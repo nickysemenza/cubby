@@ -59,20 +59,16 @@ struct CompanionImageBackgroundTests {
         let fileURL = try outboxFile()
         let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
         defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
-        let started = BackgroundExecutionFixture()
+        let execution = Gate()
         let runner = CompanionImageBackgroundRunner(
             outbox: outbox,
             execute: { command in
-                await started.markStarted()
-                do { try await Task.sleep(for: .seconds(60)) } catch
-                { /* cancellation is the fixture's stop signal */  }
-                return await started.complete(command)
+                // Cancellation is the fixture's stop signal.
+                try? await execution.pass()
+                return await BackgroundExecutionFixture().complete(command)
             })
         let task = Task { await runner.run(transport: transport, hello: hello(), maximumJobs: 1) }
-        for _ in 0..<100 {
-            if await started.started { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await execution.arrivals(1)
         task.cancel()
         await task.value
         #expect(await transport.releaseCount == 1)
@@ -95,20 +91,12 @@ struct CompanionImageBackgroundTests {
         await worker.start()
         let hello = hello()
         let run = Task { await worker.runInBackground(transport: transport, hello: hello) }
-        for _ in 0..<100 {
-            if await transport.started { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        #expect(await transport.started)
+        await transport.started.arrivals(1)
         let signOut = Task {
             try await worker.stopAndDiscardPendingResults()
             await completed.markFinished()
         }
-        for _ in 0..<100 {
-            if await transport.cancelled { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        #expect(await transport.cancelled)
+        await transport.cancelled.arrivals(1)
         #expect(!(await completed.finished))
         #expect(try await outbox.pending().count == 1)
         await transport.finishCleanup()
@@ -127,10 +115,7 @@ struct CompanionImageBackgroundTests {
         let runner = CompanionImageBackgroundRunner(
             outbox: outbox, execute: { command in await BackgroundExecutionFixture().complete(command) })
         let task = Task { await runner.run(transport: transport, hello: hello(), maximumJobs: 1) }
-        for _ in 0..<100 {
-            if await transport.completionCount > 0 { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await transport.completion.arrivals(1)
         #expect(await transport.completionCount == 1)
         task.cancel()
         _ = await task.value
@@ -145,8 +130,8 @@ private actor SignOutCompletionFixture {
 }
 
 private actor SignOutCleanupFixture: CompanionImageBackgroundTransport {
-    private(set) var started = false
-    private(set) var cancelled = false
+    let started = Gate()
+    let cancelled = Gate()
     private var cleanup: CheckedContinuation<Void, Never>?
     func pull(hello: ImageProcessingHello, leaseSeconds: Int) async throws
         -> PullCompanionImageProcessingOutput
@@ -154,9 +139,8 @@ private actor SignOutCleanupFixture: CompanionImageBackgroundTransport {
         .init(command: nil, remotePaused: false)
     }
     func complete(deviceID: String, result: ImageProcessingResult) async throws {
-        started = true
-        do { try await Task.sleep(for: .seconds(60)) } catch {
-            cancelled = true
+        do { try await started.pass() } catch {
+            cancelled.signal()
             await withCheckedContinuation { cleanup = $0 }
             throw CancellationError()
         }
@@ -172,6 +156,8 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
     var waitDuringCompletion: Bool
     private(set) var completionCount = 0
     private(set) var releaseCount = 0
+    /// Holds a completion while `waitDuringCompletion`; it ends only by cancellation.
+    let completion = Gate()
     init(
         commands: [ImageProcessingCommand], failFirstCompletion: Bool = false,
         waitDuringCompletion: Bool = false
@@ -187,7 +173,7 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
     }
     func complete(deviceID: String, result: ImageProcessingResult) async throws {
         completionCount += 1
-        if waitDuringCompletion { try await Task.sleep(for: .seconds(60)) }
+        if waitDuringCompletion { try await completion.pass() }
         if failFirstCompletion { failFirstCompletion = false; throw Failure.network }
     }
     func release(deviceID: String, command: ImageProcessingCommand) async throws { releaseCount += 1 }
@@ -195,8 +181,6 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
 
 private actor BackgroundExecutionFixture {
     private(set) var count = 0
-    private(set) var started = false
-    func markStarted() { started = true }
     func complete(_ command: ImageProcessingCommand) -> ImageProcessingResult {
         count += 1
         return .init(

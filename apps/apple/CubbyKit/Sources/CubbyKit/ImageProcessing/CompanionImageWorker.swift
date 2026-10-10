@@ -429,6 +429,14 @@ public actor CompanionImageWorker {
         return settled
     }
 
+    /// Whether a connection loop is running, the only path that opens a socket.
+    var isConnecting: Bool { connectionTask != nil }
+
+    /// Returns once every accepted command has recorded its result or stopped.
+    func commandsIdle() async {
+        while let command = commandTasks.values.first { await command.value }
+    }
+
     private func reopenIfPaused() {
         guard acceptance == .paused else { return }
         acceptance = .open

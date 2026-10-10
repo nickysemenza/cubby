@@ -150,22 +150,6 @@ private final class RunUploaderScript: @unchecked Sendable {
     }
 }
 
-private actor AnalysisGate {
-    private var open = false
-    private var waiter: CheckedContinuation<Void, Never>?
-
-    func wait() async {
-        if open { return }
-        await withCheckedContinuation { waiter = $0 }
-    }
-
-    func release() {
-        open = true
-        waiter?.resume()
-        waiter = nil
-    }
-}
-
 @Suite("PhotoImportRunUploader", .serialized)
 struct PhotoImportRunUploaderTests {
     private func makeClient() throws -> CubbyClient {
@@ -208,11 +192,11 @@ struct PhotoImportRunUploaderTests {
 
         session.start(photos, createRun: PhotoImportCreateRunInput())
         #expect(session.progress.total == 1)
-        while session.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        await session.idle()
         #expect(session.canRetry)
 
         session.start(photos)
-        while session.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        await session.idle()
         #expect(session.phase == .complete)
         #expect(session.runID == "RUN-TEST")
         #expect(script.requests(matching: "/photoImport/createRun").count == 2)
@@ -222,31 +206,25 @@ struct PhotoImportRunUploaderTests {
         defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
         let script = RunUploaderScript()
         PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
-        let gate = AnalysisGate()
+        let gate = Gate()
         let session = PhotoImportRunSession(
             uploader: PhotoImportRunUploader(
                 client: try makeClient(), put: { _, _, _ in },
                 analyze: { input in
-                    await gate.wait()
+                    await gate.hold()
                     return fakeAnalysis(for: input.id)
                 }))
 
         session.start([try photo("slow-analysis")], runID: "RUN-TEST")
-        for _ in 0..<200 {
-            if session.phase == .complete { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        #expect(session.phase == .complete)
+        await gate.arrivals(1)
+        await observe { session.phase == .complete }
         #expect(session.runID == "RUN-TEST")
         #expect(session.progress.uploaded == 1)
         #expect(session.progress.analyzed == 0)
         #expect(script.analysisCallCount(forImageID: "IMG-slow-analysis") == 0)
 
-        await gate.release()
-        for _ in 0..<200 {
-            if script.analysisCallCount(forImageID: "IMG-slow-analysis") == 1 { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        gate.open()
+        await session.idle()
         #expect(script.analysisCallCount(forImageID: "IMG-slow-analysis") == 1)
     }
 
@@ -353,17 +331,6 @@ struct PhotoImportRunUploaderTests {
         }
     }
 
-    /// The reports are fire-and-forget (never awaited by the uploader), so a test must poll for
-    /// them to land instead of asserting immediately after `upload(_:)` returns.
-    private func waitForDeviceWorkReports(
-        _ script: RunUploaderScript, imageID: String, count: Int
-    ) async throws {
-        for _ in 0..<200 {
-            if script.deviceWorkReports(forImageID: imageID).count >= count { return }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-    }
-
     /// A successfully analyzed photo reports `queued` (entering the analysis queue) then `running`
     /// (`analyzeOne` starting) and never `completed` — the server already marks that target
     /// completed when `recordImageAnalysis` succeeds, so the device-side report would be redundant.
@@ -377,7 +344,8 @@ struct PhotoImportRunUploaderTests {
             analyze: { input in fakeAnalysis(for: input.id) })
 
         _ = try await uploader.upload([try photo("ok")], runID: "RUN-TEST")
-        try await waitForDeviceWorkReports(script, imageID: "IMG-ok", count: 2)
+        // Reports are fire-and-forget; the upload returns before they land.
+        await uploader.reportsSettled()
 
         let reports = script.deviceWorkReports(forImageID: "IMG-ok")
         #expect(reports.map(\.state) == ["queued", "running"])
@@ -399,7 +367,7 @@ struct PhotoImportRunUploaderTests {
 
         let runID = try await uploader.upload([try photo("bad")], runID: "RUN-TEST")
         #expect(runID == "RUN-TEST")
-        try await waitForDeviceWorkReports(script, imageID: "IMG-bad", count: 3)
+        await uploader.reportsSettled()
 
         let reports = script.deviceWorkReports(forImageID: "IMG-bad")
         #expect(reports.map(\.state) == ["queued", "running", "failed"])
