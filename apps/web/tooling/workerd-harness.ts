@@ -404,9 +404,9 @@ function installDatabaseEnvironment(databaseUrl: string) {
 
 /**
  * Queue for the machine-wide harness lock, then make every coupled Worker
- * build current (rebuilding a stale one locally). A suite calls this in
- * `beforeAll` with a long timeout and releases in `afterAll`, so the wait and
- * any rebuild never count against a test's timeout.
+ * build current (rebuilding a stale one locally). The `integration-workerd`
+ * global setup calls this once per run, so the wait and any rebuild never
+ * count against a test's timeout.
  */
 export async function holdWorkerdHarness(): Promise<() => Promise<void>> {
   const release = await holdHarnessLock();
@@ -418,9 +418,6 @@ export async function holdWorkerdHarness(): Promise<() => Promise<void>> {
   }
   return release;
 }
-
-/** Long enough to queue behind another suite and rebuild every Worker. */
-export const HOLD_WORKERD_HARNESS_TIMEOUT_MS = 30 * 60_000;
 
 /**
  * An idempotent `close` for resources moved out of an `await using` stack:
