@@ -1,3 +1,4 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
 /**
  * The one list module every repository composes: the declared stored-filter
  * predicates (`declaredFilterPredicates`) and the per-entity list scaffold
@@ -64,6 +65,9 @@ import { relatedWhereConditions } from "./related-view";
 import { lexicalEligibility, lexicalRelevance } from "./search-lexical";
 
 const filterValues = z.record(z.string(), z.unknown());
+const suggestionFilterValue = z
+  .enum(["any", "addition", "correction"])
+  .optional();
 const optionalText = z.string().optional();
 const optionalNumber = z.number().optional();
 const optionalDate = z.string().optional();
@@ -205,64 +209,88 @@ export function declaredFilterPredicates<Filters extends object>(
   filters: Filters,
 ): Array<SQL | undefined> {
   const values = filterValues.parse(filters);
-  return descriptorsFor(entity)
-    .filter((descriptor) => descriptor.stored !== null)
-    .flatMap((descriptor): Array<SQL | undefined> => {
-      const key = descriptor.field ?? descriptor.columnId;
-      const columns = storedColumns(entity, table, descriptor);
-      const [first] = columns;
-      if (first === undefined) return [];
-      const value = values[key];
-      const presence = descriptor.nullable
-        ? presenceFilter.parse(values[descriptor.nullable.field])
-        : undefined;
-      switch (descriptor.kind) {
-        case "text":
-          return [textPredicate(columns, optionalText.parse(value)?.trim())];
-        case "boolean":
-          return [booleanPredicate(first, optionalBoolean.parse(value))];
-        case "select":
-        case "multiselect":
-          return [
-            descriptor.stored?.array
-              ? arrayOverlapOrPresence(
+  const suggestionKind = suggestionFilterValue.parse(
+    values.suggestionPresenceFilter,
+  );
+  const hasSuggestTargets = fieldModelFor(entity)?.fields.some(
+    (field) => field.control?.suggest != null,
+  );
+  const suggestionPredicate =
+    suggestionKind && hasSuggestTargets
+      ? sql`EXISTS (
+        SELECT 1 FROM "Suggestion" s
+        INNER JOIN "Run" r ON r."id" = s."runId"
+        WHERE s."entity" = ${entity}
+          AND s."recordId" = ${sql.identifier(getTableName(table))}."id"
+          AND s."status" = ${suggestionStatus.enum.pending}
+          AND r."deletedAt" IS NULL
+          AND (s."pairKey" IS NULL OR r."input"->>'decisionModel' = s."model")
+          ${suggestionKind === "any" ? sql`` : sql`AND s."kind" = ${suggestionKind}`}
+      )`
+      : undefined;
+  return [
+    suggestionPredicate,
+    ...descriptorsFor(entity)
+      .filter((descriptor) => descriptor.stored !== null)
+      .flatMap((descriptor): Array<SQL | undefined> => {
+        const key = descriptor.field ?? descriptor.columnId;
+        const columns = storedColumns(entity, table, descriptor);
+        const [first] = columns;
+        if (first === undefined) return [];
+        const value = values[key];
+        const presence = descriptor.nullable
+          ? presenceFilter.parse(values[descriptor.nullable.field])
+          : undefined;
+        switch (descriptor.kind) {
+          case "text":
+            return [textPredicate(columns, optionalText.parse(value)?.trim())];
+          case "boolean":
+            return [booleanPredicate(first, optionalBoolean.parse(value))];
+          case "select":
+          case "multiselect":
+            return [
+              descriptor.stored?.array
+                ? arrayOverlapOrPresence(
+                    first.column,
+                    optionalTextList.parse(value),
+                    presence,
+                    first.nullable,
+                  )
+                : descriptor.nullable
+                  ? eqAnyOrPresence(first.column, value, presence)
+                  : eqAny(first.column, value),
+            ];
+          case "presence":
+            return [
+              presenceCondition(first.column, presenceFilter.parse(value)),
+            ];
+          case "id":
+          case "idMulti":
+            return [
+              referencePredicate(entity, first, optionalTextList.parse(value)),
+            ];
+          case "range":
+            return descriptor.range?.kind === "date"
+              ? dateRange(
                   first.column,
-                  optionalTextList.parse(value),
-                  presence,
-                  first.nullable,
+                  optionalDate.parse(values[`${key}From`]),
+                  optionalDate.parse(values[`${key}To`]),
                 )
-              : descriptor.nullable
-                ? eqAnyOrPresence(first.column, value, presence)
-                : eqAny(first.column, value),
-          ];
-        case "presence":
-          return [presenceCondition(first.column, presenceFilter.parse(value))];
-        case "id":
-        case "idMulti":
-          return [
-            referencePredicate(entity, first, optionalTextList.parse(value)),
-          ];
-        case "range":
-          return descriptor.range?.kind === "date"
-            ? dateRange(
-                first.column,
-                optionalDate.parse(values[`${key}From`]),
-                optionalDate.parse(values[`${key}To`]),
-              )
-            : rangeConditions(
-                first.column,
-                {
-                  [`${key}Min`]: optionalNumber.parse(values[`${key}Min`]),
-                  [`${key}Max`]: optionalNumber.parse(values[`${key}Max`]),
-                },
-                key,
-              );
-        default:
-          throw new Error(
-            `${entity}.${descriptor.columnId} cannot derive a ${descriptor.kind} predicate`,
-          );
-      }
-    });
+              : rangeConditions(
+                  first.column,
+                  {
+                    [`${key}Min`]: optionalNumber.parse(values[`${key}Min`]),
+                    [`${key}Max`]: optionalNumber.parse(values[`${key}Max`]),
+                  },
+                  key,
+                );
+          default:
+            throw new Error(
+              `${entity}.${descriptor.columnId} cannot derive a ${descriptor.kind} predicate`,
+            );
+        }
+      }),
+  ];
 }
 
 /**

@@ -32,10 +32,10 @@ import {
   acceptSuggestion,
   acceptSuggestions,
   latestSuggestionSweepStatus,
+  listPagePendingSuggestions,
   listPendingSuggestions,
   rejectSuggestion,
   recordFieldSuggestionMiss,
-  summarizeSuggestionMisses,
 } from "~/server/repo/suggestion-review";
 import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 import {
@@ -314,9 +314,13 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   applyFinanceCategorySuggestion: (context, input) =>
     applyFinanceCategorySuggestion(context, input),
   listSuggestionReviewQueue: (context, input) =>
-    listPendingSuggestions(context.db, input),
-  listSuggestionMisses: (context, input) =>
-    summarizeSuggestionMisses(context.db, input),
+    input.recordIds && input.fields && input.entity
+      ? listPagePendingSuggestions(context.db, {
+          entity: input.entity,
+          recordIds: input.recordIds,
+          fields: input.fields,
+        })
+      : listPendingSuggestions(context.db, input),
   acceptSuggestion: (context, input) =>
     acceptSuggestion(context.db, context, input),
   acceptSuggestions: (context, input) =>

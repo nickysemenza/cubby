@@ -1,3 +1,4 @@
+import type { AuditEntityKind } from "@cubby/schemas/audit";
 import { amount as amountSchema } from "@cubby/schemas/codec";
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import {
@@ -504,6 +505,42 @@ function referenceLink(entity: string, item: ReferenceItem): ReactNode {
       name={item.name}
       emoji={item.emoji}
     />
+  );
+}
+
+/** Render a proposed scalar with the same compact field renderer used by its
+ * list cell. Reference values resolve their human label through the shared
+ * by-id link instead of exposing an internal UUID or public code. */
+export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
+  entity: Entity,
+  record: TRecord,
+  fieldKey: string,
+  value: z.infer<ReturnType<typeof z.json>>,
+): ReactNode {
+  const field = entityFieldModels[entity].fields.find(
+    (candidate) => candidate.key === fieldKey,
+  );
+  if (!field) return String(value ?? "—");
+  const referenceId = z.string().safeParse(value);
+  if (field.reference && referenceId.success) {
+    // SAFETY: the entity reference target is declared by this field's
+    // manifest entry and is a member of the audit entity-kind roster.
+    const entityKind = field.reference.entity as AuditEntityKind;
+    return (
+      <EntityRefLink
+        variant="byId"
+        entityKind={entityKind}
+        entityId={referenceId.data}
+        compact
+      />
+    );
+  }
+  const readKey = field.readKey ?? field.key;
+  return renderCompactFieldValue(
+    entity,
+    { ...record, [readKey]: value },
+    field,
+    { singleLine: true },
   );
 }
 

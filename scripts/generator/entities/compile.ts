@@ -571,6 +571,35 @@ const compileFieldModel = (
     };
   });
   validateFieldSuggestions(fields, context);
+  const isStored = (key: string): boolean =>
+    model.storage.some(
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Parsed declaration storage deliberately allows a bare key or a specialized descriptor.
+      (entry) => (typeof entry === "string" ? entry : entry.key) === key,
+    );
+  for (const field of fields) {
+    const suggest = field.control?.suggest;
+    if (!suggest) continue;
+    if (!isStored(field.key) && !suggest.backedBy?.length)
+      throw new EntityDeclarationError(
+        `${context}.${field.key}.control.suggest derived target must declare backedBy.`,
+      );
+    for (const backing of suggest.backedBy ?? []) {
+      if ("entity" in backing) {
+        if (backing.entity === entityKey && !isStored(backing.column))
+          throw new EntityDeclarationError(
+            `${context}.${field.key}.control.suggest.backedBy column ${backing.column} is not stored on ${entityKey}.`,
+          );
+        if (!isStored(backing.via))
+          throw new EntityDeclarationError(
+            `${context}.${field.key}.control.suggest.backedBy via ${backing.via} is not stored on ${entityKey}.`,
+          );
+      } else if (!isStored(backing.column)) {
+        throw new EntityDeclarationError(
+          `${context}.${field.key}.control.suggest.backedBy column ${backing.column} is not stored on ${entityKey}.`,
+        );
+      }
+    }
+  }
   const displayedColumnIds = new Set<string>();
   for (const field of fields) {
     const listRenderer = field.display.renderer?.list ?? null;
@@ -1767,6 +1796,40 @@ const assertPolicyGapChecksExist = (
   }
 };
 
+const suggestionFilterDescriptors = (
+  fields: readonly EntityField[],
+): FilterDescriptor[] => {
+  if (!fields.some((field) => field.control?.suggest)) return [];
+  return [
+    {
+      columnId: "suggestionPresenceFilter",
+      field: "suggestionPresenceFilter",
+      urlKey: "suggestionPresenceFilter",
+      kind: "select",
+      placeholder: "Has suggestion",
+      options: [
+        { value: "any", label: "Any" },
+        { value: "addition", label: "Addition" },
+        { value: "correction", label: "Correction" },
+      ],
+      optionsRef: null,
+      optionsKey: null,
+      label: "Has suggestion",
+      schemaDescription: null,
+      deriveSchema: true,
+      schemaFromRead: false,
+      brandRef: null,
+      expandRef: null,
+      schemaRef: null,
+      stored: null,
+      range: null,
+      urlOnly: false,
+      nullable: null,
+      wire: { kind: "param", name: "suggestionPresenceFilter" },
+    },
+  ];
+};
+
 export const compileEntity = (
   // oxlint-disable-next-line anti-slop/no-unknown-parameters -- imported declaration boundary
   value: unknown,
@@ -1937,6 +2000,7 @@ export const compileEntity = (
     : [];
   const filterDescriptorsWithAudit = [
     ...filterDescriptors,
+    ...suggestionFilterDescriptors(declaredFieldModel.fields),
     ...auditDescriptors,
   ];
   const descriptorUrlKeys = filterDescriptorsWithAudit.map(
@@ -2691,6 +2755,35 @@ export const compileEntityDeclarations = (
     ),
   );
   validateEntityIdentities(entities);
+  for (const entity of entities) {
+    for (const field of entity.fieldModel.fields) {
+      for (const backing of field.control?.suggest?.backedBy ?? []) {
+        if (!("entity" in backing)) continue;
+        const viaField = entity.fieldModel.fields.find(
+          (candidate) => candidate.key === backing.via,
+        );
+        if (viaField?.reference?.entity !== backing.entity)
+          throw new EntityDeclarationError(
+            `${entity.key}.${field.key}.control.suggest.backedBy via ${backing.via} must reference ${backing.entity}.`,
+          );
+        const target = entities.find(
+          (candidate) => candidate.key === backing.entity,
+        );
+        if (!target)
+          throw new EntityDeclarationError(
+            `${entity.key}.${field.key}.control.suggest.backedBy names unknown entity ${backing.entity}.`,
+          );
+        if (
+          !target.fieldModel.storage.some(
+            (stored) => stored.key === backing.column,
+          )
+        )
+          throw new EntityDeclarationError(
+            `${entity.key}.${field.key}.control.suggest.backedBy column ${backing.entity}.${backing.column} is not stored.`,
+          );
+      }
+    }
+  }
   validateEntityTables(entities);
   validateReferenceScopes(entities);
   validatePhotoCategoryLabels(photoCategories);

@@ -33,7 +33,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-import { unwrapDb } from "./core";
+import { unwrapDb, withTransactionOn } from "./core";
 import { notDeleted } from "./query";
 
 /**
@@ -219,12 +219,15 @@ export const updateLiveAndReturn = async <
   values: PgUpdateSetSource<T>,
   id: string,
 ): Promise<InferSelectModel<T>> => {
-  return updateAndReturn(
-    db,
-    table,
-    values,
-    and(eq(table.id, id), notDeleted(table)),
-  );
+  return withTransactionOn(db, async (tx) => {
+    const updated = await updateAndReturn(
+      tx,
+      table,
+      values,
+      and(eq(table.id, id), notDeleted(table)),
+    );
+    return updated;
+  });
 };
 
 /**

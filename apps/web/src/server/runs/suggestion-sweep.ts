@@ -10,7 +10,7 @@ import {
 } from "@cubby/schemas/run-fields";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { selectDecisionModel } from "@cubby/shared/ai/models";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -37,7 +37,7 @@ import { runPacedBatch, type PacedBatchPorts } from "./paced-batch";
 type SweepEntity = FieldSuggestionsInput["entity"];
 type SweepInput = {
   entity: SweepEntity;
-  field: string;
+  fields: string[];
   filters: Record<string, SuggestionValue>;
 };
 export type SuggestionSweepPorts = {
@@ -58,6 +58,7 @@ type SweepTarget = {
   currentValue: SuggestionValue;
   entityId: string;
   basis: Record<string, string | null>;
+  field: string;
 };
 const suggestionValueSchema: z.ZodType<SuggestionValue> = z.lazy(() =>
   z.union([
@@ -89,7 +90,7 @@ const alternateModel = (
 async function suggestTarget(
   db: Database,
   runId: RunId,
-  input: z.output<typeof sweepRunInputSchema>,
+  input: z.output<typeof sweepRunInputSchema> & { field: string },
   target: SweepTarget,
   pairKey: string | null,
   ports: SuggestionSweepPorts,
@@ -179,6 +180,18 @@ async function insertSuggestions(
   financeReviewFingerprint: string | null,
 ) {
   const typedRecordId = parseEntityId(entity, recordId);
+  await getDb(db)
+    .update(suggestionTable)
+    .set({ status: "superseded" })
+    .where(
+      and(
+        eq(suggestionTable.entity, entity),
+        eq(suggestionTable.recordId, typedRecordId),
+        eq(suggestionTable.field, field),
+        eq(suggestionTable.status, "pending"),
+        ne(suggestionTable.runId, runId),
+      ),
+    );
   for (const entry of entries) {
     await getDb(db).insert(suggestionTable).values({
       runId,
@@ -247,17 +260,25 @@ async function executeSweep(
           return parsed.success ? [[key, parsed.data]] : [];
         }),
       );
-      const currentValue = suggestionValueSchema.parse(
-        row[input.field] ?? null,
-      );
-      targets.push({ id: row.id, entityId: recordId, currentValue, basis });
+      for (const field of input.fields) {
+        const currentValue = suggestionValueSchema.parse(row[field] ?? null);
+        targets.push({
+          id: row.id,
+          entityId: recordId,
+          currentValue,
+          basis,
+          field,
+        });
+      }
     }
     pageIndex++;
   } while (rowsSeen < totalCount);
   const processed = new Set(
     processedTargetIdsSchema.parse(saved.progress ?? {}).processedTargetIds,
   );
-  const pending = targets.filter(({ entityId }) => !processed.has(entityId));
+  const pending = targets.filter(
+    ({ entityId, field }) => !processed.has(`${entityId}:${field}`),
+  );
   const progress =
     saved.progress === null
       ? null
@@ -314,13 +335,20 @@ async function executeSweep(
           entries,
           financeReviewFingerprint,
           diagnostics: targetDiagnostics = [],
-        } = await suggestTarget(db, runId, input, target, pairKey, ports);
+        } = await suggestTarget(
+          db,
+          runId,
+          { ...input, field: target.field },
+          target,
+          pairKey,
+          ports,
+        );
         diagnostics.push(...targetDiagnostics);
         await insertSuggestions(
           db,
           runId,
           input.entity,
-          input.field,
+          target.field,
           target.entityId,
           entries,
           financeReviewFingerprint,
@@ -335,6 +363,7 @@ async function executeSweep(
               .where(
                 and(
                   eq(suggestionTable.runId, runId),
+                  eq(suggestionTable.field, target.field),
                   eq(
                     suggestionTable.recordId,
                     parseEntityId(input.entity, target.entityId),
@@ -351,7 +380,7 @@ async function executeSweep(
               {
                 entity: input.entity,
                 recordId: target.entityId,
-                field: input.field,
+                field: target.field,
                 financeReviewFingerprint:
                   savedSuggestion.financeReviewFingerprint,
               },
@@ -363,6 +392,7 @@ async function executeSweep(
               .where(
                 and(
                   eq(suggestionTable.runId, runId),
+                  eq(suggestionTable.field, target.field),
                   eq(
                     suggestionTable.recordId,
                     parseEntityId(input.entity, target.entityId),
@@ -384,18 +414,19 @@ async function executeSweep(
                 and(
                   eq(suggestionTable.runId, runId),
                   eq(suggestionTable.recordId, recordId),
+                  eq(suggestionTable.field, target.field),
                 ),
               );
             outcome = "queued";
           }
         }
-        processed.add(target.entityId);
+        processed.add(`${target.entityId}:${target.field}`);
         return outcome;
       } catch {
         // SILENT: failed inference is still checkpointed so resume cannot rebill it.
         return "failed";
       } finally {
-        processed.add(target.entityId);
+        processed.add(`${target.entityId}:${target.field}`);
         batchDone++;
       }
     },

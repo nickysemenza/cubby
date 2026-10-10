@@ -26,6 +26,10 @@ import {
   getEntityEditorPresentation,
 } from "./editor-presentations";
 import type { EntityEditDialogProps } from "./entity-edit-dialog";
+import {
+  EntityEditFieldScopeProvider,
+  EntityIntentFields,
+} from "./entity-primitive-fields";
 import { isResolvedEntityEdit, resolveEntityEdit } from "./kernel";
 import { mergeOwnedIds } from "./shared-id-field";
 import type {
@@ -38,6 +42,7 @@ import {
   type EntityEditSession,
   useEntityEditSession,
 } from "./use-entity-edit-session";
+import { entityEditValueBagSchema } from "./value-schema";
 
 /** Field issues belong beside controls; dialog banners keep lifecycle context. */
 export function entityEditBannerIssues(
@@ -256,6 +261,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   request,
   onSuccess,
   mutationPort,
+  onSubmitOverride,
   evidence,
 }: EntityEditDialogProps<E>) {
   const sessionRequest: RuntimeEntityEditRequest<E> = {
@@ -269,7 +275,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   const record = request.record;
   const resolved = resolveEntityEdit(entityEditRegistry, sessionRequest);
   const intentFields = isResolvedEntityEdit(resolved)
-    ? resolved.intentDefinition.fields
+    ? resolved.fields.map((field) => field.id)
     : NO_FIELDS;
   // An intent whose active field roster includes `pendingImageIds` gets the
   // generic photo-capture field below the presentation's own fields; no
@@ -331,8 +337,20 @@ export function EntityEditDialogContent<E extends EditableEntity>({
     >
       <FormWrapper
         form={session.form}
-        onSubmit={() => {
+        onSubmit={async () => {
           setShellError(null);
+          if (onSubmitOverride) {
+            try {
+              if (!(await session.form.trigger())) return;
+              await onSubmitOverride(
+                entityEditValueBagSchema.parse(session.form.getValues()),
+              );
+              close();
+            } catch (error) {
+              setShellError(getErrorMessage(error));
+            }
+            return;
+          }
           void session
             .submit()
             .then((result) => {
@@ -380,11 +398,22 @@ export function EntityEditDialogContent<E extends EditableEntity>({
             "dialog",
           ])}
         >
-          <presentation.Fields
-            form={session.form}
-            context={context}
-            record={record}
-          />
+          <EntityEditFieldScopeProvider fieldScope={request.fieldScope}>
+            {request.fieldScope ? (
+              <EntityIntentFields
+                entity={request.entity}
+                intent={request.intent}
+                mode="edit"
+                record={record}
+              />
+            ) : (
+              <presentation.Fields
+                form={session.form}
+                context={context}
+                record={record}
+              />
+            )}
+          </EntityEditFieldScopeProvider>
         </FieldSuggestionProvider>
         {showPendingImageUpload && (
           <EntityEditorImages

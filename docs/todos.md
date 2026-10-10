@@ -853,7 +853,8 @@ the suggestion registry is generated; same-record and relation classification
 policies (Expense line kind and basis, Location furniture, GardenEntry kind,
 ProductCategory project-tool and Planting-source relations) drive writes,
 generated CHECKs, data quality, the editor and Suggestion targets; the
-Suggestion sweep, review page and `eval:decisions` exist
+Suggestion sweep, list field pills and `eval:decisions` exist; review happens
+in entity lists without a separate page
 ([entities](entities.md#classification-field-policies)).
 
 - 🤔 **Declare effective-value inheritance chains.** "Expense category =

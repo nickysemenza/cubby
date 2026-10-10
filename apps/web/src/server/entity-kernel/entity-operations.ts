@@ -14,11 +14,13 @@ import {
   listGroupSummarySchema,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { deferPublications } from "~/server/background-tasks/publish";
+import { suggestion as suggestionTable } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { withTransactionDatabase } from "~/server/repo/database-helpers";
+import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { runAfterCommit } from "~/server/repo/database-helpers/core";
 import {
   withListEntityMedia,
@@ -451,6 +453,22 @@ export const defineEntityOperations = <
                 repositoryRecordInput(binding.entity, validated.data),
               ),
             );
+            const changedFields = Object.keys(
+              z.record(z.string(), z.unknown()).parse(validated.data),
+            );
+            if (changedFields.length) {
+              await getDb(writeContext.db)
+                .update(suggestionTable)
+                .set({ status: "superseded" })
+                .where(
+                  and(
+                    eq(suggestionTable.entity, binding.entity),
+                    eq(suggestionTable.recordId, updated.entityId),
+                    inArray(suggestionTable.field, changedFields),
+                    eq(suggestionTable.status, "pending"),
+                  ),
+                );
+            }
             await writeRecordEmoji(
               writeContext.db,
               binding.entity,

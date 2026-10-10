@@ -1,11 +1,11 @@
 import {
   fieldSuggestionsInput,
   financeCategoryApplyInput,
-  suggestionMissesOut,
 } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -16,11 +16,14 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
 import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
 import { SHORTCODE_TABLE } from "~/server/repo/generated/shortcode-tables.gen";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 
 const rowIdInput = z.object({ id: z.string().uuid() });
 const filtersSchema = z.object({
@@ -31,6 +34,11 @@ const filtersSchema = z.object({
   runId: z.string().uuid().optional(),
 });
 const jsonSchema = z.json();
+const pageSuggestionsInput = z.object({
+  entity: fieldSuggestionsInput.shape.entity,
+  recordIds: z.array(z.string().min(1)).max(250),
+  fields: z.array(z.string()).max(100),
+});
 const suggestionRowSchema = z.object({
   id: z.string().uuid(),
   runId: z.string().uuid(),
@@ -65,38 +73,69 @@ export async function listPendingSuggestions(
       eq(suggestionTable.runId, parseEntityId("run", input.runId)),
     );
   const rows = await getDb(db)
-    .select()
+    .select({ suggestion: suggestionTable, runInput: runTable.input })
     .from(suggestionTable)
+    .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(and(...conditions))
     .orderBy(desc(suggestionTable.confidence));
-  const runIds = [...new Set(rows.map((row) => row.runId))];
-  const runs = (
-    await Promise.all(
-      runIds.map(async (runId) => {
-        const [run] = await getDb(db)
-          .select({ id: runTable.id, input: runTable.input })
-          .from(runTable)
-          .where(eq(runTable.id, parseEntityId("run", runId)));
-        return run;
-      }),
-    )
-  ).filter((run) => run !== undefined);
-  const pinned = new Map(
-    runs.map((run) => [
-      run.id,
-      z
-        .object({ decisionModel: z.string().optional() })
-        .passthrough()
-        .parse(run.input).decisionModel,
-    ]),
+  return rows.flatMap(({ suggestion, runInput }) => {
+    const decisionModel = z
+      .object({ decisionModel: z.string().optional() })
+      .passthrough()
+      .safeParse(runInput).data?.decisionModel;
+    return !suggestion.pairKey || decisionModel === suggestion.model
+      ? [suggestionRowSchema.parse(suggestion)]
+      : [];
+  });
+}
+
+/** One bounded shortcode-keyed read for the visible list page. Stored rows take
+ * precedence over live suggestions on list surfaces; paired evaluation
+ * candidates never reach review. */
+export async function listPagePendingSuggestions(
+  db: Database,
+  rawInput: z.input<typeof pageSuggestionsInput>,
+) {
+  const input = pageSuggestionsInput.parse(rawInput);
+  if (!input.recordIds.length || !input.fields.length) return [];
+  const uuidByPublicId = await resolveLiveShortcodes(
+    db,
+    input.recordIds,
+    input.entity,
   );
-  return rows
-    .filter(
-      (row) =>
-        !row.pairKey ||
-        pinned.get(parseEntityId("run", row.runId)) === row.model,
-    )
-    .map((row) => suggestionRowSchema.parse(row));
+  const publicIdByUuid = new Map<string, string>();
+  for (const [publicId, uuid] of uuidByPublicId)
+    publicIdByUuid.set(uuid, publicId);
+  const recordUuids = [...new Set(uuidByPublicId.values())];
+  if (recordUuids.length === 0) return [];
+  const rows = await getDb(db)
+    .select({ suggestion: suggestionTable, runInput: runTable.input })
+    .from(suggestionTable)
+    .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
+    .where(
+      and(
+        eq(suggestionTable.entity, input.entity),
+        eq(suggestionTable.status, "pending"),
+        inArray(suggestionTable.recordId, recordUuids),
+        inArray(suggestionTable.field, input.fields),
+      ),
+    );
+  return rows.flatMap(({ suggestion, runInput }) => {
+    const decisionModel = z
+      .object({ decisionModel: z.string().optional() })
+      .passthrough()
+      .safeParse(runInput).data?.decisionModel;
+    const publicRecordId = publicIdByUuid.get(suggestion.recordId);
+    return (!suggestion.pairKey || decisionModel === suggestion.model) &&
+      publicRecordId
+      ? [
+          {
+            ...suggestionRowSchema.parse(suggestion),
+            recordId: publicRecordId,
+          },
+        ]
+      : [];
+  });
 }
 
 export async function applySuggestionValue(
@@ -166,21 +205,31 @@ export async function acceptSuggestion(
   input: z.infer<typeof rowIdInput>,
 ) {
   const { id } = rowIdInput.parse(input);
-  const [row] = await getDb(db)
-    .select()
-    .from(suggestionTable)
-    .where(
-      and(eq(suggestionTable.id, id), eq(suggestionTable.status, "pending")),
-    )
-    .limit(1);
-  if (!row) throw new Error(`Pending Suggestion not found: ${id}`);
-  const parsed = suggestionRowSchema.parse(row);
-  await applySuggestionValue(db, context, parsed, row.suggestedValue);
-  await getDb(db)
-    .update(suggestionTable)
-    .set({ status: "applied" })
-    .where(eq(suggestionTable.id, id));
-  return { id, status: "applied" as const };
+  return withTransactionDatabase(db, async (transactionDb) => {
+    const [row] = await getDb(transactionDb)
+      .select()
+      .from(suggestionTable)
+      .where(
+        and(eq(suggestionTable.id, id), eq(suggestionTable.status, "pending")),
+      )
+      .limit(1)
+      .for("update");
+    if (!row) throw new Error(`Pending Suggestion not found: ${id}`);
+    const parsed = suggestionRowSchema.parse(row);
+    // The shared write path excludes this row by status while superseding its
+    // pending siblings. A failed application rolls the status transition back.
+    await getDb(transactionDb)
+      .update(suggestionTable)
+      .set({ status: "applied" })
+      .where(eq(suggestionTable.id, id));
+    await applySuggestionValue(
+      transactionDb,
+      { ...context, db: transactionDb },
+      parsed,
+      row.suggestedValue,
+    );
+    return { id, status: "applied" as const };
+  });
 }
 
 export async function acceptSuggestions(
@@ -203,6 +252,39 @@ export async function rejectSuggestion(
   const parsedInput = rowIdInput
     .extend({ correctValue: jsonSchema.optional() })
     .parse(input);
+  if (parsedInput.correctValue !== undefined) {
+    if (!context)
+      throw new Error("Applying a corrected value requires the entity context");
+    return withTransactionDatabase(db, async (transactionDb) => {
+      const [row] = await getDb(transactionDb)
+        .select()
+        .from(suggestionTable)
+        .where(
+          and(
+            eq(suggestionTable.id, parsedInput.id),
+            eq(suggestionTable.status, "pending"),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!row)
+        throw new Error(`Pending Suggestion not found: ${parsedInput.id}`);
+      const parsed = suggestionRowSchema.parse(row);
+      // Remove this row from the pending set before the shared write path
+      // supersedes sibling Suggestions. A failure rolls both operations back.
+      await getDb(transactionDb)
+        .update(suggestionTable)
+        .set({ status: "rejected", correctValue: parsedInput.correctValue })
+        .where(eq(suggestionTable.id, parsedInput.id));
+      await applySuggestionValue(
+        transactionDb,
+        { ...context, db: transactionDb },
+        parsed,
+        parsedInput.correctValue,
+      );
+      return { id: parsedInput.id, status: "rejected" as const };
+    });
+  }
   const [row] = await getDb(db)
     .select()
     .from(suggestionTable)
@@ -214,12 +296,6 @@ export async function rejectSuggestion(
     )
     .limit(1);
   if (!row) throw new Error(`Pending Suggestion not found: ${parsedInput.id}`);
-  const parsed = suggestionRowSchema.parse(row);
-  if (parsedInput.correctValue !== undefined) {
-    if (!context)
-      throw new Error("Applying a corrected value requires the entity context");
-    await applySuggestionValue(db, context, parsed, parsedInput.correctValue);
-  }
   await getDb(db)
     .update(suggestionTable)
     .set({ status: "rejected", correctValue: parsedInput.correctValue ?? null })
@@ -269,36 +345,6 @@ export async function recordFieldSuggestionMiss(
   return { recorded: true as const };
 }
 
-export async function summarizeSuggestionMisses(
-  db: Database,
-  input: { runId?: string } = {},
-) {
-  const where = input.runId
-    ? and(
-        eq(suggestionTable.status, "rejected"),
-        eq(suggestionTable.runId, parseEntityId("run", input.runId)),
-      )
-    : eq(suggestionTable.status, "rejected");
-  const rows = await getDb(db).select().from(suggestionTable).where(where);
-  const grouped = new Map<
-    string,
-    z.infer<typeof suggestionMissesOut>[number]
-  >();
-  for (const row of rows) {
-    const key = JSON.stringify([row.entity, row.field, row.suggestedValue]);
-    const found = grouped.get(key);
-    if (found) found.count++;
-    else
-      grouped.set(key, {
-        entity: fieldSuggestionsInput.shape.entity.parse(row.entity),
-        field: row.field,
-        suggestedValue: z.json().parse(row.suggestedValue),
-        count: 1,
-      });
-  }
-  return suggestionMissesOut.parse([...grouped.values()]);
-}
-
 export async function latestSuggestionSweepStatus(db: Database) {
   const [latest] = await getDb(db)
     .select({
@@ -314,6 +360,8 @@ export async function latestSuggestionSweepStatus(db: Database) {
   if (!latest)
     return {
       latestRunId: null,
+      entity: null,
+      fields: [],
       taxonomyChanged: false,
       status: null,
       paused: false,
@@ -326,8 +374,11 @@ export async function latestSuggestionSweepStatus(db: Database) {
     })
     .passthrough()
     .parse(latest.input);
+  const sweep = suggestionSweepRunInput.safeParse(latest.input);
   return {
     latestRunId: latest.id,
+    entity: sweep.success ? sweep.data.entity : null,
+    fields: sweep.success ? sweep.data.fields : [],
     taxonomyChanged:
       stored.taxonomyRevision !== (await spendingClassificationRevision(db)),
     status: latest.status,

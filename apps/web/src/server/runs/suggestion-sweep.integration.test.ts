@@ -1,7 +1,13 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { fieldSuggestionsOut } from "@cubby/schemas/ai";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { createProjectFromTasksInput } from "@cubby/schemas/project";
 import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
-import { eq } from "drizzle-orm";
+import { testShortcode } from "@cubby/schemas/testing";
+import { and, eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -14,12 +20,19 @@ import type { JevPort } from "~/server/ai/jev";
 import {
   product as productTable,
   expense as expenseTable,
+  purchase as purchaseTable,
   run as runTable,
   suggestion as suggestionTable,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
+import { projectCreateFromTasksWorkflow } from "~/server/operations/project.server";
 import { getDb } from "~/server/repo/database-helpers";
+import {
+  updateExpense,
+  updateExpensesInBulk,
+} from "~/server/repo/expense/crud";
 import { loadFinanceSuggestionContext } from "~/server/repo/finance-suggestion-context";
 import { createProduct } from "~/server/repo/product/crud";
 import { makeProductInput } from "~/server/repo/repo.fixtures";
@@ -28,19 +41,36 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   acceptSuggestion,
   listPendingSuggestions,
+  listPagePendingSuggestions,
   rejectSuggestion,
   recordFieldSuggestionMiss,
-  summarizeSuggestionMisses,
 } from "~/server/repo/suggestion-review";
 import { loadVendorSuggestionContext } from "~/server/repo/vendor-suggestion-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { aiCallRunInput, ensureRun } from "./ensure-run";
 import {
-  startSuggestionSweep,
-  resumeSuggestionSweep,
+  startSuggestionSweep as startSweep,
+  resumeSuggestionSweep as resumeSweep,
   pauseSuggestionSweep,
 } from "./suggestion-sweep";
+
+const SUGGESTION_SWEEP_MIGRATION = readFileSync(
+  join(import.meta.dirname, "../../../drizzle/0030_familiar_vargas.sql"),
+  "utf8",
+);
+
+const noPairedSample = () => false;
+const startSuggestionSweep = (
+  db: Parameters<typeof startSweep>[0],
+  input: Parameters<typeof startSweep>[1],
+  ports: Parameters<typeof startSweep>[2],
+) => startSweep(db, input, { samplePair: noPairedSample, ...ports });
+const resumeSuggestionSweep = (
+  db: Parameters<typeof resumeSweep>[0],
+  runId: Parameters<typeof resumeSweep>[1],
+  ports: Parameters<typeof resumeSweep>[2],
+) => resumeSweep(db, runId, { samplePair: noPairedSample, ...ports });
 
 type CategoryCandidate = { id: string; title: string };
 const categorySpec: ReferenceSuggestSpec<CategoryCandidate> = {
@@ -87,6 +117,361 @@ const highConfidence = decisionAt(0.97);
 describe("persisted Suggestion sweeps", () => {
   const ctx = withTestDb();
 
+  it("migrates legacy sweep input and checkpoints before resuming", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic legacy sweep target",
+        manufacturer: "Synthetic maker",
+        categoryId: taxonomyId("tools"),
+      }),
+      ctx.actor,
+    );
+    const productRecordId = await resolveLiveShortcode(
+      ctx.db,
+      product.id,
+      "product",
+    );
+    if (!productRecordId)
+      throw new Error("Synthetic product record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "suggestion_sweep",
+      trigger: "manual",
+      status: "running",
+      input: {
+        kind: "suggestion_sweep",
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [product.id] },
+        decisionModel: "typesafe/jev",
+        paused: false,
+      },
+      progress: {
+        total: 1,
+        done: 1,
+        applied: 0,
+        queued: 1,
+        failed: 0,
+        diagnostics: [],
+      },
+    });
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Run"
+      SET input = input - 'fields' || jsonb_build_object('field', ${"categoryId"}::text),
+          progress = progress || jsonb_build_object(
+            'processedTargetIds', jsonb_build_array(${productRecordId}::uuid)
+          )
+      WHERE id = ${runId}
+    `);
+    await getDb(ctx.db).execute(sql.raw(SUGGESTION_SWEEP_MIGRATION));
+    const [migrated] = await getDb(ctx.db)
+      .select({ input: runTable.input, progress: runTable.progress })
+      .from(runTable)
+      .where(eq(runTable.id, runId));
+    expect(migrated?.input).toMatchObject({ fields: ["categoryId"] });
+    expect(migrated?.progress).toMatchObject({
+      total: 1,
+      done: 1,
+      processedTargetIds: [`${productRecordId}:categoryId`],
+    });
+    const suggest = vi.fn(async () =>
+      fieldSuggestionsOut.parse({ suggestions: {}, outcomes: {} }),
+    );
+    await resumeSuggestionSweep(ctx.db, runId, {
+      context,
+      suggest,
+      wait: async () => {},
+    });
+    expect(suggest).not.toHaveBeenCalled();
+  });
+
+  it("supersedes pending Suggestions on raw entity writes used by imports", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic imported classification",
+        manufacturer: "Synthetic maker",
+        categoryId: taxonomyId("tools"),
+      }),
+      ctx.actor,
+    );
+    const productRecordId = await resolveLiveShortcode(
+      ctx.db,
+      product.id,
+      "product",
+    );
+    if (!productRecordId)
+      throw new Error("Synthetic product record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    await getDb(ctx.db)
+      .insert(suggestionTable)
+      .values({
+        runId,
+        entity: "product",
+        recordId: productRecordId,
+        field: "categoryId",
+        currentValue: taxonomyShortcode("tools"),
+        suggestedValue: taxonomyShortcode("food"),
+        confidence: 0.8,
+        model: "typesafe/jev",
+        kind: "correction",
+        status: "pending",
+      });
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Product"
+      SET "categoryId" = ${taxonomyId("food")}
+      WHERE "id" = ${productRecordId}
+    `);
+    const [saved] = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.recordId, productRecordId));
+    expect(saved?.status).toBe("superseded");
+  });
+
+  it("leaves pending Suggestions alone when an entity column is unchanged", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic unchanged classification",
+        manufacturer: "Synthetic maker",
+        categoryId: taxonomyId("tools"),
+      }),
+      ctx.actor,
+    );
+    const recordId = await resolveLiveShortcode(ctx.db, product.id, "product");
+    if (!recordId) throw new Error("Synthetic product record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    const [row] = await getDb(ctx.db)
+      .insert(suggestionTable)
+      .values({
+        runId,
+        entity: "product",
+        recordId,
+        field: "categoryId",
+        currentValue: taxonomyShortcode("tools"),
+        suggestedValue: taxonomyShortcode("food"),
+        confidence: 0.8,
+        model: "typesafe/jev",
+        kind: "correction",
+        status: "pending",
+      })
+      .returning({ id: suggestionTable.id });
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Product"
+      SET "categoryId" = ${taxonomyId("tools")}
+      WHERE "id" = ${recordId}
+    `);
+    const [saved] = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, row!.id));
+    expect(saved?.status).toBe("pending");
+  });
+
+  it("supersedes derived Expense vendor Suggestions when either backing Purchase changes", async () => {
+    const vendorA = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic vendor A",
+    });
+    const vendorB = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic vendor B",
+    });
+    const purchaseA = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendorA.id,
+      date: "2026-09-01",
+    });
+    const purchaseB = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendorA.id,
+      date: "2026-09-02",
+    });
+    const purchaseC = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendorA.id,
+      date: "2026-09-03",
+    });
+    const expenseA = await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic vendor edit",
+      cost: 10,
+      date: "2026-09-01",
+      costType: "materials",
+      trade: "other",
+      purchaseId: purchaseA.id,
+    });
+    const expenseB = await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic linked vendor edit",
+      cost: 11,
+      date: "2026-09-02",
+      costType: "materials",
+      trade: "other",
+      purchaseId: purchaseB.id,
+    });
+    const expenseC = await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic unrelated purchase",
+      cost: 12,
+      date: "2026-09-03",
+      costType: "materials",
+      trade: "other",
+      purchaseId: purchaseC.id,
+    });
+    const recordIds = await Promise.all(
+      [expenseA, expenseB, expenseC].map((row) =>
+        resolveLiveShortcode(ctx.db, row.shortcode, "expense"),
+      ),
+    );
+    if (recordIds.some((id) => !id))
+      throw new Error("Synthetic expense record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    await getDb(ctx.db)
+      .insert(suggestionTable)
+      .values(
+        recordIds.map((recordId) => ({
+          runId,
+          entity: "expense",
+          recordId: recordId!,
+          field: "vendor",
+          currentValue: "Synthetic vendor A",
+          suggestedValue: "Synthetic vendor C",
+          confidence: 0.8,
+          model: "typesafe/jev",
+          kind: "correction" as const,
+          status: "pending" as const,
+        })),
+      );
+    await updateExpense(
+      ctx.db,
+      expenseA.shortcode,
+      { vendor: "Synthetic vendor B" },
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ vendorId: vendorB.id })
+      .where(eq(purchaseTable.id, purchaseB.id));
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ date: "2026-09-04" })
+      .where(eq(purchaseTable.id, purchaseC.id));
+    const rows = await getDb(ctx.db)
+      .select({
+        recordId: suggestionTable.recordId,
+        status: suggestionTable.status,
+      })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.runId, runId));
+    expect(rows.find((row) => row.recordId === recordIds[0])?.status).toBe(
+      "superseded",
+    );
+    expect(rows.find((row) => row.recordId === recordIds[1])?.status).toBe(
+      "superseded",
+    );
+    expect(rows.find((row) => row.recordId === recordIds[2])?.status).toBe(
+      "pending",
+    );
+  });
+
+  it("supersedes pending Task project Suggestions on repository writes", async () => {
+    const task = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "Synthetic task assignment",
+    });
+    const recordId = await resolveLiveShortcode(ctx.db, task.output.id, "task");
+    if (!recordId) throw new Error("Synthetic task record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    await getDb(ctx.db)
+      .insert(suggestionTable)
+      .values({
+        runId,
+        entity: "task",
+        recordId,
+        field: "projectId",
+        currentValue: null,
+        suggestedValue: testShortcode("project", "suggested-task-project"),
+        confidence: 0.8,
+        model: "typesafe/jev",
+        kind: "addition",
+        status: "pending",
+      });
+    await projectCreateFromTasksWorkflow(
+      ctx.db,
+      createProjectFromTasksInput.parse({
+        taskIds: [task.output.id],
+        project: { name: "Synthetic task project" },
+      }),
+      ctx.actor,
+    );
+    const [saved] = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.recordId, recordId));
+    expect(saved?.status).toBe("superseded");
+  });
+
+  it("supersedes a pending Suggestion in the repository bulk patch transaction", async () => {
+    const expense = await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic bulk suggestion expense",
+      cost: 10,
+      date: "2026-09-01",
+      costType: "materials",
+      trade: "other",
+    });
+    const expenseRecordId = await resolveLiveShortcode(
+      ctx.db,
+      expense.shortcode,
+      "expense",
+    );
+    if (!expenseRecordId)
+      throw new Error("Synthetic expense record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    await getDb(ctx.db).insert(suggestionTable).values({
+      runId,
+      entity: "expense",
+      recordId: expenseRecordId,
+      field: "projectId",
+      currentValue: null,
+      suggestedValue: "PRJ-2222",
+      confidence: 0.8,
+      model: "typesafe/jev",
+      kind: "addition",
+      status: "pending",
+    });
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Synthetic bulk assignment project",
+    });
+    await updateExpensesInBulk(
+      ctx.db,
+      [expense.shortcode],
+      { projectId: project.output.id },
+      ctx.actor,
+    );
+    const [saved] = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.recordId, expenseRecordId));
+    expect(saved?.status).toBe("superseded");
+  });
+
   it("uses public ids for finance inference and checkpoints no-proposal targets", async () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
@@ -123,7 +508,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "expense",
-        field: "spendingCategoryId",
+        fields: ["spendingCategoryId"],
         filters: { ids: expenses.map(({ shortcode }) => shortcode) },
       },
       {
@@ -140,7 +525,7 @@ describe("persisted Suggestion sweeps", () => {
     );
     await resumeSuggestionSweep(ctx.db, started.id, {
       context,
-      decisionModel: () => "typesafe/jev",
+      decisionModel: () => "typesafe/jev" as const,
       suggest,
       wait: async () => {},
     });
@@ -202,7 +587,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "expense",
-        field: "spendingCategoryId",
+        fields: ["spendingCategoryId"],
         filters: { ids: [line.shortcode] },
       },
       {
@@ -274,7 +659,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "vendor",
-        field: "defaultSpendingCategoryId",
+        fields: ["defaultSpendingCategoryId"],
         filters: { ids: [vendor.shortcode] },
       },
       {
@@ -330,7 +715,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "product",
-        field: "categoryId",
+        fields: ["categoryId"],
         filters: { ids: [product.id] },
       },
       {
@@ -367,7 +752,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "product",
-        field: "categoryId",
+        fields: ["categoryId"],
         filters: {},
       },
       {
@@ -390,7 +775,7 @@ describe("persisted Suggestion sweeps", () => {
     expect(saved?.purpose).toBe("suggestion_sweep");
     expect(saved?.input).toMatchObject({
       entity: "product",
-      field: "categoryId",
+      fields: ["categoryId"],
       filters: {},
       decisionModel: "typesafe/jev",
     });
@@ -488,7 +873,7 @@ describe("persisted Suggestion sweeps", () => {
         ctx.db,
         {
           entity: "product",
-          field: "categoryId",
+          fields: ["categoryId"],
           filters: { ids: [correction.id] },
         },
         {
@@ -524,7 +909,7 @@ describe("persisted Suggestion sweeps", () => {
         ctx.db,
         {
           entity: "product",
-          field: "categoryId",
+          fields: ["categoryId"],
           filters: { ids: [addition.id] },
         },
         {
@@ -574,7 +959,7 @@ describe("persisted Suggestion sweeps", () => {
     const runId = (
       await startSuggestionSweep(
         ctx.db,
-        { entity: "product", field: "categoryId", filters: { ids } },
+        { entity: "product", fields: ["categoryId"], filters: { ids } },
         {
           context: entityKernelContextSchema.parse(context),
           decisionModel: () => "typesafe/jev",
@@ -599,6 +984,13 @@ describe("persisted Suggestion sweeps", () => {
       minConfidence: 0,
     });
     expect(reviewQueue).toHaveLength(0);
+    expect(
+      await listPagePendingSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: ids,
+        fields: ["categoryId"],
+      }),
+    ).toHaveLength(0);
     for (const pairKey of new Set(pairedRows.map((row) => row.pairKey))) {
       const pair = pairedRows.filter((row) => row.pairKey === pairKey);
       expect(pair).toHaveLength(2);
@@ -606,9 +998,180 @@ describe("persisted Suggestion sweeps", () => {
         1,
       );
       expect(pair.find((row) => row.model !== "typesafe/jev")?.status).toBe(
-        "pending",
+        "superseded",
       );
     }
+  });
+
+  it("filters pending pinned suggestions by kind and clears after a generic update", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const addition = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic suggestion addition",
+        manufacturer: "Synthetic maker",
+      }),
+      ctx.actor,
+    );
+    const correction = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic suggestion correction",
+        manufacturer: "Synthetic maker",
+        categoryId: taxonomyId("tools"),
+      }),
+      ctx.actor,
+    );
+    const started = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [addition.id, correction.id] },
+      },
+      {
+        context,
+        decisionModel: () => "typesafe/jev",
+        samplePair: () => true,
+        wait: async () => {},
+        suggestPorts: {
+          jev: vi.fn(decisionAt(0.6)),
+          registry: { "product.categoryId": categorySpec },
+        },
+      },
+    );
+    const additionRecordId = await resolveLiveShortcode(
+      ctx.db,
+      addition.id,
+      "product",
+    );
+    if (!additionRecordId)
+      throw new Error("synthetic addition did not resolve");
+    const list = async (kind: "any" | "addition" | "correction") => {
+      const result = await executeEntity(context, {
+        action: "list",
+        entity: "product",
+        filters: { suggestionPresenceFilter: kind },
+        pagination: { pageIndex: 0, pageSize: 100 },
+      });
+      if (result.action !== "list") throw new Error("Expected list result");
+      return result.items.map((row) => row.id);
+    };
+    expect(await list("any")).toEqual(
+      expect.arrayContaining([addition.id, correction.id]),
+    );
+    expect(await list("addition")).toContain(addition.id);
+    expect(await list("addition")).not.toContain(correction.id);
+    expect(await list("correction")).toContain(correction.id);
+    expect(await list("correction")).not.toContain(addition.id);
+    const [unpinned] = await getDb(ctx.db)
+      .select()
+      .from(suggestionTable)
+      .where(
+        and(
+          eq(suggestionTable.runId, started.id),
+          eq(
+            suggestionTable.recordId,
+            parseEntityId("product", additionRecordId),
+          ),
+          eq(suggestionTable.model, "@cf/cloudflare/clef"),
+        ),
+      );
+    expect(unpinned?.status).toBe("pending");
+    const [pinned] = await getDb(ctx.db)
+      .select({ id: suggestionTable.id })
+      .from(suggestionTable)
+      .where(
+        and(
+          eq(suggestionTable.runId, started.id),
+          eq(
+            suggestionTable.recordId,
+            parseEntityId("product", additionRecordId),
+          ),
+          eq(suggestionTable.model, "typesafe/jev"),
+        ),
+      );
+    if (!pinned)
+      throw new Error("synthetic pinned suggestion was not persisted");
+    await getDb(ctx.db)
+      .update(suggestionTable)
+      .set({ status: "superseded" })
+      .where(eq(suggestionTable.id, pinned.id));
+    expect(await list("any")).not.toContain(addition.id);
+    await executeEntity(context, {
+      action: "update",
+      entity: "product",
+      id: parseShortcodeFor("product", addition.id),
+      data: { categoryId: taxonomyShortcode("tools") },
+    });
+    expect(await list("any")).not.toContain(addition.id);
+  });
+
+  it("sweeps every target field only for rows selected by the list filters", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const matching = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic selected product",
+        manufacturer: "Synthetic maker",
+      }),
+      ctx.actor,
+    );
+    await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic unselected product",
+        manufacturer: "Other maker",
+      }),
+      ctx.actor,
+    );
+    const processed: Array<{ id: string; field: string }> = [];
+    const suggest = vi.fn(async (_db, _runId, input) => {
+      const field = input.targets[0]!;
+      processed.push({ id: input.entityId!, field });
+      return fieldSuggestionsOut.parse({
+        suggestions: { [field]: null },
+        outcomes: {
+          [field]: {
+            kind: "evaluated",
+            answer: "none",
+            confidence: "high",
+            probability: 0.9,
+            alternatives: [],
+          },
+        },
+      });
+    });
+    const sweepInput = {
+      entity: "product" as const,
+      fields: ["categoryId", "tags"],
+      filters: { manufacturerSearch: "Synthetic maker", ids: [matching.id] },
+    };
+    const ports = {
+      context,
+      decisionModel: () => "typesafe/jev" as const,
+      samplePair: () => false,
+      suggest,
+      wait: async () => {},
+    };
+    const started = await startSuggestionSweep(ctx.db, sweepInput, {
+      ...ports,
+      pauseAfter: 1,
+    });
+    const paused = await getDb(ctx.db)
+      .select({ progress: runTable.progress })
+      .from(runTable)
+      .where(eq(runTable.id, started.id));
+    expect(suggestionSweepRunProgress.parse(paused[0]?.progress).done).toBe(1);
+    await resumeSuggestionSweep(ctx.db, started.id, ports);
+    expect(processed).toEqual([
+      { id: matching.id, field: "categoryId" },
+      { id: matching.id, field: "tags" },
+    ]);
   });
 
   it("keeps a stale high-confidence Expense Addition pending during auto-apply", async () => {
@@ -659,7 +1222,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "expense",
-        field: "spendingCategoryId",
+        fields: ["spendingCategoryId"],
         filters: { ids: [expense.shortcode] },
       },
       {
@@ -738,7 +1301,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "vendor",
-        field: "defaultSpendingCategoryId",
+        fields: ["defaultSpendingCategoryId"],
         filters: { ids: [vendor.shortcode] },
       },
       {
@@ -782,7 +1345,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "product",
-        field: "categoryId",
+        fields: ["categoryId"],
         filters: {
           ids: products.map((p) => p.id),
           categoryPresenceFilter: "none",
@@ -858,7 +1421,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "product",
-        field: "categoryId",
+        fields: ["categoryId"],
         filters: { ids: products.map((p) => p.id) },
       },
       {
@@ -907,7 +1470,7 @@ describe("persisted Suggestion sweeps", () => {
         ctx.db,
         {
           entity: "product",
-          field: "categoryId",
+          fields: ["categoryId"],
           filters: { ids: [product.id] },
         },
         {
@@ -930,6 +1493,13 @@ describe("persisted Suggestion sweeps", () => {
     const row = pending[0]!;
 
     await rejectSuggestion(ctx.db, context, { id: row.id });
+    expect(
+      await listPagePendingSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: [product.id],
+        fields: ["categoryId"],
+      }),
+    ).toHaveLength(0);
     const afterReject = await listPendingSuggestions(ctx.db, {
       runId,
       minConfidence: 0,
@@ -942,7 +1512,6 @@ describe("persisted Suggestion sweeps", () => {
       .from(productTable)
       .where(eq(productTable.id, recordId));
     expect(stillBlank?.categoryId).toBe(taxonomyId("tools"));
-    expect(await summarizeSuggestionMisses(ctx.db, { runId })).toHaveLength(1);
   });
 
   it("accepts a persisted Suggestion through the entity kernel and marks it applied", async () => {
@@ -963,7 +1532,7 @@ describe("persisted Suggestion sweeps", () => {
         ctx.db,
         {
           entity: "product",
-          field: "categoryId",
+          fields: ["categoryId"],
           filters: { ids: [product.id] },
         },
         {
@@ -982,7 +1551,47 @@ describe("persisted Suggestion sweeps", () => {
       minConfidence: 0,
     });
     if (!row) throw new Error("synthetic suggestion setup failed");
+    expect(
+      await listPagePendingSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: [product.id],
+        fields: ["categoryId"],
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        id: row.id,
+        model: "typesafe/jev",
+        recordId: product.id,
+      }),
+    ]);
+    const productRecordId = await resolveLiveShortcode(
+      ctx.db,
+      product.id,
+      "product",
+    );
+    const [sibling] = await getDb(ctx.db)
+      .insert(suggestionTable)
+      .values({
+        runId,
+        entity: "product",
+        recordId: productRecordId!,
+        field: "categoryId",
+        currentValue: taxonomyShortcode("tools"),
+        suggestedValue: taxonomyShortcode("food"),
+        confidence: 0.75,
+        model: "typesafe/jev",
+        kind: "correction",
+        status: "pending",
+      })
+      .returning({ id: suggestionTable.id });
     await acceptSuggestion(ctx.db, context, { id: row.id });
+    expect(
+      await listPagePendingSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: [product.id],
+        fields: ["categoryId"],
+      }),
+    ).toHaveLength(0);
     const [saved] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
@@ -994,7 +1603,53 @@ describe("persisted Suggestion sweeps", () => {
       .from(productTable)
       .where(eq(productTable.id, recordId));
     expect(saved?.status).toBe("applied");
+    const [savedSibling] = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, sibling!.id));
+    expect(savedSibling?.status).toBe("superseded");
     expect(updated?.categoryId).toBeTruthy();
+  });
+
+  it("supersedes an earlier pending suggestion when a newer sweep evaluates the same field", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic repeated sweep item",
+        manufacturer: "Synthetic maker",
+        categoryId: taxonomyId("tools"),
+      }),
+      ctx.actor,
+    );
+    const ports = {
+      context,
+      decisionModel: () => "typesafe/jev" as const,
+      wait: async () => {},
+      suggestPorts: {
+        jev: vi.fn(highConfidence),
+        registry: { "product.categoryId": categorySpec },
+      },
+    };
+    const input = {
+      entity: "product" as const,
+      fields: ["categoryId"],
+      filters: { ids: [product.id] },
+    };
+    await startSuggestionSweep(ctx.db, input, ports);
+    const [first] = await listPendingSuggestions(ctx.db, { minConfidence: 0 });
+    expect(first).toBeDefined();
+    await startSuggestionSweep(ctx.db, input, ports);
+    const saved = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.recordId, first!.recordId));
+    expect(saved.map(({ status }) => status)).toEqual([
+      "superseded",
+      "pending",
+    ]);
   });
 
   it("accepts a reviewed value and groups Misses by field and suggested value", async () => {
@@ -1024,7 +1679,7 @@ describe("persisted Suggestion sweeps", () => {
         ctx.db,
         {
           entity: "product",
-          field: "categoryId",
+          fields: ["categoryId"],
           filters: { ids: [product.id, secondProduct.id] },
         },
         {
@@ -1049,6 +1704,18 @@ describe("persisted Suggestion sweeps", () => {
         correctValue: taxonomyShortcode("food"),
       });
     const db = getDb(ctx.db);
+    const rejected = await db
+      .select({
+        status: suggestionTable.status,
+        correctValue: suggestionTable.correctValue,
+      })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.runId, runId));
+    expect(rejected).toHaveLength(2);
+    expect(rejected.every((row) => row.status === "rejected")).toBe(true);
+    expect(
+      rejected.every((row) => row.correctValue === taxonomyShortcode("food")),
+    ).toBe(true);
     const recordId = await resolveLiveShortcode(ctx.db, product.id, "product");
     if (!recordId) throw new Error("synthetic record setup failed");
     const [updated] = await db
@@ -1056,9 +1723,6 @@ describe("persisted Suggestion sweeps", () => {
       .from(productTable)
       .where(eq(productTable.id, parseEntityId("product", recordId)));
     expect(updated?.categoryId).toBeTruthy();
-    expect(await summarizeSuggestionMisses(ctx.db, { runId })).toMatchObject([
-      { entity: "product", field: "categoryId", count: 2 },
-    ]);
   });
 
   it("records a per-record dismissal as a Miss on its ai_suggest Run", async () => {

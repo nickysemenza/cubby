@@ -1,13 +1,21 @@
 import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
+  SuggestionReviewRow,
 } from "@cubby/schemas/ai";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { parseShortcode } from "@cubby/shared";
-import { useQueries } from "@tanstack/react-query";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import {
+  useMutation,
+  useQueries,
+  useQueryClient,
+  type UseQueryOptions,
+} from "@tanstack/react-query";
 import {
   createContext,
   useContext,
@@ -29,13 +37,24 @@ import type { EntityMutationPort } from "~/entity/editing/types";
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
+import { renderSuggestedListFieldValue } from "~/entity/entity-display";
 import { readReferenceField } from "~/entity/entity-references";
 import { enumFieldLabel } from "~/entity/enum-field-display";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
+import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/ui/primitives/dropdown-menu";
 
 import {
   fieldSuggestionBasisFromRecord,
@@ -71,6 +90,7 @@ const mutationPatchSchema = z.record(z.string(), z.json());
 const nullableBasisValueSchema = z.string().nullable();
 const textArraySchema = z.array(z.string());
 type SuggestionRecord = z.infer<typeof recordSchema>;
+type JsonValue = z.infer<ReturnType<typeof z.json>>;
 type SuggestionRow = {
   record: SuggestionRecord;
   sourceByField: ReadonlyMap<string, FieldSuggestionSource>;
@@ -134,7 +154,44 @@ const RecordSuggestionsContext = createContext<{
     suggestion: FieldSuggestion,
     currentValue: string | null,
   ) => Promise<void>;
+  stored: ReadonlyMap<string, SuggestionReviewRow>;
+  acceptStored: (id: string) => Promise<void>;
+  rejectStored: (id: string, correctValue?: JsonValue) => Promise<void>;
+  storedCountFor: (records: readonly unknown[]) => number;
 } | null>(null);
+
+export interface StoredSuggestionOperations {
+  list: (input: {
+    entity: StandardEntity;
+    recordIds: string[];
+    fields: string[];
+  }) => Promise<SuggestionReviewRow[]>;
+  accept: (input: {
+    id: string;
+  }) => Promise<{ id: string; status: "applied" | "rejected" }>;
+  reject: (input: {
+    id: string;
+    correctValue?: JsonValue;
+  }) => Promise<{ id: string; status: "applied" | "rejected" }>;
+}
+
+const productionStoredSuggestionOperations: StoredSuggestionOperations = {
+  list: (input) => ai.listSuggestionReviewQueue.call(input),
+  accept: (input) => ai.acceptSuggestion.call(input),
+  reject: (input) => ai.rejectSuggestion.call(input),
+};
+
+const recordPublicId = (record: unknown) => {
+  const parsed = z
+    .looseObject({
+      id: z.string(),
+    })
+    .safeParse(record);
+  return parsed.success ? parsed.data.id : null;
+};
+
+const storedSuggestionKey = (recordId: string, field: string) =>
+  `${recordId}:${field}`;
 
 function explicitSuggestionPatch(
   entity: StandardEntity,
@@ -377,6 +434,7 @@ export function RecordSuggestionsProvider({
   operations,
   mutationPort,
   readRecord,
+  storedSuggestionOperations,
 }: {
   entity: Entity | undefined;
   records: readonly unknown[];
@@ -388,6 +446,7 @@ export function RecordSuggestionsProvider({
     entity: StandardEntity,
     id: string,
   ) => Promise<SuggestionRecord | null>;
+  storedSuggestionOperations?: StoredSuggestionOperations;
 }) {
   const crud = generatedBrowserCrudEntities.find(
     (candidate) => candidate === entity,
@@ -402,6 +461,7 @@ export function RecordSuggestionsProvider({
         operations={operations}
         mutationPort={mutationPort}
         readRecord={readRecord}
+        storedSuggestionOperations={storedSuggestionOperations}
       >
         {children}
       </BoundRecordSuggestions>
@@ -455,6 +515,7 @@ function requestsForRecords(
   records: readonly unknown[],
   targets: SuggestTargets,
   runKey: string,
+  stored: ReadonlyMap<string, SuggestionReviewRow>,
 ) {
   return records.flatMap((raw) => {
     const parsed = recordSchema.safeParse(raw);
@@ -464,8 +525,54 @@ function requestsForRecords(
       targets.targets.length === 0
     )
       return [];
-    return suggestionRequestsForRecord(entity, parsed.data, targets, runKey);
+    const available = suggestTargetsFor(
+      entity,
+      targets.targets
+        .filter(
+          (target) =>
+            !stored.has(
+              storedSuggestionKey(
+                recordPublicId(raw) ?? parsed.data.id,
+                target.key,
+              ),
+            ),
+        )
+        .map((target) => target.key),
+    );
+    return suggestionRequestsForRecord(entity, parsed.data, available, runKey);
   });
+}
+
+function liveRequestsAfterStoredRead(
+  hydrated: boolean,
+  recordIds: readonly string[],
+  fields: readonly string[],
+  storedReadSucceeded: boolean,
+  entity: StandardEntity,
+  records: readonly unknown[],
+  targets: SuggestTargets,
+  runKey: string,
+  stored: ReadonlyMap<string, SuggestionReviewRow>,
+) {
+  if (
+    hydrated &&
+    recordIds.length > 0 &&
+    fields.length > 0 &&
+    !storedReadSucceeded
+  )
+    return [];
+  return requestsForRecords(entity, records, targets, runKey, stored);
+}
+
+function storedSuggestionIndex(
+  rows: readonly SuggestionReviewRow[] | undefined,
+) {
+  return new Map(
+    (rows ?? []).map((suggestion) => [
+      storedSuggestionKey(suggestion.recordId, suggestion.field),
+      suggestion,
+    ]),
+  );
 }
 
 function actionableRowSuggestionCount(
@@ -537,6 +644,7 @@ function BoundRecordSuggestions({
   mutationPort,
   readRecord = async (currentEntity, id) =>
     recordSchema.parse(await entityDetailFor(currentEntity).readFresh(id)),
+  storedSuggestionOperations = productionStoredSuggestionOperations,
 }: {
   entity: StandardEntity;
   records: readonly unknown[];
@@ -548,6 +656,7 @@ function BoundRecordSuggestions({
     entity: StandardEntity,
     id: string,
   ) => Promise<SuggestionRecord | null>;
+  storedSuggestionOperations?: StoredSuggestionOperations;
 }) {
   const visit = useSuggestionVisit();
   const parentScheduler = useContext(SuggestionSchedulerContext);
@@ -573,7 +682,71 @@ function BoundRecordSuggestions({
   const hydrated = useHydrated();
   const records = hydrated ? allRecords : NO_RECORDS;
   const targets = visibleSuggestTargets(entity, fieldKeys);
-  const requests = requestsForRecords(entity, records, targets, runKey);
+  const pageRecordIds = [
+    ...new Set(
+      records.map(recordPublicId).filter((id): id is string => id !== null),
+    ),
+  ];
+  const pageFields = entityFieldModels[entity].fields
+    .filter((field) => field.control?.suggest)
+    .map((field) => field.key);
+  const storedQueryKey = [
+    "ai",
+    "page-pending-suggestions",
+    entity,
+    pageRecordIds,
+    pageFields,
+  ] as const;
+  const storedQueryOptions: UseQueryOptions<SuggestionReviewRow[]>[] = [];
+  if (hydrated && pageRecordIds.length > 0 && pageFields.length > 0) {
+    storedQueryOptions.push({
+      queryKey: storedQueryKey,
+      queryFn: () =>
+        storedSuggestionOperations.list({
+          entity,
+          recordIds: pageRecordIds,
+          fields: pageFields,
+        }),
+      retry: false,
+      meta: { cacheTags: [[entity]] },
+    });
+  }
+  const storedQueryResults = useQueries({ queries: storedQueryOptions });
+  const storedQuery = storedQueryResults[0];
+  const queryClient = useQueryClient();
+  const afterStoredReview = async (id: string) => {
+    queryClient.setQueryData<SuggestionReviewRow[]>(
+      storedQueryKey,
+      (previous = []) => previous.filter((item) => item.id !== id),
+    );
+    await Promise.all([
+      invalidateOperationTags(
+        queryClient,
+        ai.acceptSuggestion.invalidates({ id }),
+      ),
+      invalidateOperationTags(queryClient, entityRipple(entity)),
+    ]);
+  };
+  const acceptStoredMutation = useMutation({
+    mutationFn: storedSuggestionOperations.accept,
+    onSuccess: (_result, input) => afterStoredReview(input.id),
+  });
+  const rejectStoredMutation = useMutation({
+    mutationFn: storedSuggestionOperations.reject,
+    onSuccess: (_result, input) => afterStoredReview(input.id),
+  });
+  const stored = storedSuggestionIndex(storedQuery?.data);
+  const requests = liveRequestsAfterStoredRead(
+    hydrated,
+    pageRecordIds,
+    pageFields,
+    storedQuery?.isSuccess === true,
+    entity,
+    records,
+    targets,
+    runKey,
+    stored,
+  );
   // Identical records can share one query, while each row retains its own review state.
   const sources = [
     ...new Map(
@@ -610,6 +783,20 @@ function BoundRecordSuggestions({
     entity,
     runKey,
     rows,
+    stored,
+    acceptStored: async (id: string) => {
+      await acceptStoredMutation.mutateAsync({ id });
+    },
+    rejectStored: async (id: string, correctValue?: JsonValue) => {
+      await rejectStoredMutation.mutateAsync({ id, correctValue });
+    },
+    storedCountFor: (items: readonly unknown[]) => {
+      const ids = new Set(
+        items.map(recordPublicId).filter((id): id is string => id !== null),
+      );
+      return [...stored.values()].filter((item) => ids.has(item.recordId))
+        .length;
+    },
     recordMiss: async (
       id: string,
       field: string,
@@ -902,6 +1089,7 @@ export function RecordFieldSuggestion({
   field: column,
   children,
   surface = "inline",
+  renderValue,
 }: {
   record: unknown;
   field: string;
@@ -909,6 +1097,7 @@ export function RecordFieldSuggestion({
   /** `"cell"` folds the review into the outcome mark's popover for a dense
    * 32px table row; `"inline"` (detail facts, phone cards) renders it directly. */
   surface?: "inline" | "cell";
+  renderValue?: (value: JsonValue) => ReactNode;
 }) {
   const context = useContext(RecordSuggestionsContext);
   const parsed = recordSchema.safeParse(record);
@@ -917,7 +1106,23 @@ export function RecordFieldSuggestion({
     ? findEntityField(context.entity, column)
     : undefined;
   const field = fieldModel?.key;
-  if (!context || !row || !field) return children;
+  if (!context || !field) return children;
+  const storedSuggestion = context.stored.get(
+    storedSuggestionKey(recordPublicId(record) ?? "", field),
+  );
+  if (storedSuggestion)
+    return (
+      <StoredSuggestionField
+        context={context}
+        record={parsed.success ? parsed.data : { id: "" }}
+        field={field}
+        suggestion={storedSuggestion}
+        renderValue={renderValue}
+      >
+        {children}
+      </StoredSuggestionField>
+    );
+  if (!row) return children;
   const source = row.sourceByField.get(field);
   if (!source) return children;
   return (
@@ -934,14 +1139,195 @@ export function RecordFieldSuggestion({
   );
 }
 
+function StoredSuggestionField({
+  context,
+  record,
+  field,
+  suggestion,
+  renderValue,
+  children,
+}: {
+  context: RecordSuggestionsCtx;
+  record: SuggestionRecord;
+  field: string;
+  suggestion: SuggestionReviewRow;
+  renderValue?: (value: JsonValue) => ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <StoredSuggestionCell
+      suggestion={suggestion}
+      context={context}
+      record={record}
+      field={field}
+      renderValue={
+        renderValue ??
+        ((value) =>
+          renderSuggestedListFieldValue(context.entity, record, field, value))
+      }
+      accept={context.acceptStored}
+      reject={context.rejectStored}
+    >
+      {children}
+    </StoredSuggestionCell>
+  );
+}
+
+function StoredSuggestionCell({
+  context,
+  record,
+  field,
+  suggestion,
+  renderValue,
+  accept,
+  reject,
+  children,
+}: {
+  context: RecordSuggestionsCtx;
+  record: SuggestionRecord;
+  field: string;
+  suggestion: SuggestionReviewRow;
+  renderValue?: (value: JsonValue) => ReactNode;
+  accept: (id: string) => Promise<void>;
+  reject: (id: string, correctValue?: JsonValue) => Promise<void>;
+  children: ReactNode;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
+  const ghost = (
+    <span className="inline-flex min-w-0 items-center gap-1 rounded-sm border border-dashed border-muted-foreground/50 px-1 opacity-65">
+      <SparkleIcon aria-hidden className="size-3 shrink-0" />
+      {renderValue?.(suggestion.suggestedValue) ??
+        String(suggestion.suggestedValue)}
+    </span>
+  );
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1">
+      {suggestion.kind === "correction" ? (
+        <>
+          {children}
+          <ArrowRightIcon
+            aria-label="Suggested replacement"
+            className="size-3 shrink-0"
+          />
+        </>
+      ) : null}
+      <span title={`${Math.floor(suggestion.confidence * 100)}% confidence`}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 max-w-full min-w-0 px-1"
+          aria-label="Accept suggested value"
+          onClick={(event) => {
+            event.stopPropagation();
+            void accept(suggestion.id);
+          }}
+        >
+          {ghost}
+        </Button>
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              aria-label="Suggestion actions"
+            />
+          }
+        >
+          <span aria-hidden>···</span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => void accept(suggestion.id)}>
+            Accept
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void reject(suggestion.id)}>
+            Reject (Miss)
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setEditOpen(true)}>
+            Use a different value
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <EntityEditDialog<EditableEntity>
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        request={
+          // SAFETY: BoundRecordSuggestions only mounts for generated CRUD
+          // entities, and detailEditRequest builds that entity's update:full request.
+          detailEditRequest(
+            context.entity,
+            record as never,
+            field,
+          ) as EntityEditDialogRequest<EditableEntity>
+        }
+        onSubmitOverride={async (values) => {
+          const correctedValue = z.json().parse(values[field]);
+          await reject(suggestion.id, correctedValue);
+          setEditOpen(false);
+        }}
+      />
+    </span>
+  );
+}
+
+export function RecordSuggestionsBulkAction({
+  records,
+}: {
+  records: readonly unknown[];
+}) {
+  const context = useContext(RecordSuggestionsContext);
+  const [errors, setErrors] = useState<string[]>([]);
+  if (!context) return null;
+  const ids = new Set(
+    records.map(recordPublicId).filter((id): id is string => id !== null),
+  );
+  const suggestions = [...context.stored.values()].filter((item) =>
+    ids.has(item.recordId),
+  );
+  if (suggestions.length === 0) return null;
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Button
+        size="sm"
+        onClick={async () => {
+          const failures: string[] = [];
+          for (const item of suggestions) {
+            try {
+              await context.acceptStored(item.id);
+            } catch (error) {
+              failures.push(`${item.recordId}: ${String(error)}`);
+            }
+          }
+          setErrors(failures);
+        }}
+      >
+        Accept suggestions ({suggestions.length})
+      </Button>
+      {errors.length ? <span role="alert">{errors.join(" · ")}</span> : null}
+    </span>
+  );
+}
+
 /** Phone summaries truncate ordinary facts; proposals get their own full-width rows. */
 export function RecordRowSuggestions({ record }: { record: unknown }) {
   const context = useContext(RecordSuggestionsContext);
   const visit = useSuggestionVisit();
   const parsed = recordSchema.safeParse(record);
   const row = parsed.success ? context?.rows.get(parsed.data.id) : undefined;
-  if (!context || !row) return null;
-  const fields = [...row.sourceByField.keys()].filter((field) => {
+  if (!context || !parsed.success) return null;
+  const storedFields = [...context.stored.values()]
+    .filter((suggestion) => suggestion.recordId === parsed.data.id)
+    .map((suggestion) => suggestion.field);
+  const fields = [
+    ...new Set([...(row?.sourceByField.keys() ?? []), ...storedFields]),
+  ].filter((field) => {
+    if (context.stored.has(storedSuggestionKey(parsed.data.id, field)))
+      return true;
+    if (!row) return false;
     const current = recordValue(context.entity, row.record, field).value;
     const suggestion = row.suggestions[field] ?? null;
     const question = JSON.stringify([
@@ -962,20 +1348,33 @@ export function RecordRowSuggestions({ record }: { record: unknown }) {
   if (fields.length === 0) return null;
   return (
     <Stack gap="sm">
-      {fields.map((field) => (
-        <Stack key={field} gap="xs">
-          <Description size="xs">
-            {
-              entityFieldModels[context.entity].fields.find(
-                (candidate) => candidate.key === field,
-              )?.label
-            }
-          </Description>
-          <RecordFieldSuggestion record={record} field={field}>
-            {null}
-          </RecordFieldSuggestion>
-        </Stack>
-      ))}
+      {fields.map((field) => {
+        const stored = context.stored.get(
+          storedSuggestionKey(parsed.data.id, field),
+        );
+        const current = recordValue(context.entity, parsed.data, field);
+        return (
+          <Stack key={field} gap="xs">
+            <Description size="xs">
+              {
+                entityFieldModels[context.entity].fields.find(
+                  (candidate) => candidate.key === field,
+                )?.label
+              }
+            </Description>
+            <RecordFieldSuggestion record={record} field={field}>
+              {stored?.kind === "correction"
+                ? renderSuggestedListFieldValue(
+                    context.entity,
+                    parsed.data,
+                    field,
+                    current.value ?? "—",
+                  )
+                : null}
+            </RecordFieldSuggestion>
+          </Stack>
+        );
+      })}
     </Stack>
   );
 }

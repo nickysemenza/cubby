@@ -1354,6 +1354,10 @@ export const runChildren = [
         name: "Suggestion_entity_field_status_idx",
         on: ["entity", "field", "status"],
       },
+      {
+        name: "Suggestion_entity_record_status_idx",
+        on: ["entity", "recordId", "status"],
+      },
     ],
     checks: [
       {
@@ -1362,7 +1366,7 @@ export const runChildren = [
       },
       {
         name: "Suggestion_status_check",
-        sql: "{status} IN ('pending', 'applied', 'rejected')",
+        sql: "{status} IN ('pending', 'applied', 'rejected', 'superseded')",
       },
       {
         name: "Suggestion_confidence_check",
