@@ -133,7 +133,7 @@ See also the image operational passes at the end of this file.
 
 ## Import pipeline architecture
 
-[ADR 0008](adr/0008-mail-import-unattended-burn-down-interactive.md) settles the
+[ADR 0010](adr/0010-mail-import-unattended-burn-down-interactive.md) settles the
 split: Pi runs unattended Mail import (Email only, Luna/Sol/Jev routing, existing
 paid caps), and every browser, logged-in or adaptive research task is a member's
 Claude/Codex Burn-down over the Research queue (`research-queue` saved views on
@@ -151,10 +151,10 @@ historical Runs stay readable through generic reports.
   soft-deleted subjects and skip the liveness audit. The contract PR ships its
   code with the drop migration (the edge registry and Drizzle declarations still
   name these tables until then) and must:
-  - Run the data step first: copy supported `RunFactEvidence` into
-    `EntitySource` (facts on a Product or Purchase merged away after this
-    deploy stay on its tombstone), dismiss retired findings, stop unfinished
-    retired-purpose Runs, and let retirement destroy their coordinators.
+  - The data step (`0033_retire_unattended_research.sql`) has run: supported
+    `RunFactEvidence` is copied into `EntitySource` (merged-away facts on the
+    survivor), retired findings are dismissed and unfinished retired-purpose
+    Runs stopped; the daily retirement sweep destroys their coordinators.
     Record the private R2/DO manifest outside the repository first.
   - Drop the six tables, `RunEvidence` R2 objects not referenced by an Image,
     their `child-tables/run.ts` declarations, `entity-edges.ts` edges

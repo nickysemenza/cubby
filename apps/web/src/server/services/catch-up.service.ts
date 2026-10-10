@@ -122,7 +122,7 @@ export async function recoverMissedWork(db: Database) {
 /**
  * Start one Gmail discovery Workflow per connected mailbox; Mail import Runs
  * follow from discovery. Product research is never started here: it is a
- * member's Burn-down (ADR 0008).
+ * member's Burn-down (ADR 0010).
  */
 export async function discoverPurchases(db: Database) {
   const [

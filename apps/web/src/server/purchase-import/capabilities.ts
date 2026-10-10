@@ -39,7 +39,7 @@ const capabilityMatrix = {
     "finalize",
     "match_proposal",
   ]),
-  // Retired purposes (ADR 0008) keep readable history and authorize nothing.
+  // Retired purposes (ADR 0010) keep readable history and authorize nothing.
   account_sync: new Set(),
   purchase_validation: new Set(),
   product_enrichment: new Set(),

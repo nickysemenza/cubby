@@ -213,7 +213,7 @@ request: the exported Durable Object is a shell that loads
 loads the consumer when a `cubby-purchase-agent` batch arrives
 (`apps/web/scripts/check-server-closure.ts` budgets both paths).
 
-Pi runs two purposes ([ADR 0008](adr/0008-mail-import-unattended-burn-down-interactive.md)):
+Pi runs two purposes ([ADR 0010](adr/0010-mail-import-unattended-burn-down-interactive.md)):
 `mail_import` and `photo_inventory`. Both mount the same three host tools in
 `server/purchase-agent/tools.ts` (`claim_next_import_work`,
 `report_agent_progress`, `stop_import_run_for_review`) plus the public MCP

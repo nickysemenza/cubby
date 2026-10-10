@@ -11,7 +11,7 @@ respective [extraction](references/extraction.md) and [audit](references/audit.m
 instructions. For a photographed receipt or a Gmail order event, load
 [receipt extraction](references/receipt-extraction.md) or
 [order mail](references/order-mail.md). Pi, Codex and Claude share these
-contracts and the same public Cubby tools (ADR 0008).
+contracts and the same public Cubby tools (ADR 0010).
 
 Pi turns classified Email into Purchases, Expenses and Product resolutions
 without a browser. A member's Claude or Codex session does everything that needs

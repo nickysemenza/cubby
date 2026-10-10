@@ -27,6 +27,7 @@ import {
   purchasePaymentEvidence,
   run,
 } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb } from "~/server/repo/database-helpers";
 import { effectiveExpenseTradeSql } from "~/server/repo/expense-inheritance";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -387,6 +388,44 @@ describe("caller-driven purchase import writes", () => {
   // Without a commit default, purpose inheritance resolves first: a food
   // Product line keeps its household-project purpose, only a still-unassigned
   // principal line gets Other, and a Purchase-wide default is never invented.
+  // The order-id gap follows the retained order identity, not the source
+  // kind: a retailer order read in a member's own browser still lands in the
+  // Research queue when its Purchase loses that id.
+  it.each([
+    ["vendor_export", "EXAMPLE-ORDER-ID", ["order_id"]],
+    ["receipt_photo", null, []],
+  ] as const)(
+    "expects an order id only for an identified %s order",
+    async (kind, orderId, expected) => {
+      const { vendor } = await scope();
+      const { committed } = await memberImport(ctx.db, ctx.actor, {
+        key: `order-id-${kind}`,
+        orders: [
+          {
+            stableOrderId: `order-id-${kind}`,
+            vendorId: vendor.shortcode,
+            source: { ...source(`order-id-${kind}`, "d"), kind },
+            extraction: {
+              status: "ready" as const,
+              candidate: candidate(orderId, [service(12)]),
+            },
+          },
+        ],
+        defaultTrade: "other",
+      });
+      const saved = await purchaseByShortcode(committed.items[0]?.purchaseId);
+      await getDb(ctx.db)
+        .update(purchase)
+        .set({ orderId: null })
+        .where(eq(purchase.id, saved.id));
+      const gaps = (await loadDataQualities(ctx.db, "purchase", [saved.id]))
+        .get(saved.id)
+        ?.gaps.map((gap) => gap.check)
+        .filter((check) => check === "order_id");
+      expect(gaps).toEqual(expected);
+    },
+  );
+
   it("fills unassigned imported lines after resolving Product purpose inheritance", async () => {
     const { vendor } = await scope();
     await getDb(ctx.db)

@@ -413,6 +413,25 @@ export const proposedImportFix = z.discriminatedUnion("kind", [
 ]);
 export type ProposedImportFix = z.infer<typeof proposedImportFix>;
 
+// Stored findings may still carry fix kinds ADR 0010 retired until the
+// contract migration dismisses them; they read as having no executable fix.
+// Any other unknown kind still fails loudly.
+/** A persisted `RunFinding.proposedFix`, or null when it has none it can execute. */
+export const storedImportFix = z
+  .union([
+    z
+      .looseObject({
+        kind: z.enum([
+          "vendor_capture_profile",
+          "research_field_correction",
+          "validation_corrections",
+        ]),
+      })
+      .transform(() => null),
+    proposedImportFix,
+  ])
+  .nullable();
+
 export const browserCapture = z.object({
   url: z.url(),
   title: z.string().max(500),

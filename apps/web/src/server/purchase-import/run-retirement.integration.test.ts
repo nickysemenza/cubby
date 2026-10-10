@@ -465,4 +465,52 @@ describe("coordinator host retirement", () => {
     expect((await request("/coordinator-fetch")).status).toBe(410);
     status = "passed";
   }, 90_000);
+
+  // Regression: the empty-storage acknowledgement precedes the retiredAt
+  // stamp, so an entry point in that gap — even on an instance restarted
+  // after the acknowledgement — once passed the fence and recreated SDK
+  // storage that the stamped Run then never disposed.
+  it("refuses entry points once retirement begins, across a restart before retiredAt is stamped", async () => {
+    const runId = await agentRun();
+    await retirePurpose(runId);
+    runtime = await startScenarioHarness(ctx.databaseUrl, { steps: [] });
+    const { harness } = runtime;
+    const agentId = importRunAgentIdentity(runId, "mail_import");
+    const request = (pathname: string) =>
+      harness
+        .getWorker("cubby-queue-producer")
+        .fetch(new URL(pathname, "https://queue.test"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ agentId }),
+        });
+    const retireCall = async () => {
+      const response = await request("/coordinator-retire");
+      if (!response.ok) throw new Error(await response.text());
+      return disposal.parse(await response.json());
+    };
+    expect((await request("/coordinator-fetch")).status).toBe(200);
+    await settle(runId);
+    expect(await retireCall()).toEqual({ disposed: false });
+    expect(await retireCall()).toEqual({ disposed: true });
+    // The caller has the acknowledgement but has not stamped retiredAt yet.
+    expect(await coordinatorRetired(ctx.db, runId)).toBe(false);
+    // A deploy reloads every Worker, so the coordinator restarts cold.
+    await harness.update((options) => options);
+    const gapFetch = (await request("/coordinator-fetch")).status;
+    observations.push({
+      boundary: "fetch between acknowledgement and retiredAt",
+      expected: 410,
+      actual: gapFetch,
+    });
+    expect(gapFetch).toBe(410);
+    const repeat = await retireCall();
+    observations.push({
+      boundary: "repeat acknowledgement after gap fetch",
+      expected: true,
+      actual: repeat.disposed,
+    });
+    expect(repeat).toEqual({ disposed: true });
+    status = "passed";
+  }, 90_000);
 });

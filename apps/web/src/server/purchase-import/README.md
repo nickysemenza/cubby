@@ -1,6 +1,6 @@
 # Purchase import: Mail import, member imports and Burn-down
 
-[ADR 0008](../../../../../docs/adr/0008-mail-import-unattended-burn-down-interactive.md)
+[ADR 0010](../../../../../docs/adr/0010-mail-import-unattended-burn-down-interactive.md)
 splits purchase work in two (vocabulary: [GLOSSARY](../../../../../GLOSSARY.md)):
 
 - **Mail import** (unattended): Gmail discovery classifies and retains order
@@ -56,7 +56,12 @@ pending: nothing here starts Product research.
    (`run-service.ts` `reconcileSettledRun`); the daily cron expires stale Runs
    and destroys settled Runs' transcripts (`run-retirement.ts`), stamping
    `Run.retiredAt`. Runs of retired purposes are destroyed by their stored
-   coordinator identity without loading the current agent.
+   coordinator identity without loading the current agent. Once disposal is
+   authorized the coordinator writes a durable fence table, refuses every
+   entry point (also after a restart) and drains admitted ones before
+   deleting, so nothing recreates storage before `retiredAt` is stamped; an
+   inventory holding only the fence is empty. A stored finding whose fix kind is retired reads as having no
+   executable fix (`storedImportFix`).
 
 ## Member imports
 

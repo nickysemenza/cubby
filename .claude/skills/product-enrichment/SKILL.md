@@ -6,7 +6,7 @@ description: Burn down Cubby's Research queue - enrich Products with verified id
 # Enrich Cubby products
 
 Research exact Product identity and representative images, then write them with
-the Sources that support them. This is Burn-down (ADR 0008): your Claude or Codex
+the Sources that support them. This is Burn-down (ADR 0010): your Claude or Codex
 session owns the browser, the searching and the judgment; Cubby owns ownership,
 identifier collisions, image integrity and safe writes. Nothing researches
 Products unattended, so an absent session leaves the Research queue as it is.

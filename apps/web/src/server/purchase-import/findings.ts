@@ -8,7 +8,7 @@ import {
   type ResolveRunFindingInput,
 } from "@cubby/schemas/problems";
 import {
-  proposedImportFix,
+  storedImportFix,
   type ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
@@ -520,7 +520,8 @@ export async function resolveRunFinding(
       throw new Error("This import finding has already been resolved.");
     }
     if (input.action === "apply") {
-      const fix = proposedImportFix.parse(finding.proposedFix);
+      const fix = storedImportFix.parse(finding.proposedFix);
+      if (!fix) throw new Error("This import finding has no applicable fix.");
       if (
         fix.kind === "replace_aggregate_line" &&
         (!fix.reviewSnapshot ||

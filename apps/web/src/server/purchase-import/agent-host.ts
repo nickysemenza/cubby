@@ -85,6 +85,8 @@ export function purchaseAgentQueueEnvironment(
   };
 }
 
+const RETIREMENT_FENCE = "cubby_retirement_fence";
+
 type RunAgent =
   import("~/server/purchase-agent/run-agent").PurchaseImportRunAgent;
 
@@ -95,6 +97,13 @@ type RunAgent =
  * (the alarm's memory-limit circuit breaker covers boot hydration), so only
  * the `dispatch` RPC initializes it here. Retirement of a settled Run
  * destroys the transcript, and with it any Email text the agent read.
+ *
+ * `Run.retiredAt` is stamped only after `retire` acknowledges empty storage,
+ * so the database fence alone leaves a gap. Once `retire` is authorized it
+ * writes a durable fence table (which survives a restart and is the only
+ * storage an empty inventory keeps), admits no entry point, drains the ones
+ * already admitted, and inventories and deletes storage with no event
+ * interleaved.
  */
 class PurchaseImportRunAgentHost
   extends DurableObject<Env>
@@ -102,6 +111,37 @@ class PurchaseImportRunAgentHost
 {
   private agent: Promise<RunAgent> | undefined;
   private disposalAttempted = false;
+  private retiring = false;
+  private readonly admitted = new Set<Promise<unknown>>();
+
+  /** Run `work` unless retirement began, tracked so `retire` can drain it. */
+  private admit<T>(work: () => Promise<T>, refused: T): Promise<T> {
+    this.retiring ||=
+      this.ctx.storage.sql
+        .exec(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+          RETIREMENT_FENCE,
+        )
+        .toArray().length > 0;
+    if (this.retiring) return Promise.resolve(refused);
+    const running = work();
+    const settled = () => this.admitted.delete(running);
+    this.admitted.add(running);
+    running.then(settled, settled);
+    return running;
+  }
+
+  /** Persist the retirement fence; storage deletion removes it, so rewrite it after. */
+  private fence() {
+    this.ctx.storage.sql.exec(
+      `CREATE TABLE IF NOT EXISTS ${RETIREMENT_FENCE} (fenced INTEGER)`,
+    );
+  }
+
+  /** The database fence, plus retirement begun on this instance meanwhile. */
+  private async fenced(): Promise<boolean> {
+    return (await this.services().coordinatorRetired()) || this.retiring;
+  }
 
   private runId(): string {
     const runId = importRunIdFromAgentIdentity(this.ctx.id.name);
@@ -131,14 +171,24 @@ class PurchaseImportRunAgentHost
 
   async fetch(request: Request): Promise<Response> {
     if (isMaintenanceMode(this.env)) return maintenanceResponse(request);
-    if (await this.services().coordinatorRetired())
-      return new Response("Import Run coordinator retired.", { status: 410 });
-    return (await this.loaded()).fetch(request);
+    const retired = () =>
+      new Response("Import Run coordinator retired.", { status: 410 });
+    return this.admit(async () => {
+      if (await this.fenced()) return retired();
+      return (await this.loaded()).fetch(request);
+    }, retired());
   }
 
   async retire(): Promise<{ disposed: boolean }> {
     assertNotInMaintenance(this.env);
     const { current } = await this.services().authorizeRetirement();
+    this.retiring = true;
+    this.fence();
+    await Promise.allSettled(this.admitted);
+    return this.ctx.blockConcurrencyWhile(() => this.dispose(current));
+  }
+
+  private async dispose(current: boolean): Promise<{ disposed: boolean }> {
     const keys = await this.ctx.storage.list();
     const alarm = await this.ctx.storage.getAlarm();
     const tables = this.ctx.storage.sql
@@ -180,12 +230,15 @@ class PurchaseImportRunAgentHost
       // The next call's empty inventory acknowledges the disposal.
       await this.ctx.storage.deleteAlarm();
       await this.ctx.storage.deleteAll();
+      this.fence();
       return { disposed: false };
     }
     this.disposalAttempted = true;
     const agent = await this.loaded();
     await agent.abortForRetirement();
     await agent.destroy();
+    // Before destroy's deferred isolate abort runs.
+    this.fence();
     // Public destroy aborts this isolate. Only a later cold empty inventory acknowledges it.
     return { disposed: false };
   }
@@ -197,10 +250,11 @@ class PurchaseImportRunAgentHost
     }
     return withInvocationTrace(
       "purchase-agent.alarm",
-      async () => {
-        if (await this.services().coordinatorRetired()) return;
-        await (await this.loaded()).alarm();
-      },
+      () =>
+        this.admit(async () => {
+          if (await this.fenced()) return;
+          await (await this.loaded()).alarm();
+        }, undefined),
       {
         "cubby.workload": "alarm",
         "cubby.run.id":
@@ -213,13 +267,16 @@ class PurchaseImportRunAgentHost
     assertNotInMaintenance(this.env);
     return withInvocationTrace(
       "purchase-agent.dispatch",
-      async () => {
-        if (await this.services().coordinatorRetired())
-          return { accepted: false };
-        const agent = await this.loaded();
-        await agent.__unsafe_ensureInitialized();
-        return agent.dispatch(input);
-      },
+      () =>
+        this.admit(
+          async () => {
+            if (await this.fenced()) return { accepted: false };
+            const agent = await this.loaded();
+            await agent.__unsafe_ensureInitialized();
+            return agent.dispatch(input);
+          },
+          { accepted: false },
+        ),
       {
         "cubby.workload": "rpc",
         "cubby.run.id":

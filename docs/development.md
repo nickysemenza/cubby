@@ -48,7 +48,7 @@ JSONL routes    →  cancellable workflow streams
   full nutrient table (`usdaFoodListRow`); a single-food read returns it.
 - Purchase imports run in the web Worker: Pi's Mail import and photo agents
   (one Durable Object per Run), and a member's Claude/Codex Burn-down through
-  the public MCP tools ([ADR 0008](adr/0008-mail-import-unattended-burn-down-interactive.md)).
+  the public MCP tools ([ADR 0010](adr/0010-mail-import-unattended-burn-down-interactive.md)).
   The map of queue events, Run services and owning files is
   [`apps/web/src/server/purchase-import/README.md`](../apps/web/src/server/purchase-import/README.md).
 - OpenAI Responses calls use the household's ChatGPT plan when connected in

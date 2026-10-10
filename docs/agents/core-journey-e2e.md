@@ -116,7 +116,7 @@ pnpm test:e2e:sim -- --input-journey
 
 The simulator scenario uses native CSV intake and photo review controls. The Mac
 arrival-order scenarios that composed retailer browser capture were retired with
-the Mac browser bridge ([ADR 0008](../adr/0008-mail-import-unattended-burn-down-interactive.md));
+the Mac browser bridge ([ADR 0010](../adr/0010-mail-import-unattended-burn-down-interactive.md));
 the backend arrival-order matrix still covers that logic, without a Mac UI run.
 See [Mac import checks](../../apps/web/tooling/mac-import-e2e.md) for fixture
 signing, host requirements, and artifact boundaries.

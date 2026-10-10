@@ -14,7 +14,7 @@
   "apps/web/src/server/repo/data-quality/checks/location.ts": 0,
   "apps/web/src/server/repo/data-quality/checks/meal.ts": 3,
   "apps/web/src/server/repo/data-quality/checks/project.ts": 2,
-  "apps/web/src/server/repo/data-quality/checks/purchase.ts": 4,
+  "apps/web/src/server/repo/data-quality/checks/purchase.ts": 3,
   "apps/web/src/server/repo/data-quality/checks/recipe.ts": 4,
   "apps/web/src/server/repo/data-quality/checks/run.ts": 12,
   "apps/web/src/server/repo/data-quality/checks/spending-category.ts": 2,
