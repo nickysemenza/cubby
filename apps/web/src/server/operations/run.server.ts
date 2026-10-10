@@ -1,6 +1,7 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { and, eq, isNull } from "drizzle-orm";
+import type { z } from "zod";
 
 import { runContract } from "~/contracts/run.contract";
 import { getPurchaseAgentQueue } from "~/server/cf-env";
@@ -55,6 +56,63 @@ async function memberParty(context: AuthenticatedRequestContext) {
   if (!party)
     throw new Error("This login is not linked to a member ledger party yet.");
   return party;
+}
+
+async function controlRunOperation(
+  context: AuthenticatedRequestContext,
+  { runId, ...input }: z.infer<typeof runContract.ops.control.input>,
+): Promise<z.input<typeof runContract.ops.control.output>> {
+  await memberParty(context);
+  const [target] = await getDb(context.db)
+    .select({ purpose: runTable.purpose })
+    .from(runTable)
+    .where(eq(runTable.shortcode, runShortcode.parse(runId)))
+    .limit(1);
+  if (target?.purpose === "mail_search")
+    throw new Error(
+      "Historical vendor-search Runs cannot execute again; start current research instead.",
+    );
+  // A Workflow executes these Runs: cancel and retry act on its instance.
+  if (target && isWorkflowRunPurpose(target.purpose)) {
+    const { controlWorkflowRun } =
+      await import("~/server/workflow-runs/control");
+    await controlWorkflowRun(
+      context.db,
+      context.actorContext,
+      { runPublicId: runId, action: input.action },
+      target.purpose,
+    );
+    return { run: await loadRunDetail(context.db, runId), successor: null };
+  }
+  const control = await controlRun(context.db, context.actorContext, {
+    runPublicId: runId,
+    ...input,
+  });
+  const wake = approvalWakeEvent(control);
+  const queue = wake ? getPurchaseAgentQueue() : null;
+  if (wake && queue) await dispatchRunEvent(context.db, queue, wake);
+  if (
+    "dispatchRunId" in control &&
+    control.dispatchRunId &&
+    control.dispatchEventId
+  ) {
+    await dispatchStartedRun(context.db, {
+      id: control.dispatchRunId,
+      eventId: control.dispatchEventId,
+      purpose: control.dispatchPurpose,
+    });
+  }
+  return {
+    run: await loadRunDetail(context.db, runId),
+    successor:
+      "successorRunPublicId" in control && control.successorRunPublicId
+        ? {
+            publicId: control.successorRunPublicId,
+            status: control.successorStatus,
+            created: control.created,
+          }
+        : null,
+  };
 }
 
 export const runHandlers = implementOperationDomain(runContract, {
@@ -180,59 +238,9 @@ export const runHandlers = implementOperationDomain(runContract, {
       context.actorContext,
     );
   },
-  control: async (context, { runId, ...input }) => {
-    await memberParty(context);
-    const [target] = await getDb(context.db)
-      .select({ purpose: runTable.purpose })
-      .from(runTable)
-      .where(eq(runTable.shortcode, runShortcode.parse(runId)))
-      .limit(1);
-    if (target?.purpose === "mail_search")
-      throw new Error(
-        "Historical vendor-search Runs cannot execute again; start current research instead.",
-      );
-    // A Workflow executes these Runs: cancel and retry act on its instance.
-    if (target && isWorkflowRunPurpose(target.purpose)) {
-      const { controlWorkflowRun } =
-        await import("~/server/workflow-runs/control");
-      await controlWorkflowRun(
-        context.db,
-        context.actorContext,
-        { runPublicId: runId, action: input.action },
-        target.purpose,
-      );
-      return { run: await loadRunDetail(context.db, runId), successor: null };
-    }
-    const control = await controlRun(context.db, context.actorContext, {
-      runPublicId: runId,
-      ...input,
-    });
-    const wake = approvalWakeEvent(control);
-    const queue = wake ? getPurchaseAgentQueue() : null;
-    if (wake && queue) await dispatchRunEvent(context.db, queue, wake);
-    if (
-      "dispatchRunId" in control &&
-      control.dispatchRunId &&
-      control.dispatchEventId
-    ) {
-      await dispatchStartedRun(context.db, {
-        id: control.dispatchRunId,
-        eventId: control.dispatchEventId,
-        purpose: control.dispatchPurpose,
-      });
-    }
-    return {
-      run: await loadRunDetail(context.db, runId),
-      successor:
-        "successorRunPublicId" in control && control.successorRunPublicId
-          ? {
-              publicId: control.successorRunPublicId,
-              status: control.successorStatus,
-              created: control.created,
-            }
-          : null,
-    };
-  },
+  control: controlRunOperation,
+  lifecycle: (context, { controlAction, ...input }) =>
+    controlRunOperation(context, { ...input, action: controlAction }),
   logs: async (context, input) => {
     await memberParty(context);
     return loadRunLog(context.db, input.runId);

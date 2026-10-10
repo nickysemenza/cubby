@@ -20,6 +20,13 @@ Interactive Claude/Codex sessions use their available research and Cubby tools
 under the same domain contracts. Source-backed orders pass through Cubby's
 bounded import writer rather than generic entity mutation.
 
+Use `imports_read.run_status` to inspect an existing Run before controlling it.
+`run.lifecycle` supports `controlAction: cancel`, `retry` or `restart` through
+the shared member-owned controls. It does not approve findings, authorize paid
+inference or verify unfinished targets. Respect an explicit member pause: do
+not retry or restart until research is resumed. Follow the returned successor;
+the preceding research attempt remains immutable.
+
 ## Connect and converge evidence
 
 1. Connect Google with read-only Gmail access. Prioritize known Vendors and

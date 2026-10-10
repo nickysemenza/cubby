@@ -563,6 +563,12 @@ and deployment/readback order are owned by the
    browser choice and permissions, with a link to the pane. The run page proxies the agent conversation through
    `agent-proxy.ts` to the run's agent Durable Object. Member controls go
    through `controlRun` and `recordRunControlEvent`.
+   Research controls require the Run's owning member across web, native and MCP;
+   photo inventory retains its shared-household control semantics. MCP
+   `run.lifecycle` admits only `cancel`, `retry` and `restart`, delegates to that
+   same control/dispatch path, and returns the Run status and successor identity.
+   It cannot approve/reject findings or grant inference allowances. Settled
+   research attempts remain unchanged; repeated retries reuse their successor.
 
 Independent support assessment delivers identical retained attachment bytes once
 per MIME type and checksum in a request. Every observation keeps its evidence

@@ -25,7 +25,7 @@ type Capability =
   | "photo_commit"
   /** Review-queue metadata only: never changes household records. */
   | "match_proposal"
-  /** Starting another run; no purpose grants it, so a run never spawns one. */
+  /** Member Run lifecycle controls; no purpose may start or retry another Run. */
   | "start_run";
 
 const capabilityMatrix = {
@@ -118,6 +118,7 @@ const actionCapability = {
   "photo_run.propose_groups": "photo_commit",
   "photo_run.commit_group": "photo_commit",
   "run.start": "start_run",
+  "run.lifecycle": "start_run",
   "run.start_sync": "start_run",
   "run.start_charge_run": "start_run",
   "meal_recipe.add": "generic_mutation",

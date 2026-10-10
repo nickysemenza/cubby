@@ -35,9 +35,13 @@ describe("targeted import capabilities", () => {
     ).not.toThrow();
   });
 
-  // A coordinator that could start runs could chain them without a member.
+  // Starting or retrying Runs must not let a coordinator chain paid work.
   it("lets no run purpose start another run", () => {
-    for (const action of ["run.start", "run.start_charge_run"] as const)
+    for (const action of [
+      "run.start",
+      "run.start_charge_run",
+      "run.lifecycle",
+    ] as const)
       for (const purpose of runPurpose.options)
         expect(() =>
           assertRunCapability(
