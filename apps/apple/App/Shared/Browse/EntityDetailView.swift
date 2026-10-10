@@ -426,13 +426,17 @@ struct EntityDetailContent: View {
             }
             if presentation.detailSections.contains(where: { !$0.overview }) {
                 Section {
-                    Picker("Record view", selection: $selectedSection) {
-                        Text("Overview").tag("overview")
-                        ForEach(presentation.detailSections.filter { !$0.overview }) { section in
-                            Text(section.title ?? section.id).tag(section.id)
+                    LabeledContent("Record view") {
+                        Picker("Record view", selection: $selectedSection) {
+                            Text("Overview").tag("overview")
+                            ForEach(presentation.detailSections.filter { !$0.overview }) { section in
+                                Text(section.title ?? section.id).tag(section.id)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .accessibilityIdentifier("detail.record-view")
                     }
-                    .pickerStyle(.menu)
                 }
             }
             if selectedSection == "overview", let journal = journalSection {

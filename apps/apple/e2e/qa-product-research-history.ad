@@ -4,6 +4,9 @@ open com.nickysemenza.cubby
 wait "role=Button label=Find" 240000
 open "cubby://entity/${PRODUCT_ID}"
 wait text "Synthetic Flour Bag" 90000
+click "id=detail.record-view"
+wait text "Enrichment history" 30000
+click "label=\"Enrichment history\""
 scroll down 0.4 --until "text=Partially verified"
 wait text "Partially verified" 90000
 wait text "Exact model remains unsupported" 90000
