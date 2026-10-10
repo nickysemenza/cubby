@@ -176,11 +176,13 @@ export async function seedActiveResearchHistory(page: Page, name: string) {
 export async function setResearchHistoryStatus(
   code: string,
   status: "running" | "completed" | "failed",
+  dispatchError?: string,
 ) {
   await getDb(getFixtureDb())
     .update(schema.run)
     .set({
       status,
+      dispatchError,
       endedAt: status === "running" ? null : new Date(),
     })
     .where(eq(schema.run.shortcode, parseShortcodeFor("run", code)));

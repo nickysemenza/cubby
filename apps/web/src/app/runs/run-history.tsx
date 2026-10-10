@@ -142,6 +142,7 @@ export function RunHistory({
       recordType: filters.recordType,
       kind: filters.kind,
       state: filters.state,
+      attentionOnly: filters.attentionOnly,
       trigger: filters.trigger,
       excludeTriggers: filters.excludeTriggers,
       routine: filters.routine,
@@ -160,6 +161,7 @@ export function RunHistory({
       filters.recordType,
       filters.kind,
       filters.state,
+      filters.attentionOnly,
       filters.trigger,
       filters.excludeTriggers,
       filters.routine,
@@ -184,6 +186,14 @@ export function RunHistory({
   const groups = useInfiniteQuery({
     ...cursorQueryOptions(activity.groups, input),
     enabled: grouped,
+  });
+  const attentionInput = useMemo<ActivityListInput>(
+    () => ({ ...input, attentionOnly: true, limit: 5, sort: "newest" }),
+    [input],
+  );
+  const attention = useQuery({
+    ...activity.list.queryOptions(attentionInput),
+    refetchInterval: 15_000,
   });
   const groupRows = useMemo(
     () => groups.data?.pages.flatMap((page) => page.items) ?? [],
@@ -309,7 +319,7 @@ export function RunHistory({
   const toggle = useCallback((root: HistoryRow) => {
     setExpanded((value) => ({ ...value, [root.id]: !value[root.id] }));
   }, []);
-  const select = (row: HistoryRow) => {
+  const select = (row: ActivityRun) => {
     if (mode === "mobile") {
       void navigate({
         to:
@@ -529,6 +539,7 @@ export function RunHistory({
       recordType: undefined,
       kind: undefined,
       state: undefined,
+      attentionOnly: undefined,
       trigger: undefined,
       vendorAccountId: undefined,
       vendorId: undefined,
@@ -555,6 +566,84 @@ export function RunHistory({
   ) : null;
   return (
     <Stack gap="sm">
+      <section aria-label="Needs attention" className="space-y-3 border-b pb-3">
+        <Row gap="sm" align="center" wrap>
+          <h2 className="text-base font-semibold">Needs attention</h2>
+          <span className="text-sm text-muted-foreground tabular-nums">
+            {attention.data
+              ? `${attention.data.total} matching attempts`
+              : "Loading…"}
+          </span>
+          <Button
+            type="button"
+            variant={filters.attentionOnly ? "secondary" : "outline"}
+            size="sm"
+            aria-pressed={filters.attentionOnly === true}
+            onClick={() =>
+              onFilterChange({
+                attentionOnly: filters.attentionOnly ? undefined : true,
+              })
+            }
+          >
+            {filters.attentionOnly
+              ? "Show all statuses"
+              : "Show attention only"}
+          </Button>
+        </Row>
+        <p className="text-sm text-muted-foreground">
+          Waiting, review and failed attempts within the current filters. Open a
+          Run to inspect its evidence and available actions.
+        </p>
+        {attention.error ? (
+          <p role="alert" className="text-sm break-words text-destructive">
+            {attention.error.message}
+          </p>
+        ) : null}
+        {attention.data?.total === 0 ? (
+          <p className="text-sm">No matching attempts need attention.</p>
+        ) : null}
+        <ul className="space-y-3">
+          {attention.data?.items.map((run) => (
+            <li key={run.id} className="space-y-1.5 text-sm">
+              <Row gap="sm" align="center" wrap>
+                <RunSubject run={run} />
+                <Badge variant="secondary">{label(run.state)}</Badge>
+                <span className="text-muted-foreground">{run.workLabel}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => select(run)}
+                >
+                  Open Run
+                </Button>
+              </Row>
+              <p className="break-words">
+                {run.currentStep ??
+                  (run.error
+                    ? "Failure details retained below."
+                    : "No reason recorded; inspect the Run for retained context.")}
+              </p>
+              {run.error ? (
+                <details>
+                  <summary className="cursor-pointer">Failure details</summary>
+                  <pre className="max-h-48 overflow-auto text-xs break-words whitespace-pre-wrap">
+                    {run.error}
+                  </pre>
+                </details>
+              ) : null}
+              <RunTargetChips run={run} wrap />
+            </li>
+          ))}
+        </ul>
+        {attention.data &&
+        attention.data.total > attention.data.items.length ? (
+          <p className="text-sm text-muted-foreground">
+            Showing the {attention.data.items.length} newest matching attempts.
+            Use “Show attention only” to browse the full list.
+          </p>
+        ) : null}
+      </section>
       {workSummary !== undefined ? (
         <output aria-label="Matching attempts" className="block text-sm">
           <span className="block">{workSummary || "No matching attempts"}</span>

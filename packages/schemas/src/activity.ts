@@ -135,6 +135,8 @@ export const activityListInput = z.object({
   vendorId: z.string().optional(),
   ledgerPartyId: z.string().optional(),
   state: z.string().max(50).optional(),
+  /** Waiting, review and failed attempts; preserves every other scope filter. */
+  attentionOnly: z.boolean().optional(),
   subjectId: z.string().max(100).optional(),
   submissionId: activitySubmissionId.optional(),
   executor: z.enum(["all", "cloud", "device", "unknown"]).default("all"),

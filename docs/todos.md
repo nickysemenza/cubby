@@ -329,8 +329,11 @@ research acceptance.
   grouped queries, with one server-composed summary in web and native. Persisted
   pagination/filter/empty-result coverage and synthetic web acceptance passed.
   Independent review, exact-head hosted checks, merge and deployment completed
-  in [#1826](https://github.com/nickysemenza/cubby/pull/1826). A household overview with reasons and next actions remains
-  open. Finish a
+  in [#1826](https://github.com/nickysemenza/cubby/pull/1826). The web attention
+  preview now reuses the paged projection for scoped waiting, review and failed
+  attempts, retained reasons and direct inspector actions. Persisted pagination
+  and UI acceptance, independent review and delivery are in progress. Native and
+  installed-household overview acceptance remain open. Finish a
   record-level view of processed emails, matched orders, linked
   Purchases and enriched Products with processing time, outcome, evidence and
   links. Include supported unchanged facts and unresolved work, not only audit

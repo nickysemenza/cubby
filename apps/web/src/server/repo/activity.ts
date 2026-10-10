@@ -420,6 +420,11 @@ async function presentActivityRuns(db: Database, rows: readonly RunWire[]) {
   });
 }
 
+const waitingAttempt = sql`state IN ('paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')`;
+const reviewAttempt = sql`state = 'needs_review'`;
+const failedAttempt = sql`state IN ('failed', 'dispatch_failed')`;
+
+// oxlint-disable-next-line complexity -- independent optional scopes share one predicate across flat, grouped and attention reads.
 function listPredicate(input: ActivityListInput): SQL {
   const clauses: SQL[] = [sql`true`];
   if (input.recordType) clauses.push(sql`"recordType" = ${input.recordType}`);
@@ -442,6 +447,10 @@ function listPredicate(input: ActivityListInput): SQL {
   if (input.ledgerPartyId)
     clauses.push(sql`"ledgerPartyId" = ${input.ledgerPartyId}`);
   if (input.state) clauses.push(sql`state = ${input.state}`);
+  if (input.attentionOnly)
+    clauses.push(
+      sql`(${waitingAttempt} OR ${reviewAttempt} OR ${failedAttempt})`,
+    );
   if (input.from)
     clauses.push(
       sql`"createdAt" >= (${input.from}::timestamptz AT TIME ZONE 'UTC')`,
@@ -505,9 +514,9 @@ function listPredicate(input: ActivityListInput): SQL {
 /** One state policy for flat, grouped and all-page attempt summaries. */
 const workCountsProjection = sql`jsonb_build_object(
           'working', count(*) FILTER (WHERE state IN ('running', 'pending', 'leased')),
-          'waiting', count(*) FILTER (WHERE state IN ('paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')),
-          'needsReview', count(*) FILTER (WHERE state = 'needs_review'),
-          'failed', count(*) FILTER (WHERE state IN ('failed', 'dispatch_failed')),
+          'waiting', count(*) FILTER (WHERE ${waitingAttempt}),
+          'needsReview', count(*) FILTER (WHERE ${reviewAttempt}),
+          'failed', count(*) FILTER (WHERE ${failedAttempt}),
           'completed', count(*) FILTER (WHERE state IN ('completed', 'ready')),
           'skipped', count(*) FILTER (WHERE state = 'skipped')
         )`;

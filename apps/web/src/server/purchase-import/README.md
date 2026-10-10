@@ -41,6 +41,12 @@ state policy as individual groups. Filters bound those totals; an empty result
 returns zero counts. Web and native present the summary as matching Run/image-job
 attempts, not verified Product facts, completed research objectives or mailbox
 coverage. Native filter resets clear the previous summary before a new read.
+The web overview reuses the same paged list with `attentionOnly`: waiting,
+review and failed predicates are shared with the all-page counts. Every other
+scope filter still applies, including to descendant attempts beneath completed
+parents. Its five newest matching attempts show subjects, retained steps and raw
+failures, then open the existing inspector; the full attention filter remains
+paged. Read refreshes do not resume research or authorize inference.
 
 Product and Purchase research history use the shared entity report and record
 renderer on web and Apple clients. Each attempt shows its Run lifecycle alongside

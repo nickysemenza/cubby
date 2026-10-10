@@ -12,6 +12,46 @@ import {
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
+test("Run attention exposes a scoped child's failure and opens its inspector", async ({
+  page,
+}) => {
+  const sample = await seedActiveResearchHistory(
+    page,
+    uniqueName(test.info(), "Attention scope"),
+  );
+  const other = await seedActiveResearchHistory(
+    page,
+    uniqueName(test.info(), "Other attention"),
+  );
+  const diagnostic = "Synthetic retailer response: 503 source unavailable";
+  await setResearchHistoryStatus(sample.childId, "failed", diagnostic);
+  await setResearchHistoryStatus(
+    other.childId,
+    "failed",
+    "Unrelated synthetic failure",
+  );
+  await gotoAuthenticatedPage(
+    page,
+    `/runs?group=run&vendorId=${sample.vendorId}`,
+  );
+  const attention = page.getByRole("region", { name: "Needs attention" });
+  await expect(attention.getByRole("button", { name: "Open Run" })).toHaveCount(
+    1,
+  );
+  await expect(attention).toContainText(diagnostic);
+  await expect(attention).not.toContainText("Unrelated synthetic failure");
+  await attention.getByText("Failure details", { exact: true }).click();
+  await expect(attention.getByText(diagnostic, { exact: true })).toBeVisible();
+  await attention.getByRole("button", { name: "Show attention only" }).click();
+  await expect(page).toHaveURL(/attentionOnly=true/u);
+  const summary = page.getByRole("status", { name: "Matching attempts" });
+  await expect(summary).toContainText("1 failed");
+  await expect(summary).not.toContainText("completed");
+  await attention.getByRole("button", { name: "Open Run" }).click();
+  await expect(page).toHaveURL(new RegExp(`selected=${sample.childId}`));
+  await expectViewportBounded(page);
+});
+
 test("Runs summarize matching attempts without claiming Product verification", async ({
   page,
 }) => {

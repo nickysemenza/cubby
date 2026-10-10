@@ -867,6 +867,93 @@ describe("unified Runs history", () => {
     expect(rows.find((row) => row.id === legacyId)?.parentRunId).toBeNull();
   });
 
+  it("pages attention attempts without hiding waiting children behind completed roots", async () => {
+    // A cursor, a completed ancestor, or an unrelated scope must not change which
+    // persisted attempts need attention; working/completed attempts stay out.
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic attention member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const rootId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      trigger: "manual",
+      status: "completed",
+    });
+    const childId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_import",
+      trigger: "discovery",
+      parentRunId: rootId,
+    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "paused_offline" })
+      .where(eq(runTable.id, childId));
+    const reviewId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "product_enrichment",
+      trigger: "manual",
+    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "needs_review" })
+      .where(eq(runTable.id, reviewId));
+    await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+      trigger: "manual",
+    });
+    const input = {
+      executor: "all" as const,
+      sort: "newest" as const,
+      limit: 1,
+      attentionOnly: true,
+    };
+    const first = await listActivity(ctx.db, null, input);
+    expect.soft(first.total).toBe(2);
+    expect
+      .soft(first.workCounts)
+      .toMatchObject({ working: 0, completed: 0, waiting: 1, needsReview: 1 });
+    if (!first.nextCursor) throw new Error("Attention fixture must paginate");
+    const second = await listActivity(ctx.db, null, {
+      ...input,
+      cursor: first.nextCursor,
+    });
+    const ids = [first.items[0]?.id, second.items[0]?.id];
+    const saved = await getDb(ctx.db)
+      .select({ id: runTable.id, shortcode: runTable.shortcode })
+      .from(runTable);
+    expect
+      .soft(new Set(ids))
+      .toEqual(
+        new Set(
+          saved
+            .filter((row) => row.id === childId || row.id === reviewId)
+            .map((row) => row.shortcode),
+        ),
+      );
+    const groups = await listActivityGroups(ctx.db, null, {
+      ...input,
+      limit: 20,
+    });
+    expect.soft(groups).toMatchObject({ total: 2, totalItems: 2 });
+    expect
+      .soft(
+        groups.items.find(
+          (row) =>
+            row.root.id === saved.find((row) => row.id === rootId)?.shortcode,
+        ),
+      )
+      .toMatchObject({ contextOnly: true, childCount: 1 });
+    expect(
+      await listActivityGroupChildren(ctx.db, null, {
+        ...input,
+        rootId: saved.find((row) => row.id === rootId)!.shortcode,
+      }),
+    ).toMatchObject({ total: 1 });
+    expect(
+      await listActivity(ctx.db, null, { ...input, kind: "background" }),
+    ).toMatchObject({ total: 0, items: [] });
+  });
+
   it("counts matching work across every group independently of cursor pagination", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic overview member",
