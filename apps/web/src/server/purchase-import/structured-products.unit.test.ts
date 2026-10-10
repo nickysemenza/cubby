@@ -43,6 +43,22 @@ const offer = (sku: string, variant: number) => ({
 const base = "https://shop.forgewear.example.test/products/tee";
 
 describe("structured product identifiers from JSON-LD", () => {
+  it("keeps agreeing Offer identifiers when its URL makes no variant claim", () => {
+    const block = JSON.stringify({
+      "@type": "Product",
+      sku: "SYN-EXACT",
+      offers: {
+        "@type": "Offer",
+        sku: "SYN-EXACT",
+        url: "https://affiliate.example.test/tee",
+      },
+    });
+    const capture = walk("https://shop.example.test/products/tee?variant=111", [
+      block,
+    ]);
+    expect(capture.variantGroup).toBe(false);
+  });
+
   it("contributes a Shopify Product's single Offer", () => {
     const block = JSON.stringify({
       "@context": "https://schema.org",

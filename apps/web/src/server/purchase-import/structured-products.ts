@@ -174,6 +174,8 @@ export function structuredProductsFromJsonLd(input: {
         try {
           const served = new URL(input.pageURL);
           const offered = new URL(String(item.url), served);
+          const variant = variantOf(offered.href);
+          if (variant === null) return null;
           // Variant ids are local to the product page, not global identities.
           if (
             offered.protocol !== "https:" ||
@@ -183,7 +185,7 @@ export function structuredProductsFromJsonLd(input: {
             offered.pathname !== served.pathname
           )
             return INVALID;
-          return variantOf(offered.href);
+          return variant;
         } catch {
           return INVALID;
         }
