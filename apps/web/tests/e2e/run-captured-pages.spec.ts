@@ -171,6 +171,12 @@ test("retained captures open beside their accepted facts with bounded navigation
   expect(original.status()).toBe(200);
   expect(original.headers()["cache-control"]).toBe("private, no-store");
   expect(await original.body()).toEqual(png);
+  for (const headers of [
+    { Authorization: "Bearer invalid-synthetic-token" },
+    { "x-api-key": "invalid-synthetic-key" },
+  ]) {
+    expect((await page.request.get(mediaUrl, { headers })).status()).toBe(401);
+  }
   const anonymous = await browser.newContext({
     storageState: { cookies: [], origins: [] },
   });
