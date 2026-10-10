@@ -105,6 +105,36 @@ describe("account sync planning and start", () => {
     });
   });
 
+  it.each(["paused_auth", "paused_offline"] as const)(
+    "projects a live %s Run even when the account remains active",
+    async (status) => {
+      const { party, account, queue } = await fixture();
+      const started = await startAccountSync(
+        ctx.db,
+        party.id,
+        { vendorAccountId: account.shortcode },
+        queue,
+      );
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status })
+        .where(eq(run.shortcode, started.runId));
+      expect(
+        (await loadSyncPlan(ctx.db, party.id, {})).accounts[0],
+      ).toMatchObject({
+        accountStatus: status,
+        action: { kind: "resume", status },
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status: "running" })
+        .where(eq(run.shortcode, started.runId));
+      expect(
+        (await loadSyncPlan(ctx.db, party.id, {})).accounts[0],
+      ).toMatchObject({ accountStatus: "active" });
+    },
+  );
+
   it("reads broker connectivity only for the selected member-owned account", async () => {
     const { party, account } = await fixture();
     const reads: string[] = [];

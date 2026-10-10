@@ -123,7 +123,11 @@ export async function loadSyncPlan(
           shortcode: account.shortcode,
           label: account.label,
           vendorName: account.vendorName,
-          accountStatus: account.accountStatus,
+          accountStatus:
+            admission?.run.status === "paused_auth" ||
+            admission?.run.status === "paused_offline"
+              ? admission.run.status
+              : account.accountStatus,
           connected: bridge ? await bridge.connected(account.id) : null,
           lastSuccessAt:
             activity.get(account.id)?.lastSuccessAt?.toISOString() ?? null,

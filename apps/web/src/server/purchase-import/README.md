@@ -940,8 +940,10 @@ retain HTTP 400 and BAD_REQUEST classification; database failures retain the run
 
 ### Browser account status projection
 
-`run.syncPlan` keeps server broker connectivity separate from persisted VendorAccount
-status. A connected socket does not clear a sign-in/offline pause. Missing broker
+`run.syncPlan` keeps server broker connectivity separate from account status.
+A currently admitted Run's sign-in/offline pause takes precedence over the
+persisted VendorAccount status; resumed work falls back to that persisted status.
+A connected socket does not clear a sign-in/offline pause. Missing broker
 bindings return unknown connectivity; broker errors remain raw errors. Read only
 owned, enabled accounts before asking their broker. The last completed account Run
 time reuses the VendorAccount derived activity query; a later failed attempt cannot
