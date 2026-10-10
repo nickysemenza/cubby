@@ -47,7 +47,14 @@ type Variant = string | null | typeof INVALID;
  * values are decoded, and anything but exactly one non-empty value is invalid.
  */
 function variantOf(url: Json | undefined): Variant {
-  const beforeFragment = String(url ?? "").split("#")[0] ?? "";
+  if (url === undefined || url === null) return null;
+  let normalized: string;
+  try {
+    normalized = new URL(String(url)).href;
+  } catch {
+    return INVALID;
+  }
+  const beforeFragment = normalized.split("#")[0] ?? "";
   const start = beforeFragment.indexOf("?");
   if (start < 0) return null;
   const found: string[] = [];
@@ -176,6 +183,7 @@ export function structuredProductsFromJsonLd(input: {
             offered.pathname !== served.pathname
           )
             return INVALID;
+          return variantOf(offered.href);
         } catch {
           return INVALID;
         }

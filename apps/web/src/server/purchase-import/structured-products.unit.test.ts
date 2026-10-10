@@ -133,6 +133,30 @@ describe("structured product identifiers from JSON-LD", () => {
     }
   });
 
+  it("refuses repeated Offer variants revealed by URL control-character normalization", () => {
+    for (const control of ["\n", "\r", "\t"]) {
+      const block = JSON.stringify({
+        "@type": "Product",
+        sku: "SYN-DEFAULT",
+        offers: {
+          "@type": "Offer",
+          sku: "SYN-SELECTED",
+          url: `/products/tee?vari${control}ant=111&variant=222`,
+        },
+      });
+      expect(walk(`${base}?variant=222`, [block]).variantGroup).toBe(true);
+      const singleOffer = JSON.stringify({
+        "@type": "Product",
+        sku: "SYN-DEFAULT",
+        offers: offer("SYN-SELECTED", 222),
+      });
+      expect(
+        walk(`${base}?vari${control}ant=111&variant=222`, [singleOffer])
+          .variantGroup,
+      ).toBe(true);
+    }
+  });
+
   it("resolves a relative Offer on the served product page without matching unrelated query parameters", () => {
     const block = JSON.stringify({
       "@type": "Product",
