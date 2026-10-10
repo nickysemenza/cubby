@@ -171,6 +171,7 @@ test("retained captures open beside their accepted facts with bounded navigation
   const original = await page.request.get(mediaUrl);
   expect(original.status()).toBe(200);
   const cacheControl = original.headers()["cache-control"];
+  if (!cacheControl) throw new Error("Protected media omitted cache policy");
   expect(cacheControl.split(",").map((directive) => directive.trim())).toEqual(
     expect.arrayContaining(["private", "no-store"]),
   );
