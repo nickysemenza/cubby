@@ -309,8 +309,9 @@ research acceptance.
   attempt counts now ship independently of root status and Product verification.
   All-page matching-attempt totals now use the same state policy in flat and
   grouped queries, with one server-composed summary in web and native. Persisted
-  pagination/filter/empty-result coverage passed; visible acceptance, review and
-  delivery are pending. A household overview with reasons and next actions remains
+  pagination/filter/empty-result coverage and synthetic web acceptance passed.
+  Independent review, exact-head hosted checks, merge and deployment completed
+  in [#1826](https://github.com/nickysemenza/cubby/pull/1826). A household overview with reasons and next actions remains
   open. Finish a
   record-level view of processed emails, matched orders, linked
   Purchases and enriched Products with processing time, outcome, evidence and
@@ -325,8 +326,11 @@ research acceptance.
   regressions cover nested work, deleted ancestors and independent legacy rows.
   Native Activity now uses the shared grouped/child reads, expandable related
   rows and the existing inspector. Focused transport and isolated model
-  regressions passed after RED; the Mac UI compiled. Independent review, hosted
-  delivery and a small visible client journey remain pending. Historical null
+  regressions passed after RED; the Mac UI compiled. Independent review,
+  exact-head hosted checks, a sanitized isolated Mac journey and deployment
+  completed in [#1828](https://github.com/nickysemenza/cubby/pull/1828). The
+  journey covers filtered parent context, descendant failure and child-inspector
+  navigation. Installed household acceptance remains pending. Historical null
   lineage remains independent and retry predecessors never imply parentage.
 
 - 🟢 **Derive research-purpose presentation consistently.** Audit the duplicated
@@ -335,9 +339,10 @@ research acceptance.
   `mail_import`, with generated Swift and one web/server predicate. Exact-head
   hosted checks and checksum-verified E2E artifacts passed before PR #1793
   merged; production deployment succeeded on `01dda8634`. Native visible
-  report acceptance remains pending. Agent execution, discovery and the
-  Imports saved view intentionally cover different capabilities; finish their
-  audit before consolidating additional purpose declarations.
+  report acceptance remains pending. The [completed purpose audit](plans/research-simplification.md#run-purpose-audit)
+  confirms that agent execution, discovery, targeted launch, report eligibility,
+  write rights and the Imports saved view intentionally cover different
+  capabilities. No additional purpose-list consolidation is justified.
 
 - ⏳ **Accept purchase-source-first Product research.** Supply usable original-mail
   selectors and existing order-detail URLs with accepted order lines shipped in
