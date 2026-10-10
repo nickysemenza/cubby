@@ -858,5 +858,6 @@ Unrelated accounts and permission reasons retain their edges. Permission notices
 the raw command diagnostic and name the setting to change. A newly observed
 permission pause raises that account's owned Cubby browser window, only while
 the controller remains installed. The permission edge and controller are checked
-again after owned-window lookup, before raising. Sign-in retains the coordinator's existing
+again after owned-window lookup, before the queued AppleScript dispatch, and
+after the script returns before AppKit activation. Sign-in retains the coordinator's existing
 owned-window behavior. No new browser transport or Run state is introduced.

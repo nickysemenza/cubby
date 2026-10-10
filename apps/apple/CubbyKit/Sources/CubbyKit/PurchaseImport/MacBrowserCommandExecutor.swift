@@ -97,6 +97,16 @@
             try await captureStore.forget(runID: runID)
         }
 
+        static func performWindowRaise(
+            isCurrent: () -> Bool, script: () async throws -> Void,
+            activate: () throws -> Void
+        ) async throws {
+            guard isCurrent() else { return }
+            try await script()
+            guard isCurrent() else { return }
+            try activate()
+        }
+
         static func raiseAttentionWindow(
             isCurrent: () -> Bool,
             requireWindow: () async throws -> Void, raise: () async throws -> Void
@@ -116,7 +126,7 @@
                     try await Self.raiseAttentionWindow(
                         isCurrent: isCurrent,
                         requireWindow: { try await self.requireOwnedWindow() },
-                        raise: { try await self.raiseOwnedWindow() })
+                        raise: { try await self.raiseOwnedWindow(isCurrent: isCurrent) })
                 } catch {
                     BrowserBridgeDebugLog.emit(
                         .windowRaiseFailed, browser: browser, accountID: accountID, error: error
@@ -473,7 +483,9 @@
             return Set(value.split(separator: ",").compactMap { Int($0) })
         }
 
-        private func raiseOwnedWindow() async throws {
+        private func raiseOwnedWindow(
+            isCurrent: @escaping @MainActor () -> Bool = { true }
+        ) async throws {
             guard let ownedWindowID else { throw ExecutionFailure.browserUnavailable }
             let script = """
                 tell application id \(Self.appleScriptLiteral(targetBundleIdentifier))
@@ -483,11 +495,20 @@
                 set index of window id \(ownedWindowID) to 1
                 end tell
                 """
-            _ = try await runAppleScript(script, action: "raise_window")
-            try target.verifyOwnership()
-            NSRunningApplication.runningApplications(withBundleIdentifier: targetBundleIdentifier).first?
-                .activate(options: [.activateAllWindows])
-            BrowserBridgeDebugLog.emit(.windowRaised, browser: browser, accountID: accountID)
+            try await Self.performWindowRaise(
+                isCurrent: isCurrent,
+                script: {
+                    _ = try await self.runAppleScript(script, action: "raise_window", isCurrent: isCurrent)
+                },
+                activate: {
+                    try self.target.verifyOwnership()
+                    NSRunningApplication.runningApplications(
+                        withBundleIdentifier: self.targetBundleIdentifier
+                    ).first?
+                    .activate(options: [.activateAllWindows])
+                    BrowserBridgeDebugLog.emit(
+                        .windowRaised, browser: self.browser, accountID: self.accountID)
+                })
         }
 
         /// Keep the owned browser available to ScreenCaptureKit without stealing focus from the
@@ -839,11 +860,12 @@
         }
 
         private func runAppleScript(
-            _ script: String, action: String, timeoutSeconds: Int = 15
+            _ script: String, action: String, timeoutSeconds: Int = 15,
+            isCurrent: (@MainActor () -> Bool)? = nil
         ) async throws -> String {
             do {
                 return try await appleScript.execute(
-                    script, action: action, timeoutSeconds: timeoutSeconds
+                    script, action: action, timeoutSeconds: timeoutSeconds, isCurrent: isCurrent
                 )
             } catch let error as AppleScriptFailure {
                 failureDiagnostic = error.diagnostic
@@ -898,8 +920,12 @@
             self.target = target
         }
 
-        func execute(_ source: String, action: String, timeoutSeconds: Int = 15) async throws -> String {
+        func execute(
+            _ source: String, action: String, timeoutSeconds: Int = 15,
+            isCurrent: (@MainActor () -> Bool)? = nil
+        ) async throws -> String {
             try await target.verifyOwnership()
+            if let isCurrent, !(await isCurrent()) { throw ExecutionFailure.cancelled }
             // NSAppleScript is synchronous. Keeping it on this dedicated serial executor prevents a
             // slow browser or macOS Automation prompt from freezing SwiftUI and the WebSocket bridge.
             BrowserBridgeDebugLog.emit(.appleEventStarted, messageType: action)
@@ -925,6 +951,7 @@
             guard let script = NSAppleScript(source: bounded) else {
                 throw ExecutionFailure.invalidCommand
             }
+            if let isCurrent, !(await isCurrent()) { throw ExecutionFailure.cancelled }
             var details: NSDictionary?
             let result = script.executeAndReturnError(&details)
             if let details {

@@ -5,6 +5,15 @@
 
     @MainActor
     struct BrowserMemberNotificationTests {
+        @Test func staleAttentionCannotActivateAfterRaiseScriptSuspends() async throws {
+            var current = true
+            var activated = false
+            try await MacBrowserCommandExecutor.performWindowRaise(
+                isCurrent: { current }, script: { current = false },
+                activate: { activated = true })
+            #expect(!activated)
+        }
+
         @Test func staleAttentionCannotRaiseAfterOwnedWindowLookupSuspends() async throws {
             var current = true
             var raised = false
