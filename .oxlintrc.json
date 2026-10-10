@@ -74,6 +74,7 @@
     "anti-slop/no-widen-then-assert": "error",
     "anti-slop/require-safety-comment-for-type-assertion": "error",
     "cubby/no-unsafe-identifiers": "error",
+    "cubby/no-raw-enum-literal-in-sql": "error",
     "eslint/no-shadow": "off",
     "eslint/no-underscore-dangle": "off",
     "typescript/no-explicit-any": "error",
