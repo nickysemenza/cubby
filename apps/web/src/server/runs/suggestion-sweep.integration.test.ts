@@ -560,7 +560,7 @@ describe("persisted Suggestion sweeps", () => {
       auth: { userId: ctx.actor.userId },
     });
     const ids: string[] = [];
-    for (let index = 0; index < 20; index++) {
+    for (let index = 0; index < 1; index++) {
       const product = await createProduct(
         ctx.db,
         makeProductInput({
@@ -578,6 +578,7 @@ describe("persisted Suggestion sweeps", () => {
         {
           context: entityKernelContextSchema.parse(context),
           decisionModel: () => "typesafe/jev",
+          samplePair: () => true,
           wait: async () => {},
           suggestPorts: {
             jev: vi.fn(highConfidence),
@@ -592,7 +593,7 @@ describe("persisted Suggestion sweeps", () => {
       .from(suggestionTable)
       .where(eq(suggestionTable.runId, runId));
     const pairedRows = rows.filter((row) => row.pairKey !== null);
-    expect(pairedRows.length).toBeGreaterThan(0);
+    expect(pairedRows).toHaveLength(2);
     const reviewQueue = await listPendingSuggestions(ctx.db, {
       runId,
       minConfidence: 0,
@@ -821,7 +822,7 @@ describe("persisted Suggestion sweeps", () => {
       name: "Synthetic paired failure category",
     });
     const products = await Promise.all(
-      Array.from({ length: 20 }, (_, index) =>
+      Array.from({ length: 2 }, (_, index) =>
         createProduct(
           ctx.db,
           makeProductInput({
@@ -863,6 +864,7 @@ describe("persisted Suggestion sweeps", () => {
       {
         context,
         decisionModel: () => "typesafe/jev",
+        samplePair: () => true,
         suggest,
         wait: async () => {},
       },
