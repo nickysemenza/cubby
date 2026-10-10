@@ -4,51 +4,21 @@ import Testing
 
 @testable import CubbyKit
 
-@MainActor
-private func waitUntil(
-    timeout: Duration = .seconds(30),
-    _ condition: @MainActor () -> Bool
-) async throws {
-    let deadline = ContinuousClock.now + timeout
-    while !condition() {
-        try #require(ContinuousClock.now < deadline, "condition never became true")
-        try await Task.sleep(for: .milliseconds(5))
-    }
-}
-
-@MainActor
-private func settle<T: Sendable>(_ drain: ScanDrain<T>) async throws {
-    try await waitUntil { drain.pendingCount == 0 }
-}
-
-@MainActor
-private final class ScanWorkGate {
-    private(set) var started: [String] = []
-    private var releases: [CheckedContinuation<Void, Never>] = []
-
-    func pause(_ raw: String) async {
-        started.append(raw)
-        await withCheckedContinuation { releases.append($0) }
-    }
-
-    func releaseFirst() {
-        releases.removeFirst().resume()
-    }
-}
-
-@Suite("ScanDrain", .serialized)
+@Suite("ScanDrain")
 @MainActor
 struct ScanDrainTests {
     let shelf = LocationCode("LOC-2345")
 
-    @Test(.timeLimit(.minutes(1))) func worksRunOneAtATimeInOrder() async throws {
+    @Test func worksRunOneAtATimeInOrder() async throws {
         let active = Mutex((now: 0, peak: 0))
-        let gate = ScanWorkGate()
+        let started = Mutex<[String]>([])
+        let gate = Gate()
         let drain = ScanDrain<String>(anchor: shelf) { read in
             active.withLock {
                 $0.now += 1; $0.peak = max($0.peak, $0.now)
             }
-            await gate.pause(read.raw)
+            started.withLock { $0.append(read.raw) }
+            try? await gate.pass()
             active.withLock { $0.now -= 1 }
             return read.raw
         }
@@ -58,16 +28,17 @@ struct ScanDrainTests {
         drain.submit("b", at: .now + 5)
         drain.submit("c", at: .now + 10)
         #expect(drain.pendingCount == 3)
-        try await waitUntil { gate.started.count >= 1 }
-        #expect(gate.started == ["a"])
-        gate.releaseFirst()
-        try await waitUntil { gate.started.count >= 2 }
-        #expect(gate.started == ["a", "b"])
-        gate.releaseFirst()
-        try await waitUntil { gate.started.count >= 3 }
-        #expect(gate.started == ["a", "b", "c"])
-        gate.releaseFirst()
-        try await settle(drain)
+        await gate.arrivals(1)
+        #expect(started.withLock { $0 } == ["a"])
+        gate.release()
+        await gate.arrivals(2)
+        #expect(started.withLock { $0 } == ["a", "b"])
+        gate.release()
+        await gate.arrivals(3)
+        #expect(started.withLock { $0 } == ["a", "b", "c"])
+        gate.release()
+        await drain.idle()
+        #expect(drain.pendingCount == 0)
         #expect(active.withLock { $0.peak } == 1)
         #expect(settled == ["a", "b", "c"])
     }
@@ -77,31 +48,28 @@ struct ScanDrainTests {
         var outcomes: [UUID: String] = [:]
         drain.onSettle = { token, value in outcomes[token] = value }
         let token = try #require(drain.submit("abc"))
-        try await settle(drain)
+        await drain.idle()
         #expect(outcomes[token] == "ABC")
     }
 
     @Test func anchorChangeDropsQueuedAndInFlightOutcomes() async throws {
-        let started = Mutex(false)
+        let gate = Gate()
         let drain = ScanDrain<String>(anchor: shelf) { read in
-            started.withLock { $0 = true }
-            try? await Task.sleep(for: .milliseconds(50))
+            try? await gate.pass()
             return read.raw
         }
         var settled: [String] = []
         drain.onSettle = { _, raw in settled.append(raw) }
         drain.submit("in-flight", at: .now)
         drain.submit("queued", at: .now + 5)
-        let deadline = ContinuousClock.now + .seconds(2)
-        while !started.withLock({ $0 }) {
-            try #require(ContinuousClock.now < deadline, "work never started")
-            try await Task.sleep(for: .milliseconds(2))
-        }
+        await gate.arrivals(1)
         drain.anchor = LocationCode("LOC-3456")
         #expect(drain.pendingCount == 0)
-        try await Task.sleep(for: .milliseconds(120))
+        gate.open()
+        await drain.idle()
         #expect(settled.isEmpty)
         #expect(drain.pendingCount == 0)
+        #expect(gate.arrived == 1)
     }
 
     @Test func debounceIgnoresARepeatInsideTheWindow() async throws {
@@ -111,7 +79,7 @@ struct ScanDrainTests {
         #expect(drain.submit("x", at: t0 + 0.5) == nil)
         #expect(drain.submit("y", at: t0 + 0.6) != nil)
         #expect(drain.submit("x", at: t0 + 3) != nil)
-        try await settle(drain)
+        await drain.idle()
     }
 
     @Test func noAnchorMeansNothingQueues() {

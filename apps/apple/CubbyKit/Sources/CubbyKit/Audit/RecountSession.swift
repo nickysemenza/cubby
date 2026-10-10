@@ -86,7 +86,7 @@ public final class RecountSession {
 
     private let service: any RecountService
     private let persistenceNamespace: String?
-    private let drain: ScanDrain<Event>
+    let drain: ScanDrain<Event>
     private var duplicates: Set<ProductCode> = []
     private var snapshotToken: String?
     private var consecutiveStale = 0
@@ -96,8 +96,7 @@ public final class RecountSession {
     // One refetch loop at a time. A request while a fetch is in flight sets `refetchWanted` and
     // the loop runs once more; staged decisions are snapshotted only after each fetch lands, so
     // a `.verify` set meanwhile is never overwritten by an older fetch's view of the rows.
-    /// The running loop; `nil` between refetches (tests await it).
-    private(set) var refetchTask: Task<Void, Never>?
+    private var refetchTask: Task<Void, Never>?
     private var refetchWanted = false
     private var dropResolutionsOnRefetch = false
     /// Products the server just added to or confirmed in this bin, verified on the next apply.
@@ -379,6 +378,14 @@ public final class RecountSession {
         drain.anchor = bin.id
         clearBinState()
         await refetchRows(keepingResolutions: false)
+    }
+
+    /// Returns once every submitted scan has settled and the refetches they asked for have landed.
+    func idle() async {
+        repeat {
+            await drain.idle()
+            if let refetchTask { await refetchTask.value }
+        } while drain.pendingCount > 0 || refetchTask != nil
     }
 
     private func refetchRows(keepingResolutions: Bool) async {

@@ -119,6 +119,9 @@ public final class ScanSession {
         return true
     }
 
+    /// Returns once every submitted read has settled or been discarded.
+    func idle() async { await drain.idle() }
+
     public func reset() {
         drain.reset()
         chips.removeAll()

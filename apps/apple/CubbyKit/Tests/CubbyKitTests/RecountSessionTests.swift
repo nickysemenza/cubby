@@ -21,8 +21,8 @@ final class StubRecountService: RecountService, Sendable {
             .queued, id: "PRD-9999", name: "Unexpected")
         /// Per-code answers; a code not listed falls back to `scanResult`.
         var scanResults: [String: ScanAtLocationOut] = [:]
-        /// How long `stockRows` takes, so a test can overlap a refetch with later scans.
-        var rowsDelay: Duration = .zero
+        /// Holds `stockSnapshot` until released, so a test can overlap a refetch with later scans.
+        var rowsGate: Gate?
         var calls: [Call] = []
         var lastReconcile: ReconcileSessionPayload?
     }
@@ -48,8 +48,7 @@ final class StubRecountService: RecountService, Sendable {
 
     func stockSnapshot(at location: LocationCode) async throws -> RecountSnapshot {
         record(.rows(location))
-        let delay = state.withLock { $0.rowsDelay }
-        if delay > .zero { try await Task.sleep(for: delay) }
+        if let gate = state.withLock({ $0.rowsGate }) { try await gate.pass() }
         return RecountSnapshot(
             rows: state.withLock { $0.rows[location] ?? [] },
             token: "snapshot-\(location.rawValue)")
@@ -100,17 +99,6 @@ extension CubbyAPIError.ErrorDetail {
             {"code":"\(code)","message":"\(message)","reason":\(reason.map { "\"\($0)\"" } ?? "null"),"requestId":\(requestId.map { "\"\($0)\"" } ?? "null")}
             """
         self = try! JSONDecoder().decode(Self.self, from: Data(json.utf8))
-    }
-}
-
-@MainActor
-private func settle(_ session: RecountSession, timeout: Duration = .seconds(2)) async throws {
-    let deadline = ContinuousClock.now + timeout
-    // A settled scan requests its refetch synchronously, so once nothing is pending only the
-    // refetch loop can still be running.
-    while session.pendingCount > 0 || session.busy || session.refetchTask != nil {
-        try #require(ContinuousClock.now < deadline, "session never settled")
-        try await Task.sleep(for: .milliseconds(5))
     }
 }
 
@@ -201,14 +189,14 @@ struct RecountSessionTests {
     @Test func expectedProductVerifiesLocallyWithNoRequest() async throws {
         let (session, service) = try await makeSession()
         session.submit("012345678905")  // 12-digit UPC of the 14-digit primaryGtin
-        try await settle(session)
+        await session.idle()
         #expect(session.rows[0].resolution == .verify)
         #expect(session.chips.first?.status == .confirmed)
         #expect(session.chips.first?.label == "Sample Product")
         #expect(!service.calls.contains { if case .scan = $0 { true } else { false } })
 
         session.submit("PRD-3456")
-        try await settle(session)
+        await session.idle()
         #expect(session.rows[1].resolution == .verify)
         #expect(session.unresolvedCount == 0)
         #expect(!service.calls.contains { if case .scan = $0 { true } else { false } })
@@ -227,7 +215,7 @@ struct RecountSessionTests {
         #expect(session.annotation(forScanned: "not a code") == nil)
 
         session.submit("PRD-2345")
-        try await settle(session)
+        await session.idle()
         #expect(session.annotation(forScanned: "PRD-2345")?.detail == "1 each ✓")
         session.stage(.adjust(Amount(value: 3, unit: "each")), for: InventoryEntryCode("INV-2345"))
         #expect(
@@ -240,7 +228,7 @@ struct RecountSessionTests {
         let (session, _) = try await makeSession()
         session.stage(.adjust(Amount(value: 2, unit: "each")), for: InventoryEntryCode("INV-2345"))
         session.submit("012345678905")
-        try await settle(session)
+        await session.idle()
         #expect(session.rows[0].resolution == .adjust(Amount(value: 2, unit: "each")))
     }
 
@@ -257,7 +245,7 @@ struct RecountSessionTests {
                 ])
         }
         session.submit("4006381333931")
-        try await settle(session)
+        await session.idle()
         #expect(service.calls.filter { if case .scan = $0 { true } else { false } }.count == 1)
         #expect(session.chips.first?.status == .queued)
         #expect(session.strays.count == 1)
@@ -274,7 +262,7 @@ struct RecountSessionTests {
                     "INV-9999", product: "PRD-9999", name: "Unexpected", updated: "2026-03-05T10:00:00.000Z"))
         }
         session.submit("4006381333931")
-        try await settle(session)
+        await session.idle()
         #expect(session.rows.count == 3)
         #expect(session.rows[2].resolution == .verify)
         #expect(session.summary.added == 1)
@@ -286,8 +274,9 @@ struct RecountSessionTests {
     /// on load, once for the in-flight refetch, and once more after it.
     @Test func backToBackAddedScansCoalesceTheRefetchAndVerifyBothRows() async throws {
         let (session, service) = try await makeSession()
+        let rows = Gate()
         service.state.withLock { state in
-            state.rowsDelay = .milliseconds(50)
+            state.rowsGate = rows
             state.scanResults = [
                 "4006381333931": StubScanService.result(.added, id: "PRD-9999", name: "Unexpected"),
                 "5901234123457": StubScanService.result(.added, id: "PRD-8888", name: "Another"),
@@ -301,7 +290,11 @@ struct RecountSessionTests {
         }
         session.submit("4006381333931")
         session.submit("5901234123457")
-        try await settle(session)
+        // Both scans settle while the first scan's refetch is held in flight.
+        await session.drain.idle()
+        await rows.arrivals(1)
+        rows.open()
+        await session.idle()
         #expect(session.rows.map(\.id.rawValue) == ["INV-2345", "INV-3456", "INV-9999", "INV-8888"])
         #expect(session.rows[2].resolution == .verify)
         #expect(session.rows[3].resolution == .verify)
@@ -451,7 +444,7 @@ struct RecountSessionTests {
                 ])
         }
         session.submit("4006381333931")
-        try await settle(session)
+        await session.idle()
         service.state.withLock { state in
             state.rows[bin1]?.append(
                 Self.row(
@@ -479,7 +472,7 @@ struct RecountSessionTests {
         session.submit("4006381333931")
         // Skip before the scan settles: its stray must not land in Bin 2.
         await session.skipBin()
-        try await settle(session)
+        await session.idle()
         #expect(session.currentBin?.id == bin2)
         #expect(session.strays.isEmpty)
         #expect(session.chips.isEmpty)

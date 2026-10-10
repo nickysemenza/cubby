@@ -54,21 +54,7 @@ private func stray(_ entry: String, ambiguous: Bool = false) -> ScanStrayOut {
         amount: Amount(value: 1, unit: "each"), ambiguousQuantity: ambiguous)
 }
 
-/// Waits until the session has nothing pending, or fails after a bounded time. The bound only
-/// catches a hang: a loaded CI runner took 4s to drain one case, past the former 2s bound.
-@MainActor
-private func settle(_ session: ScanSession, timeout: Duration = .seconds(15)) async throws {
-    let deadline = ContinuousClock.now + timeout
-    while session.pendingCount > 0 {
-        try #require(ContinuousClock.now < deadline, "session never settled")
-        try await Task.sleep(for: .milliseconds(5))
-    }
-}
-
-// Each case drives a MainActor-owned drain through a child Task. Serializing the suite keeps a
-// neighboring case from starving that task on a loaded CI runner; the cases otherwise isolate
-// all service state.
-@Suite("ScanSession", .serialized)
+@Suite("ScanSession")
 @MainActor
 struct ScanSessionTests {
     let shelf = LocationCode("LOC-2345")
@@ -83,10 +69,10 @@ struct ScanSessionTests {
         #expect(session.annotation(forScanned: "012345678905") == nil)
         session.submit("012345678905")
         #expect(session.annotation(forScanned: "012345678905")?.tone == .pending)
-        try await settle(session)
+        await session.idle()
         session.submit("012345678905", at: .now + 10)
         session.submit("4006381333931")
-        try await settle(session)
+        await session.idle()
 
         // A UPC-A read and its zero-padded spelling are the same entry.
         #expect(
@@ -99,37 +85,20 @@ struct ScanSessionTests {
         #expect(session.annotation(forScanned: "012345678905") == nil)
     }
 
-    @Test func scansDrainOneAtATime() async throws {
-        let service = StubScanService { _, _ in
-            try await Task.sleep(for: .milliseconds(20))
-            return StubScanService.result(.added)
-        }
-        let session = ScanSession(service: service, location: shelf)
-        session.submit("012345678905")
-        session.submit("4006381333931")
-        session.submit("12345678")
-        try await settle(session)
-        #expect(service.maxActive == 1)
-        #expect(service.calls.count == 3)
-        #expect(session.tally.added == 3)
-    }
-
     @Test func staleAnchorResultsAreDiscarded() async throws {
+        let lookup = Gate()
         let service = StubScanService { _, _ in
-            try await Task.sleep(for: .milliseconds(50))
+            try await lookup.pass()
             return StubScanService.result(.queued, strays: [stray("INV-2345")])
         }
         let session = ScanSession(service: service, location: shelf)
         session.submit("012345678905")
-        // Wait until the lookup is genuinely in flight, then walk to the next shelf before it
-        // returns. Changing location earlier would empty the queue, which is a different path.
-        let deadline = ContinuousClock.now + .seconds(2)
-        while service.calls.isEmpty {
-            try #require(ContinuousClock.now < deadline, "scan never started")
-            try await Task.sleep(for: .milliseconds(2))
-        }
+        // Walk to the next shelf while the lookup is in flight. Changing location before it starts
+        // would empty the queue, which is a different path.
+        await lookup.arrivals(1)
         session.location = LocationCode("LOC-3456")
-        try await Task.sleep(for: .milliseconds(120))
+        lookup.open()
+        await session.idle()
         #expect(session.strays.isEmpty)
         #expect(session.chips.isEmpty)
         #expect(session.pendingCount == 0)
@@ -142,7 +111,7 @@ struct ScanSessionTests {
         for i in 0..<7 {
             session.submit("0000000000\(String(format: "%02d", i))", at: .now + Double(i) * 10)
         }
-        try await settle(session)
+        await session.idle()
         #expect(session.chips.count == ScanSession.recentLimit)
         #expect(session.tally.confirmed == 7)
         #expect(session.tally.added == 0)
@@ -155,7 +124,7 @@ struct ScanSessionTests {
         let session = ScanSession(service: service, location: shelf)
         session.submit("012345678905", at: .now)
         session.submit("012345678905", at: .now + 5)
-        try await settle(session)
+        await session.idle()
         #expect(session.strays.count == 1)
         #expect(session.chips.allSatisfy { $0.status == .queued })
 
@@ -170,7 +139,7 @@ struct ScanSessionTests {
         }
         let session = ScanSession(service: service, location: shelf)
         session.submit("012345678905")
-        try await settle(session)
+        await session.idle()
         #expect(session.chips.first?.status == .failed("HTTP 500"))
         #expect(session.lastError == "HTTP 500")
 
@@ -186,7 +155,7 @@ struct ScanSessionTests {
             }
         }
         session.submit("hello")
-        try await settle(session)
+        await session.idle()
         #expect(
             session.chips.first?.status
                 == .failed("Use a Cubby shortcode, UPC/EAN/GTIN barcode, or valid ISBN."))
@@ -200,7 +169,7 @@ struct ScanSessionTests {
         #expect(session.submit("012345678905", at: t0))
         #expect(!session.submit("012345678905", at: t0 + 0.5))
         #expect(session.submit("012345678905", at: t0 + 3))
-        try await settle(session)
+        await session.idle()
         #expect(service.calls.count == 2)
     }
 

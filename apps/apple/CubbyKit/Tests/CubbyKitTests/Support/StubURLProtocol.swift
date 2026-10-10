@@ -29,20 +29,38 @@ import Synchronization
 enum StubNetworking {
     typealias Handler = @Sendable (URLRequest) -> (Int, Data)
 
+    /// Answers `request` with `handler`. `detached` runs the handler on a global queue instead of
+    /// the session's loading thread, so a handler that parks on a test `Gate` (`holdBlocking()`)
+    /// cannot stall the session's other requests.
     static func startLoading(
-        _ request: URLRequest, client: URLProtocolClient?, target: URLProtocol, handler: Handler?
+        _ request: URLRequest, client: URLProtocolClient?, target: URLProtocol, handler: Handler?,
+        detached: Bool = false
     ) {
         guard let handler else {
             client?.urlProtocol(target, didFailWithError: URLError(.badServerResponse))
             return
         }
-        let (status, data) = handler(request)
+        guard !detached else {
+            // URLProtocol is not Sendable; the client is only messaged after the handler returns.
+            nonisolated(unsafe) let target = target
+            DispatchQueue.global().async {
+                respond(request, with: handler(request), client: client, target: target)
+            }
+            return
+        }
+        respond(request, with: handler(request), client: client, target: target)
+    }
+
+    private static func respond(
+        _ request: URLRequest, with answer: (status: Int, data: Data), client: URLProtocolClient?,
+        target: URLProtocol
+    ) {
         let response = HTTPURLResponse(
-            url: request.url!, statusCode: status, httpVersion: "HTTP/1.1",
+            url: request.url!, statusCode: answer.status, httpVersion: "HTTP/1.1",
             headerFields: ["Content-Type": "application/json"]
         )!
         client?.urlProtocol(target, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(target, didLoad: data)
+        client?.urlProtocol(target, didLoad: answer.data)
         client?.urlProtocolDidFinishLoading(target)
     }
 
