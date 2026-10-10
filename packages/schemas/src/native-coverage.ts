@@ -678,6 +678,30 @@ export const nativeCollectionActionPlans = {
     body: { id: "$item.id" },
     continueWith: { kind: "editRecord", field: "labelNutrition" },
   },
+  enrichProduct: {
+    label: "Enrich Product",
+    symbol: "sparkle.magnifyingglass",
+    kind: "operation",
+    operation: "run.startTargeted",
+    entities: ["product"],
+    confirmation: "none",
+    preview: {
+      operation: "run.targetedLaunch",
+      body: { purpose: "product_enrichment", targetId: "$row.id" },
+    },
+    fields: [
+      {
+        key: "sourceId",
+        label: "Evidence to replay",
+        kind: "evidence",
+        optional: true,
+      },
+    ],
+    body: {
+      purpose: "product_enrichment",
+      targets: [{ productId: "$row.id", sourceId: "$field.sourceId" }],
+    },
+  },
   validatePurchase: {
     label: "Validate ingestion",
     symbol: "checkmark.circle",

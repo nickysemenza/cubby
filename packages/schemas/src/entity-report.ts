@@ -40,6 +40,7 @@ export const reportSlots = [
   "location.contents-valuation",
   "meal.composition",
   "product.labels",
+  "product.runs",
   "product.cookbooks",
   "product.recipe-appearances",
   "ingredient.recipe-usages",
@@ -83,6 +84,7 @@ export const reportSlotActions = {
   "image.associations": ["attachImage"],
   "location.ai-description": ["analyzeLocation"],
   "purchase.runs": ["validatePurchase"],
+  "product.runs": ["enrichProduct"],
 } as const satisfies Partial<
   Record<(typeof reportSlots)[number], readonly CollectionActionId[]>
 >;

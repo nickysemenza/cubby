@@ -15,7 +15,7 @@ enum DetailSlotRegistry {
         .productNutrition: { AnyView(ProductNutritionDetailSlot(row: $0)) },
         .productUnitMappings: { AnyView(ProductUnitMappingsDetailSlot(row: $0)) },
         .productFitsWith: { AnyView(ProductSimilarityDetailSlot(productID: $0.id)) },
-        .productRuns: { AnyView(ProductEnrichmentHistorySlot(productID: $0.id)) },
+        .productRuns: { reportSlot(.product_runs, $0) },
         .productOwnership: { row in
             guard let detail = try? row.decode(ProductDetail.self) else { return nil }
             return AnyView(ProductJourneySummaryView(product: detail))

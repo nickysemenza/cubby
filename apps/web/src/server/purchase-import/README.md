@@ -25,6 +25,12 @@ the shared query cache, refresh through settlement, and reload when reopened.
 Child pagination traverses lightweight lineage before evaluating accounting
 and activity details for the selected group's members.
 
+Product and Purchase research history use the shared entity report and record
+renderer on web and Apple clients. Each attempt shows its Run lifecycle alongside
+the target outcome, retained warning and target completion time (or Run start
+while unfinished). A completed attempt does not imply a verified purchased
+variant. No-write research remains visible, and each row opens its actual Run.
+
 Execution allowance is separate from causal lineage. A member's explicit
 approval is an immutable, completed background Run; completed RunOperation
 receipts retain every conservative paid reservation and distinct candidate or

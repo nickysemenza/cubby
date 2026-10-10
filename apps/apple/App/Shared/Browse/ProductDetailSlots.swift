@@ -138,61 +138,8 @@ struct ProductSimilarityDetailSlot: View {
     }
 }
 
-struct ProductEnrichmentHistorySlot: View {
-    let productID: String
-    @Environment(AppModel.self) private var appModel
-    @State private var history: RunHistoryOut?
-    @State private var error: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            if let history {
-                if history.runs.isEmpty {
-                    Text("No targeted enrichment runs have been recorded.").foregroundStyle(.secondary)
-                }
-                ForEach(Array(history.runs.enumerated()), id: \.offset) { indexed in
-                    let run = indexed.element
-                    NavigationLink(value: Route.entityDetail(.run, id: run.publicId)) {
-                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                            Text(run.vendorName ?? run.vendorAccountLabel ?? "Product enrichment")
-                            Text("\(run.status) · \(run.trigger)").font(.caption).foregroundStyle(.secondary)
-                            Text(run.startedAt.formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption).foregroundStyle(.secondary)
-                            if let code = run.failureCode { Text(code).foregroundStyle(.secondary) }
-                        }
-                    }
-                }
-            } else if error == nil {
-                LoadingIndicator(label: "Loading enrichment history")
-            }
-            if let error {
-                InlineLoadFailure(message: error) { await load() }
-            }
-        }
-        .task(id: productID) {
-            history = nil; await load()
-        }
-    }
-
-    private func load() async {
-        error = nil
-        do {
-            let result = try await appModel.client.runHistory(.init(productId: productID))
-            guard !Task.isCancelled else { return }
-            history = result
-        } catch {
-            guard !Task.isCancelled else { return }
-            Diagnostics.report(error, context: "Product enrichment history")
-            self.error = error.localizedDescription
-        }
-    }
-}
-
 #Preview("Nutrition") { Form { ProductNutritionDetailSlot(row: PreviewFixtures.sampleDetailRow) } }
 #Preview("Unit mappings") { Form { ProductUnitMappingsDetailSlot(row: PreviewFixtures.sampleDetailRow) } }
 #Preview("Similar products") {
     Form { ProductSimilarityDetailSlot(productID: "PRD-2345") }.environment(PreviewFixtures.signedInModel())
-}
-#Preview("Enrichment history") {
-    Form { ProductEnrichmentHistorySlot(productID: "PRD-2345") }.environment(PreviewFixtures.signedInModel())
 }

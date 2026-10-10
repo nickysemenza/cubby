@@ -48,6 +48,11 @@ export const collectionActions = {
       default: m.ValidatePurchaseAction,
     })),
   ),
+  enrichProduct: action<"product">(() =>
+    import("~/app/products/product-runs").then((m) => ({
+      default: m.ProductEnrichmentAction,
+    })),
+  ),
 } satisfies Record<
   CollectionActionId,
   LazyExoticComponent<FunctionComponent<CollectionActionProps<never>>>

@@ -31,6 +31,7 @@ import {
   loadRunLog,
 } from "~/server/purchase-import/run-service";
 import { listAiUsageForRun } from "~/server/repo/ai-usage";
+import { phaseLabel } from "~/server/repo/collection-items";
 import { getRunByShortcode } from "~/server/repo/run";
 import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
@@ -81,9 +82,6 @@ const toneForState = (state: string): Tone | undefined => {
   if (state.startsWith("paused")) return "warning";
   return undefined;
 };
-
-const phaseLabel = (phase: string) =>
-  phase.replaceAll("_", " ").replace(/^./u, (letter) => letter.toUpperCase());
 
 const line = (text: string, tone?: Tone): Line =>
   tone ? { text, tone } : { text };

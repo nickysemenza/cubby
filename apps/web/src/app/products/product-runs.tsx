@@ -1,22 +1,17 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { RUN_PURPOSE_LABEL } from "@cubby/schemas/run-fields";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { CircleDashedIcon } from "@phosphor-icons/react/dist/csr/CircleDashed";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
-import type { RunSummary } from "~/contracts/run.contract";
-import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { entityListFor } from "~/entity/entity-list";
 import { ProductRelatednessActions } from "~/entity/relatedness/relatedness-rail";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatInstant } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
 
-import { runHref } from "../purchases/purchase-import-links";
 import { TargetedImportLaunchButton } from "../purchases/targeted-import-launch";
 
 function JourneyStep({
@@ -125,69 +120,10 @@ export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
   );
 };
 
-/** Enrichment history remains visible even when a run made no writes. */
-export const ProductRuns: DetailSlotComponent<"product"> = ({
-  record: product,
-}) => {
-  const runs = useQuery({
-    ...runOperations.history.queryOptions({ productId: product.id }),
-    select: (history) => history.runs,
-  });
-  return (
-    <Stack gap="sm">
-      <DetailAction>
-        <ProductEnrichmentAction record={product} />
-      </DetailAction>
-      {runs.isPending ? (
-        <StatusText>Loading enrichment history…</StatusText>
-      ) : null}
-      {runs.isError ? (
-        <StatusText tone="destructive">{runs.error.message}</StatusText>
-      ) : null}
-      {runs.isSuccess ? (
-        runs.data.length ? (
-          <div className="grid gap-3">
-            {runs.data.map((run) => (
-              <ProductRunSummary key={run.publicId} run={run} />
-            ))}
-          </div>
-        ) : (
-          <StatusText>
-            No targeted enrichment runs have been recorded.
-          </StatusText>
-        )
-      ) : null}
-    </Stack>
-  );
-};
-
-function ProductRunSummary({ run }: { run: RunSummary }) {
-  return (
-    <div className="grid gap-1 border-b border-border pb-3 text-sm last:border-0 last:pb-0">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className="font-medium">
-          {run.vendorName ?? run.vendorAccountLabel ?? "Product enrichment"}
-        </span>
-        <span className="text-muted-foreground">
-          {RUN_PURPOSE_LABEL[run.purpose ?? "product_enrichment"]} ·{" "}
-          {run.status}
-        </span>
-      </div>
-      <span className="text-muted-foreground">
-        {formatInstant(run.startedAt, "dateTime")} · {run.trigger}
-      </span>
-      {run.failureCode ? (
-        <span className="text-destructive">{run.failureCode}</span>
-      ) : null}
-      <a
-        className="w-fit text-xs font-medium text-primary hover:underline"
-        href={runHref(run.publicId)}
-      >
-        Open import run
-      </a>
-    </div>
-  );
-}
+/** Research history uses the same server-owned records report as Purchases. */
+export const ProductRuns: DetailSlotComponent<"product"> = ({ record }) => (
+  <EntityReportSlot slot="product.runs" id={record.id} record={record} />
+);
 
 export const ProductEnrichmentAction: DetailSlotComponent<"product"> = ({
   record: product,
