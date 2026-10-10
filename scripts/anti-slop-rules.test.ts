@@ -46,6 +46,26 @@ function runOxlint(fixturePath: string): OxlintDiagnostic[] {
   return output.diagnostics;
 }
 
+function runOxlintPaths(paths: string[]): OxlintDiagnostic[] {
+  const result = spawnSync(
+    "pnpm",
+    [
+      "exec",
+      "oxlint",
+      "--config",
+      ".oxlintrc.json",
+      "--format",
+      "json",
+      ...paths,
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  assert.equal(result.signal, null, result.stderr);
+  assert.ok(result.status === 0 || result.status === 1, result.stderr);
+  const output: OxlintOutput = JSON.parse(result.stdout);
+  return output.diagnostics;
+}
+
 function fixtureFilename(fixtureName: string): string {
   return fixtureName.endsWith(".tsx.txt")
     ? fixtureName.replace(/\.txt$/, "")
@@ -124,6 +144,24 @@ test("raw enum values in Drizzle SQL are rejected", () => {
   assert.deepEqual(
     diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
     [2],
+  );
+});
+
+test("raw enum SQL baseline counts stay exact and shrink-only", () => {
+  const baselinePath = join(
+    repoRoot,
+    "tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json",
+  );
+  const baseline: Record<string, number> = JSON.parse(
+    readFileSync(baselinePath, "utf8"),
+  );
+  const diagnostics = runOxlintPaths(Object.keys(baseline));
+  assert.deepEqual(
+    diagnostics.filter(
+      (diagnostic) => diagnostic.code === "cubby(no-raw-enum-literal-in-sql)",
+    ),
+    [],
+    "lower a file's baseline whenever its raw enum SQL count drops",
   );
 });
 
