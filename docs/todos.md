@@ -677,28 +677,6 @@ research acceptance.
   [audit and concrete migration proposal](plans/research-simplification.md) is
   recorded; implementation and historical/in-flight readback remain open.
 
-- 🟢 **Classification-declared field policies: remaining classifications.**
-  A classification decides whether a field or link is expected, and whether
-  it is allowed at all: a SpendingCategory with `productExpectation:
-  not_allowed` (Restaurants) means an Expense neither expects nor may link a
-  Product (strict refusal on every write path; #1685 and #1682). Decided
-  shape: fixed classifications declare policies in the entity manifest
-  (`capabilities.classificationPolicies`, keyed by classifier value);
-  household-editable ones keep per-row columns; one registry and evaluator
-  (`@cubby/schemas/classification-field-policy`) reads both, in one vocabulary
-  (`required | not_expected | unknown | not_allowed`). Shipped: that registry,
-  with SpendingCategory `productExpectation` registered, and the
-  ProductCategory `feature` slice — food-only `ingredientId`/`fdc_id`,
-  books-only ISBN, required `model` — read by category admission, the
-  `product_model` gap, and Jev targets ([entities](entities.md#classification-field-policies)).
-  Remaining, decided: move `productExpectation` enforcement
-  (`validateProductPolicy`, `expenseProductForbiddenSql`) onto
-  `classificationPolicySql`; the project-resource capability and
-  garden-source refusal in
-  `productCategoryFeatureCapabilities`/`assertProductCategoryChange`;
-  SpendingCategory `evidenceExpectation` with Vendor/Purchase overrides
-  (`repo/purchase-evidence-policy.ts`); Location type; Task/Project trade.
-
 - 🤔 **Product Category feature expectations.** Decide whether Food _expects_
   an ingredient and Books an ISBN (both `unknown` today, so no data-quality
   gap) and whether a Food Product may carry an ISBN outright rather than only
@@ -764,56 +742,38 @@ research acceptance.
 
 ## Classification in the manifest
 
-Classification knowledge — enum vocabularies and what each value means,
-the policies a value implies, the inheritance chains that resolve an
-effective value, and the Jev prompts that suggest one — is spread across
-entity declarations, hand SQL, and the Jev registry. Move each into one
-declaration that the generator, the field-policy evaluator, and Jev all read.
-Steps in order; each is independently shippable.
+Shipped: option meanings and `suggest.rules` live on field declarations and
+the suggestion registry is generated; same-record and relation classification
+policies (Expense line kind and basis, Location furniture, GardenEntry kind,
+ProductCategory project-tool and Planting-source relations) drive writes,
+generated CHECKs, data quality, the editor and Suggestion targets; the
+Suggestion sweep, review page and `eval:decisions` exist
+([entities](entities.md#classification-field-policies)).
 
-- 🟢 **Derive Jev suggestion specs from the manifest.** The Jev registry
-  (`server/ai/field-suggest/registry.ts`) imports the shared enum value arrays
-  but restates each value's label and description by hand in every spec
-  (`expectationSpec`, `productExpectationSpec`, and the other enum specs), so
-  a label or meaning lives in two places. Each enum field declares its options
-  once — value, label, meaning — and only the prompt guidance stays
-  hand-written, as `suggest: { rules }` on the field declaration; the registry
-  becomes generated from those declarations.
-- 🟢 **Finish the field-policy migration.** The remaining items of
-  **Classification-declared field policies** (Entity platform & data model):
-  move `not_allowed` enforcement (`validateProductPolicy`,
-  `expenseProductForbiddenSql`) and the delivery receiving gate onto
-  `classificationPolicySql`, then declare SpendingCategory
-  `evidenceExpectation`, Location type, and trade.
 - 🤔 **Declare effective-value inheritance chains.** "Expense category =
   override → vendor food context → product mapping (category ancestors) →
   Purchase default → Vendor default" lives in hand SQL
-  (`repo/expense-category-resolution.ts`), as do trade and project
-  inheritance. Declare each chain and generate the resolution SQL, the
-  "inherited from" explanation, and the set of Expenses a change can reach —
-  the reach scope the reviewed classification preview hand-writes once #1712
-  lands. Generated SQL must match hand-tuned performance; #1712's preview
-  equivalence and scale tests are the guard. Decide the declaration shape
-  first.
-- 🟢 **Lint raw enum literals in SQL.** Once vocabularies are generated
-  constants, flag string literals such as `'not_allowed'` or `'principal'`
-  inside `sql` templates so a typo or stale value fails at build time instead
-  of matching nothing.
-- 🤔 **Review every Jev proposal on one page.** Jev suggestions are computed
-  per record and never stored, so a wrong or missing classification surfaces
-  only on a record someone opens. One generic page lists every manifest
-  `control.suggest` target across entities as a correction (current ≠
-  proposed) or an addition (blank), with current → proposed, reasoning, and
-  probability. Accept one or a selection through the normal update or the
-  reviewed finance apply, which previews Expense reach. Reject into
-  `SuggestionDismissal` (`server/repo/suggestion-dismissal.ts`, dormant), keyed
-  on target and proposed value, so the same proposal never resurfaces;
-  `features/ai/suggestion-review.tsx` dismissals last one visit. Proposals
-  come from the **Suggestion sweep primitive** (AI & search); the page derives
-  its targets after **Derive Jev suggestion specs from the manifest**. Decide
-  whether proposals persist as Run output or recompute per bounded scan,
-  whether low-probability proposals stay visible, and what invalidates a
-  dismissal.
+  (`repo/expense-category-resolution.ts`), as do project inheritance and
+  receipt-evidence expectation (Purchase override → Vendor → SpendingCategory
+  `evidenceExpectation`, `repo/purchase-evidence-policy.ts`). Declare each
+  chain and generate the resolution SQL, the "inherited from" explanation,
+  and the set of Expenses a change can reach — the reach scope the reviewed
+  classification preview hand-writes. Generated SQL must match hand-tuned
+  performance; #1712's preview equivalence and scale tests are the guard.
+  Decide the declaration shape first.
+- 🟢 **Burn down raw enum literals in SQL.** `cubby/no-raw-enum-literal-in-sql`
+  holds a shrink-only per-file baseline
+  (`tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json`). Replace
+  literals with the shared value constants file by file, lowering each count;
+  check whether generic values (`other`, `unknown`) cause false positives
+  worth excluding.
+- 🟢 **Move the image backfill onto the paced batch Run.**
+  `backfillImageProcessing` keeps its own settings-row pause and progress;
+  move it onto `runs/paced-batch.ts` beside the Suggestion sweep.
+- 🤔 **Re-weight the decision trial from paired data.** Normal decision
+  traffic stays 50/50 Jev/Clef (`CLEF_TRAFFIC_SHARE`). Once sweeps have
+  produced paired rows and Misses, run `eval:decisions` and retier on its
+  per-field results.
 
 Per-row household policies (SpendingCategory `productExpectation`) stay
 columns; algorithms (allocation, reconciliation, fingerprints) stay code and
@@ -891,18 +851,6 @@ consume the declarations.
   - Collection membership: `collection.set`, `collection.create`.
   - ISBN create: `product.findOrCreateByCode`.
   - Derived-field explanations: `fieldExplanation.explain`.
-
-- 🤔 **Suggestion sweep primitive.** One run shape for bulk suggestion passes:
-  record each suggestion (target, branch-rolled confidence, runner-up), apply
-  only high-confidence changes, queue the rest for review, with progress and
-  pause. Consumers: product re-categorization first (run after automatic
-  description, since the basis is mostly text until then), then reviewing
-  suggestions across a full filtered list instead of opened pages only.
-  Decide where the run lives: a `Run` purpose, the activity `runProjection`,
-  or a primitive shared with `backfillImageProcessing`. Measured: about $0.10
-  per 1,000 Jev calls at a 2.3k-token roster; ~6% throttling near 600/min, so
-  pace at a few hundred per minute. The response cache keys on taxonomy
-  revision, so any category edit invalidates a completed sweep.
 
 - 🤔 **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
   Compare recall against the OpenAI adapter with this eval set:
