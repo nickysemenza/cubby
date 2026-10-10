@@ -194,7 +194,8 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   and the current 256-generation Run limit do not bound repeated commands under
   new operation IDs early enough. [#1808](https://github.com/nickysemenza/cubby/pull/1808)
   adds a reviewed three-distinct-call bound for identical thrown service failures
-  using existing durable Run state; hosted acceptance and merge remain pending.
+  using existing durable Run state. Its exact-head hosted checks and scripted
+  acceptance passed and it merged; production deployment remains pending.
   Returned domain refusals and active-time accounting remain open. Pause
   repeated unchanged failures with their raw last observation. Member sign-in,
   permissions and Mac-offline waits do not consume active time. Reuse Run state
@@ -356,13 +357,22 @@ research acceptance.
   request-only delivery of repeated attachment bytes once, preserving every
   observation binding and the existing admission limit. Complete repeated order
   context sharing in [#1807](https://github.com/nickysemenza/cubby/pull/1807)
-  has independent review and focused coverage; final hosted acceptance and merge
-  remain pending.
+  has independent review, exact-head hosted checks and scripted acceptance; it
+  merged, with production deployment still pending.
   Request-sharing changes must preserve every source binding and complete order
   context. Compare supported outcomes, physical calls and transmitted bytes on
   unchanged synthetic sources, then verify real-model quality only when live
   research is authorized. Lower effort and fewer bytes do not establish correct
   purchased-variant judgments or a measured subscription-quota saving.
+
+- 🟢 **Reuse supported existing Products before creation.**
+  [#1810](https://github.com/nickysemenza/cubby/pull/1810) replaces bounded
+  alphabetical brand-token candidate searches with shared name/alias relevance
+  and exposes live candidates when assessing a proposed new Product. Focused
+  persisted-state regressions and independent review pass; final-head hosted
+  acceptance and merge remain pending. Verify real-model reuse after explicit
+  research resumption. Existing duplicates require a supported, preserving
+  merge plan before household cleanup; matching names alone never prove variants.
 
 - 🤔 **Link enriched seed Products to Plants.** `growsPlantId` is supported,
   but deciding which growing facts belong on Plant versus a purchased seed
