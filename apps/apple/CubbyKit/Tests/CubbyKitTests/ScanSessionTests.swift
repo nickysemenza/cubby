@@ -54,9 +54,10 @@ private func stray(_ entry: String, ambiguous: Bool = false) -> ScanStrayOut {
         amount: Amount(value: 1, unit: "each"), ambiguousQuantity: ambiguous)
 }
 
-/// Waits until the session has nothing pending, or fails after a bounded time.
+/// Waits until the session has nothing pending, or fails after a bounded time. The bound only
+/// catches a hang: a loaded CI runner took 4s to drain one case, past the former 2s bound.
 @MainActor
-private func settle(_ session: ScanSession, timeout: Duration = .seconds(2)) async throws {
+private func settle(_ session: ScanSession, timeout: Duration = .seconds(15)) async throws {
     let deadline = ContinuousClock.now + timeout
     while session.pendingCount > 0 {
         try #require(ContinuousClock.now < deadline, "session never settled")
