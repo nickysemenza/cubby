@@ -38,6 +38,7 @@ import {
   type EntityEditSession,
   useEntityEditSession,
 } from "./use-entity-edit-session";
+import { entityEditValueBagSchema } from "./value-schema";
 
 /** Field issues belong beside controls; dialog banners keep lifecycle context. */
 export function entityEditBannerIssues(
@@ -256,6 +257,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   request,
   onSuccess,
   mutationPort,
+  onSubmitOverride,
   evidence,
 }: EntityEditDialogProps<E>) {
   const sessionRequest: RuntimeEntityEditRequest<E> = {
@@ -331,8 +333,20 @@ export function EntityEditDialogContent<E extends EditableEntity>({
     >
       <FormWrapper
         form={session.form}
-        onSubmit={() => {
+        onSubmit={async () => {
           setShellError(null);
+          if (onSubmitOverride) {
+            try {
+              if (!(await session.form.trigger())) return;
+              await onSubmitOverride(
+                entityEditValueBagSchema.parse(session.form.getValues()),
+              );
+              close();
+            } catch (error) {
+              setShellError(getErrorMessage(error));
+            }
+            return;
+          }
           void session
             .submit()
             .then((result) => {

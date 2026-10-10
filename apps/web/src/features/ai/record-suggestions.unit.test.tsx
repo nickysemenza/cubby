@@ -2,6 +2,7 @@ import type {
   FieldSuggestionsInput,
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
+import { suggestionReviewRowSchema } from "@cubby/schemas/ai";
 import { inventoryEntryOut } from "@cubby/schemas/inventory";
 import { productTopLevelOut } from "@cubby/schemas/product";
 import { expenseOut } from "@cubby/schemas/project";
@@ -33,6 +34,8 @@ import {
   RecordSuggestionsProvider,
   RecordFieldSuggestion,
   RecordSuggestionBoundary,
+  RecordSuggestionsBulkAction,
+  type StoredSuggestionOperations,
 } from "./record-suggestions";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -43,6 +46,11 @@ afterEach(() => {
   harness.dispose();
 });
 const id = testShortcode("product", "first");
+const emptyStoredSuggestionOperations: StoredSuggestionOperations = {
+  list: async () => [],
+  accept: async ({ id }) => ({ id, status: "applied" }),
+  reject: async ({ id }) => ({ id, status: "rejected" }),
+};
 const food = {
   value: "CAT-2222",
   label: "Food",
@@ -71,6 +79,8 @@ function Surface({
       records={visible ? [record] : []}
       fieldKeys={["categoryId"]}
       operations={operations}
+
+      storedSuggestionOperations={emptyStoredSuggestionOperations}
     >
       {visible ? (
         <RecordFieldSuggestion record={record} field="categoryId">
@@ -93,6 +103,78 @@ function Surface({
 }
 
 describe("record suggestions", () => {
+  it("loads hidden suggest fields for bulk acceptance and skips live queries for stored pairs", async () => {
+    const recordId = "11111111-1111-4111-8111-111111111111";
+    const storedRow = suggestionReviewRowSchema.parse({
+      id: "22222222-2222-4222-8222-222222222222",
+      runId: "33333333-3333-4333-8333-333333333333",
+      entity: "product",
+      recordId,
+      field: "categoryId",
+      currentValue: null,
+      suggestedValue: "CAT-2222",
+      confidence: 0.97,
+      model: "typesafe/jev",
+      kind: "addition",
+      correctValue: null,
+    });
+    let finishStored!: (
+      rows: Awaited<ReturnType<StoredSuggestionOperations["list"]>>,
+    ) => void;
+    const stored: StoredSuggestionOperations = {
+      list: vi.fn(
+        async (input: Parameters<StoredSuggestionOperations["list"]>[0]) => {
+          expect(input.fields).toContain("categoryId");
+          return new Promise<
+            Awaited<ReturnType<StoredSuggestionOperations["list"]>>
+          >((resolve) => {
+            finishStored = resolve;
+          });
+        },
+      ),
+      accept: vi.fn(async ({ id }) => ({ id, status: "applied" as const })),
+      reject: vi.fn(async ({ id }) => ({ id, status: "rejected" as const })),
+    };
+    const suggestFields = vi.fn((_input: FieldSuggestionsInput) => undefined);
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
+        suggestFields(input);
+        return { suggestions: {}, outcomes: {} };
+      }),
+    };
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[
+          { id, uuid: recordId, name: "Synthetic row", categoryId: null },
+        ]}
+        fieldKeys={["name"]}
+        operations={operations}
+        storedSuggestionOperations={stored}
+      >
+        <RecordSuggestionsBulkAction
+          records={[
+            { id, uuid: recordId, name: "Synthetic row", categoryId: null },
+          ]}
+        />
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+    await waitFor(() => expect(stored.list).toHaveBeenCalled());
+    expect(suggestFields).not.toHaveBeenCalled();
+    finishStored([storedRow]);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Accept suggestions (1)" }),
+    );
+    await waitFor(() =>
+      expect(stored.accept).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "22222222-2222-4222-8222-222222222222" }),
+        expect.anything(),
+      ),
+    );
+    expect(suggestFields).not.toHaveBeenCalled();
+  });
+
   // Regression: deriving a basis and a query observer per row during SSR cost
   // list pages hundreds of ms of Worker CPU; suggestions only resolve in the
   // browser, so the server render must not create any.
@@ -118,6 +200,8 @@ describe("record suggestions", () => {
           records={records}
           fieldKeys={["categoryId"]}
           operations={operations}
+
+          storedSuggestionOperations={emptyStoredSuggestionOperations}
         >
           <span>rows</span>
         </RecordSuggestionsProvider>
@@ -158,11 +242,11 @@ describe("record suggestions", () => {
       wrapper: harness.wrapper,
     });
     await screen.findByText("Suggested: Food");
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.basisMode).toBe("suggested");
+    expect(calls).toHaveLength(2);
+    expect(calls.some((call) => call.basisMode === "suggested")).toBe(true);
     view.rerender(<Surface name="steel wrench" operations={operations} />);
     expect(screen.queryByText("Suggested: Food")).not.toBeInTheDocument();
-    await waitFor(() => expect(calls).toHaveLength(2));
+    await waitFor(() => expect(calls).toHaveLength(3));
     await act(async () => {
       finish({
         suggestions: {
@@ -189,7 +273,7 @@ describe("record suggestions", () => {
     expect(
       screen.getByText("No suggestions · 1 field checked"),
     ).toBeInTheDocument();
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
   });
 
   it("opens the normal editor with the saved value after acceptance fails", async () => {
@@ -240,6 +324,8 @@ describe("record suggestions", () => {
             };
           },
         })}
+
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
       >
         <RecordSuggestionBoundary record={record}>
           <RecordFieldSuggestion record={record} field="location">
@@ -256,7 +342,7 @@ describe("record suggestions", () => {
       { wrapper: harness.wrapper },
     );
     await screen.findByText("Workshop");
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
     expect(
       await screen.findByRole("dialog", { name: "Edit Inventory Item" }),
@@ -327,6 +413,8 @@ describe("record suggestions", () => {
             };
           },
         })}
+
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
       >
         <RecordFieldSuggestion record={record} field="tags">
           <span>current tags</span>
@@ -392,6 +480,8 @@ describe("record suggestions", () => {
             throw new Error("must not write");
           },
         })}
+
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
       >
         <RecordFieldSuggestion record={record} field="tags">
           <span>current tags</span>
@@ -486,6 +576,8 @@ describe("record suggestions", () => {
             throw new Error("must not write");
           },
         })}
+
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
       >
         <RecordFieldSuggestion record={record} field="trade">
           <span>Empty trade</span>
@@ -572,6 +664,8 @@ describe("record suggestions", () => {
             };
           },
         })}
+
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
       >
         <RecordFieldSuggestion record={record} field="costType">
           <span>Materials</span>
@@ -631,6 +725,8 @@ describe("record suggestions", () => {
             throw new Error("stop after capture");
           },
         })}
+
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
       >
         <RecordFieldSuggestion record={record} field="trade">
           <span>Plumbing</span>
@@ -689,6 +785,8 @@ describe("record suggestions", () => {
         ]}
         fieldKeys={["projectId", "trade"]}
         operations={operations}
+
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
       >
         <span>row</span>
       </RecordSuggestionsProvider>,
@@ -763,6 +861,8 @@ describe("record suggestions", () => {
         records={[record]}
         fieldKeys={["categoryId", "tags"]}
         operations={operations}
+
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
       >
         <RecordFieldSuggestion record={record} field="categoryId">
           <span>Empty category</span>
@@ -800,6 +900,8 @@ describe("record suggestions", () => {
         records={[record]}
         fieldKeys={["categoryId"]}
         operations={operations}
+
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
       >
         <span>row</span>
       </RecordSuggestionsProvider>,

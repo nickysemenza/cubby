@@ -1,10 +1,16 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef } from "react";
 import { z } from "zod";
 
+import {
+  entityRipple,
+  exactRippleTags,
+} from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { Button } from "~/ui/primitives/button";
 
 export function SuggestionSweepAction({
@@ -29,14 +35,29 @@ export function SuggestionSweepAction({
       ),
     [entity],
   );
+  const queryClient = useQueryClient();
+  const refresh = () =>
+    Promise.all([
+      invalidateOperationTags(
+        queryClient,
+        exactRippleTags(
+          operations.latestSuggestionSweepStatus.queryOptions().meta
+            ?.cacheTags ?? [],
+        ),
+      ),
+      invalidateOperationTags(queryClient, entityRipple(entity)),
+    ]);
   const start = useMutation({
     ...operations.startSuggestionSweep.mutationOptions(),
+    onSuccess: refresh,
   });
   const pause = useMutation({
     ...operations.pauseSuggestionSweep.mutationOptions(),
+    onSuccess: refresh,
   });
   const resume = useMutation({
     ...operations.resumeSuggestionSweep.mutationOptions(),
+    onSuccess: refresh,
   });
   const status = useQuery({
     ...operations.latestSuggestionSweepStatus.queryOptions(),
@@ -44,6 +65,19 @@ export function SuggestionSweepAction({
       start.isPending || query.state.data?.status === "running" ? 1500 : false,
   });
   const current = status.data?.entity === entity ? status.data : null;
+  const previousProgress = useRef<string | null>(null);
+  useEffect(() => {
+    const progressKey = current
+      ? JSON.stringify([current.status, current.progress])
+      : null;
+    if (
+      progressKey !== null &&
+      previousProgress.current !== null &&
+      progressKey !== previousProgress.current
+    )
+      void invalidateOperationTags(queryClient, entityRipple(entity));
+    previousProgress.current = progressKey;
+  }, [current, entity, queryClient]);
   const progressSchema = z
     .object({ done: z.number().optional(), total: z.number().optional() })
     .passthrough();

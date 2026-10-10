@@ -34,6 +34,7 @@ import {
   withTransactionOn,
 } from "~/server/repo/database-helpers";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
+import { supersedePendingSuggestionsForWrite } from "~/server/repo/suggestion-superseding";
 
 type PatchTable = PgTable & {
   id: AnyPgColumn<{ data: string; notNull: true }>;
@@ -192,6 +193,12 @@ export async function bulkPatchEntities<
       .update(table)
       .set(set)
       .where(and(inArray(table.id, ids), notDeleted(table)));
+    await supersedePendingSuggestionsForWrite(
+      tx,
+      spec.entity,
+      ids,
+      Object.keys(values),
+    );
     await spec.afterWrite?.(tx);
     // SAFETY: the manifest's bulk roster names columns of the entity's table.
     const fields = entityFieldModels[spec.entity].bulk as readonly Extract<

@@ -65,7 +65,7 @@ const rippleTags = (
   ...groups: readonly (readonly OperationCacheTag[])[]
 ): InvalidationTagSet => createRippleTags(true, groups);
 
-const exactRippleTags = (
+export const exactRippleTags = (
   ...groups: readonly (readonly OperationCacheTag[])[]
 ): InvalidationTagSet => createRippleTags(false, groups);
 

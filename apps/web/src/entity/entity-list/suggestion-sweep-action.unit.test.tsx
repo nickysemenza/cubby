@@ -60,4 +60,76 @@ describe("suggestion sweep list action", () => {
     );
     harness.dispose();
   });
+
+  it("refreshes list queries when a running sweep completes", async () => {
+    let statusReads = 0;
+    const operations = {
+      ...ai,
+      startSuggestionSweep: ai.startSuggestionSweep.withTransport(async () => ({
+        id: "22222222-2222-4222-8222-222222222222",
+      })),
+      pauseSuggestionSweep: ai.pauseSuggestionSweep.withTransport(async () => ({
+        paused: true as const,
+      })),
+      resumeSuggestionSweep: ai.resumeSuggestionSweep.withTransport(
+        async () => ({
+          id: "22222222-2222-4222-8222-222222222222",
+        }),
+      ),
+      latestSuggestionSweepStatus: ai.latestSuggestionSweepStatus.withTransport(
+        async () => {
+          statusReads++;
+          const completed = statusReads >= 3;
+          return {
+            latestRunId: "22222222-2222-4222-8222-222222222222",
+            entity: "expense",
+            fields: ["projectId"],
+            taxonomyChanged: false,
+            status: completed ? ("completed" as const) : ("running" as const),
+            paused: false,
+            progress: {
+              total: 1,
+              done: completed ? 1 : 0,
+              applied: 0,
+              queued: 0,
+              failed: 0,
+            },
+          };
+        },
+      ),
+    };
+    const listQueryKey = ["synthetic-expense-list"] as const;
+    const harness = createBrowserTestHarness();
+    await harness.queryClient.fetchQuery({
+      queryKey: listQueryKey,
+      queryFn: async () => [],
+      meta: { cacheTags: [["expense"]] },
+    });
+    render(
+      <SuggestionSweepAction
+        entity="expense"
+        filters={{}}
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Suggest for these rows" }),
+    );
+    await waitFor(() => expect(statusReads).toBeGreaterThanOrEqual(2));
+    await harness.queryClient.fetchQuery({
+      queryKey: listQueryKey,
+      queryFn: async () => [],
+      meta: { cacheTags: [["expense"]] },
+    });
+    await waitFor(
+      () =>
+        expect(
+          harness.queryClient.getQueryState(listQueryKey)?.isInvalidated,
+        ).toBe(true),
+      { timeout: 4000 },
+    );
+    expect(statusReads).toBeGreaterThanOrEqual(3);
+    harness.dispose();
+  });
 });

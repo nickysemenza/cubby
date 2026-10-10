@@ -519,6 +519,7 @@ function requestsForRecords(
   records: readonly unknown[],
   targets: SuggestTargets,
   runKey: string,
+  stored: ReadonlyMap<string, SuggestionReviewRow>,
 ) {
   return records.flatMap((raw) => {
     const parsed = recordSchema.safeParse(raw);
@@ -528,8 +529,54 @@ function requestsForRecords(
       targets.targets.length === 0
     )
       return [];
-    return suggestionRequestsForRecord(entity, parsed.data, targets, runKey);
+    const available = suggestTargetsFor(
+      entity,
+      targets.targets
+        .filter(
+          (target) =>
+            !stored.has(
+              storedSuggestionKey(
+                recordInternalId(raw) ?? parsed.data.id,
+                target.key,
+              ),
+            ),
+        )
+        .map((target) => target.key),
+    );
+    return suggestionRequestsForRecord(entity, parsed.data, available, runKey);
   });
+}
+
+function liveRequestsAfterStoredRead(
+  hydrated: boolean,
+  recordIds: readonly string[],
+  fields: readonly string[],
+  storedReadSucceeded: boolean,
+  entity: StandardEntity,
+  records: readonly unknown[],
+  targets: SuggestTargets,
+  runKey: string,
+  stored: ReadonlyMap<string, SuggestionReviewRow>,
+) {
+  if (
+    hydrated &&
+    recordIds.length > 0 &&
+    fields.length > 0 &&
+    !storedReadSucceeded
+  )
+    return [];
+  return requestsForRecords(entity, records, targets, runKey, stored);
+}
+
+function storedSuggestionIndex(
+  rows: readonly SuggestionReviewRow[] | undefined,
+) {
+  return new Map(
+    (rows ?? []).map((suggestion) => [
+      storedSuggestionKey(suggestion.recordId, suggestion.field),
+      suggestion,
+    ]),
+  );
 }
 
 function actionableRowSuggestionCount(
@@ -644,7 +691,9 @@ function BoundRecordSuggestions({
       records.map(recordInternalId).filter((id): id is string => id !== null),
     ),
   ];
-  const pageFields = targets.targets.map((target) => target.key);
+  const pageFields = entityFieldModels[entity].fields
+    .filter((field) => field.control?.suggest)
+    .map((field) => field.key);
   const storedQueryKey = [
     "ai",
     "page-pending-suggestions",
@@ -690,13 +739,18 @@ function BoundRecordSuggestions({
     mutationFn: storedSuggestionOperations.reject,
     onSuccess: (_result, input) => afterStoredReview(input.id),
   });
-  const stored = new Map(
-    (storedQuery?.data ?? []).map((suggestion) => [
-      storedSuggestionKey(suggestion.recordId, suggestion.field),
-      suggestion,
-    ]),
+  const stored = storedSuggestionIndex(storedQuery?.data);
+  const requests = liveRequestsAfterStoredRead(
+    hydrated,
+    pageRecordIds,
+    pageFields,
+    storedQuery?.isSuccess === true,
+    entity,
+    records,
+    targets,
+    runKey,
+    stored,
   );
-  const requests = requestsForRecords(entity, records, targets, runKey);
   // Identical records can share one query, while each row retains its own review state.
   const sources = [
     ...new Map(
@@ -1213,17 +1267,12 @@ function StoredSuggestionCell({
             record as never,
           ) as EntityEditDialogRequest<EditableEntity>
         }
-        onSuccess={async () => {
-          const fresh = await entityDetailFor(context.entity).readFresh(
-            record.id,
-          );
+        onSubmitOverride={async (values) => {
           const readKey =
             entityFieldModels[context.entity].fields.find(
               (candidate) => candidate.key === field,
             )?.readKey ?? field;
-          const correctedValue = z
-            .looseObject({ [readKey]: z.json() })
-            .parse(fresh)[readKey];
+          const correctedValue = z.json().parse(values[readKey]);
           await reject(suggestion.id, correctedValue);
           setEditOpen(false);
         }}

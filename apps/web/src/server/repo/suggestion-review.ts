@@ -16,7 +16,7 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
 import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
 import { SHORTCODE_TABLE } from "~/server/repo/generated/shortcode-tables.gen";
@@ -165,7 +165,6 @@ export async function applySuggestionValue(
           : { spendingProfile: typedValue }),
     });
     await applyFinanceCategorySuggestion(context, financeInput);
-    await supersedePendingFieldSuggestions(db, entity, row.recordId, row.field);
     return;
   }
   await executeEntity(
@@ -177,26 +176,6 @@ export async function applySuggestionValue(
       data: { [row.field]: typedValue },
     }),
   );
-  await supersedePendingFieldSuggestions(db, entity, row.recordId, row.field);
-}
-
-async function supersedePendingFieldSuggestions(
-  db: Database,
-  entity: z.infer<typeof fieldSuggestionsInput>["entity"],
-  recordId: string,
-  field: string,
-) {
-  await getDb(db)
-    .update(suggestionTable)
-    .set({ status: "superseded" })
-    .where(
-      and(
-        eq(suggestionTable.entity, entity),
-        eq(suggestionTable.recordId, parseEntityId(entity, recordId)),
-        eq(suggestionTable.field, field),
-        eq(suggestionTable.status, "pending"),
-      ),
-    );
 }
 
 export async function acceptSuggestion(
@@ -205,21 +184,31 @@ export async function acceptSuggestion(
   input: z.infer<typeof rowIdInput>,
 ) {
   const { id } = rowIdInput.parse(input);
-  const [row] = await getDb(db)
-    .select()
-    .from(suggestionTable)
-    .where(
-      and(eq(suggestionTable.id, id), eq(suggestionTable.status, "pending")),
-    )
-    .limit(1);
-  if (!row) throw new Error(`Pending Suggestion not found: ${id}`);
-  const parsed = suggestionRowSchema.parse(row);
-  await applySuggestionValue(db, context, parsed, row.suggestedValue);
-  await getDb(db)
-    .update(suggestionTable)
-    .set({ status: "applied" })
-    .where(eq(suggestionTable.id, id));
-  return { id, status: "applied" as const };
+  return withTransactionDatabase(db, async (transactionDb) => {
+    const [row] = await getDb(transactionDb)
+      .select()
+      .from(suggestionTable)
+      .where(
+        and(eq(suggestionTable.id, id), eq(suggestionTable.status, "pending")),
+      )
+      .limit(1)
+      .for("update");
+    if (!row) throw new Error(`Pending Suggestion not found: ${id}`);
+    const parsed = suggestionRowSchema.parse(row);
+    // The shared write path excludes this row by status while superseding its
+    // pending siblings. A failed application rolls the status transition back.
+    await getDb(transactionDb)
+      .update(suggestionTable)
+      .set({ status: "applied" })
+      .where(eq(suggestionTable.id, id));
+    await applySuggestionValue(
+      transactionDb,
+      { ...context, db: transactionDb },
+      parsed,
+      row.suggestedValue,
+    );
+    return { id, status: "applied" as const };
+  });
 }
 
 export async function acceptSuggestions(
@@ -242,6 +231,39 @@ export async function rejectSuggestion(
   const parsedInput = rowIdInput
     .extend({ correctValue: jsonSchema.optional() })
     .parse(input);
+  if (parsedInput.correctValue !== undefined) {
+    if (!context)
+      throw new Error("Applying a corrected value requires the entity context");
+    return withTransactionDatabase(db, async (transactionDb) => {
+      const [row] = await getDb(transactionDb)
+        .select()
+        .from(suggestionTable)
+        .where(
+          and(
+            eq(suggestionTable.id, parsedInput.id),
+            eq(suggestionTable.status, "pending"),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!row)
+        throw new Error(`Pending Suggestion not found: ${parsedInput.id}`);
+      const parsed = suggestionRowSchema.parse(row);
+      // Remove this row from the pending set before the shared write path
+      // supersedes sibling Suggestions. A failure rolls both operations back.
+      await getDb(transactionDb)
+        .update(suggestionTable)
+        .set({ status: "rejected", correctValue: parsedInput.correctValue })
+        .where(eq(suggestionTable.id, parsedInput.id));
+      await applySuggestionValue(
+        transactionDb,
+        { ...context, db: transactionDb },
+        parsed,
+        parsedInput.correctValue,
+      );
+      return { id: parsedInput.id, status: "rejected" as const };
+    });
+  }
   const [row] = await getDb(db)
     .select()
     .from(suggestionTable)
@@ -253,12 +275,6 @@ export async function rejectSuggestion(
     )
     .limit(1);
   if (!row) throw new Error(`Pending Suggestion not found: ${parsedInput.id}`);
-  const parsed = suggestionRowSchema.parse(row);
-  if (parsedInput.correctValue !== undefined) {
-    if (!context)
-      throw new Error("Applying a corrected value requires the entity context");
-    await applySuggestionValue(db, context, parsed, parsedInput.correctValue);
-  }
   await getDb(db)
     .update(suggestionTable)
     .set({ status: "rejected", correctValue: parsedInput.correctValue ?? null })

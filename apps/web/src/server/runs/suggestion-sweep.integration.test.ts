@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { fieldSuggestionsOut } from "@cubby/schemas/ai";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -21,8 +24,9 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { getDb } from "~/server/repo/database-helpers";
+import { updateExpensesInBulk } from "~/server/repo/expense/crud";
 import { loadFinanceSuggestionContext } from "~/server/repo/finance-suggestion-context";
-import { createProduct } from "~/server/repo/product/crud";
+import { createProduct, updateProduct } from "~/server/repo/product/crud";
 import { makeProductInput } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -42,6 +46,11 @@ import {
   resumeSuggestionSweep as resumeSweep,
   pauseSuggestionSweep,
 } from "./suggestion-sweep";
+
+const SUGGESTION_SWEEP_MIGRATION = readFileSync(
+  join(import.meta.dirname, "../../../drizzle/0030_familiar_vargas.sql"),
+  "utf8",
+);
 
 const noPairedSample = () => false;
 const startSuggestionSweep = (
@@ -99,6 +108,171 @@ const highConfidence = decisionAt(0.97);
 // share provenance and never apply; pause/resume checkpoints by unprocessed row.
 describe("persisted Suggestion sweeps", () => {
   const ctx = withTestDb();
+
+  it("migrates legacy sweep input and checkpoints before resuming", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic legacy sweep target",
+        manufacturer: "Synthetic maker",
+        categoryId: taxonomyId("tools"),
+      }),
+      ctx.actor,
+    );
+    const productRecordId = await resolveLiveShortcode(
+      ctx.db,
+      product.id,
+      "product",
+    );
+    if (!productRecordId)
+      throw new Error("Synthetic product record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "suggestion_sweep",
+      trigger: "manual",
+      status: "running",
+      input: {
+        kind: "suggestion_sweep",
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [product.id] },
+        decisionModel: "typesafe/jev",
+        paused: false,
+      },
+      progress: {
+        total: 1,
+        done: 1,
+        applied: 0,
+        queued: 1,
+        failed: 0,
+        diagnostics: [],
+      },
+    });
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Run"
+      SET input = input - 'fields' || jsonb_build_object('field', ${"categoryId"}::text),
+          progress = progress || jsonb_build_object(
+            'processedTargetIds', jsonb_build_array(${productRecordId}::uuid)
+          )
+      WHERE id = ${runId}
+    `);
+    await getDb(ctx.db).execute(sql.raw(SUGGESTION_SWEEP_MIGRATION));
+    const [migrated] = await getDb(ctx.db)
+      .select({ input: runTable.input, progress: runTable.progress })
+      .from(runTable)
+      .where(eq(runTable.id, runId));
+    expect(migrated?.input).toMatchObject({ fields: ["categoryId"] });
+    expect(migrated?.progress).toMatchObject({
+      total: 1,
+      done: 1,
+      processedTargetIds: [`${productRecordId}:categoryId`],
+    });
+    const suggest = vi.fn(async () =>
+      fieldSuggestionsOut.parse({ suggestions: {}, outcomes: {} }),
+    );
+    await resumeSuggestionSweep(ctx.db, runId, {
+      context,
+      suggest,
+      wait: async () => {},
+    });
+    expect(suggest).not.toHaveBeenCalled();
+  });
+
+  it("supersedes pending Suggestions on direct repository writes used by imports", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic imported classification",
+        manufacturer: "Synthetic maker",
+        categoryId: taxonomyId("tools"),
+      }),
+      ctx.actor,
+    );
+    const productRecordId = await resolveLiveShortcode(
+      ctx.db,
+      product.id,
+      "product",
+    );
+    if (!productRecordId)
+      throw new Error("Synthetic product record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    await getDb(ctx.db)
+      .insert(suggestionTable)
+      .values({
+        runId,
+        entity: "product",
+        recordId: productRecordId,
+        field: "categoryId",
+        currentValue: taxonomyShortcode("tools"),
+        suggestedValue: taxonomyShortcode("food"),
+        confidence: 0.8,
+        model: "typesafe/jev",
+        kind: "correction",
+        status: "pending",
+      });
+    await updateProduct(
+      ctx.db,
+      parseEntityId("product", productRecordId),
+      { categoryId: taxonomyId("food") },
+      ctx.actor,
+    );
+    const [saved] = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.recordId, productRecordId));
+    expect(saved?.status).toBe("superseded");
+  });
+
+  it("supersedes a pending Suggestion in the repository bulk patch transaction", async () => {
+    const expense = await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic bulk suggestion expense",
+      cost: 10,
+      date: "2026-09-01",
+      costType: "materials",
+      trade: "other",
+    });
+    const expenseRecordId = await resolveLiveShortcode(
+      ctx.db,
+      expense.shortcode,
+      "expense",
+    );
+    if (!expenseRecordId)
+      throw new Error("Synthetic expense record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    await getDb(ctx.db).insert(suggestionTable).values({
+      runId,
+      entity: "expense",
+      recordId: expenseRecordId,
+      field: "projectId",
+      currentValue: null,
+      suggestedValue: "PRJ-2222",
+      confidence: 0.8,
+      model: "typesafe/jev",
+      kind: "addition",
+      status: "pending",
+    });
+    await updateExpensesInBulk(
+      ctx.db,
+      [expense.shortcode],
+      { projectId: null },
+      ctx.actor,
+    );
+    const [saved] = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.recordId, expenseRecordId));
+    expect(saved?.status).toBe("superseded");
+  });
 
   it("uses public ids for finance inference and checkpoints no-proposal targets", async () => {
     const context = entityKernelContextSchema.parse(
@@ -1301,6 +1475,18 @@ describe("persisted Suggestion sweeps", () => {
         correctValue: taxonomyShortcode("food"),
       });
     const db = getDb(ctx.db);
+    const rejected = await db
+      .select({
+        status: suggestionTable.status,
+        correctValue: suggestionTable.correctValue,
+      })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.runId, runId));
+    expect(rejected).toHaveLength(2);
+    expect(rejected.every((row) => row.status === "rejected")).toBe(true);
+    expect(
+      rejected.every((row) => row.correctValue === taxonomyShortcode("food")),
+    ).toBe(true);
     const recordId = await resolveLiveShortcode(ctx.db, product.id, "product");
     if (!recordId) throw new Error("synthetic record setup failed");
     const [updated] = await db
