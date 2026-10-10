@@ -147,7 +147,7 @@ describe("joint expense spending allocation", () => {
     });
   });
 
-  it("keeps unidentified refund adjustments unknown while explicit overrides and ordinary discounts conserve signed cents", async () => {
+  it("keeps unknown refund adjustments uncategorized while ordinary discounts conserve signed cents", async () => {
     const { projects, categories, purchase, vendor } = await fixture();
     await line("Synthetic retained item", 10, "principal", {
       purchaseId: purchase.id,
@@ -168,16 +168,9 @@ describe("joint expense spending allocation", () => {
       "discount",
       { purchaseId: purchase.id },
     );
-    const explicit = await line(
-      "Synthetic classified refund shipping",
-      -0.02,
-      "shipping",
-      { purchaseId: purchase.id, spendingCategoryId: categories[1]!.id },
-    );
     const map = await loadExpenseSpendingAllocations(ctx.db, [
       tax.id,
       discount.id,
-      explicit.id,
     ]);
     expect(map.get(tax.id)).toEqual([
       expect.objectContaining({
@@ -194,16 +187,6 @@ describe("joint expense spending allocation", () => {
         incomplete: false,
       }),
     ]);
-    expect(map.get(explicit.id)).toEqual([
-      expect.objectContaining({
-        spendingCategoryId: categories[1]!.id,
-        amount: -0.02,
-        incomplete: false,
-      }),
-    ]);
-    expect(
-      (await loadExpenseProjectAllocations(ctx.db, [explicit.id]))[0],
-    ).toMatchObject({ projectId: projects[0]!.id, attributedCents: -2n });
     const refundPurchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
@@ -291,7 +274,7 @@ describe("joint expense spending allocation", () => {
     expect(await loadExpenseJointAllocations(ctx.db, [])).toEqual([]);
     expect((await loadExpenseSpendingAllocations(ctx.db, [])).size).toBe(0);
   });
-  it("previews explicit adjustment category changes and clears without changing stored rows", async () => {
+  it("previews principal category changes in adjustment allocations without writes", async () => {
     const { projects, categories, purchase } = await fixture();
     const principal = await line("Synthetic preview item", 1, "principal", {
       purchaseId: purchase.id,
@@ -300,13 +283,9 @@ describe("joint expense spending allocation", () => {
     });
     const fee = await line("Synthetic preview fee", 0.01, "fee", {
       purchaseId: purchase.id,
-      spendingCategoryId: categories[1]!.id,
     });
     const draft = {
-      expenses: [
-        { id: principal.id, spendingCategoryId: categories[1]!.id },
-        { id: fee.id, spendingCategoryId: null },
-      ],
+      expenses: [{ id: principal.id, spendingCategoryId: categories[1]!.id }],
     };
     const rows = await loadExpenseJointAllocations(ctx.db, [fee.id], draft);
     expect(rows).toEqual([
@@ -315,19 +294,10 @@ describe("joint expense spending allocation", () => {
         attributedCents: 1n,
       }),
     ]);
-    const reset = await loadExpenseSpendingAllocations(ctx.db, [fee.id], {
-      expenses: [{ id: fee.id, spendingCategoryId: null }],
-    });
-    expect(reset.get(fee.id)).toEqual([
-      expect.objectContaining({
-        spendingCategoryId: categories[0]!.id,
-        amount: 0.01,
-      }),
-    ]);
     const stored = await loadExpenseSpendingAllocations(ctx.db, [fee.id]);
     expect(stored.get(fee.id)).toEqual([
       expect.objectContaining({
-        spendingCategoryId: categories[1]!.id,
+        spendingCategoryId: categories[0]!.id,
         amount: 0.01,
       }),
     ]);
@@ -389,7 +359,7 @@ describe("joint expense spending allocation", () => {
       { value: "__none__", label: null, count: 0 },
     ]);
   });
-  it("keeps classification completeness independent of Project and missing-price uncertainty", async () => {
+  it("keeps principal classification completeness independent of Project and missing-price uncertainty", async () => {
     const { categories, purchase } = await fixture();
     const unpriced = await line(
       "Synthetic categorized unpriced item",
@@ -400,19 +370,7 @@ describe("joint expense spending allocation", () => {
         spendingCategoryId: categories[0]!.id,
       },
     );
-    const explicit = await line(
-      "Synthetic explicit unpriced fee",
-      null,
-      "fee",
-      {
-        purchaseId: purchase.id,
-        spendingCategoryId: categories[1]!.id,
-      },
-    );
-    const initial = await loadExpenseSpendingAllocations(ctx.db, [
-      unpriced.id,
-      explicit.id,
-    ]);
+    const initial = await loadExpenseSpendingAllocations(ctx.db, [unpriced.id]);
     expect(initial.get(unpriced.id)).toEqual([
       expect.objectContaining({
         spendingCategoryId: categories[0]!.id,
@@ -420,16 +378,8 @@ describe("joint expense spending allocation", () => {
         incomplete: false,
       }),
     ]);
-    expect(initial.get(explicit.id)).toEqual([
-      expect.objectContaining({
-        spendingCategoryId: categories[1]!.id,
-        amount: null,
-        basis: "default",
-        incomplete: false,
-      }),
-    ]);
     expect(
-      (await loadExpenseProjectAllocations(ctx.db, [explicit.id]))[0]
+      (await loadExpenseProjectAllocations(ctx.db, [unpriced.id]))[0]
         ?.incomplete,
     ).toBe(true);
     await line("Synthetic priced sibling", 1, "principal", {

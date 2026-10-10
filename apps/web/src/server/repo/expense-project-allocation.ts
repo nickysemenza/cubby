@@ -11,7 +11,6 @@ import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
 
 import {
   effectiveExpenseSpendingCategorySql,
-  storedExpenseSpendingCategorySql,
   spendingCategoryCatalogSql,
   type ExpenseSpendingCategoryResolutionDraft,
 } from "./expense-category-resolution";
@@ -122,14 +121,12 @@ export const expenseJointAllocationSql = (
     SELECT e."id" AS "expenseId", e."purchaseId", w."principalExpenseId",
       CASE WHEN p."id" IS NULL THEN standalone_project."id" ELSE w."projectId" END AS "projectId",
       CASE
-        WHEN explicit_category."id" IS NOT NULL THEN explicit_category."id"
         WHEN e."cost" < 0 AND e."lineKind" <> 'discount' AND coalesce(d.has_positive, false) THEN NULL
         ELSE w."spendingCategoryId"
       END AS "spendingCategoryId",
       coalesce(w.basis, 'default') AS basis, coalesce(w.weight, 1::bigint) AS weight,
       round(e."cost"::numeric * 100)::bigint AS source_cents,
       sum(coalesce(w.weight, 1::bigint)) OVER (PARTITION BY e."id") AS total_weight,
-      explicit_category."id" IS NOT NULL AS has_explicit_category,
       coalesce(d.has_unpriced_principal, false) AS has_unpriced_principal
     FROM "Expense" e LEFT JOIN "Purchase" p
       ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
@@ -137,8 +134,6 @@ export const expenseJointAllocationSql = (
     LEFT JOIN purchase_direction d ON d."purchaseId" = p."id"
     LEFT JOIN "Project" standalone_project
       ON standalone_project."id" = e."projectId" AND standalone_project."deletedAt" IS NULL
-    LEFT JOIN ${spendingCategoryCatalogSql(draft)} explicit_category
-      ON explicit_category."id" = ${storedExpenseSpendingCategorySql("e", draft)} AND explicit_category."deletedAt" IS NULL
     WHERE e."deletedAt" IS NULL AND e."lineKind" <> 'principal'
       ${expenseIds ? sql`AND e."id" IN (SELECT "id" FROM selected_expense)` : sql``}
   ), adjustment_floor AS (
@@ -166,8 +161,7 @@ export const expenseJointAllocationSql = (
           WHEN r.remainder_rank <= abs(r.source_cents) - r.assigned_cents THEN 1 ELSE 0 END)
       END::bigint AS attributed_cents, r.basis,
       r.source_cents IS NULL OR r.basis = 'default' OR r.has_unpriced_principal AS incomplete,
-      r."spendingCategoryId" IS NULL OR
-        (NOT r.has_explicit_category AND (r.basis = 'default' OR r.has_unpriced_principal)) AS category_incomplete
+      r."spendingCategoryId" IS NULL OR r.basis = 'default' OR r.has_unpriced_principal AS category_incomplete
     FROM adjustment_ranked r
   )
   SELECT a."expenseId", a."purchaseId", a."principalExpenseId", a."projectId",

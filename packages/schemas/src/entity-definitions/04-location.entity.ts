@@ -1052,6 +1052,8 @@ Rules:
             field: "productId",
             byValue: { furniture: "required" },
             otherwise: "unknown",
+            refusal:
+              "A furniture location is an instance of a Product. Link a Product, or choose another type.",
           },
         ],
       },

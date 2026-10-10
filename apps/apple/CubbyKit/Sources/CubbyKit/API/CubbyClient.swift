@@ -585,6 +585,7 @@ public actor CubbyClient {
         case .mailImport: .mailImport
         case .purchaseValidation: .purchaseValidation
         case .productEnrichment: .productEnrichment
+        case .suggestionSweep: .suggestionSweep
         case .photoInventory: .photoInventory
         case .describeImage: .describeImage
         case .subjectLift: .subjectLift

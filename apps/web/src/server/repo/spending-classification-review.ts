@@ -27,7 +27,6 @@ import {
   withTransactionDatabase,
 } from "./database-helpers";
 import {
-  expenseSpendingCategoryResolutionSql,
   spendingClassificationRevision,
   type ExpenseSpendingCategoryResolutionDraft,
 } from "./expense-category-resolution";
@@ -320,39 +319,25 @@ async function householdAllocations(db: Database, scope: readonly ExpenseId[]) {
 
 const scopedFactsRow = z.object({
   digest: z.string(),
-  changedIds: z.array(z.string()),
 });
 
 /**
  * The affected Expenses' rows with their Product and Purchase rows, hashed in
  * SQL; with the policy revision and allocations these are every input to their
  * outcome. An edit that moves an Expense into or out of scope changes the
- * hashed set too. A principal line's resolved category is its allocation's
- * category, which the caller compares; only other lines resolve here.
+ * hashed set too. The caller compares allocations for every line.
  */
-async function scopedFacts(
-  db: Database,
-  expenseIds: readonly ExpenseId[],
-  draft: ExpenseSpendingCategoryResolutionDraft,
-) {
-  const adjustmentCategory = (
-    resolution: ExpenseSpendingCategoryResolutionDraft | undefined,
-  ) =>
-    sql`CASE WHEN e."lineKind" <> 'principal' THEN ${expenseSpendingCategoryResolutionSql("e", resolution)}->>'categoryId' END`;
+async function scopedFacts(db: Database, expenseIds: readonly ExpenseId[]) {
   const result = await unwrapDb(db).execute(sql`
     WITH f AS (
-      SELECT e.id, jsonb_build_object('expense',to_jsonb(e),'product',to_jsonb(g),'purchase',to_jsonb(p)) AS facts,
-        ${adjustmentCategory(undefined)} AS before,
-        ${adjustmentCategory(draft)} AS after
+      SELECT e.id, jsonb_build_object('expense',to_jsonb(e),'product',to_jsonb(g),'purchase',to_jsonb(p)) AS facts
       FROM "Expense" e
       LEFT JOIN "Product" g ON g.id=e."productId" AND g."deletedAt" IS NULL
       LEFT JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
       WHERE e."deletedAt" IS NULL AND e.id = ANY(${uuidArrayParam(expenseIds)})
     )
     SELECT encode(sha256(convert_to(coalesce(string_agg(
-        jsonb_build_array(f.id, f.facts)::text, ${"\n"} ORDER BY f.id), ''), 'UTF8')), 'hex') AS digest,
-      coalesce(jsonb_agg(f.id ORDER BY f.id) FILTER (
-        WHERE f.before IS DISTINCT FROM f.after), '[]'::jsonb) AS "changedIds"
+        jsonb_build_array(f.id, f.facts)::text, ${"\n"} ORDER BY f.id), ''), 'UTF8')), 'hex') AS digest
     FROM f
   `);
   return scopedFactsRow.parse(result.rows[0]);
@@ -383,7 +368,7 @@ async function buildPreview(
       ).rows
     : [];
   const scope = await affectedExpenseIds(db, draft);
-  const facts = await scopedFacts(db, scope, draft);
+  const facts = await scopedFacts(db, scope);
   const household = await householdAllocations(db, scope);
   // Each affected Expense carries all of its allocations on both sides, so
   // the household figures below adjust exactly.
@@ -393,7 +378,7 @@ async function buildPreview(
     : [];
   const beforeByExpense = allocationsByExpense(before);
   const afterByExpense = allocationsByExpense(after);
-  const changed = new Set<string>(facts.changedIds);
+  const changed = new Set<string>();
   for (const id of new Set([
     ...beforeByExpense.keys(),
     ...afterByExpense.keys(),

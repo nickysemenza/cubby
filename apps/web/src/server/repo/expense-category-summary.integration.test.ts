@@ -124,13 +124,13 @@ describe("live Expense category summaries", () => {
     });
     for (const [name, cost, lineKind] of [
       ["Unpriced classified principal", null, "principal"],
-      ["Explicit classified tax", 5, "tax"],
+      ["Unclassified tax", 5, "tax"],
     ] as const) {
       await insertWithShortcode(ctx.db, "expense", {
         name,
         cost,
         lineKind,
-        spendingCategoryId: category.id,
+        spendingCategoryId: lineKind === "principal" ? category.id : null,
         purchaseId: purchase.id,
         date: "2026-09-20",
         costType: "materials",
@@ -139,10 +139,10 @@ describe("live Expense category summaries", () => {
     const summary = async () =>
       (await getPurchaseByID(ctx.db, purchase.id)).spendingCategorySummary;
     expect(await summary()).toMatchObject({
-      state: "single",
-      categorizedLineCount: 2,
-      uncategorizedLineCount: 0,
-      complete: true,
+      state: "partial",
+      categorizedLineCount: 1,
+      uncategorizedLineCount: 1,
+      complete: false,
       amountsKnown: false,
     });
     await insertWithShortcode(ctx.db, "expense", {
@@ -155,8 +155,8 @@ describe("live Expense category summaries", () => {
     });
     expect(await summary()).toMatchObject({
       state: "partial",
-      categorizedLineCount: 2,
-      uncategorizedLineCount: 1,
+      categorizedLineCount: 1,
+      uncategorizedLineCount: 2,
       complete: false,
       amountsKnown: false,
     });

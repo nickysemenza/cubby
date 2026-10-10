@@ -240,11 +240,7 @@ const expenseSpendingCategoryFieldResolution = (
   row: ExpenseRow,
   purchaseRow: ExpenseRow["purchase"],
 ): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
-  if (
-    row.lineKind !== "principal" &&
-    row.spendingCategoryId == null &&
-    row.spendingCategoryAllocations?.length
-  ) {
+  if (row.lineKind !== "principal" && row.spendingCategoryAllocations?.length) {
     const categories = [
       ...new Set(
         row.spendingCategoryAllocations

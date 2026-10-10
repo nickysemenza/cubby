@@ -50,7 +50,7 @@
   "apps/web/src/server/repo/recipe/crud.ts": 2,
   "apps/web/src/server/repo/related-view.ts": 25,
   "apps/web/src/server/repo/search-document.ts": 43,
-  "apps/web/src/server/repo/spending-classification-review.ts": 5,
+  "apps/web/src/server/repo/spending-classification-review.ts": 3,
   "apps/web/src/server/repo/task-project-inheritance.ts": 5,
   "apps/web/src/server/repo/task/blocking-sql.ts": 4,
   "apps/web/src/server/repo/task/summary.ts": 4,
