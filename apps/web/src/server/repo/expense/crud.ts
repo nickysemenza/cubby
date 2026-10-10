@@ -33,6 +33,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { expense, product, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { assertClassificationPolicies } from "~/server/repo/classification-field-policy";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   buildPartialUpdateValues,
@@ -417,21 +418,12 @@ const assertExpenseProductLink = (input: {
   productId: ProductId | null;
   lineKind: string;
   lineBasis: string;
+  spendingCategoryId?: SpendingCategoryId | null;
+  projectId?: ProjectId | null;
   productQuantity: number | null;
   cost: number | null;
 }) => {
-  if (input.lineKind !== "principal" && input.productId !== null) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Only principal Expenses may link a Product. For a disposal or write-off, use lineKind=principal, cost=0, and a negative productQuantity; use other_adjustment only for purchase-level amounts with no Product.",
-    );
-  }
-  if (input.lineBasis === "allocation" && input.productId !== null) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item.",
-    );
-  }
+  assertClassificationPolicies("expense", input);
   if (input.productQuantity != null && input.productId === null) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
@@ -534,6 +526,7 @@ export const updateExpense = async (
         lineKind: true,
         lineBasis: true,
         projectId: true,
+        spendingCategoryId: true,
         trade: true,
       },
     });
@@ -927,18 +920,13 @@ export const createExpense = async (
     const projectId = explicitProjectId;
     const lineKind =
       data.lineKind ?? inferExpenseLineKind({ name: data.name, productId });
-    if (lineKind !== "principal" && productId !== null) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Only principal Expenses may link a Product. For a disposal or write-off, use lineKind=principal, cost=0, and a negative productQuantity; use other_adjustment only for purchase-level amounts with no Product.",
-      );
-    }
-    if (data.lineBasis === "allocation" && productId !== null) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item.",
-      );
-    }
+    assertClassificationPolicies("expense", {
+      lineKind,
+      lineBasis: data.lineBasis ?? "item_line",
+      productId,
+      spendingCategoryId: data.spendingCategoryId ?? null,
+      projectId,
+    });
     if (data.productQuantity !== null && productId === null) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",

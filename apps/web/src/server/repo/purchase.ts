@@ -72,6 +72,7 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
+import { assertClassificationPolicies } from "~/server/repo/classification-field-policy";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { gapCondition } from "~/server/repo/data-quality/sql";
 import {
@@ -1575,18 +1576,13 @@ export const splitExpense = async (
         }
         const lineKind =
           part.lineKind ?? inferExpenseLineKind({ name: part.name, productId });
-        if (original.lineBasis === "allocation" && productId !== null) {
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            "Unitemized allocations cannot link a Product. Review actual itemization through the receipt replacement workflow.",
-          );
-        }
-        if (lineKind !== "principal" && productId !== null) {
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            "Only principal Expenses may link a Product. For a disposal or write-off, use lineKind=principal, cost=0, and a negative productQuantity; use other_adjustment only for purchase-level amounts with no Product.",
-          );
-        }
+        assertClassificationPolicies("expense", {
+          lineKind,
+          lineBasis: original.lineBasis,
+          productId,
+          spendingCategoryId: spendingCategoryIds[index] ?? null,
+          projectId,
+        });
         if (part.productQuantity !== null && productId === null) {
           throw createAppError(
             "CONSTRAINT_VIOLATION",

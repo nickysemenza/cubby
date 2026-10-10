@@ -14,6 +14,7 @@ import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fie
 import { inArray, sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
 import { categoryFeatureInSql } from "~/server/repo/product-category-sql";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
@@ -115,4 +116,72 @@ export async function classificationRefusesField(
       return true;
   }
   return false;
+}
+
+type ClassificationPolicyRow = Readonly<{
+  lineKind?: string | null;
+  lineBasis?: string | null;
+  type?: string | null;
+  productId?: string | null;
+  spendingCategoryId?: string | null;
+  projectId?: string | null;
+}>;
+
+const policyRowValue = (
+  row: ClassificationPolicyRow,
+  field: string,
+): string | null | undefined => {
+  switch (field) {
+    case "lineKind":
+      return row.lineKind;
+    case "lineBasis":
+      return row.lineBasis;
+    case "type":
+      return row.type;
+    case "productId":
+      return row.productId;
+    case "spendingCategoryId":
+      return row.spendingCategoryId;
+    case "projectId":
+      return row.projectId;
+    default:
+      return undefined;
+  }
+};
+
+/** Enforce every same-record, database-enforced classification policy. */
+export function assertClassificationPolicies(
+  entity: string,
+  row: ClassificationPolicyRow,
+): void {
+  for (const [id, policy] of Object.entries(declaredClassificationPolicies)) {
+    if (
+      !policy.enforced ||
+      policy.target.entity !== entity ||
+      policy.target.reference !== null
+    )
+      continue;
+    const classifier = policyRowValue(row, policy.classifier);
+    for (const declaration of policy.fields) {
+      const value = policyRowValue(row, declaration.field);
+      const status =
+        (classifier === null || classifier === undefined
+          ? undefined
+          : Object.entries(declaration.byValue).find(
+              ([value]) => value === String(classifier),
+            )?.[1]) ?? declaration.otherwise;
+      if (status === "not_allowed" && value !== null && value !== undefined) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `${String(classifier)} may not set ${declaration.field} (${id}).`,
+        );
+      }
+      if (status === "required" && (value === null || value === undefined)) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `${String(classifier)} requires ${declaration.field} (${id}).`,
+        );
+      }
+    }
+  }
 }

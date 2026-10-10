@@ -55,6 +55,7 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
+import { assertClassificationPolicies } from "~/server/repo/classification-field-policy";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   associatePendingImages,
@@ -232,13 +233,6 @@ const raiseMissingType = (): never => {
   );
 };
 
-const raiseFurnitureWithoutProduct = (): never => {
-  throw createAppError(
-    "CONSTRAINT_VIOLATION",
-    "A furniture location is an instance of a Product. Link a Product, or choose another type.",
-  );
-};
-
 const createLocationTx = async (
   db: Database,
   data: LocationCreateInput,
@@ -273,7 +267,7 @@ const createLocationTx = async (
         )
       : null;
     const type = data.type ?? (productId ? "furniture" : raiseMissingType());
-    if (type === "furniture" && !productId) raiseFurnitureWithoutProduct();
+    assertClassificationPolicies("location", { type, productId });
     const newLocation = await insertWithShortcode(tx, "location", {
       name: data.name,
       aliases: data.aliases,
@@ -443,8 +437,10 @@ export const updateLocation = async (
     const nextType = data.type ?? before?.type;
     const nextProductId =
       productId === undefined ? before?.productId : productId;
-    if (nextType === "furniture" && !nextProductId)
-      raiseFurnitureWithoutProduct();
+    assertClassificationPolicies("location", {
+      type: nextType,
+      productId: nextProductId,
+    });
 
     const updateValues = buildPartialUpdateValues({
       name: data.name,
