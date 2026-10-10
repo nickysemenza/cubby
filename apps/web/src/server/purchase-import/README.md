@@ -319,18 +319,9 @@ corrective resolution refusals already use the task's three-attempt allowance
 from completed operation receipts; they do not need another counter. Active-time
 accounting remains a separate follow-up.
 
-The replacement's migration chain follows the current main journal, including
-Neon diagnostics. Its populated-history rehearsal rebuilds main's actual schema,
-restores synthetic service-created records, and invokes the production migrator
-twice. Signed Expenses, stock, owned photos, source/payment associations, settled
-targets and operation/member decisions must survive. Interrupted purchase/mail
-Runs become `needs_review` with `research_rewrite_required`; old inputs and
-diagnostics remain, and photo inventory and terminal Runs stay unchanged. Apply
-the cutover with writers and deliveries quiesced; resume only freshly admitted
-replacement work after the new code/schema pair and client versions are verified.
-The operational holds, quiescence acknowledgement, legacy upload-grant window
-and deployment/readback order are owned by the
-[cutover procedure](../../../../../docs/development.md#purchase-research-schema-cutover).
+The `0025_purchase_research` cutover is applied in production. Purchase/mail
+Runs interrupted by it are `needs_review` with `research_rewrite_required`; their
+old inputs and diagnostics remain.
 
 ## One Run, end to end
 

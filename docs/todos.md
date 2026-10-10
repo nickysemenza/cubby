@@ -1020,8 +1020,7 @@ are implemented. See [local development](local-development.md#fixture-previews-a
   Worker answer 503 and skips the cron (`server/maintenance.ts`); purchase
   coordinator callbacks and tool effects now defer/refuse before DB/model
   access, and browser brokers close without acknowledging unprocessed results.
-  Queues are paused by hand. The schema cutover sequence is in
-  [development](development.md#purchase-research-schema-cutover). Remaining:
+  Queues are paused by hand. Remaining:
   status in a Durable Object checked per request (503
   page except a new health route and the switch), by every queue consumer
   (`background-tasks/consume.ts`, `telemetry-queue.ts`, the purchase-agent

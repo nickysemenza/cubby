@@ -329,13 +329,6 @@ stale build fails with the exact rebuild command. A suite holds the harness
 across its tests with `holdWorkerdHarness()` in `beforeAll`, so the wait and
 any rebuild never count against a test timeout.
 
-The research cutover changes stored and wire contracts. Use the approved
-quiescence, preservation and deployment sequence in
-[the rewrite plan](plans/purchase-research-rewrite.md); deploying an old
-Worker against the migrated database is not a rollback. Retain the immutable
-quiescence and replacement builds and verify the data readback before reopening
-consumers.
-
 ### Browser bridge
 
 Signed-in vendor pages are read by the Mac app through one SQLite Durable
@@ -465,8 +458,8 @@ Cloudflare Image Resizing at that origin.
 
 The retired `usda-api` Worker is replaced by the USDA release Durable Object
 above; it and its D1 database and R2 bucket are deleted. The retired `upc-lookup` Worker (D1 `upc-lookup-db`, R2
-`upc-images`) is replaced by the main Worker's `UpcLookupCache`; see
-[the D1 migration runbook](runbooks/upc-d1-migration.md).
+`upc-images`) is replaced by the main Worker's `UpcLookupCache`; its data was copied and the D1
+database is deleted.
 
 ### Secrets and plaintext variables
 

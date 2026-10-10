@@ -74,8 +74,8 @@ another order. Generic Vendor and Purchase reports expose source links, explicit
 outcomes and review commands. Interrupted acquisition and admitted research can
 resume through their durable cursors and task references.
 
-The replacement's complete web/native and live acceptance remains pending; its
-focused regression results are recorded in the rewrite plan.
+The replacement's complete web/native and live acceptance remains pending; see
+[todos](todos.md#runs-enrichment--browser-capture).
 
 | Part        | Current path                                                                                                                                                                                                                                                       | Next product step                                                                                       |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |

@@ -470,13 +470,11 @@ storage-fixture capabilities, not replacements for `buildEntity`/`createEntity`.
 
 Migration regressions rehearse the committed journal from the actual deployed
 prefix through the canonical migration using a leased local database and
-`migrateDatabase`. Consolidation retires filename-based or intermediate-schema
-fixtures only after the named invariant is retained at the real domain
-write/readback boundary. `purchase-research-cutover.fixtures.ts` shares the
-main-to-0025 rehearsal; mail-source identity tests cover proved/unproved/collision
-graphs, source-claim-family tests own invalid alias-family refusal, and
-fact-evidence-subject tests own canonical Product/Purchase proof and idempotent
-preservation.
+`migrateDatabase`. Delete a migration's rehearsal once production has applied
+it and its schema readback is verified; the invariants it guarded are then
+held by domain write/readback tests (for example, source-claim-family tests own
+invalid alias-family refusal, and fact-evidence-subject tests own canonical
+Product/Purchase proof and idempotent preservation).
 
 Provider discovery scenarios grant historical backfill and continuous new-mail
 catchup independently. A backfill continuation never authorizes a history pass;
