@@ -19,7 +19,8 @@ is roughly ten times the allowance.
 ## Decision
 
 - Every required check is an Nx target. A passing result is stored in a shared
-  Nx remote cache (`@nx/s3-cache` on an R2 bucket), keyed by the hash of the
+  Nx remote cache (Nx's built-in HTTP cache client, served by the
+  `apps/nx-cache` Worker over an R2 bucket), keyed by the hash of the
   target's inputs.
 - Test inputs are deliberately broad: every non-documentation file, the
   lockfile, toolchain versions, and the CI configuration. Any code change
