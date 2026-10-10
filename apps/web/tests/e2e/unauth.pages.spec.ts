@@ -1,5 +1,7 @@
 import { expect, test } from "./e2e-test";
 
+test.use({ signedIn: false });
+
 test("public home renders and protected detail redirects before rendering", async ({
   page,
 }) => {

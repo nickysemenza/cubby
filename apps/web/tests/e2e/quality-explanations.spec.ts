@@ -610,10 +610,13 @@ test("explanation evidence formats links and dates without exposing internal ent
   const { eq } = await import("drizzle-orm");
   const suffix = Date.now();
   const vendorName = `Synthetic evidence supplier ${suffix}`;
-  const url = `https://example.com/catalog/${"synthetic-".repeat(30)}item`;
+  // A per-test host: the issuer resolves by page host, and other fixtures in
+  // this worker's database register Vendors on shared synthetic domains.
+  const host = `evidence-${suffix}.example`;
+  const url = `https://${host}/catalog/${"synthetic-".repeat(30)}item`;
   const supplier = await createEntityFixture(page, "vendor", {
     name: vendorName,
-    website: "https://example.com",
+    website: `https://${host}`,
   });
   const storedVendor = await getDb(getFixtureDb()).query.vendor.findFirst({
     where: eq(vendor.shortcode, supplier.id),
@@ -659,7 +662,7 @@ test("explanation evidence formats links and dates without exposing internal ent
     .click();
   const popover = page.locator('[data-slot="popover-content"]');
   await expect(
-    popover.getByRole("link", { name: /example.com\/catalog\// }),
+    popover.getByRole("link", { name: `${host}/catalog/` }),
   ).toHaveAttribute("href", url);
   await expect(
     popover.getByRole("link", { name: vendorName, exact: true }),

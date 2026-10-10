@@ -152,7 +152,11 @@ its idle session would otherwise hold it indefinitely. A spec's `test.use` of a
 worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
 even to its default, moves its tests into extra workers that each boot another
 browser, database, and Worker harness; only `workerdProfile` may split
-workers (`tooling/e2e-worker-pool.unit.test.ts`). Record video for a
+workers (`tooling/e2e-worker-pool.unit.test.ts`). Each split costs a shard a
+worker restart, so a signed-out spec uses the test-scoped
+`test.use({ signedIn: false })`, and Gmail specs are named `gmail.*.spec.ts`
+so the one-worker `Gmail profile tests` project runs them together at the start
+of a shard. Record video for a
 run with `CUBBY_E2E_VIDEO=1`. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
@@ -301,7 +305,7 @@ queue consumer to one of:
 | Profile          | Used by                                   | `cubby-background` | `cubby-telemetry` | `cubby-purchase-agent` | Extra peers                    | Harness lock |
 | ---------------- | ----------------------------------------- | ------------------ | ----------------- | ---------------------- | ------------------------------ | ------------ |
 | `offline`        | browser default, simulator, Tester Army   | dropped            | dropped           | unconsumed             | none                           | no           |
-| `gmail`          | `test.use({ workerdProfile: "gmail" })`   | real               | dropped           | unconsumed             | local Google provider          | no           |
+| `gmail`          | `gmail.*.spec.ts` browser specs           | real               | dropped           | unconsumed             | local Google provider          | no           |
 | `native-import`  | Mac import lane                           | dropped            | dropped           | real                   | queue producer, model, gateway | yes          |
 | `purchase-agent` | agent scenarios, live evals, browser spec | unconsumed         | real              | real                   | queue producer, model, gateway | yes          |
 | `coupled`        | coupled Tester Army journeys              | real               | real              | real                   | queue producer, model, gateway | yes          |
