@@ -5,12 +5,7 @@ import { plainDate } from "./base-entity";
 
 import { mailEvent } from "./mailbox-research";
 import { money } from "./money";
-import {
-  runEvidenceKind,
-  runPurpose,
-  runStatus,
-  runTrigger,
-} from "./run-fields";
+import { runPurpose, runStatus, runTrigger } from "./run-fields";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import {
   imageShortcode,
@@ -76,35 +71,7 @@ export function countRunTargets(states: readonly RunTargetState[]) {
   return counts;
 }
 
-export { runEvidenceKind };
-export type { RunEvidenceKind } from "./run-fields";
-
 export { runShortcode };
-/** Stage bytes for a run target only; this never creates an Image or Document. */
-export const initiateRunEvidenceUploadInput = z.object({
-  // The run's public code: the browser page names runs by it and the Mac
-  // echoes the one its capture command's evidence scope carried.
-  runId: runShortcode,
-  targetId: z.uuid(),
-  kind: runEvidenceKind,
-  contentType: z.enum([
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/avif",
-    "image/heic",
-    "image/heif",
-  ]),
-  byteSize: z
-    .number()
-    .int()
-    .positive()
-    .max(50 * 1024 * 1024),
-  checksum: z.string().regex(/^[a-f0-9]{64}$/),
-  filename: z.string().trim().min(1).max(255),
-  sourceMetadata: z.record(z.string(), z.json()).default({}),
-});
 const importOperationId = z.string().trim().min(1).max(200);
 const importItemOperationId = z.string().trim().min(1).max(200);
 const stableImportItemId = z

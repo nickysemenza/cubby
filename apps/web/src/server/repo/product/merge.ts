@@ -91,12 +91,6 @@ import { markProductConversionCoverageInputStale } from "./conversion-coverage";
 import { ensureSlotPrimaries } from "./update-helpers";
 
 export const PRODUCT_MERGE_EDGE_POLICY = {
-  "RunFactEvidence.entityId": {
-    code: "preserve-retired-research",
-    effect: "preserve",
-    description:
-      "Retired research facts stay on the merged-away Product tombstone until the contract migration drops them.",
-  },
   "ImportSourceProduct.productId": {
     code: "repoint-original-order-evidence",
     effect: "repoint",

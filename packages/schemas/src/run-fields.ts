@@ -53,36 +53,6 @@ export const runTargetEntityKind = z.enum([
 export type RunTargetEntityKind = z.infer<typeof runTargetEntityKind>;
 /** Permanent retirement prevents disposed coordinator history from being recreated. */
 export const runRetirementReason = z.enum(["unrelated_source", "settled"]);
-export const runEvidenceKind = z.enum([
-  "browser_capture",
-  "web_page",
-  "mail_message",
-  "gmail_attachment",
-  "manual_upload",
-  "upload_evidence",
-]);
-export type RunEvidenceKind = z.infer<typeof runEvidenceKind>;
-
-export const researchRetentionPhase = z.enum([
-  "fenced",
-  "objects_deleted",
-  "coordinators_destroyed",
-  "completed",
-]);
-export type ResearchRetentionPhase = z.infer<typeof researchRetentionPhase>;
-/** Only server-derived deletion/transfer identities survive interrupted cleanup. */
-export const researchRetentionPlan = z.object({
-  originOperationId: z.string().min(1),
-  objectKeys: z.array(z.string()),
-  screenshotRefs: z.array(
-    z.object({ runId: z.uuid(), imageRef: z.string().min(1) }),
-  ),
-  retiredRunIds: z.array(z.uuid()),
-  successors: z.array(
-    z.object({ runId: z.uuid(), successorRunIds: z.array(z.uuid()) }),
-  ),
-});
-export type ResearchRetentionPlan = z.infer<typeof researchRetentionPlan>;
 /** What `run.control` can do to a Run; the report actions and the operation share it. */
 export const runControlAction = z.enum([
   "pause",
@@ -181,7 +151,7 @@ export type OrderMailImportOrder = z.infer<typeof orderMailImportOrder>;
  * `Run.input` for mail-only imports. The single form (one confirmation) is
  * what every run started before multi-select carries and stays readable; the
  * `orders` form is one run over several selected confirmations of one member
- * and Vendor, each tracked as a `RunOrderCandidate`.
+ * and Vendor.
  */
 export const orderMailImportRunInput = z.union([
   orderMailImportOrder.extend({ kind: z.literal("order_mail_import") }),
@@ -220,10 +190,8 @@ export const orderBackfillRunInput = z
   });
 export type OrderBackfillRunInput = z.infer<typeof orderBackfillRunInput>;
 /**
- * `Run.input` for a browser run over charge hunts a member selected: exactly
- * these `ImportHunt` ids are its work. Their outcomes live on the hunts
- * themselves (see `chargeHuntOutcome`), so no migration or per-run table is
- * needed; a hunt belongs to at most one unfinished run.
+ * `Run.input` of a retired browser run over selected charge hunts. Only
+ * historical Runs carry it; it stays parseable so their detail still reads.
  */
 export const chargeHuntRunInput = z.object({
   kind: z.literal("charge_hunts"),
@@ -313,13 +281,6 @@ export const runRestartInput = z.discriminatedUnion("kind", [
   runRestartMailResearchInput,
 ]);
 export type RunRestartInput = z.infer<typeof runRestartInput>;
-/** A selected hunt's outcome on its run; `pending` blocks finishing. */
-export const chargeHuntOutcome = z.enum([
-  "pending",
-  "resolved",
-  "deferred",
-  "not_found",
-]);
 export const suggestionSweepRunInput = z.object({
   kind: z.literal("suggestion_sweep"),
   entity: z.string().min(1),

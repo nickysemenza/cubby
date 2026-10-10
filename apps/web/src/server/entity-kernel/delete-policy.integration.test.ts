@@ -39,7 +39,6 @@ import type {
   DeviceId,
   ExpenseId,
   FinancialAccountId,
-  FinancialTransactionId,
   ImageId,
   IngredientId,
   LedgerPartyId,
@@ -51,11 +50,10 @@ import type {
   PurchaseId,
   RecipeId,
   RunId,
-  VendorId,
 } from "@cubby/schemas/identifiers";
 import { attachableImageEntityId } from "@cubby/schemas/image";
 import { generateShortcode } from "@cubby/shared";
-import { eq, getTableColumns, type SQL, sql } from "drizzle-orm";
+import { getTableColumns, type SQL, sql } from "drizzle-orm";
 import {
   getTableConfig,
   type PgColumn,
@@ -77,7 +75,6 @@ import {
   entityLink,
   run as runTable,
   expenseAttribution,
-  importHunt,
   importPreparedOrder,
   importSourceClaim,
   importSourceOrder,
@@ -86,7 +83,6 @@ import {
   imageProcessingJob,
   ledgerSourceClaim,
   mailboxMessage,
-  researchRetention,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
@@ -97,8 +93,6 @@ import {
   photoGroupProposal,
   productMatchCandidate,
   runFinding,
-  runEvidence,
-  runFactEvidence,
   runTarget,
   statementImport,
   statementRow,
@@ -801,8 +795,6 @@ interface StagingIds {
   expenseId: ExpenseId | null;
   ledgerTransferId: LedgerTransferId | null;
   financialAccountId: FinancialAccountId | null;
-  financialTransactionId: FinancialTransactionId | null;
-  vendorId: VendorId | null;
   // Untyped uuid columns (no `.$type<VendorAccountId>()`/`<ImageId>()` on
   // these particular references) — a plain string, not a branded id.
   vendorAccountId: string | null;
@@ -980,38 +972,25 @@ async function seedCookbookExpenseAttributionInventory(
     }).catch(() => undefined);
 }
 
-/** ImportHunt, RunTarget and RunFinding: all owned by the seeded import run. */
+/** RunTarget and RunFinding: owned by the seeded import run. */
 async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
   const {
     ledgerPartyId,
-    financialTransactionId,
-    vendorId,
     vendorAccountId,
     imageId,
     productId,
     purchaseId,
     deviceId,
   } = ids;
-  if (ledgerPartyId && financialTransactionId)
-    await insertAndReturn(db, importHunt, {
-      ledgerPartyId,
-      financialTransactionId,
-      vendorId: vendorId ?? undefined,
-      vendorAccountId: vendorAccountId ?? undefined,
-      receiptImageId: imageId ?? undefined,
-      dateFrom: "2024-01-01",
-      dateTo: "2024-01-31",
-    }).catch(() => undefined);
-
-  // Each canonical subject has real retained proof so the matrix checks the
-  // proof disposition as well as task history and hard-delete dependency order.
+  // Each canonical subject has a task so the matrix checks task history and
+  // hard-delete dependency order.
   for (const [entityKind, entityId] of [
     ["purchase", purchaseId],
     ["product", productId],
     ["image", imageId],
   ] as const) {
     if (!entityId) continue;
-    const target = await insertAndReturn(db, runTarget, {
+    await insertAndReturn(db, runTarget, {
       runId,
       entityKind,
       entityId,
@@ -1020,31 +999,6 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
       deviceWorkDeviceId:
         entityKind === "purchase" ? (deviceId ?? undefined) : undefined,
       targetFingerprint: `delete-policy-runtarget-${entityKind}`,
-    });
-    const evidence = await insertAndReturn(db, runEvidence, {
-      runId,
-      targetId: target.id,
-      kind: "browser_capture",
-      objectKey: `synthetic-delete-policy/${target.id}`,
-      checksum: "a".repeat(64),
-      mediaType: "text/plain",
-      sourceMetadata: {
-        title: "Synthetic delete-policy original",
-        sourceURL: null,
-      },
-    });
-    await insertAndReturn(db, runFactEvidence, {
-      targetId: target.id,
-      evidenceId: evidence.id,
-      entityKind,
-      entityId,
-      fieldPath: "name",
-      value: "Synthetic accepted subject value",
-      valueFingerprint: "b".repeat(64),
-      support: {
-        observation: "Synthetic retained original",
-        reasoning: "The synthetic original names this canonical subject.",
-      },
     });
   }
 
@@ -1057,33 +1011,6 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
       classification: "related",
       classificationVersion: "synthetic-v1",
       status: "pending",
-    });
-    const orderMailId = crypto.randomUUID();
-    const work = await insertAndReturn(db, runTarget, {
-      runId,
-      entityKind: "run",
-      entityId: runId,
-      workKey: orderMailId,
-      targetFingerprint: "delete-policy-retention-primary-source",
-    });
-    await insertAndReturn(db, researchRetention, {
-      id: crypto.randomUUID(),
-      runId,
-      workRef: work.id,
-      ledgerPartyId,
-      orderMailId,
-      mailboxId: "synthetic-delete-policy-retention-mailbox",
-      messageId: "synthetic-delete-policy-retention-message",
-      checksum: "b".repeat(64),
-      phase: "completed",
-      completedAt: new Date(),
-      plan: {
-        originOperationId: "synthetic-delete-policy-retention",
-        objectKeys: [],
-        screenshotRefs: [],
-        retiredRunIds: [runId],
-        successors: [],
-      },
     });
   }
 
@@ -1213,7 +1140,7 @@ async function seedImageProcessingRows(db: Database, ids: StagingIds) {
  * Direct inserts into staging/child tables the kernel never creates
  * (import/photo/statement/ledger-evidence rows), covering the remaining
  * incoming edges `UNCOVERED_EDGES` used to list: meal food entries and recipe
- * portions, the import-run staging tables (`ImportHunt`, `ImportPreparedOrder`,
+ * portions, the import-run staging tables (`ImportPreparedOrder`,
  * `RunTarget`, `RunFinding`, `PhotoGroupProposal`, `OrderMailAttachment`),
  * review/settlement metadata (`ProductMatchCandidate`, `LedgerSourceClaim`,
  * `StatementRow`), `Cookbook`, `ExpenseAttribution`, a second `InventoryEntry`,
@@ -1245,8 +1172,6 @@ async function seedDeletePolicyStagingRows(
     expenseId: await resolve("expense", "EXP-"),
     ledgerTransferId: await resolve("ledgerTransfer", "LTR-"),
     financialAccountId: await resolve("financialAccount", "FAC-"),
-    financialTransactionId: await resolve("financialTransaction", "FTX-"),
-    vendorId: await resolve("vendor", "VEN-"),
     vendorAccountId: await resolve("vendorAccount", "VACCT-"),
     deviceId: await resolve("device", "DEV-"),
     imageId: await resolve("image", "IMG-"),
@@ -1284,22 +1209,6 @@ describe("entity delete policy — declared dispositions at the DB boundary", ()
       universe.shortcodeByPrefix,
       runId,
     );
-    const retainedWork = await getDb(ctx.db)
-      .select({
-        entityKind: runTarget.entityKind,
-        entityId: runTarget.entityId,
-        workKey: runTarget.workKey,
-        orderMailId: researchRetention.orderMailId,
-      })
-      .from(researchRetention)
-      .innerJoin(runTarget, eq(runTarget.id, researchRetention.workRef));
-    expect(retainedWork).toHaveLength(1);
-    expect(retainedWork[0]).toMatchObject({
-      entityKind: "run",
-      entityId: runId,
-    });
-    expect(retainedWork[0]?.workKey).toBe(retainedWork[0]?.orderMailId);
-
     const failures: string[] = [];
     const uncovered: string[] = [];
     let covered = 0;

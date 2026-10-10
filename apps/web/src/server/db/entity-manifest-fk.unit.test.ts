@@ -91,14 +91,11 @@ const NON_ENTITY_FK_TARGETS = {
   StatementRow: "verbatim statement evidence, not a domain entity",
   RunTarget:
     "explicit operational target for a validation, enrichment or photo-inventory import run",
-  RunOrderCandidate:
-    "an account-sync run's order-history worklist, not a domain entity",
   ImportPreparedOrder:
     "immutable purchase-import evidence preparation, not a domain entity",
   ImportSourceClaim: "retained source authority for imported evidence",
   ImportSourceOrder:
     "an accepted original order owned by a retained import source",
-  RunEvidence: "retained evidence bytes and metadata owned by a Run",
   ImageDerivative: "a non-gallery representation owned by its original Image",
   ImageProcessingJob:
     "authoritative operational image work, exposed through Activity",
@@ -214,32 +211,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "a validation/enrichment target exists only as part of its run",
   },
-  "RunOrderCandidate.runId": {
-    classification: "ownership",
-    reason: "an account-sync order-history worklist row owned by its run",
-  },
-  "RunEvidence.runId": {
-    classification: "ownership",
-    reason: "captured evidence filed under its run",
-  },
-  "ResearchSourceExposure.runId": {
-    classification: "metadata",
-    reason:
-      "content-free source exposure used to dispose contaminated Run storage",
-  },
-  "ResearchRetention.runId": {
-    classification: "metadata",
-    reason:
-      "external disposal authority survives the Run coordinator and its tombstone",
-  },
-  "ResearchSourceExposure.ledgerPartyId": {
-    classification: "metadata",
-    reason: "authenticated member scope of a content-free source exposure",
-  },
-  "ResearchRetention.ledgerPartyId": {
-    classification: "metadata",
-    reason: "authenticated member scope of an external disposal receipt",
-  },
   "MailboxMessage.runId": {
     classification: "metadata",
     reason: "records which research Run owns the retained mailbox message",
@@ -272,10 +243,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "RunFinding.runId": {
     classification: "metadata",
     reason: "records the run that produced this integrity finding",
-  },
-  "ImportHunt.receiptRunId": {
-    classification: "metadata",
-    reason: "records the run that captured this hunt's receipt",
   },
   "ImportPreparedOrder.runId": {
     classification: "ownership",
@@ -314,26 +281,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "RunFinding.ledgerPartyId": {
     classification: "metadata",
     reason: "scopes an operational review finding to a household member",
-  },
-  "ImportHunt.ledgerPartyId": {
-    classification: "metadata",
-    reason: "scopes receipt discovery work to a household member",
-  },
-  "ImportHunt.financialTransactionId": {
-    classification: "metadata",
-    reason: "receipt-discovery work keyed by its triggering transaction",
-  },
-  "ImportHunt.vendorId": {
-    classification: "metadata",
-    reason: "candidate vendor metadata for receipt discovery",
-  },
-  "ImportHunt.vendorAccountId": {
-    classification: "metadata",
-    reason: "vendor login selected for receipt discovery",
-  },
-  "ImportHunt.receiptImageId": {
-    classification: "metadata",
-    reason: "submitted evidence retained by receipt-discovery work",
   },
   "MerchantVendorRule.ledgerPartyId": {
     classification: "metadata",

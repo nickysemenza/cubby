@@ -145,30 +145,38 @@ Product enrichment, the research service family and its independent assessor
 were deleted in the [caller-driven research plan](plans/caller-driven-research.md);
 historical Runs stay readable through generic reports.
 
-- ⏳ **Drop the retired research tables.** No feature reads `RunFactEvidence`,
-  `RunEvidence`, `RunOrderCandidate`, `ResearchSourceExposure`,
-  `ResearchRetention` or `ImportHunt` any more; their edges preserve rows on
-  soft-deleted subjects and skip the liveness audit. The contract PR ships its
-  code with the drop migration (the edge registry and Drizzle declarations still
-  name these tables until then) and must:
-  - The data step (`0033_retire_unattended_research.sql`) has run: supported
-    `RunFactEvidence` is copied into `EntitySource` (merged-away facts on the
-    survivor), retired findings are dismissed and unfinished retired-purpose
-    Runs stopped; the daily retirement sweep destroys their coordinators.
-    Record the private R2/DO manifest outside the repository first.
-  - Drop the six tables, `RunEvidence` R2 objects not referenced by an Image,
-    their `child-tables/run.ts` declarations, `entity-edges.ts` edges
-    (`RETIRED_RESEARCH_LIVENESS`, `researchFactSubjectEdges`),
-    `entity-edge-owners.ts` exclusions, every `preserve-retired-research`
-    disposition, the `RunFactEvidence`/`ImportHunt` entries in
-    `IMAGE_HARD_DELETE`, `imageReferenceCondition` and `PROCESSING_EDGES`, and
-    the delete-policy matrix seeds.
-  - Delete the writes that exist only for those FKs: image deletion nulling
-    `RunEvidence.targetId` (`repo/image.ts`) and `mergeRunTargets` moving facts
-    and evidence off a folded RunTarget (`repo/run-target-merge.ts`).
+- ⏳ **Reclaim retired research storage.** Migration
+  `0034_drop_retired_research.sql` drops `RunFactEvidence`, `RunEvidence`,
+  `RunOrderCandidate`, `ResearchSourceExposure`, `ResearchRetention` and
+  `ImportHunt`; their code left with it. Remaining operator steps:
+  - Before deploying 0034 (and after 0033), capture privately, outside the
+    repository, the `RunEvidence` object keys no Image or derivative names —
+    0034 removes the only record of them:
+
+    ```sql
+    SELECT re."objectKey", re."byteSize", re."kind", re."runId", re."createdAt"
+    FROM "RunEvidence" re
+    WHERE NOT EXISTS (SELECT 1 FROM "Image" i WHERE i."key" = re."objectKey")
+      AND NOT EXISTS (
+        SELECT 1 FROM "ImageDerivative" d WHERE d."key" = re."objectKey")
+    ORDER BY re."objectKey";
+    ```
+
+    `Image` deliberately includes soft-deleted rows; they still own their
+    object (see [recover R2 orphans](runbooks/recover-r2-orphans.md)). After
+    the deploy, delete exactly those keys from R2 by hand; no repository code
+    deletes them.
+
+  - The generated `/api/import/evidence` byte read (`run.readEvidenceMedia`)
+    has no server handler since #1846. Delete it with the native retained-media
+    viewer (`RecordsBlockView.swift` `ReportRetainedMedia`,
+    `CubbyClient.reportMedia`) in an Apple change.
   - Drop VendorAccount `browser`, `browserSyncEnabled`, `cursor` and the
     `paused_*` statuses from the manifest, `repo/vendor-account.ts` and the
-    Gmail account default, then regenerate clients.
+    Gmail account default. The native client decodes them as required fields
+    of `VendorAccountDetail`, so this needs an
+    `APPLE_CLIENT_COMPATIBILITY_VERSION` bump and a column-dropping migration
+    that maps `paused_*` rows to a surviving status.
 
 - 🤔 **Server-side web search for Mail import.** Reintroduce `web_*` for Pi on
   [Cloudflare web search](https://developers.cloudflare.com/web-search/) to fill
@@ -973,11 +981,9 @@ counts are dated observations from the 2026-09 consolidation, not current
 usage measurements or proof of obsolescence. (The contribution ledger left
 this list: attribution prefill now reads it.)
 
-- **Historical Run machinery.** `RunOrderCandidate`, `RunEvidence`,
-  `RunFactEvidence` and `ImportHunt` are scheduled for the contract migration in
-  [import pipeline architecture](#import-pipeline-architecture).
-  `ImportPreparedOrder` and `ImportPreparedLine` are active contracts. Audit
-  legacy approval/control storage only after checking current readers.
+- **Historical Run machinery.** `ImportPreparedOrder` and `ImportPreparedLine`
+  are active contracts. Audit legacy approval/control storage only after
+  checking current readers.
 - **Review queues.** `SuggestionDismissal`, `ProductMatchCandidate`,
   `ImageDescriptionCorrection`, `OrderMailCandidateDecision`,
   `MerchantVendorRule` (historical counts: all 0). `MailboxCursor` is active in

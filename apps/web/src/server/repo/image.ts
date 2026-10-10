@@ -80,7 +80,6 @@ import {
   importPreparedOrder,
   run as runTable,
   runTarget,
-  runEvidence,
   ledgerParty,
   location,
   meal,
@@ -1098,7 +1097,6 @@ const imageReferenceCondition = (
     "ImageDescriptionCorrection.imageId": sql`FALSE`,
     // A run worklist row records history, never ownership of the image.
     "RunTarget.entityId": sql`FALSE`,
-    "RunFactEvidence.entityId": sql`FALSE`,
     // A sighting is reported evidence, not user ownership — same reasoning
     // as the processing children above.
     "ImageSighting.imageId": sql`FALSE`,
@@ -1114,8 +1112,6 @@ const imageReferenceCondition = (
         .from(importPreparedOrder)
         .where(eq(importPreparedOrder.screenshotImageId, outerImage.id)),
     ),
-    // Retired hunt history; its table is dropped by the contract migration.
-    "ImportHunt.receiptImageId": sql`FALSE`,
     "OrderMailAttachment.imageId": exists(
       dbc
         .select({ one: sql`1` })
@@ -1597,12 +1593,6 @@ export const cullPendingImages = async (
  *   null it so the parent row survives, just without a cover.
  */
 export const IMAGE_HARD_DELETE = {
-  "RunFactEvidence.entityId": {
-    code: "deleteRow",
-    effect: "hard-delete",
-    description:
-      "Accepted image-subject proof is removed before the image worklist target that owns it.",
-  },
   "RunTarget.entityId": {
     code: "deleteRow",
     effect: "hard-delete",
@@ -1644,12 +1634,6 @@ export const IMAGE_HARD_DELETE = {
     description:
       "Prepared import evidence remains while its deleted screenshot link is cleared.",
   },
-  "ImportHunt.receiptImageId": {
-    code: "clearFk",
-    effect: "detach",
-    description:
-      "The receipt hunt remains while its optional submitted image is cleared.",
-  },
   "OrderMailAttachment.imageId": {
     code: "clearFk",
     effect: "detach",
@@ -1675,14 +1659,8 @@ type ImageEdgeOperation = {
   countsAsOwnership: boolean;
 };
 
-/**
- * Edges that record processing of an image, never who owns it. Retired
- * research rows (`RunFactEvidence`, `ImportHunt`) are only cleared on delete,
- * never read, until the contract migration drops their tables.
- */
+/** Edges that record processing of an image, never who owns it. */
 const PROCESSING_EDGES: ReadonlySet<string> = new Set([
-  "RunFactEvidence.entityId",
-  "ImportHunt.receiptImageId",
   "RunTarget.entityId",
   "ImageProcessingJob.imageId",
   "ImageDerivative.imageId",
@@ -1747,26 +1725,6 @@ const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
     countsAsOwnership: !PROCESSING_EDGES.has(key),
     joinColumn: table === entityAttachment ? column : undefined,
     clear: async (tx, imageIds) => {
-      if (table === runTarget) {
-        // Original bytes remain Run history after their removed Image task.
-        await tx
-          .update(runEvidence)
-          .set({ targetId: null })
-          .where(
-            inArray(
-              runEvidence.targetId,
-              tx
-                .select({ id: runTarget.id })
-                .from(runTarget)
-                .where(
-                  and(
-                    inArray(runTarget.entityId, imageIds),
-                    eq(runTarget.entityKind, "image"),
-                  ),
-                ),
-            ),
-          );
-      }
       if (disposition.effect === "hard-delete")
         await tx
           .delete(table)

@@ -81,12 +81,6 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Import findings retain the member scope.",
   },
-  "ImportHunt.ledgerPartyId": {
-    code: "preserve-retired-research",
-    effect: "preserve",
-    description:
-      "Retired research history stays on the tombstone until the contract migration drops it.",
-  },
   "MerchantVendorRule.ledgerPartyId": {
     code: "block-merchant-rules",
     effect: "block",
@@ -102,18 +96,6 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     effect: "block",
     description:
       "Mailbox classification and recovery metadata retain their member scope.",
-  },
-  "ResearchSourceExposure.ledgerPartyId": {
-    code: "preserve-retired-research",
-    effect: "preserve",
-    description:
-      "Retired research history stays on the tombstone until the contract migration drops it.",
-  },
-  "ResearchRetention.ledgerPartyId": {
-    code: "preserve-retired-research",
-    effect: "preserve",
-    description:
-      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "OrderMail.ledgerPartyId": {
     code: "block-order-mail",
@@ -203,12 +185,6 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     effect: "block",
     description: "Import findings prevent member merges.",
   },
-  "ImportHunt.ledgerPartyId": {
-    code: "preserve-retired-research",
-    effect: "preserve",
-    description:
-      "Retired research history stays on the tombstone until the contract migration drops it.",
-  },
   "MerchantVendorRule.ledgerPartyId": {
     code: "block-merchant-rules",
     effect: "block",
@@ -224,18 +200,6 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     effect: "block",
     description:
       "Mailbox classification and recovery metadata prevent member merges.",
-  },
-  "ResearchSourceExposure.ledgerPartyId": {
-    code: "preserve-retired-research",
-    effect: "preserve",
-    description:
-      "Retired research history stays on the tombstone until the contract migration drops it.",
-  },
-  "ResearchRetention.ledgerPartyId": {
-    code: "preserve-retired-research",
-    effect: "preserve",
-    description:
-      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "OrderMail.ledgerPartyId": {
     code: "block-order-mail",

@@ -7,7 +7,6 @@
     "./http-byte-transports": "./src/http-byte-transports.ts",
     "./purchase-import-debug": "./src/purchase-import-debug.ts",
     "./mailbox-research": "./src/mailbox-research.ts",
-    "./research": "./src/research.ts",
     "./activity": "./src/activity.ts",
     "./agent-conversation": "./src/agent-conversation.ts",
     "./availability": "./src/availability.ts",

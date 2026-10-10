@@ -176,11 +176,6 @@ import {
 } from "./purchase-evidence-policy";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
-  "RunFactEvidence.entityId": {
-    code: "preserve-accepted-research-history",
-    effect: "preserve",
-    description: "Accepted field proofs retain the deleted Purchase tombstone.",
-  },
   "ImportPreparedOrder.targetPurchaseId": {
     code: "preserve-prepared-target",
     effect: "preserve",
@@ -238,12 +233,6 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
-  "RunFactEvidence.entityId": {
-    code: "preserve-retired-research",
-    effect: "preserve",
-    description:
-      "Retired research facts stay on the merged-away Purchase tombstone until the contract migration drops them.",
-  },
   "ImportPreparedOrder.targetPurchaseId": {
     code: "preserve-prepared-target",
     effect: "preserve",
