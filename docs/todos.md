@@ -498,11 +498,15 @@ research acceptance.
   distinct from committed changes and end with a concise result summary,
   including unresolved targets and the next useful action.
 
-- 🤔 **Recover a skipped import audit after an outdated-Mac stop.** When
-  an account sync stops because the Mac app is too old and its required
-  import audit also fails, the finding names the gap, but a restart audits
-  only the successor's writes. Carry the predecessor's unaudited purchases
-  into the successor's audit, or allow a terminal audit retry.
+- ⏳ **Accept skipped import-audit recovery after an outdated-Mac stop.**
+  The shared audit batch now includes matching unaudited predecessor purchases,
+  bounded by owner, actor, account, vendor, purpose and audited history. Stable
+  distinct pagination and cycle detection preserve replay neutrality. Inherited
+  findings are report-only unless the current Run also wrote the Purchase;
+  predecessor history and write rights remain unchanged. Focused persisted-state
+  regressions reproduced the missing batch and inherited-fix admission before
+  their fixes. Independent review, hosted delivery and real recovery acceptance
+  remain pending; live research is paused.
 
 - 🟢 **Stop and restart runs over MCP.** [#1814](https://github.com/nickysemenza/cubby/pull/1814)
   exposes cancel, retry and restart through the existing control/dispatch path;

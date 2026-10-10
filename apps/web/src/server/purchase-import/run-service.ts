@@ -1347,6 +1347,7 @@ export async function auditImportBatch(
     /** A stop for review audits a paused run's writes before it ends. */
     allowPaused?: boolean;
   },
+  assessor?: typeof import("~/server/agents/purchase-import/extract").auditPurchaseImportBatch,
 ) {
   const scope = await loadRunScope(db, input.runId);
   if (
@@ -1363,9 +1364,25 @@ export async function auditImportBatch(
   );
   if (renderedBatch.length === 0) return { findings: 0, nextOffset: null };
   const purchaseIds = renderedBatch.map(({ id }) => id);
-  const { auditPurchaseImportBatch } =
-    await import("~/server/agents/purchase-import/extract");
-  const audit = await auditPurchaseImportBatch({
+  const writablePurchases = new Set(
+    (
+      await getDb(db)
+        .selectDistinct({ id: auditLog.entityId })
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.runId, runId),
+            eq(auditLog.entityKind, "purchase"),
+            inArray(auditLog.entityId, purchaseIds),
+          ),
+        )
+    ).map((row) => row.id),
+  );
+  const auditBatch =
+    assessor ??
+    (await import("~/server/agents/purchase-import/extract"))
+      .auditPurchaseImportBatch;
+  const audit = await auditBatch({
     db,
     runId: input.runId,
     renderedBatch,
@@ -1379,13 +1396,34 @@ export async function auditImportBatch(
     ),
   );
   let stored = 0;
-  for (const finding of audit.findings) {
-    if (!purchaseIds.includes(purchaseId.parse(finding.targetPurchaseId)))
-      continue;
+  // Retry lineage admits inspection, never a fix on predecessor-only writes.
+  const findings = audit.findings
+    .filter((finding) =>
+      purchaseIds.includes(purchaseId.parse(finding.targetPurchaseId)),
+    )
+    .map((finding) => {
+      const fix = finding.proposedFix;
+      const target = renderedBatch.find(
+        (row) => row.id === finding.targetPurchaseId,
+      );
+      const matchesTarget =
+        fix?.kind === "relink_product"
+          ? target?.expenses.some((row) => row.id === fix.expenseId)
+          : fix &&
+            "purchaseId" in fix &&
+            fix.purchaseId === finding.targetPurchaseId;
+      return {
+        ...finding,
+        proposedFix:
+          writablePurchases.has(finding.targetPurchaseId) && matchesTarget
+            ? fix
+            : null,
+      };
+    });
+  for (const finding of findings) {
+    const proposedFix = finding.proposedFix;
     const relinkExpenseId =
-      finding.proposedFix?.kind === "relink_product"
-        ? finding.proposedFix.expenseId
-        : null;
+      proposedFix?.kind === "relink_product" ? proposedFix.expenseId : null;
     if (
       relinkExpenseId &&
       !batchExpenseIds.has(parseEntityId("expense", relinkExpenseId))
@@ -1401,7 +1439,7 @@ export async function auditImportBatch(
         entityId: relinkExpenseId ?? finding.targetPurchaseId,
         kind: finding.kind,
         summary: finding.summary,
-        proposedFix: finding.proposedFix,
+        proposedFix: proposedFix,
         evidenceFingerprint,
         probability: finding.probability,
       })
@@ -1409,10 +1447,7 @@ export async function auditImportBatch(
       .returning({ id: runFinding.id });
     if (!inserted) continue;
     stored += 1;
-    if (
-      finding.probability >= 0.95 &&
-      finding.proposedFix?.kind === "relink_product"
-    ) {
+    if (finding.probability >= 0.95 && proposedFix?.kind === "relink_product") {
       try {
         await resolveRunFinding(
           db,
@@ -1489,8 +1524,8 @@ export async function stopRunForReview(
   )
     throw new Error(`Import run is fenced in status ${scope.public.status}`);
   const fingerprint = await sha256Hex(`${kind}:${summary}`);
-  // A restart audits only its own writes, so the stopped run's imports are
-  // audited now, paused or not.
+  // Audit before stopping when possible; a successor inspects matching
+  // unaudited predecessor writes if this required audit fails.
   if (scope.public.purpose === "account_sync")
     await auditAllImportBatches(db, {
       runId: input.runId,
