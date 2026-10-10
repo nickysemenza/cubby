@@ -354,9 +354,8 @@ orders for the same item reuse the Product reference returned by resolution.
 
 CI's web E2E artifact is Playwright's built-in HTML report and retained traces.
 Each Playwright job uploads them under an artifact name containing the tested
-commit SHA and includes retained trace files. The Playwright config uses
-`trace: "retain-on-failure"`; `ci.yaml` currently passes `--trace=off`, so CI
-will not produce traces until that override is removed. Open
+commit SHA. CI traces only the retry of a failed test (`on-first-retry`);
+local runs keep failure traces (`retain-on-failure`). Open
 `playwright-report/index.html` from the downloaded artifact to inspect the
 run. Local native runs keep the `sim-e2e` artifacts, which record their build,
 process, simulator, watchdog, scenario and replay evidence.

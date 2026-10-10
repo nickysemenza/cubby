@@ -80,9 +80,9 @@ export default defineConfig({
     // contract.
     reducedMotion: "reduce",
 
-    /* Locally there is no retry to collect an "on-first-retry" trace on, so
-       record on failure in both environments. */
-    trace: "retain-on-failure",
+    /* CI records only the retry of a failed test, so passing tests pay no
+       tracing cost; locally nothing retries, so record and keep failures. */
+    trace: isCI ? "on-first-retry" : "retain-on-failure",
     screenshot: "only-on-failure",
   },
 

@@ -302,20 +302,14 @@ and `full_page_writes=off`, matching the local test-service settings. These
 remove disk durability work from synthetic test data; CI does not test database-server
 crash recovery. SQL constraints, transactions, and the full reset still run.
 
-Desktop CI passes Playwright's `--trace=off`: recording every test for
-`retain-on-failure` adds work, and raw traces are excluded from hosted artifacts.
-Local runs retain failure traces; CI preserves failure annotations, sanitized
-case results, provenance, checksums, and structured Worker diagnostics.
-For a local debugging replay, replace the manifest's `--trace=off` argument
-with `--trace=retain-on-failure`.
-Browser shards save sanitized case results, a run manifest, and SHA-256
-checksums on success and failure for seven days; a replayed pass restores the
-bundle of the run that produced it. The manifest records the tested
-commit, build fingerprint, and replay arguments; a dirty local run or unmatched
-build is marked as not exactly replayable. The manually dispatched native
-simulator E2E saves the same bundle format with its app build fingerprint and
-runtime. Raw reports, traces, screenshots, and logs stay local because they may
-contain household data or credentials.
+CI records a Playwright trace only for the retry of a failed test
+(`on-first-retry`), so passing tests pay no tracing cost; local runs keep
+failure traces. Each browser job uploads Playwright's HTML report and those
+traces for seven days, named by commit SHA and shard. CI runs use only
+synthetic data and test credentials, so the report is safe to publish. Local
+runs, including the manually dispatched native simulator E2E, keep their
+reports, traces, and run bundles local because they may contain household data
+or credentials.
 `E2E tests (purchase import agent, optional)` runs the Playwright project of
 that name (`purchase-import-run.spec.ts`: the purchase agent with a scripted
 model and gateway, driven through the browser) through the

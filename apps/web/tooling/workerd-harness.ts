@@ -8,9 +8,9 @@ import { createTestHarness, type TestHarnessOptions } from "wrangler";
 import { z } from "zod";
 
 import { SYNTHETIC_USDA_RELEASE } from "../../../scripts/lib/dev-profile.ts";
-import lockfile from "proper-lockfile";
 
 import { seedUsdaRelease } from "./dev/usda-synthetic-release";
+import { holdHarnessLock } from "./harness-lock";
 import { COUPLED_WORKER_BUILDS, ensureWorkerBuilds } from "./worker-builds";
 
 const webRoot = path.resolve(
@@ -408,44 +408,7 @@ function installDatabaseEnvironment(databaseUrl: string) {
  * any rebuild never count against a test's timeout.
  */
 export async function holdWorkerdHarness(): Promise<() => Promise<void>> {
-  const priorOwner = process.env.CUBBY_HARNESS_LOCK_OWNER;
-  const ownerPid = Number(priorOwner);
-  let inheritedOwner = false;
-  if (Number.isSafeInteger(ownerPid) && ownerPid > 0) {
-    try {
-      process.kill(ownerPid, 0);
-      inheritedOwner = true;
-    } catch (error) {
-      inheritedOwner =
-        error instanceof Error && "code" in error && error.code === "EPERM";
-    }
-  }
-  const releaseLock = inheritedOwner
-    ? undefined
-    : await lockfile.lock("/tmp/cubby-harness", {
-        realpath: false,
-        // The owner rebuilds the Worker synchronously while holding the lock,
-        // which blocks the refresh timer; a shorter threshold lets a second
-        // suite reclaim a live owner's lock mid-build.
-        stale: 10 * 60_000,
-        update: 10_000,
-        // Wait indefinitely, once a second. `retries: Infinity` throws a
-        // RangeError inside the `retry` package; `forever` repeats the last delay.
-        retries: {
-          retries: 1,
-          forever: true,
-          minTimeout: 1000,
-          maxTimeout: 1000,
-        },
-      });
-  if (releaseLock) process.env.CUBBY_HARNESS_LOCK_OWNER = String(process.pid);
-  const release = async () => {
-    if (releaseLock) await releaseLock();
-    if (releaseLock) {
-      if (priorOwner === undefined) delete process.env.CUBBY_HARNESS_LOCK_OWNER;
-      else process.env.CUBBY_HARNESS_LOCK_OWNER = priorOwner;
-    }
-  };
+  const release = await holdHarnessLock();
   try {
     ensureWorkerBuilds(COUPLED_WORKER_BUILDS);
   } catch (error) {
