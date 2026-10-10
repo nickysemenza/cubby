@@ -94,13 +94,32 @@ public struct TargetedLaunchPreview: Sendable, Equatable {
         }
     }
 
-    public let canValidate: Bool
+    public let canStart: Bool
     public let reason: String?
     public let sources: [Source]
 
     init(_ output: RunTargetedLaunchOutput) throws {
-        let purchase = try JSONValue(encoding: output)["purchase"]
-        canValidate = purchase?["canValidate"]?.boolValue ?? false
+        let value = try JSONValue(encoding: output)
+        if value["purpose"]?.stringValue == "product_enrichment" {
+            let target = value["products"]?.arrayValue?.first { $0["selected"]?.boolValue == true }
+            canStart = target != nil && target?["needsAccountChoice"]?.boolValue == false
+            reason = target?["reason"]?.stringValue
+            if let id = target?["sourceId"]?.stringValue,
+                let label = target?["sourceLabel"]?.stringValue
+            {
+                sources = [
+                    Source(
+                        id: id, label: label, kind: "",
+                        accountLabel: target?["vendorAccountLabel"]?.stringValue,
+                        usable: canStart, reason: reason, isDefault: true)
+                ]
+            } else {
+                sources = []
+            }
+            return
+        }
+        let purchase = value["purchase"]
+        canStart = purchase?["canValidate"]?.boolValue ?? false
         reason = purchase?["reason"]?.stringValue
         sources = (purchase?["sources"]?.arrayValue ?? []).compactMap { source in
             guard let id = source["id"]?.stringValue, let label = source["label"]?.stringValue else {
