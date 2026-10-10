@@ -21,9 +21,15 @@ import {
 import { createFixtureWithContext } from "./scenarios/context";
 import type { createMacBrowserScenario } from "./mac-browser-import-scenario";
 import type { MacImportDriver } from "./mac-import-driver";
-
-import { macImportOrder, type MacImportSource } from "./mac-import-orders";
 import { buildEntity } from "./factories/build";
+
+/**
+ * The one retained actual-Mac journey runs CSV first so every native review
+ * surface is exercised: aggregate booking, photo approval, browser capture and
+ * resume, and the receipt's aggregate replacement. Every other arrival order is
+ * covered headlessly by `import-order-convergence.integration.test.ts`.
+ */
+const arrivalOrder = ["csv", "photo", "receipt"] as const;
 const productName = "Black crew shirt · size M";
 const categoryName = "Synthetic Mac clothing";
 const fixtureGTIN = "00012345678905";
@@ -96,7 +102,6 @@ export async function createMacComposedScenario(input: Input) {
   );
   let photoRunCode: string | undefined;
   let bookedPurchaseCode: string | undefined;
-  let receiptCommitted = false;
   let photoProposalGuard:
     | {
         before: EconomicProjection;
@@ -105,7 +110,7 @@ export async function createMacComposedScenario(input: Input) {
       }
     | undefined;
   const stages: Array<{
-    source: MacImportSource;
+    source: (typeof arrivalOrder)[number];
     nativeReviewed: boolean;
     projection: Projection;
   }> = [];
@@ -125,7 +130,6 @@ export async function createMacComposedScenario(input: Input) {
     const [found] = await database
       .select({
         code: schema.purchase.shortcode,
-        orderId: schema.purchase.orderId,
       })
       .from(schema.purchase)
       .where(
@@ -155,33 +159,19 @@ export async function createMacComposedScenario(input: Input) {
       );
     await input.driver.openEntity(transaction.code, input.appPath());
     await input.driver.wait("id=financial.evidence.review");
-    const existing = receiptCommitted ? await purchase() : undefined;
-    if (receiptCommitted && !existing)
-      throw new Error("Receipt commit is missing its canonical Purchase");
     await input.driver.pickBookingEntity(
       "financial.booking.category",
       categoryName,
     );
-    if (existing) {
-      await input.driver.pickBookingEntity(
-        "financial.booking.purchase",
-        existing.orderId ?? "Synthetic Outfitters",
-      );
-    } else {
-      await input.driver.pickBookingEntity(
-        "financial.booking.vendor",
-        "Synthetic Outfitters",
-      );
-    }
+    await input.driver.pickBookingEntity(
+      "financial.booking.vendor",
+      "Synthetic Outfitters",
+    );
     await input.driver.click("id=financial.booking.preview");
     await input.driver.wait("id=financial.booking.commit");
     await input.driver.screenshot("native-booking-preview");
     const view = await input.driver.snapshot();
-    if (
-      !view.includes(
-        existing ? "Link existing Expenses" : "Create aggregate Expense",
-      )
-    )
+    if (!view.includes("Create aggregate Expense"))
       throw new Error(
         "Native booking preview did not display its expected economic action",
       );
@@ -422,31 +412,26 @@ export async function createMacComposedScenario(input: Input) {
       throw new Error(
         `Production native retailer commit refused: ${JSON.stringify(committed)}`,
       );
-    receiptCommitted = true;
     const { findings, replacements } = await receiptFindings();
-    if (bookedPurchaseCode) {
-      if (replacements.length !== 1 || !replacements[0])
-        throw new Error(
-          `CSV-first native receipt must offer exactly one reviewed aggregate replacement: ${JSON.stringify({ committed, findings })}`,
-        );
-      input.onStage("native-receipt-replacement-review");
-      await input.driver.openEntity(run.publicId, input.appPath());
-      await input.driver.wait(`id=run.finding.apply.${replacements[0].id}`);
-      await input.driver.screenshot("native-receipt-replacement-review");
-      await input.driver.click(`id=run.finding.apply.${replacements[0].id}`);
-      await input.driver.wait(`id=run.finding.confirm.${replacements[0].id}`);
-      await input.driver.click(`id=run.finding.confirm.${replacements[0].id}`);
-      await eventually(async () => {
-        const [finding] = await database
-          .select({ state: schema.runFinding.status })
-          .from(schema.runFinding)
-          .where(eq(schema.runFinding.id, replacements[0]!.id));
-        return finding?.state === "applied" ? finding : undefined;
-      }, "native approved receipt aggregate replacement");
-    } else if (replacements.length)
+    const replacement = replacements[0];
+    if (!bookedPurchaseCode || replacements.length !== 1 || !replacement)
       throw new Error(
-        "Receipt-first fixture unexpectedly has unresolved findings",
+        `CSV-first native receipt must offer exactly one reviewed aggregate replacement: ${JSON.stringify({ committed, findings })}`,
       );
+    input.onStage("native-receipt-replacement-review");
+    await input.driver.openEntity(run.publicId, input.appPath());
+    await input.driver.wait(`id=run.finding.apply.${replacement.id}`);
+    await input.driver.screenshot("native-receipt-replacement-review");
+    await input.driver.click(`id=run.finding.apply.${replacement.id}`);
+    await input.driver.wait(`id=run.finding.confirm.${replacement.id}`);
+    await input.driver.click(`id=run.finding.confirm.${replacement.id}`);
+    await eventually(async () => {
+      const [finding] = await database
+        .select({ state: schema.runFinding.status })
+        .from(schema.runFinding)
+        .where(eq(schema.runFinding.id, replacement.id));
+      return finding?.state === "applied" ? finding : undefined;
+    }, "native approved receipt aggregate replacement");
     const evidence = path.join(input.artifacts, "native-receipt-commit.json");
     writeFileSync(
       evidence,
@@ -457,7 +442,7 @@ export async function createMacComposedScenario(input: Input) {
           modelResponse: "supplied deterministic extraction fixture",
           preparationAndCommit: "production writers",
           originalRunResumed: true,
-          nativeReplacementApproved: Boolean(bookedPurchaseCode),
+          nativeReplacementApproved: true,
           receiptCommitted: true,
         },
         null,
@@ -634,8 +619,8 @@ export async function createMacComposedScenario(input: Input) {
   }
 
   return {
-    async run(order: MacImportSource[], csv: () => Promise<void>) {
-      for (const source of macImportOrder.parse(order)) {
+    async run(csv: () => Promise<void>) {
+      for (const source of arrivalOrder) {
         input.onStage(`native-${source}-arrival`);
         if (source === "csv") {
           await csv();
@@ -786,7 +771,7 @@ export async function createMacComposedScenario(input: Input) {
         file,
         JSON.stringify(
           {
-            order,
+            order: arrivalOrder,
             stages,
             final,
             canonicalEdges,

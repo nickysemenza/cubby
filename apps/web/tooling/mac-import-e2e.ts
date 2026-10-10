@@ -19,7 +19,6 @@ import {
 } from "./mac-fixture-identity";
 import { seedBaseWorld } from "./factories/base-world";
 import { createMacRetailerFixture } from "./mac-retailer-fixture";
-import { macImportOrder } from "./mac-import-orders";
 import type { createMacComposedScenario } from "./mac-import-composed-scenario";
 import type { createMacBrowserScenario } from "./mac-browser-import-scenario";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -47,35 +46,16 @@ const webRoot = path.resolve(
 );
 const repoRoot = path.resolve(webRoot, "../..");
 const flags = process.argv.slice(2).filter((arg) => arg !== "--");
-const order =
-  flags.length === 2 && flags[0] === "--order"
-    ? macImportOrder.parse(flags[1]!.split(","))
-    : undefined;
-const browserMode =
-  Boolean(order) || (flags.length === 1 && flags[0] === "--browser");
 const productClarity = flags.length === 1 && flags[0] === "--product-clarity";
-if (
-  (flags.length && !browserMode && !productClarity) ||
-  process.platform !== "darwin"
-)
+if ((flags.length && !productClarity) || process.platform !== "darwin")
   throw new Error(
-    "Usage on macOS: pnpm --dir apps/web exec tsx tooling/mac-import-e2e.ts [--browser | --order csv,photo,receipt | --product-clarity]",
+    "Usage on macOS: pnpm --dir apps/web exec tsx tooling/mac-import-e2e.ts [--product-clarity]",
   );
-const replayFlags = order
-  ? ["--order", order.join(",")]
-  : browserMode
-    ? ["--browser"]
-    : productClarity
-      ? ["--product-clarity"]
-      : [];
-const scenarioTitle = order
-  ? `Actual Mac composed evidence arrival: ${order.join(" → ")}`
-  : browserMode
-    ? "Actual Mac CSV import and isolated HTTPS retailer browser capture/resume"
-    : productClarity
-      ? "Actual sandboxed macOS Product explanations, financial relations and native table"
-      : "Actual sandboxed macOS app statement CSV file import";
-const fixtureVersion = order || productClarity ? 2 : 1;
+const replayFlags = productClarity ? ["--product-clarity"] : [];
+const scenarioTitle = productClarity
+  ? "Actual sandboxed macOS Product explanations, financial relations and native table"
+  : "Actual Mac composed evidence arrival: CSV → photo → receipt";
+const fixtureVersion = 2;
 const nonce = randomBytes(8).toString("hex");
 const databaseName = `cubby_sim_${nonce}`;
 const adminURL = "postgresql://postgres:password@localhost:55432/postgres";
@@ -291,7 +271,7 @@ async function reuseNativeBuild(reuseManifest: string): Promise<void> {
 }
 
 function composedCases() {
-  if (!order) return [];
+  if (productClarity) return [];
   return [
     {
       name: "Native reviewed Expense booking or settlement link",
@@ -382,18 +362,18 @@ function saveArtifact(): void {
             : "not-run",
         durationMs: Math.round(performance.now() - started),
       },
-      ...(browserMode
-        ? [
+      ...(productClarity
+        ? []
+        : [
             {
               name: "Actual Mac HTTPS retailer capture, sign-in and original run resume",
               status: milestones.browserCaptureVerified
                 ? "passed"
-                : phase === "native-browser-capture-resume"
+                : phase === "native-retailer-capture-and-resume"
                   ? "failed"
                   : "not-run",
             },
-          ]
-        : []),
+          ]),
       ...composedCases(),
     ],
     evidence: [
@@ -574,9 +554,6 @@ function retainCleanupFailure(
 async function runNativeScenario(
   csv: () => Promise<void>,
   composed: Awaited<ReturnType<typeof createMacComposedScenario>> | undefined,
-  browserScenario:
-    | Awaited<ReturnType<typeof createMacBrowserScenario>>
-    | undefined,
   productFixture: { productId: string; purchaseId: string } | undefined,
 ): Promise<void> {
   if (productClarity && productFixture) {
@@ -725,14 +702,9 @@ async function runNativeScenario(
     await driver.click("id=browse.product.view.list");
     await driver.wait("role=popupbutton id=browse.product.view.list");
     milestones.entityTableObserved = true;
-  } else if (order && composed) {
-    await composed.run(order, csv);
+  } else if (composed) {
+    await composed.run(csv);
     milestones.composedGraphVerified = true;
-  } else await csv();
-  if (browserScenario && !composed) {
-    phase = "native-browser-capture-resume";
-    await browserScenario.run(driver);
-    milestones.browserCaptureVerified = true;
   }
 }
 
@@ -904,7 +876,7 @@ async function main(): Promise<void> {
         await pool.end();
       }
     }
-    if (browserMode) {
+    if (!productClarity) {
       phase = "browser-fixture";
       retailer = await createMacRetailerFixture(artifacts, nonce, {
         identity: signingIdentity,
@@ -920,24 +892,22 @@ async function main(): Promise<void> {
         nonce,
         retailer,
       });
-      if (order) {
-        const { createMacComposedScenario } =
-          await import("./mac-import-composed-scenario");
-        composed = await createMacComposedScenario({
-          browser: browserScenario,
-          statementAccountId,
-          driver,
-          artifacts,
-          webRoot,
-          appPath: () => appPath,
-          onStage: (stage) => {
-            phase = stage;
-          },
-          onMilestone: (stage) => {
-            milestones[stage] = true;
-          },
-        });
-      }
+      const { createMacComposedScenario } =
+        await import("./mac-import-composed-scenario");
+      composed = await createMacComposedScenario({
+        browser: browserScenario,
+        statementAccountId,
+        driver,
+        artifacts,
+        webRoot,
+        appPath: () => appPath,
+        onStage: (stage) => {
+          phase = stage;
+        },
+        onMilestone: (stage) => {
+          milestones[stage] = true;
+        },
+      });
       await retailer.launch();
       milestones.browserFixturePrepared = true;
     }
@@ -1142,7 +1112,7 @@ async function main(): Promise<void> {
         await checkPool.end();
       }
     }
-    await runNativeScenario(csv, composed, browserScenario, productFixture);
+    await runNativeScenario(csv, composed, productFixture);
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
     if (fixtureUIReady) await driver.screenshot("failure").catch(() => {});
