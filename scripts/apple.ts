@@ -477,6 +477,10 @@ const main = () => {
     case "test":
       return test();
     case "check":
+      // Before Nx hashes: the Apple key reads the generated Swift, and both
+      // halves run under one Nx process, where a nested `nx run
+      // cubby-checks:apple-ffi` from each is rejected as already invoked.
+      gen();
       return run("pnpm", ["exec", "nx", "run", "apple:check"]);
     case "help":
     case "--help":

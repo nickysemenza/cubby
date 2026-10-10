@@ -65,6 +65,8 @@
       "{workspaceRoot}/**/*",
       "!{workspaceRoot}/**/*.{md,mdx,MD,markdown}",
       "!{workspaceRoot}/.claude/**",
+      // Workflows that deploy, publish or review run no check.
+      "!{workspaceRoot}/.github/workflows/{deploy.yaml,apple-testflight.yaml,claude.yml,claude-code-review.yml}",
       {
         "runtime": "git ls-files -z -co --exclude-standard -- docs/README.md docs/todos.md .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256"
       }

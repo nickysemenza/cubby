@@ -213,10 +213,13 @@ successful preparation still capture the UI tree.
 A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.
 
-Dispatch **CI** manually with `tester_army` set to `web`, `ios`, `both`, or `import` and
-`simulator_e2e` disabled. CI's `web` lane runs `--harness standard`; `import`
-runs `--harness coupled`, and CI also runs it weekly on `main` (Mondays 09:17
-UTC); a scheduled run has empty inputs and skips every other job.
+Dispatch the **E2E journeys** workflow (`e2e-journeys.yaml`) with `journey` set
+to `tester-army-web`, `tester-army-ios`, `tester-army-both`, or
+`tester-army-import`. The web lane runs `--harness standard`; the import lane
+runs `--harness coupled`, and also runs weekly on `main` (Mondays 09:17 UTC).
+On a PR, add the `tester-army` (web), `tester-army:ios` or `tester-army:import`
+label instead: the lane runs on the PR head as an informational check and
+again on each push while the label stays.
 These optional jobs do not run on PRs and do not replace the required checks.
 Run each engine three times for the live acceptance sample.
 

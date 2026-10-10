@@ -85,7 +85,7 @@ contracts separately.
 | `pnpm test:services:prune`                                         | Recover abandoned disposable test containers                                |
 | `pnpm db:generate` / `pnpm db:check`                               | Generate a migration from `schema.ts` / prove migrations match it           |
 | `pnpm --filter @cubby/web db:migrate --target=production`          | Apply migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`                    |
-| `pnpm deploy:all`                                                  | Deploy web and purchase-agent                                               |
+| `pnpm deploy:all`                                                  | Deploy web                                                                  |
 | `pnpm wasm`                                                        | Rebuild the `@cubby/recipebridge` packages from Rust, uncached              |
 | `pnpm apple <cli\|mac\|ios\|sim\|gen\|test>`                       | Native app products                                                         |
 

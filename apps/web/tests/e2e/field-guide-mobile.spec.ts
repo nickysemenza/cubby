@@ -2,7 +2,14 @@ import { seedProductPrerequisite } from "./fixtures-catalog";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-test("image-free records retain identity and a usable detail path on phone Safari", async ({
+// CI installs only Chromium, so the phone layout is a Chromium phone viewport.
+test.use({
+  viewport: { width: 402, height: 874 },
+  isMobile: true,
+  hasTouch: true,
+});
+
+test("image-free records retain identity and a usable detail path on a phone", async ({
   page,
 }, testInfo) => {
   const name = `E2E field guide record ${Date.now()}`;

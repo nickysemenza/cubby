@@ -9,6 +9,12 @@ gate ([ADR 0009](adr/0009-content-hash-merge-gate.md),
 deploys every production Worker, including after a documentation-only change;
 deployment never waits for post-merge CI.
 
+`ci.yaml` holds only those checks, so every job in a PR's run graph gates it.
+The long native and Tester Army journeys live in `e2e-journeys.yaml`: manual
+dispatch with a `journey` input, a PR label (`simulator-e2e`, `tester-army`,
+`tester-army:ios`, `tester-army:import`) that runs it on that PR, and the
+weekly Tester Army import run.
+
 ## Cache keys and the remote cache
 
 ```mermaid
@@ -29,8 +35,15 @@ stay out, so a developer Mac's pass counts for the Linux lanes. Web targets add
 ignored `.env*` files, the WASM their `dependsOn` builds, the preview-build
 switch, and the variables that select or reorder tests (`webGate` in
 `apps/web/project.json`); the Rust targets add `rustc -V`, because
-`rust-toolchain.toml` names a floating channel; the Apple targets add
-`xcodebuild -version`. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
+`rust-toolchain.toml` names a floating channel. The Apple targets key on what
+the Apple build reads instead of the whole tree (`appleGate` in
+`apps/apple/project.json`): `apps/apple`, the Rust FFI crates, the check
+scripts and CI configuration, the shared golden vectors, and the generated
+Swift, but no toolchain version, so a Mac pass on a newer Xcode than the
+runner's counts for CI; `pnpm apple check` regenerates before hashing,
+so a web-only change replays the Apple lanes. Workflows that only deploy,
+publish or review (`deploy.yaml`, `apple-testflight.yaml`, the Claude
+workflows) are outside every key. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
 the whole workflow, so every lane, nested Nx calls included, runs uncached on
 CI's platform, catching a failure that only Linux or CI's
 toolchain shows; `main` pushes reuse the cache like PRs. The key is deliberately
@@ -157,10 +170,8 @@ generates the Swift inputs) and, outside the nightly run, first runs its Nx targ
 `CUBBY_NX_CACHE_PROBE=1`: Nx replays a cached pass for the same input hash,
 and on a miss the script fails before building (Nx never caches that failure).
 Only a miss pays for the FFI, XcodeGen, and Xcode build caches and the real
-run. The nightly run skips the probe and runs both with `--skip-nx-cache`. The Apple key leaves out the Rust compiler: CI hashes before its Rust
-setup, and the probe and the run must agree on the key. Each job first selects the
-Xcode in `apps/apple/.xcode-version` when the image has it, so a Mac result
-with that Xcode satisfies CI; bump the file when the Mac's Xcode changes.
+run. The nightly run skips the probe and runs both with `--skip-nx-cache` on
+the runner's own Xcode.
 The host job runs the automatically generated
 `CubbyKit-Package` scheme with `xcodebuild test` on the ARM macOS host — no
 simulator. The aggregate package scheme includes all CubbyKit tests and the CLI
@@ -330,7 +341,7 @@ startup, PostgreSQL health wait, logs, and cleanup. PostgreSQL also maps port
 settings in the fresh PostgreSQL 17 configuration. IntegreSQL retries its
 PostgreSQL connection during startup; its pinned distroless image has no
 `/bin/sh` for Docker shell health checks. The optional purchase-import and
-Tester Army Linux lanes use the same service definitions.The
+Tester Army Linux lanes use the same service definitions. The
 `@claude` mention workflow (`claude.yml`) remains manual;
 `claude-code-review.yml` reviews each non-Renovate, non-fork PR once,
 on `opened`/`ready_for_review`/`reopened` (never on `synchronize`, so a push
