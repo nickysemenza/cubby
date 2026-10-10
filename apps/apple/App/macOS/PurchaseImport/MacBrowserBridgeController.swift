@@ -178,11 +178,18 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
     private func notifyAttention(
         accountID: String, runID: String, reason: String, body: String, raiseWindow: Bool
     ) {
+        guard settings?.isInstalled(self) == true,
+            let generation = notifier.claimAttentionEdge(accountID: accountID, runID: runID, reason: reason)
+        else { return }
         let label = settings?.accountStates.first { $0.id == accountID }?.label ?? "Browser research"
         Task { [weak self, notifier] in
             let fresh = await notifier.notifyMemberAttention(
                 accountID: accountID, runID: runID,
-                reason: reason, title: "\(label) needs your attention", body: body)
+                reason: reason, generation: generation, title: "\(label) needs your attention", body: body,
+                isCurrent: { [weak self] in
+                    guard let self else { return false }
+                    return settings?.isInstalled(self) == true
+                })
             guard fresh, raiseWindow, let self, settings?.isInstalled(self) == true else { return }
             coordinator.raiseAuthenticationWindow(for: accountID)
         }

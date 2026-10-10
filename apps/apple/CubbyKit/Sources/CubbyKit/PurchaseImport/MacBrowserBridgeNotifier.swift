@@ -80,42 +80,52 @@
             defaults.set(edges, forKey: Key.attentionEdges)
         }
 
-        func claimAttentionEdge(accountID: String, runID: String, reason: String) -> Bool {
+        public func claimAttentionEdge(accountID: String, runID: String, reason: String) -> UUID? {
             var edges = attentionEdges
             let key = attentionKey(accountID: accountID, runID: runID)
             var reasons = Set(edges[key] ?? [])
-            guard reasons.insert(reason).inserted else { return false }
-            attentionGenerations[key, default: [:]][reason] = UUID()
+            guard reasons.insert(reason).inserted else { return nil }
+            let generation = UUID()
+            attentionGenerations[key, default: [:]][reason] = generation
             edges[key] = reasons.sorted()
             defaults.set(edges, forKey: Key.attentionEdges)
-            return true
+            return generation
         }
 
         public func notifyMemberAttention(
-            accountID: String, runID: String, reason: String, title: String, body: String
+            accountID: String, runID: String, reason: String, generation: UUID, title: String, body: String,
+            isCurrent: () -> Bool
         ) async -> Bool {
-            await deliverAttention(
-                accountID: accountID, runID: runID, reason: reason,
-                canPresent: { await self.canPresentNotifications() },
-                post: {
-                    await self.post(
-                        identifier:
-                            "purchase-import-attention-\(self.attentionKey(accountID: accountID, runID: runID))-\(reason)",
-                        title: title, body: body)
+            let identifier = "purchase-import-attention-\(generation.uuidString)"
+            return await deliverAttention(
+                accountID: accountID, runID: runID, reason: reason, generation: generation,
+                isCurrent: isCurrent, canPresent: { await self.canPresentNotifications() },
+                post: { await self.post(identifier: identifier, title: title, body: body) },
+                remove: {
+                    self.center.removePendingNotificationRequests(withIdentifiers: [identifier])
+                    self.center.removeDeliveredNotifications(withIdentifiers: [identifier])
                 })
         }
 
         func deliverAttention(
-            accountID: String, runID: String, reason: String,
-            canPresent: () async -> Bool, post: () async -> Void
+            accountID: String, runID: String, reason: String, generation: UUID,
+            isCurrent: () -> Bool, canPresent: () async -> Bool, post: () async -> Void, remove: () -> Void
         ) async -> Bool {
-            guard claimAttentionEdge(accountID: accountID, runID: runID, reason: reason) else { return false }
             let key = attentionKey(accountID: accountID, runID: runID)
-            let generation = attentionGenerations[key]?[reason]
+            func current() -> Bool {
+                isCurrent() && attentionGenerations[key]?[reason] == generation
+            }
+            guard current() else { return false }
             let permitted = await canPresent()
-            guard attentionGenerations[key]?[reason] == generation else { return false }
-            if permitted { await post() }
-            return attentionGenerations[key]?[reason] == generation
+            guard current() else { return false }
+            if permitted {
+                await post()
+                guard current() else {
+                    remove()
+                    return false
+                }
+            }
+            return true
         }
 
         private var attentionEdges: [String: [String]] {

@@ -852,6 +852,8 @@ edges are persisted before delivery, so reconnect replay cannot repeat an
 unchanged alert. Successful page reads re-arm observed permission reasons; a
 successful Run clears sign-in attention. Resolving an edge invalidates pending
 delivery even when the same reason is re-armed during notification authorization.
+Claims occur synchronously with projected attention; retired controllers cannot
+deliver, and resolution during posting retracts only the stale generation.
 Unrelated accounts and permission reasons retain their edges. Permission notices retain
 the raw command diagnostic and name the setting to change. A newly observed
 permission pause raises that account's owned Cubby browser window, only while
