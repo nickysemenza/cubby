@@ -374,7 +374,9 @@ Mac is a thin hand; the server reads and decides:
 The Mac Activity screen derives executing browser Run IDs from the existing bridge
 command registry and projects them into its shared Activity center. Overlapping commands
 for one Run produce one link; transient socket reconnect preserves in-flight execution,
-while finish, cancellation and connection replacement remove it. Empty local activity
+while finish, cancellation and connection replacement remove it. Only the currently
+installed controller may project events; queued callbacks from a replaced controller
+are ignored before its asynchronous retirement finishes. Empty local activity
 does not establish that server Runs execute elsewhere. Server Run history remains separate.
 
 Browser Sync's connection column describes each account socket, and its import-plan

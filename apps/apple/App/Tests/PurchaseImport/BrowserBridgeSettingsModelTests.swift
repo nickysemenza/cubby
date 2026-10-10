@@ -43,6 +43,36 @@ struct BrowserBridgeSettingsModelTests {
         func appDidBecomeActive() {}
     }
 
+    #if os(macOS)
+        @Test func replacedControllerCannotRestoreExecutingBrowserRun() {
+            let settings = BrowserBridgeSettingsModel()
+            let baseURL = URL(string: "http://127.0.0.1:19876")!
+            let credentials = CredentialProvider(
+                host: "127.0.0.1:19876", store: InMemorySessionTokenStore())
+            let client = CubbyClient(baseURL: baseURL, credentials: credentials)
+            let previous = MacBrowserBridgeController(
+                baseURL: baseURL, client: client, credentials: credentials, settings: settings)
+            settings.install(controller: previous)
+            previous.project(
+                .accounts([
+                    .init(
+                        id: "account-first", label: "Example account", ledgerPartyID: "household-example",
+                        browser: .chrome)
+                ]))
+            previous.project(.executingRuns(accountID: "account-first", runIDs: ["RUN-4K7M"]))
+            #expect(settings.accountStates.first?.executingRuns.count == 1)
+
+            let replacement = MacBrowserBridgeController(
+                baseURL: baseURL, client: client, credentials: credentials, settings: settings)
+            settings.install(controller: replacement)
+            // A callback already queued on the old bridge can arrive before asynchronous retirement.
+            previous.project(.executingRuns(accountID: "account-first", runIDs: ["RUN-4K7M"]))
+            #expect(settings.accountStates.first?.executingRuns.isEmpty == true)
+            replacement.project(.executingRuns(accountID: "account-first", runIDs: ["RUN-EXAMPLE"]))
+            #expect(Set(settings.accountStates.first?.executingRuns.keys.map { $0 } ?? []) == ["RUN-EXAMPLE"])
+        }
+    #endif
+
     // Browser execution must be visible outside manual submission, preserve a stable start
     // through reconnect, deduplicate shared Runs, and disappear with retired connections.
     @Test func automaticBrowserRunsProjectIntoExistingActivity() async {

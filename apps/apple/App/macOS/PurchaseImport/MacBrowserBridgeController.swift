@@ -93,7 +93,9 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         }
     }
 
-    private func project(_ event: MacBrowserBridgeEvent) {
+    func project(_ event: MacBrowserBridgeEvent) {
+        // Rebinding precedes asynchronous retirement; queued old-host events must not restore activity.
+        guard settings?.isInstalled(self) == true else { return }
         switch event {
         case .accounts(let accounts):
             let listed = Set(accounts.map(\.id))
