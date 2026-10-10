@@ -13,6 +13,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { toast } from "sonner";
@@ -278,13 +279,19 @@ describe("record suggestions", () => {
   });
 
   it("shows a confident live answer in a table cell as a ghost pill and a weak one as nothing", async () => {
-    const answers = { "red apple": 0.97, "steel wrench": 0.4 };
+    const answers = {
+      "red apple": 0.97,
+      "green pear": 0.97,
+      "steel wrench": 0.4,
+    };
     const misses: unknown[] = [];
     const operations: EntitySuggestionsOperations = {
       suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
         const probability =
           answers[
-            z.enum(["red apple", "steel wrench"]).parse(input.basis.name)
+            z
+              .enum(["red apple", "green pear", "steel wrench"])
+              .parse(input.basis.name)
           ];
         return {
           suggestions: { categoryId: { ...food, probability } },
@@ -339,6 +346,23 @@ describe("record suggestions", () => {
     expect(
       screen.queryByRole("button", { name: "Accept suggested value" }),
     ).toBeNull();
+
+    // Keeping the current value through the editor still rejects the answer.
+    view.rerender(<Cell name="green pear" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Suggestion actions" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Use a different value" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(misses).toHaveLength(2));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Accept suggested value" }),
+      ).toBeNull(),
+    );
 
     view.rerender(<Cell name="steel wrench" />);
     await screen.findByText("No suggestions · 1 field checked");

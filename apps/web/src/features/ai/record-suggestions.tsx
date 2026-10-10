@@ -1278,8 +1278,13 @@ function GhostSuggestionCell({
   children: ReactNode;
 }) {
   const [editOpen, setEditOpen] = useState(false);
+  // Inert: a reference value renders as a navigating link, which would
+  // swallow the click meant to accept it (and nest a link in a button).
   const ghost = (
-    <span className="inline-flex min-w-0 items-center gap-1 rounded-sm border border-dashed border-muted-foreground/50 px-1 opacity-65">
+    <span
+      inert
+      className="pointer-events-none inline-flex min-w-0 items-center gap-1 rounded-sm border border-dashed border-muted-foreground/50 px-1 opacity-65"
+    >
       <SparkleIcon aria-hidden className="size-3 shrink-0" />
       {renderValue?.(value) ??
         renderSuggestedListFieldValue(context.entity, record, field, value)}
@@ -1349,7 +1354,7 @@ function GhostSuggestionCell({
             field,
           ) as EntityEditDialogRequest<EditableEntity>
         }
-        onSuccess={() => void onCorrected?.()}
+        onSubmitted={() => void onCorrected?.()}
         onSubmitOverride={
           correct
             ? async (values) => {
