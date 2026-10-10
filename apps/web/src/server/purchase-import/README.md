@@ -843,3 +843,15 @@ changed capture fields and supported fact fields. The generic Run log reports
 that receipt. The original capture replay, accepted facts, source bytes and
 settled targets remain unchanged; research of new evidence uses a new Run.
 Retired Runs and missing/pending originals refuse maintenance.
+
+### Mac member attention
+
+The existing Mac notifier handles sign-in, denied Screen Recording or browser
+Automation, and disabled JavaScript from Apple Events. Its account/Run/reason
+edges are persisted before delivery, so reconnect replay cannot repeat an
+unchanged alert. Successful page reads re-arm resolved reasons; unrelated
+accounts and permission reasons retain their edges. Permission notices retain
+the raw command diagnostic and name the setting to change. A newly observed
+permission pause raises that account's owned Cubby browser window, only while
+the controller remains installed. Sign-in retains the coordinator's existing
+owned-window behavior. No new browser transport or Run state is introduced.

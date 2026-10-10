@@ -118,18 +118,70 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
                 BrowserBridgeCommandSummary.line(operation: operation, outcome: result.outcome),
                 runID: result.runID, accountID: accountID)
             switch result.outcome {
-            case .completed:
+            case .completed(let completion):
                 settings?.setAccountError(nil, accountID: accountID)
+                if let snapshot = completion.snapshot {
+                    var resolved = ["browser_permission_denied", "javascript_disabled"]
+                    if !snapshot.authenticationRequired { resolved.append("sign_in") }
+                    if completion.observation.screenRecording == .granted {
+                        resolved.append("screen_recording_denied")
+                    }
+                    for reason in resolved {
+                        notifier.resolveAttentionEdge(
+                            accountID: accountID, runID: result.runID, reason: reason)
+                    }
+                }
             case .failed(let failure):
                 settings?.setAccountError(failure.message, accountID: accountID)
+                let attention: (reason: String, body: String)?
+                if failure.screenshotGap == .screenRecordingDenied {
+                    attention = (
+                        "screen_recording_denied",
+                        "Allow Cubby in System Settings > Privacy & Security > Screen & System Audio Recording."
+                    )
+                } else if failure.code == .browserPermissionDenied {
+                    attention = (
+                        "browser_permission_denied",
+                        "Allow Cubby to control this browser in System Settings > Privacy & Security > Automation."
+                    )
+                } else if failure.code == .javascriptDisabled {
+                    attention = (
+                        "javascript_disabled",
+                        "In Chrome, enable View > Developer > Allow JavaScript from Apple Events."
+                    )
+                } else {
+                    attention = nil
+                }
+                if let attention {
+                    notifyAttention(
+                        accountID: accountID, runID: result.runID, reason: attention.reason,
+                        body: "\(attention.body)\n\(failure.message)", raiseWindow: true)
+                }
             }
         case .authenticationRequired(let accountID, let runID):
             settings?.requireAuthentication(
                 accountID: accountID, message: "Finish signing in for run \(runID) in Cubby's browser window."
             )
+            notifyAttention(
+                accountID: accountID, runID: runID, reason: "sign_in",
+                body: "Finish signing in in Cubby's owned browser window, then resume the Run.",
+                raiseWindow: false)
         case .runCompleted(let accountID, let completion):
             settings?.markRunCompleted(accountID: accountID, runID: completion.runID)
             Task { [notifier] in await notifier.notifyRunCompleted(completion) }
+        }
+    }
+
+    private func notifyAttention(
+        accountID: String, runID: String, reason: String, body: String, raiseWindow: Bool
+    ) {
+        let label = settings?.accountStates.first { $0.id == accountID }?.label ?? "Browser research"
+        Task { [weak self, notifier] in
+            let fresh = await notifier.notifyMemberAttention(
+                accountID: accountID, runID: runID,
+                reason: reason, title: "\(label) needs your attention", body: body)
+            guard fresh, raiseWindow, let self, settings?.isInstalled(self) == true else { return }
+            coordinator.raiseAuthenticationWindow(for: accountID)
         }
     }
 
