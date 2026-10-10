@@ -74,6 +74,28 @@ state, object deletion and coordinator retirement in a recoverable sequence.
 The AI usage ledger is already shared. Continue using existing Expense writers
 instead of inventing a separate accounting framework.
 
+## Run-purpose audit
+
+Audited against main `5283a5120` on 2026-10-10. The shared vocabulary in
+`packages/schemas/src/activity-fields.ts` already owns Run purpose values and
+labels. The remaining subsets describe different capabilities:
+
+| Declaration                                            | Contract and callers                                                                 | Why it remains distinct                                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `agentImportRunPurpose`, `importRunAgentManifest`      | Pi agent inputs, dispatch, objective admission, retention, restart and tool mounting | Five executable research purposes; excludes discovery and file-import grouping.                         |
+| `WORKFLOW_RUN_PURPOSES` in `workflow-runs/contract.ts` | Workflow controls, binding types and durable attempt identity                        | Only `mail_discovery`; it owns mechanical mailbox pagination rather than adaptive research.             |
+| `IMPORT_REPORT_RUN_PURPOSES`                           | Generic Run reports and generated native report eligibility                          | Includes `file_import`; excludes photo, mail search and discovery because they have different reports.  |
+| Run declaration's Imports saved view                   | Generated web/native filters                                                         | Includes photo, search and discovery for browsing; a saved view grants no execution or write authority. |
+| `targetedImportPurpose` and `targetedImportStartInput` | Member launch/validation contracts                                                   | Targeted Product/Purchase inputs differ from Vendor account-sync inputs.                                |
+| Purchase `capabilityMatrix`                            | Deterministic domain-write admission                                                 | Each purpose has distinct write rights; the model's mounted tools do not replace this enforcement.      |
+
+There is no remaining duplicate purpose list in shared constants to delete.
+Do not derive execution, report eligibility or write rights from the Imports
+saved view, or expand Workflow execution to all Pi purposes. This audit changes
+no callers, schema or authority and removes zero production lines or tables.
+The next consolidation must demonstrate duplicate implementation, rather than
+replace these small semantic declarations with a larger generic policy engine.
+
 ## SDK feature assessment
 
 The [official feature table](https://github.com/cloudflare/agents#features) was
