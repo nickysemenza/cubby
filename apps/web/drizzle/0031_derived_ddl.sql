@@ -254,8 +254,6 @@ CREATE CONSTRAINT TRIGGER "EntityLink_live_endpoints" AFTER INSERT OR UPDATE ON 
   FOR EACH ROW WHEN (NEW."deletedAt" IS NULL)
   EXECUTE FUNCTION "entity_link_require_live_endpoints"();
 
--- Skipped suggest target expense.vendor: no column on Expense.
-
 CREATE OR REPLACE FUNCTION "Product_supersede_suggestions_after_update"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF OLD."tags" IS DISTINCT FROM NEW."tags" THEN
@@ -562,11 +560,19 @@ BEGIN
       AND "field" = 'productId'
       AND "status" = 'pending';
   END IF;
+  IF OLD."purchaseId" IS DISTINCT FROM NEW."purchaseId" THEN
+    UPDATE "Suggestion"
+    SET "status" = 'superseded', "updatedAt" = now()
+    WHERE "entity" = 'expense'
+      AND "recordId" = NEW."id"
+      AND "field" = 'vendor'
+      AND "status" = 'pending';
+  END IF;
   RETURN NEW;
 END;
 $$;
 DROP TRIGGER IF EXISTS "Expense_supersede_suggestions_after_update" ON "Expense";
-CREATE TRIGGER "Expense_supersede_suggestions_after_update" AFTER UPDATE OF "spendingCategoryId", "lineKind", "costType", "trade", "projectId", "productId" ON "Expense" FOR EACH ROW EXECUTE FUNCTION "Expense_supersede_suggestions_after_update"();
+CREATE TRIGGER "Expense_supersede_suggestions_after_update" AFTER UPDATE OF "spendingCategoryId", "lineKind", "costType", "trade", "projectId", "productId", "purchaseId" ON "Expense" FOR EACH ROW EXECUTE FUNCTION "Expense_supersede_suggestions_after_update"();
 
 CREATE OR REPLACE FUNCTION "Planting_supersede_suggestions_after_update"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -655,6 +661,20 @@ END;
 $$;
 DROP TRIGGER IF EXISTS "SpendingCategory_supersede_suggestions_after_update" ON "SpendingCategory";
 CREATE TRIGGER "SpendingCategory_supersede_suggestions_after_update" AFTER UPDATE OF "emoji", "evidenceExpectation", "productExpectation" ON "SpendingCategory" FOR EACH ROW EXECUTE FUNCTION "SpendingCategory_supersede_suggestions_after_update"();
+
+CREATE OR REPLACE FUNCTION "Purchase_supersede_expense_vendor_suggestions_after_update"() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF OLD."vendorId" IS DISTINCT FROM NEW."vendorId" THEN
+    UPDATE "Suggestion" AS s SET "status" = 'superseded', "updatedAt" = now()
+    FROM "Expense" AS r
+    WHERE s."entity" = 'expense' AND s."field" = 'vendor'
+      AND s."status" = 'pending' AND r."id" = s."recordId" AND r."purchaseId" = NEW."id";
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS "Purchase_supersede_expense_vendor_suggestions_after_update" ON "Purchase";
+CREATE TRIGGER "Purchase_supersede_expense_vendor_suggestions_after_update" AFTER UPDATE OF "vendorId" ON "Purchase" FOR EACH ROW EXECUTE FUNCTION "Purchase_supersede_expense_vendor_suggestions_after_update"();
 
 ALTER TABLE "Location" DROP CONSTRAINT IF EXISTS "Location_classification_type_productId_check";
 ALTER TABLE "Location" ADD CONSTRAINT "Location_classification_type_productId_check" CHECK (("type" NOT IN ('furniture') OR "productId" IS NOT NULL));

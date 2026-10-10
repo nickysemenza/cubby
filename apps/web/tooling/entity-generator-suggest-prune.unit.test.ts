@@ -83,6 +83,37 @@ function declarationWithTags(tagsField: TagsFieldFixture) {
 }
 
 describe('control.suggest.mode: "prune" compiles only onto a text-array target', () => {
+  it("rejects a derived suggest target without backing columns", () => {
+    expect(() =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model: {
+            fields: [
+              subjectField,
+              {
+                key: "derived",
+                kind: "text",
+                nullable: true,
+                control: {
+                  kind: "specialized",
+                  renderer: "derived",
+                  suggest: { basis: ["subject"] },
+                },
+                validation: { read: z.string().nullable() },
+              },
+            ],
+            storage: ["subject"],
+            create: ["subject"],
+            update: ["subject"],
+            output: ["subject", "derived"],
+            bulk: [],
+            audit: [],
+          },
+        },
+      ]),
+    ).toThrow(/derived target must declare backedBy/);
+  });
   it("rejects a prune target that is not a text-array field", () => {
     expect(() =>
       compileEntityDeclarations([

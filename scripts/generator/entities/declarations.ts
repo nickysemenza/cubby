@@ -141,6 +141,9 @@ type EntityFieldControl = Readonly<{
   required: boolean | null;
   suggest: Readonly<{
     basis: readonly string[];
+    backedBy?: readonly Readonly<
+      { column: string } | { entity: string; column: string; via: string }
+    >[];
     rules?: readonly string[];
     mode: "fill" | "prune";
     reviewRequired: boolean;

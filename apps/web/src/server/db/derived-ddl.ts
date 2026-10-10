@@ -9,15 +9,23 @@ import { entityLinkLivenessTriggerSql } from "./entity-link-schema";
 const quoteIdentifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
 const quoteLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
 
-/** Any SQL writer that changes a manifest-suggestable column invalidates the
- * pending advice for that field. Targets without a physical column (for
- * example projection-only resolution fields) are explicitly skipped below. */
+/** Any SQL writer that changes a stored backing column invalidates pending advice. */
 const suggestionSupersedingTriggerSql = (): string => {
   const byTable = new Map<
     string,
-    { tableName: string; columns: Array<{ entity: string; field: string }> }
+    {
+      tableName: string;
+      columns: Array<{ entity: string; field: string; watched: string }>;
+    }
   >();
-  const skipped: string[] = [];
+  const referenced: Array<{
+    tableName: string;
+    entity: string;
+    field: string;
+    column: string;
+    via: string;
+    table: string;
+  }> = [];
   for (const [entity, model] of Object.entries(entityFieldModels)) {
     // SAFETY: SHORTCODE_TABLE is generated from the same entity manifest and
     // this loop's key is one of its declared entity keys when present.
@@ -25,8 +33,8 @@ const suggestionSupersedingTriggerSql = (): string => {
     if (!table) {
       for (const field of model.fields) {
         if (field.control?.suggest)
-          skipped.push(
-            `-- Skipped suggest target ${entity}.${field.key}: entity has no writable table.`,
+          throw new Error(
+            `Suggest target ${entity}.${field.key} has no writable table or backedBy declaration.`,
           );
       }
       continue;
@@ -35,19 +43,55 @@ const suggestionSupersedingTriggerSql = (): string => {
     const columns = getTableColumns(table);
     for (const field of model.fields) {
       if (!field.control?.suggest) continue;
+      const backedBy =
+        "backedBy" in field.control.suggest
+          ? field.control.suggest.backedBy
+          : undefined;
       // SAFETY: the preceding key lookup is checked below before the column
       // is used; this assertion only adapts the manifest key to Drizzle's
       // column-key type.
       const column = columns[field.key as keyof typeof columns];
       if (!column) {
-        skipped.push(
-          `-- Skipped suggest target ${entity}.${field.key}: no column on ${tableName}.`,
-        );
-        continue;
+        if (!backedBy?.length)
+          throw new Error(
+            `Suggest target ${entity}.${field.key} has no physical column or backedBy declaration.`,
+          );
+      } else {
+        const entry = byTable.get(tableName) ?? { tableName, columns: [] };
+        entry.columns.push({
+          entity,
+          field: column.name,
+          watched: column.name,
+        });
+        byTable.set(tableName, entry);
       }
-      const entry = byTable.get(tableName) ?? { tableName, columns: [] };
-      entry.columns.push({ entity, field: column.name });
-      byTable.set(tableName, entry);
+      for (const backing of backedBy ?? []) {
+        if ("entity" in backing) {
+          const backingTable = Object.entries(SHORTCODE_TABLE).find(
+            ([key]) => key === backing.entity,
+          )?.[1];
+          if (!backingTable)
+            throw new Error(
+              `Suggest target ${entity}.${field.key} backs through unknown entity ${backing.entity}.`,
+            );
+          referenced.push({
+            tableName: getTableName(backingTable),
+            table: tableName,
+            entity,
+            field: field.key,
+            column: backing.column,
+            via: backing.via,
+          });
+        } else {
+          const entry = byTable.get(tableName) ?? { tableName, columns: [] };
+          entry.columns.push({
+            entity,
+            field: field.key,
+            watched: backing.column,
+          });
+          byTable.set(tableName, entry);
+        }
+      }
     }
   }
   const triggers = [...byTable.values()].map(({ tableName, columns }) => {
@@ -58,7 +102,8 @@ const suggestionSupersedingTriggerSql = (): string => {
         ({
           entity,
           field,
-        }) => `  IF OLD.${quoteIdentifier(field)} IS DISTINCT FROM NEW.${quoteIdentifier(field)} THEN
+          watched,
+        }) => `  IF OLD.${quoteIdentifier(watched)} IS DISTINCT FROM NEW.${quoteIdentifier(watched)} THEN
     UPDATE "Suggestion"
     SET "status" = 'superseded', "updatedAt" = now()
     WHERE "entity" = ${quoteLiteral(entity)}
@@ -68,7 +113,7 @@ const suggestionSupersedingTriggerSql = (): string => {
   END IF;`,
       )
       .join("\n");
-    const updatedColumns = [...new Set(columns.map(({ field }) => field))]
+    const updatedColumns = [...new Set(columns.map(({ watched }) => watched))]
       .map(quoteIdentifier)
       .join(", ");
     return `CREATE OR REPLACE FUNCTION ${quoteIdentifier(functionName)}() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -80,7 +125,26 @@ $$;
 DROP TRIGGER IF EXISTS ${quoteIdentifier(triggerName)} ON ${quoteIdentifier(tableName)};
 CREATE TRIGGER ${quoteIdentifier(triggerName)} AFTER UPDATE OF ${updatedColumns} ON ${quoteIdentifier(tableName)} FOR EACH ROW EXECUTE FUNCTION ${quoteIdentifier(functionName)}();`;
   });
-  return [...skipped, ...triggers].join("\n\n");
+  const referencedTriggers = referenced.map(
+    ({ tableName, table, entity, field, column, via }) => {
+      const functionName = `${tableName}_supersede_${entity}_${field}_suggestions_after_update`;
+      const triggerName = functionName;
+      return `CREATE OR REPLACE FUNCTION ${quoteIdentifier(functionName)}() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF OLD.${quoteIdentifier(column)} IS DISTINCT FROM NEW.${quoteIdentifier(column)} THEN
+    UPDATE "Suggestion" AS s SET "status" = 'superseded', "updatedAt" = now()
+    FROM ${quoteIdentifier(table)} AS r
+    WHERE s."entity" = ${quoteLiteral(entity)} AND s."field" = ${quoteLiteral(field)}
+      AND s."status" = 'pending' AND r."id" = s."recordId" AND r.${quoteIdentifier(via)} = NEW."id";
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS ${quoteIdentifier(triggerName)} ON ${quoteIdentifier(tableName)};
+CREATE TRIGGER ${quoteIdentifier(triggerName)} AFTER UPDATE OF ${quoteIdentifier(column)} ON ${quoteIdentifier(tableName)} FOR EACH ROW EXECUTE FUNCTION ${quoteIdentifier(functionName)}();`;
+    },
+  );
+  return [...triggers, ...referencedTriggers].join("\n\n");
 };
 
 /**

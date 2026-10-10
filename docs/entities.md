@@ -637,6 +637,13 @@ resolve to a model field, a basis key naming the field itself, and any cycle in
 the basis → target edges across an entity's suggest fields, so one request can
 always resolve every target in dependency order.
 
+A suggest target with no physical column declares `backedBy`: same-record
+stored columns with `{ column }`, or referenced-record columns with
+`{ entity, column, via }`. The generator validates those names and rejects any
+derived target without backing columns. Derived DDL supersedes pending
+suggestions when a backing column changes; referenced backing watches every
+target row linked through `via`.
+
 Shared AI selection sends the entire shown roster to Jev only when it fits
 both the 254-choice limit and the 32,000-byte serialized UTF-8 envelope,
 including subject, rules, labels, and the none option. Otherwise the fast chat
@@ -1287,8 +1294,8 @@ basis, so changing vocabulary invalidates old proposals without rerunning
 vision or introducing an inference cache.
 
 Manifest-declared suggestion targets appear as field pills in entity lists.
-Pending Suggestions appear in those cells. A changed target field supersedes
-its older pending Suggestions, and a later sweep supersedes prior pending rows
+Pending Suggestions appear in those cells. A changed target or declared
+backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
 for the same record and field. Suggestions remain available to evaluation after
 review; there is no separate classification review page.
 Entity lists expose a generic pending-suggestion filter (any, Addition, or

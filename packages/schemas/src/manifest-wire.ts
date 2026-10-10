@@ -72,6 +72,7 @@ export const manifestWire = {
     {
       reviewRequired: "boolean~",
       basis: "[string]",
+      backedBy: "Json?",
       mode: "string~",
       rules: "[string]?",
     },

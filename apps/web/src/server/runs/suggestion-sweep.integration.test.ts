@@ -20,6 +20,7 @@ import type { JevPort } from "~/server/ai/jev";
 import {
   product as productTable,
   expense as expenseTable,
+  purchase as purchaseTable,
   run as runTable,
   suggestion as suggestionTable,
   vendor as vendorTable,
@@ -28,7 +29,10 @@ import { executeEntity } from "~/server/entity-kernel";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { projectCreateFromTasksWorkflow } from "~/server/operations/project.server";
 import { getDb } from "~/server/repo/database-helpers";
-import { updateExpensesInBulk } from "~/server/repo/expense/crud";
+import {
+  updateExpense,
+  updateExpensesInBulk,
+} from "~/server/repo/expense/crud";
 import { loadFinanceSuggestionContext } from "~/server/repo/finance-suggestion-context";
 import { createProduct } from "~/server/repo/product/crud";
 import { makeProductInput } from "~/server/repo/repo.fixtures";
@@ -274,6 +278,109 @@ describe("persisted Suggestion sweeps", () => {
       .from(suggestionTable)
       .where(eq(suggestionTable.id, row!.id));
     expect(saved?.status).toBe("pending");
+  });
+
+  it("supersedes derived Expense vendor Suggestions when either backing Purchase changes", async () => {
+    const vendorA = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic vendor A",
+    });
+    const vendorB = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic vendor B",
+    });
+    const purchaseA = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendorA.id,
+      date: "2026-09-01",
+    });
+    const purchaseB = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendorA.id,
+      date: "2026-09-02",
+    });
+    const purchaseC = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendorA.id,
+      date: "2026-09-03",
+    });
+    const expenseA = await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic vendor edit",
+      cost: 10,
+      date: "2026-09-01",
+      costType: "materials",
+      trade: "other",
+      purchaseId: purchaseA.id,
+    });
+    const expenseB = await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic linked vendor edit",
+      cost: 11,
+      date: "2026-09-02",
+      costType: "materials",
+      trade: "other",
+      purchaseId: purchaseB.id,
+    });
+    const expenseC = await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic unrelated purchase",
+      cost: 12,
+      date: "2026-09-03",
+      costType: "materials",
+      trade: "other",
+      purchaseId: purchaseC.id,
+    });
+    const recordIds = await Promise.all(
+      [expenseA, expenseB, expenseC].map((row) =>
+        resolveLiveShortcode(ctx.db, row.shortcode, "expense"),
+      ),
+    );
+    if (recordIds.some((id) => !id))
+      throw new Error("Synthetic expense record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    await getDb(ctx.db)
+      .insert(suggestionTable)
+      .values(
+        recordIds.map((recordId) => ({
+          runId,
+          entity: "expense",
+          recordId: recordId!,
+          field: "vendor",
+          currentValue: "Synthetic vendor A",
+          suggestedValue: "Synthetic vendor C",
+          confidence: 0.8,
+          model: "typesafe/jev",
+          kind: "correction" as const,
+          status: "pending" as const,
+        })),
+      );
+    await updateExpense(
+      ctx.db,
+      expenseA.shortcode,
+      { vendor: "Synthetic vendor B" },
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ vendorId: vendorB.id })
+      .where(eq(purchaseTable.id, purchaseB.id));
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ date: "2026-09-04" })
+      .where(eq(purchaseTable.id, purchaseC.id));
+    const rows = await getDb(ctx.db)
+      .select({
+        recordId: suggestionTable.recordId,
+        status: suggestionTable.status,
+      })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.runId, runId));
+    expect(rows.find((row) => row.recordId === recordIds[0])?.status).toBe(
+      "superseded",
+    );
+    expect(rows.find((row) => row.recordId === recordIds[1])?.status).toBe(
+      "superseded",
+    );
+    expect(rows.find((row) => row.recordId === recordIds[2])?.status).toBe(
+      "pending",
+    );
   });
 
   it("supersedes pending Task project Suggestions on repository writes", async () => {

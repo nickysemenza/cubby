@@ -753,7 +753,13 @@ Rules:
         control: {
           kind: "specialized",
           renderer: "vendor-name",
-          suggest: { basis: ["name", "notes", "orderId"] },
+          suggest: {
+            basis: ["name", "notes", "orderId"],
+            backedBy: [
+              { column: "purchaseId" },
+              { entity: "purchase", column: "vendorId", via: "purchaseId" },
+            ],
+          },
         },
         display: { detail: true },
         provenance: { kind: "relation", sources: [{ entity: "vendor" }] },
