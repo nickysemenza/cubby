@@ -152,7 +152,8 @@ struct ActivityListModelTests {
         #expect(query.first { $0.name == "from" }?.value != nil)
     }
 
-    @Test func delayedAttentionCannotRestoreThePreviousFilterScope() async throws {
+    @Test(arguments: [false, true])
+    func delayedAttentionCannotRestoreThePreviousFilterScope(changeScope: Bool) async throws {
         let store = InMemorySessionTokenStore()
         try store.save(.bearer("tok"), for: "localhost:3000")
         let configuration = URLSessionConfiguration.ephemeral
@@ -162,6 +163,8 @@ struct ActivityListModelTests {
             credentials: CredentialProvider(host: "localhost:3000", store: store),
             session: URLSession(configuration: configuration))
         let model = ActivityListModel()
+        await model.load(client: client)
+        ActivityListStub.settled.withLock { $0 = !changeScope }
         let (requests, continuation) = AsyncStream<String>.makeStream()
         ActivityListStub.observer.withLock { $0 = continuation }
         ActivityListStub.holdAttention.withLock { $0 = true }
@@ -176,7 +179,7 @@ struct ActivityListModelTests {
             ActivityListStub.holdAttention.withLock { $0 = false }
             ActivityListStub.heldAttention.withLock { $0 = nil }
         }
-        let oldLoad = Task { await model.load(client: client) }
+        let oldLoad = Task { await model.refreshAttention(client: client) }
         var iterator = requests.makeAsyncIterator()
         while let path = await iterator.next() {
             if path == "/api/v1/activity/list" { break }
@@ -185,8 +188,12 @@ struct ActivityListModelTests {
         ActivityListStub.holdAttention.withLock { $0 = false }
         ActivityListStub.settled.withLock { $0 = true }
         defer { ActivityListStub.settled.withLock { $0 = false } }
-        model.state = "completed"
-        await model.load(client: client)
+        if changeScope {
+            model.state = "completed"
+            await model.load(client: client)
+        } else {
+            await model.refreshLoaded(client: client)
+        }
         release()
         await oldLoad.value
         #expect(model.attention?.items.first?.state == "completed")

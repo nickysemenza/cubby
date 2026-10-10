@@ -57,7 +57,8 @@ immutable.
 Native Activity uses the same five-attempt scoped attention read and all-page
 count, with its existing Run inspector and an attention-only filter. Attention
 refreshes every fifteen seconds even when no attempt is executing; late responses
-cannot restore an earlier filter scope. Reads never restart paused research.
+cannot restore an earlier filter scope. Same-scope group refreshes do not discard
+an independent attention response or diagnostic. Reads never restart paused research.
 
 Product and Purchase research history use the shared entity report and record
 renderer on web and Apple clients. Each attempt shows its Run lifecycle alongside

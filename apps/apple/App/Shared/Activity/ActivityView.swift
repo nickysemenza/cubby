@@ -123,19 +123,18 @@ final class ActivityListModel {
         let requestedIdentity = filterIdentity
         var attentionFilters = requestedFilters
         attentionFilters.attentionOnly = true
-        let scopeGeneration = requestGeneration
         attentionGeneration += 1
         let generation = attentionGeneration
         do {
             let page = try await client.activityRuns(filters: attentionFilters, limit: 5)
             guard !Task.isCancelled, generation == attentionGeneration,
-                scopeGeneration == requestGeneration, requestedIdentity == filterIdentity
+                requestedIdentity == filterIdentity
             else { return }
             attention = page
             attentionError = nil
         } catch {
             guard !Task.isCancelled, generation == attentionGeneration,
-                scopeGeneration == requestGeneration, requestedIdentity == filterIdentity
+                requestedIdentity == filterIdentity
             else { return }
             attentionError = error.localizedDescription
             Diagnostics.report(error, context: "activity.attention")
