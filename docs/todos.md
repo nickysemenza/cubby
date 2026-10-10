@@ -173,18 +173,30 @@ See also the image operational passes at the end of this file.
 The model owns adaptive investigation and semantic judgments. Code owns source
 retention, admission, durable recovery, replay, ownership and domain writes.
 Pi already hosts the researcher; the [simplification audit](plans/research-simplification.md)
-records the remaining deletion candidates and SDK comparisons. The first slice
-removes 245 net handwritten code/test lines (coordinator declarations and old Gmail
-fixtures). The next slice removes the retired vendor-search Workflow, binding,
-schemas and bespoke progress presentation; its historical Run records remain
-readable through generic reports and cannot execute again. No compatibility
-adapter remains. Review and deployment of that slice are pending; live mailbox
-acceptance remains open. Browser transport
-contracts remain in [infrastructure](infrastructure.md#browser-bridge).
+records the remaining deletion candidates and SDK comparisons. The first two
+slices merged in [#1784](https://github.com/nickysemenza/cubby/pull/1784) and
+[#1797](https://github.com/nickysemenza/cubby/pull/1797), removing 1,534 net
+tracked lines including tests and documentation. The retired vendor-search
+Workflow, binding, schemas and bespoke progress presentation are gone; historical
+Runs remain readable through generic reports and cannot execute again. No tables,
+household data or compatibility adapter were removed or introduced by these
+slices. Review, exact-head hosted checks and deployment completed; live mailbox
+acceptance remains open. Browser transport contracts remain in
+[infrastructure](infrastructure.md#browser-bridge).
+
+Delivery order: finish economical requests and deterministic execution bounds,
+then household and record-level status visibility, then the remaining source,
+browser and schema consolidation. Live research and new automation are paused
+at the member's request. Keep their retained progress; perform real-model,
+mailbox and authenticated-device acceptance only after explicit resumption.
 
 - 🟢 **Stop repeated logical failures across a Run.** One browser-command retry
-  and a generation cap do not bound repeated commands under new operation IDs.
-  Persist target/tool/outcome failure identity and active-time accounting; pause
+  and the current 256-generation Run limit do not bound repeated commands under
+  new operation IDs early enough. [#1808](https://github.com/nickysemenza/cubby/pull/1808)
+  adds a reviewed three-distinct-call bound for identical thrown service failures
+  using existing durable Run state. Its exact-head hosted checks and scripted
+  acceptance passed and it merged; production deployment remains pending.
+  Returned domain refusals and active-time accounting remain open. Pause
   repeated unchanged failures with their raw last observation. Member sign-in,
   permissions and Mac-offline waits do not consume active time. Reuse Run state
   and existing usage/cost authorization; do not introduce another job engine.
@@ -267,9 +279,10 @@ research acceptance.
 - 🟢 **Explain household work before listing its attempts.** Show what is working
   now, waiting and why, needs a member decision, and what happens next. Group
   related discovery, purchase research, enrichment and retries using existing
-  lineage. Matching working, waiting, review, failed and completed attempt
-  counts must remain independent of the root status and Product verification.
-  Finish a record-level view of processed emails, matched orders, linked
+  lineage. Grouped matching working, waiting, review, failed and completed
+  attempt counts now ship independently of root status and Product verification.
+  A household overview with reasons and next actions remains open. Finish a
+  record-level view of processed emails, matched orders, linked
   Purchases and enriched Products with processing time, outcome, evidence and
   links. Include supported unchanged facts and unresolved work, not only audit
   writes. Keep classification, linking, financial review and verification
@@ -294,9 +307,10 @@ research acceptance.
   audit before consolidating additional purpose declarations.
 
 - ⏳ **Accept purchase-source-first Product research.** Supply usable original-mail
-  selectors and existing order-detail URLs with accepted order lines. The maintained
-  skill should recover missing originals through owned email and authenticated
-  account history before broader name search. Validate a real plant and a real
+  selectors and existing order-detail URLs with accepted order lines shipped in
+  [#1801](https://github.com/nickysemenza/cubby/pull/1801). The maintained skill
+  recovers missing originals through owned email and authenticated account history
+  before broader name search. Validate a real plant and a real
   hardware-retailer Product after deployment; old per-order source associations
   remain explicit gaps until a supported original is recovered. Do not invent
   historical mappings or treat a search match as proof of the purchased variant.
@@ -333,6 +347,32 @@ research acceptance.
   without paid admission or transmission; it was canceled after one failed call.
   The actual stream-admission rejection and live paid recovery remain unresolved;
   do not infer eligibility from preceding event names alone.
+
+- ⏳ **Accept economical research requests and routing.** Mail routing now uses
+  bounded visible text, exact links and retained media descriptors instead of
+  HTML layout; incomplete views remain uncertain and original retention is
+  unchanged. The independent support assessor now uses Sol/low. The researcher
+  starts on Luna/medium and escalates continuing domain refusals to Sol/low.
+  [#1806](https://github.com/nickysemenza/cubby/pull/1806) merged and deployed
+  request-only delivery of repeated attachment bytes once, preserving every
+  observation binding and the existing admission limit. Complete repeated order
+  context sharing in [#1807](https://github.com/nickysemenza/cubby/pull/1807)
+  has independent review, exact-head hosted checks and scripted acceptance; it
+  merged, with production deployment still pending.
+  Request-sharing changes must preserve every source binding and complete order
+  context. Compare supported outcomes, physical calls and transmitted bytes on
+  unchanged synthetic sources, then verify real-model quality only when live
+  research is authorized. Lower effort and fewer bytes do not establish correct
+  purchased-variant judgments or a measured subscription-quota saving.
+
+- 🟢 **Reuse supported existing Products before creation.**
+  [#1810](https://github.com/nickysemenza/cubby/pull/1810) replaces bounded
+  alphabetical brand-token candidate searches with shared name/alias relevance
+  and exposes live candidates when assessing a proposed new Product. Focused
+  persisted-state regressions and independent review pass; final-head hosted
+  acceptance and merge remain pending. Verify real-model reuse after explicit
+  research resumption. Existing duplicates require a supported, preserving
+  merge plan before household cleanup; matching names alone never prove variants.
 
 - 🤔 **Link enriched seed Products to Plants.** `growsPlantId` is supported,
   but deciding which growing facts belong on Plant versus a purchased seed
