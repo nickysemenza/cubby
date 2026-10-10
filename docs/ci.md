@@ -11,6 +11,15 @@ deployment never waits for post-merge CI.
 
 ## Cache keys and the remote cache
 
+```mermaid
+flowchart LR
+  Mac["Developer Mac: nx run target"] -->|PUT pass| Cache[("apps/nx-cache Worker + R2")]
+  Job["PR or main CI job: nx run target"] -->|GET input hash| Cache
+  Cache -->|hit| Replay["replay the pass in seconds"]
+  Cache -->|miss| Run["run the lane, PUT the pass"]
+  Nightly["nightly: NX_SKIP_NX_CACHE=true"] --> Full["every lane runs uncached"]
+```
+
 The required test lanes key on the `gate` named input in `nx.json`: every
 non-documentation file (the lockfile and `.github/` included), the Markdown
 that the Worker bundles or generation reads (`docs/README.md`,

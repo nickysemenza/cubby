@@ -4,15 +4,16 @@
   "namedInputs": {
     // The merge-gate key plus the selected Xcode; CI selects the Xcode in
     // .xcode-version so a developer Mac's result matches CI's for the same
-    // tree (docs/adr/0009-content-hash-merge-gate.md). Rust is absent: CI hashes before its
-    // Rust setup can change the active compiler, and the probe and the run
-    // must agree on the key.
+    // tree (docs/adr/0009-content-hash-merge-gate.md). Rust is absent: CI
+    // hashes before its Rust setup can change the active compiler, and the
+    // probe and the run must agree on the key.
     "appleGate": [
       "gate",
       {
         "runtime": "xcodebuild -version 2>/dev/null || echo none"
       }
-    ]  },
+    ]
+  },
   // No explicit `cwd`: nx:run-commands defaults to the workspace root, which
   // scripts/apple-check.sh (and the paths inside it) assume.
   "targets": {
