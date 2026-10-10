@@ -823,6 +823,84 @@ describe("unified Runs history", () => {
     expect(rows.find((row) => row.id === legacyId)?.parentRunId).toBeNull();
   });
 
+  it("counts matching work across every group independently of cursor pagination", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic overview member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const rootId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      trigger: "manual",
+      status: "completed",
+    });
+    await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_import",
+      trigger: "discovery",
+      parentRunId: rootId,
+    });
+    const waitingId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "product_enrichment",
+      trigger: "manual",
+    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "paused_offline" })
+      .where(eq(runTable.id, waitingId));
+    const input = {
+      executor: "all" as const,
+      sort: "newest" as const,
+      limit: 1,
+    };
+    const counts = {
+      working: 1,
+      waiting: 1,
+      needsReview: 0,
+      failed: 0,
+      completed: 1,
+      skipped: 0,
+    };
+    expect.soft(await listActivity(ctx.db, null, input)).toMatchObject({
+      total: 3,
+      workCounts: counts,
+    });
+    const first = await listActivityGroups(ctx.db, null, input);
+    expect(first).toMatchObject({
+      total: 2,
+      totalItems: 3,
+      workCounts: counts,
+    });
+    expect(first.items).toHaveLength(1);
+    if (!first.nextCursor)
+      throw new Error("Synthetic overview did not paginate");
+    expect(
+      await listActivityGroups(ctx.db, null, {
+        ...input,
+        cursor: first.nextCursor,
+      }),
+    ).toMatchObject({ total: 2, totalItems: 3, workCounts: counts });
+    expect(
+      await listActivityGroups(ctx.db, null, {
+        ...input,
+        state: "paused_offline",
+      }),
+    ).toMatchObject({
+      total: 1,
+      totalItems: 1,
+      workCounts: { ...counts, working: 0, completed: 0 },
+    });
+    expect(
+      await listActivityGroups(ctx.db, null, {
+        ...input,
+        state: "dispatch_failed",
+      }),
+    ).toMatchObject({
+      total: 0,
+      totalItems: 0,
+      workCounts: { ...counts, working: 0, waiting: 0, completed: 0 },
+    });
+  });
+
   it("keeps completed research roots refreshable while a descendant is running", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic active lineage member",

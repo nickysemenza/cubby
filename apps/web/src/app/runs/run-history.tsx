@@ -288,6 +288,9 @@ export function RunHistory({
     grouped ? groups.data?.pages[0]?.totalItems : flat.data?.pages[0]?.total,
   );
   const query = grouped ? groups : flat;
+  const workSummary = grouped
+    ? groups.data?.pages[0]?.workSummary
+    : flat.data?.pages[0]?.workSummary;
   const active = grouped
     ? groupRows.some((group) => group.active)
     : rows.some((row) => row.active);
@@ -548,6 +551,15 @@ export function RunHistory({
   ) : null;
   return (
     <Stack gap="sm">
+      {workSummary !== undefined ? (
+        <output aria-label="Matching attempts" className="block text-sm">
+          <span className="block">{workSummary || "No matching attempts"}</span>
+          <span className="block text-muted-foreground">
+            All matching Runs and image jobs, including unloaded pages.
+            Completion does not imply verified Product facts.
+          </span>
+        </output>
+      ) : null}
       <Row gap="sm" align="center" wrap>
         <NativeSelect
           aria-label="Record type"

@@ -146,26 +146,34 @@ export const activityListInput = z.object({
   limit: z.int().min(1).max(100).default(20),
 });
 export type ActivityListInput = z.infer<typeof activityListInput>;
+export const activityWorkCounts = z.object({
+  working: z.int().nonnegative(),
+  waiting: z.int().nonnegative(),
+  needsReview: z.int().nonnegative(),
+  failed: z.int().nonnegative(),
+  completed: z.int().nonnegative(),
+  skipped: z.int().nonnegative(),
+});
+
 export const activityListOutput = z.object({
+  /** Matching attempts across all pages, not verified records or mailbox coverage. */
+  workCounts: activityWorkCounts,
+  workSummary: z.string(),
   items: z.array(activityRun),
   total: z.int().nonnegative(),
   nextCursor: z.string().nullable(),
 });
 export const activityGroupsOutput = z.object({
+  /** Matching attempts across all groups, independent of cursor position. */
+  workCounts: activityWorkCounts,
+  workSummary: z.string(),
   items: z.array(
     z.object({
       root: activityRun,
       /** Group liveness includes descendants, independently of the root's state. */
       active: z.boolean(),
       /** Matching work in this group; completed attempts do not imply verified facts. */
-      workCounts: z.object({
-        working: z.int().nonnegative(),
-        waiting: z.int().nonnegative(),
-        needsReview: z.int().nonnegative(),
-        failed: z.int().nonnegative(),
-        completed: z.int().nonnegative(),
-        skipped: z.int().nonnegative(),
-      }),
+      workCounts: activityWorkCounts,
       childCount: z.int().nonnegative(),
       contextOnly: z.boolean(),
       latestAt: z.iso.datetime(),
@@ -181,7 +189,7 @@ export const activityGroupChildrenInput = activityListInput.extend({
 
 /** Attempt states across matching related work, separate from target verification. */
 export function activityWorkSummary(
-  counts: z.infer<typeof activityGroupsOutput>["items"][number]["workCounts"],
+  counts: z.infer<typeof activityWorkCounts>,
 ): string {
   return [
     counts.working ? `${counts.working} working` : null,
