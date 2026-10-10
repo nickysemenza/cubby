@@ -366,6 +366,8 @@ and deployment/readback order are owned by the
    frozen mail sources and eligible Product targets' owned originals in ID order
    before the Run,
    matching source exposure, retirement and history erasure so those paths cannot invert locks.
+   Product selection reuses that preloaded context for the continuation; a newly
+   committed original appears on the next call, never after the Run lock.
    Run status/ledger fences use key-preserving locks: cancellation still waits,
    while a concurrent child admission can check its parent foreign key.
    Retained mail observations present plain text and compact visible HTML with

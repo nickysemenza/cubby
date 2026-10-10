@@ -249,6 +249,10 @@ export function researchServiceFor(
   env: Env,
   rawRunId: string,
   ports: ResearchServicePorts = {},
+  preloadedPurchaseContexts?: ReadonlyMap<
+    string,
+    Awaited<ReturnType<typeof loadProductPurchaseContext>>
+  >,
 ): ResearchServices {
   const runId = runEntityId.parse(rawRunId);
   const database = getDb(db);
@@ -504,7 +508,18 @@ export function researchServiceFor(
         const scope = await owner(transactionDb);
         if (!["running", "paused_offline"].includes(scope.status))
           return { status: "stopped", reason: scope.status };
-        const scoped = researchServiceFor(transactionDb, env, runId, ports);
+        const scoped = researchServiceFor(
+          transactionDb,
+          env,
+          runId,
+          ports,
+          new Map(
+            productTargets.map((target, index) => [
+              target.entityId,
+              purchasedContexts[index]!,
+            ]),
+          ),
+        );
         const next = await scoped.researchNext({}, `${callId}:next`);
         // pi may discard a proposed continuation in favor of queued input/reset.
         if (!admitted) return next;
@@ -562,10 +577,19 @@ export function researchServiceFor(
               db,
               current,
             );
-            const purchasedItems = await loadProductPurchaseContext(db, {
-              productId: current.id,
-              ledgerPartyId: parseEntityId("ledgerParty", scope.ledgerPartyId!),
-            });
+            const purchasedItems = preloadedPurchaseContexts
+              ? preloadedPurchaseContexts.get(current.id)
+              : await loadProductPurchaseContext(db, {
+                  productId: current.id,
+                  ledgerPartyId: parseEntityId(
+                    "ledgerParty",
+                    scope.ledgerPartyId!,
+                  ),
+                });
+            if (!purchasedItems)
+              throw new Error(
+                "Product research targets changed during continuation admission.",
+              );
             await exposeResearchSources(db, {
               runId,
               sources: purchasedItems.flatMap(({ originalMail }) =>
