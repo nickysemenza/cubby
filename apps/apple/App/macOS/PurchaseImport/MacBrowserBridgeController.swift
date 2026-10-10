@@ -120,9 +120,8 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
             switch result.outcome {
             case .completed(let completion):
                 settings?.setAccountError(nil, accountID: accountID)
-                if let snapshot = completion.snapshot {
+                if completion.snapshot != nil {
                     var resolved = ["browser_permission_denied", "javascript_disabled"]
-                    if !snapshot.authenticationRequired { resolved.append("sign_in") }
                     if completion.observation.screenRecording == .granted {
                         resolved.append("screen_recording_denied")
                     }
@@ -167,6 +166,10 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
                 body: "Finish signing in in Cubby's owned browser window, then resume the Run.",
                 raiseWindow: false)
         case .runCompleted(let accountID, let completion):
+            if completion.isSuccessful {
+                notifier.resolveAttentionEdge(
+                    accountID: accountID, runID: completion.runID, reason: "sign_in")
+            }
             settings?.markRunCompleted(accountID: accountID, runID: completion.runID)
             Task { [notifier] in await notifier.notifyRunCompleted(completion) }
         }

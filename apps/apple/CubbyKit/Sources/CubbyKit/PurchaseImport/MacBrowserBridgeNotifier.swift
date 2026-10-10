@@ -13,6 +13,7 @@
             static let offlineSince = "purchaseImport.browserBridge.offlineSince"
         }
 
+        private var attentionGenerations: [String: [String: UUID]] = [:]
         private let defaults: UserDefaults
         private let notificationCenter: UNUserNotificationCenter?
 
@@ -73,6 +74,7 @@
             var edges = attentionEdges
             let key = attentionKey(accountID: accountID, runID: runID)
             guard let current = edges[key], current.contains(reason) else { return }
+            attentionGenerations[key]?[reason] = nil
             let remaining = current.filter { $0 != reason }
             if remaining.isEmpty { edges.removeValue(forKey: key) } else { edges[key] = remaining }
             defaults.set(edges, forKey: Key.attentionEdges)
@@ -83,6 +85,7 @@
             let key = attentionKey(accountID: accountID, runID: runID)
             var reasons = Set(edges[key] ?? [])
             guard reasons.insert(reason).inserted else { return false }
+            attentionGenerations[key, default: [:]][reason] = UUID()
             edges[key] = reasons.sorted()
             defaults.set(edges, forKey: Key.attentionEdges)
             return true
@@ -91,14 +94,28 @@
         public func notifyMemberAttention(
             accountID: String, runID: String, reason: String, title: String, body: String
         ) async -> Bool {
+            await deliverAttention(
+                accountID: accountID, runID: runID, reason: reason,
+                canPresent: { await self.canPresentNotifications() },
+                post: {
+                    await self.post(
+                        identifier:
+                            "purchase-import-attention-\(self.attentionKey(accountID: accountID, runID: runID))-\(reason)",
+                        title: title, body: body)
+                })
+        }
+
+        func deliverAttention(
+            accountID: String, runID: String, reason: String,
+            canPresent: () async -> Bool, post: () async -> Void
+        ) async -> Bool {
             guard claimAttentionEdge(accountID: accountID, runID: runID, reason: reason) else { return false }
-            if await canPresentNotifications() {
-                await post(
-                    identifier:
-                        "purchase-import-attention-\(attentionKey(accountID: accountID, runID: runID))-\(reason)",
-                    title: title, body: body)
-            }
-            return true
+            let key = attentionKey(accountID: accountID, runID: runID)
+            let generation = attentionGenerations[key]?[reason]
+            let permitted = await canPresent()
+            guard attentionGenerations[key]?[reason] == generation else { return false }
+            if permitted { await post() }
+            return attentionGenerations[key]?[reason] == generation
         }
 
         private var attentionEdges: [String: [String]] {

@@ -849,8 +849,10 @@ Retired Runs and missing/pending originals refuse maintenance.
 The existing Mac notifier handles sign-in, denied Screen Recording or browser
 Automation, and disabled JavaScript from Apple Events. Its account/Run/reason
 edges are persisted before delivery, so reconnect replay cannot repeat an
-unchanged alert. Successful page reads re-arm resolved reasons; unrelated
-accounts and permission reasons retain their edges. Permission notices retain
+unchanged alert. Successful page reads re-arm observed permission reasons; a
+successful Run clears sign-in attention. Resolving an edge invalidates pending
+delivery even when the same reason is re-armed during notification authorization.
+Unrelated accounts and permission reasons retain their edges. Permission notices retain
 the raw command diagnostic and name the setting to change. A newly observed
 permission pause raises that account's owned Cubby browser window, only while
 the controller remains installed. Sign-in retains the coordinator's existing

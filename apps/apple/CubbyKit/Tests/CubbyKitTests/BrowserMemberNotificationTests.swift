@@ -5,6 +5,26 @@
 
     @MainActor
     struct BrowserMemberNotificationTests {
+        @Test func resolvedPauseCannotDeliverOrRaiseAfterAuthorizationSuspends() async throws {
+            let suite = "browser-attention-test-\(UUID().uuidString)"
+            let defaults = try #require(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let notifier = MacBrowserBridgeNotifier(defaults: defaults)
+            var delivered = false
+            let fresh = await notifier.deliverAttention(
+                accountID: "synthetic-account", runID: "synthetic-run", reason: "sign_in",
+                canPresent: {
+                    notifier.resolveAttentionEdge(
+                        accountID: "synthetic-account", runID: "synthetic-run", reason: "sign_in")
+                    // A new pause must not make the suspended old delivery current again.
+                    _ = notifier.claimAttentionEdge(
+                        accountID: "synthetic-account", runID: "synthetic-run", reason: "sign_in")
+                    return true
+                }, post: { delivered = true })
+            #expect(!delivered)
+            #expect(!fresh)
+        }
+
         // Replayed pauses across process restart must not notify twice; a different
         // member action or account must still be eligible for a notification.
         @Test func retainedPauseEdgesSurviveNotifierRecreation() throws {
