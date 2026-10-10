@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import type { EntitySourceInput } from "@cubby/schemas/entity-source";
 /** Image data boundary: derive association and cascade behavior from INCOMING_EDGES.image. */
 import type {
   EntityRef,
@@ -116,6 +117,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { provenanceEvidenceLabel } from "~/server/repo/detail-display-labels";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
+import { recordEntitySources } from "~/server/repo/entity-source";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list";
@@ -2845,6 +2847,10 @@ export const createOrReuseAttachedImage = async (
     expectedImageCount?: number;
     pendingImageId?: ImageId;
     purpose?: ProductImagePurpose;
+    /** Where the file was found; recorded on the target entity. */
+    sources?: readonly EntitySourceInput[];
+    /** The actor recording `sources`; required with them. */
+    recorder?: ActorContext;
   },
   entity: AttachableImageRef,
   documentKind?: PurchaseDocumentKind,
@@ -2874,6 +2880,8 @@ export const createOrReuseAttachedImage = async (
       idempotencyKey,
       pendingImageId,
       purpose,
+      sources,
+      recorder,
       ...record
     } = params;
     const row = pendingImageId
@@ -2890,6 +2898,16 @@ export const createOrReuseAttachedImage = async (
       : await insertUploadedImageRecord(tx, record);
     const imageId = parseEntityId("image", row.id);
     await associateImageWithEntity(tx, entity, imageId, documentKind, purpose);
+    if (sources?.length) {
+      if (!recorder)
+        throw new Error("Image attachment sources need the recording actor");
+      await recordEntitySources(tx, {
+        entityKind: entity.entity,
+        entityId: entity.id,
+        sources,
+        recorder,
+      });
+    }
     if (idempotencyKey) {
       await tx
         .update(entityAttachment)

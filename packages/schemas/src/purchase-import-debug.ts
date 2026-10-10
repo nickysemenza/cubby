@@ -63,10 +63,6 @@ export const purchaseImportDebugEvent = z.object({
   executor: activityExecutor.nullable().optional(),
 });
 
-export const purchaseImportDebugEventsRequest = z.object({
-  events: z.array(purchaseImportDebugEvent).min(1).max(100),
-});
-
 export const purchaseAgentConnectionStatus = z.enum([
   "authorized",
   "denied",

@@ -42,8 +42,6 @@ import {
   type ReportViewer,
 } from "./records";
 import type { RunReportSlot } from "./run";
-import { vendorAccountChargeSearchReport } from "./vendor-account-charge-search";
-import { vendorAccountSyncReport } from "./vendor-account-sync";
 
 const isRunSlot = (slot: string): slot is RunReportSlot =>
   slot.startsWith("run.");
@@ -118,10 +116,6 @@ const BUILDERS = {
   "purchase.project-allocation": purchaseProjectAllocationReport,
   "purchase.financial-settlement": purchaseFinancialSettlementReport,
   "expense.settlement": expenseSettlementReport,
-  "vendorAccount.sync": (db, id, _viewer, actor) =>
-    vendorAccountSyncReport(db, id, actor),
-  "vendorAccount.charge-search": (db, id, _viewer, actor) =>
-    vendorAccountChargeSearchReport(db, id, actor),
   "run.live-progress": runBuilder("run.live-progress"),
   "run.import-stats": runBuilder("run.import-stats"),
   "run.import-progress-live": runBuilder("run.import-progress-live"),
@@ -130,7 +124,6 @@ const BUILDERS = {
   "run.import-approvals": runBuilder("run.import-approvals"),
   "run.import-findings": runBuilder("run.import-findings"),
   "run.import-targets": runBuilder("run.import-targets"),
-  "run.import-evidence": runBuilder("run.import-evidence"),
   "run.import-prepared-orders": runBuilder("run.import-prepared-orders"),
   "run.import-timeline": runBuilder("run.import-timeline"),
   "run.import-debug-log": runBuilder("run.import-debug-log"),

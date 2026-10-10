@@ -5,21 +5,29 @@
  * Emails its Mail import Run admitted.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  runEntityId,
+  type RunId,
+  type UserId,
+} from "@cubby/schemas/identifiers";
 import {
   mailReadInput,
+  mailReadOut,
+  mailSearchInput,
   mailResolveInput,
   mailResolveOut,
   type MailEvent,
   type MailMessageRef,
   type MailReadInput,
   type MailResolveInput,
+  type MailSearchInput,
 } from "@cubby/schemas/mailbox-research";
-import { researchAttachmentOriginal } from "@cubby/schemas/research-tools";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { account } from "~/server/db/auth.schema";
 import {
   entityAttachment,
   ledgerParty,
@@ -38,20 +46,25 @@ import {
   notDeleted,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
-import { attachFileToEntity } from "~/server/repo/image";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { attachFileToEntity } from "~/server/services/image-storage.service";
 
+import { loadMailAttachmentOriginal } from "./gmail/attachment-original";
 import {
   productionOrderMailAttachmentStorage,
   type OrderMailAttachmentStorage,
 } from "./gmail/attachment-storage";
+import { ingestGmailMessages } from "./gmail/ingest";
 import { ensureMailVendorAccount } from "./gmail/mail-account";
 import { clearUnrelatedOriginal } from "./gmail/persistence";
-import { loadMailAttachmentOriginal } from "./research-mail-attachments";
+import { gmailProviderForUser } from "./gmail/provider";
+import { GMAIL_PAGE_SIZE } from "./gmail/sync";
+import { GmailAuthorizationError } from "./gmail/tokens";
+import { GmailApiError } from "./gmail/types";
 
 type RetainedMail = typeof orderMail.$inferSelect;
 
-async function memberPartyIds(db: Database, userId: string) {
+async function memberPartyIds(db: Database, userId: UserId) {
   const tx = getDb(db);
   const rows = await tx
     .select({ id: ledgerParty.id })
@@ -160,12 +173,6 @@ export async function readMail(
         message.classification === "unrelated"
       )
         throw new Error("This Email is no longer retained for purchases.");
-      // Pi claims the Email it reads so discovery never admits it twice.
-      if (owned.importRunId && message.status === "pending")
-        await tx
-          .update(mailboxMessage)
-          .set({ status: "researching", runId: owned.importRunId })
-          .where(eq(mailboxMessage.id, message.id));
       const rows = await tx
         .select({
           id: orderMailAttachment.id,
@@ -190,7 +197,7 @@ export async function readMail(
         attachmentRef: requested.id,
       })
     : undefined;
-  return {
+  return mailReadOut.parse({
     mailboxId: mail.mailboxId,
     messageId: mail.messageId,
     threadId: mail.threadId,
@@ -200,14 +207,9 @@ export async function readMail(
     receivedAt: mail.receivedAt?.toISOString() ?? null,
     content: mail.content,
     attachments: attachments.map(({ id: _id, ...row }) => row),
-    originalAttachment: original
-      ? researchAttachmentOriginal.parse({
-          ...original,
-          attachmentRef: requested?.attachmentId,
-        })
-      : undefined,
+    originalAttachment: original,
     boundToRun: importRunId !== null,
-  };
+  });
 }
 
 /** Retained attachments become the Purchase's documents, once. */
@@ -256,7 +258,7 @@ async function attachRetainedSource(
 /**
  * Record that an Email supports one lifecycle event of a Purchase. Keyed by
  * (Email, Purchase, event, checksum), so a replay adds nothing; a member's
- * earlier dismissal of this pairing wins over an automatic link.
+ * dismissal of this Email for the Purchase refuses the link.
  */
 export async function linkOrderMail(
   db: Database,
@@ -328,43 +330,51 @@ export async function linkOrderMail(
         )
         .limit(1);
   if (!event) throw new Error("The Email event was not recorded.");
+  // A member's dismissal of this Email for this Purchase, on any of its
+  // events, wins over a later automatic or session link.
   const [dismissed] = await tx
     .select({ id: orderMailCandidateDecision.id })
     .from(orderMailCandidateDecision)
+    .innerJoin(
+      orderMailEvent,
+      eq(orderMailEvent.id, orderMailCandidateDecision.eventId),
+    )
     .where(
       and(
-        eq(orderMailCandidateDecision.eventId, event.id),
+        eq(orderMailEvent.orderMailId, input.mail.id),
         eq(orderMailCandidateDecision.purchaseId, chosen.id),
         eq(orderMailCandidateDecision.decision, "dismissed"),
       ),
     )
     .limit(1);
-  if (!dismissed) {
-    // One accepted Purchase per event: an existing link elsewhere stays the
-    // member's to change through review.
-    const [other] = await tx
-      .select({ purchaseId: orderMailCandidateDecision.purchaseId })
-      .from(orderMailCandidateDecision)
-      .where(
-        and(
-          eq(orderMailCandidateDecision.eventId, event.id),
-          eq(orderMailCandidateDecision.decision, "linked"),
-        ),
-      )
-      .limit(1);
-    if (other && other.purchaseId !== chosen.id)
-      throw new Error(
-        "This Email event is already linked to another Purchase; review it before relinking.",
-      );
-    if (!other)
-      await tx.insert(orderMailCandidateDecision).values({
-        eventId: event.id,
-        purchaseId: chosen.id,
-        decision: "linked",
-        evidenceChecksum: input.mail.rawChecksum,
-        decidedByUserId: input.actorUserId,
-      });
-  }
+  if (dismissed)
+    throw new Error(
+      "A member dismissed this Email for that Purchase; review the Email before linking it.",
+    );
+  // One accepted Purchase per event: an existing link elsewhere stays the
+  // member's to change through review.
+  const [other] = await tx
+    .select({ purchaseId: orderMailCandidateDecision.purchaseId })
+    .from(orderMailCandidateDecision)
+    .where(
+      and(
+        eq(orderMailCandidateDecision.eventId, event.id),
+        eq(orderMailCandidateDecision.decision, "linked"),
+      ),
+    )
+    .limit(1);
+  if (other && other.purchaseId !== chosen.id)
+    throw new Error(
+      "This Email event is already linked to another Purchase; review it before relinking.",
+    );
+  if (!other)
+    await tx.insert(orderMailCandidateDecision).values({
+      eventId: event.id,
+      purchaseId: chosen.id,
+      decision: "linked",
+      evidenceChecksum: input.mail.rawChecksum,
+      decidedByUserId: input.actorUserId,
+    });
   await ensureMailVendorAccount(db, {
     vendorId: chosen.vendorId,
     ledgerPartyId: input.mail.ledgerPartyId,
@@ -385,7 +395,8 @@ export async function settleMail(
     importRunId: RunId | null;
     status: "completed" | "blocked";
     classification?: "unrelated";
-    outcome: string;
+    /** What settled the Email: an import, a link, or the member-facing gap. */
+    detail: string;
   },
 ) {
   const tx = getDb(db);
@@ -393,7 +404,11 @@ export async function settleMail(
     status: input.status,
     updatedAt: new Date(),
   };
-  if (input.classification) settled.classification = input.classification;
+  if (input.classification) {
+    settled.classification = input.classification;
+    settled.classificationStage = "resolution";
+    settled.classificationReason = input.detail;
+  }
   await tx
     .update(mailboxMessage)
     .set(settled)
@@ -409,7 +424,16 @@ export async function settleMail(
       .update(runTarget)
       .set({
         state: input.status === "completed" ? "completed" : "unresolved",
-        outcome: input.outcome,
+        // RunTarget.outcome is a closed set (RunTarget_outcome_check); a
+        // free-text disposition there failed every Pi resolve and commit.
+        // The gap or disposal reason lives in `warning`.
+        outcome:
+          input.classification ??
+          (input.status === "completed" ? "verified" : "ambiguous"),
+        warning:
+          input.status === "completed" && !input.classification
+            ? null
+            : input.detail,
         updatedAt: new Date(),
       })
       .where(
@@ -449,7 +473,7 @@ export async function resolveMail(
         mail,
         importRunId,
         status: "completed",
-        outcome: `linked:${disposition.event}`,
+        detail: `linked:${disposition.event}`,
       });
       return {
         mail,
@@ -462,7 +486,7 @@ export async function resolveMail(
         mail,
         importRunId,
         status: "blocked",
-        outcome: disposition.reason,
+        detail: disposition.reason,
       });
       return { mail, purchaseId: null, status: "blocked" as const };
     }
@@ -471,7 +495,7 @@ export async function resolveMail(
       importRunId,
       status: "completed",
       classification: "unrelated",
-      outcome: `unrelated: ${disposition.reason}`,
+      detail: `unrelated: ${disposition.reason}`,
     });
     return { mail, purchaseId: null, status: "completed" as const };
   });
@@ -496,11 +520,12 @@ export async function resolveMail(
   });
 }
 
-/** Mail-sourced import commits record their confirmation link themselves. */
+/** A mail-sourced import commit links its Email for the event it records. */
 export async function linkImportedMail(
   db: Database,
   input: {
     ledgerPartyId: string;
+    event: MailEvent;
     externalKey: string;
     checksum: string;
     purchaseId: string;
@@ -531,13 +556,158 @@ export async function linkImportedMail(
   await linkOrderMail(db, {
     mail,
     purchaseId: input.purchaseId,
-    event: "confirmation",
+    event: input.event,
     actorUserId: input.actorUserId,
   });
   await settleMail(db, {
     mail,
     importRunId: await mailImportRun(db, input.runId),
     status: "completed",
-    outcome: "imported",
+    detail: "imported",
   });
+}
+
+/**
+ * Pi's next admitted Email. Each Email stays the current item until
+ * `mail.resolve` or a mail-sourced commit settles its target.
+ */
+export async function claimMailImportWork(db: Database, runId: string) {
+  const id = runEntityId.parse(runId);
+  const database = getDb(db);
+  const [current] = await database
+    .select({ shortcode: runTable.shortcode, status: runTable.status })
+    .from(runTable)
+    .where(eq(runTable.id, id))
+    .limit(1);
+  if (!current) throw new Error("Mail import Run was not found");
+  if (current.status !== "running") return { kind: "none" as const };
+  const pending = await database
+    .select({
+      mailboxId: orderMail.mailboxId,
+      messageId: orderMail.messageId,
+      sender: orderMail.sender,
+      subject: orderMail.subject,
+      receivedAt: orderMail.receivedAt,
+    })
+    .from(runTarget)
+    .innerJoin(orderMail, eq(sql`${orderMail.id}::text`, runTarget.workKey))
+    .where(
+      and(
+        eq(runTarget.runId, id),
+        inArray(runTarget.state, ["pending", "prepared"]),
+      ),
+    )
+    .orderBy(asc(orderMail.receivedAt), asc(orderMail.id));
+  const [next] = pending;
+  if (!next) return { kind: "none" as const };
+  return {
+    kind: "email" as const,
+    runId: current.shortcode,
+    remaining: pending.length,
+    email: { ...next, receivedAt: next.receivedAt?.toISOString() ?? null },
+  };
+}
+
+/**
+ * Scoped live Gmail search for a missing original. Spam and Trash are
+ * excluded; under Pi's Mail import Run matches are classified exactly as
+ * discovery would, while a member's own search retains every other match as an
+ * `uncertain` candidate for the caller to settle with `mail.resolve`. Search
+ * never advances mailbox coverage.
+ */
+export async function searchMail(
+  db: Database,
+  rawInput: MailSearchInput,
+  actor: ActorContext,
+) {
+  const input = mailSearchInput.parse(rawInput);
+  const database = getDb(db);
+  const connected = await database
+    .select({ mailboxId: account.accountId })
+    .from(account)
+    .where(
+      and(eq(account.userId, actor.userId), eq(account.providerId, "google")),
+    )
+    .orderBy(asc(account.id));
+  const mailboxId =
+    input.mailboxId ??
+    (connected.length === 1 ? connected[0]?.mailboxId : undefined);
+  if (!mailboxId)
+    return {
+      status: "mailbox_required" as const,
+      mailboxes: connected.map((row) => row.mailboxId),
+      messages: [],
+      nextPageToken: null,
+    };
+  if (!connected.some((row) => row.mailboxId === mailboxId))
+    throw new Error("That Google mailbox is not connected to this member.");
+  const [party] = await memberPartyIds(db, actor.userId);
+  if (!party) throw new Error("Only a household member can search Email.");
+  try {
+    const provider = await gmailProviderForUser(db, actor.userId, mailboxId);
+    const request: Parameters<typeof provider.listMessages>[0] = {
+      query: `(${input.query}) -in:spam -in:trash`,
+      maxResults: GMAIL_PAGE_SIZE,
+    };
+    if (input.pageToken) request.pageToken = input.pageToken;
+    const listed = await provider.listMessages(request);
+    const messageIds = [
+      ...new Set(listed.messages?.map((message) => message.id) ?? []),
+    ];
+    const ingest: Parameters<typeof ingestGmailMessages>[2] = {
+      ledgerPartyId: party,
+      mailboxId,
+      messageIds,
+    };
+    // Pi's paid classification is billed to its Run; a member without a Run
+    // gets rules only and judges each candidate through `mail.resolve`.
+    if (actor.runId) ingest.runId = actor.runId;
+    else ingest.callerJudges = true;
+    await ingestGmailMessages(db, provider, ingest);
+    const retained = messageIds.length
+      ? await database
+          .select({
+            messageId: mailboxMessage.messageId,
+            classification: mailboxMessage.classification,
+            status: mailboxMessage.status,
+            threadId: orderMail.threadId,
+            sender: orderMail.sender,
+            subject: orderMail.subject,
+            receivedAt: orderMail.receivedAt,
+          })
+          .from(mailboxMessage)
+          .innerJoin(orderMail, eq(orderMail.id, mailboxMessage.orderMailId))
+          .where(
+            and(
+              eq(mailboxMessage.ledgerPartyId, party),
+              eq(mailboxMessage.mailboxId, mailboxId),
+              inArray(mailboxMessage.messageId, messageIds),
+            ),
+          )
+      : [];
+    return {
+      status: "ok" as const,
+      mailboxes: [mailboxId],
+      messages: retained.map((row) => ({
+        mailboxId,
+        ...row,
+        receivedAt: row.receivedAt?.toISOString() ?? null,
+      })),
+      nextPageToken: listed.nextPageToken ?? null,
+    };
+  } catch (error) {
+    const reconnect =
+      error instanceof GmailAuthorizationError ||
+      (error instanceof GmailApiError &&
+        (error.status === 401 ||
+          (error.status === 403 &&
+            error.reason === "insufficientPermissions")));
+    if (!reconnect) throw error;
+    return {
+      status: "gmail_reconnect_required" as const,
+      mailboxes: [mailboxId],
+      messages: [],
+      nextPageToken: null,
+    };
+  }
 }

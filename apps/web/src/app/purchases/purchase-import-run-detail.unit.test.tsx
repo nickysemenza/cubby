@@ -25,7 +25,7 @@ const operationCalls: Array<{ operation: string; input: unknown }> = [];
 const run: RunDetail = {
   publicId: runShortcode.parse("RUN-4K7M"),
   status: "completed",
-  purpose: "purchase_validation",
+  purpose: "mail_import",
   trigger: "manual",
   startedAt: "2026-09-20T16:00:00.000Z",
   endedAt: "2026-09-20T16:03:00.000Z",
@@ -64,7 +64,6 @@ const run: RunDetail = {
   operations: [
     {
       operationId: "extract-1",
-      browserTiming: null,
       kind: "extract",
       state: "completed",
       startedAt: "2026-09-20T16:01:00.000Z",
@@ -88,17 +87,6 @@ const run: RunDetail = {
       warning: null,
       diff: null,
       completedAt: "2026-09-20T16:03:00.000Z",
-    },
-  ],
-  evidence: [
-    {
-      id: "evidence-1",
-      targetId: null,
-      sourceKind: "browser_capture",
-      filename: "fixture-order.pdf",
-      mediaType: "application/pdf",
-      checksum: "fixture-checksum",
-      createdAt: "2026-09-20T16:00:00.000Z",
     },
   ],
   dispatch: {
@@ -210,7 +198,7 @@ afterEach(() => {
 const record = fromPartial<RunOut>({
   id: run.publicId,
   status: "completed",
-  purpose: "purchase_validation",
+  purpose: "mail_import",
 });
 
 // The generic detail page mounts these in the order the Run declaration lists
@@ -231,33 +219,27 @@ function RunImportSlots({ record }: { record: RunOut }) {
 }
 
 describe("import run slots", () => {
-  it("gives a paused retailer run one clear sign-in handoff and resume action", async () => {
-    detailRun = { ...run, status: "paused_auth", endedAt: null };
+  it("shows only the live agent while a run is active", async () => {
+    detailRun = { ...run, status: "running", endedAt: null };
     render(
       <RunImportSlots
-        record={fromPartial<RunOut>({ ...record, status: "paused_auth" })}
+        record={fromPartial<RunOut>({ ...record, status: "running" })}
       />,
       { wrapper: harness.wrapper },
     );
 
-    expect(
-      await screen.findByText("Sign in to Fixture vendor"),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/managed browser tab/)).toBeInTheDocument();
     // A live run shows the live agent and none of the stopped-run history.
     expect(
-      screen.getByRole("button", { name: "Send prompt" }),
+      await screen.findByRole("button", { name: "Send prompt" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/This terminal run is view-only/),
     ).not.toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: "I've signed in — resume run" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Stop run" }));
     await waitFor(() =>
       expect(operationCalls).toContainEqual({
         operation: "run.control",
-        input: { runId: "RUN-4K7M", action: "resume" },
+        input: { runId: "RUN-4K7M", action: "cancel" },
       }),
     );
   });
@@ -321,7 +303,6 @@ it("shows durable progress and diagnostics alongside photo group review", async 
     operations: [
       {
         operationId: "group-1",
-        browserTiming: null,
         kind: "commit_photo_group",
         state: "completed",
         startedAt: "2026-09-20T16:01:00.000Z",
@@ -345,7 +326,7 @@ it("shows durable progress and diagnostics alongside photo group review", async 
   expect(screen.queryByText("Run progress")).not.toBeInTheDocument();
   expect(screen.getByText("Timeline and system log")).toBeInTheDocument();
   expect(await screen.findByText("group-1")).toBeInTheDocument();
-  expect(screen.getByText("System and Mac log")).toBeInTheDocument();
+  expect(screen.getByText("System log")).toBeInTheDocument();
   expect(await screen.findByText("Work at a glance")).toBeInTheDocument();
   expect(
     screen.getByRole("region", { name: "Run step timing table" }),

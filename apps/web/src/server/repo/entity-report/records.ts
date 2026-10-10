@@ -382,6 +382,5 @@ export const recordRunsReport =
         };
       }),
       `No research run has been recorded for this ${kind}.`,
-      reportSlotActions[`${kind}.runs`],
     );
   };

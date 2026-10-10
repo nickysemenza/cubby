@@ -489,6 +489,18 @@ struct EntityDetailContent: View {
                     EntityRelationshipsSection(model: relationshipsModel, onAccepted: onRelationshipAccepted)
                 }
             }
+            let sources = row.sources
+            if !sources.isEmpty {
+                Section("Sources") {
+                    ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
+                        EntitySourceRow(
+                            label: source.fieldPath.map { descriptor.field($0)?.label ?? $0 } ?? "Record",
+                            supportsCurrentValue: source.fieldPath == nil ? nil : source.supportsCurrentValue,
+                            quote: source.quote, selectedVariant: source.selectedVariant, url: source.url,
+                            seenAt: source.observedAt ?? source.createdAt, runID: source.recorder.runId)
+                    }
+                }
+            }
             Section { RawRecordDisclosure(raw: row.raw) }
         }
         .formStyle(.grouped)

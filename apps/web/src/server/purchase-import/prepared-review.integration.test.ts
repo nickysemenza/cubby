@@ -9,7 +9,8 @@ import {
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { loadRunDetail, startOrResumeRun } from "./run-service";
+import { startImportRunFixture } from "./import-run.fixtures";
+import { loadRunDetail } from "./run-service";
 
 describe("immutable prepared purchase review", () => {
   const ctx = withTestDb();
@@ -32,7 +33,7 @@ describe("immutable prepared purchase review", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -128,7 +129,7 @@ describe("immutable prepared purchase review", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -148,19 +149,12 @@ describe("immutable prepared purchase review", () => {
       });
 
     const detail = await loadRunDetail(ctx.db, run.publicId);
-    expect(detail.targets).toHaveLength(2);
-    expect(detail.targets).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          targetType: "run",
-          targetName: "account_sync",
-        }),
-        expect.objectContaining({
-          targetType: "product",
-          targetShortcode: product.shortcode,
-          targetName: "Fixture Nasturtium",
-        }),
-      ]),
-    );
+    expect(detail.targets).toEqual([
+      expect.objectContaining({
+        targetType: "product",
+        targetShortcode: product.shortcode,
+        targetName: "Fixture Nasturtium",
+      }),
+    ]);
   });
 });

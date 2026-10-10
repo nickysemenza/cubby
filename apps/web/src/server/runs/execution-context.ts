@@ -36,7 +36,7 @@ const executionContext = z.object({
   executionAuthorization: executionAuthorizationRef.optional(),
 });
 
-export class ExecutionLimitError extends Error {
+class ExecutionLimitError extends Error {
   constructor(readonly reason: "candidate_limit" | "product_limit") {
     super(`Execution allowance refused: ${reason}.`);
     this.name = "ExecutionLimitError";

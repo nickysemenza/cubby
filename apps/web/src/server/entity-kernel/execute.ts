@@ -246,13 +246,17 @@ export async function executeEntity(
     }
 
     case "create": {
-      return ENTITY_KERNEL_OPERATIONS[command.entity].create(ctx, command.data);
+      return ENTITY_KERNEL_OPERATIONS[command.entity].create(ctx, {
+        data: command.data,
+        sources: command.sources,
+      });
     }
 
     case "update": {
       return ENTITY_KERNEL_OPERATIONS[command.entity].update(ctx, {
         id: command.id,
         data: command.data,
+        sources: command.sources,
       });
     }
 

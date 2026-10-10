@@ -276,8 +276,6 @@ public struct ReportPresentation: Hashable, Sendable {
             public var id: String { verb.rawValue }
             public let verb: SectionActionID
             public let label: String
-            /// `true` acts on the checked rows.
-            public let actsOnSelection: Bool
             public let disabledReason: String?
         }
 
@@ -298,20 +296,6 @@ public struct ReportPresentation: Hashable, Sendable {
                 empty: empty, actions: actions,
                 largeThumbnails: largeThumbnails, footer: footer, verbs: verbs, commands: commands,
                 form: form)
-        }
-
-        /// The checked keys the server still allows.
-        public func allowed(_ selection: Set<String>) -> Set<String> {
-            Set(rows.filter { $0.disabledReason == nil }.compactMap(\.key).filter(selection.contains))
-        }
-
-        /// `selection` with `key` flipped; a row the server refused is left alone.
-        public func toggled(_ selection: Set<String>, _ key: String) -> Set<String> {
-            guard let row = rows.first(where: { $0.key == key }), row.disabledReason == nil
-            else { return selection }
-            var next = selection
-            if next.contains(key) { next.remove(key) } else { next.insert(key) }
-            return next
         }
     }
 
@@ -464,8 +448,7 @@ public struct ReportPresentation: Hashable, Sendable {
                     verbs: (records.verbs ?? []).compactMap { verb in
                         SectionActionID(rawValue: verb.id.rawValue).map {
                             Records.Verb(
-                                verb: $0, label: verb.label, actsOnSelection: verb.scope == .selection,
-                                disabledReason: verb.disabledReason)
+                                verb: $0, label: verb.label, disabledReason: verb.disabledReason)
                         }
                     },
                     commands: records.commands ?? [],

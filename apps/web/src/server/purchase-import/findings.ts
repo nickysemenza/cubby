@@ -43,25 +43,17 @@ import {
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { assertClassificationPolicies } from "~/server/repo/classification-field-policy";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
-import { databaseForTransaction } from "~/server/repo/database-helpers";
-import { runAfterCommit } from "~/server/repo/database-helpers/core";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { validateProductPolicy } from "~/server/repo/inheritance-validation";
 import { cents } from "~/server/repo/money";
 import { cascadeRemoval } from "~/server/repo/removal/core";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
-import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 
 import {
   aggregateReplacementApprovalFingerprint,
   loadAggregateReplacementSnapshot,
   redistributeReplacementAttributions,
 } from "./aggregate-replacement";
-import { applyPurchaseValidationFinding } from "./purchase-validation-research";
-import type { ResearchEvidenceReader } from "./research-evidence";
-import { applyResearchFieldCorrection } from "./research-field-corrections";
-import { applyVendorCaptureProfile } from "./research-vendor-profile";
 import {
   existingExpenses,
   resolveLineProduct,
@@ -145,15 +137,10 @@ const assertFixTargetsFinding = (
   fix: ProposedImportFix,
 ) => {
   const targetMatches =
-    fix.kind === "vendor_capture_profile"
-      ? finding.entityKind === "run" && finding.entityId === fix.runId
-      : fix.kind === "research_field_correction"
-        ? finding.entityKind === "product" && finding.entityId === fix.productId
-        : fix.kind === "relink_product"
-          ? finding.entityKind === "expense" &&
-            finding.entityId === fix.expenseId
-          : finding.entityKind === "purchase" &&
-            finding.entityId === fix.purchaseId;
+    fix.kind === "relink_product"
+      ? finding.entityKind === "expense" && finding.entityId === fix.expenseId
+      : finding.entityKind === "purchase" &&
+        finding.entityId === fix.purchaseId;
   if (!targetMatches) {
     throw new Error(
       "The proposed fix no longer targets the finding's original record.",
@@ -503,8 +490,6 @@ export async function resolveRunFinding(
   db: Database,
   rawInput: ResolveRunFindingInput,
   actor: ActorContext,
-  recipeCosting?: RecipeCostingService,
-  readEvidence?: ResearchEvidenceReader,
 ) {
   const input = resolveRunFindingInput.parse(rawInput);
   return withTransaction(db, async (tx) => {
@@ -575,47 +560,7 @@ export async function resolveRunFinding(
           "Review the current replacement preview before applying it.",
         );
       assertFixTargetsFinding(finding, fix);
-      if (fix.kind === "vendor_capture_profile") {
-        await applyVendorCaptureProfile(
-          tx,
-          actor,
-          finding,
-          fix,
-          input.reviewedFingerprint,
-          readEvidence,
-        );
-      } else if (fix.kind === "research_field_correction") {
-        await applyResearchFieldCorrection(
-          tx,
-          actor,
-          finding,
-          fix,
-          input.reviewedFingerprint,
-          recipeCosting && {
-            recomputeForIngredients: (_db, ids) =>
-              recipeCosting.recomputeForIngredients(ids, {
-                source: "product.research",
-              }),
-          },
-        );
-      } else if (fix.kind === "validation_corrections") {
-        const applied = await applyPurchaseValidationFinding(
-          databaseForTransaction(tx),
-          actor,
-          { ...finding, runId: runEntityId.nullable().parse(finding.runId) },
-          fix,
-          input.reviewedFingerprint,
-        );
-        if (recipeCosting)
-          await runAfterCommit(databaseForTransaction(tx), (committedDb) =>
-            recomputeRecipesForPriceAffectedProducts(
-              committedDb,
-              recipeCosting,
-              applied.priceAffectedProductIds,
-              "problems.resolve_validation_finding",
-            ).then(() => undefined),
-          );
-      } else {
+      {
         await assertRunProvenance(tx, finding);
         await applyFix(tx, fix, actor, finding.ledgerPartyId, finding.runId);
       }

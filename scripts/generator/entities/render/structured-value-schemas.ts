@@ -27,7 +27,7 @@ type Field = CompiledEntity["fieldModel"]["fields"][number];
 /**
  * The structured editor's schema description for a field whose renderer draws from one, derived
  * from the input schema a client sends (`update`, else `create`: a create-only field such as a
- * meal's `recipes` has no update input). Null for every other field.
+ * meal's `recipes` has no update input; a collection field's full value). Null for every other field.
  */
 export const valueSchemaForField = (
   entity: string,
@@ -36,7 +36,12 @@ export const valueSchemaForField = (
   entityForPrefix: EntityForPrefix,
 ): ValueSchemaJSON | null => {
   if (!drawsFromValueSchema(entity, field)) return null;
-  const input = field.validation.update ?? field.validation.create;
+  // A collection field's update input also accepts patch items; the editor
+  // always sends the full value, which its create input describes.
+  const input =
+    field.collection && field.validation.create
+      ? field.validation.create
+      : (field.validation.update ?? field.validation.create);
   if (input === null || input === undefined)
     throw new Error(
       `${where}: a structured renderer needs a create or update input schema.`,

@@ -14,7 +14,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { preparePurchaseImport } from "./import-orders";
-import { startOrResumeRun } from "./run-service";
+import { startImportRunFixture } from "./import-run.fixtures";
 import {
   loadImportSourceFamilyOrders,
   readImportSourceClaimFamily,
@@ -48,7 +48,7 @@ describe("canonical source claim families", () => {
       ledgerPartyId: party.id,
       vendorId: vendor.id,
     });
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",

@@ -1,4 +1,7 @@
-import type { MailboxClassification } from "@cubby/schemas/mailbox-research";
+import type {
+  MailboxClassification,
+  MailboxClassificationDecision,
+} from "@cubby/schemas/mailbox-research";
 
 import type {
   GmailMessage,
@@ -30,15 +33,19 @@ export const gmailOriginalComplete = (
     normalized.attachments.length,
   ) && !(raw.payload && incompletePart(raw.payload));
 
-/** Content exists only during this call; uncertain bytes belong to the capable researcher. */
+/** Content exists only during this call; uncertain bytes belong to the relevance model. */
 export async function routeGmailMessage(
   raw: GmailMessage,
   normalized: GmailNormalizedMessage,
   choose: MailTriage,
-): Promise<MailboxClassification> {
+): Promise<MailboxClassificationDecision> {
   const body = normalized.mail.bodyText || normalized.mail.bodyHtml;
   if (!body?.trim() || (raw.payload && incompletePart(raw.payload)))
-    return "uncertain";
+    return {
+      classification: "uncertain",
+      stage: "rule",
+      reason: "The message body is empty or incomplete",
+    };
   const content = JSON.stringify({
     headers: normalized.mail.headers,
     body,
@@ -49,9 +56,22 @@ export async function routeGmailMessage(
     })),
   });
   // Jev's envelope has its own stricter check. Never truncate into a negative verdict.
-  if (new TextEncoder().encode(content).byteLength > 12_000) return "uncertain";
+  if (new TextEncoder().encode(content).byteLength > 12_000)
+    return {
+      classification: "uncertain",
+      stage: "rule",
+      reason: "The message is too large for Jev",
+    };
   const choice = await choose(content);
-  return choice === "unrelated" && normalized.attachments.length
-    ? "uncertain"
-    : choice;
+  if (choice === "unrelated" && normalized.attachments.length)
+    return {
+      classification: "uncertain",
+      stage: "rule",
+      reason: "Jev said unrelated, but attachments need a closer read",
+    };
+  return {
+    classification: choice,
+    stage: "jev",
+    reason: `Jev classified the message ${choice}`,
+  };
 }

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   deleteProducts,
   getProductByID,
-  patchProductExternalIds,
+  updateProduct,
 } from "~/server/repo/product/crud";
 import { findProductByGtin } from "~/server/repo/product/lookup";
 import {
@@ -52,16 +52,18 @@ describe("product identity constraints", () => {
         products.map((product) => product.id),
       ),
     ).toEqual([[linked.id], [linked.id], []]);
-    await patchProductExternalIds(
+    await updateProduct(
       ctx.db,
       linked.entityId,
       {
-        upsert: [],
-        remove: [
+        externalIds: [
           {
-            source: "gtin",
-            kind: "gtin_14",
-            expectedExternalId: "00012345678905",
+            op: "remove",
+            key: {
+              source: "gtin",
+              kind: "gtin_14",
+              externalId: "00012345678905",
+            },
           },
         ],
       },

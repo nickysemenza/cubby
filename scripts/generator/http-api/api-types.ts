@@ -80,9 +80,8 @@ const reachableComponents = (
   document: OpenApiDocument,
   components: Readonly<Record<string, JsonSchema>>,
   nativeOperationIds: ReadonlySet<string>,
-  additionalRoots: readonly string[] = [],
 ): Set<string> => {
-  const roots = new Set<string>(additionalRoots);
+  const roots = new Set<string>();
   for (const item of Object.values(document.paths)) {
     for (const [method, raw] of Object.entries(item)) {
       if (!httpVerbs.has(method)) continue;
@@ -136,13 +135,11 @@ export const renderApiTypes = (
   components: Readonly<Record<string, JsonSchema>>,
   nativeOperationIds: ReadonlySet<string>,
   entityOutputs: EntityOutputs,
-  additionalRoots: readonly string[] = [],
 ): EntityArtifacts => {
   const reachable = reachableComponents(
     document,
     components,
     nativeOperationIds,
-    additionalRoots,
   );
   const aliased = [...reachable]
     .filter(

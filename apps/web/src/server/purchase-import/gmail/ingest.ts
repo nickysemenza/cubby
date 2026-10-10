@@ -3,6 +3,7 @@ import {
   MAILBOX_RESEARCH_VERSION,
   mailboxClassification,
   type MailboxClassification,
+  type MailboxClassificationDecision,
 } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
 
@@ -149,14 +150,46 @@ const retainResearchOriginal = (
   classification: MailboxClassification,
   normalized: GmailNormalizedMessage,
   transientAttachments: ReadonlyMap<string, string>,
+  callerJudges = false,
 ) =>
   classification === "related" ||
   (classification === "uncertain" &&
     Boolean(
       normalized.mail.bodyText?.trim() ||
       normalized.mail.bodyHtml?.trim() ||
-      transientAttachments.size,
+      transientAttachments.size ||
+      // The caller reads an attachment-only candidate's retained bytes.
+      (callerJudges && normalized.attachments.length),
     ));
+
+/**
+ * The classification and why: an unchanged message keeps its recorded verdict;
+ * otherwise rules and Jev decide, and the relevance model settles uncertainty.
+ */
+async function classifyMessage(
+  prior: Awaited<ReturnType<typeof readMailboxMessage>>,
+  route: () => Promise<MailboxClassificationDecision>,
+  relevance: (() => ReturnType<typeof interpretMailRelevance>) | null,
+): Promise<MailboxClassificationDecision> {
+  const decision: MailboxClassificationDecision = prior
+    ? {
+        classification: mailboxClassification.parse(prior.classification),
+        stage: prior.classificationStage ?? "rule",
+        reason:
+          prior.classificationReason ??
+          "Unchanged since its last classification",
+      }
+    : await route();
+  if (decision.classification !== "uncertain" || !relevance) return decision;
+  const settled = await relevance();
+  return {
+    classification: settled.classification,
+    stage: "model",
+    reason:
+      settled.reason ??
+      `The relevance model classified the message ${settled.classification}`,
+  };
+}
 
 async function acquireEligible(
   db: Database,
@@ -185,22 +218,42 @@ async function acquireEligible(
       ? { kind: "skipped" }
       : { kind: "saved", orderMailId: prior.orderMailId };
   const ports = routingPorts(db, input);
-  let classification = unchanged
-    ? mailboxClassification.parse(prior?.classification)
-    : await routeGmailMessage(message, normalized, ports.triage);
   const transientAttachments = new Map<string, string>();
-  if (classification === "uncertain")
-    classification = (
-      await interpretMailRelevance(
-        provider,
-        normalized,
-        ports.relevance,
-        gmailOriginalComplete(message, normalized),
-        (sourceKey, encoded) => transientAttachments.set(sourceKey, encoded),
-      )
-    ).classification;
+  // A member's own search has no Run to bill: past Spam/Trash, every message
+  // is a candidate the caller settles through `mail.resolve`.
+  const decision = await classifyMessage(
+    unchanged ? prior : null,
+    input.callerJudges
+      ? async () => ({
+          classification: "uncertain",
+          stage: "rule",
+          reason: "Found by a member's search; the caller decides",
+        })
+      : () => routeGmailMessage(message, normalized, ports.triage),
+    input.callerJudges
+      ? null
+      : () =>
+          interpretMailRelevance(
+            provider,
+            normalized,
+            ports.relevance,
+            gmailOriginalComplete(message, normalized),
+            (sourceKey, encoded) =>
+              transientAttachments.set(sourceKey, encoded),
+          ),
+  );
+  const { classification } = decision;
+  const recorded = {
+    classificationStage: decision.stage,
+    classificationReason: decision.reason,
+  };
   if (
-    !retainResearchOriginal(classification, normalized, transientAttachments)
+    !retainResearchOriginal(
+      classification,
+      normalized,
+      transientAttachments,
+      input.callerJudges,
+    )
   ) {
     const protectedOriginal = await clearUnrelatedOriginal(
       db,
@@ -225,6 +278,7 @@ async function acquireEligible(
     const status = classification === "unrelated" ? "completed" : "blocked";
     await saveMailboxMessage(db, {
       ...identity,
+      ...recorded,
       checksum,
       classification,
       status,
@@ -234,6 +288,7 @@ async function acquireEligible(
   // Upload interruption remains pending, so replay finishes bytes before research dispatch.
   await saveMailboxMessage(db, {
     ...identity,
+    ...recorded,
     checksum,
     classification,
     status: "pending",
@@ -250,6 +305,7 @@ async function acquireEligible(
   );
   await saveMailboxMessage(db, {
     ...identity,
+    ...recorded,
     checksum,
     classification,
     status: "pending",
@@ -269,6 +325,8 @@ export async function ingestGmailMessages(
     triage?: MailTriage;
     relevance?: MailRelevance;
     runId?: string;
+    /** Rules only, no paid classification: the caller judges each message. */
+    callerJudges?: boolean;
     storage?: OrderMailAttachmentStorage;
     onMessage?: (handled: number) => Promise<void>;
   },

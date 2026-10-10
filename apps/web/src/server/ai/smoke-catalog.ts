@@ -14,7 +14,6 @@ import {
   PRODUCT_IDENTIFICATION_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
-  RESEARCH_SUPPORT_FEATURE,
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
@@ -124,12 +123,7 @@ export const AI_SMOKE_CASES = {
     description: "Interpret purchase relevance from synthetic original mail",
     group: "Purchase research",
   },
-  researchSourceSupport: {
-    feature: RESEARCH_SUPPORT_FEATURE,
-    label: "Research source support",
-    description: "Assess proposed facts against synthetic retained originals",
-    group: "Purchase research",
-  },
+
   purchaseProductIdentity: {
     feature: PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
     label: "Product identity",

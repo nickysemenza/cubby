@@ -84,15 +84,17 @@ pnpm test:e2e label-nutrition-review.spec.ts
 
 Playwright's standalone command uses the built web app, so build it after web
 source changes. See [validation policy](validation.md) for test tiers and the
-GitHub merge gate.
+exact-head GitHub merge gate.
 
 ## Available native input checks
 
 These commands exercise authored native file-selection and review scenarios.
-The one Mac import journey arrives CSV, then photo, then retailer receipt; it
-passed at clean `f3daf8676` in 96.0 seconds, reusing the native app after source
-and binary fingerprint checks, with 439 verified checksums, a matching build,
-and passing final graph assertions.
+Both Mac `csv,photo,receipt` and `receipt,photo,csv` cases passed at clean
+`f3daf8676`, in 96.0 and 97.5 seconds respectively; both runs reuse the native app
+after source and binary fingerprint checks. Their sealed artifacts have 439 and
+464 verified checksums, matching builds, and passing final graph assertions.
+Receipt-first classification uses the Expense editor and explicit Save because
+settlement links preserve existing receipt classifications.
 
 The iOS 27 `--input-journey` passed at clean `877c35e22` in 308.0 seconds with a
 matching build and 14 verified checksums. It selects a real Files CSV, reviews
@@ -104,20 +106,19 @@ prepared SDK session and state directory. The Files navigation flow handles the
 two captured OS starting states; the review tap uses the captured visible
 button because the sheet Toolbar's AX bounds span the whole sheet.
 
-All 24 evidence-arrival orders belong to
-`import-order-convergence.integration.test.ts`; the Mac journey proves the
-native surfaces, not the order matrix. Live external model/provider quality and
-physical-device background scheduling remain separate. Run on an unlocked host
-and retain a sealed artifact.
+These two Mac cases do not establish all six arrival orders. Live external
+model/provider quality and physical-device background scheduling remain
+separate. Run on an unlocked host and retain a sealed artifact.
 
 ```sh
 pnpm test:e2e:sim -- --input-journey
-pnpm --dir apps/web exec tsx tooling/mac-import-e2e.ts
 ```
 
 The simulator scenario uses native CSV intake and photo review controls. The Mac
-journey composes CSV, photo, and retailer receipt input. See
-[Mac import checks](../../apps/web/tooling/mac-import-e2e.md) for fixture
+arrival-order scenarios that composed retailer browser capture were retired with
+the Mac browser bridge ([ADR 0008](../adr/0008-mail-import-unattended-burn-down-interactive.md));
+the backend arrival-order matrix still covers that logic, without a Mac UI run.
+See [Mac import checks](../../apps/web/tooling/mac-import-e2e.md) for fixture
 signing, host requirements, and artifact boundaries.
 
 The interactive CSV/photo journey can also run on the dedicated hosted simulator

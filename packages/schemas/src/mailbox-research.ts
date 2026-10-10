@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { purchaseShortcode } from "./identifier-fields";
 import { executionAuthorizationRef } from "./execution-authorization.js";
-import { acceptedResearchFact } from "./research-facts";
-import { researchAssessment } from "./research-assessment";
 
 export const MAILBOX_RESEARCH_VERSION = "2026-10-07.1";
 export const mailboxClassification = z.enum([
@@ -11,6 +9,22 @@ export const mailboxClassification = z.enum([
   "uncertain",
 ]);
 export type MailboxClassification = z.infer<typeof mailboxClassification>;
+/** Which step decided a classification: a deterministic rule, Jev, the relevance model, or an Email resolution. */
+export const mailboxClassificationStage = z.enum([
+  "rule",
+  "jev",
+  "model",
+  "resolution",
+]);
+export type MailboxClassificationStage = z.infer<
+  typeof mailboxClassificationStage
+>;
+/** A classification and why it was reached. */
+export type MailboxClassificationDecision = {
+  classification: MailboxClassification;
+  stage: MailboxClassificationStage;
+  reason: string;
+};
 export const mailboxDiscoveryStartOutput = z.object({
   started: z.number().int().nonnegative(),
   running: z.number().int().nonnegative(),
@@ -105,28 +119,6 @@ export const retainedMailContent = z.object({
 });
 export type RetainedMailContent = z.infer<typeof retainedMailContent>;
 
-/** Import resolution is shared by retained mail, browser originals, and validation. */
-export const researchImportResult = z.object({
-  status: z.enum([
-    "verified",
-    "partially_verified",
-    "researched_with_gaps",
-    "ambiguous",
-    "temporarily_blocked",
-    "no_source_found",
-    "unrelated",
-  ]),
-  purchaseIds: z.array(z.uuid()),
-  productIds: z.array(z.uuid()),
-  eventIds: z.array(z.uuid()),
-  retirement: z.object({ receiptId: z.uuid() }).nullable().default(null),
-  proposedOrders: z.array(z.json()).default([]),
-  proposedLinks: z.array(z.json()).default([]),
-  proposedFacts: z.array(acceptedResearchFact).default([]),
-  refusals: researchAssessment.shape.rejected.default([]),
-});
-export type ResearchImportResult = z.infer<typeof researchImportResult>;
-
 /** Lifecycle event an Email records about a Purchase. */
 export const mailEvent = z.enum([
   "confirmation",
@@ -202,10 +194,10 @@ export const mailResolveDisposition = z.discriminatedUnion("kind", [
       "Not about a purchase. Cubby deletes its retained copy unless a reviewed decision or import already uses it.",
     ),
 ]);
-export type MailResolveDisposition = z.infer<typeof mailResolveDisposition>;
-
 export const mailResolveInput = mailMessageRef.extend({
-  checksum: sha256.describe("The checksum mail.read returned for this Email."),
+  checksum: sha256.describe(
+    "The checksum imports_read.mail returned for this Email.",
+  ),
   disposition: mailResolveDisposition,
 });
 export type MailResolveInput = z.infer<typeof mailResolveInput>;
@@ -215,4 +207,48 @@ export const mailResolveOut = mailMessageRef.extend({
   disposition: z.enum(["linked", "unresolved", "unrelated"]),
   purchaseId: purchaseShortcode.nullable(),
 });
-export type MailResolveOut = z.infer<typeof mailResolveOut>;
+export const MAIL_ATTACHMENT_MAX_BYTES = 3 * 1024 * 1024;
+/** A retained attachment's original bytes, read through `mail.read`. */
+export const mailAttachmentOriginal = z.strictObject({
+  attachmentId: z.string().min(1).max(200),
+  filename: z.string().max(1_000),
+  mimeType: z.string().regex(/^(?:application\/pdf|image\/[A-Za-z0-9.+-]+)$/u),
+  checksum: z.string().regex(/^[a-f0-9]{64}$/u),
+  dataBase64: z.string().max(Math.ceil(MAIL_ATTACHMENT_MAX_BYTES / 3) * 4),
+});
+export type MailAttachmentOriginal = z.infer<typeof mailAttachmentOriginal>;
+
+export const mailReadOut = mailMessageRef.extend({
+  threadId: z.string().nullable(),
+  checksum: sha256,
+  sender: z.string(),
+  subject: z.string(),
+  receivedAt: z.iso.datetime().nullable(),
+  content: retainedMailContent,
+  attachments: z.array(
+    z.object({
+      attachmentId: z.string(),
+      filename: z.string(),
+      mimeType: z.string(),
+      checksum: z.string(),
+    }),
+  ),
+  originalAttachment: mailAttachmentOriginal.optional(),
+  /** True when Pi reads an Email its Mail import Run admitted. */
+  boundToRun: z.boolean(),
+});
+export const mailSearchOut = z.object({
+  status: z.enum(["ok", "mailbox_required", "gmail_reconnect_required"]),
+  mailboxes: z.array(z.string()),
+  messages: z.array(
+    mailMessageRef.extend({
+      threadId: z.string().nullable(),
+      classification: mailboxClassification,
+      status: mailboxMessageStatus,
+      sender: z.string(),
+      subject: z.string(),
+      receivedAt: z.iso.datetime().nullable(),
+    }),
+  ),
+  nextPageToken: z.string().nullable(),
+});

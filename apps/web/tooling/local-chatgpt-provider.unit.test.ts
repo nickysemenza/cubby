@@ -346,59 +346,6 @@ it("preserves pi assistant replay phase through the actual public SDK serializer
   });
 });
 
-it("requires a conservative output reservation for every subscription route", async () => {
-  const { default: peer } = await import("./research-eval-peer");
-  vi.stubGlobal("fetch", upstream);
-  upstream.mockResolvedValue(new Response("ok"));
-  const env = {
-    ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
-    AI_GATEWAY_API_KEY: "synthetic-unused",
-    GATEWAY_ENVIRONMENT: "development" as const,
-    SUBSCRIPTION_PROVIDER_URL: "http://127.0.0.1:43123",
-    ROLE: "researcher" as const,
-  };
-  const configure = (maxModelOutputTokens: number | undefined, tokens = 400) =>
-    peer.fetch(
-      new Request("https://eval.test/configure", {
-        method: "POST",
-        body: JSON.stringify({
-          model: "gpt-6-sol",
-          effort: "high",
-          limits: {
-            requests: 1,
-            tokens,
-            outputTokens: 16,
-            wallMs: 1_000,
-            maxModelOutputTokens,
-          },
-          sources: [],
-        }),
-      }),
-      env,
-      { waitUntil: () => undefined },
-    );
-  await expect(configure(undefined)).rejects.toThrow("catalog output bound");
-  await configure(500);
-  const send = () =>
-    peer.fetch(
-      new Request("https://eval.test/openai/responses", {
-        method: "POST",
-        body: JSON.stringify({ model: "gpt-6-sol", input: [], stream: true }),
-      }),
-      env,
-      { waitUntil: () => undefined },
-    );
-  expect((await send()).status).toBe(429);
-  expect(upstream).not.toHaveBeenCalled();
-  await configure(500, 1_000);
-  expect((await send()).status).toBe(200);
-  expect((await send()).status).toBe(429);
-  expect(upstream).toHaveBeenCalledTimes(1);
-  expect(String(upstream.mock.lastCall?.[0])).toBe(
-    "http://127.0.0.1:43123/responses",
-  );
-});
-
 it("records incomplete subscription streams as failed attempts without inventing usage", async () => {
   vi.stubGlobal("fetch", upstream);
   upstream.mockResolvedValue(

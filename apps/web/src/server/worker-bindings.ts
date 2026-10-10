@@ -13,7 +13,6 @@ import type { CalendarFeedDurableObjectRpc } from "./calendar/rpc";
 import type { DatabaseFreshnessRpc } from "./database-freshness/rpc";
 import type { ImageProcessingCompanionRpc } from "./image-processing/contracts";
 import type { PurchaseImportRunAgentRpc } from "./purchase-agent/environment";
-import type { PurchaseImportDurableObjectRpc } from "./purchase-import/rpc";
 import type { UsdaReleaseRpc } from "./usda-release/rpc";
 import type { WorkflowRunParams } from "./workflow-runs/contract";
 
@@ -27,8 +26,6 @@ export type CalendarFeedDurableObject = CalendarFeedDurableObjectRpc &
 export type DatabaseFreshnessDurableObject = DatabaseFreshnessRpc &
   Rpc.DurableObjectBranded;
 export type ImageProcessingDurableObject = ImageProcessingCompanionRpc &
-  Rpc.DurableObjectBranded;
-export type PurchaseImportDurableObject = PurchaseImportDurableObjectRpc &
   Rpc.DurableObjectBranded;
 export type PurchaseImportRunAgent = PurchaseImportRunAgentRpc &
   Rpc.DurableObjectBranded;

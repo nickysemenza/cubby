@@ -224,16 +224,6 @@ export const detailSlots = {
   },
   vendorAccount: {
     "order-mail": reportSlot<"vendorAccount">("vendorAccount.order-mail"),
-    sync: slot(() =>
-      import("~/app/vendors/account-sync").then((m) => ({
-        default: m.VendorAccountSync,
-      })),
-    ),
-    "charge-search": slot(() =>
-      import("~/app/vendors/charge-search").then((m) => ({
-        default: m.VendorAccountChargeSearch,
-      })),
-    ),
   },
   purchase: {
     "order-mail": reportSlot<"purchase">("purchase.order-mail"),
@@ -297,7 +287,6 @@ export const detailSlots = {
     "import-approvals": runReportSlot("import-approvals", isImportRun),
     "import-findings": runReportSlot("import-findings", isImportRun),
     "import-targets": runReportSlot("import-targets", isImportRun),
-    "import-evidence": runReportSlot("import-evidence", isImportRun),
     "import-prepared-orders": runReportSlot(
       "import-prepared-orders",
       isImportRun,

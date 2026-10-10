@@ -589,6 +589,20 @@ const buildMetadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
+      /**
+       * A collection field `entity.update` can patch item by item
+       * (`@cubby/schemas/entity-collection`). `key` names the item identity:
+       * `"value"` for a text array (the kernel applies the patch), or the
+       * identity fields of a record collection (the entity repository
+       * applies it, keeping its slot and uniqueness rules).
+       */
+      collection: z
+        .strictObject({
+          key: z.union([z.literal("value"), z.array(nonEmptyString()).min(1)]),
+        })
+        .nullable()
+        .optional()
+        .default(null),
       explanation: z
         .strictObject({
           ruleId: nonEmptyString(),

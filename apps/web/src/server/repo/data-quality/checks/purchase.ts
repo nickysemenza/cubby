@@ -142,8 +142,12 @@ export const purchaseChecks = defineEntityChecks({
       fingerprint: (t) => [expectation(t)],
     },
     purchase_itemization: {
-      expected: expectsDocument,
+      // A retained receipt or invoice is itemizable whatever the Vendor's
+      // policy: a member's receipt photo enters the Research queue this way.
+      expected: (t) => sql`(${expectsDocument(t)} OR ${hasPrimaryDocument(t)})`,
       missing: (t) => sql`NOT ${hasItemization(t)}`,
+      // Document presence is already part of the evidence fingerprint; the
+      // inputs stay unchanged so accepted exceptions do not reopen.
       fingerprint: (t) => [
         purchaseEvidenceFingerprintSql(getTableName(t)),
         hasItemization(t),

@@ -73,7 +73,7 @@ export default defineEntity({
         // controls and agent: the first questions about any run.
         { kind: "slot", id: "import-stats", title: "Counts" },
         { kind: "slot", id: "import-targets", title: "Targets and outcome" },
-        // Import runs (sync, mail import, validation, enrichment, file import) declare
+        // Import runs (mail import, photo inventory, file import) declare
         // their workflow as slots that each gate their own visibility. A live
         // run leads with progress and its agent; a stopped run carries the
         // same two after its evidence.
@@ -83,7 +83,6 @@ export default defineEntity({
         { kind: "slot", id: "import-purchases", title: "Purchases changed" },
         { kind: "slot", id: "import-approvals", title: "Approvals" },
         { kind: "slot", id: "import-findings", title: "Findings" },
-        { kind: "slot", id: "import-evidence", title: "Run evidence" },
         {
           kind: "slot",
           id: "import-prepared-orders",
@@ -92,7 +91,7 @@ export default defineEntity({
         { kind: "slot", id: "import-progress-stopped", title: "Run progress" },
         { kind: "slot", id: "import-agent-stopped", title: "Agent history" },
         { kind: "slot", id: "import-timeline", title: "Durable transcript" },
-        { kind: "slot", id: "import-debug-log", title: "System and Mac log" },
+        { kind: "slot", id: "import-debug-log", title: "System and agent log" },
         { kind: "slot", id: "photo-batch", title: "Photos", placement: "full" },
         { kind: "slot", id: "ai-usage", title: "AI usage" },
         { kind: "slot", id: "changes", title: "Changes" },
@@ -201,8 +200,8 @@ export default defineEntity({
           kind: "select",
           options: [
             { value: "running", label: "Running" },
-            { value: "paused_auth", label: "Sign-in needed" },
-            { value: "paused_offline", label: "Mac offline" },
+            { value: "paused_auth", label: "Agent authorization needed" },
+            { value: "paused_offline", label: "Paused offline (historical)" },
             { value: "paused_approval", label: "Awaiting approval" },
             { value: "needs_review", label: "Needs review" },
             { value: "completed", label: "Completed" },
@@ -320,6 +319,7 @@ export default defineEntity({
           kind: "select",
           options: [
             { value: "unrelated_source", label: "Unrelated source removed" },
+            { value: "settled", label: "Settled; transcript destroyed" },
           ],
         },
         display: { detail: true },
@@ -783,12 +783,12 @@ export default defineEntity({
           { value: "running", label: "Running", color: "var(--info)" },
           {
             value: "paused_auth",
-            label: "Sign-in needed",
+            label: "Agent authorization needed",
             color: "var(--warning)",
           },
           {
             value: "paused_offline",
-            label: "Mac offline",
+            label: "Paused offline (historical)",
             color: "var(--warning)",
           },
           {

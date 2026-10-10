@@ -5,6 +5,7 @@ import {
   MAILBOX_RESEARCH_VERSION,
   type MailboxCoverage,
   type MailboxClassification,
+  type MailboxClassificationStage,
   type MailboxMessageStatus,
 } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -157,6 +158,8 @@ export async function saveMailboxMessage(
     messageId: string;
     checksum: string;
     classification: MailboxClassification;
+    classificationStage?: MailboxClassificationStage;
+    classificationReason?: string;
     status: MailboxMessageStatus;
     orderMailId?: string | null;
   },
@@ -164,6 +167,8 @@ export async function saveMailboxMessage(
   const fields = {
     checksum: input.checksum,
     classification: input.classification,
+    classificationStage: input.classificationStage ?? null,
+    classificationReason: input.classificationReason ?? null,
     classificationVersion: MAILBOX_RESEARCH_VERSION,
     status: input.status,
     orderMailId: input.orderMailId ?? null,

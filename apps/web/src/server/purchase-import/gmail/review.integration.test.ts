@@ -1,7 +1,7 @@
 import { purchaseId } from "@cubby/schemas/identifiers";
 import { purchaseShortcode, SHORTCODE_CHARS } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 /**
  * Mail matching failure modes: an exact order can be dismissed, the dismissal
  * survives rereads, and a later explicit link replaces it without creating a
@@ -18,8 +18,6 @@ import {
   orderMailCandidateDecision,
   orderMailEvent,
   purchase as purchaseTable,
-  researchRetention,
-  runTarget,
   vendorAccount,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
@@ -50,7 +48,7 @@ describe("Vendor order mail review", () => {
         classificationVersion: "synthetic-classifier/v1",
         checksum: f.source.rawChecksum,
         status,
-        runId: f.receipt.runId,
+        runId: f.runId,
         updatedAt,
       });
       const result = await listVendorOrderMail(ctx.db, {
@@ -84,7 +82,7 @@ describe("Vendor order mail review", () => {
           classification: "uncertain",
           classificationVersion: "synthetic-classifier/v1",
           status: "blocked",
-          runId: f.receipt.runId,
+          runId: f.runId,
           updatedAt,
         },
         {
@@ -115,8 +113,8 @@ describe("Vendor order mail review", () => {
         kind: "mail_message",
         externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
         checksum: f.source.rawChecksum,
-        firstRunId: f.receipt.runId,
-        lastRunId: f.receipt.runId,
+        firstRunId: f.runId,
+        lastRunId: f.runId,
       })
       .returning();
     if (!claim) throw new Error("Synthetic accepted mail claim missing");
@@ -215,8 +213,8 @@ describe("Vendor order mail review", () => {
         kind: "mail_message",
         externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
         checksum: f.source.rawChecksum,
-        firstRunId: f.receipt.runId,
-        lastRunId: f.receipt.runId,
+        firstRunId: f.runId,
+        lastRunId: f.runId,
       })
       .returning();
     if (!claim) throw new Error("Synthetic multi-merchant source missing");
@@ -326,17 +324,6 @@ describe("Vendor order mail review", () => {
       })
       .returning();
     if (!source) throw new Error("Synthetic retained source missing");
-    const [target] = await getDb(ctx.db)
-      .insert(runTarget)
-      .values({
-        runId: scope.id,
-        entityKind: "run",
-        entityId: scope.id,
-        targetFingerprint: "synthetic-retention-target",
-        state: "needs_evidence",
-      })
-      .returning();
-    if (!target) throw new Error("Synthetic retained target missing");
     const [event] = await getDb(ctx.db)
       .insert(orderMailEvent)
       .values({
@@ -347,53 +334,14 @@ describe("Vendor order mail review", () => {
       })
       .returning();
     if (!event) throw new Error("Synthetic retained event missing");
-    const receipt = {
-      id: crypto.randomUUID(),
-      runId: scope.id,
-      workRef: target.id,
-      ledgerPartyId: party.id,
-      orderMailId: source.id,
-      mailboxId: source.mailboxId,
-      messageId: source.messageId,
-      checksum,
-      phase: "fenced" as const,
-      plan: {
-        originOperationId: "synthetic-retirement",
-        objectKeys: [],
-        screenshotRefs: [],
-        retiredRunIds: [scope.id],
-        successors: [],
-      },
-    };
     const decision = {
       eventId: event.id,
       purchaseId: purchase.shortcode,
       decision: "linked" as const,
       evidenceChecksum: checksum,
     };
-    return { source, event, purchase, vendor, receipt, decision };
+    return { source, event, purchase, vendor, decision, runId: scope.id };
   }
-
-  it("refuses a human link after the retention fence before object deletion", async () => {
-    const f = await retainedReviewFixture();
-    await getDb(ctx.db).insert(researchRetention).values(f.receipt);
-    await expect(
-      decideOrderMailCandidate(ctx.db, f.decision, ctx.actor),
-    ).rejects.toThrow(/permanently retired|unrelated_source/u);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(orderMailCandidateDecision)
-        .where(eq(orderMailCandidateDecision.eventId, f.event.id)),
-    ).toEqual([]);
-    expect(
-      await getDb(ctx.db).query.orderMail.findFirst({
-        where: eq(orderMail.id, f.source.id),
-      }),
-    ).toMatchObject({
-      content: { bodyText: "Synthetic original retained receipt" },
-    });
-  });
 
   it("links a member reviewed retained original without requiring a vendor hint", async () => {
     const f = await retainedReviewFixture();
@@ -418,56 +366,6 @@ describe("Vendor order mail review", () => {
       .from(orderMail)
       .where(eq(orderMail.id, f.source.id));
     expect(unchanged?.vendorId).toBeNull();
-  });
-
-  it("locks original mail before Purchase while a retirement fence is being committed", async () => {
-    const { source, event, purchase, receipt, decision } =
-      await retainedReviewFixture();
-    let link:
-      | Promise<Awaited<ReturnType<typeof decideOrderMailCandidate>>>
-      | undefined;
-    await withTransaction(ctx.db, async (tx) => {
-      await tx
-        .select()
-        .from(orderMail)
-        .where(eq(orderMail.id, source.id))
-        .for("update");
-      link = decideOrderMailCandidate(ctx.db, decision, ctx.actor);
-      link.catch(() => undefined);
-      await expect
-        .poll(
-          async () => {
-            const waiting = await getDb(ctx.db).execute(sql`
-          SELECT count(*)::int AS count FROM pg_stat_activity
-          WHERE datname = current_database() AND wait_event_type = 'Lock'
-            AND query LIKE '%"OrderMail"%'
-        `);
-            return waiting.rows[0]?.count;
-          },
-          { timeout: 1500 },
-        )
-        .toBe(1);
-      await tx
-        .select({ id: purchaseTable.id })
-        .from(purchaseTable)
-        .where(eq(purchaseTable.id, purchase.id))
-        .for("update", { noWait: true });
-      await tx.insert(researchRetention).values(receipt);
-    });
-    await expect(link).rejects.toThrow(/permanently retired|unrelated_source/u);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(orderMailCandidateDecision)
-        .where(eq(orderMailCandidateDecision.eventId, event.id)),
-    ).toEqual([]);
-    expect(
-      await getDb(ctx.db).query.orderMail.findFirst({
-        where: eq(orderMail.id, source.id),
-      }),
-    ).toMatchObject({
-      content: { bodyText: "Synthetic original retained receipt" },
-    });
   });
 
   it("keeps exact matches reviewable and honors a durable dismiss or link", async () => {

@@ -104,13 +104,12 @@ struct CollectionActionTests {
     @Test func aVerbIsOnlyOfferedOnTheEntitiesItsPlanNames() {
         #expect(HeroActionRunner.plan(for: .analyzeLocation, on: .location) != nil)
         #expect(HeroActionRunner.plan(for: .analyzeLocation, on: .product) == nil)
-        #expect(HeroActionRunner.plan(for: .validatePurchase, on: .purchase) != nil)
         #expect(HeroActionRunner.plan(for: .attachImage, on: .image) != nil)
     }
 
     @Test func onlyTheLabelReviewActsOnARow() throws {
         #expect(CollectionActionID.reviewLabelNutrition.scope == .row)
-        for action in [CollectionActionID.analyzeLocation, .attachImage, .validatePurchase] {
+        for action in [CollectionActionID.analyzeLocation, .attachImage] {
             #expect(action.scope == .section, "\(action)")
         }
         // A row action's body reads the tapped row; none of the section actions do.
@@ -299,133 +298,6 @@ struct CollectionActionTests {
         let other: JSONValue = ["source": "Package label IMG-5K7M · analysis 2026-02-02T00:00:00.000Z"]
         #expect(throws: Never.self) {
             try HeroActionRunner.detectedValue(in: Self.analyses, imageID: "IMG-4K7M", saved: other)
-        }
-    }
-
-    // MARK: - Launching a validation
-
-    @Test func productLaunchUsesItsSelectedTargetAndRetainedEvidence() throws {
-        let data = Data(
-            #"{"purpose":"product_enrichment","purchase":null,"products":[{"productId":"PRD-4K7M","productName":"Synthetic bag","selected":true,"sourceId":"synthetic-source","sourceLabel":"Original order","vendorAccountId":null,"vendorAccountLabel":null,"needsAccountChoice":false,"accountChoices":[],"reason":null}]}"#
-                .utf8)
-        let preview = try TargetedLaunchPreview(
-            JSONDecoder().decode(RunTargetedLaunchOutput.self, from: data))
-        #expect(preview.canStart)
-        #expect(preview.sources.map(\.id) == ["synthetic-source"])
-        #expect(preview.sources.first?.usable == true)
-        #expect(preview.sources.first?.isDefault == true)
-    }
-
-    nonisolated private static let launch = Data(
-        #"{"purpose":"purchase_validation","purchase":{"id":"PUR-4K7M","label":"Sample order","canValidate":true,"reason":null,"sources":[{"id":"src-a","label":"Email receipt","kind":"mail","fingerprint":null,"vendorAccountId":null,"vendorAccountLabel":"Sample Account","usable":true,"reason":null,"default":false},{"id":"src-b","label":"Statement","kind":"statement","fingerprint":null,"vendorAccountId":null,"vendorAccountLabel":null,"usable":true,"reason":null,"default":true},{"id":"src-c","label":"Old export","kind":"file","fingerprint":null,"vendorAccountId":null,"vendorAccountLabel":null,"usable":false,"reason":"expired","default":false}],"products":[]},"products":[]}"#
-            .utf8)
-    nonisolated private static let blocked = Data(
-        #"{"purpose":"purchase_validation","purchase":{"id":"PUR-4K7M","label":"Sample order","canValidate":false,"reason":"A run is already active.","sources":[],"products":[]},"products":[]}"#
-            .utf8)
-
-    @MainActor private func launchModel(_ preview: Data) throws -> (HeroActionModel, Recorder) {
-        let recorder = capture { request in
-            request.url?.path.hasSuffix("targetedLaunch") == true
-                ? (200, preview)
-                : (
-                    200,
-                    Data(
-                        #"{"runs":[{"created":true,"run":{"id":"RUN-4K7M","status":"queued","purpose":"purchase_validation","dispatchEventId":null},"blockingRun":null}]}"#
-                            .utf8)
-                )
-        }
-        let model = HeroActionModel(
-            plan: try plan(.validatePurchase, .purchase), entity: .purchase, row: Self.row("PUR-4K7M"),
-            runner: try makeRunner())
-        return (model, recorder)
-    }
-
-    @MainActor @Test func evidenceCanOnlyBeChosenFromWhatTheServerCanReplay() async throws {
-        let (model, recorder) = try launchModel(Self.launch)
-        // Unknown until the server answers.
-        #expect(!model.canSubmit)
-        await model.refreshPreview()
-        let query = try #require(recorder.requests.first?.query)
-        #expect(query.contains("purpose=purchase_validation") && query.contains("targetId=PUR-4K7M"))
-        // The unusable export is not offered, and the server's default is chosen for the person.
-        #expect(model.evidenceOptions.map(\.value) == ["src-a", "src-b"])
-        #expect(model.values["sourceId"] == "src-b")
-        #expect(model.advisory == nil)
-        await model.refreshPreview()
-        #expect(model.canSubmit)
-    }
-
-    @MainActor @Test func aValidationTheServerRefusesCannotBeSubmitted() async throws {
-        let (model, _) = try launchModel(Self.blocked)
-        await model.refreshPreview()
-        await model.refreshPreview()
-        #expect(model.advisory?.message == "A run is already active.")
-        // The server's words, as a neutral note rather than native's own warning.
-        #expect(model.advisory?.isDestructive == false)
-        #expect(!model.canSubmit)
-    }
-
-    nonisolated private static let noEvidence = Data(
-        #"{"purpose":"purchase_validation","purchase":{"id":"PUR-4K7M","label":"Sample order","canValidate":true,"reason":null,"sources":[],"products":[]},"products":[]}"#
-            .utf8)
-
-    @MainActor @Test func aPurchaseWithNoReplayableEvidenceCanStillSearchAutomatically() async throws {
-        let (model, recorder) = try launchModel(Self.noEvidence)
-        await model.refreshPreview()
-        await model.refreshPreview()
-        // The server allows no chosen source, so only `canValidate` gates the run.
-        #expect(model.evidenceOptions.isEmpty)
-        #expect(model.advisory == nil)
-        #expect(model.canSubmit)
-        model.submit(confirmed: false) { _ in }
-        while model.isRunning { await Task.yield() }
-        let start = try #require(recorder.requests.last { $0.path.hasSuffix("startTargeted") })
-        // `sourceId` is required and nullable: an absent key is rejected as invalid input.
-        #expect(start.body.keys.contains("sourceId") && start.body["sourceId"] == .null)
-        #expect(start.body["purchaseId"] == "PUR-4K7M")
-    }
-
-    @MainActor @Test func aFailedRunShowsTheServersMessage() async throws {
-        let (model, _) = try launchModel(Self.launch)
-        await model.refreshPreview()
-        await model.refreshPreview()
-        _ = capture { _ in
-            (400, Data(#"{"code":"BAD_REQUEST","message":"No evidence matched."}"#.utf8))
-        }
-        model.submit(confirmed: false) { _ in }
-        while model.isRunning { await Task.yield() }
-        #expect(model.errorMessage == "BAD_REQUEST: No evidence matched.")
-    }
-
-    @MainActor @Test func submittingStartsTheRunWithTheChosenSource() async throws {
-        let (model, recorder) = try launchModel(Self.launch)
-        await model.refreshPreview()
-        await model.refreshPreview()
-        model.setValue("sourceId", "src-a")
-        await model.refreshPreview()
-        let outcomes = Mutex<[HeroActionOutcome]>([])
-        model.submit(confirmed: false) { outcome in outcomes.withLock { $0.append(outcome) } }
-        while model.isRunning { await Task.yield() }
-        let start = try #require(recorder.requests.last { $0.path.hasSuffix("startTargeted") })
-        #expect(start.body["purpose"] == "purchase_validation")
-        #expect(start.body["purchaseId"] == "PUR-4K7M")
-        #expect(start.body["sourceId"] == "src-a")
-        #expect(outcomes.withLock { $0 } == [.completed("Validation started", changed: [.run, .purchase])])
-    }
-
-    @Test func aBusyAccountIsReportedNotCountedAsStarted() async throws {
-        _ = capture { _ in
-            (
-                200,
-                Data(
-                    #"{"runs":[{"created":false,"run":null,"blockingRun":{"id":"RUN-5K7M","status":"running"}}]}"#
-                        .utf8)
-            )
-        }
-        await #expect(throws: HeroActionError.self) {
-            try await makeRunner().perform(
-                try plan(.validatePurchase, .purchase), on: .purchase, row: Self.row("PUR-4K7M"),
-                values: ["sourceId": "src-a"], confirmed: false)
         }
     }
 }

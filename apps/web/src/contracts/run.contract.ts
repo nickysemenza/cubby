@@ -5,40 +5,21 @@ import {
   executionAuthorizationRequestedScope,
 } from "@cubby/schemas/execution-authorization";
 import {
-  anyShortcodeSchema,
   runShortcode,
   imageShortcode,
   productShortcode,
   purchaseShortcode,
-  vendorAccountShortcode,
 } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryStartOutput } from "@cubby/schemas/mailbox-research";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
-  retainedCaptureInterpretation,
   proposedImportFix,
-  browserObservation,
   confirmMerchantVendorRuleInput,
   commitPurchaseImportInput,
   commitPurchaseImportOut,
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
-import { purchaseImportDebugEventsRequest } from "@cubby/schemas/purchase-import-debug";
-import { acceptedResearchFact } from "@cubby/schemas/research";
-import {
-  syncPlanInput,
-  syncPlanOutput,
-  startSyncInput,
-  startSyncOutput,
-  runHistoryOut,
-  targetedImportPurpose,
-  targetedImportStartInput,
-  targetedImportStartOutput,
-  runOut,
-  type TargetedImportPurpose,
-  type TargetedImportStartInput,
-  type TargetedImportStartOutput,
-} from "@cubby/schemas/run";
+import { runHistoryOut, runOut } from "@cubby/schemas/run";
 import { runRestartInput } from "@cubby/schemas/run-fields";
 import {
   runControlAction,
@@ -90,14 +71,6 @@ const restartInputs = z.object({
     }),
   ),
 });
-
-const browserTiming = browserObservation
-  .pick({ durationMs: true })
-  .extend({
-    /** Distinct retained retry-operation links, not inferred attempts. */
-    retryCount: z.number().int().nonnegative(),
-  })
-  .nullable();
 
 /** The run work view. Private UUIDs and operation payloads never cross it. */
 const runDetail = z
@@ -160,7 +133,6 @@ const runDetail = z
         startedAt: z.iso.datetime(),
         completedAt: z.iso.datetime().nullable(),
         error: z.string().nullable(),
-        browserTiming,
       }),
     ),
     preparedOrders: z.array(
@@ -191,33 +163,6 @@ const runDetail = z
         warning: z.string().nullable(),
         diff: z.json().nullable(),
         completedAt: z.iso.datetime().nullable(),
-      }),
-    ),
-    evidence: z.array(
-      z.object({
-        id: z.string().min(1),
-        targetId: z.string().nullable(),
-        sourceKind: z.string().min(1),
-        title: z.string().optional(),
-        sourceURL: z.url().optional(),
-        capturedAt: z.iso.datetime().optional(),
-        mediaUrl: z.string().optional(),
-        previewUrl: z.string().optional(),
-        supportedFacts: z
-          .array(
-            acceptedResearchFact.pick({ fieldPath: true, value: true }).extend({
-              entityKind: runTargetEntityKind,
-              entityShortcode: anyShortcodeSchema([
-                runTargetEntityKind.enum.product,
-                ...runTargetEntityKind.options,
-              ]),
-            }),
-          )
-          .optional(),
-        filename: z.string().nullable(),
-        mediaType: z.string().nullable(),
-        checksum: z.string().nullable(),
-        createdAt: z.iso.datetime(),
       }),
     ),
     dispatch: z.object({
@@ -284,60 +229,6 @@ const merchantRules = z.object({
   vendors: z.array(z.object({ shortcode: z.string(), name: z.string() })),
 });
 
-export type { TargetedImportPurpose };
-
-const targetedImportSource = z.object({
-  id: z.string().min(1),
-  label: z.string().min(1),
-  kind: z.string().min(1),
-  fingerprint: z.string().nullable(),
-  vendorAccountId: vendorAccountShortcode.nullable(),
-  vendorAccountLabel: z.string().nullable(),
-  usable: z.boolean(),
-  reason: z.string().nullable(),
-  default: z.boolean(),
-});
-export type TargetedImportSource = z.infer<typeof targetedImportSource>;
-
-const targetedProductCandidate = z.object({
-  productId: z.string().min(1),
-  productName: z.string().min(1),
-  selected: z.boolean(),
-  sourceId: z.string().nullable(),
-  sourceLabel: z.string().nullable(),
-  vendorAccountId: vendorAccountShortcode.nullable(),
-  vendorAccountLabel: z.string().nullable(),
-  needsAccountChoice: z.boolean(),
-  accountChoices: z.array(
-    z.object({ id: vendorAccountShortcode, label: z.string().min(1) }),
-  ),
-  reason: z.string().nullable(),
-});
-export type TargetedProductCandidate = z.infer<typeof targetedProductCandidate>;
-
-const targetedImportLaunch = z.object({
-  purpose: targetedImportPurpose,
-  purchase: z
-    .object({
-      id: z.string().min(1),
-      label: z.string().min(1),
-      canValidate: z.boolean(),
-      reason: z.string().nullable(),
-      sources: z.array(targetedImportSource),
-      products: z.array(targetedProductCandidate),
-    })
-    .nullable(),
-  products: z.array(targetedProductCandidate),
-});
-export type TargetedImportLaunch = z.infer<typeof targetedImportLaunch>;
-
-// The input/output schemas themselves live in `@cubby/schemas/run` (see the
-// doc comment there): the OpenAPI generator only names a discriminated
-// union's members when the union is a named export of a scanned schema
-// module, and this operation is now HTTP-visible (not browser-only), so its
-// members must resolve to real components.
-export { type TargetedImportStartInput, type TargetedImportStartOutput };
-
 const runControlInput = z.object({
   runId: runShortcode,
   action: runControlAction,
@@ -356,13 +247,6 @@ const runControlOutput = z.object({
 });
 
 export const runContract = defineContract("run", {
-  browserDebugEvents: mutation({
-    native: "Report actor-owned Mac browser bridge diagnostic batches",
-    mcp: { omit: "device_protocol" },
-    input: purchaseImportDebugEventsRequest,
-    output: z.object({ accepted: z.number().int().nonnegative() }),
-    invalidates: ["runOnly"],
-  }),
   executionMailboxes: query({
     native: "Select a connected owned mailbox for an execution approval",
     mcp: { omit: "human_approval" },
@@ -389,18 +273,6 @@ export const runContract = defineContract("run", {
     input: executionAuthorizationRequestedScope.pick({ mailboxId: true }),
     output: mailboxDiscoveryStartOutput,
     invalidates: ["runOnly"],
-  }),
-  syncPlan: query({
-    native: "Preview each browser account sync before starting it",
-    input: syncPlanInput,
-    output: syncPlanOutput,
-    cache: { tags: [] },
-  }),
-  startSync: mutation({
-    native: "Start or resume one browser account sync or historical backfill",
-    input: startSyncInput,
-    output: startSyncOutput,
-    invalidates: ["runOnly", "vendor", "vendorAccountOnly"],
   }),
   workSnapshot: query({
     native: "Show durable live import progress in Apple apps",
@@ -463,11 +335,8 @@ export const runContract = defineContract("run", {
     cache: { tags: [["run"]] },
   }),
   work: query({
-    mcp: {
-      omit: "human_approval",
-      note: "A person reviews a validation run's targets and corrections",
-    },
-    native: "Review a purchase-validation run's targets and corrections",
+    mcp: { omit: "client_view" },
+    native: "Show one Run's targets, findings, operations and prepared orders",
     input: z.object({ runId: runShortcode }),
     output: runDetail,
     cache: { tags: [["run"]] },
@@ -507,15 +376,6 @@ export const runContract = defineContract("run", {
     }),
     invalidates: ["runOnly"],
   }),
-  rederiveCapture: mutation({
-    mcp: { omit: "operator_maintenance" },
-    input: z.object({
-      runId: runShortcode,
-      operationId: z.string().min(1).max(500),
-    }),
-    output: retainedCaptureInterpretation,
-    invalidates: ["runOnly"],
-  }),
   logs: query({
     mcp: { omit: "operator_maintenance" },
     input: z.object({ runId: runShortcode }),
@@ -524,21 +384,6 @@ export const runContract = defineContract("run", {
       truncated: z.boolean(),
     }),
     cache: { tags: [["run"]] },
-  }),
-  targetedLaunch: query({
-    native: "Replayable evidence for a targeted purchase-validation launch",
-    input: z.object({
-      purpose: targetedImportPurpose,
-      targetId: anyShortcodeSchema(["purchase", "product"]),
-    }),
-    output: targetedImportLaunch,
-    cache: { tags: [] },
-  }),
-  startTargeted: mutation({
-    native: "Launch a targeted purchase-validation or product-enrichment run",
-    input: targetedImportStartInput,
-    output: targetedImportStartOutput,
-    invalidates: ["runOnly"],
   }),
   /** The member's purchase-import agent OAuth grant. */
   agentConnection: query({

@@ -18,9 +18,6 @@ import {
   prepareMacFixtureApp,
 } from "./mac-fixture-identity";
 import { seedBaseWorld } from "./factories/base-world";
-import { createMacRetailerFixture } from "./mac-retailer-fixture";
-import type { createMacComposedScenario } from "./mac-import-composed-scenario";
-import type { createMacBrowserScenario } from "./mac-browser-import-scenario";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { scrubErrorMessage } from "../src/lib/error-diagnostics";
@@ -54,8 +51,8 @@ if ((flags.length && !productClarity) || process.platform !== "darwin")
 const replayFlags = productClarity ? ["--product-clarity"] : [];
 const scenarioTitle = productClarity
   ? "Actual sandboxed macOS Product explanations, financial relations and native table"
-  : "Actual Mac composed evidence arrival: CSV → photo → receipt";
-const fixtureVersion = 2;
+  : "Actual sandboxed macOS app statement CSV file import";
+const fixtureVersion = productClarity ? 2 : 1;
 const nonce = randomBytes(8).toString("hex");
 const databaseName = `cubby_sim_${nonce}`;
 const adminURL = "postgresql://postgres:password@localhost:55432/postgres";
@@ -88,12 +85,6 @@ const milestones = {
   previewObserved: false,
   savedObserved: false,
   databaseVerified: false,
-  browserFixturePrepared: false,
-  browserCaptureVerified: false,
-  nativeBookingReviewed: false,
-  nativePhotoApproved: false,
-  retailerCommitted: false,
-  composedGraphVerified: false,
   valuationExplanationObserved: false,
   productPurchaseEvidenceObserved: false,
   purchaseProductEvidenceObserved: false,
@@ -270,31 +261,6 @@ async function reuseNativeBuild(reuseManifest: string): Promise<void> {
   driver.evidence.push(evidence);
 }
 
-function composedCases() {
-  if (productClarity) return [];
-  return [
-    {
-      name: "Native reviewed Expense booking or settlement link",
-      milestone: milestones.nativeBookingReviewed,
-    },
-    {
-      name: "Native original photo intake, supplied external analysis and native approval",
-      milestone: milestones.nativePhotoApproved,
-    },
-    {
-      name: "Actual captured retailer prepare/commit and native replacement approval",
-      milestone: milestones.retailerCommitted,
-    },
-    {
-      name: "Exact canonical Product/Expense/Purchase/source/image/inventory graph",
-      milestone: milestones.composedGraphVerified,
-    },
-  ].map(({ name, milestone }) => ({
-    name,
-    status: milestone ? "passed" : "not-run",
-  }));
-}
-
 function saveArtifact(): void {
   const webBuild = readWebBuildProvenance(repoRoot);
   const actions = path.join(artifacts, "actions.jsonl");
@@ -362,19 +328,6 @@ function saveArtifact(): void {
             : "not-run",
         durationMs: Math.round(performance.now() - started),
       },
-      ...(productClarity
-        ? []
-        : [
-            {
-              name: "Actual Mac HTTPS retailer capture, sign-in and original run resume",
-              status: milestones.browserCaptureVerified
-                ? "passed"
-                : phase === "native-retailer-capture-and-resume"
-                  ? "failed"
-                  : "not-run",
-            },
-          ]),
-      ...composedCases(),
     ],
     evidence: [
       results,
@@ -503,34 +456,15 @@ async function finishFixtureLease(
 
 async function cleanupResources(input: {
   opened: boolean;
-  browserScenario:
-    | Awaited<ReturnType<typeof createMacBrowserScenario>>
-    | undefined;
-  retailer: Awaited<ReturnType<typeof createMacRetailerFixture>> | undefined;
   runtime: WorkerdRuntime | undefined;
   restoreEnvironment: () => void;
 }): Promise<void> {
-  const { opened, browserScenario, retailer, runtime, restoreEnvironment } =
-    input;
+  const { opened, runtime, restoreEnvironment } = input;
   if (opened)
     await driver.close().catch((error) => {
       retainCleanupFailure(error, "native adapter cleanup");
     });
   await cleanupNativeProcess();
-  await browserScenario?.close().catch((error) => {
-    retainCleanupFailure(error, "browser scenario cleanup");
-  });
-  if (browserScenario) driver.evidence.push(...browserScenario.evidence);
-  await retailer?.close().catch((error) => {
-    ownedProcessCleanupFailed = true;
-    retainCleanupFailure(error, "retailer process cleanup");
-  });
-  if (retailer) {
-    driver.evidence.push(
-      path.join(artifacts, "retailer/fixture.json"),
-      path.join(artifacts, "retailer/requests.json"),
-    );
-  }
   await runtime?.close().catch((error) => {
     retainCleanupFailure(error, "Worker runtime cleanup");
   });
@@ -553,7 +487,6 @@ function retainCleanupFailure(
 
 async function runNativeScenario(
   csv: () => Promise<void>,
-  composed: Awaited<ReturnType<typeof createMacComposedScenario>> | undefined,
   productFixture: { productId: string; purchaseId: string } | undefined,
 ): Promise<void> {
   if (productClarity && productFixture) {
@@ -702,10 +635,7 @@ async function runNativeScenario(
     await driver.click("id=browse.product.view.list");
     await driver.wait("role=popupbutton id=browse.product.view.list");
     milestones.entityTableObserved = true;
-  } else if (composed) {
-    await composed.run(csv);
-    milestones.composedGraphVerified = true;
-  }
+  } else await csv();
 }
 
 async function main(): Promise<void> {
@@ -716,15 +646,6 @@ async function main(): Promise<void> {
   let fixtureUIReady = false;
   let fixtureUserId = "";
   let productFixture: { productId: string; purchaseId: string } | undefined;
-  let retailer:
-    | Awaited<ReturnType<typeof createMacRetailerFixture>>
-    | undefined;
-  let browserScenario:
-    | Awaited<ReturnType<typeof createMacBrowserScenario>>
-    | undefined;
-  let composed:
-    | Awaited<ReturnType<typeof createMacComposedScenario>>
-    | undefined;
   let restoreEnvironment = () => {};
   let runtime: WorkerdRuntime | undefined;
   let fixtureLease: ReturnType<typeof acquireMacFixtureLease> | undefined;
@@ -743,7 +664,6 @@ async function main(): Promise<void> {
       JSON.stringify(
         {
           bundleID,
-          browserBundleID: "com.cubby.fixture.browser",
           certificateKind: "Developer ID Application",
           signingTeam,
           serializedHostLease: true,
@@ -850,10 +770,7 @@ async function main(): Promise<void> {
     }
     const { seedMacStatementAccount } =
       await import("./mac-import-prerequisites");
-    const statementAccountId = await seedMacStatementAccount(
-      databaseURL,
-      fixtureUserId,
-    );
+    await seedMacStatementAccount(databaseURL, fixtureUserId);
     if (productClarity) {
       const {
         seedSimulatorPhotoActor,
@@ -875,41 +792,6 @@ async function main(): Promise<void> {
       } finally {
         await pool.end();
       }
-    }
-    if (!productClarity) {
-      phase = "browser-fixture";
-      retailer = await createMacRetailerFixture(artifacts, nonce, {
-        identity: signingIdentity,
-        lease: fixtureLease,
-      });
-      const { createMacBrowserScenario } =
-        await import("./mac-browser-import-scenario");
-      browserScenario = await createMacBrowserScenario({
-        runtime,
-        userId: fixtureUserId,
-        artifacts,
-        repoRoot,
-        nonce,
-        retailer,
-      });
-      const { createMacComposedScenario } =
-        await import("./mac-import-composed-scenario");
-      composed = await createMacComposedScenario({
-        browser: browserScenario,
-        statementAccountId,
-        driver,
-        artifacts,
-        webRoot,
-        appPath: () => appPath,
-        onStage: (stage) => {
-          phase = stage;
-        },
-        onMilestone: (stage) => {
-          milestones[stage] = true;
-        },
-      });
-      await retailer.launch();
-      milestones.browserFixturePrepared = true;
     }
     phase = "native-build";
     sourceFingerprint = nativeSourceFingerprint();
@@ -942,25 +824,10 @@ async function main(): Promise<void> {
     }
     milestones.built = true;
     const entitlements = path.join(artifacts, "Cubby-e2e.entitlements");
-    let fixtureEntitlements = readFileSync(
+    const fixtureEntitlements = readFileSync(
       path.join(repoRoot, "apps/apple/App/macOS/Cubby.entitlements"),
       "utf8",
     );
-    if (retailer) {
-      fixtureEntitlements = fixtureEntitlements.replace(
-        /(<key>com\.apple\.security\.temporary-exception\.apple-events<\/key>\s*)<array>[\s\S]*?<\/array>/u,
-        `$1<array><string>${retailer.bundleID}</string></array>`,
-      );
-      const browserPath = `${retailer.appPath}/`
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;");
-      // Signature validation reads exactly the signed fixture browser, never a broad cache directory.
-      fixtureEntitlements = fixtureEntitlements.replace(
-        /<\/dict>\s*<\/plist>/u,
-        `<key>com.apple.security.temporary-exception.files.absolute-path.read-only</key><array><string>${browserPath}</string></array></dict></plist>`,
-      );
-    }
     writeFileSync(
       entitlements,
       fixtureEntitlements.replace(
@@ -991,11 +858,7 @@ async function main(): Promise<void> {
     );
     nativeProcessExpectation = {
       executable: path.join(appPath, "Contents/MacOS/Cubby"),
-      arguments: [
-        "--cubby-e2e-server",
-        url.origin,
-        ...(retailer ? ["--cubby-e2e-browser-bundle", retailer.bundleID] : []),
-      ],
+      arguments: ["--cubby-e2e-server", url.origin],
     };
     opened = true;
     await run("open", [
@@ -1112,7 +975,7 @@ async function main(): Promise<void> {
         await checkPool.end();
       }
     }
-    await runNativeScenario(csv, composed, productFixture);
+    await runNativeScenario(csv, productFixture);
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
     if (fixtureUIReady) await driver.screenshot("failure").catch(() => {});
@@ -1122,8 +985,6 @@ async function main(): Promise<void> {
     try {
       await cleanupResources({
         opened,
-        browserScenario,
-        retailer,
         runtime,
         restoreEnvironment,
       });

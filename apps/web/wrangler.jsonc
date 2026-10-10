@@ -87,10 +87,6 @@
         "class_name": "CalendarFeedDurableObject"
       },
       {
-        "name": "PURCHASE_IMPORT",
-        "class_name": "PurchaseImportDurableObject"
-      },
-      {
         "name": "IMAGE_PROCESSING",
         "class_name": "ImageProcessingDurableObject"
       },
@@ -130,9 +126,11 @@
       "type": "durable-object",
       "storage": "sqlite"
     },
+    // The retired Mac browser bridge broker (ADR 0008): the tombstone deletes
+    // its namespace and stored commands. Remove once a deploy reports it stale.
     "PurchaseImportDurableObject": {
       "type": "durable-object",
-      "storage": "sqlite"
+      "state": "deleted"
     },
     "ImageProcessingDurableObject": {
       "type": "durable-object",

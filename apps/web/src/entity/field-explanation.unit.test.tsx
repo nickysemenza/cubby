@@ -1,6 +1,6 @@
 import type { FieldExplanationVerification } from "@cubby/schemas/field-explanation";
+import { runShortcode } from "@cubby/schemas/identifiers";
 import { render, screen } from "@testing-library/react";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -40,99 +40,46 @@ it("keeps shortcode-shaped retailer identifiers literal while linking source rec
   ).toHaveAttribute("href", "/vendors/VEN-4K7M");
 });
 
-// A collection's proof must identify its own live operand, rather than merely repeat the rationale.
-it("shows verified collection values and image sources without exposing byte identity", () => {
-  const verification = (
+// An overwritten value's Source stays visible as history rather than vanishing or reading as current.
+it("shows each field Source with whether it still supports the current value", () => {
+  const source = (
     key: string,
-    fieldPath: string,
-    value: FieldExplanationVerification["value"],
-  ) =>
-    fromPartial<FieldExplanationVerification>({
-      key,
-      fieldPath,
-      value,
-      run: { entityKind: "run", entityId: "RUN-4K7M" },
-      subject: { entityKind: "product", entityId: "PRD-4K7M" },
-      verifiedAt: "2026-10-07T16:00:00.000Z",
-      supportRetiredAt: null,
-      support: {
-        observation: "The selected blue variant lists SKU BLUE-42.",
-        reasoning: "The retained selection matches the ordered blue variant.",
-      },
-      source: {
-        label: "Fixture maker",
-        url: "https://maker.example.test/blue",
-        kind: "web_page",
-      },
-    });
+    supportsCurrentValue: boolean,
+    quote: string,
+  ): FieldExplanationVerification => ({
+    key,
+    fieldPath: "model",
+    url: `https://maker.example.test/${key}`,
+    quote,
+    selectedVariant: key === "current" ? "Blue, 42" : null,
+    supportsCurrentValue,
+    recorder: {
+      channel: "mcp",
+      oauthClientId: null,
+      runId: key === "current" ? runShortcode.parse("RUN-4K7M") : null,
+      deviceId: null,
+    },
+    observedAt: null,
+    createdAt: "2026-10-07T16:00:00.000Z",
+  });
   render(
     <FieldVerificationEvidence
       verifications={[
-        verification("sku", "externalIds.i11111111111111111111111111111111", {
-          kind: "sku",
-          externalId: "BLUE-42",
-          source: "fixture-maker",
-        }),
-        verification("image", "images.i22222222222222222222222222222222", {
-          imageId: "IMG-4K7M",
-          sourceAssetUrl: "https://maker.example.test/blue.jpg",
-          contentHash: "a".repeat(64),
-        }),
+        source("current", true, "Model Q-17 in blue."),
+        source("earlier", false, "Model Q-16."),
       ]}
     />,
     { wrapper: harness.wrapper },
   );
-  expect(screen.getByText("BLUE-42")).toBeInTheDocument();
-  expect(screen.getByText("image", { exact: true })).toBeVisible();
+  expect(screen.getByText("Current value")).toBeVisible();
+  expect(screen.getByText("Earlier value")).toBeVisible();
+  expect(screen.getByText(/Model Q-16\./u)).toBeVisible();
+  expect(screen.getByText("Selected variant: Blue, 42")).toBeVisible();
   expect(
-    screen.queryByRole("link", { name: "IMG-4K7M" }),
-  ).not.toBeInTheDocument();
-  expect(
-    screen.getByRole("link", { name: "https://maker.example.test/blue.jpg" }),
-  ).toHaveAttribute("href", "https://maker.example.test/blue.jpg");
-  expect(screen.queryByText("a".repeat(64))).not.toBeInTheDocument();
-  expect(screen.getAllByRole("link", { name: "RUN-4K7M" })).toHaveLength(2);
-  expect(screen.getAllByRole("link", { name: "PRD-4K7M" })).toHaveLength(2);
-});
-
-it("keeps the accepted value and source visible when verification rationale is retired", () => {
-  render(
-    <FieldVerificationEvidence
-      verifications={[
-        fromPartial<FieldExplanationVerification>({
-          key: "retired-model",
-          fieldPath: "model",
-          value: "Q-17",
-          run: { entityKind: "run", entityId: "RUN-4K7M" },
-          subject: { entityKind: "product", entityId: "PRD-4K7M" },
-          verifiedAt: "2026-10-07T16:00:00.000Z",
-          support: null,
-          supportRetiredAt: "2026-10-07T17:00:00.000Z",
-          source: {
-            label: "Retained maker specifications",
-            url: "https://maker.example.test/q17",
-            kind: "web_page",
-          },
-        }),
-      ]}
-    />,
-    { wrapper: harness.wrapper },
-  );
-  expect(screen.getByText("Q-17")).toBeVisible();
-  expect(
-    screen.getByRole("link", { name: "Retained maker specifications" }),
-  ).toHaveAttribute("href", "https://maker.example.test/q17");
-  expect(screen.getByText("Verification rationale retired")).toBeVisible();
-  expect(screen.getByText(/Proof gap/)).toBeVisible();
-  expect(
-    screen.queryByText("Verified against sources"),
-  ).not.toBeInTheDocument();
+    screen.getByRole("link", { name: "https://maker.example.test/earlier" }),
+  ).toHaveAttribute("href", "https://maker.example.test/earlier");
   expect(screen.getByRole("link", { name: "RUN-4K7M" })).toHaveAttribute(
     "href",
     expect.stringContaining("RUN-4K7M"),
-  );
-  expect(screen.getByText(/Retired/).closest("time")).toHaveAttribute(
-    "dateTime",
-    "2026-10-07T17:00:00.000Z",
   );
 });

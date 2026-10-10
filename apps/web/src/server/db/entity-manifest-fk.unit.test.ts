@@ -122,6 +122,11 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     reason:
       "an immutable reviewed import target is shown in Run findings; preparations are operational captures, not navigable entities",
   },
+  "ImportPreparedOrder.vendorId": {
+    classification: "metadata",
+    reason:
+      "the Vendor named during import preparation; the committed Purchase carries the navigable Vendor edge",
+  },
   "OrderMailCandidateDecision.purchaseId": {
     classification: "metadata",
     reason:

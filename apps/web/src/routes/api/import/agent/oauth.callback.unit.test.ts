@@ -130,7 +130,7 @@ describe("purchase agent OAuth callback", () => {
       {
         id: runEntityId.parse("15119902-3ed6-4f04-a9cc-8c9860c399b2"),
         publicId: "RUN-4K7M",
-        purpose: "account_sync",
+        purpose: "mail_import",
         eventId: "persisted-event",
       },
     ]);
@@ -144,7 +144,7 @@ describe("purchase agent OAuth callback", () => {
     expect(send).toHaveBeenCalledWith({
       version: 1,
       runId: "15119902-3ed6-4f04-a9cc-8c9860c399b2",
-      purpose: "account_sync",
+      purpose: "mail_import",
       eventId: "persisted-event",
       type: "start_or_resume",
     });
@@ -159,13 +159,13 @@ describe("purchase agent OAuth callback", () => {
       {
         id: runEntityId.parse("15119902-3ed6-4f04-a9cc-8c9860c399b2"),
         publicId: "RUN-4K7M",
-        purpose: "account_sync" as const,
+        purpose: "mail_import" as const,
         eventId: "event-1",
       },
       {
         id: runEntityId.parse("25119902-3ed6-4f04-a9cc-8c9860c399b2"),
         publicId: "RUN-4K7N",
-        purpose: "account_sync" as const,
+        purpose: "mail_import" as const,
         eventId: "event-2",
       },
     ];

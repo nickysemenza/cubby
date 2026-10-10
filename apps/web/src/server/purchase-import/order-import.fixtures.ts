@@ -1,11 +1,23 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import { parseEntityId, vendorAccountId } from "@cubby/schemas/identifiers";
-import { commitPurchaseImportInput } from "@cubby/schemas/purchase-import";
+import {
+  commitPurchaseImportInput,
+  type PreparePurchaseImportInput,
+  type preparedProductResolution,
+} from "@cubby/schemas/purchase-import";
+import type { Trade } from "@cubby/schemas/task-fields";
 import { and, eq } from "drizzle-orm";
+import type { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { expense, product, purchase } from "~/server/db/schema";
+import {
+  expense,
+  mailboxMessage,
+  orderMail,
+  product,
+  purchase,
+} from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   createProductFixture,
@@ -13,7 +25,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
-import { startOrResumeRun } from "./run-service";
+import { startImportRunFixture } from "./import-run.fixtures";
 
 type HistoryLine = {
   title: string;
@@ -39,7 +51,7 @@ export async function importOrderHistory(
     revision: string;
   },
 ) {
-  const run = await startOrResumeRun(db, {
+  const run = await startImportRunFixture(db, {
     ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
     vendorAccountId: vendorAccountId.parse(input.vendorAccountId),
     trigger: "manual",
@@ -150,4 +162,147 @@ export async function purchasesForOrder(db: Database, orderId: string) {
     .select({ id: purchase.id, shortcode: purchase.shortcode })
     .from(purchase)
     .where(and(eq(purchase.orderId, orderId), notDeleted(purchase)));
+}
+
+/** A member's retained, related Email awaiting import. */
+export async function retainedMailFixture(
+  db: Database,
+  input: {
+    ledgerPartyId: typeof orderMail.$inferInsert.ledgerPartyId;
+    messageId: string;
+    checksum: string;
+    bodyText?: string;
+    mailboxId?: string;
+  },
+) {
+  const [mail] = await getDb(db)
+    .insert(orderMail)
+    .values({
+      ledgerPartyId: input.ledgerPartyId,
+      mailboxId: input.mailboxId ?? "synthetic-mailbox",
+      messageId: input.messageId,
+      sender: "orders@shop.example",
+      subject: `Synthetic ${input.messageId}`,
+      receivedAt: new Date("2026-09-20T18:00:00Z"),
+      rawChecksum: input.checksum,
+      content: {
+        snippet: null,
+        bodyText: input.bodyText ?? `Synthetic ${input.messageId}`,
+        bodyHtml: null,
+      },
+    })
+    .returning();
+  if (!mail) throw new Error("Synthetic mail fixture did not persist");
+  await getDb(db).insert(mailboxMessage).values({
+    ledgerPartyId: input.ledgerPartyId,
+    mailboxId: mail.mailboxId,
+    messageId: mail.messageId,
+    checksum: mail.rawChecksum,
+    classification: "related",
+    classificationVersion: "synthetic-v1",
+    status: "pending",
+    orderMailId: mail.id,
+  });
+  return mail;
+}
+
+export const mailSource = (mail: typeof orderMail.$inferSelect) => ({
+  kind: "mail_message" as const,
+  externalKey: `gmail:${mail.mailboxId}:${mail.messageId}`,
+  checksum: mail.rawChecksum,
+});
+
+type PreparedOrder = PreparePurchaseImportInput["orders"][number];
+
+/**
+ * One order of a member import. Each principal line defaults to
+ * `expense_only`; `resolutions[i]` overrides line i.
+ */
+export type MemberImportOrder = Pick<
+  PreparedOrder,
+  "stableOrderId" | "vendorId" | "vendor" | "targetPurchaseId" | "source"
+> &
+  Partial<Pick<PreparedOrder, "primaryDocumentImageId">> & {
+    extraction: PreparedOrder["extraction"];
+    resolutions?: ReadonlyArray<
+      z.infer<typeof preparedProductResolution> | undefined
+    >;
+  };
+
+/**
+ * A member's own `purchase_import.prepare` (which opens its file_import Run)
+ * and the matching commit input; `commit()` runs that commit.
+ */
+export async function prepareMemberImport(
+  db: Database,
+  actor: ActorContext,
+  input: {
+    key: string;
+    orders: readonly MemberImportOrder[];
+    defaultTrade?: Trade;
+  },
+) {
+  const lineIds = (order: MemberImportOrder) =>
+    (order.extraction.candidate?.lines ?? []).map(
+      (_, index) => `${order.stableOrderId}:line-${index + 1}`,
+    );
+  const prepareOperationId = `prepare:${input.key}`;
+  const prepared = await preparePurchaseImport(
+    db,
+    {
+      _runExecution: { operationId: prepareOperationId },
+      orders: input.orders.map((order) => ({
+        stableOrderId: order.stableOrderId,
+        itemOperationId: `item:${order.stableOrderId}`,
+        vendorId: order.vendorId,
+        vendor: order.vendor,
+        targetPurchaseId: order.targetPurchaseId,
+        source: order.source,
+        evidenceChecksum: order.source.checksum,
+        extractionRevision: "synthetic@1",
+        extraction: order.extraction,
+        lineIds: lineIds(order),
+        primaryDocumentImageId: order.primaryDocumentImageId ?? null,
+        screenshotImageId: null,
+      })),
+    },
+    actor,
+  );
+  const commitInput = commitPurchaseImportInput.parse({
+    _runExecution: { run: prepared.runId, operationId: `commit:${input.key}` },
+    prepareOperationId,
+    defaultTrade: input.defaultTrade,
+    resolutions: input.orders.flatMap((order) =>
+      (order.extraction.candidate?.lines ?? []).flatMap((line, index) => {
+        const resolution =
+          order.resolutions?.[index] ??
+          (line.lineKind === "principal"
+            ? { kind: "expense_only" as const }
+            : undefined);
+        return resolution
+          ? [
+              {
+                stableOrderId: order.stableOrderId,
+                stableLineId: lineIds(order)[index],
+                resolution,
+              },
+            ]
+          : [];
+      }),
+    ),
+  });
+  return {
+    prepared,
+    commitInput,
+    commit: () => commitPurchaseImport(db, commitInput, actor),
+  };
+}
+
+export async function memberImport(
+  db: Database,
+  actor: ActorContext,
+  input: Parameters<typeof prepareMemberImport>[2],
+) {
+  const preparation = await prepareMemberImport(db, actor, input);
+  return { ...preparation, committed: await preparation.commit() };
 }

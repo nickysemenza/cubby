@@ -72,26 +72,18 @@ struct SectionActionRunnerTests {
 
     // MARK: - Fixtures
 
-    /// Two charges that can be checked, one the server refuses, and the search verb.
-    nonisolated private static func chargeSearch(
-        searchReason: String? = nil, firstChargeReason: String? = nil
-    ) -> String {
-        let reason = searchReason.map { "\"\($0)\"" } ?? "null"
-        let first = firstChargeReason.map { "\"\($0)\"" } ?? "null"
-        return """
-            {"blocks":[{"kind":"records","empty":"","actions":[],"rows":[
-              {"entity":null,"id":null,"title":"Example Hardware · 2026-03-03","subtitle":null,
-               "trailing":"$42.50","key":"FTX-4K7M","disabledReason":\(first)},
-              {"entity":"run","id":"RUN-4K7M","title":"Example Garden · 2026-03-04",
-               "subtitle":"A search is already running for this charge.","trailing":"$12.00",
-               "badges":["Searching"],"key":"FTX-5N8P",
-               "disabledReason":"A search is already running for this charge."},
-              {"entity":null,"id":null,"title":"Example Lumber · 2026-03-05","subtitle":null,
-               "trailing":"$7.25","key":"FTX-6Q9R","disabledReason":null}
-            ],"verbs":[{"id":"searchCharges","label":"Search selected charges","scope":"selection",
-              "disabledReason":\(reason)}]}]}
-            """
-    }
+    /// Three statement charges as the server words them; one carries the server's refusal.
+    nonisolated private static let chargeRows = """
+        {"blocks":[{"kind":"records","empty":"","actions":[],"rows":[
+          {"entity":null,"id":null,"title":"Example Hardware · 2026-03-03","subtitle":null,
+           "trailing":"$42.50","key":"FTX-4K7M","disabledReason":null},
+          {"entity":"run","id":"RUN-4K7M","title":"Example Garden · 2026-03-04",
+           "subtitle":"Already matched.","trailing":"$12.00",
+           "badges":["Matched"],"key":"FTX-5N8P","disabledReason":"Already matched."},
+          {"entity":null,"id":null,"title":"Example Lumber · 2026-03-05","subtitle":null,
+           "trailing":"$7.25","key":"FTX-6Q9R","disabledReason":null}
+        ]}]}
+        """
 
     private func records(_ json: String) throws -> ReportPresentation.Records {
         let report = try JSONDecoder().decode(EntityReportOut.self, from: Data(json.utf8))
@@ -104,75 +96,12 @@ struct SectionActionRunnerTests {
     // MARK: - Rows
 
     @Test func readsTheServersWordsAndAmountsAsGiven() throws {
-        let records = try records(Self.chargeSearch())
+        let records = try records(Self.chargeRows)
         #expect(records.rows.compactMap(\.key) == ["FTX-4K7M", "FTX-5N8P", "FTX-6Q9R"])
         #expect(records.rows[0].trailing == "$42.50")
         #expect(records.rows[1].entity == .run)
         #expect(records.rows[1].recordID == "RUN-4K7M")
-        #expect(records.verb(.searchCharges)?.actsOnSelection == true)
-    }
-
-    @Test func neverChecksARowTheServerRefused() throws {
-        let records = try records(Self.chargeSearch())
-        #expect(records.toggled([], "FTX-5N8P").isEmpty)
-        #expect(records.toggled([], "FTX-4K7M") == ["FTX-4K7M"])
-        #expect(records.toggled(["FTX-4K7M"], "FTX-4K7M").isEmpty)
-    }
-
-    @Test func aFreshReadDropsACheckedRowTheServerNowRefuses() throws {
-        let fresh = try records(Self.chargeSearch(firstChargeReason: "Claimed by a run."))
-        #expect(fresh.allowed(["FTX-4K7M", "FTX-6Q9R"]) == ["FTX-6Q9R"])
-    }
-
-    // MARK: - searchCharges
-
-    @Test @MainActor func startsOneRunForExactlyTheCheckedChargesInListedOrder() async throws {
-        let recorder = respond { _ in (200, Data("{\"runId\":\"RUN-5N8P\"}".utf8)) }
-        let run = try await SectionActionRunner(client: makeClient()).searchCharges(
-            vendorAccountID: "VACCT-4K7M", records: records(Self.chargeSearch()),
-            selection: ["FTX-6Q9R", "FTX-4K7M"])
-
-        #expect(run == "RUN-5N8P")
-        let start = try #require(recorder.requests.last)
-        #expect(start.method == "POST")
-        #expect(start.path == "/api/v1/vendor/startChargeRun")
-        #expect(
-            start.body == [
-                "vendorAccountId": "VACCT-4K7M",
-                "transactionIds": ["FTX-4K7M", "FTX-6Q9R"],
-            ])
-    }
-
-    @Test @MainActor func sendsNothingWhenNothingIsChecked() async throws {
-        let recorder = respond { _ in (200, Data()) }
-        await #expect(throws: SectionActionError.nothingSelected) {
-            _ = try await SectionActionRunner(client: self.makeClient()).searchCharges(
-                vendorAccountID: "VACCT-4K7M", records: self.records(Self.chargeSearch()), selection: [])
-        }
-        #expect(recorder.requests.isEmpty)
-    }
-
-    @Test @MainActor func refusesARefusedRowEvenIfAskedToDirectly() async throws {
-        let recorder = respond { _ in (200, Data()) }
-        await #expect(
-            throws: SectionActionError.refusedSelection("A search is already running for this charge.")
-        ) {
-            _ = try await SectionActionRunner(client: self.makeClient()).searchCharges(
-                vendorAccountID: "VACCT-4K7M", records: self.records(Self.chargeSearch()),
-                selection: ["FTX-4K7M", "FTX-5N8P"])
-        }
-        #expect(recorder.requests.isEmpty)
-    }
-
-    @Test @MainActor func refusesWhenTheServerLeavesTheVerbUnavailable() async throws {
-        let recorder = respond { _ in (200, Data()) }
-        await #expect(throws: SectionActionError.unavailable("Another search is running.")) {
-            _ = try await SectionActionRunner(client: self.makeClient()).searchCharges(
-                vendorAccountID: "VACCT-4K7M",
-                records: self.records(Self.chargeSearch(searchReason: "Another search is running.")),
-                selection: ["FTX-4K7M"])
-        }
-        #expect(recorder.requests.isEmpty)
+        #expect(records.rows[1].disabledReason == "Already matched.")
     }
 
     // MARK: - Coverage

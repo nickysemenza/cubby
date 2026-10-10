@@ -524,7 +524,9 @@ export async function seedEntity<E extends EntityKernelEntity>(
     auth: { userId: testUserId("test-user-id") },
   });
   const context: EntityKernelContext = requireActor(baseContext);
-  const created = await ENTITY_KERNEL_OPERATIONS[entity].create(context, input);
+  const created = await ENTITY_KERNEL_OPERATIONS[entity].create(context, {
+    data: input,
+  });
   const createdResult =
     generatedEntityMutationCreateResultSchema.parse(created);
   return parseEntityPublicOutput(entity, createdResult.item);

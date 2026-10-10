@@ -75,26 +75,9 @@ public final class HeroActionModel: Identifiable {
         }
     }
 
-    /// Choices for an `evidence` field: the sources the server says can be replayed.
-    public var evidenceOptions: [LabeledOption] {
-        guard case .launch(let launch)? = preview else { return [] }
-        return launch.sources.filter(\.usable).map { source in
-            LabeledOption(
-                value: source.id,
-                label: source.detail.isEmpty ? source.label : "\(source.label) — \(source.detail)")
-        }
-    }
-
     /// The server's advisory line (a warning or a blocked delete), if any, for the current form.
     public var advisory: (message: String, isDestructive: Bool)? {
         switch currentPreview {
-        case .launch(let launch)?:
-            // The server's own words, as a neutral note: with no replayable evidence the run can
-            // still search for it itself, so only server eligibility blocks.
-            if !launch.canStart {
-                return (launch.reason ?? "Research is not available for this target.", false)
-            }
-            return launch.reason.map { ($0, false) }
         case .discard(let preview)?:
             return preview.warning.map { ($0.message, $0.tone == .destructive) }
         case .addToInventory(let preview)?:
@@ -130,7 +113,6 @@ public final class HeroActionModel: Identifiable {
         if operation.preview != nil {
             guard let current = currentPreview else { return false }
             if case .discard(let discard) = current, discard.needsShelfChoice { return false }
-            if case .launch(let launch) = current, !launch.canStart { return false }
         }
         return (try? HeroActionRunner.resolvedValues(operation.fields, values: values)) != nil
     }
@@ -167,11 +149,6 @@ public final class HeroActionModel: Identifiable {
                 values["amount"] = [
                     "value": .number(add.defaultAmount.value), "unit": .string(add.defaultAmount.unit),
                 ]
-            }
-        case .launch(let launch):
-            let usable = launch.sources.filter(\.usable)
-            if let source = usable.first(where: \.isDefault) ?? usable.first, untouched("sourceId") {
-                values["sourceId"] = .string(source.id)
             }
         case .deleteImpact:
             break

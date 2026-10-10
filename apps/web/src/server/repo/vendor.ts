@@ -141,6 +141,12 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     description:
       "The logo association is soft-deleted with the vendor; the image is reaped when nothing else uses it.",
   },
+  "ImportPreparedOrder.vendorId": {
+    code: "preserve-prepared-vendor",
+    effect: "preserve",
+    description:
+      "An import preparation keeps the Vendor it named; its commit refuses a deleted Vendor.",
+  },
   "ExternalSource.vendorId": {
     code: "clear-source-vendor",
     effect: "detach",
@@ -194,6 +200,12 @@ export const VENDOR_MERGE_EDGE_POLICY = {
     effect: "repoint",
     description:
       "A loser's logo becomes the survivor's when the survivor has none; any other loser logo is detached and reaped unless shared.",
+  },
+  "ImportPreparedOrder.vendorId": {
+    code: "preserve-prepared-vendor",
+    effect: "preserve",
+    description:
+      "An import preparation keeps the Vendor it named; its commit refuses a merged-away Vendor, which is prepared again.",
   },
   "ExternalSource.vendorId": {
     code: "repoint-source-vendor",

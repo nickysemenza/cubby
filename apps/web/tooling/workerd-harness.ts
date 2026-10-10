@@ -43,9 +43,8 @@ interface WorkerdProfileDefinition {
   /**
    * The purchase agent's model peer (`cubby-test-model`), the Worker's AI
    * Gateway peer (`cubby-test-gateway`), and `cubby-queue-producer`, which
-   * dispatches agent events and connects simulated Mac browsers to the
-   * `PurchaseImportDurableObject`. Deterministic unless a caller supplies
-   * live peers.
+   * dispatches agent events to the coordinator. Deterministic unless a
+   * caller supplies live peers.
    */
   purchaseAgentPeers: boolean;
   /**
@@ -285,11 +284,6 @@ function peerWorkers(
               },
               durable_objects: {
                 bindings: [
-                  {
-                    name: "PURCHASE_IMPORT_CLIENT",
-                    class_name: "PurchaseImportDurableObject",
-                    script_name: "cubby",
-                  },
                   {
                     name: "PURCHASE_AGENT_RUN_CLIENT",
                     class_name: "PurchaseImportRunAgent",

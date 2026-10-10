@@ -109,11 +109,6 @@ for (const statementFirst of [true, false]) {
       );
       expect(allowed.ok(), await allowed.text()).toBe(true);
     }
-    const accountId = await resolveOrThrow(
-      db,
-      "vendorAccount",
-      prerequisites.account.id,
-    );
     const cardId = await resolveOrThrow(
       db,
       "financialAccount",
@@ -445,13 +440,10 @@ for (const statementFirst of [true, false]) {
       const productUrl = `https://www.amazon.com/dp/${asin}`;
       const html = `<title>Synthetic order detail</title><main><h1>${names.orderId}</h1><p>Ordered September 10, 2026. Delivered.</p><p>USD 42.50</p><p>${names.productName} SKU ${sku} quantity 1</p><a href="${productUrl}">Product page</a></main>`;
       const run = await prepareCapturedRetailerOrder({
-        page,
         db,
         actor,
         runtime: e2eRuntime,
-        ledgerPartyId: member.id,
-        vendorAccountId: accountId,
-        accountCode: prerequisites.account.id,
+
         targetPurchaseId: purchaseCode,
         token,
         url,

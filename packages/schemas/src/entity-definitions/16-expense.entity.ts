@@ -87,6 +87,13 @@ export default defineEntity({
     list: {
       savedViews: [
         {
+          id: "research-queue",
+          label: "Research queue",
+          description: "Spending lines still missing their Product",
+          filters: [{ id: "dataGaps", value: ["expense_product_resolution"] }],
+          sort: [{ id: "dataQuality", desc: false }],
+        },
+        {
           id: "planned",
           label: "Planned",
           description: "Committed spend that hasn't happened yet",

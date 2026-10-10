@@ -20,6 +20,7 @@ const withMedia = <T,>(value: T, url?: string) => ({
   attachments: [],
   redirectedFrom: null,
   previousShortcodes: [],
+  sources: [],
 });
 
 let harness: ReturnType<typeof createBrowserTestHarness>;

@@ -1,12 +1,6 @@
 import { z } from "zod";
 import { searchableEntities } from "./entity-manifest";
-import {
-  imageId,
-  locationId,
-  parseEntityRef,
-  recipeId,
-  vendorAccountId,
-} from "./identifiers";
+import { imageId, locationId, parseEntityRef, recipeId } from "./identifiers";
 import { imageProcessingResult } from "./image-processing";
 
 /**
@@ -29,7 +23,6 @@ export const backgroundTaskKinds = [
   "image-metadata.extract",
   "maintenance.recover",
   "maintenance.purchase-discovery",
-  "purchase-import.enrichment-sweep",
   "calendar-feed.mark-dirty",
 ] as const;
 
@@ -129,17 +122,6 @@ export const maintenancePurchaseDiscoveryTaskSchema = z.object({
 });
 
 /**
- * Enrich one account's waiting imported Products after it starts browsing.
- * The sweep skips Products a run already finished or is working, so replay
- * starts nothing new.
- */
-export const purchaseImportEnrichmentSweepTaskSchema = z.object({
-  kind: z.literal("purchase-import.enrichment-sweep"),
-  ...taskEnvelopeFields,
-  vendorAccountId,
-});
-
-/**
  * Fallback for a dirty-mark RPC that failed every in-request retry. `markDirty`
  * only sets a flag on the origin's calendar Durable Object, so replay is
  * harmless; the handler throws on failure so the queue keeps retrying.
@@ -161,7 +143,6 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   imageMetadataExtractTaskSchema,
   maintenanceRecoverTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
-  purchaseImportEnrichmentSweepTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
 ]);
 

@@ -1,16 +1,9 @@
-import {
-  vendorCaptureProfile,
-  vendorAgentHints,
-  vendorDomainList,
-} from "./vendor-import-fields";
 import { tradeSchema } from "./task-fields";
 import { z } from "zod";
-import { productCategoryShortcode } from "./identifier-fields";
-import { externalIdKind, externalIdSource } from "./external-id";
 import { agentImportRunPurpose } from "./import-run-agent";
-import { acceptedResearchFact } from "./research-facts";
 import { plainDate } from "./base-entity";
 
+import { mailEvent } from "./mailbox-research";
 import { money } from "./money";
 import {
   runEvidenceKind,
@@ -35,8 +28,6 @@ export const vendorOrderEvidence = z.enum([
   "receipt_only",
   "not_expected",
 ]);
-export type VendorOrderEvidence = z.infer<typeof vendorOrderEvidence>;
-
 export const importSourceKind = z.enum([
   "browser_order",
   "mail_message",
@@ -44,15 +35,9 @@ export const importSourceKind = z.enum([
   "receipt_photo",
   "vendor_export",
 ]);
-export type ImportSourceKind = z.infer<typeof importSourceKind>;
-
 export { runPurpose, runStatus, runTrigger } from "./run-fields";
 export type RunTrigger = z.infer<typeof runTrigger>;
-export type RunStatus = z.infer<typeof runStatus>;
 export type RunPurpose = z.infer<typeof runPurpose>;
-
-export const runTargetKind = z.enum(["purchase", "product"]);
-export type RunTargetKind = z.infer<typeof runTargetKind>;
 
 export const runTargetState = z.enum([
   "pending",
@@ -81,8 +66,6 @@ export const RUN_TARGET_BUCKET = {
   RunTargetState,
   "completed" | "skipped" | "blocked" | "pending"
 >;
-export type RunTargetBucket = (typeof RUN_TARGET_BUCKET)[RunTargetState];
-
 export function countRunTargets(states: readonly RunTargetState[]) {
   const counts = { total: 0, completed: 0, skipped: 0, blocked: 0, pending: 0 };
   for (const state of states) {
@@ -92,30 +75,10 @@ export function countRunTargets(states: readonly RunTargetState[]) {
   return counts;
 }
 
-export const runTargetOutcome = z.enum([
-  "replayed",
-  "raw_evidence_drift",
-  "semantic_drift",
-  "enriched",
-  "unavailable",
-  "skipped",
-  "attached",
-  "verified",
-  "partially_verified",
-  "researched_with_gaps",
-  "ambiguous",
-  "temporarily_blocked",
-  "no_source_found",
-  "unrelated",
-]);
-export type RunTargetOutcome = z.infer<typeof runTargetOutcome>;
-
 export { runEvidenceKind };
 export type { RunEvidenceKind } from "./run-fields";
 
 export { runShortcode };
-export type RunPublicId = z.infer<typeof runShortcode>;
-
 /** Stage bytes for a run target only; this never creates an Image or Document. */
 export const initiateRunEvidenceUploadInput = z.object({
   // The run's public code: the browser page names runs by it and the Mac
@@ -141,69 +104,6 @@ export const initiateRunEvidenceUploadInput = z.object({
   filename: z.string().trim().min(1).max(255),
   sourceMetadata: z.record(z.string(), z.json()).default({}),
 });
-export type InitiateRunEvidenceUploadInput = z.infer<
-  typeof initiateRunEvidenceUploadInput
->;
-
-export const initiateRunEvidenceUploadOut = z.object({
-  evidenceId: z.uuid(),
-  objectKey: z.string().min(1),
-  uploadUrl: z.url(),
-  expiresAt: z.iso.datetime(),
-});
-export type InitiateRunEvidenceUploadOut = z.infer<
-  typeof initiateRunEvidenceUploadOut
->;
-
-const targetedSource = z.object({
-  kind: importSourceKind,
-  externalKey: z.string().trim().min(1).max(512),
-});
-
-export const purchaseValidationTargetInput = z.object({
-  purchaseId: purchaseShortcode,
-  vendorAccountId: z.uuid().nullable().optional(),
-  source: targetedSource.nullable().optional(),
-  targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-});
-export const createPurchaseValidationRunInput = z.object({
-  vendorId: vendorShortcode,
-  vendorAccountId: z.uuid().nullable().optional(),
-  trigger: runTrigger.default("manual"),
-  targets: z.array(purchaseValidationTargetInput).min(1).max(50),
-});
-export type CreatePurchaseValidationRunInput = z.infer<
-  typeof createPurchaseValidationRunInput
->;
-
-export const productEnrichmentTargetInput = z.object({
-  productId: productShortcode,
-  vendorAccountId: z.uuid().nullable().optional(),
-  source: targetedSource.nullable().optional(),
-  targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-});
-export const createProductEnrichmentRunsInput = z.object({
-  vendorId: vendorShortcode,
-  trigger: runTrigger.default("manual"),
-  targets: z.array(productEnrichmentTargetInput).min(1).max(50),
-});
-export type CreateProductEnrichmentRunsInput = z.infer<
-  typeof createProductEnrichmentRunsInput
->;
-
-export const targetedRunStartOut = z.object({
-  created: z.boolean(),
-  run: z
-    .object({
-      id: runShortcode,
-      status: runStatus,
-      purpose: runPurpose,
-      dispatchEventId: z.string().uuid().nullable(),
-    })
-    .nullable(),
-  blockingRun: z.object({ id: runShortcode, status: runStatus }).nullable(),
-});
-
 const importOperationId = z.string().trim().min(1).max(200);
 const importItemOperationId = z.string().trim().min(1).max(200);
 const stableImportItemId = z
@@ -242,8 +142,6 @@ export const importSourceIdentity = z.object({
   externalKey: z.string().trim().min(1).max(512),
   checksum: z.string().regex(/^[a-f0-9]{64}$/),
 });
-export type ImportSourceIdentity = z.infer<typeof importSourceIdentity>;
-
 export const extractedPurchaseLine = z.object({
   title: z.string().trim().min(1).max(500),
   amount: money,
@@ -283,6 +181,11 @@ export const extractedOrderCandidate = z.object({
   lines: z.array(extractedPurchaseLine).max(500),
   payments: z.array(extractedPaymentEvidence).max(100),
   allShipmentsDelivered: z.boolean().nullable(),
+  sourceEvent: mailEvent
+    .optional()
+    .describe(
+      "For an Email source: the lifecycle event it records about the order (default confirmation).",
+    ),
 });
 export type ExtractedOrderCandidate = z.infer<typeof extractedOrderCandidate>;
 
@@ -439,10 +342,6 @@ export const runFindingKind = z.enum([
   "unclassified_vendor",
   "other",
 ]);
-export type RunFindingKind = z.infer<typeof runFindingKind>;
-
-export const runFindingStatus = z.enum(["open", "applied", "dismissed"]);
-
 export const replacementLineIdentity = z.object({
   productId: z.uuid().nullable(),
   promote: z.boolean(),
@@ -481,49 +380,7 @@ export const aggregateReplacementSnapshot = z.object({
   bookingTransactionCode: z.string().nullable(),
 });
 
-export const researchFieldCorrection = z.object({
-  kind: z.literal("research_field_correction"),
-  runRef: runShortcode,
-  productId: z.uuid(),
-  targetId: z.uuid(),
-  resolutionOperationId: z.string().min(1).max(200),
-  corrections: z
-    .array(z.object({ currentValue: z.json(), claim: acceptedResearchFact }))
-    .min(1),
-  evidenceIds: z.array(z.uuid()).min(1),
-  reviewSnapshot: z.object({
-    fingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
-    targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
-    evidenceFingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
-  }),
-});
-
 export const proposedImportFix = z.discriminatedUnion("kind", [
-  researchFieldCorrection,
-  z.object({
-    kind: z.literal("vendor_capture_profile"),
-    runId: z.uuid(),
-    vendorId: z.uuid(),
-    vendorAccountId: z.uuid(),
-    targetId: z.uuid(),
-    profile: vendorCaptureProfile,
-    current: z.object({
-      hints: vendorAgentHints,
-      browserDomains: vendorDomainList,
-    }),
-    reviewSnapshot: z.object({
-      fingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
-    }),
-  }),
-  z.object({
-    kind: z.literal("validation_corrections"),
-    purchaseId: z.uuid(),
-    targetId: z.uuid(),
-    resolutionOperationId: z.string().min(1).max(200),
-    reviewSnapshot: z.object({
-      fingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
-    }),
-  }),
   z.object({
     kind: z.literal("replace_aggregate_line"),
     purchaseId: z.uuid(),
@@ -575,26 +432,6 @@ export const browserCapture = z.object({
 });
 export type BrowserCapture = z.infer<typeof browserCapture>;
 
-export const purchaseImportNavigationDecision = z.discriminatedUnion("action", [
-  z.object({
-    action: z.literal("follow_link"),
-    linkId: z.string().min(1).max(200),
-    reason: z.string().trim().min(1).max(500),
-  }),
-  z.object({
-    action: z.literal("scroll"),
-    pageCount: z.number().int().min(1).max(10),
-    reason: z.string().trim().min(1).max(500),
-  }),
-  z.object({
-    action: z.literal("finish"),
-    reason: z.string().trim().min(1).max(500),
-  }),
-]);
-export type PurchaseImportNavigationDecision = z.infer<
-  typeof purchaseImportNavigationDecision
->;
-
 export const orderMailClassification = z.object({
   event: z.enum(["placed", "shipped", "delivered", "refunded", "other"]),
   orderId: z.string().trim().min(1).max(300).nullable(),
@@ -602,442 +439,12 @@ export const orderMailClassification = z.object({
   currency: z.string().trim().length(3).nullable(),
   occurredAt: z.iso.datetime().nullable(),
 });
-export type OrderMailClassification = z.infer<typeof orderMailClassification>;
-
 export const orderMailMessageClassification = z.object({
   events: z.array(orderMailClassification).max(50),
 });
 export type OrderMailMessageClassification = z.infer<
   typeof orderMailMessageClassification
 >;
-
-const allowedBrowserHosts = z
-  .array(z.string().trim().min(1).max(253))
-  .min(1)
-  .max(20);
-/**
- * Fixed browser actions in an owned account window. Navigation and interaction
- * return retained DOM and observation-scoped controls; source content is untrusted.
- * The server interprets evidence and chooses actions, never caller JavaScript.
- */
-export const BROWSER_BRIDGE_PROTOCOL = 4;
-const bridgeProtocol = z.literal(BROWSER_BRIDGE_PROTOCOL);
-const browserActionRef = z.string().min(1).max(100);
-const browserActionTarget = {
-  observationId: z.uuid(),
-  ref: browserActionRef,
-  allowedHosts: allowedBrowserHosts,
-};
-
-export const browserBridgeOperation = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("navigate"),
-    url: z.url(),
-    allowedHosts: allowedBrowserHosts,
-  }),
-  z.object({
-    type: z.literal("scroll"),
-    pageCount: z
-      .number()
-      .int()
-      .min(-10)
-      .max(10)
-      .refine((value) => value !== 0),
-    allowedHosts: allowedBrowserHosts,
-  }),
-  z.object({
-    type: z.literal("read"),
-    allowedHosts: allowedBrowserHosts,
-    /**
-     * `required`: the capture fails without one (purchase documents).
-     * `preferred`: take one when the window is capturable, otherwise report
-     * why and still return the DOM. `skip`: DOM only.
-     */
-    screenshot: z.enum(["required", "preferred", "skip"]),
-    // The web service derives this URL from the run's claimed work; the Mac
-    // uses it only when it cannot find its account window.
-    recoveryURL: z.url().optional(),
-    // Targeted browser evidence must retain the scope that authorizes its R2
-    // upload; account-sync screenshots become purchase documents instead.
-    evidenceScope: z
-      .object({ runId: runShortcode, targetId: z.uuid() })
-      .optional(),
-  }),
-  z.object({ type: z.literal("click"), ...browserActionTarget }),
-  z.object({
-    type: z.literal("type"),
-    ...browserActionTarget,
-    text: z.string().max(2_000),
-    /** Submit the control's form after typing, for navigation or site search. */
-    submit: z.boolean(),
-  }),
-  z.object({
-    type: z.literal("select"),
-    ...browserActionTarget,
-    /** An option ref from the same observation, belonging to this select. */
-    optionRef: browserActionRef,
-  }),
-  z.object({
-    type: z.literal("window"),
-    // `raise` brings the account window forward (sign-in, a capture that
-    // needs it visible); `background` returns it behind the member's work.
-    action: z.enum(["raise", "background"]),
-  }),
-]);
-export type BrowserBridgeOperation = z.infer<typeof browserBridgeOperation>;
-export const browserBridgeRequest = z.object({
-  protocolVersion: bridgeProtocol,
-  id: z.uuid(),
-  operationId: z.string().trim().min(1).max(200),
-  runID: z.string().trim().min(1).max(200),
-  deadline: z.iso.datetime(),
-  operation: browserBridgeOperation,
-});
-export type BrowserBridgeRequest = z.infer<typeof browserBridgeRequest>;
-
-export const browserEvidenceKind = z.enum(["rendered_pdf", "screenshot"]);
-export const browserEvidenceReference = z.object({
-  id: z.string().min(1).max(500),
-  kind: browserEvidenceKind,
-  checksum: z.string().regex(/^[a-f0-9]{64}$/),
-  contentType: z.string().min(1).max(200),
-});
-export const browserCapturedLink = z.object({
-  id: z.string(),
-  url: z.url(),
-  label: z.string().nullish(),
-});
-export const browserCapturedImage = z.object({
-  url: z.url(),
-  alt: z.string().nullish(),
-  naturalWidth: z.number().int().positive().nullish(),
-  naturalHeight: z.number().int().positive().nullish(),
-  highResolutionUrl: z.url().nullish(),
-});
-export const browserPaymentEvidence = z.object({
-  methodLabel: z.string().nullish(),
-  lastFour: z.string().nullish(),
-  amountText: z.string().nullish(),
-});
-const structuredIdentifierValues = z
-  .array(z.string().trim().min(1).max(100))
-  .max(10)
-  .default([]);
-/**
- * One schema.org Product node's identifier fields, read verbatim from the
- * page's `application/ld+json` block (never from page text). `gtins` merges
- * `gtin` and `gtin8/12/13/14`.
- */
-export const browserStructuredProduct = z.object({
-  skus: structuredIdentifierValues,
-  mpns: structuredIdentifierValues,
-  gtins: structuredIdentifierValues,
-  productIds: structuredIdentifierValues,
-});
-export const browserStructuredProducts = z.object({
-  products: z.array(browserStructuredProduct).max(20),
-  /** A ProductGroup (or its variants) was present: no single variant is shown. */
-  variantGroup: z.boolean(),
-});
-export type BrowserStructuredProducts = z.infer<
-  typeof browserStructuredProducts
->;
-
-/**
- * What the server derives from a captured DOM (`derivePageCapture`). It is
- * never sent by the Mac: the derivation revision replaces the old Mac capture
- * version, so improving it needs no Mac release and re-reads stored evidence.
- */
-export const browserPageCapture = z.object({
-  sourceURL: z.url(),
-  canonicalUrl: z.url().nullish(),
-  requestedAmazonAsin: z
-    .string()
-    .regex(/^[A-Z0-9]{10}$/iu)
-    .nullish(),
-  servedAmazonAsin: z
-    .string()
-    .regex(/^[A-Z0-9]{10}$/iu)
-    .nullish(),
-  variantMarkers: z
-    .array(z.string().trim().min(1).max(500))
-    .max(50)
-    .default([]),
-  title: z.string().max(500),
-  capturedAt: z.iso.datetime(),
-  captureVersion: z.number().int().positive(),
-  readableText: z.string().max(24 * 1_024),
-  links: z.array(browserCapturedLink).max(200),
-  images: z.array(browserCapturedImage).max(200),
-  paymentEvidence: z.array(browserPaymentEvidence).max(100),
-  evidence: z.array(browserEvidenceReference).max(10),
-  structuredProducts: browserStructuredProducts.nullish(),
-  /** The page asks for a password: the vendor wants a sign-in. */
-  authenticationRequired: z.boolean().default(false),
-});
-export type BrowserPageCapture = z.infer<typeof browserPageCapture>;
-
-/** A maintenance interpretation is separate from the original capture replay. */
-export const retainedCaptureInterpretation = z.object({
-  evidenceId: z.uuid(),
-  originalVersion: z.number().int().positive(),
-  supportedFactFields: z.array(z.string()),
-  capture: browserPageCapture,
-  changedFields: z.array(z.string()),
-});
-
-/** Why the Mac could not take a screenshot of its account window. */
-export const browserScreenshotGap = z.enum([
-  "window_not_found",
-  "window_minimized",
-  "window_off_screen",
-  "screen_recording_denied",
-  "capture_failed",
-  "upload_failed",
-]);
-
-/**
- * What the Mac saw when it finished (or failed) a command. Every result
- * carries one, so a stall always says why: the run log and the Runs UI read
- * it, and the server's recovery policy acts on it.
- */
-// Swift's generated client omits nil keys, so every nullable key here also
-// accepts absence and reads it as null.
-export const browserObservation = z.object({
-  url: z.url().nullable().default(null),
-  title: z.string().max(500).nullable().default(null),
-  readyState: z
-    .enum(["loading", "interactive", "complete"])
-    .nullable()
-    .default(null),
-  window: z
-    .object({
-      /** Re-found by its tab marker after an app or browser relaunch. */
-      recovered: z.boolean(),
-      minimized: z.boolean().nullable().default(null),
-      onScreen: z.boolean().nullable().default(null),
-    })
-    .nullable()
-    .default(null),
-  screenRecording: z.enum(["granted", "denied", "unknown"]),
-  durationMs: z.number().int().nonnegative(),
-});
-export type BrowserObservation = z.infer<typeof browserObservation>;
-
-/** Bytes the Mac sends inline: scripts, styles, SVG, and input values removed. */
-export const BROWSER_DOM_MAX_ENCODED = 1_000_000;
-export const browserActionableControl = z.object({
-  ref: browserActionRef,
-  kind: z.enum([
-    "link",
-    "button",
-    "textbox",
-    "searchbox",
-    "select",
-    "option",
-    "checkbox",
-    "radio",
-  ]),
-  label: z.string().max(500),
-  disabled: z.boolean(),
-  /** The observed link or form destination; server acquisition derives its allowlist. */
-  navigationURL: z.url().nullish(),
-  selected: z.boolean().nullish(),
-  checked: z.boolean().nullish(),
-  parentRef: browserActionRef.nullish(),
-});
-export const browserPageSnapshot = z.object({
-  /** Single-use action references are fenced to this observation and its live document. */
-  observationId: z.uuid(),
-  sourceURL: z.url(),
-  servedURL: z.url(),
-  actions: z.array(browserActionableControl).max(500),
-  actionsTruncated: z.boolean(),
-  title: z.string().max(500),
-  capturedAt: z.iso.datetime(),
-  dom: z.object({
-    encoding: z.literal("deflate-raw+base64"),
-    data: z.string().min(1).max(BROWSER_DOM_MAX_ENCODED),
-    /** Uncompressed UTF-8 byte length. */
-    byteSize: z.number().int().positive(),
-    sha256: z.string().regex(/^[a-f0-9]{64}$/),
-    /** The trimmed DOM still exceeded the limit and lost its tail. */
-    truncated: z.boolean(),
-  }),
-  screenshot: z.discriminatedUnion("status", [
-    z.object({
-      status: z.literal("captured"),
-      evidence: z.array(browserEvidenceReference).min(1).max(4),
-    }),
-    z.object({ status: z.literal("skipped") }),
-    z.object({
-      status: z.literal("unavailable"),
-      reason: browserScreenshotGap,
-    }),
-  ]),
-});
-export type BrowserPageSnapshot = z.infer<typeof browserPageSnapshot>;
-
-export const browserBridgeFailureCode = z.enum([
-  "cancelled",
-  "deadline_exceeded",
-  "invalid_command",
-  "disallowed_url",
-  "browser_unavailable",
-  "browser_permission_denied",
-  /** Chrome refuses JavaScript from Apple Events (View > Developer). */
-  "javascript_disabled",
-  /** The page's DOM could not be read (navigation in flight, crashed tab). */
-  "page_unreadable",
-  "stale_observation",
-  "action_unavailable",
-  /** Execution started but its durable completion is missing; read and reconcile first. */
-  "action_outcome_unknown",
-  /** A required screenshot could not be taken; `screenshotGap` says why. */
-  "screenshot_unavailable",
-  "upload_failed",
-  // The server's version gate refused this Mac build (HTTP 426).
-  "client_update_required",
-  "execution_failed",
-]);
-export const browserBridgeCommandOutcome = z.discriminatedUnion("status", [
-  z.object({
-    status: z.literal("completed"),
-    snapshot: browserPageSnapshot.nullable().default(null),
-    observation: browserObservation,
-  }),
-  z.object({
-    status: z.literal("failed"),
-    code: browserBridgeFailureCode,
-    message: z.string().max(2_000),
-    retryable: z.boolean(),
-    screenshotGap: browserScreenshotGap.nullable().default(null),
-    observation: browserObservation,
-  }),
-]);
-export const browserBridgeResult = z.object({
-  protocolVersion: bridgeProtocol,
-  // Foundation encodes UUID values uppercase. Normalize at the protocol
-  // boundary because Durable Object SQLite command keys are lowercase text.
-  commandID: z.uuid().toLowerCase(),
-  operationID: z.string().trim().min(1).max(200),
-  runID: z.string().min(1).max(200),
-  completedAt: z.iso.datetime(),
-  outcome: browserBridgeCommandOutcome,
-});
-export type BrowserBridgeResult = z.infer<typeof browserBridgeResult>;
-
-export const browserChoice = z.enum(["chrome", "safari"]);
-export const browserBridgeCapabilities = z.object({
-  /** The DOM trimming rules the Mac applies before it sends a snapshot. */
-  snapshotVersion: z.number().int().positive(),
-  screenshot: z.boolean(),
-  actions: z
-    .array(
-      z.enum([
-        "navigate",
-        "read",
-        "click",
-        "type",
-        "select",
-        "scroll",
-        "window",
-      ]),
-    )
-    .min(1),
-});
-export const browserBridgeClientMessage = z.discriminatedUnion("type", [
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("forget_run_ack"),
-    runID: z.uuid().toLowerCase(),
-    retirementID: z.uuid().toLowerCase(),
-    deviceID: z.uuid().toLowerCase(),
-  }),
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("hello"),
-    deviceID: z.uuid().toLowerCase(),
-    browser: browserChoice,
-    capabilities: browserBridgeCapabilities,
-  }),
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("result"),
-    result: browserBridgeResult,
-  }),
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("pong"),
-    timestamp: z.iso.datetime(),
-  }),
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("run_completed_ack"),
-    runID: z.uuid(),
-  }),
-]);
-export const browserBridgeRunCompletion = z.object({
-  runID: z.uuid(),
-  /** Only `completed` permits the account-owned window to be minimized. */
-  terminalStatus: z.enum([
-    "completed",
-    "needs_review",
-    "failed",
-    "dispatch_failed",
-  ]),
-  outcome: runTargetOutcome.nullish(),
-  imported: z.number().int().nonnegative(),
-  updated: z.number().int().nonnegative(),
-  skipped: z.number().int().nonnegative(),
-  findingCount: z.number().int().nonnegative(),
-  /**
-   * The notification, written by the server in the unit the run worked in.
-   * Absent only on completions a bridge stored before the server wrote one.
-   */
-  notice: z.object({ title: z.string(), body: z.string() }).optional(),
-});
-export type BrowserBridgeRunCompletion = z.infer<
-  typeof browserBridgeRunCompletion
->;
-export const browserBridgeServerMessage = z.discriminatedUnion("type", [
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("forget_run"),
-    runID: z.uuid().toLowerCase(),
-    retirementID: z.uuid().toLowerCase(),
-  }),
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("command"),
-    command: browserBridgeRequest,
-  }),
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("acknowledge"),
-    commandID: z.uuid(),
-  }),
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("cancel"),
-    commandID: z.uuid(),
-  }),
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("ping"),
-    timestamp: z.iso.datetime(),
-  }),
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("raise_auth_window"),
-    runID: z.uuid(),
-  }),
-  z.object({
-    protocolVersion: bridgeProtocol,
-    type: z.literal("run_completed"),
-    ...browserBridgeRunCompletion.shape,
-  }),
-]);
 
 const agentEventBase = z.object({
   version: z.literal(1),
@@ -1047,19 +454,7 @@ const agentEventBase = z.object({
 });
 const agentEventId = z.string().trim().min(1).max(256);
 export const purchaseAgentEvent = z.discriminatedUnion("type", [
-  agentEventBase.extend({
-    type: z.literal("research_retention"),
-    receiptId: z.uuid(),
-  }),
   agentEventBase.extend({ type: z.literal("start_or_resume") }),
-  agentEventBase.extend({
-    type: z.literal("browser_connected"),
-    connectionId: agentEventId.optional(),
-  }),
-  agentEventBase.extend({
-    type: z.literal("browser_result"),
-    commandId: agentEventId,
-  }),
   agentEventBase.extend({
     type: z.literal("retry"),
     retryOf: agentEventId.optional(),
@@ -1138,9 +533,17 @@ export type ImportWriterOutput = z.infer<typeof importWriterOutput>;
 
 const preparedImportOrderInput = z
   .object({
-    vendorId: vendorShortcode.describe(
-      "The Vendor this order was bought from; find or create it first.",
-    ),
+    vendorId: vendorShortcode
+      .optional()
+      .describe(
+        "The existing Vendor this order was bought from. Omit only when the import Run already names the Vendor.",
+      ),
+    vendor: z
+      .object({ name: z.string().trim().min(1).max(200) })
+      .optional()
+      .describe(
+        "A Vendor named exactly as the source names the seller, when no existing Vendor matches; Cubby reuses an exact-name Vendor.",
+      ),
     targetPurchaseId: purchaseShortcode.nullable().optional(),
     stableOrderId: stableImportItemId,
     itemOperationId: importItemOperationId,
@@ -1153,6 +556,12 @@ const preparedImportOrderInput = z
     screenshotImageId: imageShortcode.nullable().default(null),
   })
   .superRefine((value, context) => {
+    if (value.vendorId && value.vendor)
+      context.addIssue({
+        code: "custom",
+        path: ["vendorId"],
+        message: "Name the order's Vendor once: vendorId or vendor",
+      });
     const expected = value.extraction.candidate?.lines.length ?? 0;
     if (value.lineIds.length !== expected) {
       context.addIssue({
@@ -1297,272 +706,9 @@ export const commitPurchaseImportOut = z.object({
   ),
 });
 
-/** Read-only replay comparison for an immutable prepared validation batch. */
-export const validatePurchaseImportInput = z.object({
-  _runExecution: purchaseImportRunExecution,
-  prepareOperationId: importOperationId,
-  resolutions: commitPurchaseImportInput.shape.resolutions,
-});
-export type ValidatePurchaseImportInput = z.infer<
-  typeof validatePurchaseImportInput
->;
-
-export const validatePurchaseImportOut = z.object({
-  runId: runShortcode,
-  operationId: importOperationId,
-  status: z.enum(["completed", "needs_review"]),
-  targets: z.array(
-    z.object({
-      stableOrderId: stableImportItemId,
-      outcome: z.enum(["replayed", "raw_evidence_drift", "semantic_drift"]),
-      diff: z.json().nullable(),
-    }),
-  ),
-});
-
-/**
- * One line of the evidence plan as validation compares it. `productId` is a
- * Product shortcode, `new`/`unresolved` (a resolution with no Product yet),
- * or null for a non-principal or expense-only line.
- */
-export const validationPlanLine = z.object({
-  title: z.string(),
-  amount: z.number(),
-  lineKind: expenseLineKindSchema,
-  quantity: z.number().nullable(),
-  productId: z.string().nullable(),
-});
-export type ValidationPlanLine = z.infer<typeof validationPlanLine>;
-
-export const validationExpectedPlan = z.object({
-  orderId: z.string().nullable(),
-  currency: z.string().nullable(),
-  statedTotal: z.number().nullable(),
-  lines: z.array(validationPlanLine),
-  writeBlockReason: z.string().nullable(),
-});
-export type ValidationExpectedPlan = z.infer<typeof validationExpectedPlan>;
-
-const sha256Fingerprint = z.string().regex(/^[a-f0-9]{64}$/);
-
-/** A selectable, field-level change from the live Purchase toward the plan. */
-export const validationCorrection = z.object({
-  /** Stable across recomputation while the compared live values are unchanged. */
-  id: z.string().min(1).max(200),
-  kind: z.enum([
-    "purchase_stated_total",
-    "expense_field",
-    "expense_add",
-    "expense_remove",
-  ]),
-  target: z.object({
-    kind: z.enum(["purchase", "expense"]),
-    code: z.union([purchaseShortcode, expenseShortcode]),
-  }),
-  field: z.enum([
-    "statedTotal",
-    "title",
-    "amount",
-    "quantity",
-    "lineKind",
-    "productId",
-    "line",
-  ]),
-  before: z.json(),
-  after: z.json(),
-  /** Hash of the live values this correction was computed from. */
-  fingerprint: sha256Fingerprint,
-});
-export type ValidationCorrection = z.infer<typeof validationCorrection>;
-
-/** A visible, unselectable difference validation will not change on its own. */
-export const validationNote = z.object({
-  id: z.string().min(1).max(200),
-  target: validationCorrection.shape.target,
-  field: z.string().min(1),
-  before: z.json(),
-  after: z.json(),
-  message: z.string().min(1),
-});
-export type ValidationNote = z.infer<typeof validationNote>;
-
-/** The versioned `RunTarget.diff` a purchase-validation target stores. */
-export const validationDiff = z.object({
-  version: z.literal(2),
-  expected: validationExpectedPlan,
-  actual: z.object({
-    orderId: z.string().nullable(),
-    currency: z.string(),
-    statedTotal: z.number().nullable(),
-    lines: z.array(validationPlanLine),
-  }),
-  corrections: z.array(validationCorrection),
-  notes: z.array(validationNote),
-  /** Evidence bytes changed since the target was frozen; kept for the outcome after a correction. */
-  rawEvidenceDrift: z.boolean(),
-});
-export type ValidationDiff = z.infer<typeof validationDiff>;
-
-/**
- * A person applies a reviewed subset of a validation diff. Never an agent
- * tool: it is absent from the MCP catalog and the agent's capability matrix.
- */
-export const applyValidationCorrectionsInput = z.object({
-  runId: runShortcode,
-  purchaseId: purchaseShortcode,
-  operationId: importOperationId,
-  correctionIds: z.array(z.string().min(1).max(200)).min(1).max(500),
-});
-export type ApplyValidationCorrectionsInput = z.infer<
-  typeof applyValidationCorrectionsInput
->;
-
-export const applyValidationCorrectionsOut = z.discriminatedUnion("status", [
-  z.object({
-    status: z.literal("applied"),
-    runId: runShortcode,
-    purchaseId: purchaseShortcode,
-    operationId: importOperationId,
-    applied: z.array(z.string()),
-    outcome: z.enum(["replayed", "raw_evidence_drift", "semantic_drift"]),
-    remainingCorrections: z.number().int().nonnegative(),
-  }),
-  /** Nothing was written: raw diagnostics name each selection that no longer holds. */
-  z.object({
-    status: z.literal("stale"),
-    runId: runShortcode,
-    purchaseId: purchaseShortcode,
-    stale: z.array(
-      z.object({
-        correctionId: z.string().nullable(),
-        reason: z.string().min(1),
-      }),
-    ),
-  }),
-]);
-export type ApplyValidationCorrectionsOut = z.infer<
-  typeof applyValidationCorrectionsOut
->;
-
-/** Bounded Product enrichment write. Price is deliberately absent. */
-export const commitProductEnrichmentInput = z.object({
-  _runExecution: purchaseImportRunExecution,
-  productId: productShortcode,
-  targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-  changes: z
-    .object({
-      manufacturer: z.string().trim().min(1).max(300).optional(),
-      categoryId: productCategoryShortcode.optional(),
-      model: z.string().trim().min(1).max(300).optional(),
-      identifiers: z
-        .array(
-          z.object({
-            evidenceId: z.uuid(),
-            source: externalIdSource,
-            kind: externalIdKind,
-            externalId: z.string().trim().min(1).max(500),
-            url: z.url().nullable().optional(),
-          }),
-        )
-        .max(20)
-        .optional(),
-      image: z
-        .object({
-          evidenceId: z.uuid(),
-          url: z.url(),
-          naturalWidth: z.number().int().positive(),
-          naturalHeight: z.number().int().positive(),
-        })
-        .optional(),
-    })
-    .refine(
-      (value) => Object.keys(value).length > 0,
-      "at least one change is required",
-    ),
-});
-export type CommitProductEnrichmentInput = z.infer<
-  typeof commitProductEnrichmentInput
->;
-
-export const commitProductEnrichmentOut = z.object({
-  runId: runShortcode,
-  operationId: importOperationId,
-  productId: productShortcode,
-  status: z.enum(["running", "needs_review"]),
-  changedFields: z.array(
-    z.enum(["manufacturer", "categoryId", "model", "identifiers", "image"]),
-  ),
-  /**
-   * Proven identifiers another Product already owns. They are never
-   * reassigned; the pair is proposed in the Product match queue instead.
-   */
-  skippedIdentifiers: z
-    .array(
-      z.object({
-        source: externalIdSource,
-        kind: externalIdKind,
-        externalId: z.string(),
-        ownerProductId: productShortcode,
-      }),
-    )
-    .default([]),
-});
-
-/**
- * Close one enrichment target without a write: no exact source proves the
- * variant, or the Product is retired, bundle-only, or ambiguous. The reason
- * stays on the target for the member, and the run moves to its next Product.
- */
-export const skipProductEnrichmentInput = z.object({
-  _runExecution: purchaseImportRunExecution,
-  productId: productShortcode,
-  reason: z.string().trim().min(1).max(500),
-});
-export type SkipProductEnrichmentInput = z.infer<
-  typeof skipProductEnrichmentInput
->;
-export const skipProductEnrichmentOut = z.object({
-  runId: runShortcode,
-  productId: productShortcode,
-  state: z.literal("skipped"),
-});
-
-export const overwriteProductEnrichmentInput = z.object({
-  _runExecution: purchaseImportRunExecution,
-  productId: productShortcode,
-  targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-  change: z.discriminatedUnion("field", [
-    z.object({
-      field: z.literal("manufacturer"),
-      value: z.string().trim().min(1).max(300).nullable(),
-    }),
-    z.object({
-      field: z.literal("categoryId"),
-      value: productCategoryShortcode.nullable(),
-    }),
-    z.object({
-      field: z.literal("model"),
-      value: z.string().trim().min(1).max(300).nullable(),
-    }),
-  ]),
-});
-export type OverwriteProductEnrichmentInput = z.infer<
-  typeof overwriteProductEnrichmentInput
->;
-
-export const overwriteProductEnrichmentOut = z.object({
-  runId: runShortcode,
-  productId: productShortcode,
-  changedField: z.enum(["manufacturer", "categoryId", "model"]),
-});
-
 export const importOperationStatusInput = z.object({
   _runExecution: purchaseImportRunExecution,
 });
-export type ImportOperationStatusInput = z.infer<
-  typeof importOperationStatusInput
->;
-
 export const importOperationStatusOut = z.object({
   runId: runShortcode,
   operationId: importOperationId,
@@ -1585,29 +731,6 @@ export const confirmMerchantVendorRuleOut = z.object({
   normalizedMerchant: z.string(),
   vendorId: vendorShortcode,
 });
-
-export const submitReceiptEvidenceInput = z.object({
-  huntId: z.uuid(),
-  imageId: imageShortcode,
-});
-export type SubmitReceiptEvidenceInput = z.infer<
-  typeof submitReceiptEvidenceInput
->;
-export const submitReceiptEvidenceOut = z.object({
-  huntId: z.uuid(),
-  imageId: imageShortcode,
-  queued: z.boolean(),
-});
-
-export const listReceiptHuntsInput = z.object({});
-/** A card charge still waiting on a person-confirmed photo of its receipt. */
-export const receiptHunt = z.object({
-  id: z.uuid(),
-  transactionDate: z.iso.date().nullable(),
-  merchant: z.string().nullable(),
-  amountInCents: z.number().int().nonnegative(),
-});
-export const listReceiptHuntsOut = z.object({ items: z.array(receiptHunt) });
 
 export const importAuditFinding = z.object({
   kind: runFindingKind,

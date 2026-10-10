@@ -1,6 +1,6 @@
 /**
- * Everything the purchase agent can reach. The agent reads untrusted vendor
- * pages, mail, and photos, so it holds no database, binding, secret, or raw
+ * Everything the import agent can reach. The agent reads untrusted mail and
+ * photos, so it holds no database, binding, secret, or raw
  * Worker `env`: the host (`server/purchase-import/agent-host.ts`) builds this
  * narrowed environment, and every Cubby effect is a method of one Run's
  * services (`server/purchase-import/agent-services.ts`), which parses its
@@ -15,19 +15,8 @@ import type {
   markRunFailedInput,
   purchaseAgentOperationRef,
   reconcileSettledRunInput,
-  researchCoordinatorStatus,
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-services";
-import type {
-  ResearchWorkNextInput,
-  ResearchWorkObserveInput,
-  ResearchWorkResolveInput,
-  ResearchMailSearchInput,
-  ResearchMailReadInput,
-  ResearchWebSearchInput,
-  ResearchWebReadInput,
-  ResearchFindInput,
-} from "@cubby/schemas/research-tools";
 import type { AiGatewayEnvironment } from "@cubby/shared/ai/gateway-metadata";
 import type {
   ChatGptInference,
@@ -55,8 +44,8 @@ export type DispatchInput = {
 /** The coordinator Durable Object's RPC surface. */
 export interface PurchaseImportRunAgentRpc {
   dispatch(input: DispatchInput): Promise<{ accepted: boolean }>;
-  /** External disposal is receipt-authorized and never enters a model turn. */
-  retire(input: { receiptId: string }): Promise<{ disposed: boolean }>;
+  /** Destroy a settled Run's transcript; never enters a model turn. */
+  retire(): Promise<{ disposed: boolean }>;
 }
 
 /** A service result: the host's JSON answer, or null when there is none. */
@@ -66,11 +55,10 @@ type OperationRef = z.input<typeof purchaseAgentOperationRef>;
 
 /** One Run's services. No method takes a Run: the host bound it. */
 export interface RunServices {
-  researchCoordinatorStatus(): Promise<
-    z.output<typeof researchCoordinatorStatus>
-  >;
-  authorizeResearchRetirement(receiptId: string): Promise<void>;
-  processResearchRetention(receiptId: string): Promise<{ completed: boolean }>;
+  /** True once the Run's coordinator was destroyed; it never executes again. */
+  coordinatorRetired(): Promise<boolean>;
+  /** Refuse to destroy the coordinator of a Run that has not settled. */
+  authorizeRetirement(): Promise<void>;
   /**
    * Require the member's live Purchase Agent grant before a new coordinator
    * starts; without one the host pauses the Run for authorization and throws.
@@ -82,34 +70,6 @@ export interface RunServices {
   loadScope(): Promise<{ purpose: AgentImportRunPurpose; agentId: string }>;
   canDispatchCoordinator(eventId: string): Promise<boolean>;
   acknowledgeCoordinator(eventId: string): Promise<boolean>;
-  researchNext(input: ResearchWorkNextInput, callId: string): Promise<object>;
-  /** Host-owned iteration before a normal final answer settles its submission. */
-  researchContinue(callId: string, admitted?: boolean): Promise<object>;
-  researchObserve(
-    input: ResearchWorkObserveInput,
-    callId: string,
-  ): Promise<object>;
-  researchResolve(
-    input: ResearchWorkResolveInput,
-    callId: string,
-  ): Promise<object>;
-  researchMailSearch(
-    input: ResearchMailSearchInput,
-    callId: string,
-  ): Promise<object>;
-  researchMailRead(
-    input: ResearchMailReadInput,
-    callId: string,
-  ): Promise<object>;
-  researchWebSearch(
-    input: ResearchWebSearchInput,
-    callId: string,
-  ): Promise<object>;
-  researchWebRead(input: ResearchWebReadInput, callId: string): Promise<object>;
-  researchFind(input: ResearchFindInput, callId: string): Promise<object>;
-  researchResume(signal: AgentSignal): Promise<object | null>;
-  /** Delivery receipt follows successful durable submission, including replay. */
-  researchAcknowledge(signal: AgentSignal): Promise<void>;
   claimNextWork(input: OperationRef): Promise<RunServiceResult>;
   /**
    * One request to Cubby's MCP server, in process. The host mints a fresh

@@ -6,10 +6,8 @@ import {
   type AgentConversationSettlement,
 } from "@cubby/schemas/agent-conversation";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import { initiateRunEvidenceUploadInput } from "@cubby/schemas/purchase-import";
 import type { RunOut } from "@cubby/schemas/run";
 import { humanize } from "@cubby/shared";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
@@ -40,12 +38,8 @@ import type { RunDetail } from "~/contracts/run.contract";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  purchaseImport,
-  run as runOperations,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { putPresignedObject } from "~/lib/presigned-upload";
 import { formatCurrency } from "~/lib/utils";
 import { useSectionVisible } from "~/ui/data-table/detail-page";
 import { Row, Section, Stack } from "~/ui/layout";
@@ -99,51 +93,19 @@ interface RunAction {
   disabled?: boolean;
 }
 
-const EVIDENCE_GAP_STATES = new Set([
-  "needs_evidence",
-  "unavailable",
-  "unresolved",
-]);
-
 /**
- * Every control this run's state offers, in one list: live pause handoffs and
- * stop, dispatch recovery for a run the agent never picked up, evidence
- * recovery for a validation that found none, and the terminal retries.
+ * Every control this run's state offers, in one list: stop, dispatch recovery
+ * for a run the agent never picked up, and the terminal retries.
  */
 function runActions(run: RunDetail): RunAction[] {
   const actions: RunAction[] = [];
-  if (run.status === "paused_auth" || run.status === "paused_offline")
-    actions.push({
-      action: "resume",
-      label:
-        run.status === "paused_auth"
-          ? "I've signed in — resume run"
-          : "Browser is connected — resume run",
-    });
   if (ACTIVE_RUN_STATUSES.has(run.status))
     actions.push({ action: "cancel", label: "Stop run", variant: "outline" });
   const { dispatch } = run;
   if (!dispatch.coordinatorStartedAt && dispatch.state !== "started")
     actions.push(
-      {
-        action: "retry_dispatch",
-        label: "Retry dispatch",
-        disabled: dispatch.error === "Awaiting manual evidence upload",
-      },
+      { action: "retry_dispatch", label: "Retry dispatch" },
       { action: "abort", label: "Abort", variant: "outline" },
-    );
-  if (
-    run.purpose === "purchase_validation" &&
-    (run.status === "needs_review" || run.status === "failed") &&
-    run.targets.some((target) => EVIDENCE_GAP_STATES.has(target.state))
-  )
-    actions.push(
-      { action: "upload_evidence", label: "Upload evidence" },
-      {
-        action: "no_evidence_available",
-        label: "No evidence available",
-        variant: "outline",
-      },
     );
   if (
     TERMINAL_RUN_STATUSES.has(run.status) &&
@@ -214,20 +176,6 @@ function RunActionButtons({
 function RunControls({ run }: { run: RunDetail }) {
   return (
     <Stack gap="sm">
-      {run.status === "paused_auth" || run.status === "paused_offline" ? (
-        <Section
-          title={
-            run.status === "paused_auth"
-              ? `Sign in to ${run.vendorAccount?.label ?? "the retailer"}`
-              : "Reconnect the Mac browser"
-          }
-          description={
-            run.status === "paused_auth"
-              ? "Use the Cubby-managed browser tab on your Mac to finish sign-in. Leave the tab open; the agent will continue with the order page after you resume."
-              : "Open the Cubby Mac app and reconnect its browser bridge. Keep the retailer tab open before resuming."
-          }
-        />
-      ) : null}
       <DetailAction>
         <RunActionButtons runId={run.publicId} actions={runActions(run)}>
           {run.purpose === "photo_inventory" &&
@@ -240,9 +188,6 @@ function RunControls({ run }: { run: RunDetail }) {
         </RunActionButtons>
       </DetailAction>
       <RunLineageAndInputs run={run} />
-      <DetailAction>
-        <ManualEvidenceUpload run={run} />
-      </DetailAction>
     </Stack>
   );
 }
@@ -299,66 +244,6 @@ function RunLineageAndInputs({ run }: { run: RunDetail }) {
   );
 }
 
-function ManualEvidenceUpload({ run }: { run: RunDetail }) {
-  const queryClient = useQueryClient();
-  const target = run.targets.find((item) => item.state === "needs_evidence");
-  const upload = useMutation({
-    mutationFn: async (file: File) => {
-      if (!target) throw new Error("This run has no evidence target.");
-      const bytes = await file.arrayBuffer();
-      const checksum = await sha256Hex(bytes);
-      const contentType =
-        initiateRunEvidenceUploadInput.shape.contentType.parse(file.type);
-      const staged = await purchaseImport.initiateRunEvidenceUpload.call({
-        runId: run.publicId,
-        targetId: target.id,
-        kind: "manual_upload",
-        contentType,
-        byteSize: file.size,
-        checksum,
-        filename: file.name,
-        sourceMetadata: { filename: file.name },
-      });
-      // The guarded upload endpoint verifies the persisted manifest and live Run.
-      try {
-        await putPresignedObject(staged.uploadUrl, bytes, contentType);
-      } catch {
-        throw new Error("Evidence bytes could not be stored.");
-      }
-      return runOperations.control.call({
-        runId: run.publicId,
-        action: "retry_dispatch",
-      });
-    },
-    onSuccess: () => invalidateOperationTags(queryClient, ripple.runOnly),
-  });
-  if (
-    run.purpose !== "purchase_validation" ||
-    !["running", "dispatch_failed"].includes(run.status) ||
-    !target
-  )
-    return null;
-  return (
-    <label className="grid min-h-11 cursor-pointer items-center border border-border px-3 py-2 text-sm font-medium">
-      <span>
-        {upload.isPending ? "Uploading evidence…" : "Choose evidence file"}
-      </span>
-      <input
-        className="sr-only"
-        type="file"
-        disabled={upload.isPending}
-        onChange={(event) => {
-          const file = event.currentTarget.files?.[0];
-          if (file) upload.mutate(file);
-        }}
-      />
-      {upload.isError ? (
-        <StatusText tone="destructive">{upload.error.message}</StatusText>
-      ) : null}
-    </label>
-  );
-}
-
 function AgentSurface({ run }: { run: RunDetail }) {
   if (!ACTIVE_RUN_STATUSES.has(run.status)) {
     return <TerminalAgentSurface run={run} />;
@@ -371,23 +256,15 @@ function agentWorkHeadline(
   isPhotoRun: boolean,
   proposedGroups?: number,
 ): string {
-  const enrichment = run.purpose === "product_enrichment";
   if (run.status === "completed")
-    return isPhotoRun
-      ? "Photo review complete"
-      : enrichment
-        ? "Product enrichment complete"
-        : "Purchase import complete";
-  if (run.status === "paused_auth") return "Waiting for retailer sign-in";
+    return isPhotoRun ? "Photo review complete" : "Purchase import complete";
   if (run.status === "paused_approval") return "Waiting for your approval";
   if (run.status === "failed" || run.status === "dispatch_failed")
     return "Agent work stopped";
   if (isPhotoRun && proposedGroups)
     return `${proposedGroups} item ${proposedGroups === 1 ? "group is" : "groups are"} ready for review`;
   if (isPhotoRun) return "Preparing photo groups";
-  return enrichment
-    ? "Reading product pages"
-    : "Working through purchase evidence";
+  return "Working through purchase evidence";
 }
 
 /** The line under the headline, in the unit the run works in. */
@@ -398,8 +275,6 @@ function agentWorkDetail(run: RunDetail, settledGroups?: number) {
     ).length;
     return `${photos} ${photos === 1 ? "photo" : "photos"} received${settledGroups ? ` · ${settledGroups} groups settled` : ""}`;
   }
-  if (run.purpose === "product_enrichment")
-    return `${run.targets.length} ${run.targets.length === 1 ? "product" : "products"} selected · Research results below`;
   return `${run.ordersSeen} ${run.ordersSeen === 1 ? "order" : "orders"} seen · ${run.imported} imported · ${run.updated} updated`;
 }
 
@@ -1100,17 +975,12 @@ const isStoppedRun = (run: RunDetail) => !isActiveRun(run);
 /** Whether the controls slot has anything to offer for this run's state. */
 function hasRunControls(run: RunDetail): boolean {
   return (
-    run.status === "paused_auth" ||
-    run.status === "paused_offline" ||
     runActions(run).length > 0 ||
     Boolean(
       run.restartInputs ||
       run.predecessorRunPublicId ||
       run.successorRunPublicId,
-    ) ||
-    (run.purpose === "purchase_validation" &&
-      run.status === "dispatch_failed" &&
-      run.targets.some((item) => item.state === "needs_evidence"))
+    )
   );
 }
 
@@ -1146,7 +1016,7 @@ function ImportRunSlot({
   return shown ? children(run) : null;
 }
 
-/** Run detail slot: sign-in handoffs, control actions, lineage and restart inputs. */
+/** Run detail slot: control actions, lineage and restart inputs. */
 export function RunImportControls({ record }: { record: RunOut }) {
   return (
     <ImportRunSlot record={record} visible={hasRunControls}>
@@ -1200,7 +1070,7 @@ export function RunPhotoBatch({ record }: { record: RunOut }) {
                 status={run.status}
                 nested
               />
-              <h3 className="text-sm font-medium">System and Mac log</h3>
+              <h3 className="text-sm font-medium">System log</h3>
               <EntityReportSlot
                 slot="run.import-debug-log"
                 id={run.publicId}
@@ -1244,7 +1114,6 @@ function RunAgentActionRead({ record }: { record: RunOut }) {
       {query.data.purpose === "photo_inventory" ? (
         <PhotoRunGroupingAction run={query.data} />
       ) : null}
-      <ManualEvidenceUpload run={query.data} />
       <RunActionButtons
         runId={query.data.publicId}
         actions={runActions(query.data)}

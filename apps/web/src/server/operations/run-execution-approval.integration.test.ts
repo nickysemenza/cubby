@@ -1,5 +1,5 @@
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
-import { runShortcode, userId } from "@cubby/schemas/identifiers";
+import { userId } from "@cubby/schemas/identifiers";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
@@ -19,7 +19,6 @@ import {
 } from "~/server/purchase-import/gmail/discovery";
 import type { GmailProvider } from "~/server/purchase-import/gmail/types";
 import { getDb } from "~/server/repo/database-helpers";
-import { runReport } from "~/server/repo/entity-report/run";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
 import { ensureRun } from "~/server/runs/ensure-run";
@@ -155,17 +154,6 @@ describe("authenticated member execution approval", () => {
       .from(run)
       .where(eq(run.id, id));
     if (!before) throw new Error("Synthetic historical Run missing");
-    const report = await runReport(
-      ctx.db,
-      "run.live-progress",
-      runShortcode.parse(before.shortcode),
-      undefined,
-    );
-    const visible = JSON.stringify(report);
-    expect(visible).toContain("synthetic vendor");
-    expect(visible).toContain("2025/01/01");
-    expect(visible).toContain("synthetic-next-page");
-    expect(visible).toContain("pagesScanned");
     const result = await invoke("control", {
       runId: before.shortcode,
       action: "retry",

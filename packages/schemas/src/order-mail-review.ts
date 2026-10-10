@@ -1,15 +1,11 @@
 import { z } from "zod";
 
-import { plainDate } from "./base-entity.js";
 import {
-  financialTransactionShortcode,
   ledgerPartyShortcode,
   purchaseShortcode,
   runShortcode,
-  vendorAccountShortcode,
   vendorShortcode,
 } from "./identifier-fields.js";
-import { chargeHuntOutcome } from "./run-fields.js";
 import {
   mailboxClassification,
   mailboxMessageStatus,
@@ -117,34 +113,3 @@ export const orderMailImportOut = z.object({ runIds: z.array(runShortcode) });
 export const purchaseOrderMailInput = z.object({
   purchaseId: purchaseShortcode,
 });
-
-/** One member's unallocated charges with a browser-searchable hunt on a Vendor account. */
-export const vendorChargeHuntsInput = z.object({
-  vendorAccountId: vendorAccountShortcode,
-});
-export type VendorChargeHuntsInput = z.infer<typeof vendorChargeHuntsInput>;
-export const vendorChargeHuntsOut = z.object({
-  items: z.array(
-    z.object({
-      transactionId: financialTransactionShortcode,
-      merchant: z.string().nullable(),
-      amount: z.number(),
-      transactionDate: plainDate.nullable(),
-      /** The hunt's state as stored; its meaning is `reason` when not selectable. */
-      state: z.string(),
-      /** Why this charge cannot be selected now; null when it can. */
-      reason: z.string().nullable(),
-      /** The unfinished run that owns this hunt, when one does. */
-      runId: runShortcode.nullable(),
-      /** Its outcome on that run. */
-      outcome: chargeHuntOutcome.nullable(),
-    }),
-  ),
-});
-/** Charges of one Vendor account that one browser run should search for. */
-export const chargeRunStartInput = z.object({
-  vendorAccountId: vendorAccountShortcode,
-  transactionIds: z.array(financialTransactionShortcode).min(1).max(50),
-});
-export type ChargeRunStartInput = z.infer<typeof chargeRunStartInput>;
-export const chargeRunStartOut = z.object({ runId: runShortcode });

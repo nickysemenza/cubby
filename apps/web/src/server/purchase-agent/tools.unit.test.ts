@@ -1,15 +1,11 @@
-import { DatabaseSync } from "node:sqlite";
-
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { validateToolArguments } from "@earendil-works/pi-ai";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import { fromAny, fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import type { RunServices } from "./environment";
-import { recordResearchToolOutcome } from "./research-failure-bound";
-import { photoInventoryTools, purchaseImportTools } from "./tools";
+import { runAgentTools } from "./tools";
 
 function fakeApi(): ToolExecutionApi {
   const memos = new Map<string, unknown>();
@@ -20,8 +16,8 @@ function fakeApi(): ToolExecutionApi {
     },
   });
 }
-const tools = (services: RunServices) => photoInventoryTools(() => services);
-describe("photo inventory retained tool behavior", () => {
+const tools = (services: RunServices) => runAgentTools(() => services);
+describe("run agent tool behavior", () => {
   it("ends the submission when a claim finds the run already stopped", async () => {
     const tool = tools(
       fromPartial<RunServices>({
@@ -67,82 +63,6 @@ describe("photo inventory retained tool behavior", () => {
         },
       });
       expect(args.awaitingApproval).toBe(expected);
-    }
-  });
-});
-
-// Returned browser failures must not reset the durable bound; replay must not
-// count twice, and member/browser waits must remain recoverable.
-describe("returned browser failure admission", () => {
-  it("stops distinct unchanged blocked calls through persisted tool outcomes, not one replay", async () => {
-    const db = new DatabaseSync(":memory:");
-    db.exec("CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
-    const write = db.prepare(
-      "INSERT INTO state VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-    );
-    const read = db.prepare("SELECT value FROM state WHERE key=?");
-    const store = {
-      read: (key: string) => {
-        return z.string().optional().parse(read.get(key)?.value);
-      },
-      write: (key: string, value: string) => {
-        write.run(key, value);
-      },
-      atomic: (effect: () => string | undefined) => {
-        db.exec("BEGIN");
-        try {
-          const value = effect();
-          db.exec("COMMIT");
-          return value;
-        } catch (error) {
-          db.exec("ROLLBACK");
-          throw error;
-        }
-      },
-    };
-    try {
-      let status = "waiting";
-      const tool = purchaseImportTools(
-        () =>
-          fromPartial<RunServices>({
-            researchObserve: async () => ({
-              status,
-              reason: "capture_failed",
-              diagnostic: "Synthetic capture failed",
-              workRef: "00000000-0000-4000-8000-000000000001",
-            }),
-          }),
-        undefined,
-        undefined,
-        (name, args, callId, error) =>
-          recordResearchToolOutcome(store, name, args, callId, error),
-      ).find((candidate) => candidate.name === "work_observe");
-      if (!tool) throw new Error("Missing browser observation tool");
-      const args = {
-        workRef: "00000000-0000-4000-8000-000000000001",
-        action: { kind: "read" },
-      };
-      for (let index = 0; index < 3; index++) {
-        const waiting = await tool.execute(args, fakeApi(), BACKGROUND_CONTEXT);
-        expect(waiting.isError).not.toBe(true);
-        expect(waiting.control?.terminate).toBe(true);
-      }
-      status = "blocked";
-      const first = fakeApi();
-      expect(
-        (await tool.execute(args, first, BACKGROUND_CONTEXT)).isError,
-      ).not.toBe(true);
-      expect(
-        (await tool.execute(args, first, BACKGROUND_CONTEXT)).isError,
-      ).not.toBe(true);
-      expect(
-        (await tool.execute(args, fakeApi(), BACKGROUND_CONTEXT)).isError,
-      ).not.toBe(true);
-      const third = await tool.execute(args, fakeApi(), BACKGROUND_CONTEXT);
-      expect(third.isError).toBe(true);
-      expect(JSON.stringify(third)).toContain("Synthetic capture failed");
-    } finally {
-      db.close();
     }
   });
 });

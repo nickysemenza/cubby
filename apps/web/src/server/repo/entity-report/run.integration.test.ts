@@ -3,7 +3,7 @@ import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { auditLog } from "~/server/db/schema";
-import { startOrResumeRun } from "~/server/purchase-import/run-service";
+import { startImportRunFixture } from "~/server/purchase-import/import-run.fixtures";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -22,7 +22,6 @@ const POLLED = [
   "run.import-approvals",
   "run.import-findings",
   "run.import-targets",
-  "run.import-evidence",
   "run.import-prepared-orders",
   "run.import-timeline",
 ] as const;
@@ -54,10 +53,9 @@ describe("Run detail reports", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
-      trigger: "manual",
     });
     return { run, id: runShortcode.parse(run.publicId), vendor };
   }

@@ -711,101 +711,49 @@ function FieldExplanationContents({
   );
 }
 
-// Byte identity stays available in raw evidence; the explanation shows the public member and source.
-function visibleVerificationValue(value: ExplanationValue): ExplanationValue {
-  const record = explanationRecord.safeParse(value);
-  return record.success
-    ? Object.fromEntries(
-        Object.entries(record.data).filter(([key]) => key !== "contentHash"),
-      )
-    : value;
-}
-
+/** The Sources recorded for this field: where each value was seen, and whether it still holds. */
 export function FieldVerificationEvidence({
   verifications,
 }: Pick<FieldExplanationOutput, "verifications">) {
   if (verifications.length === 0) return null;
   return (
     <section className="grid gap-3 border-t border-border pt-3">
-      <h3 className={sectionLabelClassName}>Source evidence</h3>
-      {verifications.map((verification) => (
-        <div key={verification.key} className="grid gap-2 text-sm leading-5">
+      <h3 className={sectionLabelClassName}>Sources</h3>
+      {verifications.map((source) => (
+        <div key={source.key} className="grid gap-1 text-sm leading-5">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
-            <ExplanationEntityLink
-              entity={verification.run.entityKind}
-              id={verification.run.entityId}
-              name={verification.run.entityId}
-            />
+            <span className="font-medium">
+              {source.supportsCurrentValue === false
+                ? "Earlier value"
+                : "Current value"}
+            </span>
+            {source.selectedVariant ? (
+              <span className="text-muted-foreground">
+                Selected variant: {source.selectedVariant}
+              </span>
+            ) : null}
+            {source.recorder.runId ? (
+              <ExplanationEntityLink
+                entity="run"
+                id={source.recorder.runId}
+                name={source.recorder.runId}
+              />
+            ) : null}
             <time
-              dateTime={verification.verifiedAt}
+              dateTime={source.observedAt ?? source.createdAt}
               className="text-muted-foreground"
             >
-              {formatInstant(verification.verifiedAt, "dateTime")}
+              {formatInstant(source.observedAt ?? source.createdAt, "dateTime")}
             </time>
           </div>
-          <div className="grid gap-1">
-            <h4 className="text-xs font-medium text-muted-foreground">
-              {entityFieldModels[verification.subject.entityKind].fields.find(
-                (field) => field.key === verification.fieldPath.split(".")[0],
-              )?.label ?? "Verified value"}
-            </h4>
-            <ReadableExplanationValue
-              value={visibleVerificationValue(verification.value)}
-            />
-          </div>
-          {verification.support && verification.supportRetiredAt === null ? (
-            <>
-              <p className="break-words">{verification.support.reasoning}</p>
-              <blockquote className="break-words text-muted-foreground">
-                “{verification.support.observation}”
-              </blockquote>
-              {verification.support.selectedVariant ? (
-                <div className="grid gap-1 text-xs">
-                  <p className="font-medium">
-                    Selected variant:{" "}
-                    {verification.support.selectedVariant.identity}
-                  </p>
-                  <ReadableExplanationValue
-                    value={verification.support.selectedVariant.attributes}
-                  />
-                  <p>{verification.support.selectedVariant.reasoning}</p>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <div className="grid gap-1 text-xs">
-              <p className="font-medium text-warning-ink">
-                Verification rationale retired
-              </p>
-              <p>
-                Proof gap: this value needs fresh verification. The accepted
-                value and source remain available.
-              </p>
-              {verification.supportRetiredAt ? (
-                <time
-                  dateTime={verification.supportRetiredAt}
-                  className="text-muted-foreground"
-                >
-                  Retired{" "}
-                  {formatInstant(verification.supportRetiredAt, "dateTime")}
-                </time>
-              ) : null}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-            {verification.source.url ? (
-              <ExternalLinkText href={verification.source.url}>
-                {verification.source.label}
-              </ExternalLinkText>
-            ) : (
-              <span>{verification.source.label}</span>
-            )}
-            <ExplanationEntityLink
-              entity={verification.subject.entityKind}
-              id={verification.subject.entityId}
-              name={verification.subject.entityId}
-            />
-          </div>
+          {source.quote ? (
+            <blockquote className="break-words text-muted-foreground">
+              “{source.quote}”
+            </blockquote>
+          ) : null}
+          {source.url ? (
+            <ExternalLinkText href={source.url}>{source.url}</ExternalLinkText>
+          ) : null}
         </div>
       ))}
     </section>

@@ -18,8 +18,8 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
+import { startImportRunFixture } from "./import-run.fixtures";
 import { settleRetainedPaymentEvidence } from "./retained-settlement";
-import { startOrResumeRun } from "./run-service";
 
 const checksum = (seed: number) => seed.toString(16).padStart(64, "0");
 
@@ -48,16 +48,13 @@ describe("settlement from retained order evidence", () => {
       identity: { kind: "credit_card", issuer: null, network: "visa" },
       ledgerPartyId: party.id,
     });
-    const run = await startOrResumeRun(ctx.db, {
-      ledgerPartyId: party.id,
-      vendorAccountId: account.id,
-      trigger: "manual",
-    });
+    // Each order is imported by its own member Run: a commit settles the Run.
+    const run = { ledgerPartyId: party.id, vendorAccountId: account.id };
     return { party, vendor, account, card, run };
   }
 
   async function importOrder(
-    runId: string,
+    scope: Parameters<typeof startImportRunFixture>[1],
     order: {
       orderId: string;
       total: number;
@@ -68,6 +65,10 @@ describe("settlement from retained order evidence", () => {
     },
   ) {
     seed += 2;
+    const { id: runId } = await startImportRunFixture(ctx.db, {
+      ...scope,
+      trigger: "manual",
+    });
     const stable = `order-${order.orderId}-${order.source ?? "browser"}`;
     await preparePurchaseImport(
       ctx.db,
@@ -172,7 +173,7 @@ describe("settlement from retained order evidence", () => {
 
   it("settles a statement charge that arrives after the order from the order's retained payment line", async () => {
     const { card, run } = await world();
-    const purchaseId = await importOrder(run.id, {
+    const purchaseId = await importOrder(run, {
       orderId: "FW-1001",
       total: 40,
       payments: [{ amount: 40, chargedAt: "2026-09-02T12:00:00.000Z" }],
@@ -202,12 +203,12 @@ describe("settlement from retained order evidence", () => {
 
   it("leaves a charge two unsettled orders could both claim for review", async () => {
     const { card, run } = await world();
-    const first = await importOrder(run.id, {
+    const first = await importOrder(run, {
       orderId: "FW-2001",
       total: 25,
       payments: [{ amount: 25, chargedAt: "2026-09-02T12:00:00.000Z" }],
     });
-    const second = await importOrder(run.id, {
+    const second = await importOrder(run, {
       orderId: "FW-2002",
       total: 25,
       payments: [{ amount: 25, chargedAt: "2026-09-03T12:00:00.000Z" }],
@@ -244,17 +245,17 @@ describe("settlement from retained order evidence", () => {
       merchant: "Other Shop",
     });
     const purchases = [
-      await importOrder(run.id, {
+      await importOrder(run, {
         orderId: "FW-3001",
         total: 31,
         payments: [{ amount: 31, chargedAt: "2026-09-02T12:00:00.000Z" }],
       }),
-      await importOrder(run.id, {
+      await importOrder(run, {
         orderId: "FW-3002",
         total: 32,
         payments: [{ amount: 32, chargedAt: "2026-09-02T12:00:00.000Z" }],
       }),
-      await importOrder(run.id, {
+      await importOrder(run, {
         orderId: "FW-3003",
         total: 33,
         payments: [{ amount: 33, chargedAt: "2026-09-02T12:00:00.000Z" }],
@@ -270,7 +271,7 @@ describe("settlement from retained order evidence", () => {
       amount: 50,
       postedDate: "2026-09-04",
     });
-    const first = await importOrder(run.id, {
+    const first = await importOrder(run, {
       orderId: "FW-4001",
       total: 20,
       payments: [{ amount: 50, chargedAt: "2026-09-03T12:00:00.000Z" }],
@@ -278,7 +279,7 @@ describe("settlement from retained order evidence", () => {
     // Until the second order arrives, the first order's line overstates its
     // own total and nothing claims the rest: no settlement yet.
     expect(await allocationsFor([first])).toEqual([]);
-    const second = await importOrder(run.id, {
+    const second = await importOrder(run, {
       orderId: "FW-4002",
       total: 30,
       payments: [{ amount: 50, chargedAt: "2026-09-03T12:00:00.000Z" }],
@@ -296,7 +297,7 @@ describe("settlement from retained order evidence", () => {
   it("does not let an order without a printed total absorb a larger combined charge", async () => {
     const { card, run } = await world();
     await charge(card.id, { amount: 50, postedDate: "2026-09-04" });
-    const purchaseId = await importOrder(run.id, {
+    const purchaseId = await importOrder(run, {
       orderId: "FW-4101",
       total: 20,
       unprintedTotal: true,
@@ -325,12 +326,12 @@ describe("settlement from retained order evidence", () => {
         matchedOrderIds: ["FW-5001", "FW-5002"],
       });
     const purchases = [
-      await importOrder(run.id, {
+      await importOrder(run, {
         orderId: "FW-5001",
         total: 20,
         payments: [],
       }),
-      await importOrder(run.id, {
+      await importOrder(run, {
         orderId: "FW-5002",
         total: 30,
         payments: [],
@@ -351,7 +352,7 @@ describe("settlement from retained order evidence", () => {
       postedDate: "2026-09-03",
       merchant: "FORGEWEAR",
     });
-    const purchaseId = await importOrder(run.id, {
+    const purchaseId = await importOrder(run, {
       orderId: "FW-6001",
       total: 44,
       payments: [{ amount: 44, chargedAt: "2026-09-02T12:00:00.000Z" }],
@@ -365,12 +366,12 @@ describe("settlement from retained order evidence", () => {
 
   it("leaves an order whose sources disagree about its payments for review", async () => {
     const { card, run } = await world();
-    const purchaseId = await importOrder(run.id, {
+    const purchaseId = await importOrder(run, {
       orderId: "FW-8001",
       total: 40,
       payments: [{ amount: 40, chargedAt: "2026-09-02T12:00:00.000Z" }],
     });
-    await importOrder(run.id, {
+    await importOrder(run, {
       orderId: "FW-8001",
       total: 40,
       source: "export",
@@ -390,7 +391,7 @@ describe("settlement from retained order evidence", () => {
       amount: 30,
       postedDate: "2026-09-03",
     });
-    const partly = await importOrder(run.id, {
+    const partly = await importOrder(run, {
       orderId: "FW-7001",
       total: 55,
       payments: [
@@ -406,7 +407,7 @@ describe("settlement from retained order evidence", () => {
       amount: 30,
     });
     await charge(card.id, { amount: 25, postedDate: "2026-09-03" });
-    const other = await importOrder(run.id, {
+    const other = await importOrder(run, {
       orderId: "FW-7002",
       total: 25,
       payments: [{ amount: 25, chargedAt: "2026-09-02T12:00:00.000Z" }],

@@ -1,5 +1,4 @@
-/* eslint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/no-object-parameters, anti-slop/no-unknown-returns -- The scenario adapter forwards queue events, browser outcomes, and peer fixtures unchanged as JSON. */
-import type { researchAssessment } from "@cubby/schemas/research-assessment";
+/* eslint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/no-object-parameters, anti-slop/no-unknown-returns -- The scenario adapter forwards queue events and peer fixtures unchanged as JSON. */
 import type { RunPurpose } from "@cubby/schemas/run-fields";
 import type { TestHarness } from "wrangler";
 import { z } from "zod";
@@ -21,10 +20,6 @@ export type ScriptedScenario = {
     path: string;
     includes: string;
     steps: ScriptStep[];
-  }>;
-  assessments?: Array<{
-    match: string;
-    output: z.input<typeof researchAssessment>;
   }>;
   extractions?: Array<{ match: string; output: unknown }>;
   audit?: unknown;
@@ -77,10 +72,9 @@ export function scenarioControls(harness: TestHarness) {
       });
       const gatewayFixture: Pick<
         ScriptedScenario,
-        "extractions" | "assessments" | "audit" | "decisions"
+        "extractions" | "audit" | "decisions"
       > = {
         extractions: scenario.extractions ?? [],
-        assessments: scenario.assessments ?? [],
         decisions: scenario.decisions,
       };
       if (scenario.audit) gatewayFixture.audit = scenario.audit;
@@ -92,14 +86,6 @@ export function scenarioControls(harness: TestHarness) {
     /** Deliver one purchase-agent queue event, as the web Worker would. */
     dispatch: (event: Record<string, unknown>) =>
       post(toQueue, "/dispatch", event),
-    /** Connect a simulated Mac browser that answers commands by URL. */
-    connectBrowser: (input: {
-      vendorAccountId: string;
-      ledgerPartyId: string;
-      userId: string;
-      outcomes?: Record<string, unknown>;
-      delayMs?: number;
-    }) => post(toQueue, "/browser-connect", input),
     violations: async () =>
       readJson(z.array(z.string()), () =>
         model.fetch("https://model.test/violations"),

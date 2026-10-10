@@ -2,9 +2,7 @@ import { makeMcpCaller } from "./mcp-caller";
 import { buildActorContext } from "@cubby/schemas/context";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import {
-  commitProductEnrichmentOut,
   commitPurchaseImportOut,
-  overwriteProductEnrichmentOut,
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
 import { proposeProductMatchOut } from "@cubby/schemas/recommendations";
@@ -28,13 +26,7 @@ import { unparsedStartOperationResultSchema } from "~/server/start-operation.con
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import { financialAccount } from "~/server/db/schema";
-import { startOrResumeRun } from "~/server/purchase-import/run-service";
-import { admitProductResearch } from "~/server/purchase-import/product-research-run";
-import { researchServiceFor } from "~/server/purchase-import/research-service";
-import { fromPartial } from "@total-typescript/shoehorn";
-import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { productEnrichmentTarget } from "~/server/purchase-import/product-enrichment-target";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { replaceSettlementRefs } from "~/server/repo/entity-external-ids";
 import { recordStatementRows } from "~/server/repo/statement-row";
@@ -80,44 +72,11 @@ const syntheticProduct = z.object({
 async function readSyntheticRetailerEvidence() {
   const fixture = (name: string) =>
     new URL(`../../tests/e2e/fixtures/${name}`, import.meta.url);
-  const history = fixture("synthetic-retailer-order-history.html");
   const orderPage = fixture("synthetic-retailer-order.html");
   const productPage = fixture("synthetic-retailer-product.html");
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
-    await page.goto(history.href);
-    const historyUrl = await page
-      .locator('link[rel="canonical"]')
-      .getAttribute("href");
-    if (!historyUrl)
-      throw new Error("Synthetic order history has no canonical URL");
-    const links = await page.locator("a").evaluateAll((anchors) =>
-      anchors.map((anchor, index) => ({
-        id: String(index + 1),
-        href: anchor instanceof HTMLAnchorElement ? anchor.href : "",
-        text: anchor.textContent?.trim() ?? "",
-      })),
-    );
-    const classified = classifyOrderCapture(
-      {
-        url: historyUrl,
-        title: await page.title(),
-        text: await page.locator("body").innerText(),
-        links,
-        images: [],
-        capturedAt: "2026-09-21T00:00:00.000Z",
-      },
-      { allowedHosts: ["shop.example.test"] },
-    );
-    if (
-      classified.kind !== "order_list" ||
-      classified.orders.length !== 1 ||
-      classified.orders[0]?.orderId !== orderId
-    )
-      throw new Error(
-        `Synthetic order discovery failed: ${JSON.stringify(classified)}`,
-      );
     await page.goto(orderPage.href);
     const order = syntheticOrder.parse(
       JSON.parse(
@@ -139,7 +98,6 @@ async function readSyntheticRetailerEvidence() {
     );
     if (
       !orderUrl ||
-      classified.orders[0].orderUrl !== orderUrl ||
       order.orderNumber !== orderId ||
       product.name !== purchaseName ||
       order.price !== product.offers.price
@@ -692,27 +650,16 @@ async function importSyntheticPurchase(
   const memberId = member.rows[0]?.id;
   if (member.rows.length !== 1 || !memberId)
     throw new Error("Synthetic member is unavailable for purchase import");
-  const vendor = await insertWithShortcode(db, "vendor", {
+  await insertWithShortcode(db, "vendor", {
     name: "Synthetic Outfitters",
     website: "https://shop.example.test/orders",
     browserDomains: ["shop.example.test"],
-  });
-  const account = await insertWithShortcode(db, "vendorAccount", {
-    label: "Synthetic wardrobe account",
-    vendorId: vendor.id,
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-  });
-  const run = await startOrResumeRun(db, {
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-    vendorAccountId: account.id,
-    trigger: "manual",
   });
   const callPurchase = makeMcpCaller(kernel);
   const prepareOperationId = "prepare:synthetic-wardrobe-order";
   const prepared = preparePurchaseImportOut.parse(
     await callPurchase("purchase_import.prepare", {
       _runExecution: {
-        runId: run.id,
         operationId: prepareOperationId,
         itemOperationIds: ["prepare-item:synthetic-wardrobe-order"],
       },
@@ -772,7 +719,7 @@ async function importSyntheticPurchase(
   const committed = commitPurchaseImportOut.parse(
     await callPurchase("purchase_import.commit", {
       _runExecution: {
-        runId: run.id,
+        run: prepared.runId,
         operationId: "commit:synthetic-wardrobe-order",
       },
       prepareOperationId,
@@ -813,29 +760,6 @@ async function importSyntheticPurchase(
   return purchaseProduct;
 }
 
-async function syntheticWardrobeMemberAndVendor(pool: Pool, userId: string) {
-  const member = await pool.query<{ id: string }>(
-    `SELECT id FROM "LedgerParty" WHERE "userId" = $1 AND kind = 'member' AND "deletedAt" IS NULL`,
-    [userId],
-  );
-  const memberId = member.rows[0]?.id;
-  if (member.rows.length !== 1 || !memberId)
-    throw new Error("Synthetic member is unavailable");
-  const vendorRow = await pool.query<{ id: string }>(
-    `SELECT id FROM "Vendor" WHERE name = 'Synthetic Outfitters' AND "deletedAt" IS NULL`,
-  );
-  const vendorId = vendorRow.rows[0]?.id;
-  if (vendorRow.rows.length !== 1 || !vendorId)
-    throw new Error("Synthetic vendor is unavailable");
-  const account = await pool.query<{ id: string }>(
-    `SELECT id FROM "VendorAccount" WHERE label = 'Synthetic wardrobe account' AND "deletedAt" IS NULL`,
-  );
-  const vendorAccountId = account.rows[0]?.id;
-  if (account.rows.length !== 1 || !vendorAccountId)
-    throw new Error("Synthetic vendor account is unavailable");
-  return { memberId, vendorId, vendorAccountId };
-}
-
 /**
  * Re-import the identical order in a fresh run. A second run replaying the
  * exact same source evidence must be a true no-op — inventory never
@@ -844,33 +768,21 @@ async function syntheticWardrobeMemberAndVendor(pool: Pool, userId: string) {
  */
 async function reimportInNewRunAndAssertNoOp(
   pool: Pool,
-  db: Database,
   kernel: KernelContext,
-  userId: string,
   photoProduct: { id: string; shortcode: string },
   purchaseProduct: { id: string; shortcode: string },
 ): Promise<void> {
-  const { memberId, vendorAccountId } = await syntheticWardrobeMemberAndVendor(
-    pool,
-    userId,
-  );
   const evidence = await readSyntheticRetailerEvidence();
   const before = await readConvergenceFacts(
     pool,
     photoProduct.shortcode,
     purchaseProduct.shortcode,
   );
-  const run = await startOrResumeRun(db, {
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-    vendorAccountId: parseEntityId("vendorAccount", vendorAccountId),
-    trigger: "manual",
-  });
   const callPurchase = makeMcpCaller(kernel);
   const prepareOperationId = "prepare:synthetic-wardrobe-order-reimport";
   const prepared = preparePurchaseImportOut.parse(
     await callPurchase("purchase_import.prepare", {
       _runExecution: {
-        runId: run.id,
         operationId: prepareOperationId,
         itemOperationIds: ["prepare-item:synthetic-wardrobe-order-reimport"],
       },
@@ -924,7 +836,7 @@ async function reimportInNewRunAndAssertNoOp(
   const committed = commitPurchaseImportOut.parse(
     await callPurchase("purchase_import.commit", {
       _runExecution: {
-        runId: run.id,
+        run: prepared.runId,
         operationId: "commit:synthetic-wardrobe-order-reimport",
       },
       prepareOperationId,
@@ -1072,18 +984,10 @@ async function recordOverlappingStatementCsvAndDecoy(
  * conflicting line must be filed as a finding instead of a second Expense.
  */
 async function commitDuplicateOrderHistoryCapture(
-  db: Database,
   kernel: KernelContext,
-  memberId: string,
-  vendorAccountId: string,
   purchaseProduct: { shortcode: string },
 ) {
   const evidence = await readSyntheticRetailerEvidence();
-  const run = await startOrResumeRun(db, {
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-    vendorAccountId: parseEntityId("vendorAccount", vendorAccountId),
-    trigger: "manual",
-  });
   const callPurchase = makeMcpCaller(kernel);
   const duplicateExternalKey = `${evidence.orderUrl}#duplicate-order-history-capture`;
   const duplicateChecksum = createHash("sha256")
@@ -1093,7 +997,6 @@ async function commitDuplicateOrderHistoryCapture(
   const prepared = preparePurchaseImportOut.parse(
     await callPurchase("purchase_import.prepare", {
       _runExecution: {
-        runId: run.id,
         operationId: prepareOperationId,
         itemOperationIds: ["prepare-item:synthetic-wardrobe-order-duplicate"],
       },
@@ -1149,7 +1052,7 @@ async function commitDuplicateOrderHistoryCapture(
   const committed = commitPurchaseImportOut.parse(
     await callPurchase("purchase_import.commit", {
       _runExecution: {
-        runId: run.id,
+        run: prepared.runId,
         operationId: "commit:synthetic-wardrobe-order-duplicate",
       },
       prepareOperationId,
@@ -1190,21 +1093,11 @@ async function runForgeWearTraps(
   photoProduct: { id: string; shortcode: string },
   purchaseProduct: { id: string; shortcode: string },
 ): Promise<void> {
-  const { memberId, vendorAccountId } = await syntheticWardrobeMemberAndVendor(
-    pool,
-    userId,
-  );
   const decoyTransaction = await recordOverlappingStatementCsvAndDecoy(
     db,
     userId,
   );
-  await commitDuplicateOrderHistoryCapture(
-    db,
-    kernel,
-    memberId,
-    vendorAccountId,
-    purchaseProduct,
-  );
+  await commitDuplicateOrderHistoryCapture(kernel, purchaseProduct);
   const facts = await readConvergenceFacts(
     pool,
     photoProduct.shortcode,
@@ -1232,143 +1125,6 @@ async function runForgeWearTraps(
     );
   console.log(
     "[headless-wardrobe-e2e] ForgeWear traps held: overlapping statement rows deduped, the decoy charge stayed unmatched, and the duplicate order-history capture filed a conflict instead of a duplicate",
-  );
-}
-
-async function productEnrichmentFingerprint(
-  db: Database,
-  productId: string,
-): Promise<string> {
-  const target = await productEnrichmentTarget(
-    getDb(db),
-    parseEntityId("product", productId),
-  );
-  if (!target) throw new Error("Product enrichment fingerprint target missing");
-  return target.fingerprint;
-}
-
-/**
- * Product enrichment commit/overwrite: fill-only commit on a Product created
- * by this scenario, then a typed-approval overwrite of that same field.
- * Asserts the overwrite's stored value and that nothing else on the Product
- * changed.
- */
-async function runProductEnrichmentCommitAndOverwrite(
-  pool: Pool,
-  db: Database,
-  kernel: KernelContext,
-  userId: string,
-  purchaseProduct: { id: string; shortcode: string },
-): Promise<void> {
-  const { memberId } = await syntheticWardrobeMemberAndVendor(pool, userId);
-  const callPurchase = makeMcpCaller(kernel);
-
-  const commitFingerprint = await productEnrichmentFingerprint(
-    db,
-    purchaseProduct.id,
-  );
-  const [commitRun] = await admitProductResearch(db, {
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-    userId: testUserId(userId),
-    productIds: [parseEntityId("product", purchaseProduct.id)],
-    cause: "member_request",
-  });
-  if (!commitRun?.created)
-    throw new Error("Product enrichment commit run was blocked");
-  // Fill-only commits may only fill an empty field; the scenario's Product
-  // already has a manufacturer from its import, so this fills `model`.
-  const before = await pool.query<{
-    manufacturer: string;
-    model: string | null;
-    categoryId: string | null;
-  }>(`SELECT manufacturer, model, "categoryId" FROM "Product" WHERE id = $1`, [
-    purchaseProduct.id,
-  ]);
-  if (before.rows[0]?.model !== null)
-    throw new Error(
-      `Enrichment setup expects an empty model: ${JSON.stringify(before.rows)}`,
-    );
-  const committed = commitProductEnrichmentOut.parse(
-    await callPurchase("product_enrichment.commit", {
-      _runExecution: {
-        runId: commitRun.run.id,
-        operationId: "commit:synthetic-wardrobe-enrichment",
-      },
-      productId: purchaseProduct.shortcode,
-      targetFingerprint: commitFingerprint,
-      changes: { model: "SYN-APRON-1" },
-    }),
-  );
-  if (!committed.changedFields.includes("model"))
-    throw new Error(
-      `Enrichment commit did not fill model: ${JSON.stringify(committed)}`,
-    );
-  const afterCommit = await pool.query<{
-    manufacturer: string;
-    model: string | null;
-    categoryId: string | null;
-  }>(`SELECT manufacturer, model, "categoryId" FROM "Product" WHERE id = $1`, [
-    purchaseProduct.id,
-  ]);
-  if (
-    afterCommit.rows[0]?.model !== "SYN-APRON-1" ||
-    afterCommit.rows[0]?.manufacturer !== before.rows[0]?.manufacturer
-  )
-    throw new Error(
-      `Enrichment commit left unexpected state: ${JSON.stringify({ before: before.rows[0], after: afterCommit.rows[0] })}`,
-    );
-
-  const overwriteFingerprint = await productEnrichmentFingerprint(
-    db,
-    purchaseProduct.id,
-  );
-  await researchServiceFor(
-    db,
-    fromPartial<Env>({}),
-    commitRun.run.id,
-  ).researchNext({}, "settle:synthetic-wardrobe-enrichment");
-  const [overwriteRun] = await admitProductResearch(db, {
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-    userId: testUserId(userId),
-    productIds: [parseEntityId("product", purchaseProduct.id)],
-    cause: "member_request",
-  });
-  if (!overwriteRun?.created)
-    throw new Error("Product enrichment overwrite run was blocked");
-  const overwritten = overwriteProductEnrichmentOut.parse(
-    await callPurchase("product_enrichment.overwrite", {
-      _runExecution: {
-        runId: overwriteRun.run.id,
-        operationId: "overwrite:synthetic-wardrobe-enrichment",
-      },
-      productId: purchaseProduct.shortcode,
-      targetFingerprint: overwriteFingerprint,
-      change: { field: "model", value: "SYN-APRON-2" },
-    }),
-  );
-  if (overwritten.changedField !== "model")
-    throw new Error(
-      `Enrichment overwrite changed the wrong field: ${JSON.stringify(overwritten)}`,
-    );
-  const afterOverwrite = await pool.query<{
-    manufacturer: string;
-    model: string | null;
-    categoryId: string | null;
-  }>(`SELECT manufacturer, model, "categoryId" FROM "Product" WHERE id = $1`, [
-    purchaseProduct.id,
-  ]);
-  const row = afterOverwrite.rows[0];
-  if (
-    !row ||
-    row.model !== "SYN-APRON-2" ||
-    row.manufacturer !== afterCommit.rows[0]?.manufacturer ||
-    row.categoryId !== afterCommit.rows[0]?.categoryId
-  )
-    throw new Error(
-      `Enrichment overwrite left unexpected state: ${JSON.stringify({ before: afterCommit.rows[0], after: row })}`,
-    );
-  console.log(
-    "[headless-wardrobe-e2e] Product enrichment commit filled model, and overwrite replaced it with typed approval leaving other fields untouched",
   );
 }
 
@@ -1506,9 +1262,7 @@ export async function runWardrobeConvergenceScenario({
 
     await reimportInNewRunAndAssertNoOp(
       pool,
-      db,
       kernel,
-      userId,
       photoProduct,
       purchaseProduct,
     );
@@ -1518,13 +1272,6 @@ export async function runWardrobeConvergenceScenario({
       kernel,
       userId,
       photoProduct,
-      purchaseProduct,
-    );
-    await runProductEnrichmentCommitAndOverwrite(
-      pool,
-      db,
-      kernel,
-      userId,
       purchaseProduct,
     );
   } finally {

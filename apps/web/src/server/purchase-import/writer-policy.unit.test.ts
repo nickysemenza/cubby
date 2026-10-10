@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  decideLineWrite,
-  matchCompletePaymentSet,
-  uniqueOrderSubsetForCharge,
-} from "./writer-policy";
+import { decideLineWrite, matchCompletePaymentSet } from "./writer-policy";
 
 describe("purchase import writer policy", () => {
   const lines = [
@@ -117,34 +113,5 @@ describe("purchase import writer policy", () => {
         { ...walletCharge, id: "txn-twin" },
       ]),
     ).toBeNull();
-  });
-
-  it("returns only a unique subset of distinct orders", () => {
-    expect(
-      uniqueOrderSubsetForCharge(30, [
-        { id: "a", amount: 10 },
-        { id: "b", amount: 20 },
-        { id: "c", amount: 40 },
-      ]),
-    ).toEqual([
-      { id: "a", amount: 10 },
-      { id: "b", amount: 20 },
-    ]);
-    expect(
-      uniqueOrderSubsetForCharge(20, [
-        { id: "a", amount: 20 },
-        { id: "b", amount: 10 },
-        { id: "c", amount: 10 },
-      ]),
-    ).toBeNull();
-  });
-
-  it("refuses to call a subset unique when there are more orders than it searches", () => {
-    // 10 + 40 is the only subset of the first eight orders summing to 50, but
-    // the ninth (50 alone) makes the choice ambiguous.
-    const orders = [10, 40, 60, 70, 80, 90, 100, 110, 50].map(
-      (amount, index) => ({ id: `o${index}`, amount }),
-    );
-    expect(uniqueOrderSubsetForCharge(50, orders)).toBeNull();
   });
 });

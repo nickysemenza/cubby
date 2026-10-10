@@ -243,7 +243,7 @@ export function externalIdSlotUnchanged(
  * Throws rather than dropping the value. Silently discarding a barcode is the
  * worse failure — nothing downstream can tell it happened.
  */
-function requireCanonicalGtin(value: string): string {
+export function requireCanonicalGtin(value: string): string {
   // The recipebridge normalizer is canonical (8/12/13/14 digits, or a valid
   // ISBN); `normalizeGtin` is its wasm-free twin and cannot resolve ISBN-10.
   const normalized = wasm.scan_code_gtin14(value);
@@ -321,7 +321,7 @@ export function externalIdsContainIsbn(
  *
  * `null` retires the PRIMARY barcode, not every barcode — a product can hold
  * several, and `ensureSlotPrimaries` then promotes the oldest survivor. That is
- * the same rule `product_enrichment.patch_external_ids` documents for removing a primary;
+ * the same rule an `externalIds` remove patch follows for a primary;
  * to clear the whole set, pass an explicit `externalIds` payload.
  */
 export async function syncPrimaryGtin(

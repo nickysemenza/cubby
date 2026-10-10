@@ -4,10 +4,7 @@ import type { Pool } from "pg";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { runTarget } from "~/server/db/schema";
 import { proposePhotoGroups } from "~/server/photo-import-run/proposals";
-import {
-  startOrResumeRun,
-  startPhotoInventoryRun,
-} from "~/server/purchase-import/run-service";
+import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertOperation } from "~/server/repo/run-operation";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -306,34 +303,15 @@ export async function seedSplitSettlement(
   };
 }
 
-/** A running account-sync Run on a fresh synthetic vendor account (`name` keeps seeds apart). */
-export async function startSyntheticSyncRun(
+/** A running Run on a fresh photo inventory (`notes` keeps seeds apart). */
+export async function startSyntheticRun(
   pool: Pool,
   userId: string,
   name: string,
 ) {
-  const db = buildScenarioDatabase(pool);
-  const member = await pool.query<{ id: string }>(
-    'SELECT id FROM "LedgerParty" WHERE "userId" = $1 AND kind = $2 AND "deletedAt" IS NULL LIMIT 1',
-    [userId, "member"],
-  );
-  const memberId = member.rows[0]?.id;
-  if (!memberId) throw new Error("Synthetic member party is missing");
-  const domain = `${name.toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-")}.example.test`;
-  const vendor = await insertWithShortcode(db, "vendor", {
-    name: `Synthetic ${name} Vendor`,
-    website: `https://${domain}`,
-    browserDomains: [domain],
-  });
-  const account = await insertWithShortcode(db, "vendorAccount", {
-    label: `Synthetic ${name.toLowerCase()} account`,
-    vendorId: vendor.id,
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-  });
-  return startOrResumeRun(db, {
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-    vendorAccountId: account.id,
-    trigger: "manual",
+  return startPhotoInventoryRun(buildScenarioDatabase(pool), {
+    actorUserId: testUserId(userId),
+    notes: `Synthetic ${name} run`,
   });
 }
 
@@ -343,7 +321,7 @@ export async function seedPendingApprovalRun(
   userId: string,
 ): Promise<Record<string, string>> {
   const db = buildScenarioDatabase(pool);
-  const run = await startSyntheticSyncRun(pool, userId, "Approval");
+  const run = await startSyntheticRun(pool, userId, "Approval");
   const runRow = await pool.query<{ id: string }>(
     'SELECT id FROM "Run" WHERE shortcode = $1',
     [run.publicId],

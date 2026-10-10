@@ -13,6 +13,6 @@ wait "label=Runs" 30000
 click "label=Runs"
 wait "id=browse.run.list" 60000
 # A row exposes its combined label (title, shortcode), not its identifier.
-wait "label=\"Synthetic Approval Vendor · Account sync, ${APPROVAL_RUN_ID}\"" 60000
-click "label=\"Synthetic Approval Vendor · Account sync, ${APPROVAL_RUN_ID}\""
+wait "label=\"Synthetic Simulator Member · Photo inventory, ${APPROVAL_RUN_ID}\"" 60000
+click "label=\"Synthetic Simulator Member · Photo inventory, ${APPROVAL_RUN_ID}\""
 wait text "Paused Approval" 90000

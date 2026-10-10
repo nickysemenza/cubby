@@ -116,6 +116,21 @@ export default defineEntity({
     list: {
       savedViews: [
         {
+          id: "research-queue",
+          label: "Research queue",
+          description:
+            "Purchases whose lines or paperwork research could complete, weakest first",
+          // A receipt photo or order Email that still needs itemizing, and
+          // orders missing their paperwork (GLOSSARY "Research queue").
+          filters: [
+            {
+              id: "dataGaps",
+              value: ["purchase_itemization", "primary_document", "order_id"],
+            },
+          ],
+          sort: [{ id: "dataQuality", desc: false }],
+        },
+        {
           id: "needs-review",
           label: "Needs review",
           description: "Stated total the expense lines don't explain",

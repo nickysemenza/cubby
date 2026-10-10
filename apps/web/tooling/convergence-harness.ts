@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 
-import type { ActorContext } from "@cubby/schemas/context";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
+import {
+  parseEntityId,
+  purchaseShortcode,
+  userId,
+} from "@cubby/schemas/identifiers";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
@@ -10,11 +14,7 @@ import {
   commitPurchaseImportInput,
   preparePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
-import { retainedResearchObservation } from "@cubby/schemas/research";
-import { researchWorkResolve } from "@cubby/schemas/research-tools";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { z } from "zod";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import { providerFor } from "@cubby/shared/ai/models";
@@ -25,9 +25,7 @@ import {
   commitPurchaseImport,
   preparePurchaseImport,
 } from "~/server/purchase-import/import-orders";
-import { resolveImportResearch } from "~/server/purchase-import/research-import";
-import { startMailResearch } from "~/server/purchase-import/research-run";
-import { researchServiceFor } from "~/server/purchase-import/research-service";
+import { resolveMail } from "~/server/purchase-import/mail-tool";
 import { getDb } from "~/server/repo/database-helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/repo/expense-category-resolution";
 import {
@@ -173,9 +171,10 @@ export async function createConvergenceFixtures(
 }
 
 /**
- * Acquire and admit the original through production services. The returned
- * researcher turn runs after the other sources arrive, modeling delayed
- * background execution rather than a member link or invented itemization.
+ * Acquire the original through production ingestion. The returned linker
+ * resolves it after the other sources arrive, through the same public
+ * `mail.resolve` disposition a Mail import or Burn-down caller writes, rather
+ * than a member link or invented itemization.
  */
 export async function ingestGmailEvidence(
   db: Database,
@@ -228,96 +227,38 @@ export async function ingestGmailEvidence(
     .where(
       eq(schema.ledgerParty.id, parseEntityId("ledgerParty", ledgerPartyId)),
     );
-  if (!member?.userId || orderMailIds.length !== 1)
+  const [retained] = orderMailIds.length
+    ? await getDb(db)
+        .select({
+          mailboxId: schema.orderMail.mailboxId,
+          messageId: schema.orderMail.messageId,
+          checksum: schema.orderMail.rawChecksum,
+        })
+        .from(schema.orderMail)
+        .where(inArray(schema.orderMail.id, orderMailIds))
+    : [];
+  if (!member?.userId || orderMailIds.length !== 1 || !retained)
     throw new Error("Synthetic retained mail or owning member missing");
-  const [started] = await startMailResearch(
-    db,
-    { ledgerPartyId, userId: member.userId, messageIds: orderMailIds },
-    { send: async () => {} },
-  );
-  if (!started) throw new Error("Synthetic mail research admission missing");
-  const bytes = new Map<string, Uint8Array>();
-  const services = researchServiceFor(
-    db,
-    fromPartial<Env>({ R2_KEY_PREFIX: "synthetic/convergence" }),
-    started.runId,
-    {
-      observations: {
-        storage: {
-          put: async (key, data) => {
-            bytes.set(key, data);
-          },
-          get: async (key) => {
-            const data = bytes.get(key);
-            if (!data) throw new Error("Synthetic retained original missing");
-            return new TextDecoder().decode(data);
-          },
-        },
-      },
-      queue: { send: async () => {} },
-    },
-  );
+  const actor = buildActorContext(userId.parse(member.userId), "mcp");
   return async (purchaseRef: string) => {
-    const next = z
-      .object({ work: z.object({ workRef: z.uuid() }) })
-      .parse(await services.researchNext({}, `synthetic-next-${token}`));
-    const observed = retainedResearchObservation.parse(
-      await services.researchMailRead(
-        { workRef: next.work.workRef, messageRef: orderMailIds[0]! },
-        `synthetic-read-${token}`,
-      ),
-    );
-    const proposal = researchWorkResolve.parse({
-      workRef: next.work.workRef,
-      status: "verified",
-      identity: {
-        evidenceIds: [observed.evidenceId],
-        reasoning: "The original names the retailer order and its exact total.",
-      },
-      emailLinks: [
-        {
-          purchaseRef,
-          evidenceIds: [observed.evidenceId],
-          event: "confirmation",
-          reasoning:
-            "The retained order ID, retailer and total uniquely match this Purchase.",
-        },
-      ],
-      detail:
-        "Linked the retained confirmation without changing itemization or settlement.",
-    });
-    const callId = `synthetic-resolve-${token}`;
-    await resolveImportResearch(
+    await resolveMail(
       db,
       {
-        runId: started.runId,
-        workRef: next.work.workRef,
-        callId,
-        proposal,
-      },
-      {
-        readEvidence: async (evidence) => {
-          const data = bytes.get(evidence.objectKey);
-          if (!data) throw new Error("Synthetic retained original missing");
-          return new TextDecoder().decode(data);
+        ...retained,
+        disposition: {
+          kind: "linked",
+          purchaseId: purchaseShortcode.parse(purchaseRef),
+          event: "confirmation",
         },
-        assess: async () => ({
-          identityVerified: true,
-          acceptedFacts: [],
-          acceptedIdentifiers: [],
-          acceptedImages: [],
-          acceptedOrders: [],
-          acceptedEmailLinks: [0],
-          rejected: [],
-        }),
       },
+      actor,
     );
-    await services.researchResolve(proposal, callId);
   };
 }
 
 export interface BrowserOrderImport {
-  runId: string;
+  /** An agent's private Run id; a member caller omits it and prepare opens the Run. */
+  runId?: string;
   actor: ActorContext;
   /** Operation ids: `prepare`, `commit`, `order`, `line`, `item`. */
   ids: {
@@ -337,13 +278,13 @@ export interface BrowserOrderImport {
   resolveProduct: () => Promise<string | undefined>;
 }
 
-/** Prepare then commit one browser-captured retailer order through the production writers. */
+/** Prepare then commit one caller-read retailer order through the production writers. */
 export async function importBrowserOrder(
   db: Database,
   input: BrowserOrderImport,
 ) {
   const { ids } = input;
-  await preparePurchaseImport(
+  const prepared = await preparePurchaseImport(
     db,
     preparePurchaseImportInput.parse({
       _runExecution: {
@@ -376,7 +317,9 @@ export async function importBrowserOrder(
   return commitPurchaseImport(
     db,
     commitPurchaseImportInput.parse({
-      _runExecution: { runId: input.runId, operationId: ids.commit },
+      _runExecution: input.runId
+        ? { runId: input.runId, operationId: ids.commit }
+        : { run: prepared.runId, operationId: ids.commit },
       prepareOperationId: ids.prepare,
       defaultTrade: "other",
       resolutions: [

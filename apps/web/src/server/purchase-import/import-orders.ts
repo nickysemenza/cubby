@@ -36,17 +36,19 @@ import {
   mailboxMessage,
   orderMail,
   orderMailAttachment,
+  orderMailCandidateDecision,
+  orderMailEvent,
   product,
   purchase,
   run as runTable,
   runTarget,
+  vendor,
 } from "~/server/db/schema";
 import {
   getDb,
   notDeleted,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
-import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { resolveProductIdentifierSource } from "~/server/repo/product-identifier-source";
 import {
   externalIdKey,
@@ -57,6 +59,7 @@ import {
 import { findProductNameCandidates } from "~/server/repo/product/resolve-names";
 import { readOperation } from "~/server/repo/run-operation";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { findOrCreateVendor } from "~/server/repo/vendor";
 import { ensureRun } from "~/server/runs/ensure-run";
 import { executeAtomicOperation } from "~/server/runs/operation";
 
@@ -162,6 +165,22 @@ async function importRunScope(
     clientKey: `purchase-import:${actor.userId}:${execution.operationId}`,
   });
   return loadImportScope(db, runId, actor);
+}
+
+/** An order's Vendor: named, created by exact name, or the import Run's own. */
+async function preparedOrderVendor(
+  db: Database,
+  order: PreparePurchaseImportInput["orders"][number],
+  scope: ImportScope,
+): Promise<VendorId> {
+  const vendorId = order.vendorId
+    ? await resolveOrThrow(db, "vendor", order.vendorId)
+    : order.vendor
+      ? await findOrCreateVendor(db, order.vendor.name)
+      : scope.vendorId;
+  if (!vendorId)
+    throw new Error("Name each order's Vendor (vendorId or vendor.name).");
+  return vendorId;
 }
 
 type RetainedMailSource = typeof orderMail.$inferSelect;
@@ -340,6 +359,44 @@ async function productCandidates(
     }));
 }
 
+type TargetRow = typeof purchase.$inferSelect;
+
+/** The writer's own target fences, checked at prepare and again at commit. */
+function assertReviewedTarget(
+  input: {
+    vendorId: VendorId;
+    orderId: string | null;
+    targetPurchaseId?: string | null;
+  },
+  found: {
+    chosen: TargetRow | undefined;
+    ordered: TargetRow | undefined;
+    claim: { purchaseId: string } | undefined;
+  },
+) {
+  const { chosen, ordered, claim } = found;
+  if (input.targetPurchaseId && !chosen)
+    throw new Error("The reviewed Purchase target no longer exists.");
+  // A fresh no-ID original may converge on the reviewed Purchase that already
+  // knows its order id; the writer keeps that id (see importVendorOrder).
+  if (
+    chosen &&
+    (chosen.vendorId !== input.vendorId ||
+      (chosen.orderId !== null &&
+        chosen.orderId !== input.orderId &&
+        input.orderId !== null))
+  )
+    throw new Error(
+      "The reviewed Purchase target has a different vendor or order identity.",
+    );
+  if (chosen && ordered && chosen.id !== ordered.id)
+    throw new Error(
+      "Another Purchase already owns this vendor order. Review the two Purchases before importing.",
+    );
+  if (chosen && claim && claim.purchaseId !== chosen.id)
+    throw new Error("This source already belongs to a different Purchase.");
+}
+
 async function computeTargetFingerprint(
   db: Database,
   input: {
@@ -388,22 +445,7 @@ async function computeTargetFingerprint(
         )
         .limit(1)
     : [];
-  if (input.targetPurchaseId && !chosen)
-    throw new Error("The reviewed Purchase target no longer exists.");
-  if (
-    chosen &&
-    (chosen.vendorId !== input.vendorId ||
-      (chosen.orderId !== null && chosen.orderId !== input.orderId))
-  )
-    throw new Error(
-      "The reviewed Purchase target has a different vendor or order identity.",
-    );
-  if (chosen && ordered && chosen.id !== ordered.id)
-    throw new Error(
-      "Another Purchase already owns this vendor order. Review the two Purchases before importing.",
-    );
-  if (chosen && claim && claim.purchaseId !== chosen.id)
-    throw new Error("This source already belongs to a different Purchase.");
+  assertReviewedTarget(input, { chosen, ordered, claim });
   const target = chosen ?? ordered;
   const expenses = target
     ? await database
@@ -483,6 +525,28 @@ async function loadPreparation(
   }));
 }
 
+// Two orders of one source with the same Vendor and order id (or both
+// without one) would collapse into one source order on commit.
+function claimDistinctSourceOrder(
+  seen: Set<string>,
+  order: PreparePurchaseImportInput["orders"][number],
+  vendorId: VendorId,
+) {
+  const key = JSON.stringify([
+    order.source.kind,
+    order.source.externalKey,
+    sourceOrderKey({
+      vendorId,
+      orderId: order.extraction.candidate?.orderId ?? null,
+    }),
+  ]);
+  if (seen.has(key))
+    throw new Error(
+      "Two orders from one source name the same Vendor and order id; prepare distinct orders or one order.",
+    );
+  seen.add(key);
+}
+
 export async function preparePurchaseImport(
   db: Database,
   rawInput: PreparePurchaseImportInput,
@@ -516,12 +580,14 @@ export async function preparePurchaseImport(
         await ledger.start(database);
 
         const outputOrders = [];
+        const sourceOrders = new Set<string>();
         for (const order of input.orders) {
-          const vendorId = await resolveOrThrow(
+          const vendorId = await preparedOrderVendor(
             transactionDb,
-            "vendor",
-            order.vendorId,
+            order,
+            scope,
           );
+          claimDistinctSourceOrder(sourceOrders, order, vendorId);
           const primaryDocumentImageId = order.primaryDocumentImageId
             ? await resolveOrThrow(
                 transactionDb,
@@ -738,10 +804,20 @@ export async function commitPurchaseImport(
             scope.runId,
             input.prepareOperationId,
           );
-          const orderVendor = (order: StoredPreparation["order"]) => {
+          // A prepared Vendor may have been deleted or merged away since
+          // prepare; the commit must not book a Purchase against it.
+          const orderVendor = async (order: StoredPreparation["order"]) => {
             const vendorId = order.vendorId ?? scope.vendorId;
             if (!vendorId)
               throw new Error("Prepared purchase import order has no Vendor");
+            const [live] = await getDb(transactionDb)
+              .select({ id: vendor.id })
+              .from(vendor)
+              .where(and(eq(vendor.id, vendorId), notDeleted(vendor)));
+            if (!live)
+              throw new Error(
+                "The prepared order's Vendor was deleted or merged; prepare it again.",
+              );
             return vendorId;
           };
           const mailSources = new Map<string, RetainedMailSource | null>();
@@ -766,21 +842,6 @@ export async function commitPurchaseImport(
                 input.defaultProjectId,
               )
             : null;
-          const hasPrincipalLine = prepared.some(({ lines }) =>
-            lines.some(
-              (line) =>
-                extractedPurchaseLine.parse(line.line).lineKind === "principal",
-            ),
-          );
-          if (hasPrincipalLine) {
-            await validateExpenseInheritance(transactionDb, {
-              lineKind: "principal",
-              projectId: defaultProjectId,
-              productId: null,
-              purchaseId: null,
-              trade: input.defaultTrade ?? null,
-            });
-          }
           await ledger.start(database);
           for (const { order } of prepared) {
             const extraction = importExtractionOutcome.parse(order.extraction);
@@ -788,7 +849,7 @@ export async function commitPurchaseImport(
               transactionDb,
               {
                 ledgerPartyId: scope.ledgerPartyId,
-                vendorId: orderVendor(order),
+                vendorId: await orderVendor(order),
                 sourceKind: importSourceKind.parse(order.sourceKind),
                 sourceExternalKey: order.sourceExternalKey,
                 orderId: extraction.candidate?.orderId ?? null,
@@ -879,7 +940,7 @@ export async function commitPurchaseImport(
                 });
               }
             }
-            const vendorId = orderVendor(order);
+            const vendorId = await orderVendor(order);
             const mailSource = mailSources.get(order.id) ?? null;
             // A mail import's Purchase belongs to the member's (mail-only)
             // VendorAccount.
@@ -914,6 +975,13 @@ export async function commitPurchaseImport(
                 productResolutions,
               },
               actor.userId,
+              // Without a commit default the import never invents a Purchase
+              // purpose: inheritance resolves first, then only still
+              // unassigned principal lines get Other.
+              {
+                applyUnassignedPurposeFallback:
+                  input.defaultTrade === undefined,
+              },
             );
             const [written] = result.purchaseId
               ? await database
@@ -927,14 +995,41 @@ export async function commitPurchaseImport(
                   )
                   .limit(1)
               : [];
-            if (
-              result.purchaseId &&
-              mailSource &&
+            const linksMail =
               order.sourceKind === "mail_message" &&
-              result.outcome !== "conflict"
-            ) {
+              result.outcome !== "conflict";
+            // A member's dismissal of this Email for the Purchase the writer
+            // reached wins over the import; the whole commit rolls back.
+            // linkOrderMail refuses it for a linked Email; this covers the
+            // attachment and conflict outcomes that are not linked.
+            if (result.purchaseId && mailSource && !linksMail) {
+              const [dismissed] = await database
+                .select({ id: orderMailCandidateDecision.id })
+                .from(orderMailCandidateDecision)
+                .innerJoin(
+                  orderMailEvent,
+                  eq(orderMailEvent.id, orderMailCandidateDecision.eventId),
+                )
+                .where(
+                  and(
+                    eq(orderMailEvent.orderMailId, mailSource.id),
+                    eq(
+                      orderMailCandidateDecision.purchaseId,
+                      parseEntityId("purchase", result.purchaseId),
+                    ),
+                    eq(orderMailCandidateDecision.decision, "dismissed"),
+                  ),
+                )
+                .limit(1);
+              if (dismissed)
+                throw new Error(
+                  "A member dismissed this Email for that Purchase; review the Email before importing it.",
+                );
+            }
+            if (result.purchaseId && mailSource && linksMail) {
               await linkImportedMail(transactionDb, {
                 ledgerPartyId: scope.ledgerPartyId,
+                event: extraction.candidate?.sourceEvent ?? "confirmation",
                 externalKey: order.sourceExternalKey,
                 checksum: order.sourceChecksum,
                 purchaseId: result.purchaseId,

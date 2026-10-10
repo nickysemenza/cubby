@@ -53,10 +53,10 @@ import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import { resolveRunFinding } from "./findings";
 import { listVendorOrderMail } from "./gmail/review";
+import { startImportRunFixture } from "./import-run.fixtures";
 import {
   finalizePhotoRun,
   loadRunDetail,
-  startOrResumeRun,
   startPhotoInventoryRun,
 } from "./run-service";
 
@@ -170,7 +170,7 @@ async function createConvergenceHarness(
   };
 
   async function retailer() {
-    const run = await startOrResumeRun(db, {
+    const run = await startImportRunFixture(db, {
       ledgerPartyId: member.id,
       vendorAccountId: accountId,
       trigger: "manual",

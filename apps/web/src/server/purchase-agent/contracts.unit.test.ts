@@ -37,33 +37,6 @@ describe("PurchaseAgentEvent", () => {
     );
   });
 
-  it("accepts only the four continuation events", () => {
-    expect(
-      parsePurchaseAgentEvent({
-        type: "browser_result",
-        runId,
-        eventId: "bridge-command-7",
-        commandId: "command-7",
-      }),
-    ).toEqual({
-      version: 1,
-      type: "browser_result",
-      runId,
-      eventId: "bridge-command-7",
-      commandId: "command-7",
-    });
-    expect(() =>
-      parsePurchaseAgentEvent({ type: "browser_command", runId }),
-    ).toThrow("Invalid discriminator value");
-    expect(() =>
-      parsePurchaseAgentEvent({
-        type: "browser_result",
-        runId,
-        eventId: "event",
-      }),
-    ).toThrow("Invalid input");
-  });
-
   it("uses a stable run identity and delivery idempotency key", () => {
     const event = parsePurchaseAgentEvent({
       type: "retry",
@@ -72,7 +45,7 @@ describe("PurchaseAgentEvent", () => {
       retryOf: "operation-4",
     });
 
-    expect(importRunAgentIdentity(runId, "account_sync")).toBe(
+    expect(importRunAgentIdentity(runId, "mail_import")).toBe(
       `import-run:${runId}`,
     );
     expect(purchaseAgentEventIdempotencyKey(event)).toBe(
@@ -81,12 +54,6 @@ describe("PurchaseAgentEvent", () => {
   });
 
   it("keeps both durable prefixes and resolves photo observations", () => {
-    expect(importRunAgentIdentity(runId, "purchase_validation")).toBe(
-      `import-run:${runId}`,
-    );
-    expect(importRunAgentIdentity(runId, "product_enrichment")).toBe(
-      `import-run:${runId}`,
-    );
     expect(importRunAgentIdentity(runId, "photo_inventory")).toBe(
       `photo-inventory:${runId}`,
     );

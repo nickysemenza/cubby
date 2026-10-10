@@ -47,7 +47,6 @@ import { createProductWithInventory } from "~/server/repo/product/capture";
 import {
   getProductPickerItemsByIds,
   getProductsByShortcodes,
-  patchProductExternalIds,
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product/crud";
@@ -594,11 +593,6 @@ export const productHandlers = implementOperationDomain(productContract, {
     productExternalIdCollisionsOut.parse(
       await findProductExternalIdCollisions(context.db, input),
     ),
-  patchExternalIds: async (context, input) => {
-    const id = await productShortcodes.one(context.db, input.id);
-    await patchProductExternalIds(context.db, id, input, context.actorContext);
-    return getProductWithFood(context.db, context.usdaClient, id);
-  },
   verifyImages: async (context, input) => {
     const id = await productShortcodes.one(context.db, input.id);
     await verifyProductImages(context.db, id);

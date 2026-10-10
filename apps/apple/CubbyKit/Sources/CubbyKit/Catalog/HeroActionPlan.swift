@@ -14,8 +14,6 @@ public struct HeroActionField: Decodable, Sendable, Hashable, Identifiable {
         case number, text, date, toggle, choice, location, amount
         /// Options come from the plan's preview (`shelves`), never a guess.
         case shelf
-        /// Options are the plan preview's replayable evidence sources, never a guess.
-        case evidence
     }
 
     public let key: String

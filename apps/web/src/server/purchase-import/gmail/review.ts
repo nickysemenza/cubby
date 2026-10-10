@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   parseEntityId,
+  userId,
   type VendorId,
   type PurchaseId,
 } from "@cubby/schemas/identifiers";
@@ -47,8 +48,46 @@ import {
 } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
-import { lockOwnedResearchSource } from "../research-retention";
+import { assertMailSourceIdentityReady } from "../mail-source-identity";
 import { ensureMailVendorAccount } from "./mail-account";
+
+/** The member's own retained Email, locked at the checksum they reviewed. */
+async function lockOwnedMailSource(
+  db: Database,
+  input: {
+    orderMailId: string;
+    checksum: string;
+    ledgerPartyId: string;
+    actorUserId: string;
+  },
+) {
+  const [owned] = await getDb(db)
+    .select({ source: orderMail })
+    .from(orderMail)
+    .innerJoin(
+      ledgerParty,
+      and(
+        eq(ledgerParty.id, orderMail.ledgerPartyId),
+        eq(ledgerParty.userId, userId.parse(input.actorUserId)),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .where(
+      and(
+        eq(orderMail.id, input.orderMailId),
+        eq(
+          orderMail.ledgerPartyId,
+          parseEntityId("ledgerParty", input.ledgerPartyId),
+        ),
+        eq(orderMail.rawChecksum, input.checksum),
+      ),
+    )
+    .for("update", { of: orderMail });
+  if (!owned) throw new Error("Order mail ownership or checksum changed.");
+  await assertMailSourceIdentityReady(getDb(db), owned.source);
+  return owned.source;
+}
 
 const mailSourceIdentity = and(
   eq(importSourceClaim.ledgerPartyId, orderMail.ledgerPartyId),
@@ -605,7 +644,7 @@ async function decideOrderMailCandidateOnce(
       )
       .limit(1);
     if (!source) throw new Error("Order mail event no longer exists");
-    await lockOwnedResearchSource(databaseForTransaction(tx), {
+    await lockOwnedMailSource(databaseForTransaction(tx), {
       ...source,
       checksum: input.evidenceChecksum,
       actorUserId: actor.userId,

@@ -89,12 +89,12 @@ type RunAgent =
   import("~/server/purchase-agent/run-agent").PurchaseImportRunAgent;
 
 /**
- * One import Run's coordinator Durable Object. Every entry point checks its
- * external retirement fence before loading the agent; its Lifecycle jobs
- * wake it through `alarm`. The SDK initializes the agent inside its own
- * `fetch` and `alarm` (the alarm's memory-limit circuit breaker covers boot
- * hydration), so only the `dispatch` RPC initializes it here. Retirement
- * authorizes its receipt without hydration, then uses public SDK disposal.
+ * One import Run's coordinator Durable Object. Every entry point refuses a
+ * retired Run before loading the agent; its Lifecycle jobs wake it through
+ * `alarm`. The SDK initializes the agent inside its own `fetch` and `alarm`
+ * (the alarm's memory-limit circuit breaker covers boot hydration), so only
+ * the `dispatch` RPC initializes it here. Retirement of a settled Run
+ * destroys the transcript, and with it any Email text the agent read.
  */
 class PurchaseImportRunAgentHost
   extends DurableObject<Env>
@@ -131,22 +131,14 @@ class PurchaseImportRunAgentHost
 
   async fetch(request: Request): Promise<Response> {
     if (isMaintenanceMode(this.env)) return maintenanceResponse(request);
-    const status = await this.services().researchCoordinatorStatus();
-    if (status === "retired")
-      return new Response(
-        "Research coordinator permanently retired: unrelated_source.",
-        { status: 410 },
-      );
-    if (status !== "ready")
-      return new Response(`Research coordinator execution fenced: ${status}.`, {
-        status: 409,
-      });
+    if (await this.services().coordinatorRetired())
+      return new Response("Import Run coordinator retired.", { status: 410 });
     return (await this.loaded()).fetch(request);
   }
 
-  async retire(input: { receiptId: string }): Promise<{ disposed: boolean }> {
+  async retire(): Promise<{ disposed: boolean }> {
     assertNotInMaintenance(this.env);
-    await this.services().authorizeResearchRetirement(input.receiptId);
+    await this.services().authorizeRetirement();
     const keys = await this.ctx.storage.list();
     const alarm = await this.ctx.storage.getAlarm();
     const tables = this.ctx.storage.sql
@@ -198,8 +190,7 @@ class PurchaseImportRunAgentHost
     return withInvocationTrace(
       "purchase-agent.alarm",
       async () => {
-        if ((await this.services().researchCoordinatorStatus()) !== "ready")
-          return;
+        if (await this.services().coordinatorRetired()) return;
         await (await this.loaded()).alarm();
       },
       {
@@ -215,7 +206,7 @@ class PurchaseImportRunAgentHost
     return withInvocationTrace(
       "purchase-agent.dispatch",
       async () => {
-        if ((await this.services().researchCoordinatorStatus()) !== "ready")
+        if (await this.services().coordinatorRetired())
           return { accepted: false };
         const agent = await this.loaded();
         await agent.__unsafe_ensureInitialized();

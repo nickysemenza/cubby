@@ -743,16 +743,6 @@ extension JSONValue {
  * hand-written in `CubbyClient.swift`.
  */
 const CLIENT_PASSTHROUGH_METHODS = {
-  "vendor.browserAccounts": { method: "browserBridgeAccounts", doc: null },
-  "run.browserDebugEvents": { method: "reportBrowserDebugEvents", doc: null },
-  "run.syncPlan": {
-    method: "syncPlan",
-    doc: "Preview the member browser account syncs.",
-  },
-  "run.startSync": {
-    method: "startSync",
-    doc: "Start or resume one account sync or explicit history range.",
-  },
   "chatgpt.authorizationHost": {
     method: "chatGptAuthorizationHost",
     doc: null,
@@ -803,18 +793,6 @@ const CLIENT_PASSTHROUGH_METHODS = {
     method: "attachProductsToPurchase",
     doc: "Records which products a Purchase bought. The link carries no money or quantity.",
   },
-  "purchaseImport.listReceiptHunts": {
-    method: "receiptHunts",
-    doc: "Receipt hunts awaiting a person-confirmed photo of the receipt.",
-  },
-  "purchaseImport.submitReceiptEvidence": {
-    method: "submitReceiptEvidence",
-    doc: "Attaches a finalized, person-confirmed receipt image to a hunt and queues its extraction once.",
-  },
-  "vendor.startChargeRun": {
-    method: "startChargeRun",
-    doc: "One browser run for exactly the selected statement charges; the server refuses the whole selection if any charge is no longer searchable.",
-  },
   "product.purchases": { method: "productPurchases", doc: null },
   "recipe.getIngredientUsage": { method: "ingredientUsage", doc: null },
   "meal.addRecipe": {
@@ -850,17 +828,11 @@ const CLIENT_PASSTHROUGH_METHODS = {
     doc: "Re-parses one stored recipe line with the current parser; the server decides what changes and writes only that.",
   },
   "run.history": { method: "runHistory", doc: null },
+  "run.work": { method: "runWork", doc: null },
   // The collection-section actions' operations (`nativeCollectionActionPlans`), decoded from the
   // runner's form values into these typed inputs.
   "ai.describeLocation": { method: "describeLocation", doc: null },
   "image.attachExisting": { method: "attachExistingImage", doc: null },
-  "run.startTargeted": { method: "startTargetedRun", doc: null },
-  "run.targetedLaunch": { method: "targetedRunLaunch", doc: null },
-  "run.work": { method: "runWork", doc: null },
-  "purchaseImport.applyValidationCorrections": {
-    method: "applyValidationCorrections",
-    doc: null,
-  },
   "spendingClassification.preview": {
     method: "previewSpendingClassification",
     doc: null,
@@ -962,10 +934,6 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "photoImport.startGrouping": { method: "startPhotoGrouping", doc: null },
   "photoImport.updateDraft": { method: "updatePhotoGroupDraft", doc: null },
   "problems.getCounts": { method: "problemCounts", doc: null },
-  "purchaseImport.initiateRunEvidenceUpload": {
-    method: "initiateRunEvidenceUpload",
-    doc: "Stages immutable browser/manual evidence for one explicit targeted-import scope. The server allocates R2 directly; this must never use the shared Image/Document pathways.",
-  },
   "purchase.orderMail": { method: "purchaseOrderMail", doc: null },
   "run.aiUsage": { method: "runAiUsage", doc: null },
   "run.workSnapshot": { method: "runWorkSnapshot", doc: null },

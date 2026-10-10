@@ -74,19 +74,6 @@ const operations = Object.entries(paths).flatMap(([path, methods]) =>
   })),
 );
 const text = JSON.stringify(document);
-const nativeProtocolRoots = [
-  "BrowserBridgeClientMessage",
-  "BrowserBridgeRunCompletion",
-  "BrowserBridgeServerMessage",
-] as const;
-
-it("retains native WebSocket protocol components without fake HTTP routes", () => {
-  expect(schemas.BrowserBridgeClientMessage).toBeDefined();
-  expect(schemas.BrowserBridgeServerMessage).toBeDefined();
-  for (const name of nativeProtocolRoots)
-    expect(JSON.stringify(document.paths)).not.toContain(name);
-});
-
 const COMPONENT = "#/components/schemas/";
 const componentName = (ref: string | undefined) =>
   ref?.startsWith(COMPONENT) ? ref.slice(COMPONENT.length) : undefined;
@@ -242,18 +229,15 @@ describe("generated HTTP OpenAPI document", () => {
   });
 
   it("carries no component unreachable from a path", () => {
-    // Every component belongs either to an HTTP path or an explicit native
-    // protocol root; anything else is dead weight in generated clients.
+    // Every component belongs to an HTTP path; anything else is dead weight
+    // in generated clients.
     const reachable = new Set<string>();
     const refsIn = (serialized: string): string[] =>
       [...serialized.matchAll(/"\$ref":"([^"]+)"/gu)].flatMap((match) => {
         const name = componentName(match[1]);
         return name === undefined ? [] : [name];
       });
-    const queue = [
-      ...refsIn(JSON.stringify(document.paths)),
-      ...nativeProtocolRoots,
-    ];
+    const queue = refsIn(JSON.stringify(document.paths));
     for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
       if (reachable.has(name)) continue;
       reachable.add(name);

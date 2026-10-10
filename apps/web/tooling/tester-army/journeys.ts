@@ -19,34 +19,6 @@ const stock = `SELECT l.name AS location, ie."amountValue"::float8 AS amount, co
 
 const only = (key: string) => (ids: JourneyIds) => [ids.get(key)];
 
-const runFacts = z.object({
-  work: z.string(),
-  targets: z.string(),
-  changed: z.number(),
-  names: z.array(z.string()),
-});
-
-const runPageFacts = z.object({
-  products: z.number(),
-  enriched: z.number(),
-  skipped: z.number(),
-  waitingOnYou: z.number(),
-  toGo: z.number(),
-  names: z.array(z.string()),
-});
-
-/** Reading a run never changes it: still running, targets as seeded. */
-const runUntouched = (key: string): DbCheck => ({
-  label: "reading the run leaves it and its targets as they were",
-  sql: `SELECT r.status, array_agg(t.state ORDER BY t.position) AS states
-          FROM "Run" r JOIN "RunTarget" t ON t."runId" = r.id
-         WHERE r.shortcode = $1 GROUP BY r.status`,
-  params: only(key),
-  rows: () => [
-    { status: "running", states: ["completed", "skipped", "pending"] },
-  ],
-});
-
 const expensePurchase = (key: string): DbCheck => ({
   label: "expense belongs to the expected purchase",
   sql: `SELECT p.shortcode AS purchase FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" WHERE e.shortcode = $1 AND e."deletedAt" IS NULL`,
@@ -84,7 +56,7 @@ const importedOrder = (orderId: string, cents: number): DbCheck => ({
  * keeps the product link the email showed.
  */
 const mailImportFollowUps = (
-  source: (typeof LIVE_IMPORT)["mail" | "enrich"],
+  source: (typeof LIVE_IMPORT)["mail"],
 ): DbCheck[] => [
   {
     label: "both order emails link themselves to the Purchase",
@@ -125,10 +97,8 @@ const mailImportFollowUps = (
 const LIVE_RUN_MS = 480_000;
 
 const vendorRun = (until: RunWait["until"]): RunWait => ({
-  // The import itself: a follow-up enrichment run for the same vendor is
-  // newer but is not the run under test.
   sql: `SELECT r.id FROM "Run" r JOIN "Vendor" v ON v.id = r."vendorId"
-         WHERE v.shortcode = $1 AND r.purpose = 'account_sync'
+         WHERE v.shortcode = $1 AND r.purpose = 'mail_import'
          ORDER BY r."startedAt" DESC LIMIT 1`,
   params: only("vendor"),
   until,
@@ -142,19 +112,10 @@ const photoRun = (until: RunWait["until"]): RunWait => ({
   timeoutMs: LIVE_RUN_MS,
 });
 
-/** The run the member started again from the seeded, finished sync. */
-const successorRun = (until: RunWait["until"]): RunWait => ({
-  sql: `SELECT r.id FROM "Run" r JOIN "Run" prior ON prior.id = r."predecessorRunId"
-         WHERE prior.shortcode = $1`,
-  params: only("run"),
-  until,
-  timeoutMs: LIVE_RUN_MS,
-});
-
 /**
  * Journeys on the coupled harness: nothing behind the browser is scripted
- * except the synthetic sources (a saved confirmation, uploaded photos, and a
- * simulated Mac browser answering by URL). The coordinator, extraction,
+ * except the synthetic sources (a saved confirmation and uploaded photos).
+ * The coordinator, extraction,
  * audit, and image description call real models.
  */
 const coupledJourneys: Journey[] = [
@@ -186,45 +147,6 @@ const coupledJourneys: Journey[] = [
                WHERE v.shortcode = $1 AND p."deletedAt" IS NULL`,
         params: only("vendor"),
         rows: () => [{ synced: false, status: "disabled" }],
-      },
-    ],
-  },
-  {
-    id: "import-order-mail-enrich",
-    title: "a mail import on a browsing account starts product enrichment",
-    coupled: true,
-    timeoutMs: 600_000,
-    context:
-      "A vendor page lists saved order confirmation emails; each importable order has an Import order button, which starts an agent run and then shows a View import link to that run's page.",
-    start: "vendor",
-    steps: [
-      {
-        goal: `Import the saved order confirmation for order ${LIVE_IMPORT.enrich.orderId}, then open the import it starts.`,
-        check: { visible: () => ["Live agent"] },
-      },
-    ],
-    awaitRun: vendorRun("completed"),
-    visible: () => ["Purchases changed"],
-    db: [
-      importedOrder(LIVE_IMPORT.enrich.orderId, LIVE_IMPORT.enrich.cents),
-      ...mailImportFollowUps(LIVE_IMPORT.enrich),
-      {
-        label: "one enrichment run follows the import at the product page",
-        sql: `SELECT child.purpose, child.trigger, t."sourceExternalKey" AS "startUrl",
-                     child."vendorAccountId" IS NOT NULL AS "browsing"
-                FROM "Run" child
-                JOIN "RunTarget" t ON t."runId" = child.id
-                JOIN "Vendor" v ON v.id = child."vendorId"
-               WHERE v.shortcode = $1 AND child.purpose = 'product_enrichment'`,
-        params: only("vendor"),
-        rows: () => [
-          {
-            purpose: "product_enrichment",
-            trigger: "discovery",
-            startUrl: LIVE_IMPORT.enrich.productUrl,
-            browsing: true,
-          },
-        ],
       },
     ],
   },
@@ -296,36 +218,6 @@ const coupledJourneys: Journey[] = [
             photos: LIVE_IMPORT.photos.length,
           },
         ],
-      },
-    ],
-  },
-  {
-    id: "import-account-sync",
-    title: "sync a vendor account through the browser and import its order",
-    coupled: true,
-    timeoutMs: 900_000,
-    context:
-      "A finished import run page offers Start new run with same inputs, which starts a new run for the same vendor account and opens it.",
-    start: "run",
-    steps: [
-      {
-        goal: "Start a new run with the same inputs, then open the new run.",
-        check: { visible: () => ["Live agent"] },
-      },
-    ],
-    awaitRun: successorRun("completed"),
-    visible: () => ["Purchases changed"],
-    db: [
-      importedOrder(LIVE_IMPORT.sync.orderId, LIVE_IMPORT.sync.cents),
-      {
-        label: "the order listed on the history page was imported",
-        sql: `SELECT c."orderId", c.state
-                FROM "RunOrderCandidate" c
-                JOIN "Run" r ON r.id = c."runId"
-                JOIN "Run" prior ON prior.id = r."predecessorRunId"
-               WHERE prior.shortcode = $1`,
-        params: only("run"),
-        rows: () => [{ orderId: LIVE_IMPORT.sync.orderId, state: "imported" }],
       },
     ],
   },
@@ -671,25 +563,6 @@ export const journeys: Journey[] = [
     ],
   },
   {
-    id: "related-purchase-validate",
-    title: "validate a purchase with no evidence starts a search run",
-    start: "purchase",
-    steps: [
-      {
-        goal: "Under the purchase's runs, use Validate ingestion without choosing any evidence to replay, and start it.",
-      },
-    ],
-    visible: () => [],
-    db: [
-      {
-        label: "one validation run targeting the purchase",
-        sql: `SELECT r.purpose, r.trigger FROM "Run" r JOIN "RunTarget" t ON t."runId" = r.id JOIN "Purchase" p ON p.id = t."entityId" WHERE p.shortcode = $1`,
-        params: only("purchase"),
-        rows: () => [{ purpose: "purchase_validation", trigger: "manual" }],
-      },
-    ],
-  },
-  {
     id: "run-console",
     title: "run console shows progress and resolves a finding",
     start: "run",
@@ -708,172 +581,6 @@ export const journeys: Journey[] = [
         sql: `SELECT f.status, (f."resolvedAt" IS NOT NULL) AS resolved FROM "RunFinding" f JOIN "Run" r ON r.id = f."runId" WHERE r.shortcode = $1`,
         params: only("run"),
         rows: () => [{ status: "dismissed", resolved: true }],
-      },
-    ],
-  },
-  {
-    id: "runs-list-facts",
-    title:
-      "the Runs list says what an enrichment run is doing and what it touched",
-    webOnly: true,
-    open: () => ({ web: "/runs" }),
-    steps: [
-      {
-        goal: `In the Runs list, find the Product enrichment run whose subject is "${JOURNEY_NAMES.enrichVendor}" and click its Progress cell so its details panel opens beside the list. Stay on the list page.`,
-        check: {
-          // "Product enrichment" also names a hidden Work filter option; the
-          // screen read below checks the label instead.
-          visible: () => [
-            "1/3 done · 1 skipped · 1 to go",
-            JOURNEY_NAMES.enrichStep,
-          ],
-        },
-        read: {
-          instruction:
-            "From the open run's details: its work label, its target summary line, how many records it changed (a number), and the names of the target records it lists, in order.",
-          schema: runFacts,
-          expected: () => ({
-            work: "Product enrichment",
-            targets: "1/3 done · 1 skipped · 1 to go",
-            changed: 1,
-            names: JOURNEY_NAMES.enrichTargets.map(
-              (name) => `${name} (${JOURNEY_NAMES.enrichVendor})`,
-            ),
-          }),
-        },
-      },
-      {
-        goal: `Open the target record "${JOURNEY_NAMES.enrichTargets[0]} (${JOURNEY_NAMES.enrichVendor})" from that run.`,
-      },
-    ],
-    visible: () => [
-      `${JOURNEY_NAMES.enrichTargets[0]} (${JOURNEY_NAMES.enrichVendor})`,
-    ],
-    db: [runUntouched("run")],
-  },
-  {
-    id: "runs-list-phone",
-    title: "on a phone, the Runs list still shows an enrichment run's progress",
-    webOnly: true,
-    viewport: { width: 390, height: 844 },
-    open: () => ({ web: "/runs" }),
-    steps: [
-      {
-        goal: `Find the Product enrichment run for "${JOURNEY_NAMES.enrichPhoneVendor}" in the Runs list without opening it.`,
-        check: { visible: () => ["1/3 done · 1 skipped · 1 to go"] },
-      },
-      {
-        goal: "Open that run.",
-        check: { visible: () => [JOURNEY_NAMES.enrichStep] },
-      },
-    ],
-    visible: () => [],
-    db: [runUntouched("run")],
-  },
-  {
-    id: "run-detail-enrichment",
-    title: "an enrichment run's page counts Products and names its targets",
-    // The run page's report sections and agent glance are web layouts.
-    webOnly: true,
-    start: "run",
-    steps: [
-      {
-        goal: "Read this run's Counts and its Targets and outcome sections.",
-        check: {
-          // "Waiting on you" appears only as a Counts label, so the read
-          // below cannot be answered from the summary lines alone.
-          visible: () => [
-            "Reading product pages",
-            "1/3 done · 1 skipped · 1 to go",
-            "Waiting on you",
-          ],
-        },
-        read: {
-          instruction:
-            "From the run's Counts section: the number shown for Products, Enriched, Skipped, Waiting on you, and To go; and from Targets and outcome, the target record names in order.",
-          schema: runPageFacts,
-          expected: () => ({
-            products: 3,
-            enriched: 1,
-            skipped: 1,
-            waitingOnYou: 0,
-            toGo: 1,
-            names: JOURNEY_NAMES.enrichTargets.map(
-              (name) => `${name} (${JOURNEY_NAMES.enrichDetailVendor})`,
-            ),
-          }),
-        },
-      },
-    ],
-    // An enrichment run never counts orders.
-    visible: () => [],
-    absent: () => ["Orders seen"],
-    db: [runUntouched("run")],
-  },
-  {
-    id: "vendor-account-browser-sync",
-    title: "turn a mail-only vendor account into a browser-synced one",
-    start: "account",
-    steps: [
-      {
-        goal: "Edit this vendor account, turn on Browser sync enabled, set Status to Active, and save.",
-      },
-    ],
-    visible: () => ["Active"],
-    db: [
-      {
-        label: "account browses and its vendor is an online account",
-        sql: `SELECT a."browserSyncEnabled" AS synced, a.status, v."orderEvidence" AS evidence
-                FROM "VendorAccount" a JOIN "Vendor" v ON v.id = a."vendorId"
-               WHERE a.shortcode = $1`,
-        params: only("account"),
-        rows: () => [
-          { synced: true, status: "active", evidence: "online_account" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "run-restart-inputs",
-    title:
-      "a settled mail investigation preserves its original and restart context",
-    // The native run screen has no Restart inputs disclosure.
-    webOnly: true,
-    start: "run",
-    steps: [
-      {
-        goal: "Inspect the retained original on this report, then open Restart inputs and read this investigation’s purpose and retained source count.",
-        check: {
-          visible: (ids) => [
-            ids.get("sourceSubject"),
-            "mail_import",
-            '"sourceCount": 1',
-          ],
-        },
-      },
-    ],
-    visible: () => [],
-    db: [
-      {
-        label: "reading the run never restarts it",
-        sql: `SELECT status, r.input->>'kind' AS kind, jsonb_array_length(r.input->'sources') AS "sourceCount",
-                     EXISTS (SELECT 1 FROM "OrderMail" m
-                       WHERE m.id = (r.input #>> '{sources,0,orderMailId}')::uuid
-                         AND m."ledgerPartyId" = r."ledgerPartyId"
-                         AND m."rawChecksum" = r.input #>> '{sources,0,checksum}'
-                         AND m.subject = $2) AS "originalPreserved",
-                     (SELECT count(*)::int FROM "Run" s WHERE s."predecessorRunId" = r.id) AS successors
-                FROM "Run" r WHERE r.shortcode = $1`,
-        params: (ids) => [ids.get("run"), ids.get("sourceSubject")],
-        rows: () => [
-          {
-            status: "needs_review",
-            kind: "mail_research",
-            sourceCount: 1,
-            originalPreserved: true,
-            successors: 0,
-          },
-        ],
       },
     ],
   },

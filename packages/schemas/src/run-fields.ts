@@ -16,7 +16,6 @@ import { vendorAccountCursor } from "./vendor-account-fields.js";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
-  mailboxHistoryEvent,
 } from "./mailbox-research.js";
 
 /**
@@ -53,8 +52,7 @@ export const runTargetEntityKind = z.enum([
 ]);
 export type RunTargetEntityKind = z.infer<typeof runTargetEntityKind>;
 /** Permanent retirement prevents disposed coordinator history from being recreated. */
-export const runRetirementReason = z.enum(["unrelated_source"]);
-export type RunRetirementReason = z.infer<typeof runRetirementReason>;
+export const runRetirementReason = z.enum(["unrelated_source", "settled"]);
 export const runEvidenceKind = z.enum([
   "browser_capture",
   "web_page",
@@ -115,7 +113,6 @@ export type RunCause = z.infer<typeof runCause>;
 /** Bounded acquisition and independent full/scoped mailbox coverage. */
 export const mailDiscoveryRunInput = mailboxDiscoveryInput;
 export type MailDiscoveryRunInput = z.infer<typeof mailDiscoveryRunInput>;
-export const mailDiscoveryEvent = mailboxHistoryEvent;
 export const mailDiscoveryRunProgress = mailboxDiscoveryProgress;
 export type MailDiscoveryRunProgress = z.infer<typeof mailDiscoveryRunProgress>;
 /** Original retained sources; interpreted order identity remains a research decision. */
@@ -173,13 +170,6 @@ export const purchaseValidationResearchRunInput = z.strictObject({
 export type PurchaseValidationResearchRunInput = z.infer<
   typeof purchaseValidationResearchRunInput
 >;
-/** A listed or selected order's terminal outcome on one Run. */
-export const runOrderCandidateState = z.enum([
-  "pending",
-  "covered",
-  "imported",
-  "skipped",
-]);
 /** One saved placement confirmation a mail import run is assigned. */
 export const orderMailImportOrder = z.object({
   eventId: z.uuid(),
@@ -273,7 +263,6 @@ export const researchObjective = z.discriminatedUnion("kind", [
     checksum: z.string().regex(/^[a-f0-9]{64}$/u),
   }),
 ]);
-export type ResearchObjective = z.infer<typeof researchObjective>;
 export const researchObjectivesRunInput = z.strictObject({
   executionAuthorization: executionAuthorizationRef.optional(),
   kind: z.literal("research_objectives"),
@@ -324,13 +313,6 @@ export const runRestartInput = z.discriminatedUnion("kind", [
   runRestartMailResearchInput,
 ]);
 export type RunRestartInput = z.infer<typeof runRestartInput>;
-/** `ImportHunt.state` values a selected-charges run writes (plain text column). */
-export const CHARGE_HUNT_STATE = {
-  queued: "browser_queued",
-  resolved: "resolved",
-  deferred: "deferred_for_review",
-  notFound: "expected_order_not_found",
-} as const;
 /** A selected hunt's outcome on its run; `pending` blocks finishing. */
 export const chargeHuntOutcome = z.enum([
   "pending",
@@ -338,20 +320,6 @@ export const chargeHuntOutcome = z.enum([
   "deferred",
   "not_found",
 ]);
-export const chargeHuntOutcomeOf = (
-  state: string,
-): z.infer<typeof chargeHuntOutcome> => {
-  switch (state) {
-    case CHARGE_HUNT_STATE.queued:
-      return "pending";
-    case CHARGE_HUNT_STATE.resolved:
-      return "resolved";
-    case CHARGE_HUNT_STATE.notFound:
-      return "not_found";
-    default:
-      return "deferred";
-  }
-};
 export const suggestionSweepRunInput = z.object({
   kind: z.literal("suggestion_sweep"),
   entity: z.string().min(1),

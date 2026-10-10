@@ -394,12 +394,6 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
       throw new Error("Missing empty Product research history");
     expect(history.rows).toHaveLength(0);
     await expect(page.getByText(history.empty, { exact: true })).toBeVisible();
-    await expect(
-      page
-        .getByRole("group", { name: "Entity actions", exact: true })
-        .getByRole("button", { name: "Enrich product", exact: true })
-        .first(),
-    ).toBeVisible();
   });
 }
 

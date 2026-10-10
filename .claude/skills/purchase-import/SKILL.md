@@ -1,38 +1,40 @@
 ---
 name: purchase-import
-description: Support Cubby purchase imports when learning a vendor, ingesting a vendor export, enriching unresolved products, or reconciling financial settlement.
+description: Support Cubby purchase imports when learning a vendor, importing an order Email, receipt or vendor export, resolving order Email, or reconciling financial settlement.
 ---
 
 # Purchase-import support
 
-For a durable account sync, purchase validation, or mail-import Run,
-load [research-run-workflow.md](references/research-run-workflow.md). For receipt, browser, or retained mail
-extraction and post-commit audit, load the respective
-[extraction](references/extraction.md) and [audit](references/audit.md)
+Pi's unattended Mail import follows [mail-import.md](references/mail-import.md).
+For receipt or retained mail extraction and post-commit audit, load the
+respective [extraction](references/extraction.md) and [audit](references/audit.md)
 instructions. For a photographed receipt or a Gmail order event, load
 [receipt extraction](references/receipt-extraction.md) or
-[order mail](references/order-mail.md). The import-run agent, Codex, and Claude share these
-contracts.
+[order mail](references/order-mail.md). Pi, Codex and Claude share these
+contracts and the same public Cubby tools (ADR 0008).
 
-The researcher investigates unfamiliar mail, pages and receipts; Cubby's host
-owns task references, evidence retention, replay, recovery and safe writes.
-Interactive Claude/Codex sessions use their available research and Cubby tools
-under the same domain contracts. Source-backed orders pass through Cubby's
-bounded import writer rather than generic entity mutation.
+Pi turns classified Email into Purchases, Expenses and Product resolutions
+without a browser. A member's Claude or Codex session does everything that needs
+a browser, a logged-in retailer page or adaptive web research: it works the
+Research queue (Burn-down) and imports through the same writers. Cubby owns
+ownership checks, retained-Email checksums, replay, money conservation and
+safe writes. Source-backed orders pass through `purchase_import` rather than
+generic entity mutation.
 
 Use `imports_read.run_status` to inspect an existing Run before controlling it.
 `run.lifecycle` supports `controlAction: cancel`, `retry` or `restart` through
 the shared member-owned controls. It does not approve findings, authorize paid
 inference or verify unfinished targets. Respect an explicit member pause: do
-not retry or restart until research is resumed. Follow the returned successor;
-the preceding research attempt remains immutable.
+not retry or restart until imports are resumed. Follow the returned successor;
+the preceding attempt remains immutable.
 
 ## Connect and converge evidence
 
 1. Connect Google with read-only Gmail access. Prioritize known Vendors and
    unmatched financial transactions, then paginate all retained history,
    including archives and unfamiliar vendors, excluding Spam and Trash. Jev
-   routes relevant mail and escalates uncertainty to the researcher. An
+   routes relevant mail and escalates uncertainty to the relevance model; each
+   message records which stage decided and why. An
    unrelated message retains only its provider identity and scan/classification
    status; related originals and useful attachments become retained evidence.
    A historical launch needs its separately approved backfill allowance;
@@ -42,9 +44,9 @@ the preceding research attempt remains immutable.
    An exact order id helps; a unique supported match can use account, items,
    dates, totals, tracking or thread context together. Sender, thread or model
    confidence alone does not establish that match. Shipping mail can establish
-   an incomplete identified Purchase while itemization stays unknown. If login
-   is needed, let the member sign in and resume that browser work; cloud research
-   can continue independently.
+   an incomplete identified Purchase while itemization stays unknown. What an
+   Email cannot establish (a logged-in order page, the exact variant, an
+   image) waits in the Research queue for a member's Claude or Codex session.
 2. For a statement CSV, use `/statement-rows/import` or parse the export in the
    MCP client. Known provider columns (Monarch, Mint, Copilot, Apple Card) use
    deterministic adapters; other CSVs need a reviewed column, account, source,
@@ -66,7 +68,7 @@ the preceding research attempt remains immutable.
    ambiguous allocation and Product identity separately; show evidence and
    the changes that approval would make.
 
-The host coordinates durable steps, browser handoffs, progress and review stops.
+Pi's host coordinates Mail import steps, progress and review stops.
 Frontier AI can propose a mapping for an unfamiliar layout; a person verifies
 the columns and sign before saving. Jev can rank a bounded set of ambiguous
 account, transaction, or Purchase candidates using evidence. A choice is a
@@ -83,8 +85,9 @@ same outcome without prescribing an agent runtime.
   `statedTotal`, infer tax, or fabricate a transaction to close a gap.
 - Unknown facts stay unknown. A missing cost, date, quantity, or order id is
   recorded as absent, never as zero or a guessed value.
-- Vendor-account imports are member-owned. The authenticated user must own the
-  named VendorAccount through `LedgerParty.userId`.
+- Imports are member-owned. The authenticated member owns the import Run, the
+  retained Email (its mailbox) and any named VendorAccount through
+  `LedgerParty.userId`.
 - Public identifiers are shortcodes. Never expose private UUIDs to the user.
 - A source row is replay-safe only when its kind, external key, and checksum are
   stable. If the same source key changes, stop on the conflict.
@@ -96,15 +99,21 @@ same outcome without prescribing an agent runtime.
 
 ## Vendor export
 
-1. Resolve the member-owned VendorAccount.
+1. Resolve the Vendor (`vendorId`, or `vendor.name` to reuse or create an
+   exact-name Vendor).
 2. Collect one preparation payload per order: stable source identity, header, printed
    grand total and currency, item and adjustment lines, shipment state,
    transaction evidence, and finalized document image shortcodes.
    De-duplicate saved snapshots by stable order id. A generic mail subject may
    omit the brand and variant; search sender, order id, and time window, then
    inspect the order page for itemization.
-3. Call `purchase_import.prepare` in batches of at most 50 orders. Preserve its
-   preparation revision and stable line ids.
+3. Call `purchase_import.prepare` in batches of at most 50 orders, with a
+   stable `_runExecution.operationId`. Without a Run, a member's preparation
+   opens its own import Run and returns its `RUN-` code; pass it back as
+   `_runExecution.run` to commit. Preserve the preparation revision and stable
+   line ids. A retained Email source is `mail_message` with key
+   `gmail:<mailboxId>:<messageId>` and the checksum `imports_read.mail` returned;
+   committing it links the Email to the Purchase.
 4. Resolve every principal line. Prefer exact-variant identifiers: a
    per-variant retailer SKU, ASIN, UPC/GTIN, or exact manufacturer part number.
    A style, family, or model number shared by sizes or colors only ranks
@@ -138,27 +147,16 @@ same outcome without prescribing an agent runtime.
    those to their Product.
 5. Call `purchase_import.commit` with the preparation revision and every line
    resolution. Do not use generic entity creation for imported Products or
-   Expenses.
+   Expenses. A commit never starts Product research; unresolved Product facts
+   wait in the Research queue.
 6. Inspect every ordered result. `created`, `updated`, and `replayed` are
    terminal; `conflict` requires review.
 7. Report every conflict or open finding; resolve it through the Problems UI.
 
-In a hosted Run, use `work_next`, task-scoped observation tools and
-`work_resolve` as described in the research workflow. Sources are retained
-automatically; use issued references and supported source-to-target reasoning.
-The host prepares and commits accepted orders, records refusals and produces
-progress and final accounting. It returns the next task or `done`; no separate
-finish ceremony or caller-generated operation/evidence bookkeeping is needed.
-An unresolved task remains visible with a concrete outcome and gaps.
-
-Account-history objectives retain their admitted cursor or explicit backfill
-range. Selected-charge objectives retain the exact Hunt selection and frozen
-search hints. Investigate those objectives without broadening their scope.
-Their snapshots alone establish neither current financial authority nor
-settlement; the host checks ownership and current allocations. Receipt originals
-use that same evidence/write path. A retry creates fresh task identities while
-preserving real lineage, old evidence and settled outcomes. A historical scope
-the old runtime did not retain cannot be reconstructed from today's cursor.
+Mail import is Pi's version of this flow; [mail-import.md](references/mail-import.md)
+adds the Email dispositions (`mail.resolve`: a lifecycle `linked` event,
+`unresolved` with its gap, or `unrelated`). A member resolves an Email the same
+way.
 
 An interrupted mutation is recovered through
 `imports_read.purchase_status` with its original operation id. Repeating
@@ -172,42 +170,33 @@ Create or update the Vendor deliberately, then configure:
 - `orderEvidence`: `online_account`, `receipt_only`, or `not_expected`. It says
   where to look, never whether evidence is wanted; the resolved
   `evidenceExpectation` (transaction, then vendor, then category) decides
-  that, so a required charge from a `not_expected` vendor still opens a
-  `receipt_required` hunt. Creating a browser-synced account for a vendor with
-  `browserDomains` fills only an unset value with `online_account`; an
-  explicit choice is never overwritten and weaker signals stay unset for the
-  `vendor_order_evidence` gap. Contradictory choices (`not_expected` source
+  that. An explicit choice is never overwritten and weaker signals stay unset
+  for the `vendor_order_evidence` gap. Contradictory choices (`not_expected` source
   with a required vendor policy, or a not-expected policy with a source) show
   as `vendor_order_evidence_conflict`; resolve by changing one field;
-- `browserDomains` and `orderUrlTemplate` for online accounts;
+- `orderUrlTemplate` for online accounts, so a Burn-down session can open the
+  exact order page;
 - `orderEmailSenders` only for verified senders outside the website domain;
 - `returnWindowDays` only when the policy is known.
 
 The website domain and configured senders are search hints, not purchase
 relevance gates. A new Vendor or member-owned VendorAccount may be created from
 sufficient retained purchase evidence. This records a vendor relationship,
-not proof of a browser login. Turn on browser sync (set the account's
-`browserSyncEnabled` and status `active`) only after confirming that member's
-online account. The Mac app picks up a newly synced account when it becomes
-active or within about ten minutes; Sync now runs it immediately while the Mac
-app and chosen browser are open.
+not proof of a login.
 Related mail can converge on the same Purchase in either arrival order. Preserve
 explicit member link and dismissal decisions. Competing supported matches stay
 unresolved. A cancellation or refund can attach evidence and record its event;
 changing existing Expenses or writing refund Expenses requires review.
-Import completion supplies automatic Product research work, including supported
-existing Products that lack verification. Preserve order-line URLs and original
-evidence. Product research starts from those originals and authenticated order
-history; broader name search recovers missing sources or unresolved facts. A
-missing saved snapshot is a context gap, not proof the email or account lacks
-exact links. An order thumbnail remains provisional until exact-variant research
-verifies a representative image. Treat cached navigation hints as observations,
-not authority to alter a task's scope or bypass browser permissions.
-For account-history work, propose learned navigation with `work_resolve.captureProfile` and cite retained page evidence. Include observed order-history URLs, useful pagination hints and supported browser hosts. This creates a member review; it does not grant new browser permissions. Keep the current authorized hosts in the proposal, and leave unrelated hosts out. A member applies the displayed profile through the Run review.
+Imported Products with identity, image or category gaps appear in the Research
+queue (the `research-queue` saved views); nothing starts research automatically.
+Preserve order-line URLs and original evidence. Product research starts from
+those originals and authenticated order history; broader name search recovers
+missing sources or unresolved facts. A missing saved snapshot is a context gap,
+not proof the email or account lacks exact links. An order thumbnail remains
+provisional until exact-variant research verifies a representative image.
 
 For every exact merchant descriptor observed on that member's statement, call
 `purchase_import.confirm_vendor` after the human/vendor mapping is known.
-Charge-driven hunts leave unmapped descriptors for review.
 
 ## Settlement
 
@@ -230,9 +219,9 @@ when variant evidence agrees. Keep historical Expense attribution separate from
 current inventory ownership. Reconciliation never receives that inventory again.
 Record a historical acquisition (a known quantity whose earlier purchase is missing) as an Expense with `cost: null`, no `date`, and the known `productQuantity`; never invent price or date, and it receives no inventory.
 
-## Enrichment fallback
+## Enrichment
 
-Run the `product-enrichment` skill for unresolved Products after an import.
+Work unresolved Products with the `product-enrichment` skill (Burn-down).
 Prefer stable vendor identity such as SKU, ASIN, UPC, or model. Leave ambiguous
 identity as a finding and preserve human-linked Products. An inventory-photo
 handoff matches an existing Product; it does not turn an unresolved photo into
@@ -240,14 +229,11 @@ a new purchase-import Product or inventory.
 
 ## Agent authority
 
-Hosted research uses its focused mounted tools and retained observations.
-Bounded evidence-backed import and matching-value verification may write
-automatically; contradictions and financial corrections use explicit review.
-Interactive Claude/Codex sessions follow the actual Cubby tool contract and
-their granted authority. Techniques requiring a terminal, arbitrary browser
-evaluation or file parsing belong only to a session that exposes those
-capabilities. Receiving remains a human decision and inventory never changes
-merely because an order arrived.
+Pi's Mail import mounts only Email reads, `mail.*`, `purchase_import` and read
+tools; any other write needs a member's approval. A member's Claude or Codex
+session writes with the member's authority and records Sources on what it
+changes. Financial corrections use explicit review. Receiving remains a human
+decision and inventory never changes merely because an order arrived.
 
 ## Completion report
 

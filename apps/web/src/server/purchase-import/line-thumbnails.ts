@@ -28,15 +28,6 @@ type ThumbnailPorts = {
 };
 
 const THUMBNAIL_ATTACHMENT_PREFIX = "order-line-thumbnail:";
-export const isProvisionalOrderThumbnail = (
-  key: string | null,
-  productId: string,
-) =>
-  Boolean(
-    key?.startsWith(THUMBNAIL_ATTACHMENT_PREFIX) &&
-    key.endsWith(`:${productId}`),
-  );
-
 /**
  * After a mail import commits, give each image-less Product its confirmation
  * line's thumbnail as the item cover. Its attachment marker is provisional: a

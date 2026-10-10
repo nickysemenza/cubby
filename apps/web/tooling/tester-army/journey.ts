@@ -97,7 +97,7 @@ export type Journey = {
   title: string;
   /**
    * Runs on the coupled harness: the built Worker hosting the purchase agent,
-   * with live model peers, object storage, and a simulated Mac browser. Web only.
+   * with live model peers and object storage. Web only.
    */
   coupled?: true;
   /** Exercises a control only the web app renders; never selected for iOS. */

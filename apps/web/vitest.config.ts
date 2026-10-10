@@ -116,12 +116,7 @@ const workerSafetyTests = ["src/server/mcp/worker-validation.unit.test.ts"];
 const workerdIntegrationTests = [
   "tooling/database-socket-lifecycle.integration.test.ts",
   "src/server/purchase-import/purchase-agent-scenarios.integration.test.ts",
-  "src/server/purchase-import/purchase-research-workerd.integration.test.ts",
-  "src/server/purchase-import/purchase-research-lifecycle-workerd.integration.test.ts",
-  "src/server/purchase-import/purchase-research-account-history.integration.test.ts",
-  "src/server/purchase-import/purchase-research-offline.integration.test.ts",
-  "src/server/purchase-import/research-retirement-host.integration.test.ts",
-  "src/server/purchase-import/research-browser-retirement.integration.test.ts",
+  "src/server/purchase-import/run-retirement.integration.test.ts",
   "tooling/workerd-runtime.integration.test.ts",
 ];
 const integrationTests = [

@@ -22,17 +22,26 @@ deterministic idempotency key. Multiple attachments to one Product are
 dependent count changes; prefer independent target batches and retry only
 failed items after a fresh read.
 
-## Runs
+## Runs and Burn-down
 
-`run.start` and `run.start_charge_run` start runs the coordinator executes;
-page reads go through the Mac app's signed-in browser, so a run may wait for a
-connected Mac. `imports_read.run_launch_preview` and
-`imports_read.charge_hunts` show what a start would use. Status is the Run
-entity: poll `entity_read.get` with `resultDetail: "full"`. A start never
-queues behind a busy Vendor account: `run.start` answers `blockingRun`, and
-`run.start_charge_run` refuses. No run purpose holds the `start_run`
-capability (`server/purchase-import/capabilities.ts`), so a coordinator never
-starts another run.
+Runs are started by Mail discovery, photo uploads and a member's own
+`purchase_import.prepare`; nothing on MCP starts research
+([ADR 0008](../adr/0008-mail-import-unattended-burn-down-interactive.md)).
+`imports_read.run_status` reads one Run; `run.lifecycle` cancels, retries or
+restarts it. No run purpose holds the `start_run` capability
+(`server/purchase-import/capabilities.ts`), so a coordinator never starts
+another run.
+
+Burn-down works the Research queue (`research-queue` saved views) with the
+caller's own browser. Record where each fact was seen with `sources` on
+`entity.update` (field-scoped) and `image.attach_files` (record-level); a
+quote and URL are enough, screenshots are optional. Read and resolve retained
+Email with `imports_read.mail` and `mail.resolve`; recover a missing original
+with `mail.search`. A member's search runs no paid classification: past Spam
+and Trash every match is retained as `uncertain`, and the caller settles each
+with `mail.resolve` (`unrelated` disposes of it). Change identifier slots with `entity.update` collection
+patches on `externalIds` (`{op: "add"|"replace"|"remove", key, value?, expect?}`).
+Record "searched, not available" with `data_exception.set`.
 
 ## Failures and timeouts
 

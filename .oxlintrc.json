@@ -280,6 +280,7 @@
         "packages/schemas/src/data-quality-shape.ts",
         "packages/schemas/src/expense-line-kind.ts",
         "packages/schemas/src/external-id.ts",
+        "packages/schemas/src/entity-collection.ts",
         "packages/schemas/src/field-resolution.ts",
         "packages/schemas/src/spending-classification.ts",
         "packages/schemas/src/financial-reconciliation.ts",

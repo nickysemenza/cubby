@@ -737,8 +737,8 @@ const productExternalIdMcpEntityOut = externalIdOut.omit({ id: true });
  * `syncProductUnitMappings` (repo/product/update-helpers.ts) accepts to update
  * an existing row in place — a mapping resent without it is hard-deleted and
  * reinserted, losing `createdAt`/`updatedAt` and its audit trail. External-id
- * rows have their own slot-addressed patch tool (`product_enrichment.patch_external_ids`)
- * and stay id-less, but a unit mapping has no such tool, so this child row
+ * rows are addressed by their identity in `entity.update` patch items and
+ * stay id-less, but a unit mapping has no such key, so this child row
  * keeps its raw uuid across the MCP boundary — the same "id is the follow-up
  * write handle" carve-out as mealRecipe `id` and recipe section `lineId` (see
  * MCP_SERVER_INSTRUCTIONS in apps/web/src/server/mcp/server.ts).
@@ -1248,67 +1248,6 @@ export const productExternalIdCollisionInput = z.object({
     .min(1)
     .max(100),
 });
-
-export const patchProductExternalIdsInput = z
-  .object({
-    id: productShortcode,
-    upsert: z
-      .array(
-        z.object({
-          source: externalIdSource,
-          kind: externalIdKind,
-          externalId: z.string().min(1),
-          url: z.string().url().nullish(),
-          isPrimary: z.boolean().optional(),
-        }),
-      )
-      .default([]),
-    remove: z
-      .array(
-        z.object({
-          source: externalIdSource,
-          kind: externalIdKind,
-          expectedExternalId: z.string().min(1),
-        }),
-      )
-      .default([]),
-  })
-  .superRefine((value, ctx) => {
-    // Scoped to the VALUE, not the slot: a slot holds one primary and any
-    // number of secondaries, so patching two of its rows in one call is
-    // ordinary. What must stay unique is the row each entry addresses — and,
-    // separately, the single primary.
-    const addressed = new Set<string>();
-    const primaries = new Set<string>();
-    const slotOf = (entry: { source: string; kind: string }) =>
-      `${entry.source.trim().toLowerCase()}\u0000${entry.kind}`;
-    for (const entry of value.upsert) {
-      const key = `${slotOf(entry)}\u0000${entry.externalId}`;
-      if (addressed.has(key))
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Each external ID may be patched only once",
-        });
-      addressed.add(key);
-      if (entry.isPrimary === false) continue;
-      if (primaries.has(slotOf(entry)))
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            "Each external-ID slot may take only one PRIMARY per call; mark the others isPrimary: false",
-        });
-      primaries.add(slotOf(entry));
-    }
-    for (const entry of value.remove) {
-      const key = `${slotOf(entry)}\u0000${entry.expectedExternalId}`;
-      if (addressed.has(key))
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Each external ID may be patched only once",
-        });
-      addressed.add(key);
-    }
-  });
 
 /**
  * Fold duplicate products into one. A user action, never an import guess:

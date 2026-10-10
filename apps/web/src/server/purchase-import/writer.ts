@@ -761,7 +761,7 @@ async function fileFinding(
   return existing.id;
 }
 
-export type ImportSourceAssociationInput = Pick<
+type ImportSourceAssociationInput = Pick<
   ImportWriterInput,
   | "ledgerPartyId"
   | "runId"
@@ -810,7 +810,7 @@ async function recordOriginalProductBindings(
 }
 
 /** Source ownership and accepted order identity are shared by imports and lifecycle links. */
-export async function recordImportSourceAssociation(
+async function recordImportSourceAssociation(
   tx: Pick<DrizzleTransaction, "insert" | "select" | "update">,
   input: ImportSourceAssociationInput,
   purchaseId: ReturnType<typeof parseEntityId<"purchase">>,

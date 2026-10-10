@@ -318,7 +318,6 @@ const RUN_BATCH_SLOTS = [
   "run.import-approvals",
   "run.import-findings",
   "run.import-targets",
-  "run.import-evidence",
   "run.import-prepared-orders",
   "run.import-timeline",
 ] as const satisfies readonly EntityReportInput["slot"][];

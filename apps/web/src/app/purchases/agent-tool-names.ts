@@ -14,7 +14,6 @@ const LEGACY_TOOL_ACTIONS = {
   attach_files: "image.attach_files",
   clear_data_exception: "data_exception.clear",
   commit_photo_group: "photo_run.commit_group",
-  commit_product_enrichment: "product_enrichment.commit",
   commit_purchase_import: "purchase_import.commit",
   confirm_purchase_merchant_vendor: "purchase_import.confirm_vendor",
   correct_image_description: "image.correct_description",
@@ -65,8 +64,6 @@ const LEGACY_TOOL_ACTIONS = {
   lookup_upc: "imports_read.upc_lookup",
   match_expenses: "finance_read.expense_match",
   move_inventory_entries: "entity.move_inventory",
-  overwrite_product_enrichment: "product_enrichment.overwrite",
-  patch_products_external_ids: "product_enrichment.patch_external_ids",
   patch_recipe_line: "recipe_import.patch_line",
   prepare_purchase_import: "purchase_import.prepare",
   preview_entity_operation: "entity_read.preview",
@@ -91,7 +88,6 @@ const LEGACY_TOOL_ACTIONS = {
   suggest_project_tools: "project_overview.tool_suggestions",
   update_meal_recipe: "meal_recipe.update",
   update_statement_rows: "statement_rows.update",
-  validate_purchase_import: "purchase_import.validate",
   verify_products_images: "product_enrichment.verify_images",
 } as const satisfies Record<string, CubbyMcpToolAction>;
 

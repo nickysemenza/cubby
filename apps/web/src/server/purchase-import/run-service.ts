@@ -1,23 +1,18 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
-import { runEvidenceMediaRead } from "@cubby/schemas/http-byte-transports";
 import {
-  anyShortcodeSchema,
   parseEntityId,
   imageId,
   imageShortcode,
   ledgerPartyId,
-  productId,
   purchaseId,
   userId,
   parseEntityRef,
   runEntityId,
   vendorAccountId,
   type LedgerPartyId,
-  type ProductId,
   type RunId,
   type UserId,
-  type VendorAccountId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -30,10 +25,6 @@ import {
   agentProgressEvent,
 } from "@cubby/schemas/purchase-agent-services";
 import {
-  retainedCaptureInterpretation,
-  initiateRunEvidenceUploadInput,
-} from "@cubby/schemas/purchase-import";
-import {
   proposedImportFix,
   extractedPurchaseLine,
   preparePurchaseImportOut,
@@ -45,14 +36,10 @@ import {
   runTrigger,
   runTargetState,
   runScope,
-  type RunTrigger,
 } from "@cubby/schemas/purchase-import";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { purchaseImportDebugEvent } from "@cubby/schemas/purchase-import-debug";
-import { researchSourceMetadata } from "@cubby/schemas/research";
 import {
-  purchaseValidationResearchRunInput,
-  CHARGE_HUNT_STATE,
   chargeHuntRunInput,
   researchObjectivesRunInput,
   mailResearchRunInput,
@@ -60,8 +47,6 @@ import {
   orderMailImportRunInput,
   orderMailImportRunOrders,
   type RunRestartInput,
-  runWorkLabel,
-  runTargetEntityKind,
 } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -93,7 +78,6 @@ import {
   auditLog,
   entityIdentity,
   image,
-  importHunt,
   importPreparedLine,
   importPreparedOrder,
   ledgerParty,
@@ -102,8 +86,6 @@ import {
   run as runTable,
   runApproval,
   runControlEvent,
-  runEvidence,
-  runFactEvidence,
   runFinding,
   runOperation,
   runProgress,
@@ -129,10 +111,7 @@ import {
   readOperation,
   setOperationResult,
 } from "~/server/repo/run-operation";
-import {
-  findOrCreateWithShortcode,
-  insertWithShortcode,
-} from "~/server/repo/shortcode-utils";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { publishImageProcessingWakeups } from "~/server/services/image-processing.service";
 import {
   productionPhotoImportCommitPorts,
@@ -143,18 +122,7 @@ import { finalizeImportedImages } from "~/server/services/photo-import-finalize.
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflow-runs/contract";
 
 import { loadPurchaseAuditBatch } from "./audit-batch";
-import { browserCommandRecord } from "./browser-results";
-import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
-import { notHeldByChargeRun } from "./charge-hunt-state";
-import type { PurchaseImportDurableObjectRpc } from "./contracts";
 import { resolveRunFinding } from "./findings";
-import { continueResearchRun } from "./research-continuation";
-import { PRIVATE_RESEARCH_OPERATION_KINDS } from "./research-operation-visibility";
-import {
-  CHARGE_HOLDING_STATUSES,
-  accountSyncEligibility,
-  readAccountSyncAdmission,
-} from "./sync-admission";
 
 /**
  * The target rows "Start new run with same inputs" copies, with the public
@@ -183,259 +151,6 @@ function selectRestartTargets(
     .leftJoin(vendorAccount, eq(vendorAccount.id, runTarget.vendorAccountId))
     .where(eq(runTarget.runId, runId))
     .orderBy(asc(runTarget.position), asc(runTarget.createdAt));
-}
-
-/** An implicit start, restart, or retry must not work a charge run's account. */
-async function assertNoHoldingChargeRun(
-  tx: DrizzleTransaction,
-  accountId: VendorAccountId,
-  exceptRunId?: RunId,
-) {
-  const [held] = await tx
-    .select({ shortcode: runTable.shortcode })
-    .from(runTable)
-    .where(
-      and(
-        eq(runTable.vendorAccountId, accountId),
-        inArray(runTable.status, [...CHARGE_HOLDING_STATUSES]),
-        chargeResearchRunPredicate(runTable.input),
-        exceptRunId ? ne(runTable.id, exceptRunId) : undefined,
-      ),
-    )
-    .limit(1);
-  if (held) throw new ActiveChargeRunError(held.shortcode);
-}
-
-import {
-  admitResearchObjectiveTargets,
-  assertAccountBackfillAdmission,
-  freezeAccountResearchObjectives,
-  researchChargeHuntIds,
-  chargeResearchRunPredicate,
-} from "./research-objective";
-
-const OFFLINE_EXPIRY_MS = 24 * 60 * 60_000;
-
-export type PurchaseImportNamespace = {
-  getByName(
-    name: string,
-  ): Pick<
-    PurchaseImportDurableObjectRpc,
-    "result" | "pendingCommands" | "cancel"
-  >;
-};
-
-export async function startOrResumeRun(
-  db: Database,
-  input: {
-    ledgerPartyId: LedgerPartyId;
-    vendorAccountId: VendorAccountId;
-    trigger: RunTrigger;
-    /** Inclusive order-date range for an explicit `backfill` run. */
-    backfill?: { from: string; to: string };
-    /**
-     * Charge hunts a member selected: the run's only work. Never joins a run
-     * already holding the account, which would silently drop the selection.
-     */
-    chargeHuntIds?: readonly string[];
-    predecessorRunId?: string;
-  },
-) {
-  const trigger = runTrigger.parse(input.trigger);
-  const backfill = input.backfill
-    ? orderBackfillRunInput.parse({ kind: "order_backfill", ...input.backfill })
-    : null;
-  if ((trigger === "backfill") !== (backfill !== null))
-    throw new Error("A backfill run requires exactly one explicit date range");
-  const chargeHunts = input.chargeHuntIds
-    ? chargeHuntRunInput.parse({
-        kind: "charge_hunts",
-        huntIds: [...input.chargeHuntIds],
-      })
-    : null;
-  if (chargeHunts && backfill)
-    throw new Error("A run cannot be both a backfill and a charge search");
-  return withTransaction(db, async (tx) => {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${input.vendorAccountId}))`,
-    );
-    const [scope] = await tx
-      .select({
-        id: vendorAccount.id,
-        vendorId: vendorAccount.vendorId,
-        browserSyncEnabled: vendorAccount.browserSyncEnabled,
-        syncEligible: accountSyncEligibility(),
-        actorUserId: ledgerParty.userId,
-        actorName: user.name,
-        actorEmail: user.email,
-        actorLedgerPartyShortcode: ledgerParty.shortcode,
-        actorLedgerPartyName: ledgerParty.name,
-        actorLedgerPartyKind: ledgerParty.kind,
-      })
-      .from(vendorAccount)
-      .leftJoin(vendor, eq(vendor.id, vendorAccount.vendorId))
-      .innerJoin(
-        ledgerParty,
-        and(
-          eq(ledgerParty.id, vendorAccount.ledgerPartyId),
-          notDeleted(ledgerParty),
-        ),
-      )
-      .innerJoin(user, eq(user.id, ledgerParty.userId))
-      .where(
-        and(
-          eq(vendorAccount.id, input.vendorAccountId),
-          eq(vendorAccount.ledgerPartyId, input.ledgerPartyId),
-          notDeleted(vendorAccount),
-        ),
-      )
-      .limit(1);
-    const actorUserId = scope?.actorUserId;
-    if (!actorUserId)
-      throw new Error("Vendor account is not owned by an authenticated member");
-    if (!scope.browserSyncEnabled)
-      throw new Error("Browser sync is not enabled for this Vendor account");
-    if (!scope.syncEligible)
-      throw new Error(
-        "Browser sync requires an active, paused_auth, or paused_offline account with a non-deleted Vendor",
-      );
-    await assertAccountBackfillAdmission(tx, input.vendorAccountId, backfill);
-    const admission = await readAccountSyncAdmission(tx, input.vendorAccountId);
-    if (admission?.kind === "blocked") {
-      if (admission.isChargeSearch) {
-        if (!chargeHunts)
-          throw new ActiveChargeRunError(admission.run.shortcode);
-      } else {
-        throw new AccountOccupiedError(
-          admission.run.shortcode,
-          runWorkLabel(admission.run).toLowerCase(),
-        );
-      }
-    }
-    if (chargeHunts) {
-      const [active] = await tx
-        .select({ shortcode: runTable.shortcode })
-        .from(runTable)
-        .where(
-          and(
-            eq(runTable.vendorAccountId, input.vendorAccountId),
-            inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
-          ),
-        )
-        .limit(1);
-      if (active)
-        throw new Error(
-          `Vendor account already has an active import run (${active.shortcode}); finish or stop it before searching for selected charges`,
-        );
-    }
-    const frozenObjectives = await freezeAccountResearchObjectives(tx, {
-      ledgerPartyId: input.ledgerPartyId,
-      vendorAccountId: input.vendorAccountId,
-      range: backfill ? { from: backfill.from, to: backfill.to } : null,
-      chargeHuntIds: chargeHunts?.huntIds ?? null,
-    });
-    const result = await findOrCreateWithShortcode(tx, "run", {
-      where: and(
-        eq(runTable.vendorAccountId, input.vendorAccountId),
-        inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
-      ),
-      values: () => {
-        const id = runEntityId.parse(crypto.randomUUID());
-        return {
-          id,
-          ledgerPartyId: input.ledgerPartyId,
-          actorUserId,
-          actorName: scope.actorName,
-          actorEmail: scope.actorEmail,
-          actorLedgerPartyShortcode: scope.actorLedgerPartyShortcode,
-          actorLedgerPartyName: scope.actorLedgerPartyName,
-          actorLedgerPartyKind: scope.actorLedgerPartyKind,
-          vendorAccountId: input.vendorAccountId,
-          vendorId: scope.vendorId,
-          predecessorRunId: input.predecessorRunId
-            ? runEntityId.parse(input.predecessorRunId)
-            : null,
-          trigger,
-          input: frozenObjectives,
-          cause:
-            trigger === "discovery"
-              ? "source_discovered"
-              : trigger === "scheduled"
-                ? "scheduled"
-                : "member_request",
-          attempt: 1,
-          coordinatorModel: coordinatorModelFor("account_sync"),
-          agentSessionId: importRunAgentIdentity(id, "account_sync"),
-          dispatchEventId: crypto.randomUUID(),
-        };
-      },
-    });
-    const run = {
-      id: result.row.id,
-      publicId: result.row.shortcode,
-      status: result.row.status,
-      dispatchEventId: result.row.dispatchEventId,
-    };
-    if (!result.created) return { ...run, created: false };
-    await admitResearchObjectiveTargets(tx, {
-      runId: result.row.id,
-      objectives: frozenObjectives,
-    });
-    await tx
-      .update(vendorAccount)
-      .set({ status: "active", updatedAt: new Date() })
-      .where(eq(vendorAccount.id, input.vendorAccountId));
-    return { ...run, created: true };
-  });
-}
-
-/**
- * One Product is enriched by at most one active run. Every path that makes
- * enrichment targets active (a new run, a restart's successor, a retried
- * dispatch) locks its Products in id order inside its transaction, so two
- * such paths on different accounts cannot both admit a Product or deadlock
- * over overlapping ones. Returns each locked Product another active run
- * holds, with that run's shortcode.
- */
-async function lockProductsFindHeld(
-  tx: DrizzleTransaction,
-  productIds: readonly ProductId[],
-  exceptRunId?: RunId,
-) {
-  const held = new Map<string, string>();
-  if (productIds.length === 0) return held;
-  for (const id of [...new Set(productIds)].sort())
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${`product-enrichment:${id}`}))`,
-    );
-  const rows = await tx
-    .select({ productId: runTarget.entityId, runCode: runTable.shortcode })
-    .from(runTarget)
-    .innerJoin(runTable, eq(runTable.id, runTarget.runId))
-    .where(
-      and(
-        eq(runTable.purpose, "product_enrichment"),
-        inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
-        inArray(runTarget.entityId, [...productIds]),
-        exceptRunId ? ne(runTable.id, exceptRunId) : undefined,
-      ),
-    );
-  for (const row of rows) held.set(row.productId, row.runCode);
-  return held;
-}
-
-/** A member's restart or retry refuses rather than drop a held Product. */
-async function assertProductsUnheld(
-  tx: DrizzleTransaction,
-  productIds: readonly ProductId[],
-  exceptRunId: RunId,
-) {
-  const held = await lockProductsFindHeld(tx, productIds, exceptRunId);
-  const [holder] = held.values();
-  if (holder)
-    throw new Error(
-      `A Product in this run is already being enriched by ${holder}; finish or stop that run first`,
-    );
 }
 
 export type StartPhotoInventoryRunInput = {
@@ -950,27 +665,16 @@ export async function pauseAuthorizedRuns(db: Database, actorUserId: string) {
     .returning({ id: runTable.id });
 }
 
-export async function expireOfflineRuns(db: Database, now = new Date()) {
-  const cutoff = new Date(now.getTime() - OFFLINE_EXPIRY_MS);
-  const expired = await getDb(db)
-    .update(runTable)
-    .set({
-      status: "failed",
-      failureCode: "offline_expired",
-      endedAt: now,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(runTable.status, "paused_offline"),
-        lt(runTable.updatedAt, cutoff),
-      ),
-    )
-    .returning({ id: runTable.id });
-  for (const { id } of expired)
-    await deferQueuedChargeHunts(db, id, "Run expired while offline");
-  return { expired: expired.length };
-}
+/**
+ * Historical provider-pagination and mailbox-binding receipts: host authority,
+ * never shown as Run evidence.
+ */
+const PRIVATE_OPERATION_KINDS = [
+  "research_mail_scope",
+  "research_mail_choice",
+  "research_mail_page",
+  "research_mail_continuation",
+] as const;
 
 const STALE_RUN_MS = 2 * 60 * 60_000;
 
@@ -984,8 +688,8 @@ const APPROVAL_WAKE_DECISION = new Map([
 
 /**
  * Whether the server issued a wake the reporting agent has not received: the
- * current dispatch generation, a member's approval decision, or a Mac answer
- * to a browser command. Each is a queue event that resumes the conversation,
+ * current dispatch generation or a member's approval decision. Each is a
+ * queue event that resumes the conversation,
  * so the stop the settled submission reported is not where the run ends.
  * Event ids, not clocks: the two Workers' clocks are not comparable.
  */
@@ -993,12 +697,6 @@ async function unreceivedWake(
   db: Database,
   scope: Awaited<ReturnType<typeof loadRunScope>>,
   received: ReadonlySet<string>,
-  browsers: Awaited<
-    ReturnType<
-      typeof import("./research-browser-service").researchBrowserSettlement
-    >
-  >,
-  brokers: Map<string, ReturnType<PurchaseImportNamespace["getByName"]>>,
 ): Promise<boolean> {
   const runId = scope.public.runId;
   if (
@@ -1019,15 +717,6 @@ async function unreceivedWake(
     const decision = APPROVAL_WAKE_DECISION.get(state);
     if (!received.has(`approval:${id}:${decision}`)) return true;
   }
-  for (const { commandId, accountId } of browsers.commands) {
-    // An answered command's result event resumes the conversation; until
-    // the agent has received it, that answer is still in flight.
-    if (
-      !received.has(`browser-result:${commandId}`) &&
-      (await brokers.get(accountId)?.result(commandId))
-    )
-      return true;
-  }
   return false;
 }
 
@@ -1036,14 +725,13 @@ async function unreceivedWake(
  * coordinator stopped without a terminal tool call: a `review` progress
  * report, a turn budget, or a model that simply ended its turn. The
  * legitimate ways to settle while running are a wake the agent has not
- * received yet (`unreceivedWake`), a browser command still in flight, and
- * photo groups awaiting a household review, so those cases are left alone.
+ * received yet (`unreceivedWake`) and photo groups awaiting a household
+ * review, so those cases are left alone.
  * A pending approval never reaches here: it moves the run to
  * `paused_approval` first.
  */
 export async function reconcileSettledRun(
   db: Database,
-  namespace: PurchaseImportNamespace,
   input: {
     runId: string;
     operationId: string;
@@ -1058,48 +746,14 @@ export async function reconcileSettledRun(
       failureCode: "agent_failed" | "agent_aborted";
       detail?: string;
     };
-    /** Cancel bridge commands nobody answered before this instant. */
-    abandonCommandsBefore?: Date;
   },
 ) {
   const scope = await loadRunScope(db, input.runId);
   if (scope.public.status !== "running")
     return { reconciled: false as const, status: scope.public.status };
-  const { researchBrowserSettlement } =
-    await import("./research-browser-service");
-  const browsers =
-    scope.public.purpose === "photo_inventory"
-      ? { accounts: [], commands: [], deliveryPending: false }
-      : await researchBrowserSettlement(db, scope.public.runId);
-  const brokers = new Map(
-    browsers.accounts.map((id) => [id, namespace.getByName(id)]),
-  );
-  // Snapshot unanswered commands before looking for answered ones, so a Mac
-  // answer landing between the two reads is seen as an undelivered wake.
-  const pending = (
-    await Promise.all(
-      [...brokers].map(async ([accountId, broker]) =>
-        (await broker.pendingCommands(scope.public.runId)).map((command) => ({
-          ...command,
-          accountId,
-        })),
-      ),
-    )
-  ).flat();
   if (
     input.receivedEventIds &&
-    (await unreceivedWake(db, scope, input.receivedEventIds, browsers, brokers))
-  )
-    return { reconciled: false as const, status: "running" as const };
-  if (browsers.deliveryPending)
-    return { reconciled: false as const, status: "running" as const };
-  // A command still awaiting the Mac will resume the conversation with its
-  // result; the sweep's cutoff abandons only commands nobody answered.
-  const cutoff = input.abandonCommandsBefore?.getTime();
-  if (
-    pending.some(
-      (command) => cutoff === undefined || command.createdAt >= cutoff,
-    )
+    (await unreceivedWake(db, scope, input.receivedEventIds))
   )
     return { reconciled: false as const, status: "running" as const };
   if (input.failure) {
@@ -1159,12 +813,38 @@ export async function reconcileSettledRun(
     if (awaitingPhotoReview)
       return { reconciled: false as const, status: "running" as const };
   }
-  if (pending.length) {
-    // A command the Mac never answered within the stale window is not work
-    // in flight; it is the reason the run stalled. Its 25-hour deadline is
-    // the bridge's replay bound, not a promise anyone is still keeping.
-    for (const command of pending)
-      await brokers.get(command.accountId)?.cancel(command.requestId);
+  // A Mail import has no explicit finish tool: once every admitted Email is
+  // imported, linked or disposed of, Pi's settled submission completes it.
+  // Without this every fully resolved Mail import ended in needs_review.
+  if (scope.public.purpose === "mail_import") {
+    const completed = await withTransaction(db, async (tx) => {
+      const [locked] = await tx
+        .select({ status: runTable.status })
+        .from(runTable)
+        .where(eq(runTable.id, scope.public.runId))
+        .for("update");
+      if (locked?.status !== "running") return false;
+      const targets = await tx
+        .select({ state: runTarget.state })
+        .from(runTarget)
+        .where(eq(runTarget.runId, scope.public.runId));
+      if (
+        targets.length === 0 ||
+        targets.some((target) => target.state !== "completed")
+      )
+        return false;
+      await tx
+        .update(runTable)
+        .set({
+          status: "completed",
+          endedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(runTable.id, scope.public.runId));
+      return true;
+    });
+    if (completed)
+      return { reconciled: true as const, status: "completed" as const };
   }
   await stopRunForReview(db, {
     runId: input.runId,
@@ -1181,11 +861,7 @@ export async function reconcileSettledRun(
  * run row, its operations and its progress reports so a slow but live agent
  * is not cut off.
  */
-export async function expireStaleRuns(
-  db: Database,
-  namespace: PurchaseImportNamespace,
-  now = new Date(),
-) {
+export async function expireStaleRuns(db: Database, now = new Date()) {
   const cutoff = new Date(now.getTime() - STALE_RUN_MS);
   const stale = await getDb(db)
     .select({ id: runTable.id })
@@ -1215,11 +891,10 @@ export async function expireStaleRuns(
     // pass); that must not abort the tick for every other run or the offline
     // expiry that shares it. The next tick retries.
     try {
-      const outcome = await reconcileSettledRun(db, namespace, {
+      const outcome = await reconcileSettledRun(db, {
         runId: run.id,
         operationId: `stale-run:${now.toISOString()}`,
         detail: "No coordinator activity for two hours",
-        abandonCommandsBefore: cutoff,
       });
       if (outcome.reconciled) expired += 1;
     } catch (error) {
@@ -1236,70 +911,6 @@ const assertRunActive = (status: string) => {
   if (status !== "running")
     throw new Error(`Import run is fenced in status ${status}`);
 };
-
-/** The hunts a charge-search run was assigned, or null for every other run. */
-async function runChargeHuntIds(
-  db: Database,
-  runId: string,
-): Promise<string[] | null> {
-  const [row] = await getDb(db)
-    .select({ input: runTable.input })
-    .from(runTable)
-    .where(eq(runTable.id, runEntityId.parse(runId)))
-    .limit(1);
-  return researchChargeHuntIds(row?.input);
-}
-
-/**
- * A charge run that ends without finishing (cancelled, failed, expired) leaves
- * its still-queued selected hunts for review: they stay reselectable and a
- * restart can carry them, instead of being queued under a dead run.
- */
-async function deferQueuedChargeHunts(
-  db: Database,
-  runId: string,
-  reason: string,
-) {
-  const huntIds = await runChargeHuntIds(db, runId);
-  if (!huntIds) return;
-  await getDb(db)
-    .update(importHunt)
-    .set({
-      state: CHARGE_HUNT_STATE.deferred,
-      error: reason,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        inArray(importHunt.id, huntIds),
-        eq(importHunt.state, CHARGE_HUNT_STATE.queued),
-      ),
-    );
-}
-
-/** An implicit start must not silently join a member's selected-charges run. */
-/**
- * The vendor account's one active run is doing other work, so this request
- * cannot join it; the member finishes or stops that run first.
- */
-export class AccountOccupiedError extends Error {
-  constructor(
-    readonly runShortcode: string,
-    work: string,
-  ) {
-    super(
-      `Vendor account is running ${work} (${runShortcode}); finish or stop it first`,
-    );
-    this.name = "AccountOccupiedError";
-  }
-}
-
-export class ActiveChargeRunError extends AccountOccupiedError {
-  constructor(runShortcode: string) {
-    super(runShortcode, "a selected charge search");
-    this.name = "ActiveChargeRunError";
-  }
-}
 
 /** Photo coordination reads only its explicit pending image targets. */
 export async function claimPhotoInventoryWork(db: Database, runId: string) {
@@ -1563,62 +1174,15 @@ export async function stopRunForReview(
             ),
           )
           .limit(1);
-    const stoppedHuntIds = await runChargeHuntIds(
-      databaseForTransaction(tx),
-      runId,
-    );
-    if (stoppedHuntIds) {
-      // A stopped charge search found nothing wrong with its charges, so its
-      // unfinished ones are left for review and carried by a restart.
-      await tx
-        .update(importHunt)
-        .set({
-          state: CHARGE_HUNT_STATE.deferred,
-          error: summary,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            inArray(importHunt.id, stoppedHuntIds),
-            eq(importHunt.state, CHARGE_HUNT_STATE.queued),
-          ),
-        );
-    } else if (
-      scope.public.purpose === "account_sync" &&
-      scope.public.vendorAccountId
-    ) {
-      await tx
-        .update(importHunt)
-        .set({ state: "exhausted", error: summary, updatedAt: new Date() })
-        .where(
-          and(
-            eq(
-              importHunt.vendorAccountId,
-              vendorAccountId.parse(scope.public.vendorAccountId),
-            ),
-            eq(importHunt.state, "browser_queued"),
-            // Hunts a member's selected-charges run holds are not this run's.
-            notHeldByChargeRun,
-          ),
-        );
-    }
-    if (scope.public.purpose !== "account_sync") {
-      await tx
-        .update(runTarget)
-        .set({
-          state: "unresolved",
-          outcome: null,
-          // A target left mid-capture says why the run stopped instead.
-          warning: sql`CASE WHEN ${runTarget.warning} = ${CAPTURE_INTERIM_NOTE} THEN ${summary} ELSE ${runTarget.warning} END`,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(runTarget.runId, runId),
-            inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
-          ),
-        );
-    }
+    await tx
+      .update(runTarget)
+      .set({ state: "unresolved", outcome: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(runTarget.runId, runId),
+          inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
+        ),
+      );
     await tx
       .update(runTable)
       .set({
@@ -1666,7 +1230,6 @@ export async function markRunFailed(
       ),
     )
     .returning({ vendorAccountId: runTable.vendorAccountId });
-  if (run) await deferQueuedChargeHunts(db, runId, "Run failed");
   if (run?.vendorAccountId) {
     await getDb(db)
       .update(vendorAccount)
@@ -1851,8 +1414,6 @@ export async function loadRunDetail(
     findings,
     controlHistory,
     targets,
-    evidence,
-    acceptedFacts,
     agentModelUsage,
     restartTargets,
   ] = await Promise.all([
@@ -1876,7 +1437,7 @@ export async function loadRunDetail(
       .where(
         and(
           eq(runOperation.runId, run.id),
-          notInArray(runOperation.kind, [...PRIVATE_RESEARCH_OPERATION_KINDS]),
+          notInArray(runOperation.kind, [...PRIVATE_OPERATION_KINDS]),
         ),
       )
       .orderBy(asc(runOperation.startedAt)),
@@ -1973,57 +1534,6 @@ export async function loadRunDetail(
       .orderBy(asc(runTarget.createdAt)),
     database
       .select({
-        id: runEvidence.id,
-        targetId: runEvidence.targetId,
-        sourceMetadata: runEvidence.sourceMetadata,
-        byteSize: runEvidence.byteSize,
-        kind: runEvidence.kind,
-        checksum: runEvidence.checksum,
-        mediaType: runEvidence.mediaType,
-        createdAt: runEvidence.createdAt,
-      })
-      .from(runEvidence)
-      .where(eq(runEvidence.runId, run.id))
-      .orderBy(asc(runEvidence.createdAt)),
-    database
-      .select({
-        evidenceId: runFactEvidence.evidenceId,
-        entityKind: runFactEvidence.entityKind,
-        entityShortcode: entityIdentity.shortcode,
-        fieldPath: runFactEvidence.fieldPath,
-        value: runFactEvidence.value,
-      })
-      .from(runFactEvidence)
-      .innerJoin(
-        runEvidence,
-        and(
-          eq(runEvidence.id, runFactEvidence.evidenceId),
-          eq(runEvidence.targetId, runFactEvidence.targetId),
-        ),
-      )
-      .innerJoin(
-        runTarget,
-        and(
-          eq(runTarget.id, runFactEvidence.targetId),
-          eq(runTarget.runId, runEvidence.runId),
-        ),
-      )
-      .innerJoin(
-        entityIdentity,
-        and(
-          eq(entityIdentity.id, runFactEvidence.entityId),
-          eq(entityIdentity.kind, runFactEvidence.entityKind),
-        ),
-      )
-      .where(
-        and(
-          eq(runEvidence.runId, run.id),
-          isNull(runFactEvidence.supportRetiredAt),
-        ),
-      )
-      .orderBy(asc(runFactEvidence.createdAt), asc(runFactEvidence.id)),
-    database
-      .select({
         durationMs: sql<number>`coalesce(sum(${aiUsage.durationMs}), 0)`,
       })
       .from(aiUsage)
@@ -2058,60 +1568,6 @@ export async function loadRunDetail(
     ...event,
     createdAt: event.createdAt.toISOString(),
   }));
-  const evidenceById = new Map(evidence.map((item) => [item.id, item]));
-  const targetIds = new Set(targets.map((target) => target.id));
-  const captureContext = researchSourceMetadata
-    .pick({
-      title: true,
-      sourceURL: true,
-      capturedAt: true,
-      researchUploadState: true,
-      screenshots: true,
-    })
-    .loose();
-  const contexts = new Map(
-    evidence.map((item) => {
-      const parsed = captureContext.safeParse(item.sourceMetadata);
-      return [item.id, parsed.success ? parsed.data : null];
-    }),
-  );
-  const retainedMediaUrl = (item: (typeof evidence)[number]) => {
-    if (
-      run.retiredAt ||
-      !item.targetId ||
-      !targetIds.has(item.targetId) ||
-      !initiateRunEvidenceUploadInput.shape.contentType.safeParse(
-        item.mediaType,
-      ).success ||
-      !initiateRunEvidenceUploadInput.shape.byteSize.safeParse(item.byteSize)
-        .success ||
-      contexts.get(item.id)?.researchUploadState === "pending"
-    )
-      return undefined;
-    const query = new URLSearchParams({
-      runId: publicId,
-      targetId: item.targetId,
-      evidenceId: item.id,
-    });
-    return `${runEvidenceMediaRead.path}?${query}`;
-  };
-  const factsByEvidence = new Map<
-    string,
-    NonNullable<RunDetail["evidence"][number]["supportedFacts"]>
-  >();
-  for (const fact of acceptedFacts) {
-    const facts = factsByEvidence.get(fact.evidenceId) ?? [];
-    facts.push({
-      entityKind: fact.entityKind,
-      entityShortcode: anyShortcodeSchema([
-        runTargetEntityKind.enum.product,
-        ...runTargetEntityKind.options,
-      ]).parse(fact.entityShortcode),
-      fieldPath: fact.fieldPath,
-      value: fact.value,
-    });
-    factsByEvidence.set(fact.evidenceId, facts);
-  }
   return {
     publicId,
     status: header.status,
@@ -2186,30 +1642,11 @@ export async function loadRunDetail(
     skillRevision: header.skillRevision,
     runtimeRevision: header.runtimeRevision,
     agentModelMs: Number(agentModelUsage[0]?.durationMs ?? 0),
-    operations: operations.map(({ result, ...operation }) => {
-      const parsed =
-        operation.kind === "browser_command"
-          ? browserCommandRecord.safeParse(result)
-          : null;
-      const record = parsed?.success ? parsed.data : null;
-      const receipt = record?.serverResult;
-      const bound =
-        receipt &&
-        receipt.commandID === record.commandId &&
-        receipt.operationID === operation.operationId &&
-        receipt.runID === run.id;
-      return {
-        ...operation,
-        startedAt: operation.startedAt.toISOString(),
-        completedAt: iso(operation.completedAt),
-        browserTiming: bound
-          ? {
-              durationMs: receipt.outcome.observation.durationMs,
-              retryCount: new Set(record.retries ?? []).size,
-            }
-          : null,
-      };
-    }),
+    operations: operations.map(({ result: _result, ...operation }) => ({
+      ...operation,
+      startedAt: operation.startedAt.toISOString(),
+      completedAt: iso(operation.completedAt),
+    })),
     preparedOrders: projectPreparedOrders(preparedOrders, operations),
     targets: targets.map((target) => ({
       id: target.id,
@@ -2234,50 +1671,6 @@ export async function loadRunDetail(
         .parse(target.diff ?? null),
       completedAt: iso(target.completedAt),
     })),
-    evidence: evidence.map((item) => {
-      const context = contexts.get(item.id);
-      const sourceURL =
-        context?.sourceURL &&
-        ["https:", "http:"].includes(new URL(context.sourceURL).protocol)
-          ? context.sourceURL
-          : undefined;
-      const mediaUrl = retainedMediaUrl(item);
-      const screenshot = context?.screenshots.find((reference) => {
-        const retained = evidenceById.get(reference.id);
-        return (
-          reference.kind === "screenshot" &&
-          retained &&
-          retained.targetId === item.targetId &&
-          retained.checksum === reference.checksum &&
-          retained.mediaType === reference.contentType &&
-          retained.mediaType.startsWith("image/") &&
-          retainedMediaUrl(retained)
-        );
-      });
-      const screenshotRow = screenshot
-        ? evidenceById.get(screenshot.id)
-        : undefined;
-      const previewUrl = item.mediaType.startsWith("image/")
-        ? mediaUrl
-        : screenshotRow
-          ? retainedMediaUrl(screenshotRow)
-          : undefined;
-      return {
-        id: item.id,
-        targetId: null,
-        sourceKind: item.kind,
-        title: context?.title,
-        sourceURL,
-        capturedAt: context?.capturedAt,
-        mediaUrl,
-        previewUrl,
-        supportedFacts: factsByEvidence.get(item.id) ?? [],
-        filename: null,
-        mediaType: item.mediaType,
-        checksum: item.checksum,
-        createdAt: item.createdAt.toISOString(),
-      };
-    }),
     approvals: approvals.map((approval) => ({
       id: approval.id,
       operationId: approval.operationId,
@@ -2367,20 +1760,6 @@ function operationLogEntry(
     "id" | "operationId" | "kind" | "state" | "result" | "error" | "startedAt"
   >,
 ): RunLogEntry | null {
-  if (operation.kind === "capture_interpretation") {
-    const receipt = retainedCaptureInterpretation.parse(operation.result);
-    return {
-      id: operation.id,
-      occurredAt: operation.startedAt.toISOString(),
-      source: "server",
-      level: "info",
-      event: "capture.reinterpreted",
-      state: operation.state,
-      ...emptyLogMetadata,
-      operationId: operation.operationId,
-      outcome: `Revision ${receipt.originalVersion} → ${receipt.capture.captureVersion}; changed ${receipt.changedFields.join(", ") || "none"}; supported facts ${receipt.supportedFactFields.join(", ") || "none"}. Accepted facts unchanged.`,
-    };
-  }
   if (operation.kind === DEBUG_EVENT_KIND)
     return debugOperationLogEntry(operation);
 
@@ -2451,7 +1830,7 @@ export async function loadRunLog(db: Database, shortcode: string) {
     .where(
       and(
         eq(runOperation.runId, run.id),
-        notInArray(runOperation.kind, [...PRIVATE_RESEARCH_OPERATION_KINDS]),
+        notInArray(runOperation.kind, [...PRIVATE_OPERATION_KINDS]),
       ),
     )
     .orderBy(asc(runOperation.startedAt), asc(runOperation.id))
@@ -2582,72 +1961,6 @@ export async function recordRunControlEvent(
   return event;
 }
 
-// New attempts enter source admission; cancellation and approval mutate only
-// the named Run under its lock and retain controller attribution separately.
-async function wakeUploadedValidation(
-  db: Database,
-  actor: ActorContext,
-  runId: RunId,
-) {
-  return withTransaction(db, async (tx) => {
-    const [owned] = await tx
-      .select()
-      .from(runTable)
-      .where(
-        and(
-          eq(runTable.id, runId),
-          eq(runTable.actorUserId, actor.userId),
-          eq(runTable.purpose, "purchase_validation"),
-          eq(runTable.status, "running"),
-          isNull(runTable.retiredAt),
-          notDeleted(runTable),
-        ),
-      )
-      .for("update");
-    if (!owned)
-      throw new Error(
-        "Only live owned validation research can resume after an upload.",
-      );
-    const admitted = purchaseValidationResearchRunInput.parse(owned.input);
-    const originals = await tx
-      .select({ evidence: runEvidence, target: runTarget })
-      .from(runEvidence)
-      .innerJoin(
-        runTarget,
-        and(
-          eq(runTarget.id, runEvidence.targetId),
-          eq(runTarget.runId, runEvidence.runId),
-        ),
-      )
-      .where(
-        and(
-          eq(runEvidence.runId, owned.id),
-          eq(runEvidence.kind, "manual_upload"),
-          inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
-        ),
-      )
-      .orderBy(desc(runEvidence.createdAt), desc(runEvidence.id));
-    const original = originals[0];
-    if (
-      !original ||
-      original.target.entityKind !== "purchase" ||
-      !admitted.purchases.some(
-        (item) => item.purchaseId === original.target.entityId,
-      ) ||
-      !z
-        .object({ researchUploadState: z.literal("uploaded") })
-        .safeParse(original.evidence.sourceMetadata).success
-    )
-      throw new Error("Manual evidence has not completed its verified upload.");
-    return {
-      publicId: owned.shortcode,
-      status: owned.status,
-      wakeRunId: owned.id,
-      evidenceWakeId: original.evidence.id,
-    };
-  });
-}
-
 export async function controlRun(
   db: Database,
   actor: ActorContext,
@@ -2682,39 +1995,6 @@ export async function controlRun(
     scope.ledgerPartyId !== controller.ledgerPartyId
   )
     throw new Error("Only the member this Run belongs to can control it");
-  if (
-    [
-      "mail_import",
-      "product_enrichment",
-      "account_sync",
-      "purchase_validation",
-    ].includes(scope.public.purpose) &&
-    ["retry", "restart", "escalate_sol"].includes(input.action)
-  ) {
-    // Owning admission locks sources before the predecessor; do not enter the
-    // legacy Run-first mutation transaction before calling it.
-    return continueResearchRun(db, actor, {
-      predecessorRunId: scope.public.runId,
-      action: input.action === "restart" ? "restart" : "retry",
-    });
-  }
-  if (
-    scope.public.purpose === "purchase_validation" &&
-    ["upload_evidence", "no_evidence_available"].includes(input.action)
-  ) {
-    return continueResearchRun(db, actor, {
-      predecessorRunId: scope.public.runId,
-      action: "retry",
-      manualEvidenceUnavailable: input.action === "no_evidence_available",
-    });
-  }
-  if (
-    scope.public.purpose === "purchase_validation" &&
-    input.action === "retry_dispatch" &&
-    scope.public.coordinatorStartedAt
-  ) {
-    return wakeUploadedValidation(db, actor, scope.public.runId);
-  }
   return withTransaction(
     db,
     // eslint-disable-next-line complexity
@@ -2790,9 +2070,6 @@ export async function controlRun(
           sourceTargets.some((target) => target.entityKind !== "image")
         )
           throw new Error("Photo run inputs are incomplete");
-        if (locked.vendorAccountId) {
-          await assertNoHoldingChargeRun(tx, locked.vendorAccountId);
-        }
         const successorId = runEntityId.parse(crypto.randomUUID());
         const dispatchEventId = crypto.randomUUID();
         const successor = await insertWithShortcode(tx, "run", {
@@ -2855,30 +2132,11 @@ export async function controlRun(
         controllerLedgerPartyKind: controller.ledgerPartyKind,
       });
       if (input.action === "retry_dispatch") {
-        if (locked.vendorAccountId && !researchChargeHuntIds(locked.input)) {
-          await assertNoHoldingChargeRun(tx, locked.vendorAccountId);
-        }
         if (
           !new Set(["running", "dispatch_failed"]).has(locked.status) ||
           locked.coordinatorStartedAt
         ) {
           throw new Error("Only an unacknowledged dispatch can be retried");
-        }
-        if (locked.purpose === "product_enrichment") {
-          const targets = await tx
-            .select({ entityId: runTarget.entityId })
-            .from(runTarget)
-            .where(
-              and(
-                eq(runTarget.runId, scope.public.runId),
-                eq(runTarget.entityKind, "product"),
-              ),
-            );
-          await assertProductsUnheld(
-            tx,
-            targets.map((target) => productId.parse(target.entityId)),
-            scope.public.runId,
-          );
         }
         const dispatchEventId = crypto.randomUUID();
         await tx
@@ -2909,8 +2167,6 @@ export async function controlRun(
           throw new Error(
             `Purchase import run is not terminal in ${locked.status}`,
           );
-        if (!locked.vendorAccountId && !locked.vendorId)
-          throw new Error("Purchase import run has no vendor to retry");
         const successorVendorAccountId = locked.vendorAccountId
           ? vendorAccountId.parse(locked.vendorAccountId)
           : null;
@@ -2961,7 +2217,7 @@ export async function controlRun(
             ),
           );
         if (!unresolvedTargets.length)
-          throw new Error("Targeted import run has no unresolved targets");
+          throw new Error("This Run has no unresolved targets to retry");
         const successor = await insertWithShortcode(tx, "run", {
           id: successorId,
           ledgerPartyId: locked.ledgerPartyId,
@@ -3031,16 +2287,6 @@ export async function controlRun(
           throw new Error(
             `Purchase import run is immutable in ${locked.status}`,
           );
-        const browserOperations = await tx
-          .select({ result: runOperation.result })
-          .from(runOperation)
-          .where(
-            and(
-              eq(runOperation.runId, scope.public.runId),
-              eq(runOperation.kind, "browser_command"),
-              inArray(runOperation.state, ["started", "completed"]),
-            ),
-          );
         await tx
           .update(runTable)
           .set({
@@ -3050,11 +2296,6 @@ export async function controlRun(
             updatedAt: new Date(),
           })
           .where(eq(runTable.id, scope.public.runId));
-        await deferQueuedChargeHunts(
-          databaseForTransaction(tx),
-          scope.public.runId,
-          "Run cancelled by its owner",
-        );
         await tx
           .update(runApproval)
           .set({ state: "invalidated", invalidatedAt: new Date() })
@@ -3071,18 +2312,7 @@ export async function controlRun(
             ? "Dispatch aborted by its owner"
             : "Run cancelled by its owner",
         );
-        return {
-          publicId: input.runPublicId,
-          status: "failed" as const,
-          cancelledBrowserCommandIds: browserOperations.flatMap(
-            ({ result }) => {
-              const parsed = z
-                .object({ commandId: z.uuid() })
-                .safeParse(result);
-              return parsed.success ? [parsed.data.commandId] : [];
-            },
-          ),
-        };
+        return { publicId: input.runPublicId, status: "failed" as const };
       }
       if (input.action === "pause") {
         if (locked.status !== "running")

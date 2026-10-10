@@ -8,17 +8,7 @@
  */
 import { z } from "zod";
 
-import { researchToolInputs } from "./research-tools";
-
 import { aiUsageTransport } from "./telemetry";
-
-/** Cleanup remains available while model execution is fenced. */
-export const researchCoordinatorStatus = z.enum([
-  "ready",
-  "retired",
-  "legacy",
-  "incomplete_admission",
-]);
 
 export const purchaseAgentOperationRef = z.object({
   operationId: z.string().min(1).max(256),
@@ -108,9 +98,6 @@ const modelId = {
   operationId: purchaseAgentOperationRef.shape.operationId.max(200),
 };
 const modelOperationRef = z.object(modelId);
-
-/** Bounded research inputs; host replay identity is never model supplied. */
-export const purchaseAgentToolInputs = researchToolInputs;
 
 /** Photo inventory retains its existing restricted workflow and replay keys. */
 export const photoInventoryToolInputs = {

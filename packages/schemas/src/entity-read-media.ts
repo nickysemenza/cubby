@@ -3,6 +3,7 @@ import { z } from "zod";
 import { displayImagesField } from "./display-images";
 import { entityAttachmentRoleValues } from "./entity-attachment";
 import { imageOut } from "./entity-definitions/field-primitives";
+import { entitySourceRead } from "./entity-source";
 
 export const entityAttachmentRole = z.enum(entityAttachmentRoleValues);
 
@@ -21,6 +22,8 @@ const detailMediaFields = z.object({
   redirectedFrom: z.string().nullable(),
   /** Codes of entities merged into this one; each still redirects here. */
   previousShortcodes: z.array(z.string()),
+  /** Where facts about this record were seen, newest first. */
+  sources: z.array(entitySourceRead),
 });
 
 const entityReadObject = (schema: z.ZodType) => {

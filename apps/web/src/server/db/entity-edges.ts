@@ -1101,6 +1101,18 @@ export const ENTITY_EDGES = {
       description: "A charge-side evidence search routed to this vendor.",
       liveness: { kind: "must-target-live" },
     },
+    "ImportPreparedOrder.vendorId": {
+      column: importPreparedOrder.vendorId,
+      role: "history",
+      label: "prepared import orders",
+      description:
+        "The Vendor a purchase import named while preparing an order.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Preparation is an immutable capture; commit refuses a deleted or merged Vendor and the order must be prepared again.",
+      },
+    },
     "MerchantVendorRule.vendorId": {
       column: merchantVendorRule.vendorId,
       role: "metadata",

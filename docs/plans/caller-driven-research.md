@@ -9,12 +9,12 @@ recorded in [Round-2 dispositions](#round-2-dispositions).
 
 ## Split
 
-| Concern | Owner |
-| --- | --- |
-| Mail discovery: pagination, frozen-page replay, Spam/Trash exclusion, exact coverage | Server, unchanged; classification also records deciding stage (rule/Jev/model) + short reason on `MailboxMessage` |
-| Mail import: Email → Purchase, Expenses, Product resolutions, Email links | Pi, Luna/Sol routing, skills, existing paid caps + known-price admission. Email only: no browser, no web |
-| Product details, variants, images, unresolved lines, unmatched charges, receipt itemization | Burn-down: member Claude/Codex via Cubby MCP with its own browser |
-| Photo inventory | Pi, unchanged |
+| Concern                                                                                     | Owner                                                                                                             |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Mail discovery: pagination, frozen-page replay, Spam/Trash exclusion, exact coverage        | Server, unchanged; classification also records deciding stage (rule/Jev/model) + short reason on `MailboxMessage` |
+| Mail import: Email → Purchase, Expenses, Product resolutions, Email links                   | Pi, Luna/Sol routing, skills, existing paid caps + known-price admission. Email only: no browser, no web          |
+| Product details, variants, images, unresolved lines, unmatched charges, receipt itemization | Burn-down: member Claude/Codex via Cubby MCP with its own browser                                                 |
+| Photo inventory                                                                             | Pi, unchanged                                                                                                     |
 
 Pi and Burn-down use the **same public MCP tools**. There is no private research
 tool family.

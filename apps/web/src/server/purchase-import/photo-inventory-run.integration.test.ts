@@ -4,6 +4,7 @@ import {
   runShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -28,10 +29,12 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { productionPhotoImportCommitPorts } from "~/server/services/photo-import-commit.service";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
+import { coordinatorRetired } from "./run-retirement";
 import {
   controlRun,
   finalizePhotoRun,
   loadRunDetail,
+  loadRunScope,
   startPhotoInventoryCoordinator,
   startPhotoInventoryRun,
 } from "./run-service";
@@ -465,6 +468,30 @@ describe("photo import finalize", () => {
         ctx.actor,
       ),
     ).rejects.toThrow("fenced in status completed");
+  });
+
+  // The coordinator host admits a Run only through its agent scope and
+  // retirement fence; a household owner keeps the member as the acting user.
+  it("preserves the member's photo coordinator for an explicitly shared household owner", async () => {
+    await createMember();
+    const household = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic shared photo household",
+      kind: "household",
+    });
+    const started = await startPhotoInventoryRun(ctx.db, {
+      actorUserId: ctx.actor.userId,
+      ledgerPartyId: household.id,
+    });
+    const scope = await loadRunScope(ctx.db, started.id);
+    expect(scope).toMatchObject({
+      actorUserId: ctx.actor.userId,
+      ledgerPartyId: household.id,
+      public: {
+        purpose: "photo_inventory",
+        agentId: importRunAgentIdentity(started.id, "photo_inventory"),
+      },
+    });
+    expect(await coordinatorRetired(ctx.db, started.id)).toBe(false);
   });
 
   it("refuses a non-photo-inventory run", async () => {

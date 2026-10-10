@@ -120,8 +120,6 @@ struct SettingsView: View {
             }
 
             if model.phase == .signedIn, photosReady { photosSection }
-
-            // TODO(caller-driven-research): receipt photo creates a minimal Purchase
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)

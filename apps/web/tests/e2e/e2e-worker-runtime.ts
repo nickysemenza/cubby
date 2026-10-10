@@ -1,19 +1,4 @@
 import { request, type APIRequestContext } from "@playwright/test";
-import type { PurchaseImportDurableObjectRpc } from "~/server/purchase-import/rpc";
-
-export type E2EBrowserNamespace = {
-  getByName(
-    name: string,
-  ): Pick<
-    PurchaseImportDurableObjectRpc,
-    | "connected"
-    | "enqueue"
-    | "result"
-    | "requestAuthentication"
-    | "pendingCommands"
-    | "cancel"
-  >;
-};
 
 import {
   harnessExplorerUrl,
@@ -133,13 +118,6 @@ export async function createE2EWorkerRuntime({
     purchaseAgent: WORKERD_PROFILES[profile].purchaseAgentPeers
       ? scenarioControls(harness)
       : undefined,
-    async browserNamespace(): Promise<E2EBrowserNamespace> {
-      return (
-        await harness
-          .getWorker<{ PURCHASE_IMPORT: E2EBrowserNamespace }>()
-          .getEnv()
-      ).PURCHASE_IMPORT;
-    },
     storageState,
     /** Bindings, Durable Object, queue and R2 explorer of this live harness. */
     explorerUrl,

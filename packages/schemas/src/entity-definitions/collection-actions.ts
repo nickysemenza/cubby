@@ -8,8 +8,6 @@ export const COLLECTION_ACTIONS = [
   "analyzeLocation",
   "attachImage",
   "reviewLabelNutrition",
-  "validatePurchase",
-  "enrichProduct",
 ] as const;
 
 export type CollectionActionId = (typeof COLLECTION_ACTIONS)[number];
@@ -18,6 +16,4 @@ export const COLLECTION_ACTION_SCOPES = {
   analyzeLocation: "section",
   attachImage: "section",
   reviewLabelNutrition: "row",
-  validatePurchase: "section",
-  enrichProduct: "section",
 } as const satisfies Record<CollectionActionId, "section" | "row">;

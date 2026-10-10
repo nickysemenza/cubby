@@ -14,6 +14,7 @@ import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { PuzzlePieceIcon } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
+import { QuotesIcon } from "@phosphor-icons/react/dist/csr/Quotes";
 import { Link } from "@tanstack/react-router";
 import { Suspense, useMemo, useState } from "react";
 import { z } from "zod";
@@ -92,6 +93,7 @@ import {
   planRelationSection,
   RelationSectionActions,
 } from "./entity-relation-table";
+import { EntitySourcesSection, recordSources } from "./entity-sources-section";
 
 /** What every detail read carries that the generic page reads by name. */
 const detailRecordSchema = z.looseObject({
@@ -603,6 +605,16 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
       icon: FileTextIcon,
       placement: "primary",
       content: <DocumentViewerList documents={documents} />,
+    });
+  }
+  const sources = recordSources(record);
+  if (sources.length > 0) {
+    sections.push({
+      id: "sources",
+      title: "Sources",
+      icon: QuotesIcon,
+      placement: "supporting",
+      content: <EntitySourcesSection entity={entity} sources={sources} />,
     });
   }
 

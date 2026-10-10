@@ -8,12 +8,9 @@ import type {
 import { runEntityId } from "./identifier-fields";
 import { runPurpose } from "./run-fields";
 
-/** Purposes currently coordinated by the durable import-run agent. */
+/** Purposes coordinated by the durable import-run agent. */
 export const agentImportRunPurpose = runPurpose.extract([
-  "account_sync",
   "mail_import",
-  "purchase_validation",
-  "product_enrichment",
   "photo_inventory",
 ]);
 export type AgentImportRunPurpose = z.infer<typeof agentImportRunPurpose>;
@@ -21,10 +18,7 @@ export type AgentImportRunPurpose = z.infer<typeof agentImportRunPurpose>;
 // These prefixes are persisted in Run.agentSessionId and the agent's Durable
 // Object storage. Existing conversations must retain their original identity.
 const instancePrefix = {
-  account_sync: "import-run",
   mail_import: "import-run",
-  purchase_validation: "import-run",
-  product_enrichment: "import-run",
   photo_inventory: "photo-inventory",
 } satisfies Record<AgentImportRunPurpose, string>;
 const validPrefixes = new Set<string>(Object.values(instancePrefix));
@@ -48,22 +42,28 @@ export function importRunIdFromAgentIdentity(
   return runEntityId.safeParse(instanceId.slice(colon + 1)).data;
 }
 
-/** The purchase agent's own tools (apps/web/src/server/purchase-agent/tools.ts). */
-const RESEARCH_AGENT_TOOLS = [
-  "work_next",
-  "work_observe",
-  "work_resolve",
-  "mail_search",
-  "mail_read",
-  "web_search",
-  "web_read",
-  "cubby_find",
+/** The host-owned tools every agent mounts (apps/web/src/server/purchase-agent/tools.ts). */
+const RUN_AGENT_TOOLS = [
+  "claim_next_import_work",
+  "report_agent_progress",
+  "stop_import_run_for_review",
 ] as const;
-export type ImportRunAgentToolName =
-  | (typeof RESEARCH_AGENT_TOOLS)[number]
-  | "claim_next_import_work"
-  | "report_agent_progress"
-  | "stop_import_run_for_review";
+export type ImportRunAgentToolName = (typeof RUN_AGENT_TOOLS)[number];
+
+/** Mail import reads Email and writes through the same public tools a member uses. */
+const MAIL_IMPORT_MCP_ACTIONS = [
+  "imports_read.mail",
+  "mail.search",
+  "mail.resolve",
+  "purchase_import.prepare",
+  "purchase_import.commit",
+  "entity_read.get",
+  "entity_read.list",
+  "entity_read.resolve",
+  "search.global",
+  "imports_read.external_id_collisions",
+  "product_enrichment.propose_match",
+] as const satisfies readonly CubbyMcpToolAction[];
 
 const PHOTO_MCP_ACTIONS = [
   "imports_read.photo_context",
@@ -73,7 +73,7 @@ const PHOTO_MCP_ACTIONS = [
   "entity_read.resolve",
   "search.similar",
   "photo_run.propose_groups",
-  "product_enrichment.patch_external_ids",
+  "entity.update",
 ] as const satisfies readonly CubbyMcpToolAction[];
 
 /** The tools the coordinator mounts for a set of actions: it mounts by tool name. */
@@ -100,41 +100,29 @@ export type ImportRunAgentConfig = {
   mcpTools: readonly CubbyMcpToolName[];
 };
 
-const purchaseAgent = {
-  model: "gpt-6-luna",
-  effort: "medium",
-  agentTools: RESEARCH_AGENT_TOOLS,
-  mcpActions: [],
-  mcpTools: [],
-} satisfies ImportRunAgentConfig;
-
-/** Purpose-specific research authority; photo inventory retains its legacy surface. */
+/** Each purpose's model and authority: host tools plus narrowed MCP actions. */
 export const importRunAgentManifest = {
   photo_inventory: {
     model: "gpt-6-luna",
     effort: "medium",
-    agentTools: [
-      "claim_next_import_work",
-      "report_agent_progress",
-      "stop_import_run_for_review",
-    ],
+    agentTools: RUN_AGENT_TOOLS,
     mcpActions: PHOTO_MCP_ACTIONS,
     mcpTools: toolsOf(PHOTO_MCP_ACTIONS),
   },
-  account_sync: purchaseAgent,
-  mail_import: purchaseAgent,
-  purchase_validation: purchaseAgent,
-  product_enrichment: purchaseAgent,
+  mail_import: {
+    model: "gpt-6-luna",
+    effort: "medium",
+    agentTools: RUN_AGENT_TOOLS,
+    mcpActions: MAIL_IMPORT_MCP_ACTIONS,
+    mcpTools: toolsOf(MAIL_IMPORT_MCP_ACTIONS),
+  },
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;
 
-/**
- * The model a run row records as its coordinator. Any other purpose records
- * the account-sync coordinator, matching the column default.
- */
+/** The model a run row records as its coordinator. */
 export function coordinatorModelFor(
   purpose: string,
 ): ImportRunAgentConfig["model"] {
   const parsed = agentImportRunPurpose.safeParse(purpose);
-  return importRunAgentManifest[parsed.success ? parsed.data : "account_sync"]
+  return importRunAgentManifest[parsed.success ? parsed.data : "mail_import"]
     .model;
 }

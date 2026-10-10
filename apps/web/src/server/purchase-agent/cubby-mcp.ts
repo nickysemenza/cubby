@@ -1,3 +1,4 @@
+import { mailAttachmentOriginal } from "@cubby/schemas/mailbox-research";
 import { Type, type JsonObject } from "@earendil-works/pi-ai";
 import {
   defineExtension,
@@ -45,6 +46,9 @@ const imageBlock = z.object({
   data: z.string(),
   mimeType: z.string(),
 });
+const attachmentResult = z.looseObject({
+  originalAttachment: mailAttachmentOriginal,
+});
 const callResult = z.object({
   content: z.array(z.unknown()).default([]),
   structuredContent: z.unknown().optional(),
@@ -60,6 +64,25 @@ function toolResult(raw: unknown): ToolExecutionResult {
     const image = imageBlock.safeParse(block);
     if (image.success) content.push(image.data);
   }
+  // `mail.read` returns an attachment's original bytes; the model receives
+  // them as media rather than as base64 text.
+  const original = attachmentResult.safeParse(parsed.structuredContent);
+  if (original.success) {
+    const { dataBase64, ...descriptor } = original.data.originalAttachment;
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            ...original.data,
+            originalAttachment: descriptor,
+          }),
+        },
+        { type: "image", data: dataBase64, mimeType: descriptor.mimeType },
+      ],
+      isError: parsed.isError === true,
+    };
+  }
   if (content.length === 0 && parsed.structuredContent !== undefined)
     content.push({
       type: "text",
@@ -70,8 +93,8 @@ function toolResult(raw: unknown): ToolExecutionResult {
 
 /**
  * Cubby MCP tools as pi tools named `mcp__cubby__<tool>`. Replay is safe:
- * every mutation carries the run's `_runExecution` operation id and the
- * server replays an identical effect instead of repeating it.
+ * import writers carry the run's `_runExecution` operation id and replay an
+ * identical effect; `mail.resolve` is idempotent by its Email and outcome.
  */
 export function cubbyMcpExtension(
   tools: readonly McpToolDefinition[],

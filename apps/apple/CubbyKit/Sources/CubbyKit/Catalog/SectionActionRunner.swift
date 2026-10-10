@@ -5,10 +5,6 @@ import Foundation
 public enum SectionActionError: Error, Equatable, Sendable {
     /// The report does not offer the verb, or offers it with a reason the server gave.
     case unavailable(String)
-    /// A `selection` verb ran with nothing checked.
-    case nothingSelected
-    /// A checked row is one the server refused; carries its reason.
-    case refusedSelection(String)
     /// Native does not implement the verb (`native-coverage.ts`); carries the reason.
     case unsupported(String)
 }
@@ -68,31 +64,4 @@ public struct SectionActionRunner: Sendable {
         return PurchaseProductLinkSession(purchaseID: purchaseID, client: client)
     }
 
-    public func syncAccount(
-        vendorAccountID: String, records: ReportPresentation.Records
-    ) async throws -> String {
-        try Self.canOpen(.syncAccount, in: records)
-        return try await client.startSync(.init(vendorAccountId: vendorAccountID)).runId
-    }
-
-    /// `searchCharges`: one browser run for exactly the checked statement charges. Returns the
-    /// new run's id. Nothing is sent unless the verb is offered, something is checked, and every
-    /// checked row is one the server still allows.
-    public func searchCharges(
-        vendorAccountID: String, records: ReportPresentation.Records, selection: Set<String>
-    ) async throws -> String {
-        try Self.canOpen(.searchCharges, in: records)
-        guard !selection.isEmpty else { throw SectionActionError.nothingSelected }
-        for id in selection {
-            guard let item = records.rows.first(where: { $0.key == id }) else {
-                throw SectionActionError.refusedSelection("This charge is no longer listed.")
-            }
-            if let reason = item.disabledReason { throw SectionActionError.refusedSelection(reason) }
-        }
-        // Listed order, so the same selection always sends the same body.
-        let ids = records.rows.compactMap(\.key).filter(selection.contains)
-        return try await client.startChargeRun(
-            .init(vendorAccountId: vendorAccountID, transactionIds: ids)
-        ).runId
-    }
 }

@@ -275,6 +275,7 @@ struct NativeListAdaptersTests {
         object["attachments"] = [Any]()
         object["redirectedFrom"] = NSNull()
         object["previousShortcodes"] = [Any]()
+        object["sources"] = [Any]()
         return try! JSONSerialization.data(withJSONObject: object)
     }()
 
