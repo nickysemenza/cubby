@@ -154,6 +154,8 @@ export interface WorkerdHarnessOptions {
   googleProviderUrl?: string;
   /** Live peers for a profile with `purchaseAgentPeers`; deterministic by default. */
   models?: { agent?: WorkerdModelWorker; gateway?: WorkerdModelWorker };
+  /** Omitted: request pools keep pg-pool's production idle timeout. */
+  poolIdleTimeoutMs?: number;
 }
 
 const consumerSchema = z.object({ queue: z.string() }).loose();
@@ -357,6 +359,11 @@ export function workerdHarnessOptions(
           // Keyless and deterministic like CI; a model peer, when present,
           // takes precedence over the Gateway transport anyway.
           AI_GATEWAY_API_KEY: "",
+          // A scripted Run settles in a test's time, not production's 10s poll.
+          CUBBY_TEST_SETTLEMENT_POLL_MS: "250",
+          ...(options.poolIdleTimeoutMs !== undefined && {
+            CUBBY_TEST_POOL_IDLE_TIMEOUT_MS: String(options.poolIdleTimeoutMs),
+          }),
           ...(options.googleProviderUrl && {
             E2E_GOOGLE_PROVIDER_URL: options.googleProviderUrl,
             GOOGLE_CLIENT_ID: "synthetic-google-client",

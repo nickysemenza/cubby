@@ -216,8 +216,12 @@ that job's fresh bundle. An unlisted consumer fails in the ordinary integration
 job.
 The socket-lifecycle regression lives in that workerd integration project: it
 exercises HTTP reads and freshness writes against the real Worker and observes
-PostgreSQL socket expiry, without a browser. Preserve its twelve-second quiet
-windows and repeated-load assertions when changing its scheduling.
+PostgreSQL socket expiry, without a browser. The runtime's
+`poolIdleTimeoutMs` shortens the request pools' idle timeout; preserve quiet
+windows longer than that timeout and the repeated-load assertions when
+changing its scheduling. Purchase-agent harness profiles likewise shorten the
+coordinator's settlement poll (`CUBBY_TEST_SETTLEMENT_POLL_MS`), so a
+scripted Run never waits out production's ten-second interval.
 
 Browser workers, Tester Army, native runners, the purchase-agent Vitest scenarios and the
 live evals start the built Worker through `openWorkerdRuntime`

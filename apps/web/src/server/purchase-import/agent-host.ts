@@ -71,6 +71,9 @@ function purchaseAgentEnvironment(
     services: runServicesFor(env, ctx, runId),
     mcpTools: purchaseAgentMcpTools,
     ...(testModel && { testModel }),
+    ...(env.CUBBY_TEST_SETTLEMENT_POLL_MS && {
+      settlementPollMs: Number(env.CUBBY_TEST_SETTLEMENT_POLL_MS),
+    }),
   };
 }
 

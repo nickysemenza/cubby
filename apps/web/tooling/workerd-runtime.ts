@@ -37,6 +37,7 @@ export interface WorkerdRuntimeOptions {
         ) => Promise<{ origin: string; close(): Promise<void> }>;
       };
   models?: WorkerdHarnessOptions["models"];
+  poolIdleTimeoutMs?: WorkerdHarnessOptions["poolIdleTimeoutMs"];
   /** Called after each acquisition, to attribute a slow or failed start. */
   onPhase?: (phase: string) => void;
 }
@@ -115,6 +116,7 @@ export async function openWorkerdRuntime<T>(
     objectStorage,
     googleProviderUrl: googleProvider?.url,
     models: options.models,
+    poolIdleTimeoutMs: options.poolIdleTimeoutMs,
   });
   cleanup.defer(harness.close);
   const { url } = await harness.listen();
