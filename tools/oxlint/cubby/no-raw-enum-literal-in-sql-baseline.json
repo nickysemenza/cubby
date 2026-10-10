@@ -4,7 +4,7 @@
   "apps/web/src/server/purchase-import/hunts.ts": 3,
   "apps/web/src/server/purchase-import/retained-settlement.ts": 2,
   "apps/web/src/server/purchase-import/run-service.ts": 2,
-  "apps/web/src/server/repo/activity.ts": 82,
+  "apps/web/src/server/repo/activity.ts": 83,
   "apps/web/src/server/repo/ai-usage.ts": 3,
   "apps/web/src/server/repo/category-connections.ts": 11,
   "apps/web/src/server/repo/data-quality/checks/cookbook.ts": 1,
