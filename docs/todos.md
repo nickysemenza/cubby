@@ -1018,13 +1018,8 @@ small Tester Army navigation, and reuses verified native builds. Low-signal
 source/copy/declaration tests are removed with a deletion ledger. The shared T3
 device launcher is supported for finite simulator journeys.
 
-Completed in the developer-loop change: separate app/Kit package lockfiles,
-shortcode-aware Tester Army replay keys, verified abandoned-container recovery,
-and Docker-backed persistent development. See [implementation and test deletion
-evidence](dev-tooling-evidence.md).
-
 - 🤔 **Measure post-change routing speed and quality.** The
-  [2026-10-08 metadata recheck](dev-tooling-evidence.md#routing-measurement)
+  [2026-10-08 metadata recheck](agents/model-routing.md#delegate-or-not)
   records delegation and token shares, but mostly predates the routing rule.
   Repeat after a full post-change window using the same accounting and explicit
   latency/quality evidence; do not infer improvement from token shares alone.
