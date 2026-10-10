@@ -83,7 +83,8 @@ const nativeProtocolRoots = [
 it("retains native WebSocket protocol components without fake HTTP routes", () => {
   expect(schemas.BrowserBridgeClientMessage).toBeDefined();
   expect(schemas.BrowserBridgeServerMessage).toBeDefined();
-  expect(JSON.stringify(document.paths)).not.toContain("BrowserBridge");
+  for (const name of nativeProtocolRoots)
+    expect(JSON.stringify(document.paths)).not.toContain(name);
 });
 
 const COMPONENT = "#/components/schemas/";
