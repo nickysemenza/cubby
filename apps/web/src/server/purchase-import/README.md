@@ -6,6 +6,8 @@ and a Mac browser. The host code here owns every write. The purchase agent
 conversation: it reaches Cubby through one Run's services and nothing else
 (the boundary: [infrastructure](../../../../../docs/infrastructure.md#purchase-agent)).
 
+Account-history research can submit a typed `captureProfile` through `work_resolve`. The host retains a Run finding containing the proposed Vendor navigation hints and browser hosts; it does not change permissions automatically. Applying the generic review binds the displayed fingerprint to the current Vendor, owned account, frozen target and checksum-verified retained page evidence. Stale choices or altered evidence refuse application. Order-history URLs must be observed; new hosts must appear in retained sources. Unrelated unsafe links confer no authority. The existing Vendor writer applies the reviewed profile, with no separate profile table or launch mode.
+
 Run lineage distinguishes causal work (`parentRunId`) from another attempt at
 the same work (`predecessorRunId`). New starters record `cause` and `attempt`;
 historical rows retain null lineage rather than inferred AuditLog links. Parent

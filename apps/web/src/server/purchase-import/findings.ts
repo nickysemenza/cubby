@@ -59,7 +59,9 @@ import {
   redistributeReplacementAttributions,
 } from "./aggregate-replacement";
 import { applyPurchaseValidationFinding } from "./purchase-validation-research";
+import type { ResearchEvidenceReader } from "./research-evidence";
 import { applyResearchFieldCorrection } from "./research-field-corrections";
+import { applyVendorCaptureProfile } from "./research-vendor-profile";
 import {
   existingExpenses,
   resolveLineProduct,
@@ -143,12 +145,15 @@ const assertFixTargetsFinding = (
   fix: ProposedImportFix,
 ) => {
   const targetMatches =
-    fix.kind === "research_field_correction"
-      ? finding.entityKind === "product" && finding.entityId === fix.productId
-      : fix.kind === "relink_product"
-        ? finding.entityKind === "expense" && finding.entityId === fix.expenseId
-        : finding.entityKind === "purchase" &&
-          finding.entityId === fix.purchaseId;
+    fix.kind === "vendor_capture_profile"
+      ? finding.entityKind === "run" && finding.entityId === fix.runId
+      : fix.kind === "research_field_correction"
+        ? finding.entityKind === "product" && finding.entityId === fix.productId
+        : fix.kind === "relink_product"
+          ? finding.entityKind === "expense" &&
+            finding.entityId === fix.expenseId
+          : finding.entityKind === "purchase" &&
+            finding.entityId === fix.purchaseId;
   if (!targetMatches) {
     throw new Error(
       "The proposed fix no longer targets the finding's original record.",
@@ -208,7 +213,12 @@ async function applyFix(
   tx: DrizzleTransaction,
   fix: Exclude<
     ProposedImportFix,
-    { kind: "validation_corrections" | "research_field_correction" }
+    {
+      kind:
+        | "validation_corrections"
+        | "research_field_correction"
+        | "vendor_capture_profile";
+    }
   >,
   actor: ActorContext,
   ledgerPartyId: string,
@@ -494,6 +504,7 @@ export async function resolveRunFinding(
   rawInput: ResolveRunFindingInput,
   actor: ActorContext,
   recipeCosting?: RecipeCostingService,
+  readEvidence?: ResearchEvidenceReader,
 ) {
   const input = resolveRunFindingInput.parse(rawInput);
   return withTransaction(db, async (tx) => {
@@ -564,7 +575,16 @@ export async function resolveRunFinding(
           "Review the current replacement preview before applying it.",
         );
       assertFixTargetsFinding(finding, fix);
-      if (fix.kind === "research_field_correction") {
+      if (fix.kind === "vendor_capture_profile") {
+        await applyVendorCaptureProfile(
+          tx,
+          actor,
+          finding,
+          fix,
+          input.reviewedFingerprint,
+          readEvidence,
+        );
+      } else if (fix.kind === "research_field_correction") {
         await applyResearchFieldCorrection(
           tx,
           actor,

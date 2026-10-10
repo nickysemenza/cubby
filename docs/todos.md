@@ -212,9 +212,11 @@ mailbox and authenticated-device acceptance only after explicit resumption.
 
 - 🤔 **Reviewed Vendor capture profiles.** Reuse the Vendor declaration for
   learned order-history URLs, sign-in hosts, reviewed additional hosts and
-  pagination hints. Current `agentHints` readers have no maintained learning
-  writer. Establish typed proposal/admission semantics before restoring one;
-  page content cannot grant itself host authorization.
+  pagination hints. A typed proposal through the shared research resolver and the existing Run
+  review is under implementation. Keep source/account/current-profile binding,
+  explicit member host authorization and stale-review refusal. Generation,
+  independent review, UI acceptance and delivery remain pending; page content
+  cannot grant itself host authorization.
 
 - 🤔 **Recognize email-code and hosted sign-in.** Combine retained page
   interpretation with deterministic host/path checks. Exercise a hosted customer

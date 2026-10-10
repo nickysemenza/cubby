@@ -29,3 +29,10 @@ export const vendorDomainList = z
 export const vendorEmailSenderList = z
   .array(z.email().trim().toLowerCase())
   .max(50);
+
+/** Learning is a review proposal; retained pages cannot grant browser hosts. */
+export const vendorCaptureProfile = z.strictObject({
+  evidenceIds: z.array(z.uuid()).min(1).max(20),
+  hints: vendorAgentHints,
+  browserDomains: vendorDomainList.min(1),
+});
