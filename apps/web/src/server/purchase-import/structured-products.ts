@@ -162,7 +162,26 @@ export function structuredProductsFromJsonLd(input: {
       return own;
     }
     const offerSets = offers.map(identifiers);
-    const offerVariants = offers.map((item) => variantOf(item.url));
+    const offerVariants = offers.map((item): Variant => {
+      if (servedVariant && item.url !== undefined) {
+        try {
+          const served = new URL(input.pageURL);
+          const offered = new URL(String(item.url), served);
+          // Variant ids are local to the product page, not global identities.
+          if (
+            offered.protocol !== "https:" ||
+            offered.username ||
+            offered.password ||
+            offered.origin !== served.origin ||
+            offered.pathname !== served.pathname
+          )
+            return INVALID;
+        } catch {
+          return INVALID;
+        }
+      }
+      return variantOf(item.url);
+    });
     const first = offerSets[0]!;
     const agree =
       offerSets.every((set) => sameSet(set, first)) &&
