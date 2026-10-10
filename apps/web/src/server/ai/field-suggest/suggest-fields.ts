@@ -57,7 +57,6 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { classificationAllowsField } from "~/server/repo/classification-field-policy";
 import { classificationRefusesField } from "~/server/repo/classification-field-policy";
-import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
 import { resolveDraftExpenseFields } from "~/server/repo/expense-inheritance";
 import {
   isFinanceCategoryEntity,
@@ -122,13 +121,11 @@ function suggestionUsage(
   runId: RunId,
   operation: string,
   ports: SuggestFieldsPorts | undefined,
-  cacheRevision: string,
 ): AiSelectionUsage {
   return {
     db: ports?.recordUsage === false ? undefined : db,
     runId,
     operation,
-    cacheRevision,
     cacheStatus: "none",
     force: ports?.force,
   };
@@ -890,7 +887,6 @@ export async function suggestFields(
   rawInput: FieldSuggestionsInput,
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {
-  const taxonomyRevision = await spendingClassificationRevision(db);
   const financeContext = await savedSuggestionContext(db, rawInput);
   const classifiedInput =
     rawInput.entity === "expense"
@@ -1054,7 +1050,6 @@ export async function suggestFields(
         runId,
         `suggestFields.${input.entity}.${target}`,
         ports,
-        taxonomyRevision,
       );
       const { suggestion, rawValue, outcome } = await resolveSpec(
         db,

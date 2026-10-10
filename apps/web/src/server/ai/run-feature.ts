@@ -121,8 +121,6 @@ export interface AiRunContext<T = unknown> extends Pick<
   runId: RunId;
   /** The code path placing the call — `suggestCategory`, `select`, … */
   operation: string;
-  /** Invalidates exact-input decision reuse when its source vocabulary changes. */
-  cacheRevision?: string;
   /** Correlates calls emitted while one durable job is executing. */
   job?: { kind: string; id: string } | null;
   entity?: { entityKind: string; entityId: string } | null;

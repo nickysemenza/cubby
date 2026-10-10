@@ -103,6 +103,7 @@ export const ENTITY_EDGE_OWNERS = {
   },
   AuditLog: { excluded: "History attribution." },
   RunFinding: { excluded: WORKFLOW },
+  Suggestion: { excluded: WORKFLOW },
   ImportHunt: { excluded: WORKFLOW },
   ImportPreparedOrder: { excluded: WORKFLOW },
   RunApproval: { excluded: WORKFLOW },

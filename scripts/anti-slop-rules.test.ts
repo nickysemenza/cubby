@@ -137,9 +137,12 @@ test("runtime typeof is allowed only in explicitly annotated predicates", () => 
 });
 
 test("raw enum values in Drizzle SQL are rejected", () => {
-  const diagnostics = lintScopedFixture(
+  // The rule is global, so an OS-tmpdir fixture runs it; a fixture under
+  // apps/web/src/server races the generator's import-boundary scan in CI.
+  const diagnostics = lintFixture(
     "no-raw-enum-literal-in-sql",
     "no-raw-enum-literal-in-sql.txt",
+    "cubby",
   );
   assert.deepEqual(
     diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),

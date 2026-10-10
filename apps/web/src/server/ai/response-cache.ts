@@ -26,7 +26,6 @@ export interface AiResponseCacheKeyInput {
   feature: string;
   model: string;
   promptVersion: string;
-  cacheRevision?: string;
   input?: {
     state: string;
     questions: {

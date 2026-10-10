@@ -59,17 +59,6 @@ describe("AI response cache", () => {
     expect(
       await aiResponseCacheKey({ ...input("alpha"), promptVersion: "2" }),
     ).not.toBe(await aiResponseCacheKey(input("alpha")));
-    expect(
-      await aiResponseCacheKey({
-        ...input("alpha"),
-        cacheRevision: "taxonomy-b",
-      }),
-    ).not.toBe(
-      await aiResponseCacheKey({
-        ...input("alpha"),
-        cacheRevision: "taxonomy-a",
-      }),
-    );
   });
 
   it("shares simultaneous work, reuses success, and refreshes when forced", async () => {

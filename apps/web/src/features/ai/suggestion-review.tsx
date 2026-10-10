@@ -106,16 +106,13 @@ function useSuggestionActions(
   const active = useRef(false);
   const dismissed = visit ? visit.dismissed.has(key) : localDismissed === key;
   const hide = () => (visit ? visit.dismiss(key) : setLocalDismissed(key));
+  // Hide at once; the Miss is evidence for fixing prompts, so a failed
+  // write surfaces as a toast instead of keeping the Suggestion on screen.
   const dismiss = async () => {
-    if (!onDismiss) {
-      hide();
-      return;
-    }
+    hide();
     try {
-      await onDismiss();
-      hide();
+      await onDismiss?.();
     } catch (error) {
-      setFailure(error);
       showErrorToast(error);
     }
   };
