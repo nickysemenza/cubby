@@ -419,7 +419,12 @@ and deployment/readback order are owned by the
    Run status/ledger fences use key-preserving locks: cancellation still waits,
    while a concurrent child admission can check its parent foreign key.
    Retained mail observations present plain text and compact visible HTML with
-   source links before applying the model-view size limit. Layout/CSS bytes never
+   source links before applying the model-view size limit. Mail HTML links also
+   use the shared typed observation link list, with the same public HTTP URL,
+   label and count bounds as page links; text truncation cannot hide those leads.
+   The existing mail compaction supplies both views without another extraction.
+   A retained link is a research lead, not purchased-variant proof or a host grant.
+   Layout/CSS bytes never
    crowd receipt facts out of that view. The immutable original MIME content and
    checksum remain unchanged for support assessment and replay; attachment bytes
    still use the original binary assessment path.

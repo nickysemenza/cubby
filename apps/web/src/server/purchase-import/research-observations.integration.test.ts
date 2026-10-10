@@ -237,7 +237,7 @@ describe("retained research observations", () => {
 
   it("reads receipt facts after oversized mail styles without changing retained originals", async () => {
     const s = await scope();
-    const bodyHtml = `<html><head><style>/*${"synthetic layout padding ".repeat(2_000)}*/</style></head><body><p>Order SYNTHETIC-410. Green shirt, size M. Total USD 24.00.</p><a href="https://shop.example.test/orders/synthetic-410">Order details</a></body></html>`;
+    const bodyHtml = `<html><head><style>/*${"synthetic layout padding ".repeat(2_000)}*/</style></head><body><p>Order SYNTHETIC-410. Green shirt, size M. Total USD 24.00.</p><a href="https://shop.example.test/orders/synthetic-410">Order details</a><a href="https://shop.example.test/products/green-shirt?variant=medium">Purchased variant</a><a href="https://user:secret@shop.example.test/private">Credential link</a><a href="http://127.0.0.1/private">Local link</a><a href="javascript:void(0)">Script link</a></body></html>`;
     for (const [index, bodyText] of [
       null,
       "Plain-text receipt: shipping on September 15.",
@@ -269,6 +269,18 @@ describe("retained research observations", () => {
       expect(JSON.parse(result.observation.readableText)).toMatchObject({
         content: { bodyText },
       });
+      expect(result.observation.links).toEqual([
+        {
+          id: "link-1",
+          url: "https://shop.example.test/orders/synthetic-410",
+          label: "Order details",
+        },
+        {
+          id: "link-2",
+          url: "https://shop.example.test/products/green-shirt?variant=medium",
+          label: "Purchased variant",
+        },
+      ]);
       expect(result.observation.textTruncated).toBe(false);
       expect(result.observation.readableText).not.toContain(
         "synthetic layout padding",
@@ -281,6 +293,39 @@ describe("retained research observations", () => {
         result,
       );
     }
+    const content = JSON.stringify({
+      content: {
+        headers: {},
+        snippet: null,
+        bodyText: "Receipt context ".repeat(2_000),
+        bodyHtml,
+      },
+    });
+    const input = {
+      runId: s.runId,
+      workRef: s.first.id,
+      callId: "read:mail-long-context",
+      kind: "mail_message" as const,
+      sourceMetadata: { sourceURL: null },
+      content,
+    };
+    const retained = await retainResearchObservation(ctx.db, input, s.ports);
+    expect(retained.observation.textTruncated).toBe(true);
+    expect(retained.observation.readableText).not.toContain(
+      "shop.example.test",
+    );
+    expect(retained.observation.links.map((link) => link.url)).toEqual([
+      "https://shop.example.test/orders/synthetic-410",
+      "https://shop.example.test/products/green-shirt?variant=medium",
+    ]);
+    expect(await retainResearchObservation(ctx.db, input, s.ports)).toEqual(
+      retained,
+    );
+    expect(
+      [...s.objects.values()].some(
+        (bytes) => new TextDecoder().decode(bytes) === content,
+      ),
+    ).toBe(true);
   });
 
   it("does not upload bytes before a durable manifest insert rejected by PostgreSQL", async () => {
