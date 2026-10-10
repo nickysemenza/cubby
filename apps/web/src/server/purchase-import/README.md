@@ -925,4 +925,5 @@ originals and thumbnails use one retained-media loader, the shared response-auth
 middleware and in-memory PDF or image presentation, without writing private documents to disk. Retained evidence is distinct from the live
 browser preview and does not establish research completion.
 Media refusals use the canonical API error shape, preserving checksum, storage
-and admission diagnostics in both clients; only credential-shaped values are scrubbed.
+and admission diagnostics in both clients, including nested database causes and
+SQLSTATE; only credential-shaped values are scrubbed.
