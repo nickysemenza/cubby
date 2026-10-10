@@ -1,5 +1,6 @@
 import CubbyAPI
 import Foundation
+import HTTPTypes
 import OpenAPIRuntime
 import OpenAPIURLSession
 
@@ -35,6 +36,25 @@ public actor CubbyClient {
             transport: transport,
             middlewares: [auth, JSONNullMiddleware()]
         )
+    }
+
+    /// Private report media keeps the existing session credentials on the evidence endpoint.
+    /// Public cover images continue to use the public image pipeline.
+    public func reportMediaRequest(_ reference: String) async throws -> URLRequest {
+        guard let url = URL(string: reference, relativeTo: baseURL)?.absoluteURL,
+            url.scheme == baseURL.scheme, url.host == baseURL.host, url.port == baseURL.port,
+            url.user == nil, url.password == nil, url.fragment == nil,
+            url.path == "/api/import/evidence"
+        else {
+            throw CubbyAPIError(status: 0, operationID: "report.media", detail: nil)
+        }
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        var fields = HTTPFields()
+        CubbyAuthMiddleware.apply(await credentials.requestState(), identity: .unknown, to: &fields)
+        for field in fields {
+            request.setValue(field.value, forHTTPHeaderField: field.name.rawName)
+        }
+        return request
     }
 
     // MARK: - Products

@@ -252,6 +252,7 @@ public struct ReportPresentation: Hashable, Sendable {
 
     /// Rows that are records of their own, with the verbs the slot offers (`CollectionActionID`).
     public struct Records: Hashable, Sendable {
+        public var filmstrip = false
         public let title: String?
         public let rows: [RecordRow]
         public let empty: String
@@ -427,6 +428,7 @@ public struct ReportPresentation: Hashable, Sendable {
         case .records(let records):
             return .records(
                 Records(
+                    filmstrip: records.presentation == .filmstrip,
                     title: records.title,
                     rows: records.rows.enumerated().map { index, row in
                         RecordRow(

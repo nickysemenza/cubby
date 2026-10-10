@@ -37,7 +37,8 @@ struct ClientQueryTests {
     @Test func protectedReportMediaKeepsAuthenticationOnItsOwnOriginOnly() async throws {
         let client = try makeClient()
         let request = try await client.reportMediaRequest("/api/import/evidence?evidenceId=synthetic")
-        #expect(request.url?.absoluteString == "http://localhost:3000/api/import/evidence?evidenceId=synthetic")
+        #expect(
+            request.url?.absoluteString == "http://localhost:3000/api/import/evidence?evidenceId=synthetic")
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
         #expect(request.cachePolicy == .reloadIgnoringLocalCacheData)
         await #expect(throws: CubbyAPIError.self) {

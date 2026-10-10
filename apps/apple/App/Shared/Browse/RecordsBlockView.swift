@@ -1,4 +1,6 @@
 import CubbyKit
+import Nuke
+import NukeUI
 import SwiftUI
 
 /// The record a report slot belongs to, so a `records` block's verbs have something to act on.
@@ -28,9 +30,13 @@ struct RecordRowView: View {
     private var content: some View {
         HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
             if let url = row.imageURL {
-                Thumb(
-                    url: url, size: large ? 112 : 48,
-                    symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "photo")
+                if url.path == "/api/import/evidence" {
+                    ReportMediaImage(url: url).frame(width: large ? 112 : 48, height: large ? 112 : 48)
+                } else {
+                    Thumb(
+                        url: url, size: large ? 112 : 48,
+                        symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "photo")
+                }
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
@@ -281,6 +287,46 @@ extension ReportPresentation.Tone {
 /// A `records` report block: the server's rows and the slot's declared verbs, which the one
 /// generic hero-action runner executes from their plans. Nothing here is per entity: the server
 /// says which rows and which verbs; the plans say which operations.
+private struct ReportMediaImage: View {
+    let url: URL
+    @Environment(AppModel.self) private var appModel
+    @State private var request: ImageRequest?
+    @State private var error: String?
+
+    var body: some View {
+        Group {
+            if let request {
+                LazyImage(request: request) { state in
+                    if let image = state.image {
+                        image.resizable().scaledToFit()
+                    } else if let failure = state.error {
+                        Text(failure.localizedDescription).font(.caption)
+                    } else {
+                        ProgressView()
+                    }
+                }
+            } else if let error {
+                Text(error).font(.caption)
+            } else {
+                ProgressView()
+            }
+        }
+        .task(id: url) {
+            request = nil
+            error = nil
+            do {
+                let prepared = try await appModel.client.reportMediaRequest(url.absoluteString)
+                try Task.checkCancellation()
+                request = ImageRequest(
+                    urlRequest: prepared, options: [.disableMemoryCache, .disableDiskCache])
+            } catch is CancellationError {} catch {
+                Diagnostics.report(error, context: "Retained report media")
+                self.error = error.localizedDescription
+            }
+        }
+    }
+}
+
 struct RecordsBlockView: View {
     let records: ReportPresentation.Records
     let host: ReportHost?
@@ -295,6 +341,8 @@ struct RecordsBlockView: View {
     @State private var busy = false
     // Finance verbs (`records.verbs`): checked rows, and the flows they open.
     @State private var selection: Set<String> = []
+    @State private var selectedCapture: String?
+    @State private var captureOffset = 0
     @State private var statementMatch: StatementMatchSession?
     @State private var receiving: ReceivingModel?
     @State private var splitting: ExpenseSplitSession?
@@ -337,6 +385,40 @@ struct RecordsBlockView: View {
         }
     }
 
+    private var captureFilmstrip: some View {
+        let start = min(captureOffset, max(0, ((records.rows.count - 1) / 8) * 8))
+        let selected = records.rows.first { $0.key == selectedCapture } ?? records.rows.first
+        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            ScrollView(.horizontal) {
+                HStack {
+                    ForEach(Array(records.rows.dropFirst(start).prefix(8))) { row in
+                        Button {
+                            selectedCapture = row.key
+                        } label: {
+                            Text(row.title)
+                        }
+                        .accessibilityLabel("View \(row.title)")
+                        .accessibilityAddTraits(row.id == selected?.id ? .isSelected : [])
+                    }
+                }
+            }
+            HStack {
+                Button("Previous captures") { captureOffset = start - 8 }.disabled(start == 0)
+                Text("\(start + 1)–\(min(start + 8, records.rows.count)) of \(records.rows.count)").font(
+                    .caption)
+                Button("Next captures") { captureOffset = start + 8 }.disabled(
+                    start + 8 >= records.rows.count)
+            }
+            if let selected {
+                if let url = selected.imageURL {
+                    ReportMediaImage(url: url).frame(maxWidth: .infinity, maxHeight: 500)
+                        .accessibilityLabel(selected.title)
+                }
+                RecordRowView(row: selected, model: model)
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             if let title = records.title, !records.rows.isEmpty { Eyebrow(title) }
@@ -346,7 +428,8 @@ struct RecordsBlockView: View {
             if records.rows.isEmpty, !records.empty.isEmpty {
                 Text(records.empty).foregroundStyle(.secondary)
             }
-            ForEach(records.rows) { row in
+            if records.filmstrip { captureFilmstrip }
+            ForEach(records.filmstrip ? [] : records.rows) { row in
                 HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
                     if offersSelection, let key = row.key {
                         Button {
