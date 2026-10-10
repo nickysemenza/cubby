@@ -214,6 +214,12 @@ export function purchaseImportTools(
   services: () => RunServices,
   retainOutput?: (output: JsonValue) => Promise<void>,
   beforeEffect?: () => Promise<void>,
+  recordOutcome?: (
+    tool: string,
+    args: JsonValue,
+    callId: string,
+    error?: string,
+  ) => Promise<string | undefined>,
 ): ToolRegistration[] {
   const run = <N extends keyof typeof purchaseAgentToolInputs>(
     name: N,
@@ -241,9 +247,23 @@ export function purchaseImportTools(
               context,
             )
           ).value;
-        const output = await step(api, context, "service-result", () =>
-          effect(services(), args, callId),
-        );
+        let output: JsonValue;
+        try {
+          output = await step(api, context, "service-result", () =>
+            effect(services(), args, callId),
+          );
+        } catch (error) {
+          const detail = await recordOutcome?.(
+            name,
+            z.json().parse(args),
+            callId,
+            error instanceof Error ? error.message : String(error),
+          );
+          if (detail)
+            return { ...result({ failure: detail }, true), isError: true };
+          throw error;
+        }
+        await recordOutcome?.(name, z.json().parse(args), callId);
         await retainOutput?.(output);
         return originalMediaResult(output, researchTerminated(output));
       },
