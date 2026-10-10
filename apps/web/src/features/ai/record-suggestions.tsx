@@ -19,6 +19,7 @@ import {
 import {
   createContext,
   useContext,
+  useEffect,
   useRef,
   useState,
   type ContextType,
@@ -72,6 +73,7 @@ import {
   actionableSuggestion,
   suggestionReviewKey,
   SuggestionReview,
+  useSuggestionActions,
   SuggestionVisitProvider,
   useSuggestionVisit,
 } from "./suggestion-review";
@@ -1052,6 +1054,45 @@ function ResolvedFieldSuggestion({
       throw new Error("Suggestion inputs changed");
     await context.save(row.record.id, field, suggestion, source, current.value);
   };
+  const dismiss = async () => {
+    if (suggestion)
+      await context.recordMiss(row.record.id, field, suggestion, current.value);
+  };
+  if (surface === "cell" && !row.error) {
+    // Prune proposals keep the popover review: removing chips has no pill.
+    if (
+      suggestion?.operation !== "remove" &&
+      actionableSuggestion(
+        suggestion,
+        current.value,
+        source.basisMode === "provided",
+      ) &&
+      suggestion.probability !== null
+    )
+      return (
+        <RecordSuggestionScope value={row}>
+          <LiveSuggestionCell
+            context={context}
+            record={row.record}
+            field={field}
+            suggestion={{ ...suggestion, probability: suggestion.probability }}
+            currentValue={current.value}
+            questionKey={questionKey}
+            pending={row.pending}
+            apply={apply}
+            dismiss={dismiss}
+          >
+            {children}
+          </LiveSuggestionCell>
+        </RecordSuggestionScope>
+      );
+    // Keep the row scope: a nested FieldSuggestionApply (an inline cell
+    // editor) reads it to reuse this row's answer instead of asking again.
+    if (suggestion?.operation !== "remove")
+      return (
+        <RecordSuggestionScope value={row}>{children}</RecordSuggestionScope>
+      );
+  }
   return (
     <RecordSuggestionScope value={row}>
       <SuggestionReview
@@ -1062,16 +1103,7 @@ function ResolvedFieldSuggestion({
         pending={row.pending}
         error={row.error}
         onApply={apply}
-        onDismiss={() =>
-          suggestion
-            ? context.recordMiss(
-                row.record.id,
-                field,
-                suggestion,
-                current.value,
-              )
-            : undefined
-        }
+        onDismiss={dismiss}
         applyLabel={usesInheritedValue ? "Use inherited value" : undefined}
         alternative={source.basisMode === "provided"}
         outcome={row.outcomes[field]}
@@ -1155,54 +1187,143 @@ function StoredSuggestionField({
   children: ReactNode;
 }) {
   return (
-    <StoredSuggestionCell
-      suggestion={suggestion}
+    <GhostSuggestionCell
       context={context}
       record={record}
       field={field}
-      renderValue={
-        renderValue ??
-        ((value) =>
-          renderSuggestedListFieldValue(context.entity, record, field, value))
-      }
-      accept={context.acceptStored}
-      reject={context.rejectStored}
+      kind={suggestion.kind}
+      value={suggestion.suggestedValue}
+      confidence={suggestion.confidence}
+      renderValue={renderValue}
+      accept={() => context.acceptStored(suggestion.id)}
+      reject={() => context.rejectStored(suggestion.id)}
+      correct={(value) => context.rejectStored(suggestion.id, value)}
     >
       {children}
-    </StoredSuggestionCell>
+    </GhostSuggestionCell>
   );
 }
 
-function StoredSuggestionCell({
+/** A live answer in a table cell reads like a stored one — a ghost pill, not
+ * a hover-only glyph — and a cell with nothing confident to offer shows only
+ * its value. */
+function LiveSuggestionCell({
   context,
   record,
   field,
   suggestion,
-  renderValue,
-  accept,
-  reject,
+  currentValue,
+  questionKey,
+  pending,
+  apply,
+  dismiss,
   children,
 }: {
   context: RecordSuggestionsCtx;
   record: SuggestionRecord;
   field: string;
-  suggestion: SuggestionReviewRow;
+  suggestion: FieldSuggestion & { value: string; probability: number };
+  currentValue: string | null;
+  questionKey: string;
+  pending: boolean;
+  apply: () => Promise<void>;
+  dismiss: () => Promise<void>;
+  children: ReactNode;
+}) {
+  const actions = useSuggestionActions(
+    suggestionReviewKey(questionKey, currentValue, suggestion),
+    apply,
+    pending,
+    dismiss,
+  );
+  if (actions.dismissed) return children;
+  return (
+    <GhostSuggestionCell
+      context={context}
+      record={record}
+      field={field}
+      kind={currentValue?.trim() ? "correction" : "addition"}
+      value={suggestion.value}
+      confidence={suggestion.probability}
+      accept={actions.apply}
+      reject={actions.dismiss}
+      onCorrected={actions.dismiss}
+    >
+      {children}
+    </GhostSuggestionCell>
+  );
+}
+
+/** The live text of a rendered subtree — a reference value resolves its
+ * label asynchronously, so this follows the DOM rather than reading once. */
+function useRenderedText() {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [text, setText] = useState("");
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const read = () => setText(element.textContent?.trim() ?? "");
+    read();
+    const observer = new MutationObserver(read);
+    observer.observe(element, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+    return () => observer.disconnect();
+  }, []);
+  return { ref, text };
+}
+
+function GhostSuggestionCell({
+  context,
+  record,
+  field,
+  kind,
+  value,
+  confidence,
+  renderValue,
+  accept,
+  reject,
+  correct,
+  onCorrected,
+  children,
+}: {
+  context: RecordSuggestionsCtx;
+  record: SuggestionRecord;
+  field: string;
+  kind: SuggestionReviewRow["kind"];
+  value: JsonValue;
+  confidence: number;
   renderValue?: (value: JsonValue) => ReactNode;
-  accept: (id: string) => Promise<void>;
-  reject: (id: string, correctValue?: JsonValue) => Promise<void>;
+  accept: () => Promise<void>;
+  reject: () => Promise<void>;
+  /** Owns the "different value" commit (a stored Suggestion's atomic
+   * correct+reject); without it the editor saves normally. */
+  correct?: (value: JsonValue) => Promise<void>;
+  onCorrected?: () => Promise<void>;
   children: ReactNode;
 }) {
   const [editOpen, setEditOpen] = useState(false);
+  const valueText = useRenderedText();
+  // Inert: a reference value renders as a navigating link, which would
+  // swallow the click meant to accept it (and nest a link in a button).
+  // Inert content leaves the accessibility tree, so the button's name
+  // carries the rendered value text instead.
   const ghost = (
-    <span className="inline-flex min-w-0 items-center gap-1 rounded-sm border border-dashed border-muted-foreground/50 px-1 opacity-65">
+    <span
+      ref={valueText.ref}
+      inert
+      className="pointer-events-none inline-flex min-w-0 items-center gap-1 rounded-sm border border-dashed border-muted-foreground/50 px-1 opacity-65"
+    >
       <SparkleIcon aria-hidden className="size-3 shrink-0" />
-      {renderValue?.(suggestion.suggestedValue) ??
-        String(suggestion.suggestedValue)}
+      {renderValue?.(value) ??
+        renderSuggestedListFieldValue(context.entity, record, field, value)}
     </span>
   );
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
-      {suggestion.kind === "correction" ? (
+      {kind === "correction" ? (
         <>
           {children}
           <ArrowRightIcon
@@ -1211,16 +1332,20 @@ function StoredSuggestionCell({
           />
         </>
       ) : null}
-      <span title={`${Math.floor(suggestion.confidence * 100)}% confidence`}>
+      <span title={`${Math.floor(confidence * 100)}% confidence`}>
         <Button
           type="button"
           variant="ghost"
           size="sm"
           className="h-6 max-w-full min-w-0 px-1"
-          aria-label="Accept suggested value"
+          aria-label={
+            valueText.text
+              ? `Accept suggested value: ${valueText.text}`
+              : "Accept suggested value"
+          }
           onClick={(event) => {
             event.stopPropagation();
-            void accept(suggestion.id);
+            void accept();
           }}
         >
           {ghost}
@@ -1241,10 +1366,10 @@ function StoredSuggestionCell({
           <span aria-hidden>···</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => void accept(suggestion.id)}>
+          <DropdownMenuItem onClick={() => void accept()}>
             Accept
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => void reject(suggestion.id)}>
+          <DropdownMenuItem onClick={() => void reject()}>
             Reject (Miss)
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setEditOpen(true)}>
@@ -1264,11 +1389,15 @@ function StoredSuggestionCell({
             field,
           ) as EntityEditDialogRequest<EditableEntity>
         }
-        onSubmitOverride={async (values) => {
-          const correctedValue = z.json().parse(values[field]);
-          await reject(suggestion.id, correctedValue);
-          setEditOpen(false);
-        }}
+        onSubmitted={() => void onCorrected?.()}
+        onSubmitOverride={
+          correct
+            ? async (values) => {
+                await correct(z.json().parse(values[field]));
+                setEditOpen(false);
+              }
+            : undefined
+        }
       />
     </span>
   );

@@ -260,6 +260,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   onOpenChange,
   request,
   onSuccess,
+  onSubmitted,
   mutationPort,
   onSubmitOverride,
   evidence,
@@ -355,6 +356,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
             .submit()
             .then((result) => {
               if (!result.ok) return;
+              onSubmitted?.();
               if (!result.changed) {
                 close();
                 return;

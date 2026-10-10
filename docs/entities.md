@@ -1294,7 +1294,7 @@ basis, so changing vocabulary invalidates old proposals without rerunning
 vision or introducing an inference cache.
 
 Manifest-declared suggestion targets appear as field pills in entity lists.
-Pending Suggestions appear in those cells. A changed target or declared
+Pending Suggestions and confident live answers both appear in those cells as the same ghost pill (accept, reject as a Miss, or use a different value); a cell with no confident answer shows only its value. A changed target or declared
 backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
 for the same record and field. Suggestions remain available to evaluation after
 review; there is no separate classification review page.

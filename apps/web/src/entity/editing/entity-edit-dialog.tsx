@@ -41,6 +41,8 @@ export interface EntityEditDialogProps<E extends EditableEntity> {
   onOpenChange: (open: boolean) => void;
   request: EntityEditDialogRequest<E>;
   onSuccess?: (result: EntityEditResultFor<E>) => void;
+  /** Any accepted submit, including one that changed nothing (no `onSuccess`). */
+  onSubmitted?: () => void;
   /** Own the commit when an editor action must be atomic with another record. */
   onSubmitOverride?: (values: EntityEditValueBag) => Promise<void>;
   /** A local command adapter for a surface whose remote transport is unavailable. */
