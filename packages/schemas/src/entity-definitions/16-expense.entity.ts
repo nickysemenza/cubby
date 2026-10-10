@@ -1838,6 +1838,38 @@ Rules:
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["projectId", "trade", "costType", "date"] },
     merge: false,
+    classificationPolicies: [
+      {
+        classifier: "lineKind",
+        fields: [
+          {
+            field: "productId",
+            byValue: { principal: "unknown" },
+            otherwise: "not_allowed",
+          },
+          {
+            field: "spendingCategoryId",
+            byValue: { principal: "unknown" },
+            otherwise: "not_allowed",
+          },
+          {
+            field: "projectId",
+            byValue: { principal: "unknown" },
+            otherwise: "not_allowed",
+          },
+        ],
+      },
+      {
+        classifier: "lineBasis",
+        fields: [
+          {
+            field: "productId",
+            byValue: { allocation: "not_allowed" },
+            otherwise: "unknown",
+          },
+        ],
+      },
+    ],
     dataQuality: {
       exceptions: true,
       checks: [

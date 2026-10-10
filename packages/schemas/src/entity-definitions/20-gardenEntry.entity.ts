@@ -498,6 +498,23 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
+    classificationPolicies: [
+      {
+        classifier: "kind",
+        fields: [
+          {
+            field: "notes",
+            byValue: { note: "required" },
+            otherwise: "unknown",
+          },
+          {
+            field: "harvestAmount",
+            byValue: { harvest: "required" },
+            otherwise: "unknown",
+          },
+        ],
+      },
+    ],
     dataQuality: {
       checks: [
         {

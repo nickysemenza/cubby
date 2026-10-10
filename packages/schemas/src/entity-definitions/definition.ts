@@ -1808,10 +1808,11 @@ const buildMetadataSchemas = () => {
     .object({
       /** This entity's enum field whose (effective) value classifies. */
       classifier: nonEmptyString(),
-      /** The classified entity and its reference field to this entity. */
+      /** Omit target to classify fields on this same record. */
       target: z
         .object({ entity: nonEmptyString(), reference: nonEmptyString() })
-        .strict(),
+        .strict()
+        .optional(),
       fields: z.array(classificationFieldPolicyMetadataSchema).min(1),
     })
     .strict();

@@ -693,16 +693,7 @@ Rules:
         where: "{deletedAt} IS NULL",
       },
     ],
-    checks: [
-      // `furniture` marks a Product-instance location (the bin or rack
-      // itself). One direction only: a garden bed or planter may link a
-      // Product and keep its own type, so `productId IS NOT NULL` does not
-      // imply `furniture`.
-      {
-        name: "Location_furniture_product_check",
-        sql: "{type} <> 'furniture' OR {productId} IS NOT NULL",
-      },
-    ],
+    checks: [],
     relations: {
       parent: { field: "parentId", relationName: "LocationToLocation" },
       children: { many: "location", relationName: "LocationToLocation" },
@@ -1049,6 +1040,18 @@ Rules:
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["parentId"] },
     merge: false,
+    classificationPolicies: [
+      {
+        classifier: "type",
+        fields: [
+          {
+            field: "productId",
+            byValue: { furniture: "required" },
+            otherwise: "unknown",
+          },
+        ],
+      },
+    ],
     dataQuality: {
       checks: [
         {

@@ -12,6 +12,7 @@
  */
 import { fieldPolicyValue, type FieldPolicyValue } from "./field-policy-fields";
 import { declaredClassificationPolicies } from "./generated/classification-field-policies.gen";
+export { declaredClassificationPolicies } from "./generated/classification-field-policies.gen";
 
 export type { FieldPolicyValue } from "./field-policy-fields";
 
@@ -131,7 +132,7 @@ export const declaredPoliciesGoverning = (
       declaredFields(id).some((entry) => entry.field === field),
   );
 
-/** The classified entity's reference field to the classifying record. */
+/** The classified entity's reference field, or null for same-record policy. */
 export const classificationReference = (
   id: DeclaredClassificationPolicyId,
-): string => declaredClassificationPolicies[id].target.reference;
+): string | null => declaredClassificationPolicies[id].target.reference;

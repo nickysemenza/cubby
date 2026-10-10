@@ -1,16 +1,17 @@
 import {
-  type ClassificationValue,
   type ClassifiedField,
   classificationReference,
   classificationValuesWhere,
   type DeclaredClassificationPolicyId,
   declaredPoliciesGoverning,
+  declaredClassificationPolicies,
   type FieldPolicyValue,
   isFieldAllowed,
 } from "@cubby/schemas/classification-field-policy";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { SQL } from "drizzle-orm";
+import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fields";
+import { inArray, sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { categoryFeatureInSql } from "~/server/repo/product-category-sql";
@@ -23,12 +24,12 @@ type Db = Database | DrizzleTransaction;
  * hook the generic evaluator cannot derive: ProductCategory `feature` is
  * inherited from the nearest bound ancestor (`productCategory.effective-feature`).
  */
-type ClassificationSource<Id extends DeclaredClassificationPolicyId> = {
+type ClassificationSource = {
   owner: ShortcodeEntity;
   /** The effective value for one classifying record (a uuid). */
-  resolve(db: Db, id: string): Promise<ClassificationValue<Id> | null>;
+  resolve(db: Db, id: string): Promise<string | null>;
   /** SQL: the referenced record's effective value is one of `values`. */
-  valueInSql(reference: SQL, values: ClassificationValue<Id>[]): SQL<boolean>;
+  valueInSql(reference: SQL, values: readonly string[]): SQL<boolean>;
 };
 
 const classificationSources = {
@@ -40,11 +41,21 @@ const classificationSources = {
       const { getCategoryFeature } = await import("./product-category");
       return getCategoryFeature(db, parseEntityId("productCategory", id));
     },
-    valueInSql: categoryFeatureInSql,
+    valueInSql: (reference, values) => {
+      // SAFETY: generator validation restricts this source to productCategory.feature values.
+      return categoryFeatureInSql(
+        reference,
+        values as ProductCategoryFeature[],
+      );
+    },
   },
-} satisfies {
-  [Id in DeclaredClassificationPolicyId]: ClassificationSource<Id>;
-};
+} satisfies Partial<
+  Record<DeclaredClassificationPolicyId, ClassificationSource>
+>;
+const classificationSource = (id: DeclaredClassificationPolicyId) =>
+  id === "productCategory.feature"
+    ? classificationSources["productCategory.feature"]
+    : undefined;
 
 /** SQL: the record's classification sets `policy` for `field`. */
 export const classificationPolicySql = <
@@ -54,11 +65,17 @@ export const classificationPolicySql = <
   field: ClassifiedField<Id>,
   policy: FieldPolicyValue,
   reference: SQL,
-): SQL<boolean> =>
-  classificationSources[id].valueInSql(
-    reference,
-    classificationValuesWhere(id, field, policy),
-  );
+): SQL<boolean> => {
+  const values = classificationValuesWhere(id, field, policy);
+  if (classificationReference(id) === null)
+    return values.length
+      ? sql<boolean>`${inArray(reference, values)}`
+      : sql<boolean>`false`;
+  const source = classificationSource(id);
+  if (!source)
+    throw new Error(`No classification source registered for ${id}.`);
+  return source.valueInSql(reference, values);
+};
 
 /**
  * True when a recorded classification refuses `field` on this record.
@@ -75,8 +92,22 @@ export async function classificationRefusesField(
   basis: Readonly<Record<string, string | null | undefined>>,
 ): Promise<boolean> {
   for (const id of declaredPoliciesGoverning(entity, field)) {
-    const source = classificationSources[id];
-    const shortcode = basis[classificationReference(id)];
+    const referenceField = classificationReference(id);
+    if (referenceField === null) {
+      if (
+        !isFieldAllowed(
+          id,
+          basis[declaredClassificationPolicies[id].classifier] ?? null,
+          field,
+        )
+      )
+        return true;
+      continue;
+    }
+    const source = classificationSource(id);
+    if (!source)
+      throw new Error(`No classification source registered for ${id}.`);
+    const shortcode = basis[referenceField];
     if (!shortcode) continue;
     const recordId = await resolveLiveShortcode(db, shortcode, source.owner);
     if (recordId === null) continue;

@@ -1203,8 +1203,9 @@ value is expected and whether it is allowed at all, in one vocabulary
 (`fieldPolicyValues`: `required` gaps a missing value, `not_expected` and
 `unknown` raise no gap, `not_allowed` also refuses a value). A fixed
 classification declares it in the manifest under
-`capabilities.classificationPolicies`: the classifier enum, the classified
-entity and its reference field, and per target field a `byValue` map keyed by
+`capabilities.classificationPolicies`: the classifier enum, optionally the
+classified entity and its reference field (omit `target` when the classifier
+is on the governed record itself), and per target field a `byValue` map keyed by
 classifier value plus an `otherwise` policy. The generator checks every name
 and value and requires a field refused by default to have exactly one
 admitting value, then emits `classification-field-policies.gen.ts`. A

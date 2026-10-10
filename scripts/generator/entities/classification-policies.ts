@@ -38,15 +38,22 @@ export const validateClassificationPolicies = (
     for (const [index, policy] of owner.classificationPolicies.entries()) {
       const context = `${owner.key}.capabilities.classificationPolicies[${index}]`;
       const values = classifierValues(owner, policy, context);
-      const target = byKey.get(policy.target.entity);
+      const targetEntity = policy.target?.entity ?? owner.key;
+      const target = byKey.get(targetEntity);
       if (target === undefined)
         throw new EntityDeclarationError(
-          `${context}.target names undeclared entity ${policy.target.entity}.`,
+          `${context}.target names undeclared entity ${targetEntity}.`,
         );
-      const reference = target.fieldModel.fields.find(
-        (field) => field.key === policy.target.reference,
-      );
-      if (reference?.reference?.entity !== owner.key)
+      const reference =
+        policy.target?.reference === undefined
+          ? null
+          : target.fieldModel.fields.find(
+              (field) => field.key === policy.target?.reference,
+            );
+      if (
+        policy.target?.reference !== undefined &&
+        reference?.reference?.entity !== owner.key
+      )
         throw new EntityDeclarationError(
           `${context}.target.reference ${policy.target.reference} must be a ${target.key} field referencing ${owner.key}.`,
         );
@@ -100,7 +107,9 @@ export const renderClassificationPolicyArtifacts = (
           owner: owner.key,
           classifier: policy.classifier,
           values,
-          target: policy.target,
+          target: policy.target
+            ? { ...policy.target }
+            : { entity: owner.key, reference: null },
           fields: policy.fields,
         },
       )},`;
@@ -113,7 +122,7 @@ export const renderClassificationPolicyArtifacts = (
     "  owner: string;\n" +
     "  classifier: string;\n" +
     "  values: readonly string[];\n" +
-    "  target: Readonly<{ entity: string; reference: string }>;\n" +
+    "  target: Readonly<{ entity: string; reference: string | null }>;\n" +
     "  fields: readonly Readonly<{\n" +
     "    field: string;\n" +
     "    byValue: Readonly<Record<string, FieldPolicyValue>>;\n" +
