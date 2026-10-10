@@ -28,6 +28,15 @@ runs:
       shell: bash
       run: |
         if [[ -n "${NX_CACHE_URL:-}" && -n "${NX_CACHE_TOKEN:-}" ]]; then
+          # Nx fails a task on any remote-cache error other than a 404 miss,
+          # so an unreachable cache must not be connected: lanes then run
+          # for real against the local cache instead of failing.
+          status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+            -H "authorization: Bearer $NX_CACHE_TOKEN" "$NX_CACHE_URL/v1/cache/0" || true)"
+          if [[ "$status" != "404" && "$status" != "200" ]]; then
+            echo "::warning::Shared Nx cache unavailable (HTTP $status); using the local cache only."
+            exit 0
+          fi
           {
             echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=$NX_CACHE_URL"
             echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=$NX_CACHE_TOKEN"

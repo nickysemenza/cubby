@@ -25,7 +25,8 @@ is roughly ten times the allowance.
   lockfile, toolchain versions, and the CI configuration. Any code change
   misses the cache. Rebases, documentation-only changes, and re-pushes of an
   already-tested tree hit it.
-- CI and the developer's Mac write to the cache; fork PRs only read it. A
+- CI and the developer's Mac write to the cache; fork PRs receive no
+  credentials and use only their runner's local cache. A
   result produced locally for the same input hash satisfies the merge gate
   exactly as a CI result does.
 - The Apple lane runs locally through the same Nx target. On a PR cache miss,

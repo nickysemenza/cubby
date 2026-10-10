@@ -17,16 +17,30 @@ that the Worker bundles or generation reads (`docs/README.md`,
 `docs/todos.md`, and the purchase-import, product-enrichment, and
 photo-inventory-import skills). Platform, Node version, locale, and `CI`
 stay out, so a developer Mac's pass counts for the Linux lanes. Web targets add
-ignored `.env*` files and the variables that select or reorder tests (`webGate`
-in `apps/web/project.json`); the Rust targets add `rustc -V`, because
+ignored `.env*` files, the WASM their `dependsOn` builds, the preview-build
+switch, and the variables that select or reorder tests (`webGate` in
+`apps/web/project.json`); the Rust targets add `rustc -V`, because
 `rust-toolchain.toml` names a floating channel; the Apple targets add
-`xcodebuild -version`. The nightly scheduled run executes every lane with
-`--skip-nx-cache` on CI's platform, catching a failure that only Linux or CI's
+`xcodebuild -version`. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
+the whole workflow, so every lane, nested Nx calls included, runs uncached on
+CI's platform, catching a failure that only Linux or CI's
 toolchain shows; `main` pushes reuse the cache like PRs. The key is deliberately
 broad. A false hit skips a check that should have run, so a target that starts
 reading something new must have it in its inputs. A change to ordinary
 documentation, a rebase that leaves the content unchanged, or a re-push of a
 tested tree hits; any code change misses.
+
+Known gaps the nightly run covers rather than the key: the Worker bundles all
+of `docs/**/*.md`, but only the Markdown listed above is in the web keys, so a
+documentation-only change replays the browser and workerd lanes; and the Apple
+key omits the Rust toolchain and FFI build settings, so a changed compiler
+reuses an earlier Apple pass.
+
+To let CI replay a local pass, run the lane exactly as its CI job does from a
+worktree without ignored `.env*` files, for example
+`CUBBY_E2E_SHARD=2/4 pnpm exec nx run @cubby/web:e2e` for each of the four
+browser shards, `CUBBY_POSTGRES_SHARD=1/2` and `2/2` for `@cubby/web:postgres`,
+and `pnpm apple check` for the Apple lanes. An unsharded run is a different key.
 
 Nx's built-in HTTP remote cache (`apps/nx-cache`, a Worker over R2) is the
 shared store. Nx connects when `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` and
@@ -36,6 +50,15 @@ them in its shell, and in CI `setup-node-with-deps` exports them from the
 secrets, so both stay unset and its jobs use only the runner's empty local cache:
 every lane runs, and nothing is written to the shared cache. Nx never caches a
 failed task.
+
+Nx fails a task on any remote-cache error other than a 404 miss, so
+`setup-node-with-deps` first requests a missing entry and connects only on a
+404; when the Worker is down or the token is rejected, the job warns and runs
+its lanes uncached. The bucket expires entries after 30 days (an R2 lifecycle
+rule on `cubby-nx-cache`). To rotate the token, run `wrangler secret put
+CACHE_TOKEN` in `apps/nx-cache`, then update the `NX_CACHE_TOKEN` repository
+secret and the Mac's `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN`; jobs started
+in between run uncached.
 
 Project relationships (`implicitDependencies` and `dependsOn`) decide which
 prerequisite targets run and in what order (WASM before its consumers, the MCP

@@ -39,9 +39,12 @@ permissions:
   actions: read
   pull-requests: read
 
-# Read by setup-node-with-deps, which connects Nx to the shared remote cache
-# only when both are present (a fork PR receives neither).
 env:
+  # The nightly backstop bypasses the Nx cache for every command, nested ones
+  # included; other runs replay passes for the same input hash.
+  NX_SKIP_NX_CACHE: ${{ github.event.schedule == '23 8 * * *' && 'true' || 'false' }}
+  # Read by setup-node-with-deps, which connects Nx to the shared remote cache
+  # only when both are present (a fork PR receives neither) and it responds.
   NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
   NX_CACHE_TOKEN: ${{ secrets.NX_CACHE_TOKEN }}
 
@@ -118,7 +121,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - run: pnpm exec nx run-many -t test --exclude=cubby-checks --outputStyle=static-failures-only ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
+      - run: pnpm exec nx run-many -t test --exclude=cubby-checks --outputStyle=static-failures-only
 
   test-rust:
     name: Rust - recipebridge and cubby-ffi
@@ -133,7 +136,7 @@ jobs:
           cache: true
           cache-workspaces: ". -> target"
       # One crate at a time: both share the workspace target directory.
-      - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
+      - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream
 
   # Migration drift and the workerd PostgreSQL files, which build the Worker
   # themselves; ordinary integration files run in test-postgres.
@@ -177,7 +180,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - run: pnpm exec nx run-many -p @cubby/web -t db-check workerd-tests --parallel=1 --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
+      - run: pnpm exec nx run-many -p @cubby/web -t db-check workerd-tests --parallel=1 --outputStyle=stream
 
   test-postgres:
     name: PostgreSQL integration tests (${{ matrix.shard }})
@@ -194,7 +197,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - run: pnpm exec nx run @cubby/web:postgres --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
+      - run: pnpm exec nx run @cubby/web:postgres --outputStyle=stream
         env:
           CUBBY_POSTGRES_SHARD: ${{ matrix.shard }}
 
@@ -244,7 +247,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
       - name: Run Playwright tests
-        run: pnpm exec nx run @cubby/web:e2e --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
+        run: pnpm exec nx run @cubby/web:e2e --outputStyle=stream
         env:
           CUBBY_E2E_SHARD: ${{ matrix.shard }}
       - name: Upload Playwright HTML report and traces
@@ -295,7 +298,7 @@ jobs:
         if: steps.browser-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
       - name: Run purchase import browser E2E
-        run: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
+        run: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream
       - name: Upload Playwright HTML report and traces
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -381,7 +384,7 @@ jobs:
             xcode-host-v1-${{ runner.os }}-${{ steps.host-xcode-version.outputs.hash }}-
       - name: Run CubbyKit host tests
         if: steps.cached.outcome != 'success'
-        run: pnpm exec nx run apple:host-tests --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
+        run: pnpm exec nx run apple:host-tests --outputStyle=stream
       # Publish only successful builds: exact-key cache entries are immutable.
       - name: Save host compilation cache
         if: steps.cached.outcome != 'success'
@@ -426,7 +429,7 @@ jobs:
         id: derived-data
       - name: Run iOS app checks
         if: steps.cached.outcome != 'success'
-        run: pnpm exec nx run apple:simulator-build --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
+        run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       # A canceled compile must not permanently populate an exact cache key.
       - name: Save DerivedData cache
         if: steps.cached.outcome != 'success'

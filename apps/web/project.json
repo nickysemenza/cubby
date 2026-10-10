@@ -13,6 +13,10 @@
       {
         "runtime": "git ls-files --others --ignored --exclude-standard -- ':(glob)**/.env*' | git hash-object --stdin-paths"
       },
+      // Built from Rust inputs and toolchain the file key cannot see.
+      { "dependentTasksOutputFiles": "packages/wasm/**/*" },
+      // Switches the built Worker to its development preview configuration.
+      { "env": "CUBBY_DEV_PREVIEW_BUILD" },
       { "env": "NODE_ENV" },
       { "env": "CUBBY_TEST_SHUFFLE_SEED" },
       { "env": "CUBBY_TEST_INTEGRATION" }
