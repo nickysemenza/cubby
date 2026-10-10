@@ -266,9 +266,13 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   actual Run. Exact-revision UI and authenticated-device acceptance are still pending;
   server authorization, target/step and last-success projection remain open.
 
-- 🟢 **Generate remaining Mac agent-route contracts.** Move accounts and debug
-  events from hand-written `/api/import/agent/*` routes onto shared contracts and
-  generated Swift. Keep the separately owned MCP HTTP handler out of this work.
+- 🟢 **Generate remaining Mac agent-route contracts.** Accounts and debug batches
+  now use shared generated Vendor/Run operations in the local implementation;
+  both Mac callers migrated, the old HTTP routes/request helper were deleted,
+  and debug schemas moved into the shared package. Persisted eligibility,
+  mixed-owner rejection and replay regressions pass. Native validation,
+  independent review, exact-head hosted checks, merge and deployment remain
+  pending. Keep the separately owned MCP HTTP handler out of this work.
 
 - 🤔 **Separate debug observations from replayable operations.** Replace
   `__debug_event` special cases with an existing bounded event/report path if it

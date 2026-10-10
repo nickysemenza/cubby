@@ -34,7 +34,7 @@
                 state.withLock {
                     $0.accounts = ids.map {
                         BrowserBridgeVendorAccount(
-                            id: $0, label: "Account \($0)", ledgerPartyID: "LPY-TEST", browser: .chrome)
+                            id: $0, label: "Account \($0)", ledgerPartyId: "LPY-TEST", browser: .chrome)
                     }
                 }
             }

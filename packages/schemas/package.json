@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./purchase-import-debug": "./src/purchase-import-debug.ts",
     "./mailbox-research": "./src/mailbox-research.ts",
     "./research": "./src/research.ts",
     "./research-context": "./src/research-context.ts",

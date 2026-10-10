@@ -877,3 +877,12 @@ identity. An Offer URL without a variant parameter makes no selected-variant
 claim and does not contradict otherwise agreeing identifiers. Tracking query parameters and fragments do not change the product
 path. A refused Offer remains ambiguous, and historical replay receipts are
 not rewritten when the derivation revision changes.
+
+The Mac browser account roster uses generated `vendor.browserAccounts`; debug
+batches use generated `run.browserDebugEvents`. Both pass through the shared
+request context. The roster includes only this member's live browser-enabled
+accounts in active/auth-paused/offline-paused states. Debug ingestion checks
+both member and initiating actor for every Run before writing any event, and
+replayed event IDs remain idempotent. The socket and OAuth routes remain device
+transports; the old accounts/debug HTTP routes and custom request helper are
+removed. Apple compatibility 2.16 ships the changed paths.

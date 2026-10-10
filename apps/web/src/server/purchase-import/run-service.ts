@@ -43,6 +43,7 @@ import {
   type RunTrigger,
 } from "@cubby/schemas/purchase-import";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { purchaseImportDebugEvent } from "@cubby/schemas/purchase-import-debug";
 import {
   purchaseValidationResearchRunInput,
   CHARGE_HUNT_STATE,
@@ -79,7 +80,6 @@ import type {
   PhotoImportFinalizeOutput,
 } from "~/contracts/photo-import.contract";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
-import { purchaseImportDebugEvent } from "~/lib/purchase-import-debug";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,

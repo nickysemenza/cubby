@@ -1,6 +1,5 @@
+import { purchaseImportDebugEvent } from "@cubby/schemas/purchase-import-debug";
 import { describe, expect, it } from "vitest";
-
-import { purchaseImportDebugEvent } from "./purchase-import-debug";
 
 const validEvent = {
   id: "11111111-1111-4111-8111-111111111111",
