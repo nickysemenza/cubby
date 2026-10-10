@@ -45,8 +45,10 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Browser canaries are deterministic contracts; retries hide flakes. */
-  retries: 0,
+  /* One CI retry turns a flake into a seconds-long "flaky" report instead of a
+     whole-job rerun. A test reported flaky twice is quarantined with
+     `test.fixme` and a docs/todos.md entry; local runs keep failing fast. */
+  retries: isCI ? 1 : 0,
   /* Each worker owns an isolated database and harness. Three local macOS
      workers made iPhone WebKit flake across four unrelated specs under host
      contention, so macOS defaults to two and other hosts to one. Use
@@ -75,8 +77,8 @@ export default defineConfig({
     // contract.
     reducedMotion: "reduce",
 
-    /* retries: 0 means "on-first-retry" never fires — there is no retry to
-       collect a trace on. Record on the first (only) failure instead. */
+    /* Locally there is no retry to collect an "on-first-retry" trace on, so
+       record on failure in both environments. */
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

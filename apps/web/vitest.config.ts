@@ -214,6 +214,8 @@ export default defineConfig({
     // CI runners are slower than local dev machines but should still fail
     // fast on a genuinely hung test; local runs keep Vitest's own default.
     testTimeout: process.env.CI ? 10_000 : 5000,
+    // Same flake policy as Playwright: one CI retry, quarantine on repeat.
+    retry: process.env.CI ? 1 : 0,
     // Vitest 5 makes file ordering a root-only concern. Every project still
     // inherits the same deterministic shuffle; project sequence config only
     // controls which groups may run together.
