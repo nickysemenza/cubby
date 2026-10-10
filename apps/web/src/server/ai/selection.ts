@@ -17,6 +17,7 @@
  *   resolves to null rather than to a guess.
  */
 import type { AiSelectionResult, Confidence } from "@cubby/schemas/ai";
+import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 
 import {
   type AiDecisionFeature,
@@ -120,6 +121,7 @@ export async function runAiSelection<C>(
     candidates: readonly C[];
     usage: AiSelectionUsage;
     jev?: JevPort;
+    decisionModel?: SupportedDecisionModel;
     ai?: AiSelectionPort;
   },
 ): Promise<AiSelectionOutcome<C>> {
@@ -172,6 +174,7 @@ export async function runAiSelection<C>(
     choices,
     usage: args.usage,
     port: args.jev,
+    decisionModel: args.decisionModel,
   });
   const distribution = result.ranked.flatMap((entry) => {
     const candidate = shown[entry.index];
