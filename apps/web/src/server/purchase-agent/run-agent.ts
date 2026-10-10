@@ -52,6 +52,7 @@ import type {
   RunServices,
 } from "./environment";
 import { workflowForRun } from "./import-run-workflows";
+import { recordResearchToolOutcome } from "./research-failure-bound";
 import { RunSettlement } from "./run-settlement";
 import {
   parseSignal,
@@ -277,6 +278,29 @@ export class PurchaseImportRunAgent
               () => this.services(),
               (output) => this.retainResearchMode(output),
               () => this.acknowledgeAdmittedObservations(),
+              async (tool, args, callId, error) => {
+                const detail = await recordResearchToolOutcome(
+                  {
+                    read: (key) => this.readState(key),
+                    write: (key, value) => this.writeState(key, value),
+                    atomic: (effect) =>
+                      this.ctx.storage.transactionSync(() => {
+                        const detail = effect();
+                        if (detail)
+                          this.writeState(
+                            STATE_KEYS.researchGenerationStop,
+                            detail,
+                          );
+                        return detail;
+                      }),
+                  },
+                  tool,
+                  args,
+                  callId,
+                  error,
+                );
+                return detail;
+              },
             )
         ).filter((tool) => agentTools.has(tool.name)),
         hooks: [

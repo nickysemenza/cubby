@@ -284,6 +284,14 @@ SDK hooks may report an exception and continue; a hook exception alone cannot
 enforce the allowance. The local denial is terminal, avoiding provider retries
 for intentionally stopped work. Explicit member aborts retain their failure
 semantics, while allowance exhaustion leaves unfinished targets for review.
+Research host tools also stop after three distinct calls repeat identical
+arguments and the same credential-scrubbed error. The existing Durable Object
+state retains call receipts and the failure count atomically with the review
+reason; replay does not count twice and a successful action clears its failures.
+The terminating tool preserves the diagnostic, and the same provider fence
+denies further inference. Changed arguments or errors are separate attempts.
+This bound covers thrown service failures, not returned domain refusals or
+active-time accounting; those remain separate follow-ups.
 
 The replacement's migration chain follows the current main journal, including
 Neon diagnostics. Its populated-history rehearsal rebuilds main's actual schema,
