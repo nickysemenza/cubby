@@ -36,7 +36,6 @@ import {
   listPendingSuggestions,
   rejectSuggestion,
   recordFieldSuggestionMiss,
-  summarizeSuggestionMisses,
 } from "~/server/repo/suggestion-review";
 import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 import {
@@ -322,8 +321,6 @@ export const aiHandlers = implementOperationDomain(aiContract, {
           fields: input.fields,
         })
       : listPendingSuggestions(context.db, input),
-  listSuggestionMisses: (context, input) =>
-    summarizeSuggestionMisses(context.db, input),
   acceptSuggestion: (context, input) =>
     acceptSuggestion(context.db, context, input),
   acceptSuggestions: (context, input) =>

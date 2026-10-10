@@ -1286,6 +1286,12 @@ precedence over model text. Taxonomy contents participate in the proposal
 basis, so changing vocabulary invalidates old proposals without rerunning
 vision or introducing an inference cache.
 
+Manifest-declared suggestion targets appear as field pills in entity lists.
+Pending Suggestions appear in those cells. A changed target field supersedes
+its older pending Suggestions, and a later sweep supersedes prior pending rows
+for the same record and field. Suggestions remain available to evaluation after
+review; there is no separate classification review page.
+
 Product Category describes identity and can supply a Spending category mapping
 through its ancestry. Cost type describes the Expense's accounting role; Trade
 describes the work context. Product Category does not infer Trade. Reviewed

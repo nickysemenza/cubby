@@ -517,14 +517,6 @@ export const fieldSuggestionMissInput = z.object({
   confidence: z.number().min(0).max(1),
 });
 export const fieldSuggestionMissOut = z.object({ recorded: z.literal(true) });
-export const suggestionMissesOut = z.array(
-  z.object({
-    entity: z.enum(shortcodeEntities),
-    field: z.string(),
-    suggestedValue: z.json(),
-    count: z.number().int().positive(),
-  }),
-);
 export const suggestionSweepStartInput = z.object({
   entity: z.enum(shortcodeEntities),
   field: z.string().min(1),

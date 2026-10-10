@@ -21,7 +21,6 @@ import {
   fieldSuggestionsReviewOut,
   fieldSuggestionMissInput,
   fieldSuggestionMissOut,
-  suggestionMissesOut,
   suggestionReviewActionInput,
   suggestionReviewActionOut,
   suggestionReviewBatchInput,
@@ -166,13 +165,6 @@ export const aiContract = defineContract("ai", {
     output: suggestionReviewListOut,
     readPolicy: "strong",
     transport: "post",
-    cache: { profile: "stable" },
-  }),
-  listSuggestionMisses: query({
-    mcp: { omit: "operator_maintenance" },
-    input: zod.object({ runId: zod.string().uuid().optional() }),
-    output: suggestionMissesOut,
-    readPolicy: "strong",
     cache: { profile: "stable" },
   }),
   acceptSuggestion: mutation({

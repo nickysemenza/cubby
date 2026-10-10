@@ -10,7 +10,7 @@ import {
 } from "@cubby/schemas/run-fields";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { selectDecisionModel } from "@cubby/shared/ai/models";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -177,6 +177,18 @@ async function insertSuggestions(
   financeReviewFingerprint: string | null,
 ) {
   const typedRecordId = parseEntityId(entity, recordId);
+  await getDb(db)
+    .update(suggestionTable)
+    .set({ status: "superseded" })
+    .where(
+      and(
+        eq(suggestionTable.entity, entity),
+        eq(suggestionTable.recordId, typedRecordId),
+        eq(suggestionTable.field, field),
+        eq(suggestionTable.status, "pending"),
+        ne(suggestionTable.runId, runId),
+      ),
+    );
   for (const entry of entries) {
     await getDb(db).insert(suggestionTable).values({
       runId,

@@ -31,7 +31,6 @@ import {
   listPagePendingSuggestions,
   rejectSuggestion,
   recordFieldSuggestionMiss,
-  summarizeSuggestionMisses,
 } from "~/server/repo/suggestion-review";
 import { loadVendorSuggestionContext } from "~/server/repo/vendor-suggestion-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -141,7 +140,7 @@ describe("persisted Suggestion sweeps", () => {
     );
     await resumeSuggestionSweep(ctx.db, started.id, {
       context,
-      decisionModel: () => "typesafe/jev",
+      decisionModel: () => "typesafe/jev" as const,
       suggest,
       wait: async () => {},
     });
@@ -613,7 +612,7 @@ describe("persisted Suggestion sweeps", () => {
         1,
       );
       expect(pair.find((row) => row.model !== "typesafe/jev")?.status).toBe(
-        "pending",
+        "superseded",
       );
     }
   });
@@ -955,7 +954,6 @@ describe("persisted Suggestion sweeps", () => {
       .from(productTable)
       .where(eq(productTable.id, recordId));
     expect(stillBlank?.categoryId).toBe(taxonomyId("tools"));
-    expect(await summarizeSuggestionMisses(ctx.db, { runId })).toHaveLength(1);
   });
 
   it("accepts a persisted Suggestion through the entity kernel and marks it applied", async () => {
@@ -1024,6 +1022,47 @@ describe("persisted Suggestion sweeps", () => {
     expect(updated?.categoryId).toBeTruthy();
   });
 
+  it("supersedes an earlier pending suggestion when a newer sweep evaluates the same field", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic repeated sweep item",
+        manufacturer: "Synthetic maker",
+        categoryId: taxonomyId("tools"),
+      }),
+      ctx.actor,
+    );
+    const ports = {
+      context,
+      decisionModel: () => "typesafe/jev" as const,
+      wait: async () => {},
+      suggestPorts: {
+        jev: vi.fn(highConfidence),
+        registry: { "product.categoryId": categorySpec },
+      },
+    };
+    const input = {
+      entity: "product" as const,
+      field: "categoryId",
+      filters: { ids: [product.id] },
+    };
+    await startSuggestionSweep(ctx.db, input, ports);
+    const [first] = await listPendingSuggestions(ctx.db, { minConfidence: 0 });
+    expect(first).toBeDefined();
+    await startSuggestionSweep(ctx.db, input, ports);
+    const saved = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.recordId, first!.recordId));
+    expect(saved.map(({ status }) => status)).toEqual([
+      "superseded",
+      "pending",
+    ]);
+  });
+
   it("accepts a reviewed value and groups Misses by field and suggested value", async () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
@@ -1083,9 +1122,6 @@ describe("persisted Suggestion sweeps", () => {
       .from(productTable)
       .where(eq(productTable.id, parseEntityId("product", recordId)));
     expect(updated?.categoryId).toBeTruthy();
-    expect(await summarizeSuggestionMisses(ctx.db, { runId })).toMatchObject([
-      { entity: "product", field: "categoryId", count: 2 },
-    ]);
   });
 
   it("records a per-record dismissal as a Miss on its ai_suggest Run", async () => {

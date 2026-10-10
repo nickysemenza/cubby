@@ -1,7 +1,6 @@
 import {
   fieldSuggestionsInput,
   financeCategoryApplyInput,
-  suggestionMissesOut,
 } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
@@ -165,6 +164,7 @@ export async function applySuggestionValue(
           : { spendingProfile: typedValue }),
     });
     await applyFinanceCategorySuggestion(context, financeInput);
+    await supersedePendingFieldSuggestions(db, entity, row.recordId, row.field);
     return;
   }
   await executeEntity(
@@ -176,6 +176,26 @@ export async function applySuggestionValue(
       data: { [row.field]: typedValue },
     }),
   );
+  await supersedePendingFieldSuggestions(db, entity, row.recordId, row.field);
+}
+
+async function supersedePendingFieldSuggestions(
+  db: Database,
+  entity: z.infer<typeof fieldSuggestionsInput>["entity"],
+  recordId: string,
+  field: string,
+) {
+  await getDb(db)
+    .update(suggestionTable)
+    .set({ status: "superseded" })
+    .where(
+      and(
+        eq(suggestionTable.entity, entity),
+        eq(suggestionTable.recordId, parseEntityId(entity, recordId)),
+        eq(suggestionTable.field, field),
+        eq(suggestionTable.status, "pending"),
+      ),
+    );
 }
 
 export async function acceptSuggestion(
@@ -285,36 +305,6 @@ export async function recordFieldSuggestionMiss(
   if (!row) throw new Error("Suggestion miss was not persisted");
   await rejectSuggestion(db, undefined, { id: row.id });
   return { recorded: true as const };
-}
-
-export async function summarizeSuggestionMisses(
-  db: Database,
-  input: { runId?: string } = {},
-) {
-  const where = input.runId
-    ? and(
-        eq(suggestionTable.status, "rejected"),
-        eq(suggestionTable.runId, parseEntityId("run", input.runId)),
-      )
-    : eq(suggestionTable.status, "rejected");
-  const rows = await getDb(db).select().from(suggestionTable).where(where);
-  const grouped = new Map<
-    string,
-    z.infer<typeof suggestionMissesOut>[number]
-  >();
-  for (const row of rows) {
-    const key = JSON.stringify([row.entity, row.field, row.suggestedValue]);
-    const found = grouped.get(key);
-    if (found) found.count++;
-    else
-      grouped.set(key, {
-        entity: fieldSuggestionsInput.shape.entity.parse(row.entity),
-        field: row.field,
-        suggestedValue: z.json().parse(row.suggestedValue),
-        count: 1,
-      });
-  }
-  return suggestionMissesOut.parse([...grouped.values()]);
 }
 
 export async function latestSuggestionSweepStatus(db: Database) {
