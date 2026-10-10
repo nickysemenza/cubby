@@ -154,6 +154,10 @@ native PostgreSQL installation remain owned by their existing runners.
   [.worktreeinclude](../.worktreeinclude). Every `pnpm install` re-verifies
   `node_modules` (`optimisticRepeatInstall: false`), so rerunning it relinks a
   missing dependency instead of reporting "Already up to date".
+- Amp orbs run [.agents/setup](../.agents/setup): Node from `.nvmrc`, Rust and
+  wasm-pack, `pnpm agent:setup`, Playwright Chromium, and the test-service
+  images, with Docker reachable without sudo. Start PostgreSQL/IntegreSQL with
+  `docker compose -p cubby up -d --wait`.
 - Rust builds share `~/.cache/cubby/cargo-target`.
   [scripts/ensure-wasm.ts](../scripts/ensure-wasm.ts) keys the WASM artifact on
   Cargo's resolved graph and file contents, so it never drifts silently.
