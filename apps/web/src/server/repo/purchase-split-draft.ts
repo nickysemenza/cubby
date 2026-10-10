@@ -1,3 +1,4 @@
+import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type ProductShortcode,
   type ProjectShortcode,
@@ -32,6 +33,7 @@ export interface SplitOriginal {
   cost: number | null;
   costType: CostType;
   trade: Trade | null;
+  spendingCategoryId: string | null;
   projectId: ProjectShortcode | null;
   productId: ProductShortcode | null;
   productName: string | null;
@@ -43,6 +45,30 @@ export interface SplitOriginal {
   hasAttribution: boolean;
   /** An external source row claims it, so it cannot become several. */
   imported: boolean;
+}
+
+/** Resolve the category a replacement part will store after its classifier is known. */
+export function resolveSplitPartClassification<
+  TOriginalCategory extends string | null,
+  TPartCategory extends string | null,
+>(input: {
+  originalSpendingCategoryId: TOriginalCategory;
+  lineKind: ExpenseLineKind;
+  partSpendingCategoryId?: TPartCategory;
+}) {
+  const inheritsOriginal =
+    input.partSpendingCategoryId === undefined &&
+    input.lineKind === "principal";
+  return {
+    lineKind: input.lineKind,
+    inheritsOriginal,
+    spendingCategoryId:
+      input.partSpendingCategoryId !== undefined
+        ? input.partSpendingCategoryId
+        : inheritsOriginal
+          ? input.originalSpendingCategoryId
+          : null,
+  };
 }
 
 type CheckOut = z.output<typeof purchaseSplitCheckOut>;

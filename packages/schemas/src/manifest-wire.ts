@@ -69,7 +69,12 @@ export const manifestWire = {
     { conformances: codable },
   ),
   FieldSuggestionDescriptor: record(
-    { reviewRequired: "boolean~", basis: "[string]", mode: "string~" },
+    {
+      reviewRequired: "boolean~",
+      basis: "[string]",
+      mode: "string~",
+      rules: "[string]?",
+    },
     { conformances: codable },
   ),
   FieldResolutionDescriptor: record(

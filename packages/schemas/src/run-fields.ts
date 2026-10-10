@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
 export {
   RUN_PURPOSE_LABEL,
@@ -351,6 +352,35 @@ export const chargeHuntOutcomeOf = (
       return "deferred";
   }
 };
+export const suggestionSweepRunInput = z.object({
+  kind: z.literal("suggestion_sweep"),
+  entity: z.string().min(1),
+  field: z.string().min(1),
+  filters: z.record(z.string(), z.json()),
+  decisionModel: supportedDecisionModelSchema,
+  taxonomyRevision: z.string().optional(),
+  paused: z.boolean(),
+});
+export type SuggestionSweepRunInput = z.infer<typeof suggestionSweepRunInput>;
+export const suggestionSweepRunProgress = z.object({
+  total: z.number().int().nonnegative(),
+  done: z.number().int().nonnegative(),
+  applied: z.number().int().nonnegative(),
+  queued: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  diagnostics: z
+    .array(
+      z.object({
+        targetId: z.string(),
+        stage: z.enum(["apply", "paired_model"]),
+        reason: z.string(),
+      }),
+    )
+    .default([]),
+});
+export type SuggestionSweepRunProgress = z.infer<
+  typeof suggestionSweepRunProgress
+>;
 export type RunInput =
   | ExecutionAuthorizationInput
   | ResearchObjectivesRunInput
@@ -360,8 +390,9 @@ export type RunInput =
   | MailDiscoveryRunInput
   | z.infer<typeof orderMailImportRunInput>
   | OrderBackfillRunInput
-  | z.infer<typeof chargeHuntRunInput>;
-export type RunProgress = MailDiscoveryRunProgress;
+  | z.infer<typeof chargeHuntRunInput>
+  | SuggestionSweepRunInput;
+export type RunProgress = MailDiscoveryRunProgress | SuggestionSweepRunProgress;
 
 /**
  * What one run actually does, for every surface that names it (lists,

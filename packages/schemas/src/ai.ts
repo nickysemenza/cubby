@@ -470,6 +470,75 @@ export const fieldSuggestionsInput = z.object({
 });
 export type FieldSuggestionsInput = z.infer<typeof fieldSuggestionsInput>;
 
+export const suggestionReviewListInput = z.object({
+  entity: z.enum(shortcodeEntities).optional(),
+  field: z.string().optional(),
+  kind: z.enum(["correction", "addition"]).optional(),
+  minConfidence: z.number().min(0).max(1).default(0.5),
+  runId: z.string().uuid().optional(),
+});
+export const suggestionReviewRowSchema = z.object({
+  id: z.string().uuid(),
+  runId: z.string().uuid(),
+  entity: z.enum(shortcodeEntities),
+  recordId: z.string().uuid(),
+  field: z.string(),
+  currentValue: z.json().nullable(),
+  suggestedValue: z.json(),
+  confidence: z.number(),
+  model: z.string(),
+  kind: z.enum(["correction", "addition"]),
+  correctValue: z.json().nullable(),
+});
+export const suggestionReviewListOut = z.array(suggestionReviewRowSchema);
+export type SuggestionReviewRow = z.infer<typeof suggestionReviewRowSchema>;
+export const suggestionReviewActionInput = z.object({ id: z.string().uuid() });
+export const suggestionReviewBatchInput = z.object({
+  ids: z.array(z.string().uuid()).min(1),
+});
+export const suggestionReviewRejectInput = suggestionReviewActionInput.extend({
+  correctValue: z.json().optional(),
+});
+export const suggestionReviewActionOut = z.object({
+  id: z.string().uuid(),
+  status: z.enum(["applied", "rejected"]),
+});
+export const suggestionReviewBatchOut = z.array(suggestionReviewActionOut);
+export const fieldSuggestionMissInput = z.object({
+  entity: z.enum(shortcodeEntities),
+  entityId: z.string().min(1),
+  field: z.string().min(1),
+  runKey: z.string().uuid(),
+  currentValue: z.json().nullable(),
+  suggestedValue: z.string(),
+  confidence: z.number().min(0).max(1),
+});
+export const fieldSuggestionMissOut = z.object({ recorded: z.literal(true) });
+export const suggestionMissesOut = z.array(
+  z.object({
+    entity: z.enum(shortcodeEntities),
+    field: z.string(),
+    suggestedValue: z.json(),
+    count: z.number().int().positive(),
+  }),
+);
+export const suggestionSweepStartInput = z.object({
+  entity: z.enum(shortcodeEntities),
+  field: z.string().min(1),
+  filters: z.record(z.string(), z.json()).default({}),
+});
+export const suggestionSweepStartOut = z.object({ id: z.string().uuid() });
+export const suggestionSweepControlInput = z.object({
+  runId: z.string().uuid(),
+});
+export const suggestionSweepStatusOut = z.object({
+  latestRunId: z.string().uuid().nullable(),
+  taxonomyChanged: z.boolean(),
+  status: z.string().nullable(),
+  paused: z.boolean(),
+  progress: z.json().nullable(),
+});
+
 /**
  * One target's answer: `value` is the raw field value (a shortcode for a
  * reference target, the enum member for an enum target, the chosen string

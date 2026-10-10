@@ -153,6 +153,7 @@ import {
   plant,
   planting,
   statementRow,
+  suggestion,
   task,
   vendorAccount,
 } from "./schema";
@@ -1422,6 +1423,14 @@ export const ENTITY_EDGES = {
         reason:
           "Append-only provenance: a job keeps naming the run that scheduled it.",
       },
+    },
+    "Suggestion.runId": {
+      column: suggestion.runId,
+      role: "owned-child",
+      label: "Suggestions",
+      description:
+        "A Suggestion this Run computed; deleting the Run takes its Suggestions with it.",
+      liveness: { kind: "must-target-live" },
     },
     "Purchase.runId": {
       column: purchase.runId,

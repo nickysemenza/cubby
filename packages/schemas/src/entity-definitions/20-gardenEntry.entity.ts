@@ -81,10 +81,23 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
-          suggest: { basis: ["harvestAmount", "notes"] },
+          suggest: {
+            basis: ["harvestAmount", "notes"],
+            rules: [
+              `Choose harvest when a harvest amount is present; otherwise choose note for an observation or photo journal entry.`,
+            ],
+          },
           options: [
-            { value: "note", label: "Note" },
-            { value: "harvest", label: "Harvest" },
+            {
+              value: "note",
+              label: "Note",
+              description: "A note, observation, or photo record",
+            },
+            {
+              value: "harvest",
+              label: "Harvest",
+              description: "A record of gathered produce",
+            },
           ],
         },
         display: { list: true, detail: true },
@@ -485,6 +498,25 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
+    classificationPolicies: [
+      {
+        classifier: "kind",
+        fields: [
+          {
+            field: "notes",
+            byValue: { note: "required" },
+            otherwise: "unknown",
+            gap: "garden_entry_note",
+          },
+          {
+            field: "harvestAmount",
+            byValue: { harvest: "required" },
+            otherwise: "unknown",
+            gap: "garden_entry_harvest_amount",
+          },
+        ],
+      },
+    ],
     dataQuality: {
       checks: [
         {

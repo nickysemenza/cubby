@@ -240,75 +240,79 @@ export default defineEntity({
               value: "food",
               label: "Food",
               description:
-                "Expenses with no project fall to the household project, and the unit-mapping check covers these products. Required for products linked to an ingredient or a USDA food.",
+                "Edible/consumable products tracked against nutrition (USDA-linkable)",
             },
             {
               value: "books",
               label: "Books",
-              description: "Required for products that carry an ISBN.",
+              description: "Books, manuals, and other bound reading matter",
             },
             {
               value: "tools",
               label: "Tools",
-              description:
-                "Reusable project resources: tool matrix and gallery, wishlist candidates. Data quality expects a model number.",
+              description: "Durable hand or power tools",
             },
             {
               value: "tool-consumables",
               label: "Tool consumables",
               description:
-                "Blades, bits, abrasives. Classification only: color, icon, and the category-family filter.",
+                "Consumed alongside tool use: blades, bits, abrasives",
             },
             {
               value: "tool-accessories",
               label: "Tool accessories",
-              description:
-                "Attachments and add-ons for tools. Classification only: color, icon, and the category-family filter.",
+              description: "Non-consumed attachments and add-ons for tools",
             },
             {
               value: "storage",
               label: "Storage",
               description:
-                "Bins, totes, shelving. Data quality expects a model number.",
+                "Bins, totes, shelving, and other organizational containers",
             },
             {
               value: "hardware",
               label: "Hardware",
-              description:
-                "Fasteners and fittings. Classification only: color, icon, and the category-family filter.",
+              description: "Fasteners, fittings, and small hardware components",
             },
             {
               value: "electronics",
               label: "Electronics",
-              description:
-                "Devices and components. Data quality expects a model number.",
+              description: "Electronic devices and components",
             },
             {
               value: "software",
               label: "Software",
-              description:
-                "Licenses and subscriptions. Can be used as a reusable project resource.",
+              description: "Software, licenses, and digital subscriptions",
             },
             {
               value: "household",
               label: "Household",
               description:
-                "General household goods. Data quality expects a model number.",
+                "General household goods with no more specific feature",
             },
             {
               value: "supplies",
               label: "Supplies",
               description:
-                "Tape, paper, cleaning. Classification only: color, icon, and the category-family filter.",
+                "Consumable general-purpose supplies (tape, paper, cleaning, …)",
             },
             {
               value: "apparel",
               label: "Apparel",
-              description:
-                "Clothing and wearables. Classification only: color, icon, and the category-family filter.",
+              description: "Clothing, footwear, and wearable accessories",
             },
           ],
-          suggest: { basis: ["name", "parentId"] },
+          suggest: {
+            basis: ["name", "parentId"],
+            rules: [
+              `You are a product-category classification assistant. Given a category's name and its parent category, determine which behavior namespace it belongs to.
+
+Rules:
+1. Match the category's own subject, not an ancestor's — a feature binds to the nearest category that carries one and descendants inherit it, so only assign a feature this category itself should own.
+2. Prefer the most specific feature that fits over "household", the catch-all — reserve "household" for a genuinely general-purpose category with no more specific behavior.
+3. A consumable used alongside a tool (blades, bits, abrasives) is "tool-consumables"; a durable attachment for one is "tool-accessories"; the tool itself is "tools".`,
+            ],
+          },
         },
         display: {
           list: true,
@@ -734,6 +738,24 @@ export default defineEntity({
               household: "required",
             },
             otherwise: "unknown",
+          },
+          {
+            field: "projectTool",
+            relation: true,
+            byValue: {
+              tools: "unknown",
+              "tool-accessories": "unknown",
+              software: "unknown",
+            },
+            otherwise: "not_allowed",
+          },
+          {
+            field: "plantingSource",
+            relation: true,
+            byValue: { food: "not_allowed" },
+            otherwise: "unknown",
+            refusal:
+              "A planting source Product must be a garden product, not a food Product.",
           },
         ],
       },

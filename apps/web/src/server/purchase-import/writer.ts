@@ -48,6 +48,7 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { assertRunCapabilityById } from "~/server/purchase-import/capabilities";
+import { classificationAllowsField } from "~/server/repo/classification-field-policy";
 import {
   databaseForTransaction,
   getDb,
@@ -450,7 +451,7 @@ async function decideLineIdentities(
         ] ?? "concession")
       : null;
     const baseDecision = { lineKind, kitKind, reversalKind };
-    if (lineKind !== "principal") {
+    if (!classificationAllowsField("expense", { lineKind }, "productId")) {
       decisions.push({
         productId: null,
         promote: false,
@@ -574,7 +575,13 @@ export async function explicitLineDecisions(
 ): Promise<LineIdentityDecision[]> {
   const decisions: LineIdentityDecision[] = [];
   for (const [index, line] of lines.entries()) {
-    if (line.lineKind !== "principal") {
+    if (
+      !classificationAllowsField(
+        "expense",
+        { lineKind: line.lineKind, lineBasis: "item_line" },
+        "productId",
+      )
+    ) {
       decisions.push({
         productId: null,
         promote: false,

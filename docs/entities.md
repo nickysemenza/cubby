@@ -662,6 +662,15 @@ declared `"entity.field"` suggest target, and its `GeneratedSuggestFieldKey`
 union type-enforces that the server's field-suggest registry carries exactly
 one entry per key.
 
+Reviewable field suggestions are stored against their `ai_suggest` or sweep
+Run. A human acceptance writes through the entity update path (finance
+categories use the reviewed finance apply so linked Expense reach is checked);
+a rejection records a Miss on that Run. Misses are evidence for improving the
+prompt or classification vocabulary and do not suppress future suggestions.
+Bulk sweeps retain paired model rows for evaluation, while review exposes only
+the pinned model's candidate. The response cache includes the active
+classification revision, which each sweep also records for later comparison.
+
 An omitted or null mode has no schema. Zod owns optionality, transformations,
 nullability, descriptions, refinements, and defaults. Put create-only defaults
 only on create schemas, and make partial update schemas explicitly optional so
@@ -1203,15 +1212,18 @@ value is expected and whether it is allowed at all, in one vocabulary
 (`fieldPolicyValues`: `required` gaps a missing value, `not_expected` and
 `unknown` raise no gap, `not_allowed` also refuses a value). A fixed
 classification declares it in the manifest under
-`capabilities.classificationPolicies`: the classifier enum, the classified
-entity and its reference field, and per target field a `byValue` map keyed by
+`capabilities.classificationPolicies`: the classifier enum, optionally the
+classified entity and its reference field (omit `target` when the classifier
+is on the governed record itself), and per target field a `byValue` map keyed by
 classifier value plus an `otherwise` policy. The generator checks every name
 and value and requires a field refused by default to have exactly one
 admitting value, then emits `classification-field-policies.gen.ts`. A
 household-editable classification keeps its policy per row instead
 (SpendingCategory `productExpectation`), and `@cubby/schemas/classification-field-policy`
 registers both shapes behind one evaluator (`isFieldAllowed`,
-`classificationValuesWhere`, `impliedClassification`).
+`classificationValuesWhere`, `impliedClassification`). The server SQL evaluator
+also compiles column policies against their declared owner table, so inherited
+Expense category resolution and policy evaluation share the same path.
 
 ProductCategory `feature` is the first declared instance, resolved through the
 Product's category and its nearest bound ancestor. An ingredient or USDA link
@@ -1227,6 +1239,32 @@ unclassified record is not refused, since the write classifies it), and
 post-import auto-fill re-checks under its row lock. Each declared
 classification supplies its effective-value resolver in that server module's
 typed `classificationSources` map.
+
+A same-record policy reads the classifier from the governed row. Expense
+`lineKind` refuses a product, a stored spending category and a stored project
+on every line except `principal` — a tax, shipping, fee, tip or discount line
+always follows the split of the Purchase's item lines (shown as "Follows
+items") — and `lineBasis: allocation` refuses a product; Location `furniture`
+requires its Product; GardenEntry `kind` expects notes on a note and an amount
+on a harvest. `enforced: true` (same-record only) makes the generator emit one
+CHECK per field into the derived DDL, so every write path is refused by the
+database as well as by `assertClassificationPolicies`, which every write calls
+first; a field's `refusal` is the actionable message it raises, and its `gap`
+names the public data-quality check that reports a missing `required` value or
+a present `not_allowed` one. Reclassifying a row clears a stored field the new
+value refuses unless the same write sets it, then validates the resulting
+record once. Split parts and receipt replacement lines inherit a stored
+spending category only when their final line kind allows it. The editor hides a
+field the record's classification refuses, and a Suggestion request drops
+refused targets, refusing the request only when none remain.
+
+A `relation: true` entry governs a relation the classified record takes part
+in instead of a stored field: ProductCategory `feature` admits a Product as a
+project tool only under Tools, Tool accessories and Software, and refuses a
+Food Product as a Planting source. Relation entries never imply a
+classification. Category change, Planting writes, project-tool attach and
+Product merge read them through `@cubby/schemas/product-category-relations`,
+which entity declarations must not import.
 
 ## Product classification and photos
 

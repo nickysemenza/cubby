@@ -15,6 +15,11 @@ import type {
   ReferenceSuggestSpec,
 } from "~/server/ai/field-suggest/registry";
 import { FIELD_SUGGEST_REGISTRY } from "~/server/ai/field-suggest/registry";
+
+const productCategoryFeatureSpec =
+  FIELD_SUGGEST_REGISTRY["productCategory.feature"];
+if (productCategoryFeatureSpec.kind !== "enum")
+  throw new Error("productCategory.feature must remain an enum suggestion");
 import type { JevPort } from "~/server/ai/jev";
 import type { Database } from "~/server/db";
 
@@ -464,7 +469,7 @@ describe("suggestFields", () => {
       jev: jevPortPicking("supplies:"),
       registry: {
         "productCategory.feature": {
-          ...FIELD_SUGGEST_REGISTRY["productCategory.feature"],
+          ...productCategoryFeatureSpec,
           candidates: async () => ["supplies", "storage"],
         },
       },
@@ -727,6 +732,25 @@ describe("suggestFields", () => {
       expect(jev).not.toHaveBeenCalled();
     },
   );
+
+  // Regression guard: a record panel asks for every target at once, so one
+  // refused target must not fail the request for the allowed ones.
+  it("drops a refused target and still suggests the allowed ones", async () => {
+    const jev = jevPortPicking("Kitchen Remodel");
+    const result = await suggestFields(
+      fakeDb,
+      fixtureRunId,
+      {
+        basisMode: "provided",
+        entity: "expense",
+        targets: ["projectId", "costType"],
+        basis: { name: "Sales tax", lineKind: "tax" },
+      },
+      { jev, registry: { "expense.projectId": fakeProjectSpec() } },
+    );
+    expect(result.suggestions.projectId).toBeUndefined();
+    expect(jev).toHaveBeenCalled();
+  });
 
   it("resolves automatic principal line kinds before asking for projects", async () => {
     const result = await suggestFields(

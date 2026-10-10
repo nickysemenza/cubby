@@ -46,6 +46,26 @@ function runOxlint(fixturePath: string): OxlintDiagnostic[] {
   return output.diagnostics;
 }
 
+function runOxlintPaths(paths: string[]): OxlintDiagnostic[] {
+  const result = spawnSync(
+    "pnpm",
+    [
+      "exec",
+      "oxlint",
+      "--config",
+      ".oxlintrc.json",
+      "--format",
+      "json",
+      ...paths,
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  assert.equal(result.signal, null, result.stderr);
+  assert.ok(result.status === 0 || result.status === 1, result.stderr);
+  const output: OxlintOutput = JSON.parse(result.stdout);
+  return output.diagnostics;
+}
+
 function fixtureFilename(fixtureName: string): string {
   return fixtureName.endsWith(".tsx.txt")
     ? fixtureName.replace(/\.txt$/, "")
@@ -113,6 +133,38 @@ test("runtime typeof is allowed only in explicitly annotated predicates", () => 
   assert.deepEqual(
     rejected.map((diagnostic) => diagnostic.labels[0]?.span.line),
     [2, 6, 10],
+  );
+});
+
+test("raw enum values in Drizzle SQL are rejected", () => {
+  // The rule is global, so an OS-tmpdir fixture runs it; a fixture under
+  // apps/web/src/server races the generator's import-boundary scan in CI.
+  const diagnostics = lintFixture(
+    "no-raw-enum-literal-in-sql",
+    "no-raw-enum-literal-in-sql.txt",
+    "cubby",
+  );
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [2],
+  );
+});
+
+test("raw enum SQL baseline counts stay exact and shrink-only", () => {
+  const baselinePath = join(
+    repoRoot,
+    "tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json",
+  );
+  const baseline: Record<string, number> = JSON.parse(
+    readFileSync(baselinePath, "utf8"),
+  );
+  const diagnostics = runOxlintPaths(Object.keys(baseline));
+  assert.deepEqual(
+    diagnostics.filter(
+      (diagnostic) => diagnostic.code === "cubby(no-raw-enum-literal-in-sql)",
+    ),
+    [],
+    "lower a file's baseline whenever its raw enum SQL count drops",
   );
 });
 

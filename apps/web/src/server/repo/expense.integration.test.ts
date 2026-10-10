@@ -48,6 +48,7 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { resolveShortcode } from "~/server/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { vendorOptions } from "~/server/repo/vendor";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -403,6 +404,159 @@ describe("expense repository — CRUD", () => {
       updateExpense(ctx.db, principal.id, { lineKind: "fee" }, ctx.actor),
     );
     expect(reclassified).toMatchObject({ lineKind: "fee", projectId: null });
+  });
+
+  const categoryCode = async (name: string) => ({
+    id: (await insertWithShortcode(ctx.db, "spendingCategory", { name }))
+      .shortcode,
+  });
+
+  // Regression guard: the first generated line-kind CHECK listed the kinds
+  // that ALLOW the field, refusing products on every item line.
+  it("lets an item line carry a product, stored category and project", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "policy item product" }),
+      ctx.actor,
+    );
+    const category = await categoryCode("policy item category");
+    const { output: project } = await createRepoEntity(ctx, "project", {
+      name: "policy item project",
+    });
+    const item = await unwrap(
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Policy item",
+          lineKind: "principal",
+          productId: product.id,
+          spendingCategoryId: category.id,
+          projectId: project.id,
+        }),
+      ),
+    );
+    expect(item).toMatchObject({
+      productId: product.id,
+      spendingCategoryId: category.id,
+      projectId: project.id,
+    });
+  });
+
+  it("refuses a stored category on a non-item line and a product on an allocation", async () => {
+    const category = await categoryCode("policy adjustment category");
+    await expect(
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Sales tax",
+          lineKind: "tax",
+          spendingCategoryId: category.id,
+        }),
+      ),
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
+
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "policy allocation product" }),
+      ctx.actor,
+    );
+    await expect(
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Deposit",
+          lineKind: "principal",
+          lineBasis: "allocation",
+          productId: product.id,
+        }),
+      ),
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
+  });
+
+  it("drops the stored category when a principal line becomes an adjustment", async () => {
+    const category = await categoryCode("policy reclassify category");
+    const principal = await unwrap(
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Handling",
+          lineKind: "principal",
+          spendingCategoryId: category.id,
+          vendor: "Line role fixture vendor",
+          orderId: "LINE-ROLE-3",
+        }),
+      ),
+    );
+    const reclassified = await unwrap(
+      updateExpense(ctx.db, principal.id, { lineKind: "fee" }, ctx.actor),
+    );
+    expect(reclassified).toMatchObject({
+      lineKind: "fee",
+      spendingCategoryId: null,
+    });
+  });
+
+  it("clears product-dependent classification when a principal becomes shipping or allocation", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "reclassified product" }),
+      ctx.actor,
+    );
+    const category = await categoryCode("reclassified category");
+    const { output: project } = await createRepoEntity(ctx, "project", {
+      name: "reclassified project",
+    });
+    const seed = async (name: string, orderId: string) =>
+      unwrap(
+        createRepoEntity(
+          ctx,
+          "expense",
+          makeExpenseInput({
+            name,
+            lineKind: "principal",
+            productId: product.id,
+            productQuantity: 2,
+            spendingCategoryId: category.id,
+            projectId: project.id,
+            vendor: "Classification policy vendor",
+            orderId,
+          }),
+        ),
+      );
+
+    const shipping = await seed("Shipping reclassification", "POLICY-SHIP");
+    const reclassifiedShipping = await unwrap(
+      updateExpense(ctx.db, shipping.id, { lineKind: "shipping" }, ctx.actor),
+    );
+    expect(reclassifiedShipping).toMatchObject({
+      lineKind: "shipping",
+      productId: null,
+      productQuantity: null,
+      spendingCategoryId: null,
+      projectId: null,
+    });
+
+    const allocation = await seed(
+      "Allocation reclassification",
+      "POLICY-ALLOC",
+    );
+    const reclassifiedAllocation = await unwrap(
+      updateExpense(
+        ctx.db,
+        allocation.id,
+        { lineBasis: "allocation" },
+        ctx.actor,
+      ),
+    );
+    expect(reclassifiedAllocation).toMatchObject({
+      lineBasis: "allocation",
+      productId: null,
+      productQuantity: null,
+    });
   });
 });
 

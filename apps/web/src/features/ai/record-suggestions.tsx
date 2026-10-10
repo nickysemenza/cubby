@@ -119,6 +119,7 @@ function mergeSuggestionRow(
 
 const RecordSuggestionsContext = createContext<{
   entity: StandardEntity;
+  runKey: string;
   rows: ReadonlyMap<string, SuggestionRow>;
   save: (
     id: string,
@@ -126,6 +127,12 @@ const RecordSuggestionsContext = createContext<{
     suggestion: FieldSuggestion,
     source: FieldSuggestionSource,
     expectedCurrent: string | null,
+  ) => Promise<void>;
+  recordMiss: (
+    id: string,
+    field: string,
+    suggestion: FieldSuggestion,
+    currentValue: string | null,
   ) => Promise<void>;
 } | null>(null);
 
@@ -601,7 +608,25 @@ function BoundRecordSuggestions({
   }
   const context = {
     entity,
+    runKey,
     rows,
+    recordMiss: async (
+      id: string,
+      field: string,
+      suggestion: FieldSuggestion,
+      currentValue: string | null,
+    ) => {
+      if (!suggestion.value) return;
+      await operations.recordFieldSuggestionMiss?.call({
+        entity,
+        entityId: id,
+        field,
+        runKey,
+        currentValue,
+        suggestedValue: suggestion.value,
+        confidence: suggestion.probability ?? 0,
+      });
+    },
     save: async (
       id: string,
       field: string,
@@ -850,6 +875,16 @@ function ResolvedFieldSuggestion({
         pending={row.pending}
         error={row.error}
         onApply={apply}
+        onDismiss={() =>
+          suggestion
+            ? context.recordMiss(
+                row.record.id,
+                field,
+                suggestion,
+                current.value,
+              )
+            : undefined
+        }
         applyLabel={usesInheritedValue ? "Use inherited value" : undefined}
         alternative={source.basisMode === "provided"}
         outcome={row.outcomes[field]}

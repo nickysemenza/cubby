@@ -16,6 +16,7 @@ import { sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import { assertClassificationPolicies } from "~/server/repo/classification-field-policy";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
@@ -431,17 +432,12 @@ export async function validateExpenseInheritance(
   tx: Database | DrizzleTransaction,
   tuple: ExpenseInheritanceTuple,
 ): Promise<ResolvedExpenseInheritance> {
+  assertClassificationPolicies("expense", tuple);
   if (tuple.lineKind !== "principal") {
     if (tuple.purchaseId === null) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",
         "A purchase adjustment must belong to a live Purchase.",
-      );
-    }
-    if (tuple.projectId !== null) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A purchase adjustment cannot store a project; its cost is allocated from the Purchase's principal lines.",
       );
     }
   }

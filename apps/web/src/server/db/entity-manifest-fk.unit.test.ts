@@ -142,6 +142,10 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Run a model call belonged to",
   },
+  "Suggestion.runId": {
+    classification: "metadata",
+    reason: "records the Sweep or suggestion Run that computed a Suggestion",
+  },
   "ImageProcessingJob.runId": {
     classification: "metadata",
     reason: "records the Run that scheduled a queued image-processing job",

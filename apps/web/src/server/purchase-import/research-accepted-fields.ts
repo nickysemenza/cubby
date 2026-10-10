@@ -372,9 +372,9 @@ async function stagedClassificationBasis(
 ) {
   const references = new Set(
     normalized.flatMap(({ fact }) =>
-      declaredPoliciesGoverning(subject.entityKind, fact.fieldPath).map(
-        classificationReference,
-      ),
+      declaredPoliciesGoverning(subject.entityKind, fact.fieldPath)
+        .map(classificationReference)
+        .filter((reference): reference is string => reference !== null),
     ),
   );
   const basis: Record<string, string | null> = {};

@@ -1,0 +1,4 @@
+import { sql } from "drizzle-orm";
+const invalid = sql`SELECT * FROM expense e WHERE e."lineKind" = 'principal'`;
+const valid = sql`SELECT * FROM expense e WHERE e."lineKind" = ${lineKind}`;
+const unrelated = sql`SELECT * FROM expense e WHERE e."memo" = 'ordinary note'`;

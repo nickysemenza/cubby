@@ -334,6 +334,7 @@ const buildMetadataSchemas = () => {
       suggest: z
         .object({
           basis: z.array(nonEmptyString()).min(1),
+          rules: z.array(nonEmptyString()).optional(),
           mode: z.enum(["fill", "prune"]).optional().default("fill"),
           reviewRequired: z.boolean().optional().default(false),
         })
@@ -1788,12 +1789,26 @@ const buildMetadataSchemas = () => {
 
   const classificationFieldPolicyMetadataSchema = z
     .object({
-      /** A field of the classified (target) entity. */
+      /** A field of the classified (target) entity, or with `relation`, a
+       * relation it may be linked through (a link kind or reference role). */
       field: nonEmptyString(),
+      /**
+       * `field` names a relation the classified record may take part in (a
+       * Planting source, a project tool) rather than a stored field. Relation
+       * entries never imply a classification.
+       */
+      relation: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(false),
       /** The policy where the effective classifier value is a listed key. */
       byValue: z.record(z.string().min(1), fieldPolicyValue),
       /** The policy for every other value, and for no value at all. */
       otherwise: fieldPolicyValue,
+      /** Actionable explanation shown when this policy refuses the field. */
+      refusal: nonEmptyString().optional(),
+      /** Public data-quality check id for same-record required/refused values. */
+      gap: nonEmptyString().optional(),
     })
     .strict();
 
@@ -1807,10 +1822,20 @@ const buildMetadataSchemas = () => {
     .object({
       /** This entity's enum field whose (effective) value classifies. */
       classifier: nonEmptyString(),
-      /** The classified entity and its reference field to this entity. */
+      /** Omit target to classify fields on this same record. */
       target: z
         .object({ entity: nonEmptyString(), reference: nonEmptyString() })
-        .strict(),
+        .strict()
+        .optional(),
+      /**
+       * Same-record policies only: generate a CHECK so every write path
+       * refuses `not_allowed` and enforces `required`. Enabling it on existing
+       * data needs a migration that first resolves violators.
+       */
+      enforced: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(false),
       fields: z.array(classificationFieldPolicyMetadataSchema).min(1),
     })
     .strict();

@@ -171,13 +171,36 @@ export default defineEntity({
           suggest: {
             basis: ["name", "website", "notes"],
             reviewRequired: true,
+            rules: [
+              `Suggest this vendor's spending profile using saved independent purchase and ProductCategory evidence. Food products alone do not distinguish groceries from restaurant meals. Mixed goods support mixed_retail; ambiguous or truncated evidence supports unspecified. The current profile is a review target, never proof. Return a proposal only.`,
+            ],
           },
           options: [
-            { value: "unspecified", label: "Unspecified" },
-            { value: "mixed_retail", label: "Mixed retailer" },
-            { value: "food_retail", label: "Groceries" },
-            { value: "restaurant", label: "Restaurant" },
-            { value: "coffee_shop", label: "Coffee shop" },
+            {
+              value: "unspecified",
+              label: "Unspecified",
+              description: "Insufficient evidence",
+            },
+            {
+              value: "mixed_retail",
+              label: "Mixed retailer",
+              description: "Mixed retailer selling multiple kinds of goods",
+            },
+            {
+              value: "food_retail",
+              label: "Groceries",
+              description: "Groceries and food retail",
+            },
+            {
+              value: "restaurant",
+              label: "Restaurant",
+              description: "Prepared restaurant meals",
+            },
+            {
+              value: "coffee_shop",
+              label: "Coffee shop",
+              description: "Coffee shop",
+            },
           ],
         },
         display: { list: true, detail: true },
@@ -213,11 +236,30 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "select",
-          suggest: { basis: ["name", "website", "notes"] },
+          suggest: {
+            basis: ["name", "website", "notes"],
+            rules: [
+              `Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.`,
+            ],
+          },
           options: [
-            { value: "unknown", label: "Unclassified" },
-            { value: "required", label: "Expected" },
-            { value: "not_expected", label: "Not expected" },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              description:
+                "Insufficient or mixed evidence; leave receipt expectation unclassified",
+            },
+            {
+              value: "required",
+              label: "Expected",
+              description: "Household expects a receipt or order evidence",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+              description:
+                "Household does not expect receipt or order evidence",
+            },
           ],
         },
         display: { list: true, detail: true },

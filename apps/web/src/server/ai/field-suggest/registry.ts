@@ -12,48 +12,17 @@ import {
   entityFieldModels,
   type GeneratedSuggestFieldKey,
 } from "@cubby/schemas/entity-fields";
-import { type CostType, costTypeValues } from "@cubby/schemas/expense-fields";
-import {
-  type ExpenseLineKind,
-  expenseLineKindValues,
-} from "@cubby/schemas/expense-line-kind";
-import { gardenEntryKind, plantingStatus } from "@cubby/schemas/garden-fields";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { type LocationType, locationType } from "@cubby/schemas/location";
-import {
-  MEAL_KIND_LABELS,
-  MEAL_TYPE_LABELS,
-  type MealKind,
-  type MealType,
-  mealKindValues,
-  mealTypeValues,
-} from "@cubby/schemas/meal-classification";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
-import {
-  type ProductCategoryFeature,
-  productCategoryFeatureValues,
-} from "@cubby/schemas/product-category-fields";
 import {
   TRADE_LABELS,
   type Trade,
-  tradeValues,
   type ProjectOptionsOut,
 } from "@cubby/schemas/project";
-import {
-  type ProjectKind,
-  projectKindValues,
-} from "@cubby/schemas/project-fields";
-import {
-  evidenceExpectationValues,
-  productExpectationValues,
-  type EvidenceExpectation,
-  type ProductExpectation,
-} from "@cubby/schemas/purchase-evidence-policy";
 import {
   spendingCategoryFilters,
   type SpendingCategoryOut,
 } from "@cubby/schemas/spending-category";
-import { vendorSpendingProfileValues } from "@cubby/schemas/spending-classification";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
 import {
   redundantTokens,
@@ -61,26 +30,6 @@ import {
 } from "@cubby/shared/redundant-tokens";
 import { z } from "zod";
 
-import { householdLocalDate } from "~/lib/household-date";
-import {
-  COST_TYPE_DESCRIPTIONS,
-  COST_TYPE_RULES,
-  LINE_KIND_DESCRIPTIONS,
-  LINE_KIND_RULES,
-  LOCATION_TYPE_DESCRIPTIONS,
-  LOCATION_TYPE_RULES,
-  MEAL_KIND_DESCRIPTIONS,
-  MEAL_KIND_RULES,
-  MEAL_TYPE_DESCRIPTIONS,
-  MEAL_TYPE_RULES,
-  PRODUCT_CATEGORY_FEATURE_DESCRIPTIONS,
-  PRODUCT_CATEGORY_FEATURE_RULES,
-  PROJECT_KIND_DESCRIPTIONS,
-  PROJECT_KIND_RULES,
-  TAG_PRUNE_RULES,
-  TRADE_DESCRIPTIONS,
-  TRADE_RULES,
-} from "~/server/ai/vocabularies";
 import type { Database } from "~/server/db";
 import { expenseTradeAffinity } from "~/server/repo/expense/analytics";
 import {
@@ -118,7 +67,7 @@ export type RawBasis = Readonly<Record<string, string | null>>;
  * arrow-typed `describe: (v: V) => string` is checked contravariantly and
  * would reject every concrete entry below.
  */
-export interface EnumSuggestSpec<V extends string> {
+interface EnumSuggestSpec<V extends string> {
   kind: "enum";
   values: readonly V[];
   /** Narrows `values` for this record; an empty result skips the target
@@ -152,7 +101,7 @@ export interface ReferenceSuggestSpec<C> {
   parentIdOf?(c: C): string | null;
 }
 
-export interface TextRosterSuggestSpec {
+interface TextRosterSuggestSpec {
   kind: "text";
   rules: string;
   maxCandidates: number;
@@ -478,108 +427,16 @@ function spendingCategorySpec(
   };
 }
 
-const expectationLabels = {
-  unknown: "Unclassified",
-  required: "Expected",
-  not_expected: "Not expected",
-  not_allowed: "Not allowed",
-} satisfies Record<ProductExpectation, string>;
-
-function expectationSpec(
-  entity: "vendor" | "purchase" | "financialTransaction" | "spendingCategory",
-): EnumSuggestSpec<EvidenceExpectation> {
-  return {
-    kind: "enum",
-    values: evidenceExpectationValues,
-    labelOf: (value) => expectationLabels[value],
-    describe: (value) =>
-      ({
-        unknown:
-          "Insufficient or mixed evidence; leave receipt expectation unclassified",
-        required: "Household expects a receipt or order evidence",
-        not_expected: "Household does not expect receipt or order evidence",
-      })[value],
-    rules:
-      "Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.",
-    subject: (basis) => renderSubject(entity, basis),
-  };
-}
-
-const productExpectationSpec: EnumSuggestSpec<ProductExpectation> = {
-  kind: "enum",
-  values: productExpectationValues,
-  labelOf: (value) => expectationLabels[value],
-  describe: (value) =>
-    ({
-      unknown: "Insufficient evidence for durable Product records",
-      required: "Durable purchased goods should have Product records",
-      not_expected:
-        "Groceries, services, reimbursements or other non-durable spending do not require Product records, but may link one",
-      not_allowed:
-        "Restaurant meals, event tickets, rides and donations never link a Product",
-    })[value],
-  rules:
-    "Suggest Product expectation independently from receipt expectation using the spending category and parent context. Durable goods such as tools, furniture, clothing and tracked software require Product records (required). Groceries, services and friend reimbursements do not require one but may link one (not_expected). Restaurant meals, event tickets, rides and donations can never be a Product (not_allowed); choose not_allowed only when every Expense in the category is such spending. A mixed or unclear category must remain unknown. Do not infer that every receipted purchase requires Products. Return a reviewed proposal only; never overwrite explicit decisions.",
-  subject: (basis) => renderSubject("spendingCategory", basis),
-};
-
-export const FIELD_SUGGEST_REGISTRY = {
+const FIELD_SUGGEST_OVERRIDES = {
   "vendor.defaultSpendingCategoryId": {
     ...spendingCategorySpec("vendor"),
     rules:
       "Suggest an existing spending category suitable as this vendor's fallback from saved principal purchase lines, purchased Products and their category mappings, and independent explicit classifications. Compare the full spending-category tree. Never use the vendor's existing default or classifications inherited from it as evidence. A mixed retailer or sparse, ambiguous history can support no single default: choose none. Preserve explicit decisions until reviewed and applied. Refunds and reimbursements are not additional goods; truncated evidence cannot justify a recommendation.",
   },
-  "vendor.spendingProfile": {
-    kind: "enum",
-    values: vendorSpendingProfileValues,
-    describe: (value) =>
-      ({
-        unspecified: "Insufficient evidence",
-        mixed_retail: "Mixed retailer selling multiple kinds of goods",
-        food_retail: "Groceries and food retail",
-        restaurant: "Prepared restaurant meals",
-        coffee_shop: "Coffee shop",
-      })[value] ?? value,
-    rules:
-      "Suggest this vendor's spending profile using saved independent purchase and ProductCategory evidence. Food products alone do not distinguish groceries from restaurant meals. Mixed goods support mixed_retail; ambiguous or truncated evidence supports unspecified. The current profile is a review target, never proof. Return a proposal only.",
-    subject: (basis) => renderSubject("vendor", basis),
-  },
+
   "purchase.spendingCategoryId": spendingCategorySpec("purchase"),
   "expense.spendingCategoryId": spendingCategorySpec("expense"),
-  "vendor.evidenceExpectation": expectationSpec("vendor"),
-  "purchase.evidenceExpectation": expectationSpec("purchase"),
-  "financialTransaction.evidenceExpectation": expectationSpec(
-    "financialTransaction",
-  ),
-  "spendingCategory.evidenceExpectation": expectationSpec("spendingCategory"),
-  "spendingCategory.productExpectation": productExpectationSpec,
-  "planting.status": {
-    kind: "enum",
-    values: plantingStatus.options,
-    describe: (v) =>
-      ({
-        planned: "Planned for a future or not-yet-established planting",
-        growing: "Currently transplanted or actively growing",
-        finished: "No longer growing or completed",
-      })[v],
-    rules:
-      "Infer the planting lifecycle status from its dates, compared with Today. A finished date on or before Today indicates finished. A sow or transplant date on or before Today indicates growing. A sow or transplant date after Today is an estimate on a planned planting, so choose planned; with no dates choose planned.",
-    // Without today's date the model reads any filled-in transplant date as
-    // growing, including the estimated future dates planned plantings carry.
-    subject: (basis) =>
-      `Today: "${householdLocalDate()}"\n${renderSubject("planting", basis)}`,
-  } satisfies EnumSuggestSpec<"planned" | "growing" | "finished">,
-  "gardenEntry.kind": {
-    kind: "enum",
-    values: gardenEntryKind.options,
-    describe: (v) =>
-      v === "harvest"
-        ? "A record of gathered produce"
-        : "A note, observation, or photo record",
-    rules:
-      "Choose harvest when a harvest amount is present; otherwise choose note for an observation or photo journal entry.",
-    subject: (basis) => renderSubject("gardenEntry", basis),
-  } satisfies EnumSuggestSpec<"note" | "harvest">,
+
   "product.categoryId": {
     kind: "reference",
     entity: "productCategory",
@@ -637,7 +494,10 @@ export const FIELD_SUGGEST_REGISTRY = {
   } satisfies ReferenceSuggestSpec<LinkedEntityCandidate>,
   "product.tags": {
     kind: "prune",
-    rules: TAG_PRUNE_RULES,
+    rules:
+      entityFieldModels.product.fields
+        .find((field) => field.key === "tags")
+        ?.control?.suggest?.rules?.join("\n") ?? "",
     arrayKey: "tags",
     maxJevCandidates: 8,
     candidates: (_basis, raw) => pruneCandidates(raw, "tags"),
@@ -668,14 +528,6 @@ export const FIELD_SUGGEST_REGISTRY = {
     },
     subject: productTagPruneSubject,
   } satisfies ArrayPruneSuggestSpec,
-  "location.type": {
-    kind: "enum",
-    // `furniture` is a Product instance; only a productId link can make one.
-    values: locationType.options.filter((value) => value !== "furniture"),
-    describe: (v) => LOCATION_TYPE_DESCRIPTIONS[v],
-    rules: LOCATION_TYPE_RULES,
-    subject: (basis) => renderSubject("location", basis),
-  } satisfies EnumSuggestSpec<LocationType>,
   "inventory.locationId": {
     kind: "reference",
     entity: "location",
@@ -698,37 +550,6 @@ export const FIELD_SUGGEST_REGISTRY = {
     renderLine: locationSuggestionSpec.renderLine,
     subject: (basis) => renderSubject("inventory", basis),
   } satisfies ReferenceSuggestSpec<LocationPutAwayCandidate>,
-  "project.kind": {
-    kind: "enum",
-    values: projectKindValues,
-    describe: (v) => PROJECT_KIND_DESCRIPTIONS[v],
-    rules: PROJECT_KIND_RULES,
-    subject: (basis) => renderSubject("project", basis),
-  } satisfies EnumSuggestSpec<ProjectKind>,
-  "project.defaultTrade": {
-    kind: "enum",
-    values: tradeValues,
-    describe: (v) => TRADE_DESCRIPTIONS[v],
-    labelOf: (v) => TRADE_LABELS[v],
-    rules: TRADE_RULES,
-    subject: (basis) => renderSubject("project", basis),
-  } satisfies EnumSuggestSpec<Trade>,
-  "meal.mealType": {
-    kind: "enum",
-    values: mealTypeValues,
-    describe: (v) => MEAL_TYPE_DESCRIPTIONS[v],
-    labelOf: (v) => MEAL_TYPE_LABELS[v],
-    rules: MEAL_TYPE_RULES,
-    subject: (basis) => renderSubject("meal", basis),
-  } satisfies EnumSuggestSpec<MealType>,
-  "meal.mealKind": {
-    kind: "enum",
-    values: mealKindValues,
-    describe: (v) => MEAL_KIND_DESCRIPTIONS[v],
-    labelOf: (v) => MEAL_KIND_LABELS[v],
-    rules: MEAL_KIND_RULES,
-    subject: (basis) => renderSubject("meal", basis),
-  } satisfies EnumSuggestSpec<MealKind>,
   "task.projectId": {
     kind: "reference",
     entity: "project",
@@ -755,36 +576,6 @@ export const FIELD_SUGGEST_REGISTRY = {
     renderLine: renderProductCandidate,
     subject: (basis) => renderSubject("task", basis),
   } satisfies ReferenceSuggestSpec<InternalSearchCandidate>,
-  "task.trade": {
-    kind: "enum",
-    values: tradeValues,
-    describe: (v) => TRADE_DESCRIPTIONS[v],
-    labelOf: (v) => TRADE_LABELS[v],
-    rules: TRADE_RULES,
-    subject: (basis) => renderSubject("task", basis),
-  } satisfies EnumSuggestSpec<Trade>,
-  "expense.costType": {
-    kind: "enum",
-    values: costTypeValues,
-    describe: (v) => COST_TYPE_DESCRIPTIONS[v],
-    rules: COST_TYPE_RULES,
-    subject: (basis) => renderSubject("expense", basis),
-  } satisfies EnumSuggestSpec<CostType>,
-  "expense.lineKind": {
-    kind: "enum",
-    values: expenseLineKindValues,
-    describe: (v) => LINE_KIND_DESCRIPTIONS[v],
-    rules: LINE_KIND_RULES,
-    subject: (basis) => renderSubject("expense", basis),
-  } satisfies EnumSuggestSpec<ExpenseLineKind>,
-  "expense.trade": {
-    kind: "enum",
-    values: tradeValues,
-    describe: (v) => TRADE_DESCRIPTIONS[v],
-    labelOf: (v) => TRADE_LABELS[v],
-    rules: TRADE_RULES,
-    subject: (basis) => renderSubject("expense", basis),
-  } satisfies EnumSuggestSpec<Trade>,
   // No `trade` in this basis: `expense.trade`'s own basis includes
   // `projectId`, so the reverse edge would make the pair cyclic — rejected
   // by the manifest compiler (step 1).
@@ -825,14 +616,6 @@ export const FIELD_SUGGEST_REGISTRY = {
     },
     subject: (basis) => renderSubject("expense", basis),
   } satisfies TextRosterSuggestSpec,
-  "purchase.defaultTrade": {
-    kind: "enum",
-    values: tradeValues,
-    describe: (v) => TRADE_DESCRIPTIONS[v],
-    labelOf: (v) => TRADE_LABELS[v],
-    rules: TRADE_RULES,
-    subject: (basis) => renderSubject("purchase", basis),
-  } satisfies EnumSuggestSpec<Trade>,
   "purchase.vendorId": {
     kind: "reference",
     entity: "vendor",
@@ -864,22 +647,99 @@ export const FIELD_SUGGEST_REGISTRY = {
     renderLine: renderProjectOption,
     subject: (basis) => renderSubject("purchase", basis),
   } satisfies ReferenceSuggestSpec<ProjectOptionsOut>,
-  "productCategory.feature": {
-    kind: "enum",
-    values: productCategoryFeatureValues,
-    // A child already inherits its ancestor's binding, and a nested binding is
-    // a deliberate override, not a guess. Each feature binds one category
-    // (`ProductCategory_feature_live_unique`), so a taken value would only
-    // fail on apply.
-    candidates: async (db, raw) => {
-      if (raw.parentId) return [];
-      const bound = new Set(await listBoundCategoryFeatures(db));
-      return productCategoryFeatureValues.filter((v) => !bound.has(v));
+} satisfies Record<
+  Exclude<GeneratedSuggestFieldKey, EnumSuggestKey | `${string}.emoji`>,
+  FieldSuggestSpec
+>;
+
+type EnumSuggestKey =
+  | "vendor.spendingProfile"
+  | "planting.status"
+  | "gardenEntry.kind"
+  | "location.type"
+  | "project.kind"
+  | "project.defaultTrade"
+  | "meal.mealType"
+  | "meal.mealKind"
+  | "task.trade"
+  | "expense.costType"
+  | "expense.lineKind"
+  | "expense.trade"
+  | "purchase.defaultTrade"
+  | "productCategory.feature"
+  | "vendor.evidenceExpectation"
+  | "purchase.evidenceExpectation"
+  | "financialTransaction.evidenceExpectation"
+  | "spendingCategory.evidenceExpectation"
+  | "spendingCategory.productExpectation";
+
+// oxlint-disable anti-slop/no-known-value-widening -- The closed generated key union is validated by the final registry satisfies check; this builder must return that map after enumerating model fields.
+function manifestEnumSpecs(): Record<EnumSuggestKey, FieldSuggestSpec> {
+  const specs: Partial<Record<EnumSuggestKey, FieldSuggestSpec>> = {};
+  // SAFETY: Object.entries erases generated entity and field unions; each
+  // value still comes from the generated field model declared below.
+  const models = Object.entries(entityFieldModels) as [
+    string,
+    {
+      fields: readonly {
+        key: string;
+        control: {
+          options:
+            | readonly { value: string; label: string; description?: string }[]
+            | null;
+          suggest: { mode: "fill" | "prune"; rules?: readonly string[] } | null;
+        } | null;
+      }[];
     },
-    describe: (v) => PRODUCT_CATEGORY_FEATURE_DESCRIPTIONS[v],
-    rules: PRODUCT_CATEGORY_FEATURE_RULES,
-    subject: (basis) => renderSubject("productCategory", basis),
-  } satisfies EnumSuggestSpec<ProductCategoryFeature>,
+  ][];
+  for (const [entity, model] of models)
+    for (const field of model.fields) {
+      const options = field.control?.options;
+      const suggest = field.control?.suggest;
+      if (!options?.length || !suggest || suggest.mode !== "fill") continue;
+      // SAFETY: this union enumerates all generated enum suggestion fields.
+      const key = `${entity}.${field.key}` as EnumSuggestKey;
+      const byValue = new Map<
+        string,
+        { value: string; label: string; description?: string }
+      >(options.map((option) => [option.value, option]));
+      const spec: EnumSuggestSpec<string> = {
+        kind: "enum",
+        values: options
+          .filter(
+            ({ value }) => !(key === "location.type" && value === "furniture"),
+          )
+          .map(({ value }) => value),
+        describe(value) {
+          return byValue.get(value)?.description ?? value;
+        },
+        labelOf(value) {
+          return byValue.get(value)?.label ?? value;
+        },
+        rules: suggest.rules?.join("\n") ?? "",
+        subject: (basis) => renderSubject(entity, basis),
+      };
+      if (key === "productCategory.feature")
+        spec.candidates = async (db, raw) => {
+          if (raw.parentId) return [];
+          const bound: Set<string> = new Set(
+            await listBoundCategoryFeatures(db),
+          );
+          return options
+            .map(({ value }) => value)
+            .filter((value) => !bound.has(value));
+        };
+      specs[key] = spec;
+    }
+  // SAFETY: every declared EnumSuggestKey was visited above; missing keys fail the merged registry completeness check.
+  // oxlint-disable-next-line anti-slop/no-known-value-widening -- Runtime enumeration fills precisely the enum keys in this closed generated union.
+  const completeSpecs = specs as Record<EnumSuggestKey, FieldSuggestSpec>;
+  return completeSpecs;
+}
+
+export const FIELD_SUGGEST_REGISTRY = {
+  ...manifestEnumSpecs(),
+  ...FIELD_SUGGEST_OVERRIDES,
 } satisfies Record<
   Exclude<GeneratedSuggestFieldKey, `${string}.emoji`>,
   FieldSuggestSpec
@@ -893,7 +753,9 @@ export function fieldSuggestSpecFor(
     return {
       kind: "enum",
       values: emojiCandidates,
-      describe: (value) => value,
+      describe(value) {
+        return `A single emoji symbol to help recognize the ${entity} record: ${value}`;
+      },
       labelOf: (value) => value,
       rules:
         "Choose one emoji that makes this record easy to recognize from its saved identity and category context. Use none when there is insufficient evidence. This is a reviewed proposal; never change a saved value automatically.",
@@ -903,7 +765,10 @@ export function fieldSuggestSpecFor(
   const key = `${entity}.${field}`;
   // SAFETY: `Object.hasOwn` just proved `key` names one of
   // `FIELD_SUGGEST_REGISTRY`'s own declared keys, not an arbitrary string.
-  return Object.hasOwn(FIELD_SUGGEST_REGISTRY, key)
-    ? FIELD_SUGGEST_REGISTRY[key as keyof typeof FIELD_SUGGEST_REGISTRY]
-    : undefined;
+  if (!Object.hasOwn(FIELD_SUGGEST_REGISTRY, key)) return undefined;
+  // SAFETY: Object.hasOwn above proves this dynamic key belongs to the
+  // registry, while TypeScript retains only its full literal union.
+  const spec =
+    FIELD_SUGGEST_REGISTRY[key as keyof typeof FIELD_SUGGEST_REGISTRY];
+  return spec;
 }

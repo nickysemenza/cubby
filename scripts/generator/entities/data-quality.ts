@@ -137,6 +137,7 @@ export const compileDataQuality = (
   hasContract: boolean,
   hasFilterSchema: boolean,
   context: string,
+  policyGapKinds: Readonly<Record<string, "missing" | "defect">> = {},
 ): CompiledDataQualityResult => {
   const reserved = [DATA_QUALITY_FIELD, DATA_GAPS_FIELD];
   const declaredReserved = fieldModel.fields.find((field) =>
@@ -188,7 +189,11 @@ export const compileDataQuality = (
     throw new EntityDeclarationError(
       `${context}.capabilities.dataQuality needs model.sort (the score is a sort).`,
     );
-  const ids = raw.checks.map((check) => check.id);
+  const checks = raw.checks.map((check) => ({
+    ...check,
+    kind: policyGapKinds[check.id] ?? check.kind,
+  }));
+  const ids = checks.map((check) => check.id);
   if (new Set(ids).size !== ids.length)
     throw new EntityDeclarationError(
       `${context}.capabilities.dataQuality.checks contains duplicate ids.`,
@@ -281,7 +286,7 @@ export const compileDataQuality = (
     // Own checks only here; related checks are appended once every entity is
     // compiled (`validateDataQualityDeclarations`), because a related
     // entity's ids are not known while compiling this one.
-    options: raw.checks.map((check) => ({
+    options: checks.map((check) => ({
       value: check.id,
       label: check.label,
     })),
@@ -293,7 +298,7 @@ export const compileDataQuality = (
   // and `buildOrderBy` must never fall through to a column lookup.
   return {
     dataQuality: {
-      checks: raw.checks.map((check) => ({ ...check })),
+      checks: checks.map((check) => ({ ...check })),
       exceptions: raw.exceptions,
       related: [...raw.related],
     },

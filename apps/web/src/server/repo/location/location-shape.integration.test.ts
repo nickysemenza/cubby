@@ -146,7 +146,7 @@ describe("location shape", () => {
         parentId: TEST_HOME_ID,
       }),
     ).rejects.toMatchObject({
-      cause: { constraint: "Location_furniture_product_check" },
+      cause: { constraint: "Location_classification_type_productId_check" },
     });
   });
 

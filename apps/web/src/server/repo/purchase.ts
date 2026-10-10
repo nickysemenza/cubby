@@ -72,6 +72,7 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
+import { assertClassificationPolicies } from "~/server/repo/classification-field-policy";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { gapCondition } from "~/server/repo/data-quality/sql";
 import {
@@ -135,6 +136,7 @@ import {
   loadPurchaseFinancialAggregates,
   type PurchaseFinancialAggregate,
 } from "~/server/repo/purchase-financial-aggregates";
+import { resolveSplitPartClassification } from "~/server/repo/purchase-split-draft";
 import { cascadeRemoval } from "~/server/repo/removal/core";
 /** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
 import {
@@ -1556,14 +1558,31 @@ export const splitExpense = async (
       if (projectIds.length !== parts.length) {
         throw new Error("Default project resolution lost its correlation");
       }
+      const classifications = parts.map((part, index) => {
+        const productId = partProductIds[index] ?? null;
+        const lineKind =
+          part.lineKind ?? inferExpenseLineKind({ name: part.name, productId });
+        return resolveSplitPartClassification({
+          originalSpendingCategoryId: original.spendingCategoryId,
+          lineKind,
+          partSpendingCategoryId: part.spendingCategoryId,
+        });
+      });
       const spendingCategoryIds = await Promise.all(
-        parts.map((part) =>
-          part.spendingCategoryId === undefined
-            ? original.spendingCategoryId
-            : part.spendingCategoryId === null
-              ? null
-              : resolveOrThrow(tx, "spendingCategory", part.spendingCategoryId),
-        ),
+        classifications.map((classification, index) => {
+          const partCategoryId = parts[index]?.spendingCategoryId;
+          if (partCategoryId === undefined)
+            return classification.inheritsOriginal
+              ? original.spendingCategoryId
+              : null;
+          return classification.spendingCategoryId === null
+            ? null
+            : resolveOrThrow(
+                tx,
+                "spendingCategory",
+                classification.spendingCategoryId,
+              );
+        }),
       );
       const preparedParts = parts.map((part, index) => {
         const productId = partProductIds[index] ?? null;
@@ -1573,20 +1592,17 @@ export const splitExpense = async (
             `Default project resolution lost part ${String(index + 1)}`,
           );
         }
-        const lineKind =
-          part.lineKind ?? inferExpenseLineKind({ name: part.name, productId });
-        if (original.lineBasis === "allocation" && productId !== null) {
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            "Unitemized allocations cannot link a Product. Review actual itemization through the receipt replacement workflow.",
-          );
-        }
-        if (lineKind !== "principal" && productId !== null) {
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            "Only principal Expenses may link a Product. For a disposal or write-off, use lineKind=principal, cost=0, and a negative productQuantity; use other_adjustment only for purchase-level amounts with no Product.",
-          );
-        }
+        const classification = classifications[index];
+        if (!classification)
+          throw new Error("Missing classification for split part");
+        const lineKind = classification.lineKind;
+        assertClassificationPolicies("expense", {
+          lineKind,
+          lineBasis: original.lineBasis,
+          productId,
+          spendingCategoryId: spendingCategoryIds[index] ?? null,
+          projectId,
+        });
         if (part.productQuantity !== null && productId === null) {
           throw createAppError(
             "CONSTRAINT_VIOLATION",

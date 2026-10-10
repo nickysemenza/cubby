@@ -114,7 +114,7 @@ function projectedValue<T extends { id: string }>(
   return value;
 }
 
-export const storedExpenseSpendingCategorySql = (
+const storedExpenseSpendingCategorySql = (
   alias: string,
   draft?: ExpenseSpendingCategoryResolutionDraft,
 ): SQL =>
@@ -131,11 +131,11 @@ export function expenseSpendingCategoryResolutionSql(
 ): SQL {
   const productId = column(alias, "productId");
   const purchaseId = column(alias, "purchaseId");
+  const principal = sql`${column(alias, "lineKind")} = 'principal'`;
   const storedId = ignoreOverride
     ? sql`NULL::uuid`
-    : storedExpenseSpendingCategorySql(alias, draft);
+    : sql`CASE WHEN ${principal} THEN ${storedExpenseSpendingCategorySql(alias, draft)} ELSE NULL::uuid END`;
   const categoryCatalog = spendingCategoryCatalogSql(draft);
-  const principal = sql`${column(alias, "lineKind")} = 'principal'`;
   const vendorProfile = projectedValue("v", "spendingProfile", draft?.vendors);
   const vendorTarget = redirectedCategory(
     projectedValue("v", "defaultSpendingCategoryId", draft?.vendors),

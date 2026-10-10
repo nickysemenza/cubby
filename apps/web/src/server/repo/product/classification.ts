@@ -1,9 +1,10 @@
 import type { ProductCategoryId, ProductId } from "@cubby/schemas/identifiers";
 import { impliedProductFeature } from "@cubby/schemas/product";
 import {
+  isPlantingSourceFeature,
   isProjectResourceFeature,
   projectResourceFeatureLabels,
-} from "@cubby/schemas/product-category-fields";
+} from "@cubby/schemas/product-category-relations";
 import { and, eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
@@ -68,7 +69,7 @@ export async function assertProductCategoryChange(
     where: and(eq(planting.sourceProductId, productId), notDeleted(planting)),
     columns: { id: true },
   });
-  if (gardenSource && feature === "food") {
+  if (gardenSource && !isPlantingSourceFeature(feature)) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "A planting source Product must be a garden product, not a food Product.",

@@ -166,7 +166,16 @@ export default defineEntity({
           kind: "select",
           placeholder: "Which meal of the day?",
           options: selectControlOptions.mealType,
-          suggest: { basis: ["name"] },
+          suggest: {
+            basis: ["name"],
+            rules: [
+              `You are a meal-planning classification assistant. Given a meal name, determine which eating occasion of the day it is.
+
+Rules:
+1. Use the name's timing and dish cues (e.g., "pancakes" suggests breakfast, "birthday cake" suggests dessert).
+2. When the name gives no timing cue, prefer "dinner" — the most common unslotted meal.`,
+            ],
+          },
         },
         display: {
           list: true,
@@ -196,7 +205,17 @@ export default defineEntity({
         control: {
           kind: "select",
           options: selectControlOptions.mealKind,
-          suggest: { basis: ["name"] },
+          suggest: {
+            basis: ["name"],
+            rules: [
+              `You are a meal-planning classification assistant. Given a meal name, determine how the meal is eaten.
+
+Rules:
+1. A named dish with no restaurant/delivery cue is "cooked".
+2. "leftovers" only when the name says so explicitly.
+3. Restaurant or delivery-service names indicate "eating_out" or "takeout" respectively.`,
+            ],
+          },
           // The storage default is a DB literal, so the create schema stays
           // optional with no Zod default to read.
           initial: { value: "cooked" },

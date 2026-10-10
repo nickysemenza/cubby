@@ -620,8 +620,12 @@ has its own cache key, so repeated identical inputs can return either model's
 cached answer. Cache hits do not place an upstream request; 50/50 is the
 request-assignment probability, not a guaranteed split of billed calls.
 The selected answer drives the normal decision, including the existing 0.85
-high-confidence/autofill threshold. There are no shadow calls or paired
-comparison records. Existing AI usage records retain the selected model,
+high-confidence/autofill threshold. The opt-in classification sweep retains the
+pinned model's candidate and a paired candidate for one in ten stable record
+identities; only the pinned model's pending row enters human review. Field
+suggestion cache keys also include the live classification revision, which the
+sweep stores on its Run to report whether the vocabulary changed afterward.
+Existing AI usage records retain the selected model,
 provider, latency, token counts and failures, including model-specific cache
 hits. Compare upstream latency on rows with `attempt > 0`, excluding
 application-cache hits. The shared `selectDecisionModel` controls the trial.
@@ -657,6 +661,20 @@ miss with token cost. `FEATURE_EVAL_FEATURES` narrows to `audit`, `repair`, or
 revision, replay command, and results under `artifacts/feature-routing-eval/`.
 The purchase coordinator's model is measured by `eval:purchase-decisions`
 (see the purchase agent section).
+
+Field decision prompts are measured by the opt-in, billed
+`pnpm --dir apps/web eval:decisions` eval. Set
+`DECISION_EVAL_DATABASE_URL` to a database URL with read-only access; the eval
+refuses to start without it and reads accepted/rejected Suggestions in a
+read-only transaction. `AI_GATEWAY_API_KEY` authenticates billed inference. It
+replays each saved record through the current field
+prompt for `typesafe/jev` and `@cf/cloudflare/clef`;
+`DECISION_EVAL_MODELS` selects candidates. JSON results, including record ids,
+are written under the OS temp directory; set `DECISION_EVAL_REPORT` to choose
+another path outside the repository. Unit tests use synthetic rows and a fake
+decision port, never this live-eval entrypoint. The report includes accuracy,
+repeat misses, confidence, token counts, and priced token cost where the model
+catalog has rates.
 
 The `AI_GATEWAY_API_KEY` environment variable authenticates the direct REST
 fallback used outside Cloudflare Workers. It is optional in the deployed Worker
@@ -780,3 +798,14 @@ Before deleting apparently unused provider state, search the repository, check
 provider usage/audit logs, and confirm that it is absent from current deployed
 bindings. A resource being absent from this file is evidence of drift, not by
 itself authorization to delete it.
+
+## Suggestion sweep model routing
+
+A `suggestion_sweep` Run stores its entity, field, filters, pinned decision model,
+and pause state in Run input; Run progress checkpoints total, completed, applied,
+queued, and failed targets. Targets come from the entity's generic live list read.
+A deterministic sample of targets is evaluated by both Jev and Clef; the paired
+Suggestions share a pair key, and only the pinned-model row can auto-apply an
+Addition at confidence 0.85 or higher. Corrections remain pending regardless of
+confidence. The shared paced batch loop observes persisted pause state between
+items; image-processing backfill can move onto it in a later change.

@@ -1,0 +1,1 @@
+ALTER TABLE "Location" DROP CONSTRAINT "Location_furniture_product_check";

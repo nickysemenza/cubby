@@ -26,9 +26,10 @@ import {
   type MergeProductsInput,
 } from "@cubby/schemas/product";
 import {
+  isPlantingSourceFeature,
   isProjectResourceFeature,
   projectResourceFeatureLabels,
-} from "@cubby/schemas/product-category-fields";
+} from "@cubby/schemas/product-category-relations";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
 
@@ -1256,7 +1257,10 @@ const validateProductMergePlan = async (
       `A Product used as a project resource must be in a category that allows project resources (${projectResourceFeatureLabels}).`,
     );
   }
-  if (admission.keeperIsGardenSource && admission.feature === "food") {
+  if (
+    admission.keeperIsGardenSource &&
+    !isPlantingSourceFeature(admission.feature)
+  ) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "A planting source Product must be a garden product, not a food Product.",
@@ -1995,7 +1999,7 @@ const previewMergeProductsFromPlan = async (
       label: "planting source that cannot become Food",
       byTargetId:
         categoryAdmission.keeperIsGardenSource &&
-        categoryAdmission.feature === "food"
+        !isPlantingSourceFeature(categoryAdmission.feature)
           ? { [keepId]: 1 }
           : {},
     }),

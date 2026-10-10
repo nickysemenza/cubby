@@ -24,6 +24,13 @@ describe("product feature implied by identity evidence", () => {
 });
 
 describe("one evaluator for declared and column policies", () => {
+  it("evaluates a classifier stored on the governed record", () => {
+    expect(isFieldAllowed("expense.lineKind", "principal", "productId")).toBe(
+      true,
+    );
+    expect(isFieldAllowed("expense.lineKind", "tax", "productId")).toBe(false);
+  });
+
   it("refuses food-only fields outside food, including no feature", () => {
     expect(
       isFieldAllowed("productCategory.feature", "food", "ingredientId"),

@@ -12,6 +12,7 @@ import {
   getDecisionModelConfig,
   providerFor,
   selectDecisionModel,
+  type SupportedDecisionModel,
 } from "@cubby/shared/ai/models";
 import { retryWithBackoff } from "@cubby/shared/retry";
 import { z } from "zod";
@@ -350,6 +351,12 @@ export async function runJevChoice(args: {
    */
   allowNone?: boolean;
   port?: JevPort;
+  onTokenUsage?: (usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }) => void;
+  /** A long-lived Run may pin the sampled decision tier for reproducibility. */
+  decisionModel?: SupportedDecisionModel;
 }): Promise<JevChoiceResult> {
   if (args.choices.length > JEV_MAX_CANDIDATES) {
     throw new Error(
@@ -390,8 +397,9 @@ export async function runJevChoice(args: {
     return result;
   };
   // Mail routing stays pinned; trial features sample once before cache/retry.
-  const feature =
-    args.port || args.feature.sample === false
+  const feature = args.decisionModel
+    ? { ...args.feature, model: args.decisionModel }
+    : args.port || args.feature.sample === false
       ? args.feature
       : { ...args.feature, model: selectDecisionModel() };
   return withAiResponseCache({
@@ -410,6 +418,10 @@ export async function runJevChoice(args: {
       const response = await (args.port
         ? args.port(input)
         : requestJev(input, args.usage, feature, applicationCacheStatus));
+      args.onTokenUsage?.({
+        inputTokens: response.usage?.input_tokens ?? null,
+        outputTokens: response.usage?.output_tokens ?? null,
+      });
       const answer = response.answers.selection;
       validateProbabilities(
         answer.probabilities,

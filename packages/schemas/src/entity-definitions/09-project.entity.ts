@@ -241,7 +241,17 @@ export default defineEntity({
         control: {
           kind: "select",
           options: selectControlOptions.projectKind,
-          suggest: { basis: ["name", "notes"] },
+          suggest: {
+            basis: ["name", "notes"],
+            rules: [
+              `You are a project classification assistant. Given a project name and notes, determine the most appropriate kind.
+
+Rules:
+1. Match the primary subject of the project, not incidental tasks within it.
+2. A room or structure name (kitchen, deck, garage) usually indicates "renovation".
+3. A single object being built or fixed usually indicates "furniture".`,
+            ],
+          },
         },
         display: {
           list: true,
@@ -312,7 +322,18 @@ export default defineEntity({
           // Project has no vendor field, unlike `expense.trade`/
           // `purchase.defaultTrade` — `name`/`notes`/`kind` are the only
           // signal available.
-          suggest: { basis: ["name", "notes", "kind"] },
+          suggest: {
+            basis: ["name", "notes", "kind"],
+            rules: [
+              `You are a home-project trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
+
+Rules:
+1. Match the physical work being described, not the room it happens in.
+2. A product or vendor name is a strong signal: electrical supply vendors imply "electrical", lumber implies "building".
+3. Prefer the most specific trade that fits over "other".
+4. "planning" is for pre-work (design, permits, estimates), not the work itself.`,
+            ],
+          },
         },
         display: { detail: true },
         resolution: {

@@ -230,7 +230,6 @@ async function seedEdgeBaskets(
         purchaseId,
         lineKind,
         cost,
-        spendingCategoryId: index % 4 === 0 ? merged : null,
       });
     if (kind === "refund") {
       principal(-12.34, { spendingCategoryId: merged });
@@ -339,7 +338,6 @@ async function seedSyntheticHousehold(db: Database, scale: number) {
       purchaseId: pick(purchases).id,
       lineKind: pick(["tax", "shipping", "discount"]),
       cost: cents(1000),
-      spendingCategoryId: next() < 0.2 ? pick(spend).id : null,
     });
   while (expenses.length < count(12500))
     expense({

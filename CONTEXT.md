@@ -108,3 +108,34 @@ _Avoid_: household, unknown person
 A quantity and unit of an Ingredient or Product, or named manual nutrient totals,
 assigned to one eater at a Meal. Source conversions and nutrition remain live;
 the entered amount is retained even when its nutrition cannot yet be calculated.
+
+**Classification**:
+A value from a fixed or household-edited vocabulary that sorts a record, such
+as a Product Category's feature or a Spending Category.
+_Avoid_: tag (Tags are free-form labels, not classifications)
+
+**Classification policy**:
+What a classification value implies about another field on the classified
+record: the field is required, not expected, unknown, or not allowed.
+_Avoid_: field rule, expectation (when meaning the whole policy)
+
+**Suggestion**:
+A classification or field value that has been computed for a record but not
+yet accepted by the household, with a confidence.
+_Avoid_: proposal, Jev suggestion, recommendation
+
+**Correction**:
+A Suggestion whose value differs from the record's current value.
+
+**Addition**:
+A Suggestion for a field that is currently blank.
+
+**Miss**:
+A Suggestion the household rejected. A Miss is evidence that a prompt or the
+taxonomy needs fixing, not a standing instruction to hide that value.
+_Avoid_: dismissal (dismissals record durable household facts, such as two
+Products not being duplicates)
+
+**Sweep**:
+A bulk pass that computes Suggestions across a filtered set of records.
+_Avoid_: backfill (when the work produces Suggestions rather than derived data)

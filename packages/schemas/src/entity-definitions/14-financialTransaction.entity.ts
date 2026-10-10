@@ -334,11 +334,28 @@ export default defineEntity({
               "kind",
               "notes",
             ],
+            rules: [
+              `Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.`,
+            ],
           },
           options: [
-            { value: "unknown", label: "Unclassified" },
-            { value: "required", label: "Expected" },
-            { value: "not_expected", label: "Not expected" },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              description:
+                "Insufficient or mixed evidence; leave receipt expectation unclassified",
+            },
+            {
+              value: "required",
+              label: "Expected",
+              description: "Household expects a receipt or order evidence",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+              description:
+                "Household does not expect receipt or order evidence",
+            },
           ],
         },
         display: { list: true, detail: true },

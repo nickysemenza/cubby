@@ -383,11 +383,28 @@ export default defineEntity({
           kind: "select",
           suggest: {
             basis: ["displayLabel", "vendorId", "spendingCategoryId", "notes"],
+            rules: [
+              `Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.`,
+            ],
           },
           options: [
-            { value: "unknown", label: "Unclassified" },
-            { value: "required", label: "Expected" },
-            { value: "not_expected", label: "Not expected" },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              description:
+                "Insufficient or mixed evidence; leave receipt expectation unclassified",
+            },
+            {
+              value: "required",
+              label: "Expected",
+              description: "Household expects a receipt or order evidence",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+              description:
+                "Household does not expect receipt or order evidence",
+            },
           ],
         },
         display: { list: true, detail: true },
@@ -471,7 +488,18 @@ export default defineEntity({
           options: selectControlOptions.trade,
           // Purchase has no "name" field — `displayLabel` is its closest
           // equivalent (the operator-facing text for the purchase).
-          suggest: { basis: ["displayLabel", "vendorId", "notes"] },
+          suggest: {
+            basis: ["displayLabel", "vendorId", "notes"],
+            rules: [
+              `You are a home-project trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
+
+Rules:
+1. Match the physical work being described, not the room it happens in.
+2. A product or vendor name is a strong signal: electrical supply vendors imply "electrical", lumber implies "building".
+3. Prefer the most specific trade that fits over "other".
+4. "planning" is for pre-work (design, permits, estimates), not the work itself.`,
+            ],
+          },
         },
         display: { detail: true },
         validation: {

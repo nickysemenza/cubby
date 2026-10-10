@@ -41,6 +41,7 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { logAuditEntries } from "~/server/repo/audit-log";
+import { assertClassificationPolicies } from "~/server/repo/classification-field-policy";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
 import { databaseForTransaction } from "~/server/repo/database-helpers";
 import { runAfterCommit } from "~/server/repo/database-helpers/core";
@@ -299,6 +300,9 @@ async function applyFix(
   });
 }
 
+const principalOnly = <T>(lineKind: string, value: T | null): T | null =>
+  lineKind === "principal" ? value : null;
+
 async function applyAggregateReplacement(
   tx: DrizzleTransaction,
   fix: Extract<ProposedImportFix, { kind: "replace_aggregate_line" }>,
@@ -366,6 +370,16 @@ async function applyAggregateReplacement(
       productsByExternalIdentity,
     );
     const quantity = receiptProductQuantity(productId, line, identity);
+    assertClassificationPolicies("expense", {
+      lineKind: identity.lineKind,
+      lineBasis: "item_line",
+      productId,
+      projectId: principalOnly(identity.lineKind, aggregate.projectId),
+      spendingCategoryId: principalOnly(
+        identity.lineKind,
+        aggregate.spendingCategoryId,
+      ),
+    });
     const row = await insertWithShortcode(tx, "expense", {
       purchaseId,
       name: line.title,
@@ -381,8 +395,11 @@ async function applyAggregateReplacement(
       economicRole: "vendor",
       costType: costTypeSchema.parse(aggregate.costType),
       trade: tradeSchema.nullable().parse(aggregate.trade),
-      projectId: identity.lineKind === "principal" ? aggregate.projectId : null,
-      spendingCategoryId: aggregate.spendingCategoryId,
+      projectId: principalOnly(identity.lineKind, aggregate.projectId),
+      spendingCategoryId: principalOnly(
+        identity.lineKind,
+        aggregate.spendingCategoryId,
+      ),
       bookingTransactionCode: aggregate.bookingTransactionCode,
       productId,
       productQuantity: quantity,

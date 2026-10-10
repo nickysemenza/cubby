@@ -33,6 +33,10 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { expense, product, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  assertClassificationPolicies,
+  classificationFieldsToClear,
+} from "~/server/repo/classification-field-policy";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   buildPartialUpdateValues,
@@ -417,21 +421,12 @@ const assertExpenseProductLink = (input: {
   productId: ProductId | null;
   lineKind: string;
   lineBasis: string;
+  spendingCategoryId?: SpendingCategoryId | null;
+  projectId?: ProjectId | null;
   productQuantity: number | null;
   cost: number | null;
 }) => {
-  if (input.lineKind !== "principal" && input.productId !== null) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Only principal Expenses may link a Product. For a disposal or write-off, use lineKind=principal, cost=0, and a negative productQuantity; use other_adjustment only for purchase-level amounts with no Product.",
-    );
-  }
-  if (input.lineBasis === "allocation" && input.productId !== null) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item.",
-    );
-  }
+  assertClassificationPolicies("expense", input);
   if (input.productQuantity != null && input.productId === null) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
@@ -493,12 +488,16 @@ export const updateExpense = async (
     data.future,
     data.productId,
     data.productQuantity,
+    data.lineKind,
+    data.lineBasis,
   ].some((value) => value !== undefined);
   const qualityCanChange = [
     data.cost,
     data.future,
     data.productId,
     data.purchaseId,
+    data.lineKind,
+    data.lineBasis,
   ].some((value) => value !== undefined);
 
   const loadUpdateState = async (tx: DrizzleTransaction) => {
@@ -534,6 +533,7 @@ export const updateExpense = async (
         lineKind: true,
         lineBasis: true,
         projectId: true,
+        spendingCategoryId: true,
         trade: true,
       },
     });
@@ -555,19 +555,42 @@ export const updateExpense = async (
 
   type UpdateState = Awaited<ReturnType<typeof loadUpdateState>>;
 
-  // Reclassifying a principal line as an adjustment drops its project: an
-  // adjustment cannot store one (`validateExpenseInheritance` rejects it),
-  // and every editing surface — list, embedded relation table, detail —
-  // relies on the server owning that rule rather than each sending
-  // `projectId: null` alongside.
-  const dropProjectOnReclassify = (update: ResolvedExpenseUpdate) => {
-    if (
-      update.lineKind !== undefined &&
-      update.lineKind !== "principal" &&
-      update.projectId === undefined
-    ) {
-      update.projectId = null;
+  const clearReclassifiedFields = (
+    previous: UpdateState["qualityBefore"],
+    update: ResolvedExpenseUpdate,
+  ) => {
+    for (const field of classificationFieldsToClear(
+      "expense",
+      previous ?? {},
+      update,
+    )) {
+      Object.assign(update, { [field]: null });
     }
+  };
+
+  const normalizeAndAssertUpdateProductLink = (
+    state: UpdateState,
+    update: ResolvedExpenseUpdate,
+  ) => {
+    const previous = state.qualityBefore;
+    clearReclassifiedFields(previous, update);
+    if (update.productId === null && update.productQuantity === undefined) {
+      update.productQuantity = null;
+    }
+    const resultingProductId =
+      update.productId === undefined
+        ? (previous?.productId ?? null)
+        : update.productId;
+    assertExpenseProductLink({
+      productId: resultingProductId,
+      lineKind: update.lineKind ?? previous?.lineKind ?? "principal",
+      lineBasis: update.lineBasis ?? previous?.lineBasis ?? "item_line",
+      productQuantity:
+        update.productQuantity === undefined
+          ? (previous?.productQuantity ?? null)
+          : update.productQuantity,
+      cost: state.nextCost,
+    });
   };
 
   const validateUpdateState = async (
@@ -577,7 +600,7 @@ export const updateExpense = async (
     resultingPurchaseId: PurchaseId | null,
   ) => {
     const previous = state.qualityBefore;
-    dropProjectOnReclassify(update);
+    normalizeAndAssertUpdateProductLink(state, update);
     // Detaching a source preserves its effective attribution unless the same
     // edit explicitly replaces or resets that assignment.
     if (
@@ -614,21 +637,6 @@ export const updateExpense = async (
     const resolvedProjectId = await resolveOptionalProjectId(tx, projectId);
     const resolvedProductId = await resolveOptionalProductId(tx, productId);
     const explicitPurchaseId = await resolveOptionalPurchaseId(tx, purchaseId);
-    const resultingProductId =
-      resolvedProductId === undefined
-        ? (state.qualityBefore?.productId ?? null)
-        : resolvedProductId;
-    assertExpenseProductLink({
-      productId: resultingProductId,
-      lineKind: data.lineKind ?? state.qualityBefore?.lineKind ?? "principal",
-      lineBasis:
-        data.lineBasis ?? state.qualityBefore?.lineBasis ?? "item_line",
-      productQuantity:
-        data.productQuantity === undefined
-          ? (state.qualityBefore?.productQuantity ?? null)
-          : data.productQuantity,
-      cost: state.nextCost,
-    });
     const update: ResolvedExpenseUpdate = {
       ...restColumns,
       spendingCategoryId:
@@ -647,6 +655,11 @@ export const updateExpense = async (
     }
     if (resolvedProjectId !== undefined) update.projectId = resolvedProjectId;
     if (resolvedProductId !== undefined) update.productId = resolvedProductId;
+    normalizeAndAssertUpdateProductLink(state, update);
+    const resultingProductId =
+      update.productId === undefined
+        ? (state.qualityBefore?.productId ?? null)
+        : update.productId;
     return {
       explicitPurchaseId,
       resolvedProductId,
@@ -927,18 +940,13 @@ export const createExpense = async (
     const projectId = explicitProjectId;
     const lineKind =
       data.lineKind ?? inferExpenseLineKind({ name: data.name, productId });
-    if (lineKind !== "principal" && productId !== null) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Only principal Expenses may link a Product. For a disposal or write-off, use lineKind=principal, cost=0, and a negative productQuantity; use other_adjustment only for purchase-level amounts with no Product.",
-      );
-    }
-    if (data.lineBasis === "allocation" && productId !== null) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item.",
-      );
-    }
+    assertClassificationPolicies("expense", {
+      lineKind,
+      lineBasis: data.lineBasis ?? "item_line",
+      productId,
+      spendingCategoryId: data.spendingCategoryId ?? null,
+      projectId,
+    });
     if (data.productQuantity !== null && productId === null) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",

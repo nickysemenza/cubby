@@ -251,7 +251,7 @@ describe("reviewed finance suggestions", () => {
         targets: ["productExpectation", "evidenceExpectation"],
         basis: { name: "Fixture durable tools" },
       },
-      modelPicking("Durable purchased goods should", "not_expected:"),
+      modelPicking("Durable goods", "not_expected:"),
     );
     expect(result.suggestions.productExpectation?.value).toBe("required");
     expect(result.suggestions.evidenceExpectation?.value).toBe("not_expected");

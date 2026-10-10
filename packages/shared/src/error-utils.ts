@@ -78,7 +78,7 @@ export const AppErrors = {
   // A Product that exists and is live, but whose `category` the relation it is
   // being attached to does not accept — today only `projectTool`, which
   // takes a category that grants the project-resource capability (see
-  // `productCategoryFeatureCapabilities`) and nothing else.
+  // the declared `projectTool` policy) and nothing else.
   //
   // Split out of PRODUCT_NOT_FOUND, which every one of those gates used to
   // throw. The code LIED: it sent a caller hunting for a typo in a shortcode

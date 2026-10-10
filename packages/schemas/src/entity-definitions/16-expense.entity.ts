@@ -465,7 +465,21 @@ export default defineEntity({
         control: {
           kind: "select",
           options: selectControlOptions.expenseLineKind,
-          suggest: { basis: ["name", "cost", "notes"] },
+          suggest: {
+            basis: ["name", "cost", "notes"],
+            rules: [
+              `You are a receipt-line classifier. Given an expense's name, cost, and notes, determine the receipt role.
+
+Rules:
+1. Names containing "tax", "sales tax", "estimated tax" → tax
+2. Names containing "shipping", "delivery", "freight" → shipping
+3. Names containing "discount", "coupon", "credit", "promo", or a negative cost with that wording → discount
+4. Names containing "fee", "processing", "handling" → fee
+5. Names containing "tip", "gratuity" → tip
+6. An explicit receipt adjustment none of the above covers (rounding, price adjustment) → other_adjustment
+7. Otherwise → principal (the main purchased item/service)`,
+            ],
+          },
         },
         display: {
           list: true,
@@ -508,7 +522,17 @@ export default defineEntity({
         control: {
           kind: "select",
           options: selectControlOptions.costType,
-          suggest: { basis: ["name", "productId", "vendor"] },
+          suggest: {
+            basis: ["name", "productId", "vendor"],
+            rules: [
+              `You are a project-expense classification assistant. Given an expense name and its available context, determine the most appropriate cost type.
+
+Rules:
+1. A consumed or installed physical good is "materials".
+2. Equipment that outlives the job and isn't consumed by it is "tools".
+3. Paid labor, delivery fees, permits, and other non-material charges are "services".`,
+            ],
+          },
         },
         display: {
           list: true,
@@ -531,6 +555,15 @@ export default defineEntity({
           options: selectControlOptions.trade,
           suggest: {
             basis: ["name", "notes", "productId", "vendor", "projectId"],
+            rules: [
+              `You are a home-project trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
+
+Rules:
+1. Match the physical work being described, not the room it happens in.
+2. A product or vendor name is a strong signal: electrical supply vendors imply "electrical", lumber implies "building".
+3. Prefer the most specific trade that fits over "other".
+4. "planning" is for pre-work (design, permits, estimates), not the work itself.`,
+            ],
           },
         },
         display: {
@@ -1805,6 +1838,44 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["projectId", "trade", "costType", "date"] },
     merge: false,
+    classificationPolicies: [
+      {
+        classifier: "lineKind",
+        enforced: true,
+        fields: [
+          {
+            field: "productId",
+            byValue: { principal: "unknown" },
+            otherwise: "not_allowed",
+            refusal:
+              "Only principal Expenses may link a Product. For a disposal or write-off, use lineKind=principal, cost=0, and a negative productQuantity; use other_adjustment only for purchase-level amounts with no Product.",
+          },
+          {
+            field: "spendingCategoryId",
+            byValue: { principal: "unknown" },
+            otherwise: "not_allowed",
+          },
+          {
+            field: "projectId",
+            byValue: { principal: "unknown" },
+            otherwise: "not_allowed",
+          },
+        ],
+      },
+      {
+        classifier: "lineBasis",
+        enforced: true,
+        fields: [
+          {
+            field: "productId",
+            byValue: { allocation: "not_allowed" },
+            otherwise: "unknown",
+            refusal:
+              "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item.",
+          },
+        ],
+      },
+    ],
     dataQuality: {
       exceptions: true,
       checks: [

@@ -41,22 +41,31 @@ function ProblemsPage() {
       variant="list"
       title="Data Problems"
       actions={
-        // The product match queue is a review surface, not a Problems lane:
-        // its detector needs vector lookups the DB-only fast lane forbids.
-        <Button
-          size="sm"
-          variant="outline"
-          render={
-            <Link
-              to="/recommendations/workbench"
-              search={{ kind: "product-match" }}
-            />
-          }
-          nativeButton={false}
-        >
-          <GitMergeIcon className="size-3.5" />
-          Product matches
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            render={<Link to="/problems/classification-review" />}
+            nativeButton={false}
+          >
+            Classifications
+          </Button>
+          {/* Product matching has its own review workbench. */}
+          <Button
+            size="sm"
+            variant="outline"
+            render={
+              <Link
+                to="/recommendations/workbench"
+                search={{ kind: "product-match" }}
+              />
+            }
+            nativeButton={false}
+          >
+            <GitMergeIcon className="size-3.5" />
+            Product matches
+          </Button>
+        </div>
       }
     >
       <Stack gap="lg">

@@ -256,7 +256,19 @@ export default defineEntity({
         control: {
           kind: "select",
           options: selectControlOptions.locationType,
-          suggest: { basis: ["name"] },
+          suggest: {
+            basis: ["name"],
+            rules: [
+              `You are a location classification assistant. Given a location name, determine the most appropriate location type.
+
+Rules:
+1. Look for keywords in the name that indicate the type (e.g., "shelf" in name suggests shelf type)
+2. Consider the hierarchy: rooms contain areas, areas contain shelves/cabinets/drawers, etc.
+3. For ambiguous names, consider the most likely physical form
+4. Names with numbers often indicate shelves or drawers (e.g., "Shelf 3", "Drawer 2")
+5. Names mentioning "workbench" or "station" are typically areas or tables`,
+            ],
+          },
           initial: { value: "room" },
         },
         display: {
@@ -681,16 +693,7 @@ export default defineEntity({
         where: "{deletedAt} IS NULL",
       },
     ],
-    checks: [
-      // `furniture` marks a Product-instance location (the bin or rack
-      // itself). One direction only: a garden bed or planter may link a
-      // Product and keep its own type, so `productId IS NOT NULL` does not
-      // imply `furniture`.
-      {
-        name: "Location_furniture_product_check",
-        sql: "{type} <> 'furniture' OR {productId} IS NOT NULL",
-      },
-    ],
+    checks: [],
     relations: {
       parent: { field: "parentId", relationName: "LocationToLocation" },
       children: { many: "location", relationName: "LocationToLocation" },
@@ -1037,6 +1040,24 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["parentId"] },
     merge: false,
+    classificationPolicies: [
+      // `furniture` marks a Product-instance location (the bin or rack
+      // itself). One direction only: a garden bed or planter may link a
+      // Product and keep its own type, so a Product does not imply furniture.
+      {
+        classifier: "type",
+        enforced: true,
+        fields: [
+          {
+            field: "productId",
+            byValue: { furniture: "required" },
+            otherwise: "unknown",
+            refusal:
+              "A furniture location is an instance of a Product. Link a Product, or choose another type.",
+          },
+        ],
+      },
+    ],
     dataQuality: {
       checks: [
         {

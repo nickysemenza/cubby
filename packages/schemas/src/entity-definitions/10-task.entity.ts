@@ -369,7 +369,18 @@ export default defineEntity({
         control: {
           kind: "select",
           options: selectControlOptions.trade,
-          suggest: { basis: ["name", "projectId"] },
+          suggest: {
+            basis: ["name", "projectId"],
+            rules: [
+              `You are a home-project trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
+
+Rules:
+1. Match the physical work being described, not the room it happens in.
+2. A product or vendor name is a strong signal: electrical supply vendors imply "electrical", lumber implies "building".
+3. Prefer the most specific trade that fits over "other".
+4. "planning" is for pre-work (design, permits, estimates), not the work itself.`,
+            ],
+          },
         },
         display: {
           list: true,
