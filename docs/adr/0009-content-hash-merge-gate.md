@@ -29,8 +29,11 @@ is roughly ten times the allowance.
   result produced locally for the same input hash satisfies the merge gate
   exactly as a CI result does.
 - The Apple lane runs locally through the same Nx target. On a PR cache miss,
-  CI falls back to the hosted macOS run. `main` always runs the full macOS
-  lane as a backstop.
+  CI falls back to the hosted macOS run.
+- Keys leave out platform, Node version, locale, and CI's own environment, so
+  a Mac result counts for Linux lanes too. A nightly run executes every lane
+  uncached on CI as the backstop for platform-only failures; `main` pushes
+  reuse the cache.
 
 ## Considered options
 

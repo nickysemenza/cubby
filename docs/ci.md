@@ -15,11 +15,14 @@ The required test lanes key on the `gate` named input in `nx.json`: every
 non-documentation file (the lockfile and `.github/` included), the Markdown
 that the Worker bundles or generation reads (`docs/README.md`,
 `docs/todos.md`, and the purchase-import, product-enrichment, and
-photo-inventory-import skills), the Node version, and the platform and
-architecture. Web targets add ignored `.env*` files and the environment their
-configs branch on, `CI` included (`webGate` in `apps/web/project.json`); the
-Rust targets add `rustc -V`, because `rust-toolchain.toml` names a floating
-channel; the Apple targets swap the Node version for `xcodebuild -version`. The key is deliberately
+photo-inventory-import skills). Platform, Node version, locale, and `CI`
+stay out, so a developer Mac's pass counts for the Linux lanes. Web targets add
+ignored `.env*` files and the variables that select or reorder tests (`webGate`
+in `apps/web/project.json`); the Rust targets add `rustc -V`, because
+`rust-toolchain.toml` names a floating channel; the Apple targets add
+`xcodebuild -version`. The nightly scheduled run executes every lane with
+`--skip-nx-cache` on CI's platform, catching a failure that only Linux or CI's
+toolchain shows; `main` pushes reuse the cache like PRs. The key is deliberately
 broad. A false hit skips a check that should have run, so a target that starts
 reading something new must have it in its inputs. A change to ordinary
 documentation, a rebase that leaves the content unchanged, or a re-push of a
@@ -118,12 +121,11 @@ for whichever caller — local or hosted — ends up running that scheme there.
 
 Two hosted macOS jobs, `Apple host tests` and `Apple simulator build`, run in
 parallel on every PR and `main` push. Each installs the workspace (which also
-generates the Swift inputs) and, on a PR, first runs its Nx target with
+generates the Swift inputs) and, outside the nightly run, first runs its Nx target with
 `CUBBY_NX_CACHE_PROBE=1`: Nx replays a cached pass for the same input hash,
 and on a miss the script fails before building (Nx never caches that failure).
 Only a miss pays for the FFI, XcodeGen, and Xcode build caches and the real
-run. `main` skips the probe and runs both with `--skip-nx-cache` as the
-backstop. The Apple key leaves out the Rust compiler: CI hashes before its Rust
+run. The nightly run skips the probe and runs both with `--skip-nx-cache`. The Apple key leaves out the Rust compiler: CI hashes before its Rust
 setup, and the probe and the run must agree on the key. Each job first selects the
 Xcode in `apps/apple/.xcode-version` when the image has it, so a Mac result
 with that Xcode satisfies CI; bump the file when the Mac's Xcode changes.

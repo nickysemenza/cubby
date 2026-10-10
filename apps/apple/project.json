@@ -2,14 +2,13 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "name": "apple",
   "namedInputs": {
-    // The merge-gate tree plus the selected Xcode, without the Node version:
-    // Node only runs generation here, and a developer Mac's result must match
-    // CI's for the same tree (docs/adr/0009-content-hash-merge-gate.md). CI
-    // selects the Xcode in .xcode-version. Rust is absent: CI hashes before its
+    // The merge-gate key plus the selected Xcode; CI selects the Xcode in
+    // .xcode-version so a developer Mac's result matches CI's for the same
+    // tree (docs/adr/0009-content-hash-merge-gate.md). Rust is absent: CI hashes before its
     // Rust setup can change the active compiler, and the probe and the run
     // must agree on the key.
     "appleGate": [
-      "gateFiles",
+      "gate",
       {
         "runtime": "xcodebuild -version 2>/dev/null || echo none"
       }

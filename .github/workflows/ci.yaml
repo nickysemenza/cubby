@@ -5,9 +5,12 @@ on:
     branches: [main]
   push:
     branches: [main]
-  # Weekly live Tester Army import journeys (the coupled harness); never a merge gate.
   schedule:
+    # Weekly live Tester Army import journeys (the coupled harness); never a merge gate.
     - cron: "17 9 * * 1"
+    # Nightly backstop: every lane uncached, so a pass reused from another
+    # platform or toolchain is rechecked on CI's (docs/adr/0009-content-hash-merge-gate.md).
+    - cron: "23 8 * * *"
   workflow_dispatch:
     inputs:
       simulator_e2e:
@@ -49,7 +52,7 @@ jobs:
   # A stable required check that also keeps live entity codes out of PR text.
   scope:
     name: Scope
-    if: &verification github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none')
+    if: &verification github.event_name == 'pull_request' || github.event_name == 'push' || github.event.schedule == '23 8 * * *' || (github.event_name == 'workflow_dispatch' && !inputs.simulator_e2e && inputs.tester_army == 'none')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -115,7 +118,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - run: pnpm exec nx run-many -t test --exclude=cubby-checks --outputStyle=static-failures-only
+      - run: pnpm exec nx run-many -t test --exclude=cubby-checks --outputStyle=static-failures-only ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
 
   test-rust:
     name: Rust - recipebridge and cubby-ffi
@@ -130,7 +133,7 @@ jobs:
           cache: true
           cache-workspaces: ". -> target"
       # One crate at a time: both share the workspace target directory.
-      - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream
+      - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
 
   # Migration drift and the workerd PostgreSQL files, which build the Worker
   # themselves; ordinary integration files run in test-postgres.
@@ -174,7 +177,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - run: pnpm exec nx run-many -p @cubby/web -t db-check workerd-tests --parallel=1 --outputStyle=stream
+      - run: pnpm exec nx run-many -p @cubby/web -t db-check workerd-tests --parallel=1 --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
 
   test-postgres:
     name: PostgreSQL integration tests (${{ matrix.shard }})
@@ -191,7 +194,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - run: pnpm exec nx run @cubby/web:postgres --outputStyle=stream
+      - run: pnpm exec nx run @cubby/web:postgres --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
         env:
           CUBBY_POSTGRES_SHARD: ${{ matrix.shard }}
 
@@ -212,8 +215,6 @@ jobs:
           - { shard: "4/4", slug: desktop-4 }
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
-      E2E_TEST_USER_EMAIL: nicky@test.com
-      E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
       CUBBY_SOURCE_COMMIT: ${{ github.sha }}
       CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
@@ -243,7 +244,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
       - name: Run Playwright tests
-        run: pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+        run: pnpm exec nx run @cubby/web:e2e --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
         env:
           CUBBY_E2E_SHARD: ${{ matrix.shard }}
       - name: Save Playwright run bundle
@@ -292,7 +293,7 @@ jobs:
         if: steps.browser-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
       - name: Run purchase import browser E2E
-        run: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream
+        run: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
       - name: Save Playwright run bundle
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -342,7 +343,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
       - name: Reuse a cached pass
         id: cached
-        if: github.event_name != 'push'
+        if: github.event_name != 'schedule'
         continue-on-error: true
         env:
           CUBBY_NX_CACHE_PROBE: "1"
@@ -376,7 +377,7 @@ jobs:
             xcode-host-v1-${{ runner.os }}-${{ steps.host-xcode-version.outputs.hash }}-
       - name: Run CubbyKit host tests
         if: steps.cached.outcome != 'success'
-        run: pnpm exec nx run apple:host-tests --outputStyle=stream ${{ github.event_name == 'push' && '--skip-nx-cache' || '' }}
+        run: pnpm exec nx run apple:host-tests --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
       # Publish only successful builds: exact-key cache entries are immutable.
       - name: Save host compilation cache
         if: steps.cached.outcome != 'success'
@@ -402,7 +403,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
       - name: Reuse a cached pass
         id: cached
-        if: github.event_name != 'push'
+        if: github.event_name != 'schedule'
         continue-on-error: true
         env:
           CUBBY_NX_CACHE_PROBE: "1"
@@ -421,7 +422,7 @@ jobs:
         id: derived-data
       - name: Run iOS app checks
         if: steps.cached.outcome != 'success'
-        run: pnpm exec nx run apple:simulator-build --outputStyle=stream ${{ github.event_name == 'push' && '--skip-nx-cache' || '' }}
+        run: pnpm exec nx run apple:simulator-build --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
       # A canceled compile must not permanently populate an exact cache key.
       - name: Save DerivedData cache
         if: steps.cached.outcome != 'success'
@@ -553,7 +554,7 @@ jobs:
 
   tester-army-inputs:
     name: Tester Army dispatch inputs
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.tester_army != 'none')
+    if: github.event.schedule == '17 9 * * 1' || (github.event_name == 'workflow_dispatch' && inputs.tester_army != 'none')
     runs-on: ubuntu-latest
     # Inputs are empty on `schedule`, which runs the import lane.
     outputs:

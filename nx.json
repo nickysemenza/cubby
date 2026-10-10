@@ -51,31 +51,20 @@
       "!{workspaceRoot}/**/*.md",
       "!{workspaceRoot}/.claude/**"
     ],
-    // The tree half of `gate`, shared with the Apple key, which swaps the
-    // Node version for the selected Xcode.
-    "gateFiles": [
+    // Merge-gate test lanes (docs/adr/0009-content-hash-merge-gate.md). A
+    // passing result for this hash satisfies the gate, so a false cache hit
+    // skips a check that should have run: keep it broad. Every
+    // non-documentation file (lockfile and CI configuration included) and the
+    // Markdown that the Worker bundles or generation reads; Nx applies a
+    // negation to every file input, so that Markdown is hashed at runtime.
+    // Platform and Node version stay out so a developer Mac's pass counts as
+    // CI's; the nightly CI run reruns every lane uncached as the backstop.
+    "gate": [
       "{workspaceRoot}/**/*",
       "!{workspaceRoot}/**/*.{md,mdx,MD,markdown}",
       "!{workspaceRoot}/.claude/**",
       {
         "runtime": "git ls-files -z -co --exclude-standard -- docs/README.md docs/todos.md .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256"
-      }
-    ],
-    // Merge-gate test lanes (docs/adr/0009-content-hash-merge-gate.md). A
-    // passing result for this hash satisfies the gate, so a false cache hit
-    // skips a check that should have run: keep it broad. Every
-    // non-documentation file (lockfile and CI configuration included), the
-    // Markdown that the Worker bundles or generation reads, and the toolchain.
-    // Nx applies a negation to every file input, so that Markdown is hashed at
-    // runtime. CI's own environment stays out: a developer's result for the
-    // same tree, platform, and toolchain counts as CI's.
-    "gate": [
-      "gateFiles",
-      {
-        "runtime": "node --version"
-      },
-      {
-        "runtime": "node -p \"process.platform + process.arch\""
       }
     ]
   },
