@@ -37,3 +37,24 @@ jobs:
           deploy-command: "pnpm --filter @cubby/web exec wrangler deploy --config dist/server/wrangler.json"
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+
+  # The Nx remote cache the CI merge gate reads (docs/ci.md). Its R2 bucket
+  # and CACHE_TOKEN secret are provisioned once; this deploys only the code.
+  deploy-nx-cache:
+    name: Deploy Nx cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: deploy-cubby-nx-cache
+      cancel-in-progress: false
+    environment:
+      name: cloudflare
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/deploy-worker
+        with:
+          package: "@cubby/nx-cache"
+          workspace-filter: "@cubby/nx-cache"
+          deploy-command: "pnpm --filter @cubby/nx-cache exec wrangler deploy"
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
