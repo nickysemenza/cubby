@@ -629,6 +629,7 @@ export const journeys: Journey[] = [
       },
       {
         goal: 'Save this product. Finish with the Edit action visible and the product detail showing external ID "B0SYNTH001" from Source "synthetic-shop" with Kind "asin".',
+        ios: "Save this product and close the editor. Finish with the Edit button visible.",
       },
     ],
     visible: () => ["B0SYNTH001"],

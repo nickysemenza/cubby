@@ -69,6 +69,10 @@ rows for keyboard avoidance. Keep unsupported interaction handling in the
 journeys or product UI rather than patching the E2E SDK. Goals end at observable
 states, with exact database read-back establishing persistence. HTTP and network
 inference failures fail once at Cubby's gateway boundary; aborts stay aborts.
+The iOS Save goal confirms that the editor closed and Edit is available. The
+following visible-value check and exact SQL assertions verify the saved external
+ID, source and kind; a compound model completion claim proved inconclusive even
+when the detail screen displayed all three correct values.
 
 ## Failure modes and acceptance
 
