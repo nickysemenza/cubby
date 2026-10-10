@@ -358,6 +358,7 @@ export const suggestionSweepRunInput = z.object({
   field: z.string().min(1),
   filters: z.record(z.string(), z.json()),
   decisionModel: supportedDecisionModelSchema,
+  taxonomyRevision: z.string().optional(),
   paused: z.boolean(),
 });
 export type SuggestionSweepRunInput = z.infer<typeof suggestionSweepRunInput>;

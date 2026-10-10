@@ -57,6 +57,7 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { classificationAllowsField } from "~/server/repo/classification-field-policy";
 import { classificationRefusesField } from "~/server/repo/classification-field-policy";
+import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
 import { resolveDraftExpenseFields } from "~/server/repo/expense-inheritance";
 import {
   isFinanceCategoryEntity,
@@ -850,6 +851,7 @@ export async function suggestFields(
   rawInput: FieldSuggestionsInput,
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {
+  const taxonomyRevision = await spendingClassificationRevision(db);
   const financeContext = await savedSuggestionContext(db, rawInput);
   const classifiedInput =
     rawInput.entity === "expense"
@@ -1012,6 +1014,7 @@ export async function suggestFields(
         db,
         runId,
         operation: `suggestFields.${input.entity}.${target}`,
+        cacheRevision: taxonomyRevision,
         cacheStatus: "none",
         force: ports?.force,
       };

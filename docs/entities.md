@@ -662,6 +662,15 @@ declared `"entity.field"` suggest target, and its `GeneratedSuggestFieldKey`
 union type-enforces that the server's field-suggest registry carries exactly
 one entry per key.
 
+Reviewable field suggestions are stored against their `ai_suggest` or sweep
+Run. A human acceptance writes through the entity update path (finance
+categories use the reviewed finance apply so linked Expense reach is checked);
+a rejection records a Miss on that Run. Misses are evidence for improving the
+prompt or classification vocabulary and do not suppress future suggestions.
+Bulk sweeps retain paired model rows for evaluation, while review exposes only
+the pinned model's candidate. The response cache includes the active
+classification revision, which each sweep also records for later comparison.
+
 An omitted or null mode has no schema. Zod owns optionality, transformations,
 nullability, descriptions, refinements, and defaults. Put create-only defaults
 only on create schemas, and make partial update schemas explicitly optional so

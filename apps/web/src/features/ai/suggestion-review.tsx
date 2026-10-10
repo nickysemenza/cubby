@@ -97,6 +97,7 @@ function useSuggestionActions(
   key: string,
   onApply: () => void | Promise<void>,
   pending: boolean | undefined,
+  onDismiss?: () => void | Promise<void>,
 ) {
   const visit = useSuggestionVisit();
   const [localDismissed, setLocalDismissed] = useState<string | null>(null);
@@ -104,7 +105,20 @@ function useSuggestionActions(
   const [failure, setFailure] = useState<unknown>(null);
   const active = useRef(false);
   const dismissed = visit ? visit.dismissed.has(key) : localDismissed === key;
-  const dismiss = () => (visit ? visit.dismiss(key) : setLocalDismissed(key));
+  const hide = () => (visit ? visit.dismiss(key) : setLocalDismissed(key));
+  const dismiss = async () => {
+    if (!onDismiss) {
+      hide();
+      return;
+    }
+    try {
+      await onDismiss();
+      hide();
+    } catch (error) {
+      setFailure(error);
+      showErrorToast(error);
+    }
+  };
   const apply = async () => {
     if (active.current || pending) return;
     active.current = true;
@@ -112,7 +126,7 @@ function useSuggestionActions(
     setFailure(null);
     try {
       await onApply();
-      dismiss();
+      hide();
     } catch (error) {
       setFailure(error);
       showErrorToast(error);
@@ -134,6 +148,7 @@ interface ReviewBodyProps {
   applyLabel: string;
   children?: ReactNode;
   outcome: FieldSuggestionOutcome | null;
+  onDismiss?: () => void | Promise<void>;
   surface: SuggestionOutcomeSurface;
   alternative: boolean;
   autoFilled: boolean;
@@ -461,6 +476,7 @@ export function SuggestionReview({
   questionKey,
   pending,
   onApply,
+  onDismiss,
   applyLabel,
   alternative = false,
   outcome = null,
@@ -477,6 +493,7 @@ export function SuggestionReview({
   questionKey: string;
   pending?: boolean;
   onApply: () => void | Promise<void>;
+  onDismiss?: () => void | Promise<void>;
   applyLabel?: string;
   alternative?: boolean;
   /** What Jev's decision tier did with this field — drives the always-visible
@@ -498,6 +515,7 @@ export function SuggestionReview({
     key,
     onApply,
     pending,
+    onDismiss,
   );
   const isMobile = useIsMobile();
   const rowActive = useRowActive();

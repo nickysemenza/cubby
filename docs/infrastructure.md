@@ -604,8 +604,12 @@ has its own cache key, so repeated identical inputs can return either model's
 cached answer. Cache hits do not place an upstream request; 50/50 is the
 request-assignment probability, not a guaranteed split of billed calls.
 The selected answer drives the normal decision, including the existing 0.85
-high-confidence/autofill threshold. There are no shadow calls or paired
-comparison records. Existing AI usage records retain the selected model,
+high-confidence/autofill threshold. The opt-in classification sweep retains the
+pinned model's candidate and a paired candidate for one in ten stable record
+identities; only the pinned model's pending row enters human review. Field
+suggestion cache keys also include the live classification revision, which the
+sweep stores on its Run to report whether the vocabulary changed afterward.
+Existing AI usage records retain the selected model,
 provider, latency, token counts and failures, including model-specific cache
 hits. Compare upstream latency on rows with `attempt > 0`, excluding
 application-cache hits. The shared `selectDecisionModel` controls the trial.

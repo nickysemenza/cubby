@@ -405,6 +405,7 @@ export async function runJevChoice(args: {
       feature: feature.feature,
       model: feature.model,
       promptVersion: feature.promptVersion,
+      cacheRevision: args.usage.cacheRevision,
       input,
     },
     validate,

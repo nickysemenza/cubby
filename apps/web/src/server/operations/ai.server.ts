@@ -28,7 +28,21 @@ import {
   resolveLiveShortcodes,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+import {
+  acceptSuggestion,
+  acceptSuggestions,
+  latestSuggestionSweepStatus,
+  listPendingSuggestions,
+  rejectSuggestion,
+  recordFieldSuggestionMiss,
+  summarizeSuggestionMisses,
+} from "~/server/repo/suggestion-review";
 import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
+import {
+  pauseSuggestionSweep,
+  resumeSuggestionSweep,
+  startSuggestionSweep,
+} from "~/server/runs/suggestion-sweep";
 import {
   suggestIngredientMerge,
   suggestIngredientMergeBatch,
@@ -299,6 +313,35 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   },
   applyFinanceCategorySuggestion: (context, input) =>
     applyFinanceCategorySuggestion(context, input),
+  listSuggestionReviewQueue: (context, input) =>
+    listPendingSuggestions(context.db, input),
+  listSuggestionMisses: (context, input) =>
+    summarizeSuggestionMisses(context.db, input),
+  acceptSuggestion: (context, input) =>
+    acceptSuggestion(context.db, context, input),
+  acceptSuggestions: (context, input) =>
+    acceptSuggestions(context.db, context, input),
+  rejectSuggestion: (context, input) =>
+    rejectSuggestion(context.db, context, input),
+  recordFieldSuggestionMiss: async (context, input) =>
+    recordFieldSuggestionMiss(
+      context.db,
+      await actorAiRun(context, { runKey: input.runKey }),
+      input,
+    ),
+  startSuggestionSweep: (context, input) =>
+    startSuggestionSweep(context.db, input, { context }),
+  pauseSuggestionSweep: async (context, input) => {
+    await pauseSuggestionSweep(context.db, parseEntityId("run", input.runId));
+    return { paused: true as const };
+  },
+  resumeSuggestionSweep: async (context, input) => {
+    const id = parseEntityId("run", input.runId);
+    await resumeSuggestionSweep(context.db, id, { context });
+    return { id };
+  },
+  latestSuggestionSweepStatus: (context) =>
+    latestSuggestionSweepStatus(context.db),
   // Both presentations share the page run grouping and authoritative inference.
   suggestFields: suggestionsForContext,
   suggestFieldsReview: async (context, input) => {

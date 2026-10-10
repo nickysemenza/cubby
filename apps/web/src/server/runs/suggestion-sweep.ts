@@ -26,6 +26,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { getDb } from "~/server/repo/database-helpers";
+import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 import { ensureRun } from "./ensure-run";
@@ -356,11 +357,13 @@ export async function startSuggestionSweep(
   ports: SuggestionSweepPorts,
 ) {
   const decisionModel = ports.decisionModel?.() ?? selectDecisionModel();
+  const taxonomyRevision = await spendingClassificationRevision(db);
   const actor = { ...ports.context.actorContext, runId: null };
   const storedInput = suggestionSweepRunInput.parse({
     kind: "suggestion_sweep",
     ...input,
     decisionModel,
+    taxonomyRevision,
     paused: false,
   });
   const initialProgress = suggestionSweepRunProgress.parse({

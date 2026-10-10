@@ -175,6 +175,21 @@ describe("inline suggestion review", () => {
     expect(edit).toHaveBeenCalledTimes(2);
   });
 
+  it("records a Miss when Keep current is chosen", async () => {
+    const onDismiss = vi.fn(async () => {});
+    render(
+      <SuggestionReview
+        suggestion={suggestion}
+        currentValue="materials"
+        questionKey="miss"
+        onApply={() => {}}
+        onDismiss={onDismiss}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Keep current" }));
+    await vi.waitFor(() => expect(onDismiss).toHaveBeenCalledOnce());
+  });
+
   it("remembers Keep current across page changes, but new evidence and a new visit can propose again", () => {
     const content = (key: string | null) => (
       <SuggestionVisitProvider>

@@ -261,12 +261,14 @@ export interface FieldSuggestionSource {
 export interface EntitySuggestionsOperations {
   suggestFields: typeof ai.suggestFields;
   applyFinanceCategorySuggestion?: typeof ai.applyFinanceCategorySuggestion;
+  recordFieldSuggestionMiss?: typeof ai.recordFieldSuggestionMiss;
 }
 
 export const productionEntitySuggestionsOperations: EntitySuggestionsOperations =
   {
     suggestFields: ai.suggestFields,
     applyFinanceCategorySuggestion: ai.applyFinanceCategorySuggestion,
+    recordFieldSuggestionMiss: ai.recordFieldSuggestionMiss,
   };
 
 /** Never a fresh `{}` — a stable default keeps `suggestions` referentially
