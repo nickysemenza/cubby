@@ -93,7 +93,9 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         }
     }
 
-    private func project(_ event: MacBrowserBridgeEvent) {
+    func project(_ event: MacBrowserBridgeEvent) {
+        // Rebinding precedes asynchronous retirement; queued old-host events must not restore activity.
+        guard settings?.isInstalled(self) == true else { return }
         switch event {
         case .accounts(let accounts):
             let listed = Set(accounts.map(\.id))
@@ -109,10 +111,12 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
             if status == .connected {
                 Task { [notifier] in await notifier.notifyDelayedOfflineIfNeeded(accountID: accountID) }
             }
+        case .executingRuns(let accountID, let runIDs):
+            settings?.setExecutingRuns(runIDs, accountID: accountID)
         case .result(let accountID, let result, let operation):
             settings?.setLastCommand(
                 BrowserBridgeCommandSummary.line(operation: operation, outcome: result.outcome),
-                accountID: accountID)
+                runID: result.runID, accountID: accountID)
             switch result.outcome {
             case .completed:
                 settings?.setAccountError(nil, accountID: accountID)

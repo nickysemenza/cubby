@@ -5,6 +5,7 @@
         case accounts([BrowserBridgeVendorAccount])
         case fleetStatus(BrowserBridgeConnectionStatus, connected: Int, total: Int)
         case accountStatus(accountID: String, status: BrowserBridgeConnectionStatus)
+        case executingRuns(accountID: String, runIDs: Set<String>)
         case result(accountID: String, result: BrowserBridgeCommandResult, operation: BrowserBridgeOperation)
         case authenticationRequired(accountID: String, runID: String)
         case runCompleted(accountID: String, completion: BrowserBridgeRunCompletion)
@@ -47,6 +48,7 @@
         /// One token per opened bridge: a callback from a bridge that was since closed (or replaced
         /// by a later bridge for the same account) never reaches the current projection.
         private var bridgeTokens: [String: UUID] = [:]
+        private var executionRevisions: [String: UInt64] = [:]
         /// Bumped whenever the whole fleet is replaced or torn down; a roster refresh that
         /// straddles one discards its listing.
         private var generation = UUID()
@@ -195,6 +197,7 @@
             accounts = [:]
             statuses = [:]
             bridgeTokens = [:]
+            executionRevisions = [:]
             if reportStatus {
                 observer(.accounts([]))
                 observer(.fleetStatus(.disconnected, connected: 0, total: 0))
@@ -206,10 +209,14 @@
             generation = UUID()
             let generation = self.generation
             let old = Array(bridges.values)
+            for accountID in bridges.keys {
+                observer(.executingRuns(accountID: accountID, runIDs: []))
+            }
             bridges = [:]
             executors = [:]
             statuses = [:]
             bridgeTokens = [:]
+            executionRevisions = [:]
             for bridge in old { await bridge.disconnect() }
 
             guard case .bearer(let token) = await credentials.current(), !token.isEmpty else {
@@ -257,6 +264,7 @@
                 executors[accountID] = nil
                 statuses[accountID] = nil
                 bridgeTokens[accountID] = nil
+                executionRevisions[accountID] = nil
             }
             let rosterChanged = listed != accounts
             accounts = listed
@@ -300,6 +308,11 @@
                 Task { @MainActor [weak self] in
                     self?.didCompleteRun(completion, accountID: account.id, token: token)
                 }
+            } executionObserver: { [weak self] runIDs, revision in
+                Task { @MainActor [weak self] in
+                    self?.didChangeExecution(
+                        runIDs, revision: revision, accountID: account.id, token: token)
+                }
             }
             // Opening is idempotent: a bridge this replaces is closed, never left running unowned.
             let replaced = bridges[account.id]
@@ -307,6 +320,8 @@
             executors[account.id] = executor
             statuses[account.id] = .connecting
             bridgeTokens[account.id] = token
+            executionRevisions[account.id] = nil
+            observer(.executingRuns(accountID: account.id, runIDs: []))
             if let replaced { await replaced.disconnect() }
             BrowserBridgeDebugLog.emit(
                 .connectRequested, browser: connection.browser, accountID: account.id)
@@ -344,6 +359,16 @@
                 messageType: Self.statusLabel(status))
             observer(.accountStatus(accountID: accountID, status: status))
             publishFleetStatus()
+        }
+
+        private func didChangeExecution(
+            _ runIDs: Set<String>, revision: UInt64, accountID: String, token: UUID
+        ) {
+            guard bridgeTokens[accountID] == token,
+                revision > (executionRevisions[accountID] ?? 0)
+            else { return }
+            executionRevisions[accountID] = revision
+            observer(.executingRuns(accountID: accountID, runIDs: runIDs))
         }
 
         private func didFinishResult(

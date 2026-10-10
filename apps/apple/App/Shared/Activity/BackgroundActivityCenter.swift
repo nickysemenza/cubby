@@ -245,20 +245,29 @@ extension PhotoClassificationSweep: BackgroundActivitySource {
 /// `apps/apple/App/Shared/PurchaseImport/BrowserBridgeSettingsModel.swift`.
 extension BrowserBridgeSettingsModel: BackgroundActivitySource {
     var currentActivities: [BackgroundActivity] {
-        guard isSyncing else { return [] }
-        return [
+        let starts = accountStates.reduce(into: [String: Date]()) { result, account in
+            for (runID, startedAt) in account.executingRuns {
+                result[runID] = min(result[runID] ?? startedAt, startedAt)
+            }
+        }
+        var activities = starts.keys.sorted().map { runID in
             BackgroundActivity(
-                id: "browser-bridge-sync",
-                kind: .browserBridgeSync,
-                title: "Running purchase import",
-                phase: .running,
-                progress: nil,
-                detail: nil,
-                startedAt: syncStartedAt ?? .now,
-                link: .localActivity("browser-bridge-sync"),
-                isUserInitiated: true,
-                isCancellable: false)
-        ]
+                id: "browser-run-\(runID)", kind: .browserBridgeSync,
+                title: "Browser research", phase: .running, progress: nil,
+                detail: "Executing browser commands on this Mac",
+                startedAt: starts[runID]!, link: .serverRun(runID),
+                isUserInitiated: false, isCancellable: false)
+        }
+        if isSyncing {
+            activities.append(
+                BackgroundActivity(
+                    id: "browser-bridge-sync", kind: .browserBridgeSync,
+                    title: "Submitting purchase import", phase: .running,
+                    progress: nil, detail: nil, startedAt: syncStartedAt ?? .now,
+                    link: .localActivity("browser-bridge-sync"),
+                    isUserInitiated: true, isCancellable: false))
+        }
+        return activities
     }
 }
 
