@@ -285,9 +285,10 @@ lock, then check every Worker build they load (`COUPLED_WORKER_BUILDS` in `apps/
 only the web Worker, which hosts the agent) against the content hash in
 `dist/web-build-provenance.json`. Locally a stale build is rebuilt in place
 before workerd starts; in CI, where the Worker artifact must be current, a
-stale build fails with the exact rebuild command. A suite holds the harness
-across its tests with `holdWorkerdHarness()` in `beforeAll`, so the wait and
-any rebuild never count against a test timeout.
+stale build fails with the exact rebuild command. The `integration-workerd`
+Vitest project holds the harness for its whole run with `holdWorkerdHarness()`
+in global setup, so its files run in parallel and the wait and any rebuild
+never count against a test timeout.
 
 ### PostgreSQL and Hyperdrive
 

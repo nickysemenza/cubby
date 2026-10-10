@@ -22,19 +22,7 @@ import {
 } from "tooling/e2e-run-bundle";
 import { sanitizeWorkerdLogs } from "tooling/e2e-workerd-logs";
 import { withTestDb } from "tooling/test-setup";
-import {
-  HOLD_WORKERD_HARNESS_TIMEOUT_MS,
-  holdWorkerdHarness,
-} from "tooling/workerd-harness";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { run, runOperation } from "~/server/db/schema";
@@ -325,14 +313,12 @@ type CoordinatorRequest = {
 };
 
 describe("coordinator host retirement", () => {
-  let releaseHarness:
-    | Awaited<ReturnType<typeof holdWorkerdHarness>>
-    | undefined;
-  beforeAll(async () => {
-    releaseHarness = await holdWorkerdHarness();
-  }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
-  afterAll(() => releaseHarness?.());
-  let runtime: ScenarioHarness | undefined;
+  // Each case addresses only its own Run's coordinator, so one Worker serves
+  // them all; the restart case's reload leaves it usable for later cases.
+  let shared: ScenarioHarness | undefined;
+  const sharedRuntime = async () =>
+    (shared ??= await startScenarioHarness(ctx.databaseUrl, { steps: [] }));
+  afterAll(() => shared?.close());
   let started: E2ERunIdentity;
   let status = "failed";
   const scenario = "synthetic-settled-coordinator-disposal";
@@ -346,15 +332,14 @@ describe("coordinator host retirement", () => {
     started = captureE2ERunIdentity(repoRoot);
     status = "failed";
     observations = [];
+    shared?.harness.clearLogs();
   });
-  afterEach(async () => {
+  afterEach(() => {
     const inventory = sanitizeWorkerdLogs(
-      runtime?.harness
+      shared?.harness
         .getLogs()
         .filter((entry) => entry.message.includes("storage-inventory")) ?? [],
     );
-    await runtime?.close();
-    runtime = undefined;
     const outputDir = `/tmp/cubby-run-retirement-host-${Date.now()}`;
     mkdirSync(outputDir, { recursive: true });
     const evidence = path.join(outputDir, "boundary-results.json");
@@ -398,7 +383,7 @@ describe("coordinator host retirement", () => {
 
   it("stamps retiredAt in one pass only after a cold empty retry, then fences fetch and dispatch", async () => {
     const runId = await agentRun();
-    runtime = await startScenarioHarness(ctx.databaseUrl, { steps: [] });
+    const runtime = await sharedRuntime();
     const peer = runtime.harness.getWorker("cubby-queue-producer");
     const agentId = importRunAgentIdentity(runId, "mail_import");
     const request = (pathname: string, body: CoordinatorRequest) =>
@@ -474,7 +459,7 @@ describe("coordinator host retirement", () => {
   it("destroys a retired purpose's coordinator storage and acknowledges it cold", async () => {
     const runId = await agentRun();
     await retirePurpose(runId);
-    runtime = await startScenarioHarness(ctx.databaseUrl, { steps: [] });
+    const runtime = await sharedRuntime();
     const peer = runtime.harness.getWorker("cubby-queue-producer");
     const agentId = importRunAgentIdentity(runId, "mail_import");
     const request = (pathname: string) =>
@@ -515,7 +500,7 @@ describe("coordinator host retirement", () => {
   it("refuses entry points once retirement begins, across a restart before retiredAt is stamped", async () => {
     const runId = await agentRun();
     await retirePurpose(runId);
-    runtime = await startScenarioHarness(ctx.databaseUrl, { steps: [] });
+    const runtime = await sharedRuntime();
     const { harness } = runtime;
     const agentId = importRunAgentIdentity(runId, "mail_import");
     const request = (pathname: string) =>

@@ -109,9 +109,10 @@ and generated-file edits until the runner reports terminal completion. Send
 its live handle to every writer and release the hold after cleanup. A test-only
 edit also changes the build fingerprint; a rejected build supplies no scenario
 evidence.
-Workerd suites acquire the machine-wide harness lock in `beforeAll` using
-`HOLD_WORKERD_HARNESS_TIMEOUT_MS`, then release it in `afterAll`. Queue waits
-belong to setup and must not consume a scenario's behavioral timeout.
+The `integration-workerd` project acquires the machine-wide harness lock once,
+in its global setup (`tooling/workerd-integration-setup.ts`), and releases it
+at teardown; its files inherit it and run in parallel. Queue waits belong to
+setup and must not consume a scenario's behavioral timeout.
 Use the shared E2E identity and bundle for source provenance. Do not add a
 second recorder that buffers the entire Git diff: a large breaking change can
 overflow the subprocess buffer before the scenario and its cleanup begin, and
@@ -216,8 +217,12 @@ that job's fresh bundle. An unlisted consumer fails in the ordinary integration
 job.
 The socket-lifecycle regression lives in that workerd integration project: it
 exercises HTTP reads and freshness writes against the real Worker and observes
-PostgreSQL socket expiry, without a browser. Preserve its twelve-second quiet
-windows and repeated-load assertions when changing its scheduling.
+PostgreSQL socket expiry, without a browser. The runtime's
+`poolIdleTimeoutMs` shortens the request pools' idle timeout; preserve quiet
+windows longer than that timeout and the repeated-load assertions when
+changing its scheduling. Purchase-agent harness profiles likewise shorten the
+coordinator's settlement poll (`CUBBY_TEST_SETTLEMENT_POLL_MS`), so a
+scripted Run never waits out production's ten-second interval.
 
 Browser workers, Tester Army, native runners, the purchase-agent Vitest scenarios and the
 live evals start the built Worker through `openWorkerdRuntime`
@@ -307,7 +312,7 @@ harness seeds the synthetic USDA release into `USDA_RELEASES` before any USDA re
 profile throws when its routes and the compiled Worker's queue consumer names
 differ in either direction. That check covers consumer queue names only, not
 producers, Durable Objects, Hyperdrive, or service bindings, so it is not
-exhaustive binding coverage; `tooling/workerd-runtime.integration.test.ts`
+exhaustive binding coverage; `tooling/workerd-runtime-profiles.integration.test.ts`
 probes each profile's queues in a running harness.
 
 A browser spec may declare `objectStoragePublicUrl` for an HTTPS source identity
@@ -319,8 +324,9 @@ model decisions and Mac captures are scripted; it does not evaluate live researc
 quality, remote retailer image downloads, or Gmail discovery.
 
 The harness lock is the one machine-wide lock above; only the profiles marked
-"yes" take it (and rebuild a stale Worker). A Playwright run already holds it
-from global setup and its workers pass through; other `offline` and `gmail`
+"yes" take it (and rebuild a stale Worker). A Playwright run and the
+`integration-workerd` Vitest project already hold it from global setup, and
+their workers pass through; other `offline` and `gmail`
 callers run without it. Run one runtime per process at a time: it
 snapshots and restores `E2E_DATABASE_URL` and the Hyperdrive variables
 process-wide, and the lock is reentrant within a process, so two concurrent

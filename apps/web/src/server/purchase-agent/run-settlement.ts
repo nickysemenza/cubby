@@ -9,7 +9,8 @@ import {
 import type { RunServices } from "./environment";
 import { reportSettlement, type SubmissionLedger } from "./settlement";
 
-const POLL_MS = 10_000;
+/** Production's settlement poll; a workerd harness may shorten it. */
+export const SETTLEMENT_POLL_MS = 10_000;
 
 type SettlementJob = { operationId: string };
 
@@ -27,6 +28,7 @@ export class RunSettlement extends LifecycleCapability {
     private readonly report: <TError>(error: TError) => void,
     private readonly onSettled: (settled: AgentConversationSettlement) => void,
     private readonly submissions: SubmissionLedger,
+    private readonly pollMs: () => number,
   ) {
     super("cubby-run-settlement");
   }
@@ -38,7 +40,7 @@ export class RunSettlement extends LifecycleCapability {
     await this.lifecycle.jobs.push({
       id: `settle:${job.operationId}`,
       fn: "settle",
-      time: Date.now() + POLL_MS,
+      time: Date.now() + this.pollMs(),
       payload: job,
       singleflight: true,
     });
@@ -58,7 +60,7 @@ export class RunSettlement extends LifecycleCapability {
       operationId,
     );
     return outcome === "retry"
-      ? { rescheduleAt: Date.now() + POLL_MS }
+      ? { rescheduleAt: Date.now() + this.pollMs() }
       : undefined;
   }
 }

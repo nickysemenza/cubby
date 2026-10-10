@@ -297,6 +297,11 @@ const handler = {
                             strong: env.HYPERDRIVE.connectionString,
                             boundedStale:
                               env.HYPERDRIVE_CACHED.connectionString,
+                            ...(env.CUBBY_TEST_POOL_IDLE_TIMEOUT_MS && {
+                              poolIdleTimeoutMs: Number(
+                                env.CUBBY_TEST_POOL_IDLE_TIMEOUT_MS,
+                              ),
+                            }),
                           },
                           async () => {
                             const imageProcessingSocket =

@@ -41,4 +41,8 @@ declare module "cloudflare:workers" {
 interface Env {
   E2E_GOOGLE_PROVIDER_URL?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  /** Workerd harness only; see `RequestDbConnections.poolIdleTimeoutMs`. */
+  CUBBY_TEST_POOL_IDLE_TIMEOUT_MS?: string;
+  /** Workerd harness only; see `PurchaseAgentEnvironment.settlementPollMs`. */
+  CUBBY_TEST_SETTLEMENT_POLL_MS?: string;
 }

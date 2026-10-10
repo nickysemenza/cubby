@@ -118,6 +118,7 @@ const workerdIntegrationTests = [
   "src/server/purchase-import/purchase-agent-scenarios.integration.test.ts",
   "src/server/purchase-import/run-retirement.integration.test.ts",
   "tooling/workerd-runtime.integration.test.ts",
+  "tooling/workerd-runtime-profiles.integration.test.ts",
 ];
 const integrationTests = [
   "src/**/*.integration.test.ts",
@@ -368,6 +369,10 @@ export default defineConfig({
           test: {
             ...integrationProject,
             name: "integration-workerd",
+            globalSetup: [
+              ...integrationProject.globalSetup,
+              "./tooling/workerd-integration-setup.ts",
+            ],
             include: workerdIntegrationTests,
             sequence: { groupOrder: 4 },
           },

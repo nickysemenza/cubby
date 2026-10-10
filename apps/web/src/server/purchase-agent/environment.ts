@@ -120,6 +120,11 @@ export interface PurchaseAgentEnvironment {
   mcpTools(purpose: AgentImportRunPurpose): Promise<McpToolDefinition[]>;
   /** Workerd harness only: the scripted model peer replacing the Gateway. */
   testModel?: { fetch(request: Request): Promise<Response> };
+  /**
+   * Workerd harness only: a shorter settlement poll, so a scripted Run settles
+   * without waiting out production's interval.
+   */
+  settlementPollMs?: number;
 }
 
 /** The narrowed environment of the queue consumer, which serves every Run. */

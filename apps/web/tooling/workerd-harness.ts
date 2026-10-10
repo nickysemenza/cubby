@@ -154,6 +154,8 @@ export interface WorkerdHarnessOptions {
   googleProviderUrl?: string;
   /** Live peers for a profile with `purchaseAgentPeers`; deterministic by default. */
   models?: { agent?: WorkerdModelWorker; gateway?: WorkerdModelWorker };
+  /** Omitted: request pools keep pg-pool's production idle timeout. */
+  poolIdleTimeoutMs?: number;
 }
 
 const consumerSchema = z.object({ queue: z.string() }).loose();
@@ -357,6 +359,11 @@ export function workerdHarnessOptions(
           // Keyless and deterministic like CI; a model peer, when present,
           // takes precedence over the Gateway transport anyway.
           AI_GATEWAY_API_KEY: "",
+          // A scripted Run settles in a test's time, not production's 10s poll.
+          CUBBY_TEST_SETTLEMENT_POLL_MS: "25",
+          ...(options.poolIdleTimeoutMs !== undefined && {
+            CUBBY_TEST_POOL_IDLE_TIMEOUT_MS: String(options.poolIdleTimeoutMs),
+          }),
           ...(options.googleProviderUrl && {
             E2E_GOOGLE_PROVIDER_URL: options.googleProviderUrl,
             GOOGLE_CLIENT_ID: "synthetic-google-client",
@@ -397,9 +404,9 @@ function installDatabaseEnvironment(databaseUrl: string) {
 
 /**
  * Queue for the machine-wide harness lock, then make every coupled Worker
- * build current (rebuilding a stale one locally). A suite calls this in
- * `beforeAll` with a long timeout and releases in `afterAll`, so the wait and
- * any rebuild never count against a test's timeout.
+ * build current (rebuilding a stale one locally). The `integration-workerd`
+ * global setup calls this once per run, so the wait and any rebuild never
+ * count against a test's timeout.
  */
 export async function holdWorkerdHarness(): Promise<() => Promise<void>> {
   const release = await holdHarnessLock();
@@ -411,9 +418,6 @@ export async function holdWorkerdHarness(): Promise<() => Promise<void>> {
   }
   return release;
 }
-
-/** Long enough to queue behind another suite and rebuild every Worker. */
-export const HOLD_WORKERD_HARNESS_TIMEOUT_MS = 30 * 60_000;
 
 /**
  * An idempotent `close` for resources moved out of an `await using` stack:
