@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -31,6 +31,11 @@ const filtersSchema = z.object({
   runId: z.string().uuid().optional(),
 });
 const jsonSchema = z.json();
+const pageSuggestionsInput = z.object({
+  entity: fieldSuggestionsInput.shape.entity,
+  recordIds: z.array(z.string().uuid()).max(250),
+  fields: z.array(z.string()).max(100),
+});
 const suggestionRowSchema = z.object({
   id: z.string().uuid(),
   runId: z.string().uuid(),
@@ -65,38 +70,51 @@ export async function listPendingSuggestions(
       eq(suggestionTable.runId, parseEntityId("run", input.runId)),
     );
   const rows = await getDb(db)
-    .select()
+    .select({ suggestion: suggestionTable, runInput: runTable.input })
     .from(suggestionTable)
+    .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(and(...conditions))
     .orderBy(desc(suggestionTable.confidence));
-  const runIds = [...new Set(rows.map((row) => row.runId))];
-  const runs = (
-    await Promise.all(
-      runIds.map(async (runId) => {
-        const [run] = await getDb(db)
-          .select({ id: runTable.id, input: runTable.input })
-          .from(runTable)
-          .where(eq(runTable.id, parseEntityId("run", runId)));
-        return run;
-      }),
-    )
-  ).filter((run) => run !== undefined);
-  const pinned = new Map(
-    runs.map((run) => [
-      run.id,
-      z
-        .object({ decisionModel: z.string().optional() })
-        .passthrough()
-        .parse(run.input).decisionModel,
-    ]),
-  );
-  return rows
-    .filter(
-      (row) =>
-        !row.pairKey ||
-        pinned.get(parseEntityId("run", row.runId)) === row.model,
-    )
-    .map((row) => suggestionRowSchema.parse(row));
+  return rows.flatMap(({ suggestion, runInput }) => {
+    const decisionModel = z
+      .object({ decisionModel: z.string().optional() })
+      .passthrough()
+      .safeParse(runInput).data?.decisionModel;
+    return !suggestion.pairKey || decisionModel === suggestion.model
+      ? [suggestionRowSchema.parse(suggestion)]
+      : [];
+  });
+}
+
+/** One bounded read for the visible list page. Stored rows take precedence over
+ * live suggestions in cells; paired evaluation candidates never reach review. */
+export async function listPagePendingSuggestions(
+  db: Database,
+  rawInput: z.input<typeof pageSuggestionsInput>,
+) {
+  const input = pageSuggestionsInput.parse(rawInput);
+  if (!input.recordIds.length || !input.fields.length) return [];
+  const rows = await getDb(db)
+    .select({ suggestion: suggestionTable, runInput: runTable.input })
+    .from(suggestionTable)
+    .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
+    .where(
+      and(
+        eq(suggestionTable.entity, input.entity),
+        eq(suggestionTable.status, "pending"),
+        inArray(suggestionTable.recordId, input.recordIds),
+        inArray(suggestionTable.field, input.fields),
+      ),
+    );
+  return rows.flatMap(({ suggestion, runInput }) => {
+    const decisionModel = z
+      .object({ decisionModel: z.string().optional() })
+      .passthrough()
+      .safeParse(runInput).data?.decisionModel;
+    return !suggestion.pairKey || decisionModel === suggestion.model
+      ? [suggestionRowSchema.parse(suggestion)]
+      : [];
+  });
 }
 
 export async function applySuggestionValue(

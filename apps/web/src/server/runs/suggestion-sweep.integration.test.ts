@@ -28,6 +28,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   acceptSuggestion,
   listPendingSuggestions,
+  listPagePendingSuggestions,
   rejectSuggestion,
   recordFieldSuggestionMiss,
   summarizeSuggestionMisses,
@@ -598,6 +599,13 @@ describe("persisted Suggestion sweeps", () => {
       minConfidence: 0,
     });
     expect(reviewQueue).toHaveLength(0);
+    expect(
+      await listPagePendingSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: [...new Set(rows.map((row) => row.recordId))],
+        fields: ["categoryId"],
+      }),
+    ).toHaveLength(0);
     for (const pairKey of new Set(pairedRows.map((row) => row.pairKey))) {
       const pair = pairedRows.filter((row) => row.pairKey === pairKey);
       expect(pair).toHaveLength(2);
@@ -928,6 +936,13 @@ describe("persisted Suggestion sweeps", () => {
     const row = pending[0]!;
 
     await rejectSuggestion(ctx.db, context, { id: row.id });
+    expect(
+      await listPagePendingSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: [row.recordId],
+        fields: ["categoryId"],
+      }),
+    ).toHaveLength(0);
     const afterReject = await listPendingSuggestions(ctx.db, {
       runId,
       minConfidence: 0,
@@ -980,7 +995,21 @@ describe("persisted Suggestion sweeps", () => {
       minConfidence: 0,
     });
     if (!row) throw new Error("synthetic suggestion setup failed");
+    expect(
+      await listPagePendingSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: [row.recordId],
+        fields: ["categoryId"],
+      }),
+    ).toEqual([expect.objectContaining({ id: row.id, model: "typesafe/jev" })]);
     await acceptSuggestion(ctx.db, context, { id: row.id });
+    expect(
+      await listPagePendingSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: [row.recordId],
+        fields: ["categoryId"],
+      }),
+    ).toHaveLength(0);
     const [saved] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)

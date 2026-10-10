@@ -476,6 +476,9 @@ export const suggestionReviewListInput = z.object({
   kind: z.enum(["correction", "addition"]).optional(),
   minConfidence: z.number().min(0).max(1).default(0.5),
   runId: z.string().uuid().optional(),
+  /** Bounded list-page read; both are supplied together by generic entity lists. */
+  recordIds: z.array(z.string().uuid()).max(250).optional(),
+  fields: z.array(z.string()).max(100).optional(),
 });
 export const suggestionReviewRowSchema = z.object({
   id: z.string().uuid(),
