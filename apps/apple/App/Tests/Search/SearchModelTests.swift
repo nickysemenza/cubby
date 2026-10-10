@@ -39,9 +39,9 @@ nonisolated private final class SearchModelStub: URLProtocol, @unchecked Sendabl
 }
 
 @MainActor
-@Suite("SearchModel", .serialized)
+@Suite("SearchModel", .timeLimit(.minutes(1)), .serialized)
 struct SearchModelTests {
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func laterQueryPublishesWithoutWaitingForOrAcceptingTheEarlierResponse() async throws {
         defer { SearchModelStub.handler.withLock { $0 = nil } }
         let requestedQueries = Mutex<[String]>([])
@@ -63,13 +63,13 @@ struct SearchModelTests {
         model.query = "second"
         model.retry()
         // The earlier response is still held while the later one publishes.
-        await model.searchTask?.value
+        await model.searchTask?.waitUnlessCancelled()
 
         #expect(Self.resultTitle(in: model.phase) == "second")
         #expect(requestedQueries.withLock { $0.contains("second") })
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func changingScopeInvalidatesVisibleResultsImmediatelyAndUsesTheLatestScope() async throws {
         defer { SearchModelStub.handler.withLock { $0 = nil } }
         let entityKinds = Mutex<[String]>([])
@@ -89,13 +89,13 @@ struct SearchModelTests {
 
         #expect(model.phase == .searching)
         model.retry()
-        await model.searchTask?.value
+        await model.searchTask?.waitUnlessCancelled()
 
         #expect(Self.resultTitle(in: model.phase) == "scoped")
         #expect(entityKinds.withLock { $0 } == ["product"])
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func queryChangeCancelsAStaleSubmittedCodeLookup() async throws {
         defer { SearchModelStub.handler.withLock { $0 = nil } }
         let lookup = Gate()
@@ -119,7 +119,7 @@ struct SearchModelTests {
         #expect(model.phase == .searching)
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func watcherDoesNotKeepADiscardedSearchModelAlive() async throws {
         let defaults = UserDefaults.standard
         let recentsKey = "cubby.intents.recent"

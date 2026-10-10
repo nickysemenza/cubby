@@ -7,7 +7,7 @@ import Testing
 // Native async failure modes: core waits for background work; a removed optional survives a
 // patch; stale query/page work writes into a new context; one group failure loses other groups;
 // summary failure hides exact pagination; a retry discards ready data.
-@Suite("EntityListEnrichment")
+@Suite("EntityListEnrichment", .timeLimit(.minutes(1)))
 @MainActor
 struct EntityListEnrichmentTests {
     @Test func coreIsVisibleBeforeGroupsAndRemovedOptionalIsCleared() async throws {
@@ -45,7 +45,7 @@ struct EntityListEnrichmentTests {
         await model.waitForBackground()
         groups.resolve([.ready(id: "media", rows: [["id": "PRD-2345", "displayImages": []]])])
         summary.resolve(["price": 99])
-        for task in stale { await task.value }
+        for task in stale { await task.waitUnlessCancelled() }
 
         #expect(model.sums?["price"] == 3)
         #expect(model.project(fresh.items).first?.raw["displayImages"] != .array([]))

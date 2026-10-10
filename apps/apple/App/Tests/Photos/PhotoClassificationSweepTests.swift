@@ -5,7 +5,7 @@ import Testing
 @testable import Cubby
 
 @MainActor
-@Suite("PhotoClassificationSweep")
+@Suite("PhotoClassificationSweep", .timeLimit(.minutes(1)))
 struct PhotoClassificationSweepTests {
     private func candidate(_ id: String, day: Int, monthID: Date = Date(timeIntervalSince1970: 0))
         -> PhotoSweepScheduler.Candidate
@@ -165,7 +165,7 @@ struct PhotoClassificationSweepTests {
         sweep.setParticipating(false)
         #expect(!sweep.isRunning)
         // Let any in-flight classification land before asserting nothing progressed.
-        await stopped?.value
+        await stopped?.waitUnlessCancelled()
         let classifiedWhileOff = try await store.classifiedCount(
             newerThan: PhotoClassificationSweep.classifyVersion)
 

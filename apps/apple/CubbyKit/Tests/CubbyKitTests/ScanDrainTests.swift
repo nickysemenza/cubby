@@ -4,7 +4,7 @@ import Testing
 
 @testable import CubbyKit
 
-@Suite("ScanDrain")
+@Suite("ScanDrain", .timeLimit(.minutes(1)))
 @MainActor
 struct ScanDrainTests {
     let shelf = LocationCode("LOC-2345")

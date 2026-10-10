@@ -34,7 +34,7 @@ private struct StubPowerSource: PhotoPowerSource {
 }
 
 @MainActor
-@Suite("LibraryMetadataSync")
+@Suite("LibraryMetadataSync", .timeLimit(.minutes(1)))
 struct LibraryMetadataSyncTests {
     private func candidate(_ id: String, imageID: String = "IMG-0001") -> LibraryMetadataSync.Candidate {
         LibraryMetadataSync.Candidate(
@@ -274,7 +274,7 @@ struct LibraryMetadataSyncTests {
         sync.cancel()
         #expect(!sync.isRunning)
         pages.open()
-        await run?.value
+        await run?.waitUnlessCancelled()
         #expect(sentCount.withLock { $0 } == 50)
     }
 
@@ -411,7 +411,7 @@ struct LibraryMetadataSyncTests {
         let cancelled = sync.runTask
         sync.cancel()
         #expect(!sync.isRunning)
-        await cancelled?.value
+        await cancelled?.waitUnlessCancelled()
 
         // A gate change that is not participation or sign-in (a thermal/power notification calling
         // `reconcile()`, exactly as `observeSystemConditions` does) must not undo the cancel.

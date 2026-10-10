@@ -102,7 +102,7 @@ extension CubbyAPIError.ErrorDetail {
     }
 }
 
-@Suite("RecountSession")
+@Suite("RecountSession", .timeLimit(.minutes(1)))
 @MainActor
 struct RecountSessionTests {
     let garage = LocationCode("LOC-3456")

@@ -252,7 +252,7 @@ final class PhotoClassificationSweep {
     /// source that changed after a run already started, or after one finished with none to do).
     /// Returns once the current run has ended.
     func idle() async {
-        while let runTask { await runTask.value }
+        while !Task.isCancelled, let runTask { await runTask.waitUnlessCancelled() }
     }
 
     func reconcile(force: Bool = false) {

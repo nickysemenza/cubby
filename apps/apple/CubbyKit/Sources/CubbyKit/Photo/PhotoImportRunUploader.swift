@@ -398,7 +398,7 @@ public actor PhotoImportRunUploader {
 
     /// Returns once every device-work report issued so far has settled.
     func reportsSettled() async {
-        await pendingReport?.value
+        await pendingReport?.waitUnlessCancelled()
     }
 
     /// A short, PII-free description for a `failed` device-work report: a Vision or Photos error's
@@ -537,7 +537,7 @@ public final class PhotoImportRunSession {
 
     /// Returns once the running upload or analysis retry has finished.
     func idle() async {
-        while let task { await task.value }
+        while !Task.isCancelled, let task { await task.waitUnlessCancelled() }
     }
 
     /// Stops further chunks from starting; chunks already finalized stay finalized (the server has

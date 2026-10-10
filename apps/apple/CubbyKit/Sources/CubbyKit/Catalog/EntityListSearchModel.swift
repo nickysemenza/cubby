@@ -155,8 +155,8 @@ public final class EntityListSearchModel {
 
     /// Returns once the debounced request, if any, has applied its result or been superseded.
     func settled() async {
-        while let requestTask {
-            await requestTask.value
+        while !Task.isCancelled, let requestTask {
+            await requestTask.waitUnlessCancelled()
             if self.requestTask == requestTask { return }
         }
     }

@@ -150,7 +150,7 @@ private final class RunUploaderScript: @unchecked Sendable {
     }
 }
 
-@Suite("PhotoImportRunUploader", .serialized)
+@Suite("PhotoImportRunUploader", .timeLimit(.minutes(1)), .serialized)
 struct PhotoImportRunUploaderTests {
     private func makeClient() throws -> CubbyClient {
         let store = InMemorySessionTokenStore()

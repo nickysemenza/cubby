@@ -20,7 +20,7 @@ private final class NativeListStub: URLProtocol, @unchecked Sendable {
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
-@Suite("Native list adapters", .serialized)
+@Suite("Native list adapters", .timeLimit(.minutes(1)), .serialized)
 @MainActor
 struct NativeListAdaptersTests {
     private func makeClient() throws -> CubbyClient {

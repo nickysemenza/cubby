@@ -154,7 +154,7 @@ final class StubPhotoService: PhotoService, Sendable {
     }
 }
 
-@Suite("PhotoUploader")
+@Suite("PhotoUploader", .timeLimit(.minutes(1)))
 struct PhotoUploaderTests {
     let image = TestImages.canvas(width: 3000, height: 1500, subject: true)
 

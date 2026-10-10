@@ -18,7 +18,7 @@ private final class CollectionStub: URLProtocol, @unchecked Sendable {
 
 /// The verbs a report `records` block offers: the plans name the operations, and the one generic
 /// runner executes them. Synthetic ids only.
-@Suite("Records verbs", .serialized)
+@Suite("Records verbs", .timeLimit(.minutes(1)), .serialized)
 struct CollectionActionTests {
     private struct Seen: Sendable {
         let method: String?

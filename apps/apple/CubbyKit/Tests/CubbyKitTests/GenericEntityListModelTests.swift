@@ -16,7 +16,7 @@ private final class ListStub: URLProtocol, @unchecked Sendable {
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
-@Suite("GenericEntityListModel", .serialized)
+@Suite("GenericEntityListModel", .timeLimit(.minutes(1)), .serialized)
 @MainActor
 struct GenericEntityListModelTests {
     private func makeClient(credential: CubbyCredential = .bearer("tok")) throws -> CubbyClient {
@@ -143,8 +143,8 @@ struct GenericEntityListModelTests {
         let duplicateTrigger = Task.immediate { await model.loadNextPage() }
         await pageTwo.arrivals(1)
         pageTwo.open()
-        await firstTrigger.value
-        await duplicateTrigger.value
+        await firstTrigger.waitUnlessCancelled()
+        await duplicateTrigger.waitUnlessCancelled()
 
         #expect(model.rows.map(\.id) == ["PRD-2345", "PRD-3456"])
         #expect(model.page == 2)

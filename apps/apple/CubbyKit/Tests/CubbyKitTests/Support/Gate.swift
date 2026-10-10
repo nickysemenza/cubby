@@ -18,6 +18,7 @@ nonisolated final class Gate: Sendable {
         let continuation: CheckedContinuation<Void, any Error>
     }
     private struct Watcher {
+        let id: Int
         let count: Int
         let continuation: CheckedContinuation<Void, Never>
     }
@@ -59,7 +60,8 @@ nonisolated final class Gate: Sendable {
     }
 
     /// Records an arrival and suspends until released or opened, ignoring cancellation, so a
-    /// superseded request answers only when the test lets it.
+    /// superseded request answers only when the test lets it. It parks a double's task, never the
+    /// test's own, so a time-limited test still unwinds through `arrivals(_:)`.
     func hold() async {
         try? await park(id: nextID(), cancellable: false)
     }
@@ -106,15 +108,24 @@ nonisolated final class Gate: Sendable {
         for watcher in state.withLock({ $0.arrive() }) { watcher.resume() }
     }
 
-    /// Suspends until at least `count` callers have reached the gate.
+    /// Suspends until at least `count` callers have reached the gate, or the waiting task is
+    /// cancelled (a test's time limit), so a double that is never reached fails rather than hangs.
     func arrivals(_ count: Int = 1) async {
-        await withCheckedContinuation { continuation in
-            let reached = state.withLock { state in
-                guard state.arrived < count else { return true }
-                state.watchers.append(Watcher(count: count, continuation: continuation))
-                return false
+        let id = nextID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                let reached = state.withLock { state in
+                    guard state.arrived < count, !Task.isCancelled else { return true }
+                    state.watchers.append(Watcher(id: id, count: count, continuation: continuation))
+                    return false
+                }
+                if reached { continuation.resume() }
             }
-            if reached { continuation.resume() }
+        } onCancel: {
+            let watcher = state.withLock { state in
+                state.watchers.firstIndex { $0.id == id }.map { state.watchers.remove(at: $0) }
+            }
+            watcher?.continuation.resume()
         }
     }
 
@@ -145,5 +156,5 @@ nonisolated final class Gate: Sendable {
 /// it, and a value that turns true and back between two reads is missed.
 @MainActor
 func observe(until condition: @escaping @MainActor @Sendable () -> Bool) async {
-    for await satisfied in Observations(condition) where satisfied { return }
+    for await satisfied in Observations(condition) where satisfied || Task.isCancelled { return }
 }

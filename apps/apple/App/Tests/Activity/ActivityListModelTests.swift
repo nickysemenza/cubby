@@ -112,7 +112,7 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
 }
 
 @MainActor
-@Suite("Activity grouped list", .serialized)
+@Suite("Activity grouped list", .timeLimit(.minutes(1)), .serialized)
 struct ActivityListModelTests {
     @Test func hiddenSettledGroupsDoNotPollFromOrphanedChildCaches() async throws {
         let store = InMemorySessionTokenStore()
@@ -153,7 +153,7 @@ struct ActivityListModelTests {
         }
         #expect(await iterator.next() == nil)
         poll.cancel()
-        await poll.value
+        await poll.waitUnlessCancelled()
     }
 
     @Test func settlementRefreshSurvivesConcurrentChildPagination() async throws {
@@ -197,7 +197,7 @@ struct ActivityListModelTests {
         await refresh.value
         ActivityListStub.holdChildren.withLock { $0 = false }
         ActivityListStub.heldChild.withLock { $0 }?()
-        await more.value
+        await more.waitUnlessCancelled()
         #expect(model.groups?.items.first?.active == false)
         #expect(model.children["RUN-4K7M"]?.items.first?.active == true)
         let poll = Task { await model.pollActive(client: client) }
@@ -207,7 +207,7 @@ struct ActivityListModelTests {
         #expect(await iterator.next() == "/api/v1/activity/groupChildren")
         await pauses.arrivals(1)
         poll.cancel()
-        await poll.value
+        await poll.waitUnlessCancelled()
         #expect(model.children["RUN-4K7M"]?.items.allSatisfy { !$0.active } == true)
     }
 

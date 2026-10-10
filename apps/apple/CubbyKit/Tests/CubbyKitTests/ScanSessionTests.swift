@@ -54,7 +54,7 @@ private func stray(_ entry: String, ambiguous: Bool = false) -> ScanStrayOut {
         amount: Amount(value: 1, unit: "each"), ambiguousQuantity: ambiguous)
 }
 
-@Suite("ScanSession")
+@Suite("ScanSession", .timeLimit(.minutes(1)))
 @MainActor
 struct ScanSessionTests {
     let shelf = LocationCode("LOC-2345")

@@ -3,7 +3,7 @@ import Testing
 
 @testable import CubbyKit
 
-@Suite("CompanionImageWorker")
+@Suite("CompanionImageWorker", .timeLimit(.minutes(1)))
 struct CompanionImageWorkerTests {
     @Test func helloUsesTheSuppliedCreationHint() {
         let message = ImageProcessingClientMessage.companionHello(
@@ -89,23 +89,36 @@ struct CompanionImageWorkerTests {
     /// drain-state read must count a finished command as outstanding, pending, or both until the server
     /// acknowledges it.
     @Test func drainStateCountsACommandUntilItsResultIsDurablyRecorded() async throws {
-        let gate = Gate()
+        let execution = Gate()
+        let recording = Gate()
+        let store = try outbox()
         let worker = CompanionImageWorker(
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: try credentials(bearer: "tok"),
             deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
-            outbox: try outbox(),
+            outbox: store,
             execute: { command in
-                try? await gate.pass()
+                try? await execution.pass()
                 return Self.failedResult(command)
+            },
+            recordResult: { result, key in
+                await recording.hold()
+                try await store.record(result, for: key)
             })
         await worker.startCommand(try describeCommand(), socket: nil)
-        await gate.arrivals(1)
+        await execution.arrivals(1)
         #expect(
             try await worker.drainState()
                 == .init(connected: false, outstandingCommands: 1, pendingResults: 0))
 
-        gate.release()
+        // Executed but not yet persisted: still counted, or shutdown would see nothing to wait for.
+        execution.release()
+        await recording.arrivals(1)
+        #expect(
+            try await worker.drainState()
+                == .init(connected: false, outstandingCommands: 1, pendingResults: 0))
+
+        recording.open()
         await worker.commandsIdle()
         #expect(
             try await worker.drainState()

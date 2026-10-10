@@ -4,7 +4,7 @@ import Testing
 @testable import CubbyKit
 
 /// Transport is the external seam; the real editor and review state handle delayed responses and explicit acceptance.
-@Suite("Field suggestion review model")
+@Suite("Field suggestion review model", .timeLimit(.minutes(1)))
 @MainActor
 struct FieldSuggestionReviewModelTests {
     private static let applied = FinanceCategoryApplyOut(

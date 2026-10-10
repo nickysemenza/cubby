@@ -456,7 +456,9 @@ final class PhotoMatchStore {
 
     /// Returns once every queued background registration has been matched.
     func registrationsDrained() async {
-        while let registrationTask { await registrationTask.value }
+        while !Task.isCancelled, let registrationTask {
+            await registrationTask.waitUnlessCancelled()
+        }
     }
 
     private func schedulePendingRegistrations() {

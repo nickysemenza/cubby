@@ -82,6 +82,8 @@ public actor CompanionImageWorker {
     private let session: URLSession
     private let execute: @Sendable (ImageProcessingCommand) async -> ImageProcessingResult
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
+    /// Durably records a finished command's result; tests hold this boundary open.
+    private let recordResult: @Sendable (ImageProcessingResult, String) async throws -> Void
     private let failureObserver: FailureObserver?
     private let activityObserver: ActivityObserver?
     private let jobObserver: JobObserver?
@@ -148,7 +150,8 @@ public actor CompanionImageWorker {
         failureObserver: FailureObserver? = nil,
         activityObserver: ActivityObserver? = nil,
         jobObserver: JobObserver? = nil,
-        execute: @escaping @Sendable (ImageProcessingCommand) async -> ImageProcessingResult
+        execute: @escaping @Sendable (ImageProcessingCommand) async -> ImageProcessingResult,
+        recordResult: (@Sendable (ImageProcessingResult, String) async throws -> Void)? = nil
     ) {
         self.baseURL = baseURL
         self.credentials = credentials
@@ -157,6 +160,7 @@ public actor CompanionImageWorker {
         self.foreground = foreground
         self.isParticipating = isParticipating
         self.outbox = outbox
+        self.recordResult = recordResult ?? { try await outbox.record($0, for: $1) }
         self.session = session
         self.execute = execute
         self.failureObserver = failureObserver
@@ -434,7 +438,9 @@ public actor CompanionImageWorker {
 
     /// Returns once every accepted command has recorded its result or stopped.
     func commandsIdle() async {
-        while let command = commandTasks.values.first { await command.value }
+        while !Task.isCancelled, let command = commandTasks.values.first {
+            await command.waitUnlessCancelled()
+        }
     }
 
     private func reopenIfPaused() {
@@ -474,7 +480,7 @@ public actor CompanionImageWorker {
         guard !Task.isCancelled else { return }
         jobObserver?(.init(result, kind: command.companionKind, duration: started.duration(to: .now)))
         do {
-            try await outbox.record(result, for: key)
+            try await recordResult(result, key)
             // A reconnect replays the outbox, so a result from a dropped socket is not lost.
             guard let socket, self.socket === socket else { return }
             try await send(.companionResult(result), on: socket)

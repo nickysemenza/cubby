@@ -384,8 +384,8 @@ public final class RecountSession {
     func idle() async {
         repeat {
             await drain.idle()
-            if let refetchTask { await refetchTask.value }
-        } while drain.pendingCount > 0 || refetchTask != nil
+            if let refetchTask { await refetchTask.waitUnlessCancelled() }
+        } while !Task.isCancelled && (drain.pendingCount > 0 || refetchTask != nil)
     }
 
     private func refetchRows(keepingResolutions: Bool) async {

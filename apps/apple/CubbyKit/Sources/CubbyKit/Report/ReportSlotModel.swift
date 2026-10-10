@@ -209,8 +209,10 @@ public final class ReportSlotModel {
     @ObservationIgnored private let waitForNextPoll: @Sendable () async throws -> Void
     @ObservationIgnored private var watchers = 0
     @ObservationIgnored private(set) var pollTask: Task<Void, Never>?
-    /// Callers waiting for the read in flight to finish; a later read never overlaps it.
-    @ObservationIgnored private var loadWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Callers waiting for the read in flight to finish; a later read never overlaps it. Observed,
+    /// so a test can see a read queue behind the one in flight.
+    private var loadWaiters: [CheckedContinuation<Void, Never>] = []
+    var queuedLoads: Int { loadWaiters.count }
     @ObservationIgnored private var staleStatusReported: String?
     /// Pages after the first, kept across a refresh so polling never drops what was loaded.
     @ObservationIgnored private var laterPages: [ReportPresentation] = []

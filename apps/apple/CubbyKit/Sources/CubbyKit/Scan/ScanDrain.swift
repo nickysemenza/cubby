@@ -79,7 +79,7 @@ public final class ScanDrain<Outcome: Sendable> {
     /// Returns once every read submitted so far has finished, including work in flight whose
     /// outcome a `reset()` discards.
     func idle() async {
-        while let drainTask { await drainTask.value }
+        while !Task.isCancelled, let drainTask { await drainTask.waitUnlessCancelled() }
     }
 
     private func drain() async {

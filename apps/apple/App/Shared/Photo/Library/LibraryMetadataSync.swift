@@ -161,7 +161,7 @@ final class LibraryMetadataSync {
 
     /// Returns once the scheduled run, including any replanned pass, has ended.
     func idle() async {
-        while let runTask { await runTask.value }
+        while !Task.isCancelled, let runTask { await runTask.waitUnlessCancelled() }
     }
 
     /// Runs the sync to completion inside a `BGProcessingTask`, bypassing the scene-active gate.

@@ -4,7 +4,7 @@
     import Testing
     @testable import CubbyKit
 
-    @Suite("ChatGPT local sign-in")
+    @Suite("ChatGPT local sign-in", .timeLimit(.minutes(1)))
     struct ChatGptSignInTests {
         @Test("PKCE and registration survive the browser round trip")
         func registration() throws {

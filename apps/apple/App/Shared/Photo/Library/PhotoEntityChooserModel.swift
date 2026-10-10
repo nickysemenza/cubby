@@ -119,7 +119,7 @@ final class PhotoEntityChooserModel {
     /// that surviving page before its replacement drain decides whether to request another.
     /// Returns once the recent-lane drain, including any drain that replaced it, has ended.
     func drained() async {
-        while let drainTask { await drainTask.value }
+        while !Task.isCancelled, let drainTask { await drainTask.waitUnlessCancelled() }
     }
 
     func stopPaging() {

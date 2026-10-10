@@ -189,7 +189,7 @@ private let yieldCommand = #"""
     """#
 
 @MainActor
-@Suite("Report slot model")
+@Suite("Report slot model", .timeLimit(.minutes(1)))
 struct ReportSlotModelTests {
     /// `polls` stands in for the wait between polls: a poll proceeds only once the test lets it.
     private func model(
@@ -446,7 +446,7 @@ struct ReportSlotModelTests {
         ])
         let model = model(service, polls: Gate(open: true))
         model.retain()
-        await model.pollTask?.value
+        await model.pollTask?.waitUnlessCancelled()
         model.release()
         #expect(service.calls.withLock { $0.reads.count } == 3)
         #expect(!model.live)
@@ -467,7 +467,7 @@ struct ReportSlotModelTests {
         await polls.arrivals(2)
         let polling = model.pollTask
         model.release()
-        await polling?.value
+        await polling?.waitUnlessCancelled()
         #expect(service.calls.withLock { $0.reads.count } == 2)
         #expect(polls.arrived == 2)
     }
@@ -522,7 +522,7 @@ struct ReportSlotModelTests {
         first.retain()
         second.retain()
         // The completed record is read once and never polled.
-        await batch.pollTask?.value
+        await batch.pollTask?.waitUnlessCancelled()
         #expect(rowIDs(first.presentation) == ["a"])
         #expect(rowIDs(second.presentation) == ["a"])
         #expect(service.calls.withLock { $0.reads } == ["batch:\(RunReportBatch.slots.count)"])
@@ -548,8 +548,8 @@ struct ReportSlotModelTests {
         #expect(model.isLoading)
         let more = Task.immediate { await model.loadMore() }
         reads.open()
-        await refreshing.value
-        await more.value
+        await refreshing.waitUnlessCancelled()
+        await more.waitUnlessCancelled()
         #expect(rowIDs(model.presentation) == ["one", "two"])
         // A later refresh keeps the loaded page.
         await model.refresh()
@@ -569,9 +569,11 @@ struct ReportSlotModelTests {
         let poll = Task.immediate { await model.refresh() }
         #expect(model.isLoading)
         let ran = Task.immediate { _ = await model.run(action, confirmed: false) }
+        // The action's refresh queues behind the read still held in flight.
+        await observe { model.queuedLoads == 1 }
         reads.open()
-        await poll.value
-        await ran.value
+        await poll.waitUnlessCancelled()
+        await ran.waitUnlessCancelled()
         #expect(rowIDs(model.presentation) == ["fresh"])
     }
 
@@ -585,12 +587,12 @@ struct ReportSlotModelTests {
         ])
         let model = model(service, polls: Gate(open: true))
         model.retain()
-        await model.pollTask?.value
+        await model.pollTask?.waitUnlessCancelled()
         // The stopped record ended the loop after one read.
         #expect(model.pollTask == nil)
         #expect(service.calls.withLock { $0.reads.count } == 1)
         model.restartPolling()
-        await model.pollTask?.value
+        await model.pollTask?.waitUnlessCancelled()
         #expect(rowIDs(model.presentation) == ["d"])
         model.release()
     }

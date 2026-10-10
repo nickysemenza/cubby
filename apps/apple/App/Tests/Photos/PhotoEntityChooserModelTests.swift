@@ -6,7 +6,7 @@ import Testing
 @testable import Cubby
 
 @MainActor
-@Suite("Photo entity chooser")
+@Suite("Photo entity chooser", .timeLimit(.minutes(1)))
 struct PhotoEntityChooserModelTests {
     @Test func recentPagesAdvancePastSameDayRowsAndDateMatchesStayIndependent() async throws {
         let captureDate = Self.day("2026-09-10")
@@ -205,8 +205,7 @@ struct PhotoEntityChooserModelTests {
 
     /// A load-more can start while refresh awaits its independent date lane. The completed
     /// refresh must replace that drain too, even if its obsolete recent page ignores cancellation.
-    // A refresh that waited on the held page would hang; the limit turns that into a failure.
-    @Test(.timeLimit(.minutes(1))) func refreshReplacesADrainStartedDuringItsDateRequest() async throws {
+    @Test func refreshReplacesADrainStartedDuringItsDateRequest() async throws {
         let calls = Mutex<[Int]>([])
         let dateCalls = Mutex(0)
         let dateRefresh = Gate()
@@ -239,11 +238,11 @@ struct PhotoEntityChooserModelTests {
         dateRefresh.open()
 
         // The refresh finishes while the obsolete page is still held.
-        await refreshing.value
+        await refreshing.waitUnlessCancelled()
         #expect(calls.withLock { $0 } == [1, 2, 1, 2])
         #expect(model.recentRows.map(\.id) == ["MEA-recent-2-2"])
         stalePage.open()
-        await more.value
+        await more.waitUnlessCancelled()
         #expect(model.recentRows.map(\.id) == ["MEA-recent-2-2"])
     }
 
@@ -272,7 +271,7 @@ struct PhotoEntityChooserModelTests {
         model.stopPaging()
         pageTwo.open()
         await initial.value
-        await drain?.value
+        await drain?.waitUnlessCancelled()
 
         #expect(calls.withLock { $0 } == [1, 2])
         #expect(model.hasMoreRecents)
@@ -338,7 +337,7 @@ struct PhotoEntityChooserModelTests {
         // request page 2.
         let returning = Task.immediate { await model.loadInitial() }
         recentRefresh.open()
-        await refreshing.value
+        await refreshing.waitUnlessCancelled()
         await returning.value
 
         #expect(calls.withLock { $0 } == [1, 1, 2])
@@ -405,7 +404,7 @@ struct PhotoEntityChooserModelTests {
         await dateRefresh.arrivals(1)
         model.stopPaging()
         dateRefresh.open()
-        await refreshing.value
+        await refreshing.waitUnlessCancelled()
 
         #expect(calls.withLock { $0 } == [1])
         #expect(model.recentRows.map(\.id) == ["MEA-recent-1"])

@@ -5,7 +5,7 @@ import Testing
 
 // A completed result survives a failed HTTP send; cancellation releases the assigned capability
 // instead of writing a failed result that can consume the next background window's work.
-@Suite("Companion image background window")
+@Suite("Companion image background window", .timeLimit(.minutes(1)))
 struct CompanionImageBackgroundTests {
     private func command() throws -> ImageProcessingCommand {
         let value = """

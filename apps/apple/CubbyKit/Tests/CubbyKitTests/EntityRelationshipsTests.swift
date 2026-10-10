@@ -3,7 +3,7 @@ import Testing
 
 @testable import CubbyKit
 
-@Suite("Entity relationships")
+@Suite("Entity relationships", .timeLimit(.minutes(1)))
 struct EntityRelationshipsTests {
     @Test func graphPageMergeDeduplicatesAndAdvancesOnlyTheRequestedBranch() throws {
         let root = ref(.product, "PRD-1001")

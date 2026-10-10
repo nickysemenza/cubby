@@ -7,7 +7,7 @@ import Testing
 @testable import Cubby
 
 @MainActor
-@Suite("Progressive photo matching", .serialized)
+@Suite("Progressive photo matching", .timeLimit(.minutes(1)), .serialized)
 struct PhotoMatchStoreTests {
     @Test(arguments: PhotoImportCatalog.ingressRoutes.filter { $0.storage != nil && $0.relationPath.isEmpty })
     func everyDirectOwnerFamilyCanProduceStrongAndPossibleBadges(route: PhotoIngressRoute) throws {

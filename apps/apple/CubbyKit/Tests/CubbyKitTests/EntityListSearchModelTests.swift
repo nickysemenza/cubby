@@ -3,7 +3,7 @@ import Testing
 
 @testable import CubbyKit
 
-@Suite("EntityListSearchModel")
+@Suite("EntityListSearchModel", .timeLimit(.minutes(1)))
 @MainActor
 struct EntityListSearchModelTests {
     @Test func debouncesAndLoadsOnlyTheLatestQuery() async {
