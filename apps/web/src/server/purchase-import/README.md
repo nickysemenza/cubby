@@ -59,6 +59,8 @@ count, with its existing Run inspector and an attention-only filter. Attention
 refreshes every fifteen seconds even when no attempt is executing; late responses
 cannot restore an earlier filter scope. Same-scope group refreshes do not discard
 an independent attention response or diagnostic. Reads never restart paused research.
+Activity rows present execution state and retained progress, not entity record
+completeness: a structurally complete Run record can still be paused or failed.
 
 Product and Purchase research history use the shared entity report and record
 renderer on web and Apple clients. Each attempt shows its Run lifecycle alongside
