@@ -125,6 +125,33 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
 @MainActor
 @Suite("Activity grouped list", .serialized)
 struct ActivityListModelTests {
+    @Test func attentionPollingRemovesResolvedGroupsWithoutActiveWork() async throws {
+        ActivityListStub.settled.withLock { $0 = true }
+        ActivityListStub.hideSettledGroups.withLock { $0 = false }
+        defer {
+            ActivityListStub.settled.withLock { $0 = false }
+            ActivityListStub.hideSettledGroups.withLock { $0 = false }
+        }
+        let store = InMemorySessionTokenStore()
+        try store.save(.bearer("tok"), for: "localhost:3000")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ActivityListStub.self]
+        let client = CubbyClient(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: CredentialProvider(host: "localhost:3000", store: store),
+            session: URLSession(configuration: configuration))
+        let model = ActivityListModel()
+        model.attentionOnly = true
+        await model.load(client: client)
+        #expect(model.runs.count == 1)
+        ActivityListStub.hideSettledGroups.withLock { $0 = true }
+        let poll = Task { await model.pollAttention(client: client) }
+        defer { poll.cancel() }
+        try await Task.sleep(for: .seconds(16))
+        #expect(model.runs.isEmpty)
+        #expect(model.total == 0)
+    }
+
     @Test func loadFetchesBoundedAttentionWithTheSameScope() async throws {
         let store = InMemorySessionTokenStore()
         try store.save(.bearer("tok"), for: "localhost:3000")

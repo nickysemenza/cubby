@@ -144,7 +144,10 @@ final class ActivityListModel {
     func pollAttention(client: CubbyClient) async {
         while !Task.isCancelled {
             do { try await Task.sleep(for: .seconds(15)) } catch { return }
-            if !loading { await refreshAttention(client: client) }
+            if !loading {
+                if attentionOnly { await refreshLoaded(client: client) }
+                await refreshAttention(client: client)
+            }
         }
     }
 
