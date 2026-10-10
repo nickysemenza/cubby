@@ -29,6 +29,7 @@ for (const journey of selectedJourneys(journeys, "ios"))
   test(journey.title, async ({ app, agent, screen, device }) => {
     await runJourney(journey, "ios", {
       agent,
+      tapTestId: (id) => screen.getByTestId(id).tap(),
       expectText: async (text, visible) => {
         const target = screen.getByText(text, { exact: false }).first();
         if (visible) await expect(target).toBeVisible();

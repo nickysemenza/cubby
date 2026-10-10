@@ -61,18 +61,18 @@ the application readiness contract; it does not add a fixed delay.
 
 Tester Army and its decision/mobile SDKs run unpatched. Goals use the existing
 searchable web picker inputs. The native external-ID journey splits source,
-identifier and save into separate goals that explicitly use the app's Done
-button. Its fixture establishes a reachable structured-entry row, centered in
+and identifier into separate goals that explicitly use the app's Done
+button, then taps the known Save control as a supported hybrid step. Its fixture establishes a reachable structured-entry row, centered in
 the measured Form viewport; product rename covers editor navigation. The generic native editors
 expose that shared Done action and render structured fields as separate Form
 rows for keyboard avoidance. Keep unsupported interaction handling in the
 journeys or product UI rather than patching the E2E SDK. Goals end at observable
 states, with exact database read-back establishing persistence. HTTP and network
 inference failures fail once at Cubby's gateway boundary; aborts stay aborts.
-The iOS Save goal confirms that the editor closed and Edit is available. The
+The iOS Save step uses `tapTestId` rather than model completion: both compound
+and simple Save goals returned inconclusive after successfully saving. The
 following visible-value check and exact SQL assertions verify the saved external
-ID, source and kind; a compound model completion claim proved inconclusive even
-when the detail screen displayed all three correct values.
+ID, source and kind. Jev still enters the fields and drives product rename.
 
 ## Failure modes and acceptance
 

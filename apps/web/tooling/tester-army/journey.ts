@@ -88,6 +88,8 @@ export type JourneyStep = {
   /** Engine-specific wording or interaction phases supported by that engine. */
   web?: string | string[];
   ios?: string | string[];
+  /** A supported hybrid step uses a known control instead of model completion. */
+  tapTestId?: Partial<Record<Engine, string>>;
 };
 
 export type Journey = {
