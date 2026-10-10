@@ -265,7 +265,12 @@ struct ActivityView: View {
                         appModel.backgroundActivity.cancel(id: activity.id)
                     }
                     if case .serverRun(let runID) = activity.link {
-                        NavigationLink(value: ActivitySelection.serverRun(runID)) { row }
+                        Button {
+                            appModel.navigator.selectedActivity = .serverRun(runID)
+                        } label: {
+                            row
+                        }
+                        .buttonStyle(.plain)
                     } else {
                         row
                     }
