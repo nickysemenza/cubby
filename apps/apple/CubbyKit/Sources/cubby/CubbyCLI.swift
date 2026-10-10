@@ -18,7 +18,7 @@ struct CubbyCLI: AsyncParsableCommand {
 
     private static var platformCommands: [any ParsableCommand.Type] {
         #if os(macOS)
-            [BrowserCommand.self, ChatGptCommand.self]
+            [ChatGptCommand.self]
         #else
             []
         #endif

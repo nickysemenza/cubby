@@ -335,12 +335,3 @@ extension ImageAnalysisOutput {
                 filename: analysis.provenance.filename))
     }
 }
-
-extension ReceiptHunt {
-    /// An unknown charge day leaves manual selection available without inventing a search window.
-    public var searchContext: NearbyReceiptSearchContext {
-        let date = transactionDate.flatMap { PlainDate(rawValue: $0).date() }
-        return NearbyReceiptSearchContext(
-            huntID: id, transactionDate: date, merchant: merchant, amountInCents: amountInCents)
-    }
-}

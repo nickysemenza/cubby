@@ -246,7 +246,6 @@ targets:
     info:
       properties:
         LSApplicationCategoryType: public.app-category.productivity
-        NSAppleEventsUsageDescription: Cubby opens a dedicated browser window to capture signed-in order evidence you request.
   # Tests for iOS-only screens. Hosted by Cubby-iOS so `@testable import Cubby`
   # and `.environment`/`AppModel` work exactly as the app's own `#Preview`s do.
   # macOS hosts the cross-platform navigation contracts below.
@@ -285,7 +284,6 @@ targets:
       - path: App/Tests/Photos/EntityPickerIdentityTests.swift
       - path: App/Tests/Photos/PhotoTestStores.swift
       - path: App/Tests/Participation/AppInstallationIDTests.swift
-      - path: App/Tests/PurchaseImport
       - path: App/Tests/Activity/ActivityListModelTests.swift
     dependencies:
       - target: Cubby-macOS

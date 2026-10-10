@@ -589,12 +589,11 @@ public actor CubbyClient {
         public var executor: Executor
         public var from: Date?
         public var to: Date?
-        public var attentionOnly: Bool?
 
         public init(
             kind: ActivityKind? = nil, state: String? = nil, subjectID: String? = nil,
             submissionID: String? = nil, executor: Executor = .all, from: Date? = nil,
-            to: Date? = nil, attentionOnly: Bool? = nil
+            to: Date? = nil
         ) {
             self.kind = kind
             self.state = state
@@ -603,7 +602,6 @@ public actor CubbyClient {
             self.executor = executor
             self.from = from
             self.to = to
-            self.attentionOnly = attentionOnly
         }
     }
 
@@ -614,8 +612,7 @@ public actor CubbyClient {
             try await api.activity_list(
                 query: .init(
                     kind: filters.kind.map(activityListKind), state: filters.state,
-                    attentionOnly: filters.attentionOnly, subjectId: filters.subjectID,
-                    submissionId: filters.submissionID,
+                    subjectId: filters.subjectID, submissionId: filters.submissionID,
                     executor: .init(rawValue: filters.executor.query.name),
                     deviceId: filters.executor.query.deviceID, from: filters.from, to: filters.to,
                     sort: .newest, cursor: cursor, limit: limit)
@@ -630,8 +627,7 @@ public actor CubbyClient {
             try await api.activity_groups(
                 query: .init(
                     kind: filters.kind.flatMap { .init(rawValue: $0.rawValue) }, state: filters.state,
-                    attentionOnly: filters.attentionOnly, subjectId: filters.subjectID,
-                    submissionId: filters.submissionID,
+                    subjectId: filters.subjectID, submissionId: filters.submissionID,
                     executor: .init(rawValue: filters.executor.query.name),
                     deviceId: filters.executor.query.deviceID, from: filters.from, to: filters.to,
                     sort: .newest, cursor: cursor, limit: limit)
@@ -646,8 +642,7 @@ public actor CubbyClient {
             try await api.activity_groupChildren(
                 query: .init(
                     kind: filters.kind.flatMap { .init(rawValue: $0.rawValue) }, state: filters.state,
-                    attentionOnly: filters.attentionOnly, subjectId: filters.subjectID,
-                    submissionId: filters.submissionID,
+                    subjectId: filters.subjectID, submissionId: filters.submissionID,
                     executor: .init(rawValue: filters.executor.query.name),
                     deviceId: filters.executor.query.deviceID, from: filters.from, to: filters.to,
                     sort: .newest, cursor: cursor, limit: limit, rootId: rootID)

@@ -12,7 +12,6 @@ struct SettingsView: View {
     var isSidebarRoot = false
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedServer = SettingsServer.production
     @State private var draftURL = ""
     @AppStorage("photoAnalysisWindow") private var photoAnalysisWindowRaw = PhotoAnalysisWindow.thisYear
@@ -21,17 +20,11 @@ struct SettingsView: View {
     @State private var photoAnalysisSummary: (analysed: Int, total: Int)?
     @State private var photoStorageSummary: PhotoAnalysisStorageSummary?
     @State private var photosReady = false
-    @State private var receiptHunts: [ReceiptHunt] = []
-    @State private var selectedReceiptHunt: ReceiptHunt?
     /// On iOS Settings is a view-based `NavigationLink` destination. Pushing Dev through the
     /// tab's value path before popping Settings makes SwiftUI animate two independent stacks at
     /// once, which can leave the destination visually blank. Pop first, then append the route
     /// from this view's disappearance callback.
     @State private var opensDeveloperToolsAfterDismissal = false
-    #if os(macOS)
-        @AppStorage("purchaseImport.browser") private var purchaseImportBrowser = BrowserChoice.chrome
-        @State private var browserPermissions = MacBrowserPermissionSnapshot.current(browser: .chrome)
-    #endif
 
     var body: some View {
         @Bindable var model = model
@@ -128,11 +121,7 @@ struct SettingsView: View {
 
             if model.phase == .signedIn, photosReady { photosSection }
 
-            if model.phase == .signedIn, !receiptHunts.isEmpty { receiptHuntsSection }
-
-            #if os(macOS)
-                if model.phase == .signedIn { purchaseImportSection }
-            #endif
+            // TODO(caller-driven-research): receipt photo creates a minimal Purchase
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
@@ -146,9 +135,6 @@ struct SettingsView: View {
         .onAppear {
             synchronizeServerSelection()
             photosReady = model.photoAnalysisStore != nil
-            #if os(macOS)
-                browserPermissions = .current(browser: purchaseImportBrowser)
-            #endif
         }
         #if os(iOS)
             .onDisappear {
@@ -158,23 +144,6 @@ struct SettingsView: View {
             }
         #endif
         .onChange(of: model.baseURL) { _, _ in synchronizeServerSelection() }
-        .task(id: model.phase) {
-            guard model.phase == .signedIn else {
-                receiptHunts = []
-                return
-            }
-            await loadReceiptHunts()
-        }
-        .sheet(item: $selectedReceiptHunt) { hunt in
-            NavigationStack {
-                NearbyReceiptSearchView(
-                    context: hunt.searchContext,
-                    onConfirm: { file, context in
-                        try await model.client.submitConfirmedReceipt(file, huntID: context.huntID)
-                        await loadReceiptHunts()
-                    })
-            }
-        }
         .photoAnalysisLifecycle(ready: photosReady, model: model, paused: photoAnalysisPaused) {
             await loadPhotoAnalysisSummary()
         }
@@ -185,110 +154,6 @@ struct SettingsView: View {
                 }
             }
         #endif
-        #if os(macOS)
-            .onChange(of: purchaseImportBrowser) { _, browser in
-                browserPermissions = .current(browser: browser)
-                model.browserBridge.reconnect(browser: browser)
-            }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active {
-                    browserPermissions = .current(browser: purchaseImportBrowser)
-                }
-            }
-        #endif
-    }
-
-    #if os(macOS)
-        private var purchaseImportSection: some View {
-            Section {
-                Picker("Browser", selection: $purchaseImportBrowser) {
-                    ForEach(BrowserChoice.allCases) { browser in
-                        Text(browser.title).tag(browser)
-                    }
-                }
-                .accessibilityIdentifier("settings.purchaseImport.browser")
-                LabeledContent("Status") {
-                    Text(model.browserBridge.statusLabel)
-                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                }
-                permissionRow(
-                    "Screen Recording", status: browserPermissions.screenRecording,
-                    pane: .screenRecording)
-                permissionRow(
-                    "Browser control", status: browserPermissions.appleEvents, pane: .automation)
-                Button("Open Browser Sync", systemImage: "arrow.triangle.2.circlepath") {
-                    model.navigator.section = .browserSync
-                }
-                .accessibilityIdentifier("settings.purchaseImport.openPane")
-                if let error = model.browserBridge.error {
-                    Text(error).foregroundStyle(FieldGuideTokens.destructive)
-                }
-            } header: {
-                Eyebrow("Purchase imports")
-            } footer: {
-                Text(
-                    "Cubby controls only its own browser window and sends the page's markup without form values; browser sessions never leave this Mac. Screenshots need Screen Recording; without it Cubby still sends the page and says why the screenshot is missing."
-                )
-                .font(.fieldGuideLabel)
-                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-            }
-        }
-
-        @ViewBuilder
-        private func permissionRow(
-            _ title: String, status: MacBrowserPermissionStatus, pane: MacBrowserPermissionSnapshot.Pane
-        ) -> some View {
-            LabeledContent(title) {
-                if status == .denied {
-                    Button(status.label) {
-                        // The first request lists Cubby under Screen Recording so it can be allowed.
-                        if pane == .screenRecording {
-                            _ = MacBrowserPermissionSnapshot.requestScreenRecording()
-                        }
-                        MacBrowserPermissionSnapshot.openSettings(pane)
-                    }
-                } else {
-                    Text(status.label).foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                }
-            }
-        }
-    #endif
-
-    private var receiptHuntsSection: some View {
-        Section {
-            ForEach(receiptHunts) { hunt in
-                Button {
-                    selectedReceiptHunt = hunt
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(hunt.merchant ?? "Unidentified purchase")
-                            Text(hunt.transactionDate ?? "Date unknown")
-                                .font(.fieldGuideLabel)
-                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                        }
-                        Spacer()
-                        Text(Double(hunt.amountInCents) / 100, format: .usd)
-                            .font(.fieldGuideData)
-                    }
-                }
-                .accessibilityIdentifier("settings.purchaseImport.receipt.\(hunt.id)")
-            }
-        } header: {
-            Eyebrow("Receipts needed")
-        } footer: {
-            Text("Choose a charge to find a nearby receipt photo. Nothing uploads until you confirm it.")
-                .font(.fieldGuideLabel)
-                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-        }
-    }
-
-    @MainActor private func loadReceiptHunts() async {
-        do {
-            receiptHunts = try await model.client.receiptHunts().items
-        } catch {
-            Diagnostics.report(error, context: "purchaseImport.receiptHunts")
-        }
     }
 
     /// Split out of `body` to keep its expression under the 200ms type-check budget

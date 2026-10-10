@@ -41,10 +41,6 @@ final class ActivityListModel {
     var runs: [ActivityRun] { groups?.items.map(\.root) ?? [] }
     private(set) var total = 0
     private(set) var workSummary: String?
-    private(set) var attention: ActivityListOutput?
-    private(set) var attentionError: String?
-    private var attentionGeneration = 0
-    var attentionOnly = false
     private(set) var nextCursor: String?
     private(set) var loading = false
     private(set) var devices: [ActivityExecutor] = []
@@ -68,12 +64,11 @@ final class ActivityListModel {
             }
         return .init(
             kind: kind, state: state.nilIfBlank, subjectID: subjectID.nilIfBlank,
-            submissionID: submissionID.nilIfBlank, executor: executor, from: dateRange.start,
-            attentionOnly: attentionOnly ? true : nil)
+            submissionID: submissionID.nilIfBlank, executor: executor, from: dateRange.start)
     }
 
     var filterIdentity: String {
-        "\(kind?.rawValue ?? "all"):\(state):\(subjectID):\(submissionID):\(execution):\(dateRange.rawValue):\(attentionOnly)"
+        "\(kind?.rawValue ?? "all"):\(state):\(subjectID):\(submissionID):\(execution):\(dateRange.rawValue)"
     }
 
     func load(client: CubbyClient, reset: Bool = true) async {
@@ -82,9 +77,6 @@ final class ActivityListModel {
         let requestedIdentity = filterIdentity
         if reset {
             workSummary = nil
-            attention = nil
-            attentionError = nil
-            attentionGeneration += 1
             requestGeneration += 1
             childLoading.removeAll()
             children.removeAll()
@@ -107,7 +99,6 @@ final class ActivityListModel {
             workSummary = page.workSummary
             nextCursor = page.nextCursor
             error = nil
-            if reset { await refreshAttention(client: client) }
         } catch {
             guard !Task.isCancelled, generation == requestGeneration, requestedIdentity == filterIdentity
             else {
@@ -115,40 +106,6 @@ final class ActivityListModel {
             }
             self.error = error.localizedDescription
             Diagnostics.report(error, context: "activity.list")
-        }
-    }
-
-    func refreshAttention(client: CubbyClient) async {
-        guard !Task.isCancelled else { return }
-        let requestedFilters = filters
-        let requestedIdentity = filterIdentity
-        var attentionFilters = requestedFilters
-        attentionFilters.attentionOnly = true
-        attentionGeneration += 1
-        let generation = attentionGeneration
-        do {
-            let page = try await client.activityRuns(filters: attentionFilters, limit: 5)
-            guard !Task.isCancelled, generation == attentionGeneration,
-                requestedIdentity == filterIdentity
-            else { return }
-            attention = page
-            attentionError = nil
-        } catch {
-            guard !Task.isCancelled, generation == attentionGeneration,
-                requestedIdentity == filterIdentity
-            else { return }
-            attentionError = error.localizedDescription
-            Diagnostics.report(error, context: "activity.attention")
-        }
-    }
-
-    func pollAttention(client: CubbyClient) async {
-        while !Task.isCancelled {
-            do { try await Task.sleep(for: .seconds(15)) } catch { return }
-            if !loading {
-                if attentionOnly { await refreshLoaded(client: client) }
-                await refreshAttention(client: client)
-            }
         }
     }
 
@@ -297,20 +254,6 @@ struct ActivityView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Section("Needs attention") {
-                if let error = model.attentionError {
-                    LoadFailureView(title: "Couldn’t load attention", message: error) {
-                        await model.refreshAttention(client: appModel.client)
-                    }
-                } else if let attention = model.attention {
-                    Text("\(attention.total) matching attempts across all pages")
-                        .font(.caption).foregroundStyle(.secondary)
-                    ForEach(attention.items, id: \.id) { run in runButton(run) }
-                    if attention.total > 0, !model.attentionOnly {
-                        Button("Show attention only") { model.attentionOnly = true }
-                    }
-                }
-            }
             Section {
                 if let error = model.error {
                     LoadFailureView(title: "Couldn’t load activity", message: error) {
@@ -385,17 +328,11 @@ struct ActivityView: View {
             }
         }
         .navigationTitle("Activity")
-        .refreshable {
-            await model.refreshLoaded(client: appModel.client)
-            await model.refreshAttention(client: appModel.client)
-        }
+        .refreshable { await model.refreshLoaded(client: appModel.client) }
         .task(id: "\(appModel.host):\(model.filterIdentity)") {
             await model.load(client: appModel.client)
         }
         .task(id: appModel.host) { await model.loadDevices(client: appModel.client) }
-        .task(id: "\(appModel.host):\(model.filterIdentity):attention") {
-            await model.pollAttention(client: appModel.client)
-        }
         .task(id: "\(appModel.host):\(model.filterIdentity):poll") {
             await model.pollActive(client: appModel.client)
         }
@@ -425,7 +362,6 @@ struct ActivityView: View {
     private var filters: some View {
         Section {
             DisclosureGroup("Filters") {
-                Toggle("Attention only", isOn: $model.attentionOnly)
                 Picker("Work type", selection: $model.kind) {
                     Text("All types").tag(nil as ActivityKind?)
                     ForEach(ActivityKind.allCases, id: \.self) { kind in
