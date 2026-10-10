@@ -749,6 +749,15 @@ export const browserPageCapture = z.object({
 });
 export type BrowserPageCapture = z.infer<typeof browserPageCapture>;
 
+/** A maintenance interpretation is separate from the original capture replay. */
+export const retainedCaptureInterpretation = z.object({
+  evidenceId: z.uuid(),
+  originalVersion: z.number().int().positive(),
+  supportedFactFields: z.array(z.string()),
+  capture: browserPageCapture,
+  changedFields: z.array(z.string()),
+});
+
 /** Why the Mac could not take a screenshot of its account window. */
 export const browserScreenshotGap = z.enum([
   "window_not_found",

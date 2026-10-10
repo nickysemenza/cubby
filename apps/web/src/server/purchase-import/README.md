@@ -832,3 +832,14 @@ The maintained Product skill prioritizes those sources and exact item URLs.
 Broader search resolves unavailable sources or remaining facts. Pi keeps hosting
 the adaptive conversation; shared tools keep retaining observations and enforcing
 writes. No new workflow, transport, status model or table is introduced.
+
+### Retained capture maintenance
+
+`run.rederiveCapture` is an authenticated operator-maintenance operation. It reads
+an owned retained browser command, verifies its task-bound original checksum,
+and derives a new interpretation under that command's original allowed hosts.
+A revision-keyed completed RunOperation retains the interpretation and its
+changed capture fields and supported fact fields. The generic Run log reports
+that receipt. The original capture replay, accepted facts, source bytes and
+settled targets remain unchanged; research of new evidence uses a new Run.
+Retired Runs and missing/pending originals refuse maintenance.
