@@ -24,6 +24,7 @@ import {
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
 import { purchaseImportDebugEventsRequest } from "@cubby/schemas/purchase-import-debug";
+import { acceptedResearchFact } from "@cubby/schemas/research";
 import {
   syncPlanInput,
   syncPlanOutput,
@@ -197,6 +198,19 @@ const runDetail = z
         id: z.string().min(1),
         targetId: z.string().nullable(),
         sourceKind: z.string().min(1),
+        title: z.string().optional(),
+        sourceURL: z.url().optional(),
+        capturedAt: z.iso.datetime().optional(),
+        mediaUrl: z.string().optional(),
+        previewUrl: z.string().optional(),
+        supportedFacts: z
+          .array(
+            acceptedResearchFact.pick({ fieldPath: true, value: true }).extend({
+              entityKind: runTargetEntityKind,
+              entityShortcode: anyShortcodeSchema(runTargetEntityKind.options),
+            }),
+          )
+          .optional(),
         filename: z.string().nullable(),
         mediaType: z.string().nullable(),
         checksum: z.string().nullable(),

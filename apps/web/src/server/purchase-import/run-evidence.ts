@@ -22,6 +22,7 @@ import {
   runTarget,
 } from "~/server/db/schema";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import { getS3Object } from "~/server/utils/s3";
 
 import {
   productionBrowserEvidenceStorage,
@@ -230,5 +231,110 @@ export async function receiveRunEvidenceUpload(
         })
         .where(eq(runEvidence.id, owned.evidence.id));
     return new Response(null, { status: 204 });
+  });
+}
+
+const retainedMediaSelection = initiateRunEvidenceUploadInput
+  .pick({
+    runId: true,
+    targetId: true,
+  })
+  .extend({ evidenceId: z.uuid() });
+
+/** Read immutable originals through the same ownership and retirement fence as uploads. */
+export async function readRunEvidenceMedia(
+  db: Database,
+  selection: z.input<typeof retainedMediaSelection>,
+  actorUserId: string,
+  readObject: (key: string) => Promise<Response> = getS3Object,
+): Promise<Response> {
+  const input = retainedMediaSelection.parse(selection);
+  const actor = userId.parse(actorUserId);
+  const headers = {
+    "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "sandbox; default-src 'none'",
+  };
+  return withTransaction(db, async (database) => {
+    const [owned] = await database
+      .select({ evidence: runEvidence })
+      .from(runEvidence)
+      .innerJoin(runTable, eq(runTable.id, runEvidence.runId))
+      .innerJoin(
+        runTarget,
+        and(
+          eq(runTarget.id, runEvidence.targetId),
+          eq(runTarget.runId, runTable.id),
+        ),
+      )
+      .innerJoin(
+        ledgerParty,
+        and(
+          eq(ledgerParty.id, runTable.ledgerPartyId),
+          eq(ledgerParty.userId, actor),
+          eq(ledgerParty.kind, "member"),
+          notDeleted(ledgerParty),
+        ),
+      )
+      .where(
+        and(
+          eq(runTable.shortcode, input.runId),
+          eq(runTable.actorUserId, actor),
+          notDeleted(runTable),
+          isNull(runTable.retiredAt),
+          eq(runTarget.id, input.targetId),
+          eq(runEvidence.id, input.evidenceId),
+        ),
+      )
+      .limit(1)
+      .for("update", { of: runTable });
+    if (!owned)
+      return new Response(
+        "Retained evidence is unavailable or no longer owned",
+        { status: 404, headers },
+      );
+    const evidence = owned.evidence;
+    const mediaType =
+      initiateRunEvidenceUploadInput.shape.contentType.safeParse(
+        evidence.mediaType,
+      );
+    const size = initiateRunEvidenceUploadInput.shape.byteSize.safeParse(
+      evidence.byteSize,
+    );
+    const staged = z
+      .object({ researchUploadState: z.literal("pending") })
+      .safeParse(evidence.sourceMetadata);
+    if (staged.success)
+      return new Response("Retained evidence upload is pending", {
+        status: 409,
+        headers,
+      });
+    if (!mediaType.success || !size.success)
+      return new Response(
+        "Retained evidence cannot be displayed as verified media",
+        { status: 415, headers },
+      );
+    const original = await readObject(evidence.objectKey);
+    if (!original.ok)
+      return new Response(await original.text(), {
+        status: original.status,
+        headers,
+      });
+    const bytes = await readResponseWithLimit(original, size.data);
+    if (
+      bytes.byteLength !== size.data ||
+      (await sha256Hex(bytes)) !== evidence.checksum
+    )
+      return new Response(
+        "Retained evidence bytes differ from their manifest",
+        { status: 422, headers },
+      );
+    return new Response(bytes, {
+      headers: {
+        ...headers,
+        "Content-Type": mediaType.data,
+        "Content-Length": String(bytes.byteLength),
+      },
+    });
   });
 }

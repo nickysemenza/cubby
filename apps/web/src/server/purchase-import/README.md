@@ -892,3 +892,15 @@ both member and initiating actor for every Run before writing any event, and
 replayed event IDs remain idempotent. The socket and OAuth routes remain device
 transports; the old accounts/debug HTTP routes and custom request helper are
 removed. Apple compatibility 2.17 ships the changed paths.
+
+### Retained capture media
+
+Original screenshot and document bytes are served by authenticated GET on the
+existing evidence endpoint. Reads bind the initiating actor and member to the
+Run, target and evidence row, including completed targets. Retirement takes the
+same Run fence as reads; mismatched ownership cannot fetch storage. The allocated
+manifest bounds the bytes, and checksum verification precedes delivery. Only the
+existing upload media allowlist is displayable; HTML remains inert retained
+research content rather than a page served from Cubby's origin. Responses are
+private and uncached, with MIME sniffing disabled and a sandbox policy. No public
+Image attachment or second capture store is created.
