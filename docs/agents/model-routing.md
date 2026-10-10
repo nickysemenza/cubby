@@ -20,10 +20,29 @@ tokens, so each spawn should be a deliberate choice. Parallel lanes suit
 read-heavy work; write lanes own disjoint worktrees or stay in the main thread.
 The per-PR review below is the one routine spawn.
 
-The 2026-10-08 recheck (289 parent sessions, usage metadata only) recorded
+The 2026-10-08 recheck ([method](#routing-measurement-method)) recorded
 44.6% of sessions delegating and 56.2% of recorded token usage in subagents.
 It mostly predates this rule and does not establish a speed/quality improvement;
 the 47% figure above is the historical baseline, not a current measurement.
+
+### Routing measurement method
+
+The UTC window 2026-09-08 through 2026-10-07 included 289 parent sessions with
+assistant usage metadata; 129 (44.6%) contained a delegation tool call.
+142,733 unique assistant message IDs appeared in 270,586 assistant rows.
+Deduplicating message snapshots by parent session/message ID and taking the
+maximum recorded usage fields gives subagents 56.2% of summed input,
+cache-creation, cache-read and output tokens. Of 49,014,224 subagent output tokens,
+14,264,238 (29.1%) were Opus/Fable; older Sonnet runs dominate the remainder.
+Only timestamps, tool names, model names and usage metadata were aggregated;
+no prompt/response text, tool inputs, transcript paths or identities are retained.
+
+This mostly predates the routing change and its initial baseline did not retain
+an identical extractor/accounting definition. It does not establish a causal
+reduction, speed improvement or unchanged quality. Keep the current rule and
+repeat after a full post-change window, with the same accounting and explicit
+latency/quality evidence. The 47% baseline remains historical, not a claim about
+the current window.
 
 ## Lanes
 
