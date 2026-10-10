@@ -933,12 +933,6 @@ export async function updateFinancialTransaction(
 }
 
 const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
-  "ImportHunt.financialTransactionId": {
-    code: "preserve-retired-research",
-    effect: "preserve",
-    description:
-      "Retired research history stays on the tombstone until the contract migration drops it.",
-  },
   "FinancialTransactionAllocation.transactionId": {
     code: "soft-delete-association",
     effect: "soft-delete",

@@ -239,6 +239,13 @@
       "when": 1791667114829,
       "tag": "0033_retire_unattended_research",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791667729400,
+      "tag": "0034_drop_retired_research",
+      "breakpoints": true
     }
   ]
 }

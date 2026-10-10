@@ -73,12 +73,6 @@ const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Replay-safe source claims retain their vendor-account scope.",
   },
-  "ImportHunt.vendorAccountId": {
-    code: "preserve-retired-research",
-    effect: "preserve",
-    description:
-      "Retired research history stays on the tombstone until the contract migration drops it.",
-  },
 } as const satisfies IncomingEdgePolicy<"vendorAccount", OperationDisposition>;
 
 type VendorAccountRow = typeof vendorAccount.$inferSelect;
