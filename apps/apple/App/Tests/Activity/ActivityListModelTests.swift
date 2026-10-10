@@ -125,6 +125,45 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
 @MainActor
 @Suite("Activity grouped list", .serialized)
 struct ActivityListModelTests {
+    @Test func cancelledAttentionReadCannotInvalidateAnInFlightResponse() async throws {
+        let store = InMemorySessionTokenStore()
+        try store.save(.bearer("tok"), for: "localhost:3000")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ActivityListStub.self]
+        let client = CubbyClient(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: CredentialProvider(host: "localhost:3000", store: store),
+            session: URLSession(configuration: configuration))
+        let model = ActivityListModel()
+        let (requests, continuation) = AsyncStream<String>.makeStream()
+        ActivityListStub.observer.withLock { $0 = continuation }
+        ActivityListStub.holdAttention.withLock { $0 = true }
+        let deadline = Task {
+            try? await Task.sleep(for: .seconds(2))
+            continuation.finish()
+        }
+        defer {
+            deadline.cancel()
+            continuation.finish()
+            ActivityListStub.observer.withLock { $0 = nil }
+            ActivityListStub.holdAttention.withLock { $0 = false }
+            ActivityListStub.heldAttention.withLock { $0 = nil }
+        }
+        let valid = Task { await model.refreshAttention(client: client) }
+        var iterator = requests.makeAsyncIterator()
+        #expect(await iterator.next() == "/api/v1/activity/list")
+        let release = try #require(ActivityListStub.heldAttention.withLock { $0 })
+        ActivityListStub.holdAttention.withLock { $0 = false }
+        let cancelled = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            await model.refreshAttention(client: client)
+        }
+        await cancelled.value
+        release()
+        await valid.value
+        #expect(model.attention != nil)
+    }
+
     @Test func attentionPollingRemovesResolvedGroupsWithoutActiveWork() async throws {
         ActivityListStub.settled.withLock { $0 = true }
         ActivityListStub.hideSettledGroups.withLock { $0 = false }

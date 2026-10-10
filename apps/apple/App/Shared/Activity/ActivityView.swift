@@ -119,6 +119,7 @@ final class ActivityListModel {
     }
 
     func refreshAttention(client: CubbyClient) async {
+        guard !Task.isCancelled else { return }
         let requestedFilters = filters
         let requestedIdentity = filterIdentity
         var attentionFilters = requestedFilters
