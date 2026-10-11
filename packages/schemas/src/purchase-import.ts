@@ -35,7 +35,7 @@ export const vendorOrderEvidence = z.enum([
 const distinctFromProduct = <Id extends z.ZodType<string>>(productId: Id) =>
   z.object({
     productId,
-    url: z.url().max(2048),
+    url: z.url(),
     quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
   });
 
@@ -823,12 +823,11 @@ export const preparedProductResolution = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("new"),
       distinctFrom: z
-        .array(distinctFromProduct(productShortcode))
-        .max(20)
+        .array(distinctFromProduct(productShortcode.describe("Product")))
         .optional(),
     })
     .describe(
-      "Create a Product from supported order-line facts after checking existing matches. A candidate with exactNameMatch is refused unless distinctFrom names it with a Source showing the difference; one with exactIdentifierMatch is always refused. Missing catalog identity stays unknown and continues through Product research.",
+      "Create a Product; an exact match must be listed in distinctFrom.",
     ),
   z
     .object({

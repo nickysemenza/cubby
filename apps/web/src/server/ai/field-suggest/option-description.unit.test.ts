@@ -508,18 +508,24 @@ describe("suggestion enum descriptions", () => {
               "value": "auto",
             },
             {
+              "description": "Airfare, lodging, car rental, and trip taxes and fees",
+              "label": "Travel",
+              "value": "travel",
+            },
+            {
               "description": "Anything that doesn't fit a listed trade",
               "label": "Other",
               "value": "other",
             },
           ],
-          "rules": "You are a home-project trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
+          "rules": "You are a household trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
 
       Rules:
       1. Match the physical work being described, not the room it happens in.
       2. A product or vendor name is a strong signal: electrical supply vendors imply "electrical", lumber implies "building".
       3. Prefer the most specific trade that fits over "other".
-      4. "planning" is for pre-work (design, permits, estimates), not the work itself.",
+      4. "planning" is for pre-work (design, permits, estimates), not the work itself.
+      5. Trip costs (airfare, lodging, car rental, and their taxes and fees) are "travel".",
         },
         {
           "basis": [
@@ -701,18 +707,24 @@ describe("suggestion enum descriptions", () => {
               "value": "auto",
             },
             {
+              "description": "Airfare, lodging, car rental, and trip taxes and fees",
+              "label": "Travel",
+              "value": "travel",
+            },
+            {
               "description": "Anything that doesn't fit a listed trade",
               "label": "Other",
               "value": "other",
             },
           ],
-          "rules": "You are a home-project trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
+          "rules": "You are a household trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
 
       Rules:
       1. Match the physical work being described, not the room it happens in.
       2. A product or vendor name is a strong signal: electrical supply vendors imply "electrical", lumber implies "building".
       3. Prefer the most specific trade that fits over "other".
-      4. "planning" is for pre-work (design, permits, estimates), not the work itself.",
+      4. "planning" is for pre-work (design, permits, estimates), not the work itself.
+      5. Trip costs (airfare, lodging, car rental, and their taxes and fees) are "travel".",
         },
         {
           "basis": [
@@ -901,18 +913,24 @@ describe("suggestion enum descriptions", () => {
               "value": "auto",
             },
             {
+              "description": "Airfare, lodging, car rental, and trip taxes and fees",
+              "label": "Travel",
+              "value": "travel",
+            },
+            {
               "description": "Anything that doesn't fit a listed trade",
               "label": "Other",
               "value": "other",
             },
           ],
-          "rules": "You are a home-project trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
+          "rules": "You are a household trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
 
       Rules:
       1. Match the physical work being described, not the room it happens in.
       2. A product or vendor name is a strong signal: electrical supply vendors imply "electrical", lumber implies "building".
       3. Prefer the most specific trade that fits over "other".
-      4. "planning" is for pre-work (design, permits, estimates), not the work itself.",
+      4. "planning" is for pre-work (design, permits, estimates), not the work itself.
+      5. Trip costs (airfare, lodging, car rental, and their taxes and fees) are "travel".",
         },
         {
           "basis": [
@@ -1013,18 +1031,24 @@ describe("suggestion enum descriptions", () => {
               "value": "auto",
             },
             {
+              "description": "Airfare, lodging, car rental, and trip taxes and fees",
+              "label": "Travel",
+              "value": "travel",
+            },
+            {
               "description": "Anything that doesn't fit a listed trade",
               "label": "Other",
               "value": "other",
             },
           ],
-          "rules": "You are a home-project trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
+          "rules": "You are a household trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
 
       Rules:
       1. Match the physical work being described, not the room it happens in.
       2. A product or vendor name is a strong signal: electrical supply vendors imply "electrical", lumber implies "building".
       3. Prefer the most specific trade that fits over "other".
-      4. "planning" is for pre-work (design, permits, estimates), not the work itself.",
+      4. "planning" is for pre-work (design, permits, estimates), not the work itself.
+      5. Trip costs (airfare, lodging, car rental, and their taxes and fees) are "travel".",
         },
         {
           "basis": [
