@@ -789,15 +789,14 @@ const IMPORT_BUILDERS = {
 export type ImportReportSlot = keyof typeof IMPORT_BUILDERS;
 
 /**
- * One import slot's blocks. A run outside the import workflow gets none; a photo batch keeps
- * only the durable transcript beneath its own review.
+ * Durable operations are evidence for every Run purpose. Other import slots
+ * remain restricted to workflows that use the purchase-import reports.
  */
 export function importReportBlocks(
   slot: ImportReportSlot,
   run: RunDetail,
 ): ReportBlock[] {
-  if (run.purpose === "photo_inventory")
-    return slot === "run.import-timeline" ? importTimeline(run) : [];
+  if (slot === "run.import-timeline") return importTimeline(run);
   return hasImportRunReports(run.purpose) ? IMPORT_BUILDERS[slot](run) : [];
 }
 
