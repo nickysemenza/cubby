@@ -275,8 +275,6 @@ describe("joint expense spending allocation", () => {
     expect(await loadExpenseJointAllocations(ctx.db, [])).toEqual([]);
     expect((await loadExpenseSpendingAllocations(ctx.db, [])).size).toBe(0);
   });
-  // Regression: an award ticket's $0 fare left every tax and fee on the
-  // booking without a category or Project share.
   it("carries each principal's trade and cost type onto adjustment shares", async () => {
     const { projects, purchase } = await fixture();
     await line("Synthetic wire", 1, "principal", {
@@ -322,6 +320,8 @@ describe("joint expense spending allocation", () => {
     ]);
   });
 
+  // Regression: an award ticket's $0 fare left every tax and fee on the
+  // booking without a category or Project share.
   it("splits adjustments evenly across priced $0 principals", async () => {
     const { projects, categories, vendor } = await fixture();
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
