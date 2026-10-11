@@ -375,6 +375,7 @@ async function applyAggregateReplacement(
       identity,
       targetPurchase.vendorId,
       productsByExternalIdentity,
+      { recorder: actor },
     );
     const quantity = receiptProductQuantity(productId, line, identity);
     assertClassificationPolicies("expense", {

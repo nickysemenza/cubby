@@ -4,6 +4,7 @@ import { agentImportRunPurpose } from "./import-run-agent";
 import { plainDate } from "./base-entity";
 
 import { mailEvent } from "./mailbox-research";
+import { ENTITY_SOURCE_QUOTE_MAX } from "./child-tables/modules";
 import { money } from "./money";
 import { runPurpose, runStatus, runTrigger } from "./run-fields";
 import { costTypeSchema } from "./expense-fields";
@@ -27,6 +28,17 @@ export const vendorOrderEvidence = z.enum([
   "not_expected",
 ]);
 /** Every stored source kind; `browser_order` is retired and only read. */
+/**
+ * A Distinct-from decision (GLOSSARY): the line is a different Product from
+ * this exact name match, shown by the Source's url and quoted difference.
+ */
+const distinctFromProduct = <Id extends z.ZodType<string>>(productId: Id) =>
+  z.object({
+    productId,
+    url: z.url().max(2048),
+    quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
+  });
+
 export const importSourceKind = z.enum([
   "browser_order",
   "mail_message",
@@ -350,6 +362,8 @@ export const replacementLineIdentity = z.object({
   reversalKind: z
     .enum(["return", "concession", "cancellation", "replacement"])
     .nullable(),
+  /** A committed Distinct-from decision, carried into a reviewed fix. */
+  distinctFrom: z.array(distinctFromProduct(z.uuid())).optional(),
 });
 
 export const replacementLineAttribution = z.object({
@@ -654,6 +668,7 @@ export const importWriterInput = z.object({
         z.object({
           kind: z.literal("new"),
           lineIndex: z.number().int().nonnegative(),
+          distinctFrom: z.array(distinctFromProduct(z.uuid())).optional(),
         }),
         z.object({
           kind: z.literal("unresolved"),
@@ -765,6 +780,8 @@ export const preparedProductCandidate = z.object({
   manufacturer: z.string().max(300),
   model: z.string().max(300).nullable(),
   exactIdentifierMatch: z.boolean(),
+  /** The candidate's name or an alias equals the line title (case and surrounding spaces aside). */
+  exactNameMatch: z.boolean(),
   /** Why a non-exact candidate ranks (e.g. a shared model/style number). */
   matchReason: z.string().max(300).optional(),
 });
@@ -803,9 +820,15 @@ export const preparedProductResolution = z.discriminatedUnion("kind", [
       "Reuse an existing Product whose exact item and variant match the source without contradicting its recorded facts. productId is the public Product shortcode returned by Cubby search.",
     ),
   z
-    .object({ kind: z.literal("new") })
+    .object({
+      kind: z.literal("new"),
+      distinctFrom: z
+        .array(distinctFromProduct(productShortcode))
+        .max(20)
+        .optional(),
+    })
     .describe(
-      "Create a Product from supported order-line facts after checking existing matches. Missing catalog identity stays unknown and continues through Product research.",
+      "Create a Product from supported order-line facts after checking existing matches. A candidate with exactNameMatch is refused unless distinctFrom names it with a Source showing the difference; one with exactIdentifierMatch is always refused. Missing catalog identity stays unknown and continues through Product research.",
     ),
   z
     .object({
