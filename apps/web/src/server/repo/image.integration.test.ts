@@ -147,6 +147,7 @@ describe("image repository", () => {
     });
     const before = await getImageById(ctx.db, original.id);
     await updateImage(ctx.db, original.id, {
+      filename: before.filename,
       source: "catalog",
       sourcePageUrl: "https://supplier.example.test/products/item",
       sourceAssetUrl: "https://supplier.example.test/images/item.jpg",
@@ -163,7 +164,10 @@ describe("image repository", () => {
       size: before.size,
       contentType: before.contentType,
     });
-    await updateImage(ctx.db, original.id, { sourceName: null });
+    await updateImage(ctx.db, original.id, {
+      filename: before.filename,
+      sourceName: null,
+    });
     expect(await getImageById(ctx.db, original.id)).toMatchObject({
       source: "catalog",
       sourcePageUrl: persisted.sourcePageUrl,

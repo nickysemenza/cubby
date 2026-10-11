@@ -92,6 +92,7 @@ describe("image-sighting", () => {
         );
       }
       await updateImage(ctx.db, image.id, {
+        filename: image.filename,
         source: "catalog",
         sourceAssetUrl: "https://supplier.example.test/item.jpg",
       });
