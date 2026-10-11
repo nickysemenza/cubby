@@ -143,7 +143,39 @@ the `CubbyAPI` build plugin; none is committed), and, except for host tests,
 `xcodegen generate --use-cache`. The script skips itself (with a message, not a
 failure) when `xcode-select -p` fails; that skip is keyed on the missing Xcode
 and never matches a real result. The `rust` target runs fmt/clippy/test per
-crate (`recipebridge/project.json`, `cubby-ffi/project.json`).
+crate (`recipebridge/project.json`, `cubby-ffi/project.json`). Clippy and tests
+use the root workspace's `ci` profile: no debuginfo, incremental compilation,
+or dependency optimization. These tests run in under a second; the development
+profile's optimized dependencies add compilation work without useful runtime savings.
+Cargo still needs check metadata and linked test artifacts, and the default
+and browser/native feature sets remain separate checks. Both targets share
+`target/ci` and run sequentially to avoid Cargo's target-directory lock.
+Their broad `gate` inputs include the root profile and workflow; `rustc -V`
+still keys the floating compiler.
+
+The Rust job uses an explicit, pinned `Swatinem/rust-cache` step with prefix
+`rust-gate-v3`; its key also hashes root `Cargo.toml`, because rust-cache hashes
+member manifests but omits the virtual workspace's profiles. When `cache-hit`
+is not `'true'` (a miss or partial match), the job runs Clippy and `cargo test
+--no-run` under the `ci` profile for each Rust target's package and feature
+selection before Nx. This populates both check metadata and linked test
+dependencies even when Nx replays both targets. Exact hits skip population;
+only successful jobs save new entries.
+
+The old 39 MB entry was seeded by a
+[successful main run](https://github.com/nickysemenza/cubby/actions/runs/38073526350/job/114275644002)
+that replayed both Rust targets from Nx's remote cache, compiling nothing and
+saving no dependency artifacts. Success alone does not establish a populated
+cache. Those immutable exact-key entries cannot be repaired by later hits;
+the new prefix prevents restoring them, including through a fallback match.
+A [successful PR run](https://github.com/nickysemenza/cubby/actions/runs/38092783727/job/114332463103)
+on 2026-10-10 took 4:14 overall, including a 208s Nx step and about 34s of
+Node/dependency setup. Despite an exact 39 MB Rust-cache restore, recipebridge
+spent 96s + 12s in clippy and 52s compiling tests; FFI spent 19s + 26s.
+Tests themselves took under one second. The new profile and populated cache
+target a warm job under about 2.5 minutes; local compilation reuse cannot
+establish hosted timing. A cache miss explicitly pays the population cost even
+when Nx has a passing result; later exact hits reuse the saved dependencies.
 
 `cubby-ffi` and the WASM packages share the `recipebridge` Rust core and Cargo
 lockfile, but each target needs its own compiled artifacts. EPUB extraction is
@@ -479,7 +511,15 @@ database contracts; it does not establish a five-minute full suite.
   modules into fewer chunks (a catch-all entries-aware group, or one for
   modules under 4 KiB) broke hydration on every route with a module
   initialization-order error, and `strictExecutionOrder` turned that into a
-  hydration stall, so the client bundle keeps its bounded groups.
+  hydration stall, so the client bundle keeps its bounded groups. Madge
+  (`--circular` with type-only imports skipped) finds 11 source cycles, among
+  them `field-explanation` ↔ `field-resolution-explanation`,
+  `detail-action-bar` ↔ `report-slot`/`records-block`,
+  `TableLayoutCustomizer` ↔ `data-table-view-options`,
+  `suggestion-outcome-mark` ↔ `suggestion-review`, and the event-calendar
+  group. Removing them is not sufficient on its own: regrouping chunks can
+  create new initialization cycles through shared dependencies, so fewer
+  chunks needs a deliberate renderer-boundary refactor, not a config change.
 - Playwright's `--shard` with `fullyParallel` takes contiguous, equal-count
   slices of the ordered test list, so one slow case lands wholly on one shard.
   Keep individual cases short (wait on a fast-forwarded page clock or a
