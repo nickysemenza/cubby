@@ -25,6 +25,9 @@ const slotsFrom =
       ),
     );
 
+const email = slotsFrom(() =>
+  import("~/app/emails/list-slots").then((m) => m.emailListSlots),
+);
 const expense = slotsFrom(() =>
   import("~/app/expenses/list-slots").then((m) => m.expenseListSlots),
 );
@@ -59,6 +62,7 @@ const task = slotsFrom(() =>
  * explicit platform disposition.
  */
 export const listSlotCoverage = {
+  email: { accuracy: email("accuracy") },
   expense: { analytics: expense("analytics") },
   location: {
     gallery: location("gallery"),

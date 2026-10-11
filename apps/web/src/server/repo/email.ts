@@ -5,8 +5,12 @@ import {
   type EmailOut,
 } from "@cubby/schemas/email";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  mailboxClassification,
+  mailboxClassificationStage,
+  relevanceLabel,
+} from "@cubby/schemas/mailbox-research";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { importSourceKind } from "@cubby/schemas/purchase-import";
 import { and, desc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -24,6 +28,12 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/repo/database-helpers";
+import {
+  emailLifecyclePurchasesSql,
+  emailLinkedSql,
+  emailPurchaseAssociationsSql,
+  emailReviewConflictSql,
+} from "~/server/repo/email-sql";
 import { listScaffold } from "~/server/repo/list";
 import {
   hydrateListRead,
@@ -41,64 +51,6 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
 
 type EmailRow = typeof emailTable.$inferSelect;
-
-/**
- * Correlated to the plain Email root table used by the list scaffold. Explicit
- * qualification prevents Drizzle's single-table SELECT from turning the inner
- * identity comparison into a self-comparison. Thread context is not a link.
- * Accepted Orders on any member of the canonical source family survive cache
- * disposal and historical aliases; active lifecycle decisions remain separate.
- */
-export const emailAcceptedEvidenceSql = (): SQL => sql`
-  SELECT accepted."purchaseId", accepted."checksum" AS "evidenceChecksum", accepted."createdAt" AS "acceptedAt"
-  FROM "ImportSourceClaim" identity
-  INNER JOIN "ImportSourceClaim" root
-    ON root."id" = coalesce(identity."canonicalClaimId", identity."id")
-    AND root."canonicalClaimId" IS NULL
-    AND root."ledgerPartyId" = identity."ledgerPartyId"
-    AND root."kind" = identity."kind"
-  INNER JOIN "ImportSourceClaim" family
-    ON coalesce(family."canonicalClaimId", family."id") = root."id"
-    AND family."ledgerPartyId" = root."ledgerPartyId"
-    AND family."kind" = root."kind"
-  INNER JOIN "ImportSourceOrder" accepted ON accepted."sourceClaimId" = family."id"
-  INNER JOIN "Purchase" p ON p."id" = accepted."purchaseId" AND p."deletedAt" IS NULL
-  LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
-  WHERE identity."ledgerPartyId" = "Email"."ledgerPartyId"
-    AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
-    AND (
-      (identity."kind" = ${importSourceKind.enum.mail_message}
-        AND identity."externalKey" = "Email"."provider" || ':' || "Email"."mailboxId" || ':' || "Email"."messageId")
-      OR (identity."kind" = ${importSourceKind.enum.mail_attachment} AND EXISTS (
-        SELECT 1 FROM "OrderMailAttachment" attachment
-        INNER JOIN "OrderMail" original ON original."id" = attachment."orderMailId"
-        WHERE original."id" = "Email"."orderMailId"
-          AND original."ledgerPartyId" = "Email"."ledgerPartyId"
-          AND identity."externalKey" = "Email"."provider" || ':' || "Email"."mailboxId" || ':' || "Email"."messageId" || ':attachment:' || attachment."providerAttachmentId"
-      ))
-    )
-`;
-
-const emailLifecyclePurchasesSql = (
-  decision: "linked" | "dismissed",
-): SQL => sql`
-  SELECT decision."purchaseId"
-  FROM "OrderMailEvent" event
-  INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
-  INNER JOIN "OrderMailCandidateDecision" decision ON decision."eventId" = event."id"
-  INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND p."deletedAt" IS NULL
-  LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
-  WHERE original."id" = "Email"."orderMailId"
-    AND original."ledgerPartyId" = "Email"."ledgerPartyId"
-    AND event."supersededAt" IS NULL AND decision."decision" = ${decision}
-    AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
-`;
-
-/** Accepted families and explicit lifecycle decisions share one association policy. */
-export const emailPurchaseAssociationsSql = (): SQL => sql`
-  SELECT evidence."purchaseId" FROM (${emailAcceptedEvidenceSql()}) evidence
-  UNION ${emailLifecyclePurchasesSql("linked")}
-`;
 
 /** Member-owned navigation derives from evidence; thread context never binds a Purchase. */
 export async function readEmailAssociations(
@@ -228,9 +180,6 @@ export async function readEmailAssociations(
   };
 }
 
-/** The same SQL owns filter/count membership and the hydrated linked value. */
-export const emailLinkedSql = () =>
-  sql<boolean>`EXISTS (${emailPurchaseAssociationsSql()})`;
 /** Accepted source or lifecycle association; Gmail-thread context never authorizes retention. */
 export async function hasAcceptedEmailAssociation(
   db: Database | DrizzleTransaction,
@@ -269,6 +218,9 @@ export const buildEmailWhere = (filters: EmailFilters) =>
     filters.linked === undefined
       ? undefined
       : eq(emailLinkedSql(), filters.linked),
+    filters.reviewConflict === undefined
+      ? undefined
+      : eq(emailReviewConflictSql(), filters.reviewConflict),
   ]);
 
 const hydrateRead = async (
@@ -296,7 +248,11 @@ const hydrateRead = async (
         rows.length === 0
           ? []
           : await unwrapDb(db)
-              .select({ id: emailTable.id, linked: emailLinkedSql() })
+              .select({
+                id: emailTable.id,
+                linked: emailLinkedSql(),
+                reviewConflict: emailReviewConflictSql(),
+              })
               .from(emailTable)
               .where(
                 and(
@@ -367,6 +323,9 @@ const hydrateRead = async (
         parties,
         runs,
         linked: new Map(associations.map((row) => [row.id, row.linked])),
+        reviewConflict: new Map(
+          associations.map((row) => [row.id, row.reviewConflict]),
+        ),
       };
     },
     mapRow: (row, { loaded }) => {
@@ -376,11 +335,16 @@ const hydrateRead = async (
         ...row,
         id: parseShortcodeFor("email", row.shortcode),
         displayName: row.subject?.trim() || row.sender?.trim() || row.shortcode,
+        relevanceLabel: relevanceLabel(
+          mailboxClassification.nullable().parse(row.classification),
+          mailboxClassificationStage.nullable().parse(row.classificationStage),
+        ),
         ledgerPartyId: party.id,
         ledgerPartyName: party.name,
         runId:
           row.runId === null ? null : (loaded.runs.get(row.runId)?.id ?? null),
         linked: loaded.linked.get(row.id) ?? false,
+        reviewConflict: loaded.reviewConflict.get(row.id) ?? false,
         reviewedClassification:
           loaded.reviews.get(row.id)?.classification ?? null,
         reviewedClassificationReason:

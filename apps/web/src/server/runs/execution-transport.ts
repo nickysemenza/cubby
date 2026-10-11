@@ -1,4 +1,5 @@
 import type { RunId } from "@cubby/schemas/identifiers";
+import { isMailReclassifyRun } from "@cubby/schemas/run-fields";
 import {
   workersAiModel,
   type GatewayFetchRoutes,
@@ -105,7 +106,8 @@ export function paidResearchPreflight(
     // responses and other models retain their original monetary allowance.
     if (
       (current.purpose === "mail_discovery" ||
-        current.purpose === "mail_import") &&
+        current.purpose === "mail_import" ||
+        isMailReclassifyRun(current)) &&
       request.endpoint !== "responses" &&
       ["typesafe/jev", "@cf/cloudflare/clef"].includes(
         workersAiModel(request.endpoint),

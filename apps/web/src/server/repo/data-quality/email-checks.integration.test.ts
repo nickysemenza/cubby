@@ -1,0 +1,125 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+
+import { orderMail, orderMailAttachment } from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
+import { listEmailsRead } from "~/server/repo/email";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { loadDataQualities } from "./hydrate";
+
+// Email pipeline gaps are Relevance-conditional, and their correlated SQL must
+// stay bound to the scored Email: another Email's attachment or completed
+// import Run must never satisfy this Email's check.
+describe("Email data quality", () => {
+  const ctx = withTestDb();
+
+  it("docks unrelated Emails only for review and keeps related checks bound to their own original and import", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic quality member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const shell = async (bodyText: string | null) =>
+      (
+        await getDb(ctx.db)
+          .insert(orderMail)
+          .values({
+            ledgerPartyId: party.id,
+            rawChecksum: "c".repeat(64),
+            content: { snippet: null, bodyText, bodyHtml: null },
+          })
+          .returning()
+      )[0]!;
+    const email = (
+      messageId: string,
+      fields: Partial<
+        Parameters<typeof insertWithShortcode<"email">>[2] & object
+      >,
+    ) =>
+      insertWithShortcode(ctx.db, "email", {
+        ledgerPartyId: party.id,
+        provider: "gmail",
+        mailboxId: "synthetic-quality-mailbox",
+        messageId,
+        checksum: "c".repeat(64),
+        classification: "related",
+        classificationStage: "jev",
+        status: "pending",
+        ...fields,
+      });
+    const other = await shell(null);
+    await getDb(ctx.db)
+      .insert(orderMailAttachment)
+      .values({
+        orderMailId: other.id,
+        providerAttachmentId: "synthetic-other-attachment",
+        filename: "other.pdf",
+        mimeType: "application/pdf",
+        checksum: "d".repeat(64),
+        pendingObjectKey: "synthetic/other.pdf",
+      });
+    await insertWithShortcode(ctx.db, "run", {
+      ledgerPartyId: party.id,
+      actorUserId: ctx.actor.userId,
+      actorName: "Synthetic member",
+      actorEmail: "member@example.test",
+      actorLedgerPartyShortcode: party.shortcode,
+      actorLedgerPartyName: party.name,
+      actorLedgerPartyKind: party.kind,
+      purpose: "mail_import",
+      trigger: "manual",
+      status: "completed",
+      input: {
+        kind: "mail_research",
+        sources: [{ orderMailId: other.id, checksum: "c".repeat(64) }],
+      },
+    });
+    const unrelated = await email("synthetic-unrelated", {
+      classification: "unrelated",
+      status: "completed",
+    });
+    const emptyShell = await shell(null);
+    const related = await email("synthetic-related", {
+      orderMailId: emptyShell.id,
+    });
+    const retained = await email("synthetic-retained", {
+      orderMailId: (await shell("Synthetic order body")).id,
+    });
+
+    const id = (row: { id: string }) => parseEntityId("email", row.id);
+    const qualities = await loadDataQualities(ctx.db, "email", [
+      id(unrelated),
+      id(related),
+      id(retained),
+    ]);
+    const gaps = (row: { id: string }) =>
+      qualities
+        .get(id(row))
+        ?.gaps.map((gap) => gap.check)
+        .sort();
+    expect(gaps(unrelated)).toEqual(["email_relevance_unreviewed"]);
+    expect(gaps(related)).toEqual([
+      "email_not_imported",
+      "email_original_missing",
+      "email_preview_missing",
+      "email_relevance_unreviewed",
+    ]);
+    expect(gaps(retained)).toEqual([
+      "email_not_imported",
+      "email_preview_missing",
+      "email_relevance_unreviewed",
+    ]);
+
+    const missingOriginal = await listEmailsRead(
+      ctx.db,
+      { dataGap: ["email_original_missing"] },
+      [],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    expect(missingOriginal.data.map((row) => row.id)).toEqual([
+      related.shortcode,
+    ]);
+  });
+});

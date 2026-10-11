@@ -4,6 +4,10 @@ import {
 } from "@cubby/schemas/email-fields";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
+import {
+  isMailReclassifyRun,
+  mailReclassifyRunInput,
+} from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -35,7 +39,27 @@ export async function gmailExecutionPolicy(
     return emailExecutionPolicy.parse(input.executionPolicy);
   }
   if (current.purpose === "mail_import") return "import";
+  const reclassify = mailReclassifyRunInput.safeParse(current.input);
+  if (current.purpose === "background" && reclassify.success) {
+    if (expected && reclassify.data.mailboxId !== expected.mailboxId)
+      throw new Error(
+        "Gmail classification mailbox is outside its persisted Run.",
+      );
+    // Reclassify reruns stages; it never authorizes import.
+    return "classification_only";
+  }
   throw new Error(
-    "Gmail classification requires a Mail discovery or Mail import Run.",
+    "Gmail classification requires a Mail discovery, Mail import or Reclassify Run.",
   );
+}
+
+/** The relevance model runs for import-authorized work and for a member's Reclassify. */
+export async function gmailRelevanceAllowed(db: Database, runId: string) {
+  if ((await gmailExecutionPolicy(db, runId)) === "import") return true;
+  const [current] = await getDb(db)
+    .select({ purpose: run.purpose, input: run.input })
+    .from(run)
+    .where(eq(run.id, runEntityId.parse(runId)))
+    .limit(1);
+  return current !== undefined && isMailReclassifyRun(current);
 }

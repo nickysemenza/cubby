@@ -32,6 +32,14 @@ _Avoid_: fuzzy match, likely duplicate
 A recorded judgment that an imported line is a different Product from an exact identity match, carrying a Source that shows the difference (model, size, pack or kit contents). Without one, an import may not create a Product beside its exact identity match.
 _Avoid_: force new, override
 
+**Email pipeline**:
+The ordered steps an Email can pass through: retrieval, rule, Jev, model, member review, extraction preview, Mail import and Purchase association. For one Email, each step has run, was skipped because an earlier step decided, has not been reached, or failed.
+_Avoid_: processing trail, stage ledger, triage
+
+**Reclassify**:
+Rerunning an Email's Relevance stages from its original, retrieving it again when its content was not retained. The new result is history; it replaces the Email's Relevance only when that keeps retained content, and never overrides a member's resolution.
+_Avoid_: rerun triage, retriage
+
 **Vendor alias**:
 Another name a Vendor trades under, recorded by a member, a Vendor merge, or Sender proof, so import finds the existing Vendor by that name.
 _Avoid_: vendor nickname, similar vendor

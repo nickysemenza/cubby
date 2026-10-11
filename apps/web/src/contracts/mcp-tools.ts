@@ -656,6 +656,16 @@ export const MCP_TOOLS = defineMcpTools({
           "Record an independent grade after reading the real frozen-checksum message without viewing its prediction. Preserve original predictions; unavailable messages need no invented label. Exact retries replay, contradictory grades refuse.",
       }),
 
+      reclassify: mcpAction({
+        op: purchaseImportContract.ops.emailReclassify,
+        description:
+          "Rerun Relevance for at most 200 owned Emails (one Run per mailbox): rule, Jev and the relevance model, refetching each original from Gmail. The result is recorded as history. It replaces Relevance only when no retained content or import would be dropped (`awaiting_acceptance` otherwise; accept with `mail.resolve` unrelated), never overrides a member resolution, and reports `conflict` when it disagrees with the member's review.",
+      }),
+      rerun_preview: mcpAction({
+        op: purchaseImportContract.ops.emailPreviewRerun,
+        description:
+          "Rerun the cheap extraction preview for one related, retained Email at its current checksum. Records the preview; never imports.",
+      }),
       import: mcpAction({
         op: purchaseImportContract.ops.emailImport,
         description:

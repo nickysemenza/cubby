@@ -290,7 +290,7 @@ export const listRendererCoverage = {
   device: scoredCoverage<"device">(),
   spendingCategory: scoredCoverage<"spendingCategory">(),
   vendorAccount: unscoredCoverage<"vendorAccount">(),
-  email: unscoredCoverage<"email">(),
+  email: scoredCoverage<"email">(),
   run: scoredCoverage<"run">(),
   "usda-food": {
     "data-quality": implemented<

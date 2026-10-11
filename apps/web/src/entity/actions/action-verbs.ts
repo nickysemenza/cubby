@@ -1,3 +1,4 @@
+import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowsClockwise";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
 import { ArrowsSplitIcon } from "@phosphor-icons/react/dist/csr/ArrowsSplit";
@@ -92,6 +93,7 @@ export const actionVerbs = {
   importPhotos: { label: "Import photos...", icon: ImagesIcon },
   setProjectUses: { label: "Set project uses...", icon: WrenchIcon },
   setTradeCost: { label: "Set trade cost...", icon: HandCoinsIcon },
+  reclassify: { label: "Reclassify selected...", icon: ArrowsClockwiseIcon },
 
   // — AI ——————————————————————————————————————————————————————————————
   //

@@ -19,6 +19,8 @@ private final class FakeReports: ReportServing {
         var scaled: [MealUpdateRecipeInput] = []
         var removed: [MealRecipeIdInput] = []
         var prepared: [SaveMealRecipePreparationInput] = []
+        var reclassified: [ReclassifyEmailsInput] = []
+        var corrections: [CorrectEmailRelevanceInput] = []
     }
     let calls = Mutex(Calls())
     /// The import call (1-based) that reports a failure; 0 means none do.
@@ -97,6 +99,27 @@ private final class FakeReports: ReportServing {
         calls.withLock { $0.prepared.append(input) }
     }
     func commitPrepared(_ input: RunCommitPreparedInput) async throws {}
+    /// One Run per selected Email, each replaced except a failing `EML-9X2B`.
+    func reclassifyEmails(_ input: ReclassifyEmailsInput) async throws -> ReclassifyEmailsOut {
+        calls.withLock { $0.reclassified.append(input) }
+        let results = input.ids.map { id in
+            id == "EML-9X2B"
+                ? #"{"id": "\#(id)", "outcome": "failed", "conflict": false, "error": "upstream 503"}"#
+                : #"{"id": "\#(id)", "outcome": "replaced", "conflict": false, "error": null}"#
+        }
+        let runs = input.ids.indices.map { #""RUN-\#($0 + 2)K7M""# }
+        return try decode(
+            #"{"runIds": [\#(runs.joined(separator: ","))], "results": [\#(results.joined(separator: ","))]}"#
+        )
+    }
+    func correctEmailRelevance(_ input: CorrectEmailRelevanceInput) async throws
+        -> CorrectEmailRelevanceOut
+    {
+        calls.withLock { $0.corrections.append(input) }
+        return try decode(
+            #"{"id": "\#(input.id)", "checksum": "\#(String(repeating: "c", count: 64))", "classification": "\#(input.classification.rawValue)", "originalAvailable": true}"#
+        )
+    }
 }
 
 private func decode<T: Decodable>(_ json: String) throws -> T {
@@ -187,6 +210,24 @@ private let yieldCommand = #"""
      "inputs": [{"kind": "number", "key": "grams", "label": "Made (g)", "initial": null, "min": 1}],
      "request": {"kind": "meal-yield", "mealRecipeId": "\#(mealRecipeID)", "field": "actual", "grams": null}}
     """#
+
+private let checksumA = String(repeating: "a", count: 64)
+private let checksumB = String(repeating: "b", count: 64)
+
+private let correctRelevanceCommand = #"""
+    {"id": "correct-relevance", "label": "Correct relevance", "prominent": false, "confirm": null,
+     "inputs": [{"kind": "choice", "key": "classification", "label": "Relevance", "initial": "related",
+                 "options": [{"value": "related", "label": "Related"}, {"value": "uncertain", "label": "Uncertain"}]},
+                {"kind": "text", "key": "reason", "label": "Reason", "initial": null}],
+     "request": {"kind": "correct-email-relevance", "id": "EML-4K7M", "expectedChecksum": "\#(checksumA)",
+                 "reviewedChecksum": "\#(checksumB)", "classification": "related", "reason": "server default"}}
+    """#
+
+private func reclassifyCommand(_ ids: [String]) -> String {
+    let list = ids.map { #""\#($0)""# }.joined(separator: ",")
+    return
+        #"{"id": "reclassify", "label": "Reclassify", "prominent": false, "confirm": null, "request": {"kind": "reclassify-email", "ids": [\#(list)]}}"#
+}
 
 @MainActor
 @Suite("Report slot model", .timeLimit(.minutes(1)))
@@ -407,6 +448,48 @@ struct ReportSlotModelTests {
         let sent = try JSONValue(encoding: try #require(service.calls.withLock { $0.prepared.first }))
         #expect(sent["actualYieldGrams"]?.doubleValue == 1200)
         #expect(sent["changes"]?.arrayValue?.isEmpty == true)
+    }
+
+    @Test("A relevance correction needs a written reason and sends the picked relevance with it")
+    func relevanceCorrectionNeedsAReason() async throws {
+        let command: ReportCommand = try decode(correctRelevanceCommand)
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+
+        var form = ReportCommandForm(command: command)
+        #expect(form.missing == ["Reason"])
+        form.setText("reason", "   ")
+        #expect(form.missing == ["Reason"])
+        #expect(await model.run(command, confirmed: false, form: form) == nil)
+        #expect(service.calls.withLock { $0.corrections.isEmpty })
+
+        form.setChoice("classification", "uncertain")
+        form.setText("reason", " Synthetic shipping notice ")
+        #expect(
+            await model.run(command, confirmed: false, form: form) == .done("Relevance corrected: uncertain"))
+        let sent = try #require(service.calls.withLock { $0.corrections.first })
+        #expect(sent.id == "EML-4K7M")
+        #expect(sent.expectedChecksum == checksumA)
+        #expect(sent.reviewedChecksum == checksumB)
+        #expect(sent.classification == .uncertain)
+        #expect(sent.reason == "Synthetic shipping notice")
+    }
+
+    @Test("Reclassifying one Email opens its Run; several are summarized with raw errors")
+    func reclassifyOpensOrSummarizes() async throws {
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+
+        let one: ReportCommand = try decode(reclassifyCommand(["EML-4K7M"]))
+        #expect(await model.run(one, confirmed: false) == .openedRun("RUN-2K7M"))
+        #expect(service.calls.withLock { $0.reclassified.first?.ids } == ["EML-4K7M"])
+
+        let several: ReportCommand = try decode(reclassifyCommand(["EML-4K7M", "EML-5K7M", "EML-9X2B"]))
+        #expect(
+            await model.run(several, confirmed: false)
+                == .done(
+                    "Reclassified: 2 replaced, 1 failed. EML-9X2B: upstream 503. Runs: RUN-2K7M, RUN-3K7M, RUN-4K7M"
+                ))
     }
 
     @Test("An action with no confirmation acts on the tap and refreshes the report")

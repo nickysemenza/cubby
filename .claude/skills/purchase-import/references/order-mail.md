@@ -7,6 +7,10 @@ purchases; promotions, transfers and bank statements have different roles.
 Jev routes mail cheaply and escalates uncertainty to the researcher rather than
 discarding unfamiliar vendors or formats. Read related retained originals and
 use the hosted research workflow's task and evidence references.
+When a stored Relevance looks wrong, `mail.reclassify` reruns every stage from
+the original; it reports `awaiting_acceptance` instead of dropping retained
+content and `conflict` when it disagrees with the member's review. Resolve or
+correct the Email yourself rather than reclassifying until it agrees.
 
 Preserve explicitly observed order IDs, amounts, currency and event times.
 Message receipt time is not an order date. Unknown order dates and itemization

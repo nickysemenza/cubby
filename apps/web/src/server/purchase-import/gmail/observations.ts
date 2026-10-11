@@ -98,7 +98,7 @@ function sameClassificationObservation(
     previous.promptVersion === parsed.promptVersion &&
     previous.operation === parsed.operation &&
     previous.usageId === parsed.usageId &&
-    previous.conflict?.kind === parsed.conflict?.kind
+    isEqual(previous.conflict, parsed.conflict)
   );
 }
 
@@ -166,7 +166,8 @@ export async function recordEmailClassificationObservation(
       throw new Error(
         "Email classification observation insert returned no row",
       );
-    if (parsed.conflict && parsed.runId)
+    // A review conflict is a worklist filter, not a Run finding.
+    if (parsed.conflict?.kind === "accepted_unrelated" && parsed.runId)
       await tx.insert(runFinding).values({
         runId: runEntityId.parse(parsed.runId),
         ledgerPartyId: email.ledgerPartyId,

@@ -1,4 +1,6 @@
+import type { EmailReclassifyOutcome } from "@cubby/schemas/email-actions";
 import { emailCandidateSource } from "@cubby/schemas/email-candidates";
+import type { EmailClassificationConflict } from "@cubby/schemas/email-observations";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   MAILBOX_RESEARCH_VERSION,
@@ -10,12 +12,18 @@ import {
 import { eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { email as emailTable, orderMailAttachment } from "~/server/db/schema";
+import {
+  email as emailTable,
+  orderMail,
+  orderMailAttachment,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { runAfterCommit } from "~/server/repo/database-helpers/core";
 import { hasAcceptedEmailAssociation } from "~/server/repo/email";
+import { emailMemberClassificationSql } from "~/server/repo/email-sql";
 import { claimRunExecution } from "~/server/runs/execution-context";
 
+import { hasRetainedEmailImportContent } from "../email-content";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../mail-source-identity";
 import {
   deferClassificationRefresh,
@@ -70,6 +78,10 @@ export type GmailIngestOutcome = {
   excluded: string[];
   unrelated: string[];
   blocked: string[];
+  /** Reclassify kept the current Relevance and recorded the rerun as history. */
+  kept: { messageId: string; reason: ReclassifyKeptReason }[];
+  /** Reclassify reached the current Relevance again. */
+  confirmed: string[];
   candidatePreviews: NonNullable<
     Awaited<ReturnType<typeof relatedEmailPreview>>
   >[];
@@ -200,6 +212,37 @@ function classificationCallFor(
 }
 
 type PriorMessage = Awaited<ReturnType<typeof readEmail>>;
+/** Accepted Purchases outrank the member's review; both are protected evidence. */
+async function classificationConflict(
+  db: Database,
+  identity: MessageIdentity,
+  prior: NonNullable<PriorMessage>,
+  checksum: string,
+  decision: MailboxClassificationDecision,
+  acceptedOnly: boolean,
+): Promise<EmailClassificationConflict | null> {
+  if (
+    decision.classification === "unrelated" &&
+    (await hasAcceptedEmailAssociation(db, identity))
+  )
+    return { kind: "accepted_unrelated" };
+  if (
+    acceptedOnly ||
+    decision.stage === "resolution" ||
+    prior.checksum !== checksum
+  )
+    return null;
+  const [member] = await getDb(db)
+    .select({ classification: emailMemberClassificationSql() })
+    .from(emailTable)
+    .where(eq(emailTable.id, prior.id))
+    .limit(1);
+  return member?.classification &&
+    member.classification !== decision.classification
+    ? { kind: "member_review", memberClassification: member.classification }
+    : null;
+}
+
 async function observeClassification(
   db: Database,
   input: IngestInput,
@@ -210,10 +253,17 @@ async function observeClassification(
   unchanged: boolean,
   call: GmailClassificationCall | null,
 ) {
-  const acceptedConflict =
-    decision.classification === "unrelated" &&
-    (await hasAcceptedEmailAssociation(db, identity));
-  if (!prior || (unchanged && !acceptedConflict)) return;
+  if (!prior) return;
+  // A reused verdict records nothing new unless it now contradicts a Purchase.
+  const conflict = await classificationConflict(
+    db,
+    identity,
+    prior,
+    checksum,
+    decision,
+    unchanged,
+  );
+  if (unchanged && !conflict) return;
   await recordEmailClassificationObservation(db, {
     emailId: prior.id,
     runId: input.runId ?? null,
@@ -225,8 +275,67 @@ async function observeClassification(
     model: call?.model ?? null,
     promptVersion: call?.promptVersion ?? null,
     operation: call?.operation ?? null,
-    conflict: acceptedConflict ? { kind: "accepted_unrelated" } : null,
+    conflict,
   });
+}
+
+type ReclassifyKeptReason = Extract<
+  EmailReclassifyOutcome,
+  "awaiting_acceptance" | "resolution_kept"
+>;
+async function hasRetainedContent(
+  db: Database,
+  email: NonNullable<PriorMessage>,
+) {
+  if (!email.orderMailId || email.contentClearedAt) return false;
+  const [original] = await getDb(db)
+    .select({ content: orderMail.content })
+    .from(orderMail)
+    .where(eq(orderMail.id, email.orderMailId))
+    .limit(1);
+  return hasRetainedEmailImportContent(
+    getDb(db),
+    email.orderMailId,
+    original?.content ?? null,
+  );
+}
+
+/**
+ * Reclassify replaces Relevance only when the member keeps what they have: a
+ * resolution stands, and a rerun that would drop retained content or an
+ * imported Email waits for the member to accept it. A confirming rerun of an
+ * Email whose content is gone publishes normally so the refetched original is
+ * retained again. `null` publishes normally.
+ */
+async function reclassifyPublication(
+  db: Database,
+  current: NonNullable<PriorMessage>,
+  decision: MailboxClassificationDecision,
+  retain: boolean,
+): Promise<GmailAcquisitionOutcome | null> {
+  if (current.classificationStage === "resolution")
+    return { kind: "kept", reason: "resolution_kept" };
+  const imported =
+    current.classification !== "unrelated" &&
+    (current.status === "completed" || current.status === "researching");
+  if (decision.classification === current.classification) {
+    if (retain && !imported && !(await hasRetainedContent(db, current)))
+      return null;
+    await getDb(db)
+      .update(emailTable)
+      .set({
+        classificationStage: decision.stage,
+        classificationReason: decision.reason,
+        classificationVersion: MAILBOX_RESEARCH_VERSION,
+        updatedAt: new Date(),
+      })
+      .where(eq(emailTable.id, current.id));
+    return { kind: "confirmed" };
+  }
+  if (imported) return { kind: "kept", reason: "awaiting_acceptance" };
+  return !retain && (await hasRetainedContent(db, current))
+    ? { kind: "kept", reason: "awaiting_acceptance" }
+    : null;
 }
 async function protectOriginalOutcome(
   db: Database,
@@ -321,9 +430,28 @@ async function stageGmailAttachments(
   });
 }
 
+/** Member search judges itself; otherwise import policy or a Reclassify runs the model. */
+const relevanceModelRuns = (
+  input: IngestInput,
+  executionPolicy: Awaited<ReturnType<typeof gmailExecutionPolicy>>,
+) =>
+  !input.callerJudges &&
+  (executionPolicy !== "classification_only" || Boolean(input.reclassify));
+
+function recordUnsavedOutcome(
+  outcome: GmailIngestOutcome,
+  messageId: string,
+  result: Exclude<GmailAcquisitionOutcome, { kind: "saved" }>,
+) {
+  if (result.kind === "kept")
+    outcome.kept.push({ messageId, reason: result.reason });
+  else if (result.kind !== "skipped") outcome[result.kind].push(messageId);
+}
+
 type GmailAcquisitionOutcome =
   | { kind: "saved"; orderMailId: string }
-  | { kind: "unrelated" | "blocked" | "skipped" };
+  | { kind: "kept"; reason: ReclassifyKeptReason }
+  | { kind: "unrelated" | "blocked" | "skipped" | "confirmed" };
 
 async function cleanNewGmailKeys(
   createdKeys: Set<string>,
@@ -375,7 +503,8 @@ async function acquireEligible(
     return { kind: "skipped" };
   if (prior?.classificationVersion === HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION)
     return { kind: "blocked" };
-  const unchanged = unchangedClassification(prior, checksum);
+  const unchanged =
+    !input.reclassify && unchangedClassification(prior, checksum);
   const publication = {
     ...identity,
     runId: input.runId,
@@ -417,7 +546,7 @@ async function acquireEligible(
           reason: "Found by a member's search; the caller decides",
         })
       : () => routeGmailMessage(message, normalized, ports.triage),
-    input.callerJudges || executionPolicy === "classification_only"
+    !relevanceModelRuns(input, executionPolicy)
       ? null
       : () =>
           interpretMailRelevance(
@@ -490,6 +619,11 @@ async function acquireEligible(
             unchanged,
             classificationCallFor(decision.stage, triageCall, relevanceCall),
           );
+          const reclassified =
+            input.reclassify && current
+              ? await reclassifyPublication(tx, current, decision, retain)
+              : null;
+          if (reclassified) return reclassified;
           const recorded = {
             classificationStage: decision.stage,
             classificationReason: decision.reason,
@@ -633,6 +767,11 @@ export async function ingestGmailMessages(
     runId?: string;
     /** Rules only, no paid classification: the caller judges each message. */
     callerJudges?: boolean;
+    /**
+     * A member's Reclassify: rerun every stage, including the relevance model,
+     * and publish through `reclassifyPublication`.
+     */
+    reclassify?: boolean;
     storage?: OrderMailAttachmentStorage;
     onMessage?: (handled: number) => Promise<void>;
   },
@@ -650,6 +789,8 @@ export async function ingestGmailMessages(
     excluded: [],
     unrelated: [],
     blocked: [],
+    kept: [],
+    confirmed: [],
     candidatePreviews: [],
   };
   let handled = 0;
@@ -746,8 +887,7 @@ export async function ingestGmailMessages(
           outcome.orderMailIds.push(result.orderMailId);
           if (preview) outcome.candidatePreviews.push(preview);
         }
-      } else if (result.kind !== "skipped")
-        outcome[result.kind].push(messageId);
+      } else recordUnsavedOutcome(outcome, messageId, result);
     }
     handled += 1;
     await reportAcquisitionProgress(input, handled);

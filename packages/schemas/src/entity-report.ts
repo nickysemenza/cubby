@@ -1,6 +1,10 @@
 import { createEmailAccuracyEvaluationInput } from "./email-accuracy.js";
 import { z } from "zod";
-import { emailImportInput } from "./email-actions.js";
+import {
+  correctEmailRelevanceInput,
+  emailImportInput,
+  reclassifyEmailsInput,
+} from "./email-actions.js";
 
 import {
   COLLECTION_ACTIONS,
@@ -227,6 +231,15 @@ const reportNote = z.object({
  */
 export const reportCommandRequest = z.discriminatedUnion("kind", [
   emailImportInput.extend({ kind: z.literal("import-email") }),
+  reclassifyEmailsInput.extend({ kind: z.literal("reclassify-email") }),
+  // A preview rerun names the same exact Email and checksum as an import.
+  emailImportInput.extend({ kind: z.literal("rerun-email-preview") }),
+  correctEmailRelevanceInput.extend({
+    kind: z.literal("correct-email-relevance"),
+    // The template carries no reason; the member types it in the command's
+    // `text` input, and the operation refuses a blank one.
+    reason: z.string(),
+  }),
   createEmailAccuracyEvaluationInput.extend({
     kind: z.literal("create-email-accuracy"),
   }),
@@ -323,7 +336,8 @@ export type ReportCommandRequest = z.infer<typeof reportCommandRequest>;
 /**
  * Something the person supplies before a command runs. The client collects it and puts it in the
  * request field of the same `key`; nothing is sent while a required input is empty. Each kind is
- * a primitive both clients already draw (a number field, the entity picker, an option list).
+ * a primitive both clients already draw (a number field, the entity picker, an option list, a
+ * text field).
  */
 export const reportCommandInput = z.discriminatedUnion("kind", [
   z.object({
@@ -348,6 +362,13 @@ export const reportCommandInput = z.discriminatedUnion("kind", [
     options: z
       .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
       .min(1),
+    initial: z.string().nullable(),
+  }),
+  z.object({
+    kind: z.literal("text"),
+    key: z.string().min(1),
+    label: z.string().min(1),
+    /** Required free text, e.g. why the member corrected a record. */
     initial: z.string().nullable(),
   }),
 ]);

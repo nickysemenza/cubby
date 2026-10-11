@@ -1,6 +1,10 @@
 import { purchaseImportContract } from "~/contracts/purchase-import.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { startEmailImport } from "~/server/purchase-import/email-actions";
+import {
+  reclassifyEmails,
+  rerunEmailPreview,
+} from "~/server/purchase-import/gmail/reclassify";
 import { correctEmailRelevance } from "~/server/purchase-import/gmail/relevance-correction";
 import {
   commitPurchaseImport,
@@ -23,6 +27,7 @@ import {
   gradeEmailAccuracyItem,
   getEmailAccuracyReport,
 } from "~/server/repo/email-accuracy";
+import { emailAccuracyViewReport } from "~/server/repo/entity-report/email";
 
 export const purchaseImportHandlers = implementOperationDomain(
   purchaseImportContract,
@@ -45,6 +50,12 @@ export const purchaseImportHandlers = implementOperationDomain(
       ),
     emailImport: (context, input) =>
       startEmailImport(context.db, input, context.actorContext),
+    emailReclassify: (context, input) =>
+      reclassifyEmails(context.db, input, context.actorContext),
+    emailPreviewRerun: (context, input) =>
+      rerunEmailPreview(context.db, input, context.actorContext),
+    emailAccuracyView: (context) =>
+      emailAccuracyViewReport(context.db, context.actorContext),
     prepareReconciliation: (context, input) =>
       prepareSourceOrderReconciliation(context.db, input, context.actorContext),
     prepare: (context, input) =>

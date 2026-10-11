@@ -2,6 +2,7 @@ import type { ScoredEntity } from "@cubby/schemas/data-quality";
 
 import { cookbookChecks } from "./checks/cookbook";
 import { deviceChecks } from "./checks/device";
+import { emailChecks } from "./checks/email";
 import { expenseChecks } from "./checks/expense";
 import { financialAccountChecks } from "./checks/financial-account";
 import { financialTransactionChecks } from "./checks/financial-transaction";
@@ -58,6 +59,7 @@ export const dataQualityEntries = {
   financialAccount: financialAccountChecks,
   financialTransaction: financialTransactionChecks,
   expense: expenseChecks,
+  email: emailChecks,
   spendingCategory: spendingCategoryChecks,
   wish: wishChecks,
   plant: plantChecks,

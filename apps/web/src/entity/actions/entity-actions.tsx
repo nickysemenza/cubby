@@ -32,6 +32,10 @@ import {
 import { declaredEntityActionDefinitions } from "./declared-entity-actions";
 import { deleteEntityActionDefinition } from "./delete-entity-action";
 import {
+  reclassifyEmailsAvailability,
+  useReclassifyEmailsAction,
+} from "./email-entity-actions";
+import {
   defineEntityAction,
   type EntityActionArity,
   type EntityActionDefinition,
@@ -364,6 +368,17 @@ const entityActions: readonly EntityActionDefinition[] = [
     priority: 500,
     preserveSelection: true,
     use: useCreateProjectFromTasksAction,
+  }),
+  defineEntityAction({
+    id: "reclassify-emails",
+    verb: "reclassify",
+    entities: ["email"],
+    arity: "both",
+    surfaces: ["selection"],
+    group: "organize",
+    priority: 500,
+    availability: reclassifyEmailsAvailability,
+    use: useReclassifyEmailsAction,
   }),
 ];
 

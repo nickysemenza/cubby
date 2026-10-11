@@ -229,16 +229,17 @@ const blockKey = (block: ReportBlock, index: number) =>
 /**
  * Draws the generic report blocks a detail slot's server read returns. A slot
  * with a richer web-only surface (the schedule grid) reads the same blocks
- * itself instead.
+ * itself instead; a report read outside a detail slot (a list view) has no
+ * `slot` and so no detail-bar placement.
  */
-function ReportBlocks({
+export function ReportBlocks({
   slot,
   blocks,
   record,
   entity,
   recordsList,
 }: {
-  slot: EntityReportInput["slot"];
+  slot?: EntityReportInput["slot"];
   blocks: readonly ReportBlock[];
   record?: object;
   /** The record's entity, for the finance verbs a `records` block offers. */
@@ -288,7 +289,7 @@ function ReportBlocks({
               <RecordsBlockView
                 key={key}
                 block={block}
-                detailActions={reportDetailActionsFor(slot)}
+                detailActions={slot && reportDetailActionsFor(slot)}
                 record={record}
                 entity={entity}
                 list={recordsList?.(block)}

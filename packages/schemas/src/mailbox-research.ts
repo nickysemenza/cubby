@@ -3,6 +3,8 @@ import { purchaseShortcode } from "./identifier-fields";
 import { executionAuthorizationRef } from "./execution-authorization.js";
 
 export const MAILBOX_RESEARCH_VERSION = "2026-10-11.1";
+/** One Reclassify request records at most this many Emails in its Run. */
+export const EMAIL_RECLASSIFY_LIMIT = 200;
 export const mailboxClassification = z.enum([
   "related",
   "unrelated",
@@ -19,6 +21,30 @@ export const mailboxClassificationStage = z.enum([
 export type MailboxClassificationStage = z.infer<
   typeof mailboxClassificationStage
 >;
+export const MAILBOX_CLASSIFICATION_LABEL = {
+  related: "Related",
+  unrelated: "Unrelated",
+  uncertain: "Uncertain",
+} as const satisfies Record<MailboxClassification, string>;
+export const MAILBOX_CLASSIFICATION_STAGE_LABEL = {
+  rule: "Rule",
+  jev: "Jev",
+  model: "Model",
+  resolution: "Member resolution",
+} as const satisfies Record<MailboxClassificationStage, string>;
+/** The Email list cell: Relevance and the stage that decided it. */
+export const relevanceLabel = (
+  classification: MailboxClassification | null,
+  stage: MailboxClassificationStage | null,
+) =>
+  classification === null
+    ? null
+    : [
+        MAILBOX_CLASSIFICATION_LABEL[classification],
+        stage && MAILBOX_CLASSIFICATION_STAGE_LABEL[stage],
+      ]
+        .filter(Boolean)
+        .join(" · ");
 /** A classification and why it was reached. */
 export type MailboxClassificationDecision = {
   classification: MailboxClassification;
