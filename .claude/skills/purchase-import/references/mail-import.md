@@ -13,7 +13,9 @@ Claude or Codex session researches it later through the Research queue.
 3. Decide what the Email is:
    - **An order with priced lines** (confirmation, receipt, invoice): import it.
      Find the Vendor first with `search` / `entity_read`; name it by
-     `vendorId`, or by `vendor.name` exactly as the Email names the seller.
+     `vendorId`, or by `vendor.name` exactly as the Email names the seller;
+     an Email from a sender address the Vendor records resolves to it by
+     Sender proof even when the name differs.
      `purchase_import` `prepare` the order from this Email
      (`source.kind: "mail_message"`, `externalKey`
      `gmail:<mailboxId>:<messageId>`, the read `checksum` as both source and

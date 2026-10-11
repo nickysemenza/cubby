@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/agent-conversation";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { RunOut } from "@cubby/schemas/run";
+import { runInputsErased } from "@cubby/schemas/run-fields";
 import { humanize } from "@cubby/shared";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
@@ -109,7 +110,9 @@ function runActions(run: RunDetail): RunAction[] {
     );
   if (
     TERMINAL_RUN_STATUSES.has(run.status) &&
-    agentImportRunPurpose.safeParse(run.purpose).success
+    agentImportRunPurpose.safeParse(run.purpose).success &&
+    // An erased Run has no inputs or targets left to retry or copy.
+    !runInputsErased(run.retirementReason)
   ) {
     if (
       run.purpose !== "photo_inventory" &&
@@ -187,6 +190,12 @@ function RunControls({ run }: { run: RunDetail }) {
           ) : null}
         </RunActionButtons>
       </DetailAction>
+      {runInputsErased(run.retirementReason) ? (
+        <p className="text-xs text-muted-foreground">
+          Retired after an unrelated source: its inputs and targets were erased
+          with that Email, so it can’t be retried or restarted.
+        </p>
+      ) : null}
       <RunLineageAndInputs run={run} />
     </Stack>
   );
@@ -976,6 +985,7 @@ const isStoppedRun = (run: RunDetail) => !isActiveRun(run);
 function hasRunControls(run: RunDetail): boolean {
   return (
     runActions(run).length > 0 ||
+    runInputsErased(run.retirementReason) ||
     Boolean(
       run.restartInputs ||
       run.predecessorRunPublicId ||

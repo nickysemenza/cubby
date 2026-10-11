@@ -4,7 +4,8 @@
  *
  * Neither column is an enum, and manufacturer shouldn't be: typing it would put
  * "create an entity first" in front of a one-off brand. `Vendor` IS an entity,
- * but `findOrCreateVendor` matches its name EXACTLY, which has the same effect —
+ * but `findOrCreateVendor` matches only its name or a Vendor alias, which has
+ * the same effect for any other spelling —
  * the cost either way is that the same name can be entered two ways, which an
  * exact-match filter then splits into two picklist rows (or, for vendors, two
  * roster rows splitting one vendor's spend).
@@ -165,10 +166,10 @@ export const findManufacturerSpellingVariants = (
  * `mergeVendors` (repo/vendor.ts), which also folds any charges the two vendors
  * hold under the same order id.
  *
- * The gap it closes: `findOrCreateVendor` matches names EXACTLY on the write
- * path (deliberately — folding case there would silently merge a real `3M` /
- * `3m` distinction on first sight), so every importer that meets a new spelling
- * mints a new row and nothing else notices. As of the split's backfill there are
+ * The gap it closes: `findOrCreateVendor` matches a name or Vendor alias
+ * ignoring case but nothing looser, so every importer that meets a new
+ * spelling mints a new row and nothing else notices; merging the pair keeps
+ * the loser's name as an alias. As of the split's backfill there are
  * 0 such pairs across 114 vendors; this exists to keep it that way.
  *
  * `sampleId` is the VARIANT's own vendor id, so the card links to the row a merge

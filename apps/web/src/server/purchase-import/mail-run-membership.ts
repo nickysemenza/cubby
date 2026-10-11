@@ -1,5 +1,8 @@
 import type { RunId } from "@cubby/schemas/identifiers";
-import { mailResearchRunInput } from "@cubby/schemas/run-fields";
+import {
+  mailResearchRunInput,
+  runInputsErased,
+} from "@cubby/schemas/run-fields";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -11,10 +14,18 @@ export async function readMailRunSources(
   runId: RunId,
 ) {
   const [owner] = await client
-    .select({ input: run.input, purpose: run.purpose })
+    .select({
+      input: run.input,
+      purpose: run.purpose,
+      retirementReason: run.retirementReason,
+    })
     .from(run)
     .where(eq(run.id, runId));
   if (owner?.purpose !== "mail_import") return [];
+  // An erased Run's roster is NULL and admits no sources. A live Run with a
+  // missing roster still fails the parse below.
+  if (runInputsErased(owner.retirementReason) && owner.input === null)
+    return [];
   const frozen = mailResearchRunInput.parse(owner.input).sources;
   const messages = await client
     .select()

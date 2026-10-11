@@ -54,6 +54,13 @@ export const runTargetEntityKind = z.enum([
 export type RunTargetEntityKind = z.infer<typeof runTargetEntityKind>;
 /** Permanent retirement prevents disposed coordinator history from being recreated. */
 export const runRetirementReason = z.enum(["unrelated_source", "settled"]);
+/**
+ * Unrelated-source retirement erased the Run's input, progress and targets
+ * with the Email they named; `settled` only disposed the coordinator, so a
+ * settled Run keeps its inputs and can still be restarted.
+ */
+export const runInputsErased = (reason: string | null) =>
+  reason === runRetirementReason.enum.unrelated_source;
 /** What `run.control` can do to a Run; the report actions and the operation share it. */
 export const runControlAction = z.enum([
   "pause",

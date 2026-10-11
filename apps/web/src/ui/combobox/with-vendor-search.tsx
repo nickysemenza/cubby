@@ -27,8 +27,8 @@ import type { SearchProviderProps } from "./with-search-hook";
  *
  * Every write path for a charge's vendor (`expenseUpdateData.vendor`,
  * `purchase-import`, quick-add, MCP) takes a **name** and resolves it server-side
- * through `findOrCreateVendor` — an exact, trimmed, case-SENSITIVE match. That
- * contract is deliberately unchanged, so the picker's job is to make the name it
+ * through `findOrCreateVendor` — a trimmed name or Vendor alias match ignoring
+ * case, where an exact-case spelling wins a legacy case pair. The picker's job is to make the name it
  * saves come out of the roster verbatim rather than out of the user's keyboard
  * (typing `amazon` next to an existing `Amazon` used to mint a second roster
  * row). Using the name as the `ComboboxItem` id is what lets the generic

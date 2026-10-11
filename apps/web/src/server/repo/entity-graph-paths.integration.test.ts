@@ -37,6 +37,7 @@ describe("entity graph path repository", () => {
       {
         defaultSpendingCategoryId: null,
         spendingProfile: "unspecified",
+        aliases: [],
         name: "Path vendor",
         website: null,
         orderUrlTemplate: null,

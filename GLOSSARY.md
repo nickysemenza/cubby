@@ -40,6 +40,14 @@ _Avoid_: processing trail, stage ledger, triage
 Rerunning an Email's Relevance stages from its original, retrieving it again when its content was not retained. The new result is history; it replaces the Email's Relevance only when that keeps retained content, and never overrides a member's resolution.
 _Avoid_: rerun triage, retriage
 
+**Vendor alias**:
+Another name a Vendor trades under, recorded by a member, a Vendor merge, or Sender proof, so import finds the existing Vendor by that name.
+_Avoid_: vendor nickname, similar vendor
+
+**Sender proof**:
+An order Email arriving from a sender address already recorded on a Vendor, which proves that Vendor regardless of the merchant name the Email shows. A shared domain alone is not Sender proof.
+_Avoid_: domain match
+
 **Research queue**:
 The derived, unstored list of household records whose quality further research could improve.
 _Avoid_: worklist, enrichment queue, backlog

@@ -148,6 +148,7 @@ export const runHandlers = implementOperationDomain(runContract, {
       status: runStatus.parse(run.status),
       startedAt: run.startedAt,
       endedAt: run.endedAt,
+      retirementReason: run.retirementReason,
       coordinatorModel: run.coordinatorModel,
       agentModelMs: run.agentModelMs,
       ordersSeen: run.ordersSeen,

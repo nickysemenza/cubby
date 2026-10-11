@@ -27,6 +27,7 @@ export default defineEntity({
           id: "details",
           title: "Details",
           fields: [
+            "aliases",
             "orderUrlTemplate",
             "orderEvidence",
             "orderEmailSenders",
@@ -368,6 +369,19 @@ export default defineEntity({
         },
       },
       {
+        key: "aliases",
+        kind: "text-array",
+        description:
+          "Other names this Vendor trades under. Import finds the Vendor by its name or any alias; Sender proof and Vendor merges add them.",
+        control: { kind: "specialized", renderer: "tag-list" },
+        display: { detail: true },
+        validation: {
+          read: z.array(z.string()),
+          create: z.array(z.string()).default([]),
+          update: z.array(z.string()).optional(),
+        },
+      },
+      {
         key: "orderEmailSenders",
         kind: "text-array",
         control: {
@@ -579,6 +593,11 @@ export default defineEntity({
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
+      {
+        key: "aliases",
+        defaultValue: "'{}'::text[]",
+        specialized: "text-array",
+      },
       "website",
       "orderUrlTemplate",
       "orderEvidence",
@@ -609,6 +628,7 @@ export default defineEntity({
       "defaultSpendingCategoryId",
       "evidenceExpectation",
       "name",
+      "aliases",
       "website",
       "orderUrlTemplate",
       "orderEvidence",
@@ -623,6 +643,7 @@ export default defineEntity({
       "defaultSpendingCategoryId",
       "evidenceExpectation",
       "name",
+      "aliases",
       "website",
       "orderUrlTemplate",
       "orderEvidence",
@@ -638,6 +659,7 @@ export default defineEntity({
       "defaultSpendingCategoryId",
       "evidenceExpectation",
       "name",
+      "aliases",
       "website",
       "orderUrlTemplate",
       "orderEvidence",
@@ -669,6 +691,7 @@ export default defineEntity({
           "defaultSpendingCategoryId",
           "evidenceExpectation",
           "name",
+          "aliases",
           "website",
           "orderUrlTemplate",
           "orderEvidence",
@@ -678,7 +701,7 @@ export default defineEntity({
           "returnWindowDays",
           "notes",
         ],
-        identity: ["name"],
+        identity: ["name", "aliases"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
@@ -694,6 +717,7 @@ export default defineEntity({
       "evidenceExpectation",
       "id",
       "name",
+      "aliases",
       "website",
       "orderUrlTemplate",
       "orderEvidence",
@@ -1098,6 +1122,7 @@ export default defineEntity({
     },
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
+    resolve: { match: ["name", "aliases"], createMissing: false },
     merge: true,
     dataQuality: {
       checks: [

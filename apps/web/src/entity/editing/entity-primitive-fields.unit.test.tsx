@@ -542,6 +542,7 @@ function VendorFullFields() {
       website: null,
       orderUrlTemplate: null,
       orderEvidence: null,
+      aliases: [],
       orderEmailSenders: [],
       browserDomains: [],
       returnWindowDays: null,

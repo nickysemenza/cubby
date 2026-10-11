@@ -47,6 +47,7 @@ const run: RunDetail = {
   skipped: 0,
   failureCode: null,
   notes: "Fall closet batch, top shelf",
+  retirementReason: null,
   predecessorRunPublicId: null,
   restartInputs: null,
   successorRunPublicId: null,

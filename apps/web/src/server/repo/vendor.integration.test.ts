@@ -66,6 +66,13 @@ describe("vendor repository — findOrCreateVendor", () => {
       .where(eq(vendor.name, "Flow Form Plumbing"));
     expect(rows).toHaveLength(1);
   });
+
+  it("keeps resolving the exact spelling of a legacy case-variant pair", async () => {
+    const upper = await insertWithShortcode(ctx.db, "vendor", { name: "3M" });
+    const lower = await insertWithShortcode(ctx.db, "vendor", { name: "3m" });
+    expect(await findOrCreateVendor(ctx.db, "3M")).toBe(upper.id);
+    expect(await findOrCreateVendor(ctx.db, "3m")).toBe(lower.id);
+  });
 });
 
 describe("vendor declared scalar updates", () => {
@@ -403,6 +410,9 @@ describe("vendor repository — mergeVendors", () => {
     );
 
     expect(merged.id).toBe(keeperCode);
+    // The loser's name stays findable: imports resolve it to the keeper.
+    expect(merged.aliases).toEqual(["B&H"]);
+    expect(await findOrCreateVendor(ctx.db, "B&H")).toBe(keeper);
     // Union of both sides: 3 live charges, 150 of live spend.
     expect(merged.purchaseCount).toBe(3);
     expect(merged.spend).toBe(150);
@@ -507,7 +517,10 @@ describe("vendor repository — mergeVendors", () => {
 
   it("writes the full audit trail for a merge that folds a charge", async () => {
     const keeper = await findOrCreateVendor(ctx.db, "Audited Keeper");
-    const loser = await findOrCreateVendor(ctx.db, "audited keeper");
+    // A legacy case-variant Vendor: import now resolves names case-insensitively.
+    const { id: loser } = await insertWithShortcode(ctx.db, "vendor", {
+      name: "audited keeper",
+    });
 
     const survivor = await charge(keeper, "AUD-1");
     const dead = await charge(loser, "AUD-1");

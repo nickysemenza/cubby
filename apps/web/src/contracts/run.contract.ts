@@ -25,6 +25,7 @@ import { runRestartInput } from "@cubby/schemas/run-fields";
 import {
   runControlAction,
   runPurpose,
+  runRetirementReason,
   runStatus,
 } from "@cubby/schemas/run-fields";
 import { z } from "zod";
@@ -87,6 +88,8 @@ const runDetail = z
     skipped: z.number().int().nonnegative(),
     failureCode: z.string().nullable(),
     notes: z.string().nullable(),
+    /** Why the coordinator was permanently retired; `unrelated_source` erased its inputs. */
+    retirementReason: runRetirementReason.nullable(),
     predecessorRunPublicId: runShortcode.nullable(),
     successorRunPublicId: runShortcode.nullable(),
     /** Null for runs that cannot be started again. */
@@ -283,6 +286,7 @@ export const runContract = defineContract("run", {
       status: runStatus,
       startedAt: z.iso.datetime(),
       endedAt: z.iso.datetime().nullable(),
+      retirementReason: runDetail.shape.retirementReason,
       coordinatorModel: z.string().nullable(),
       agentModelMs: z.number().nonnegative(),
       ordersSeen: z.number().int(),

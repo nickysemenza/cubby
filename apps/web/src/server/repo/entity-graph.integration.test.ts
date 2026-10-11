@@ -227,6 +227,7 @@ describe("entity graph repository", () => {
       {
         defaultSpendingCategoryId: null,
         spendingProfile: "unspecified",
+        aliases: [],
         name: "Evidence graph vendor",
         website: null,
         orderUrlTemplate: null,
