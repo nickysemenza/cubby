@@ -2,7 +2,7 @@ import type {
   EntityReportOut,
   ReportCommand,
 } from "@cubby/schemas/entity-report";
-import { parseShortcodeFor, runShortcode } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -12,8 +12,8 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { DetailActionProvider } from "./detail-action-bar";
 import { EntityReportSlot, ReportDetailActions } from "./report-slot";
 
-const RUN_ID = runShortcode.parse("RUN-4K7M");
-const EMAIL_ID = parseShortcodeFor("email", "EML-4K7M");
+const RUN_ID = shortcode("RUN-4K7M");
+const EMAIL_ID = shortcode("EML-4K7M");
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let restoreDispatch: () => void;

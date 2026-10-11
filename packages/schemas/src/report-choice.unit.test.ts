@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { CommitPreparedRequest, ReportChoice } from "./entity-report";
-import { runShortcode } from "./identifiers";
+import { shortcode } from "./identifiers";
 import {
   commitPreparedInput,
   isChoiceAnswered,
@@ -91,7 +91,7 @@ describe("remainingSentence", () => {
 describe("commitPreparedInput", () => {
   const request: CommitPreparedRequest = {
     kind: "commit-prepared",
-    runId: runShortcode.parse("RUN-4K7M"),
+    runId: shortcode("RUN-4K7M"),
     prepareOperationId: "prepare-1",
     tradeChoiceId: "trade",
     lines: [
@@ -109,7 +109,7 @@ describe("commitPreparedInput", () => {
 
   it("sends each line's decision under its own order and line, with the trade and operation id", () => {
     expect(commitPreparedInput(request, answers, "op-1")).toEqual({
-      runId: runShortcode.parse("RUN-4K7M"),
+      runId: shortcode("RUN-4K7M"),
       operationId: "op-1",
       prepareOperationId: "prepare-1",
       defaultTrade: "plumbing",
@@ -156,7 +156,7 @@ describe("commitPreparedInput", () => {
       "op-1",
     );
     expect(input).toEqual({
-      runId: runShortcode.parse("RUN-4K7M"),
+      runId: shortcode("RUN-4K7M"),
       operationId: "op-1",
       prepareOperationId: "prepare-1",
       resolutions: [],

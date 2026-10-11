@@ -1,8 +1,4 @@
-import {
-  imageShortcode,
-  runShortcode,
-  productShortcode,
-} from "@cubby/schemas/identifiers";
+import { imageShortcode, shortcode } from "@cubby/schemas/identifiers";
 import type {
   PhotoRunImage,
   PhotoRunReview,
@@ -29,7 +25,7 @@ const answerOperations = (data: UnparsedStartOperationData) => {
 // "RUN-4K7M" is the one synthetic shortcode body AGENTS.md sanctions for
 // outward-facing examples, and it also satisfies the real shortcode format
 // the `runId` filter validates against.
-const RUN_ID = runShortcode.parse("RUN-4K7M");
+const RUN_ID = shortcode("RUN-4K7M");
 
 const run: RunDetail = {
   publicId: RUN_ID,
@@ -201,7 +197,7 @@ describe("PhotoImportRunView", () => {
           {
             groupKey: "fixture-shirt",
             state: "proposed",
-            images: [{ id: imageShortcode.parse("IMG-4K7P"), purpose: "item" }],
+            images: [{ id: shortcode("IMG-4K7P"), purpose: "item" }],
             skip: [],
             product: { kind: "create", create: { name: "Fixture shirt" } },
             committedProduct: null,
@@ -365,13 +361,13 @@ describe("PhotoImportRunView", () => {
               groupKey: "fixture-sweater",
               state: "committed",
               images: [
-                { id: imageShortcode.parse("IMG-4K7M"), purpose: "item" },
-                { id: imageShortcode.parse("IMG-4K7N"), purpose: "label" },
+                { id: shortcode("IMG-4K7M"), purpose: "item" },
+                { id: shortcode("IMG-4K7N"), purpose: "label" },
               ],
               skip: [],
               product: { kind: "create", create: { name: "Fixture sweater" } },
               committedProduct: {
-                id: productShortcode.parse("PRD-4K7M"),
+                id: shortcode("PRD-4K7M"),
                 name: "Fixture sweater",
                 coverUrl: null,
               },
@@ -446,7 +442,7 @@ describe("PhotoImportRunView", () => {
           {
             groupKey: "fixture-sweater",
             state: "proposed",
-            images: [{ id: imageShortcode.parse("IMG-4K7P"), purpose: "item" }],
+            images: [{ id: shortcode("IMG-4K7P"), purpose: "item" }],
             skip: [],
             product: { kind: "create", create: { name: "Fixture sweater" } },
             committedProduct: null,

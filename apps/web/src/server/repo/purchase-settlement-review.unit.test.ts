@@ -1,7 +1,7 @@
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import {
   financialTransactionShortcode,
-  purchaseShortcode,
+  shortcode,
 } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
@@ -11,7 +11,7 @@ import { composeSettlementReview } from "./purchase-settlement-review";
 const ftx = (suffix: string) =>
   financialTransactionShortcode.parse(`FTX-${suffix}`);
 const purchase = {
-  id: purchaseShortcode.parse("PUR-2345"),
+  id: shortcode("PUR-2345"),
   date: "2026-03-02",
   statedTotal: 42.5,
 };

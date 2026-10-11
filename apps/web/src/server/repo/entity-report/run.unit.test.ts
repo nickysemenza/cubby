@@ -1,9 +1,5 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
-import {
-  expenseShortcode,
-  productShortcode,
-  runShortcode,
-} from "@cubby/schemas/identifiers";
+import { productShortcode, shortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
 import type { RunDetail } from "~/contracts/run.contract";
@@ -17,7 +13,7 @@ import {
   runLogBlocks,
 } from "./run";
 
-const RUN_ID = runShortcode.parse("RUN-4K7M");
+const RUN_ID = shortcode("RUN-4K7M");
 const FINDING_ID = "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91";
 
 const baseRun: RunDetail = {
@@ -483,7 +479,7 @@ describe("import report blocks", () => {
             lines: [],
             reviewSnapshot: {
               fingerprint: "f".repeat(64),
-              expenseCode: expenseShortcode.parse("EXP-2A3B"),
+              expenseCode: shortcode("EXP-2A3B"),
               title: "Aggregate line",
               amount: 12.5,
               notes: null,

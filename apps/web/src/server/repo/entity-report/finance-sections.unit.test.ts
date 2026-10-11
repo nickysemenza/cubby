@@ -2,9 +2,7 @@ import type { FinancialTransactionOut } from "@cubby/schemas/financial-transacti
 import {
   expenseShortcode,
   financialTransactionShortcode,
-  productShortcode,
-  purchaseShortcode,
-  vendorShortcode,
+  shortcode,
 } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
@@ -15,7 +13,7 @@ import { composeExpenseSettlementSection } from "./expense-settlement";
 import { composeFinancialSettlementSection } from "./purchase-financial-settlement";
 import { composeReconciliationSection } from "./purchase-reconciliation";
 
-const pur = purchaseShortcode.parse("PUR-2345");
+const pur = shortcode("PUR-2345");
 const ftx = (suffix: string) =>
   financialTransactionShortcode.parse(`FTX-${suffix}`);
 
@@ -107,7 +105,7 @@ const transaction = (
     transactionDate: "2026-03-03",
     allocations: [
       { purchaseId: pur, amount: 42.5 },
-      { purchaseId: purchaseShortcode.parse("PUR-3456"), amount: 48.5 },
+      { purchaseId: shortcode("PUR-3456"), amount: 48.5 },
     ],
     ...overrides,
   });
@@ -212,7 +210,7 @@ const context = {
     orderId: "ORD-1001",
     displayLabel: null,
     date: "2026-03-02",
-    vendorId: vendorShortcode.parse("VEN-4K7M"),
+    vendorId: shortcode("VEN-4K7M"),
     vendorName: "Example Hardware",
   },
   siblings: [line("5N8P", 20), line("6Q9R", null)],
@@ -223,7 +221,7 @@ describe("composeExpenseSettlementSection", () => {
     const section = composeExpenseSettlementSection(
       line("4K7M", 30, {
         purchaseId: pur,
-        productId: productShortcode.parse("PRD-4K7M"),
+        productId: shortcode("PRD-4K7M"),
       }),
       context,
     );

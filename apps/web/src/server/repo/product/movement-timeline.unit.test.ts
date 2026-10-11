@@ -1,4 +1,4 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,9 +6,9 @@ import {
   toEntityTimeline,
 } from "./movement-timeline";
 
-const product = parseShortcodeFor("product", "PRD-TM22");
-const acquired = parseShortcodeFor("expense", "EXP-TM22");
-const sold = parseShortcodeFor("expense", "EXP-TM23");
+const product = shortcode("PRD-TM22");
+const acquired = shortcode("EXP-TM22");
+const sold = shortcode("EXP-TM23");
 
 const timeline: ProductMovementTimeline = {
   products: [
@@ -28,11 +28,11 @@ const timeline: ProductMovementTimeline = {
       key: "purchase:PUR-TM22",
       date: "2026-01-10",
       purchase: {
-        id: parseShortcodeFor("purchase", "PUR-TM22"),
+        id: shortcode("PUR-TM22"),
         displayLabel: "Order 42",
         orderId: "42",
         date: "2026-01-10",
-        vendor: { id: parseShortcodeFor("vendor", "VEN-TM22"), name: "Toolco" },
+        vendor: { id: shortcode("VEN-TM22"), name: "Toolco" },
       },
       movements: [
         {

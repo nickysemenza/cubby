@@ -1,5 +1,5 @@
+import { shortcode } from "@cubby/schemas/identifiers";
 import type { LedgerPartyShortcode } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageSightingRecordItem } from "@cubby/schemas/image-sighting";
 import { parseShortcode } from "@cubby/shared";
 import { eq } from "drizzle-orm";
@@ -156,10 +156,7 @@ describe("image-sighting", () => {
     await expect(
       recordImageSightings(
         ctx.db,
-        [
-          page[0]!,
-          { ...page[1]!, deviceId: parseShortcodeFor("device", "DEV-9999") },
-        ],
+        [page[0]!, { ...page[1]!, deviceId: shortcode("DEV-9999") }],
         ctx.actor,
       ),
     ).rejects.toThrow("DEV-9999");

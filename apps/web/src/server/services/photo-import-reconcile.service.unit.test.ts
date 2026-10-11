@@ -1,4 +1,4 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import { describe, expect, it, vi } from "vitest";
 
@@ -8,9 +8,9 @@ import { reconcilePhotoImport } from "~/server/services/photo-import-reconcile.s
 // SAFETY: every test replaces all database-touching ports; this value is only
 // an opaque identity token passed between the injected transaction callbacks.
 const database = {} as Database;
-const imageA = parseShortcodeFor("image", "IMG-AAAA");
-const imageB = parseShortcodeFor("image", "IMG-BBBB");
-const productA = parseShortcodeFor("product", "PRD-AAAA");
+const imageA = shortcode("IMG-AAAA");
+const imageB = shortcode("IMG-BBBB");
+const productA = shortcode("PRD-AAAA");
 const uploadedImage: ImageWithEntity = {
   id: imageA,
   url: "https://example.test/image.jpg",

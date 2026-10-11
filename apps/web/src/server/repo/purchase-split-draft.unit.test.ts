@@ -1,8 +1,4 @@
-import {
-  expenseShortcode,
-  productShortcode,
-  purchaseShortcode,
-} from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import type { SplitPartDraft } from "@cubby/schemas/purchase";
 import { describe, expect, it } from "vitest";
 
@@ -22,7 +18,7 @@ const original = (overrides: Partial<SplitOriginal> = {}): SplitOriginal => ({
   productId: null,
   productName: null,
   productQuantity: null,
-  purchaseId: purchaseShortcode.parse("PUR-4K7M"),
+  purchaseId: shortcode("PUR-4K7M"),
   unitemized: false,
   hasAttribution: false,
   imported: false,
@@ -46,7 +42,7 @@ const check = (
   attributionPolicy?: "inherit" | "clear",
 ) =>
   checkSplitDraft(base, {
-    expenseId: expenseShortcode.parse("EXP-4K7M"),
+    expenseId: shortcode("EXP-4K7M"),
     attributionPolicy,
     parts,
   });
@@ -71,7 +67,7 @@ describe("startSplitDraft", () => {
     expect(startSplitDraft(original()).productNote).toBeNull();
     const linked = startSplitDraft(
       original({
-        productId: productShortcode.parse("PRD-4K7M"),
+        productId: shortcode("PRD-4K7M"),
         productName: "Sample saw",
       }),
     );
@@ -93,7 +89,7 @@ describe("checkSplitDraft", () => {
     expect(result.reason).toBeNull();
     expect(result.delta).toBe(0);
     expect(result.split).toMatchObject({
-      expenseId: expenseShortcode.parse("EXP-4K7M"),
+      expenseId: shortcode("EXP-4K7M"),
       parts: [
         { name: "Saw", cost: 10, productId: null, projectId: null },
         { name: "Blade", cost: 20, trade: null },
@@ -152,7 +148,7 @@ describe("checkSplitDraft", () => {
   it("does not offer a product on an unitemized allocation", () => {
     const start = startSplitDraft(
       original({
-        productId: productShortcode.parse("PRD-4K7M"),
+        productId: shortcode("PRD-4K7M"),
         productName: "Sample saw",
         unitemized: true,
       }),
@@ -203,7 +199,7 @@ describe("checkSplitDraft", () => {
 
   describe("product link", () => {
     const linked = original({
-      productId: productShortcode.parse("PRD-4K7M"),
+      productId: shortcode("PRD-4K7M"),
       productName: "Sample saw",
     });
 

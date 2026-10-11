@@ -1,4 +1,4 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Database } from "~/server/db";
@@ -29,7 +29,7 @@ describe("photo import staging", () => {
       if (input.filename === "failed.jpg") throw new Error("presign failed");
       return {
         uploadUrl: "https://uploads.example.test/presigned",
-        imageId: parseShortcodeFor("image", "IMG-CDEF"),
+        imageId: shortcode("IMG-CDEF"),
         key: "images/new.jpg",
         url: "https://images.example.test/new.jpg",
       };
@@ -76,7 +76,7 @@ describe("photo import staging", () => {
     const hash = "d".repeat(64);
     const initiateUpload = vi.fn(async () => ({
       uploadUrl: "https://uploads.example.test/new",
-      imageId: parseShortcodeFor("image", "IMG-GHJK"),
+      imageId: shortcode("IMG-GHJK"),
       key: "images/new-2.jpg",
       url: "https://images.example.test/new-2.jpg",
     }));
