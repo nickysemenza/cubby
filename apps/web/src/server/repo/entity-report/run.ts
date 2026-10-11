@@ -84,6 +84,15 @@ const toneForState = (state: string): Tone | undefined => {
   return undefined;
 };
 
+/**
+ * A progress phase with a known tone is the row's state, so a failed phase reads as one and its
+ * detail wraps in full instead of clipping (a ledger clips only quiet rows).
+ */
+const phaseBadges = (phase: string) => {
+  const tone = toneForState(phase);
+  return tone ? [{ label: phaseLabel(phase), tone }] : [];
+};
+
 const line = (text: string, tone?: Tone): Line =>
   tone ? { text, tone } : { text };
 
@@ -109,12 +118,17 @@ const row = (id: string, fields: RowFields = {}): Row => ({
 /** `empty` is the copy for no rows; an empty string hides the block. */
 const records = (
   rows: Row[],
-  fields: { title?: string; empty?: string } = {},
+  fields: {
+    title?: string;
+    empty?: string;
+    presentation?: Block<"records">["presentation"];
+  } = {},
 ): Block<"records"> => ({
   kind: "records",
   title: fields.title,
   rows,
   empty: fields.empty ?? "",
+  presentation: fields.presentation,
 });
 
 const counts = (
@@ -283,7 +297,7 @@ function importProgress(run: RunDetail): ReportBlock[] {
             at: event.createdAt,
           }),
         ),
-        { title: "Control history" },
+        { title: "Control history", presentation: "ledger" },
       ),
     );
   if (run.progress.length)
@@ -293,9 +307,10 @@ function importProgress(run: RunDetail): ReportBlock[] {
           row(progress.eventId, {
             title: `${progress.phase}${progress.currentItem ? ` · ${progress.currentItem}` : ""}${progress.detail ? ` · ${progress.detail}` : ""}`,
             at: progress.createdAt,
+            badges: phaseBadges(progress.phase),
           }),
         ),
-        { title: "Run progress history" },
+        { title: "Run progress history", presentation: "ledger" },
       ),
     );
   return blocks;
@@ -551,7 +566,10 @@ const importTimeline = (run: RunDetail): ReportBlock[] => [
         ],
       }),
     ),
-    { empty: "No durable operations have been recorded for this run." },
+    {
+      empty: "No durable operations have been recorded for this run.",
+      presentation: "ledger",
+    },
   ),
 ];
 
@@ -943,12 +961,14 @@ export function liveProgressBlocks(
           title: phaseLabel(event.phase),
           body: event.detail ?? undefined,
           at: event.createdAt,
+          badges: phaseBadges(event.phase),
         }),
       ),
       {
         empty: active
           ? "Waiting for the first progress update…"
           : "No progress updates were recorded for this Run.",
+        presentation: "ledger",
       },
     ),
   ];
@@ -1030,7 +1050,10 @@ export function aiUsageBlocks(usage: AiRunUsage): ReportBlock[] {
           ],
         }),
       ),
-      { empty: "No AI calls were recorded for this run." },
+      {
+        empty: "No AI calls were recorded for this run.",
+        presentation: "ledger",
+      },
     ),
   ];
 }

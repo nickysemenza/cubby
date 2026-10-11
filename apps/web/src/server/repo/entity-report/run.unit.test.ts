@@ -841,6 +841,26 @@ describe("liveProgressBlocks", () => {
         : [],
     );
 
+  // A ledger clips quiet rows, so a failed phase must carry its state for its detail to wrap.
+  it("marks a failed progress phase as a destructive state", () => {
+    const [first, ...rest] = progress.progress;
+    const blocks = liveProgressBlocks(RUN_ID, {
+      ...progress,
+      progress: [
+        { ...first!, phase: "failed", detail: "503 from upstream" },
+        ...rest,
+      ],
+    });
+    const rows = blocks.flatMap((block) =>
+      block.kind === "records" ? block.rows : [],
+    );
+    expect(
+      rows.find((row) => row.subtitle === "503 from upstream"),
+    ).toMatchObject({
+      statuses: [{ tone: "destructive" }],
+    });
+  });
+
   it("shows durable mailbox pages and routing outcomes while discovery continues", () => {
     const blocks = liveProgressBlocks(RUN_ID, {
       ...progress,

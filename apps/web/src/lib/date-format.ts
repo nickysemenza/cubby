@@ -29,6 +29,8 @@ const DATE_PRESETS = {
   isoDateTimeSeconds: "yyyy-MM-dd HH:mm:ss",
   /** Jan 5 */
   monthDay: "MMM d",
+  /** Jan 5, 1:04 PM */
+  monthDayTime: "MMM d, h:mm a",
   /** Jan */
   monthShort: "MMM",
   /** Jan 2026 */

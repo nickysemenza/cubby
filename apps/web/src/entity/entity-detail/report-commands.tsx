@@ -25,6 +25,7 @@ import {
   run,
   vendor,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { EntityPicker } from "~/ui/combobox/entity-picker";
 import {
@@ -36,6 +37,7 @@ import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { NativeSelect } from "~/ui/primitives/native-select";
+import { ChoiceSwitcher } from "~/ui/primitives/view-switcher";
 
 /** Runs a row command through the operation it names; the server composed the exact body. */
 export function useReportCommands() {
@@ -366,9 +368,12 @@ export type ReportCommands = ReturnType<typeof useReportCommands>;
 export function CommandButton({
   command,
   commands,
+  compact = false,
 }: {
   command: ReportCommand;
   commands: ReportCommands;
+  /** One inline line: inputs carry their label as their accessible name, not a stacked caption. */
+  compact?: boolean;
 }) {
   const [values, setValues] = useState<Record<string, string | number>>(() =>
     Object.fromEntries(
@@ -394,13 +399,14 @@ export function CommandButton({
     ...values,
   });
   return (
-    <Row gap="sm" wrap align="end">
+    <Row gap="sm" wrap align={compact ? "center" : "end"}>
       {(command.inputs ?? []).map((input) => (
         <CommandOperand
           key={input.key}
           input={input}
           value={values[input.key]}
           disabled={commands.pending}
+          compact={compact}
           onChange={(value) => setValue(input.key, value)}
         />
       ))}
@@ -446,11 +452,13 @@ function CommandOperand({
   input,
   value,
   disabled,
+  compact,
   onChange,
 }: {
   input: ReportCommandInput;
   value: string | number | undefined;
   disabled: boolean;
+  compact: boolean;
   onChange: (value: string | number | undefined) => void;
 }) {
   if (input.kind === "record")
@@ -461,12 +469,32 @@ function CommandOperand({
         onChange={onChange}
       />
     );
+  // A short choice reads as one segmented control; it needs a current option to show as chosen.
+  const chosen =
+    compact && input.kind === "choice" && input.options.length <= 3
+      ? input.options.find((option) => option.value === value)
+      : undefined;
+  if (chosen && input.kind === "choice")
+    return (
+      <ChoiceSwitcher
+        ariaLabel={input.label}
+        options={input.options}
+        value={chosen.value}
+        onValueChange={onChange}
+      />
+    );
   return (
-    <label className="flex flex-col gap-1 text-xs">
-      <span>{input.label}</span>
+    <label
+      className={cn(
+        "flex text-xs",
+        compact ? "min-w-40 flex-1" : "flex-col gap-1",
+      )}
+    >
+      <span className={cn(compact && "sr-only")}>{input.label}</span>
       {input.kind === "text" ? (
         <Input
           aria-label={input.label}
+          placeholder={compact ? input.label : undefined}
           value={value ?? ""}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value || undefined)}

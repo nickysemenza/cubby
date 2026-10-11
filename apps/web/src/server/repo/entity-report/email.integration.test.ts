@@ -228,6 +228,9 @@ describe("Email review report", () => {
         context.email.shortcode,
       ]),
     );
+    // Received time is an instant each client formats, never preformatted trailing text.
+    for (const row of rows(blocks, "Gmail thread context"))
+      expect(row.trailing).toBeNull();
     const allRows = blocks.flatMap((block) =>
       block.kind === "records" ? block.rows : [],
     );
@@ -313,14 +316,12 @@ describe("Email review report", () => {
         expectedChecksum: "a".repeat(64),
       },
     );
-    expect(blocks).toContainEqual(
-      expect.objectContaining({
-        kind: "stats",
-        figures: expect.arrayContaining([
-          expect.objectContaining({ id: "pi-cost-low", value: null }),
-        ]),
-      }),
-    );
+    // An absent estimate never reads as free.
+    expect(
+      blocks
+        .flatMap((block) => (block.kind === "records" ? block.rows : []))
+        .find((row) => row.title === "Import Run")?.subtitle,
+    ).toContain("Cost unknown");
     await getDb(ctx.db)
       .update(orderMail)
       .set({ content: { snippet: null, bodyText: null, bodyHtml: null } })
@@ -511,13 +512,6 @@ describe("Email review report", () => {
       ]),
     );
     expect(usage.join("\n")).not.toContain("synthetic-unrelated");
-    expect(blocks).toContainEqual(
-      expect.objectContaining({
-        kind: "stats",
-        figures: expect.arrayContaining([
-          expect.objectContaining({ id: "pi-cost-low", value: 99 }),
-        ]),
-      }),
-    );
+    expect(importRow?.subtitle).toMatch(/Est\. \$99\.00 per Email/u);
   });
 });
