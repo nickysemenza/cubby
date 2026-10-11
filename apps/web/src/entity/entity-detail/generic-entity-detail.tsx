@@ -354,7 +354,7 @@ function orderSections(
 }
 
 /** Reads the relation tables and timeline section perform; a test seam. */
-export interface GenericEntityDetailOperations {
+interface GenericEntityDetailOperations {
   list?: EntityRelationTableOperations;
   timeline?: EntityTimelineOperations;
 }

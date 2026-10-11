@@ -57,7 +57,7 @@ declare global {
   }
 }
 
-export function postNativeWorkspaceMessage(message: NativeWorkspaceMessage) {
+function postNativeWorkspaceMessage(message: NativeWorkspaceMessage) {
   if (import.meta.env.SSR) return;
   const parsed = nativeBridgeSchema.safeParse(window);
   if (!parsed.success || !window.webkit) return;

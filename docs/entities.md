@@ -418,6 +418,8 @@ Evidence; other sections default to Overview. The browser groups share a
 compact adaptive index and preserve draft state when switching views. Apple
 retains its native detail renderer; the Run evidence pilot renders only the
 shared Evidence group in its isolated hosted surface.
+Workspace choices are presentation-only literal unions, separate from persisted
+SQL enum vocabulary; adding a view must not expand the database enum lint vocabulary.
 
 `detail.overviewSections` optionally selects which section IDs appear in the
 Overview. Other sections remain available through their existing section links;

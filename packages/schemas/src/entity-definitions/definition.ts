@@ -890,12 +890,18 @@ const buildMetadataSchemas = () => {
     .enum(["primary", "supporting", "full"])
     .optional()
     .default("primary");
+  // Presentation choices are not persisted SQL enum vocabulary.
+  const sectionWorkspace = z.union([
+    z.literal("overview"),
+    z.literal("work"),
+    z.literal("evidence"),
+  ]);
   const sectionBase = {
     id: sectionId,
     title: nonEmptyString(),
     placement: sectionPlacement,
     /** Focused detail workspace; omission follows the section's semantic kind. */
-    workspace: z.enum(["overview", "work", "evidence"]).optional(),
+    workspace: sectionWorkspace.optional(),
     collapsed: z
       .boolean({ error: "must be a boolean" })
       .optional()
@@ -988,7 +994,7 @@ const buildMetadataSchemas = () => {
         title: nonEmptyString().nullable().optional().default(null),
         /** Declared computed field whose explanation applies to this slot. */
         explanationField: fieldKey.nullable().optional().default(null),
-        workspace: z.enum(["overview", "work", "evidence"]).optional(),
+        workspace: sectionWorkspace.optional(),
         placement: sectionPlacement,
         collapsed: z
           .boolean({ error: "must be a boolean" })
