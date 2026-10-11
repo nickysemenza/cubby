@@ -35,30 +35,26 @@ export function WorkbenchBand({
   return (
     <div
       data-workbench-band
-      className="flex flex-col gap-2 border-b border-border bg-card px-2 py-3 max-md:sticky max-md:top-[var(--app-chrome-top)] max-md:z-20 md:px-4"
+      className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-2 py-2 max-md:sticky max-md:top-[var(--app-chrome-top)] max-md:z-20 md:px-4"
     >
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <h1 className="truncate font-display text-2xl leading-8 tracking-tight">
-            {title}
-          </h1>
-          {count !== undefined && (
-            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-              {countLabel ?? formatCount(count)}
-            </span>
-          )}
-        </div>
-        <div className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain">
-          <div data-workbench-actions className="contents" />
-          {actions}
-        </div>
+      <div className="flex min-w-0 items-baseline gap-2 max-md:basis-full md:shrink-0">
+        <h1 className="truncate font-display text-xl leading-8 tracking-tight">
+          {title}
+        </h1>
+        {count !== undefined && (
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {countLabel ?? formatCount(count)}
+          </span>
+        )}
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <div
-          className="flex min-w-0 flex-1 items-center gap-2 max-md:basis-full"
-          data-workbench-utilities
-        />
-        {controls && <div className="shrink-0">{controls}</div>}
+      <div
+        className="flex min-w-0 flex-1 items-center gap-2 max-md:basis-full md:min-w-64 md:basis-64"
+        data-workbench-utilities
+      />
+      {controls && <div className="shrink-0">{controls}</div>}
+      <div className="ml-auto flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain">
+        <div data-workbench-actions className="contents" />
+        {actions}
       </div>
     </div>
   );

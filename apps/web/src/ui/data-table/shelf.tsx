@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
@@ -123,29 +122,12 @@ function ShelfIdentityFallback({
       className="relative flex h-full w-full flex-col items-center justify-center gap-3 bg-[var(--brand-paper-alt)] text-foreground"
       aria-hidden
     >
-      {!compact && (
-        <span className="absolute top-3 left-3 font-mono text-2xs tracking-[0.16em] text-muted-foreground uppercase">
-          Field guide
-        </span>
-      )}
-      <span
-        className={cn(
-          "flex items-center justify-center border border-border bg-card shadow-sm",
-          compact ? "size-10 rounded-xl" : "size-16 rounded-2xl",
-        )}
-      >
-        <RecordEmoji
-          entity={entity}
-          record={record}
-          size={compact ? 20 : 32}
-          className={compact ? "size-5" : "size-8"}
-        />
-      </span>
-      {!compact && (
-        <span className="font-mono text-2xs tracking-[0.16em] text-muted-foreground uppercase">
-          {entitySummary[entity].singular}
-        </span>
-      )}
+      <RecordEmoji
+        entity={entity}
+        record={record}
+        size={compact ? 20 : 32}
+        className={compact ? "size-5 opacity-50" : "size-8 opacity-50"}
+      />
     </div>
   );
 }
