@@ -13,6 +13,7 @@ import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Button } from "~/ui/primitives/button";
 import { FilterableCombobox } from "~/ui/primitives/combobox";
 import { Input } from "~/ui/primitives/input";
+import { Pill } from "~/ui/primitives/pill";
 import {
   Popover,
   PopoverContent,
@@ -699,9 +700,9 @@ export function MobileFilterTier<TData extends RowData>({
             const filter = filtersByField.get(field.key);
             const label = field.label ?? field.key;
             return (
-              <span
+              <Pill
                 key={field.key}
-                className="flex h-6 shrink-0 items-center gap-1 rounded-full border border-primary bg-primary/8 px-2 text-2xs whitespace-nowrap"
+                className="h-6 shrink-0 gap-1 border-primary bg-primary/8 px-2 whitespace-nowrap"
               >
                 <button
                   type="button"
@@ -718,7 +719,7 @@ export function MobileFilterTier<TData extends RowData>({
                 >
                   <XIcon className="size-3" />
                 </button>
-              </span>
+              </Pill>
             );
           })}
         </div>

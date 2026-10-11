@@ -1314,9 +1314,23 @@ and retained original-image evidence. Confirmed description corrections take
 precedence over model text. Taxonomy contents participate in the proposal
 basis, so changing vocabulary invalidates old proposals without rerunning
 vision or introducing an inference cache.
+Hierarchy-aware proposals never replace a saved specific category with its
+ancestor merely because aggregated branch probability is high. Current target
+values participate in suggestion requests and drift checks; sibling corrections,
+refinements, and broad classifications for empty fields remain available.
+Stored category corrections wait for the current hierarchy projection before
+cell or bulk acceptance; stored ancestor downgrades are withheld as well.
+Suppressed live ancestors report a non-pick outcome with no calibrated decline
+probability, so outcome summaries never count them as proposed changes.
 
 Manifest-declared suggestion targets appear as field pills in entity lists.
-Pending Suggestions and confident live answers both appear in those cells as the same ghost pill (accept, reject as a Miss, or use a different value); a cell with no confident answer shows only its value. A changed target or declared
+Pending Suggestions and confident live answers both appear in those cells as the
+same shared suggestion-mode pill (accept, reject as a Miss, or use a different
+value). Weaker live proposals and ranked alternatives remain behind the cell's
+suggestion actions menu, with reasoning, hierarchy context, and review through
+the normal editor. Percentages describe model or branch confidence, not a
+guarantee of correctness. Apply shows local saving feedback; completed row
+enrichment stays visible throughout same-query refreshes. A changed target or declared
 backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
 for the same record and field. Suggestions remain available to evaluation after
 review; there is no separate classification review page.

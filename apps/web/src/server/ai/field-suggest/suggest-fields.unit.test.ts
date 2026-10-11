@@ -687,6 +687,153 @@ describe("suggestFields", () => {
     expect(out.suggestions.categoryId?.alternatives[0]?.value).toBe("CAT-BBBB");
   });
 
+  it.each([
+    {
+      name: "a directly selected parent",
+      choiceIndex: 0,
+      probabilities: [0.9, 0.02, 0.03, 0.03, 0.02],
+    },
+    {
+      name: "a branch rollup",
+      choiceIndex: 1,
+      probabilities: [0.1, 0.7, 0.08, 0.1, 0.02],
+    },
+  ])(
+    "does not propose an ancestor of the current category for $name",
+    async ({ choiceIndex, probabilities }) => {
+      interface Node {
+        id: string;
+        name: string;
+        parent: string | null;
+      }
+      const tree: Node[] = [
+        { id: "CAT-AAAA", name: "Food", parent: null },
+        { id: "CAT-BBBB", name: "Prepared", parent: "CAT-AAAA" },
+        { id: "CAT-CCCC", name: "Snacks", parent: "CAT-AAAA" },
+        { id: "CAT-DDDD", name: "Household", parent: null },
+      ];
+      const spec: ReferenceSuggestSpec<Node> = {
+        kind: "reference",
+        entity: "productCategory",
+        rules: "Pick the one classification.",
+        maxCandidates: 10,
+        roster: async () => tree,
+        idOf: (c) => c.id,
+        labelOf: (c) => c.name,
+        renderLine: (c) => `${c.id} | ${c.name}`,
+        subject: (basis) => String(basis.name),
+        parentIdOf: (c) => c.parent,
+      };
+      const entries = probabilities
+        .slice(0, 4)
+        .map((probability, index) => [`c${index}`, probability]);
+      const jev: JevPort = vi.fn(async () => ({
+        answers: {
+          selection: {
+            type: "choice" as const,
+            choice: `c${choiceIndex}`,
+            confidence: probabilities[choiceIndex]!,
+            probabilities: Object.fromEntries([
+              ...entries,
+              ["none", probabilities[4]],
+            ]),
+          },
+        },
+      }));
+      const out = await suggestFields(
+        fakeDb,
+        fixtureRunId,
+        {
+          entity: "product",
+          targets: ["categoryId"],
+          basis: { name: "frozen dumplings", categoryId: "CAT-BBBB" },
+          basisMode: "provided",
+        },
+        { jev, registry: { "product.categoryId": spec } },
+      );
+
+      expect(out.suggestions.categoryId).toBeNull();
+      expect(out.outcomes?.categoryId).toMatchObject({
+        kind: "evaluated",
+        answer: "none",
+        confidence: "low",
+        probability: null,
+        alternatives: expect.not.arrayContaining([
+          expect.objectContaining({ value: "CAT-AAAA" }),
+        ]),
+      });
+    },
+  );
+
+  it("keeps sibling corrections and refinements while removing ancestor alternatives", async () => {
+    interface Node {
+      id: string;
+      name: string;
+      parent: string | null;
+    }
+    const tree: Node[] = [
+      { id: "CAT-AAAA", name: "Food", parent: null },
+      { id: "CAT-BBBB", name: "Prepared", parent: "CAT-AAAA" },
+      { id: "CAT-CCCC", name: "Snacks", parent: "CAT-AAAA" },
+      { id: "CAT-DDDD", name: "Household", parent: null },
+    ];
+    const spec: ReferenceSuggestSpec<Node> = {
+      kind: "reference",
+      entity: "productCategory",
+      rules: "Pick the one classification.",
+      maxCandidates: 10,
+      roster: async () => tree,
+      idOf: (c) => c.id,
+      labelOf: (c) => c.name,
+      renderLine: (c) => `${c.id} | ${c.name}`,
+      subject: (basis) => String(basis.name),
+      parentIdOf: (c) => c.parent,
+    };
+    const run = async (current: string, choiceIndex: number) => {
+      const probabilities =
+        choiceIndex === 1
+          ? [0.04, 0.9, 0.02, 0.02, 0.02]
+          : [0.04, 0.02, 0.9, 0.02, 0.02];
+      const jev: JevPort = vi.fn(async () => ({
+        answers: {
+          selection: {
+            type: "choice" as const,
+            choice: `c${choiceIndex}`,
+            confidence: probabilities[choiceIndex]!,
+            probabilities: Object.fromEntries([
+              ...probabilities
+                .slice(0, 4)
+                .map((probability, index) => [`c${index}`, probability]),
+              ["none", probabilities[4]],
+            ]),
+          },
+        },
+      }));
+      return suggestFields(
+        fakeDb,
+        fixtureRunId,
+        {
+          entity: "product",
+          targets: ["categoryId"],
+          basis: { name: "frozen dumplings", categoryId: current },
+          basisMode: "provided",
+        },
+        { jev, registry: { "product.categoryId": spec } },
+      );
+    };
+
+    const sibling = await run("CAT-BBBB", 2);
+    expect(sibling.suggestions.categoryId?.value).toBe("CAT-CCCC");
+    expect(
+      sibling.suggestions.categoryId?.alternatives.map(
+        (alternative) => alternative.value,
+      ),
+    ).not.toContain("CAT-AAAA");
+
+    const refinement = await run("CAT-AAAA", 1);
+    expect(refinement.suggestions.categoryId?.value).toBe("CAT-BBBB");
+  });
+
   it("rejects an unknown target without calling the model", async () => {
     const jev = jevPortPicking();
 

@@ -4,7 +4,7 @@ import type {
   RelatedViewDefinition,
   RelatedViewKey,
 } from "@cubby/schemas/related-view";
-import { useQuery } from "@tanstack/react-query";
+import { type UseQueryResult, useQueries } from "@tanstack/react-query";
 import { type RefObject, useMemo, useRef } from "react";
 
 import { getSortableFields } from "~/entity/entities";
@@ -22,6 +22,8 @@ import type { RuntimeFilterOptions } from "./filter-option-types";
 export interface RelatedPreviewState {
   byCell: Map<string, RelatedPreviewGroup>;
   loading: boolean;
+  loadingSourceIds: Set<string>;
+  errorsBySourceId: Map<string, Error>;
 }
 
 export interface RelatedPreviewColumnsResult<TData extends { id: string }> {
@@ -38,12 +40,20 @@ export interface RelatedPreviewOperations {
   previews: typeof relatedData.previews;
 }
 
+// Keep descriptor inputs within relatedPreviewInput's sourceIds contract.
+const RELATED_PREVIEW_SOURCE_ID_LIMIT = 1000;
+
 const productionRelatedPreviewOperations: RelatedPreviewOperations = {
   previews: relatedData.previews,
 };
 
 export function useRelatedPreviewStateRef() {
-  return useRef<RelatedPreviewState>({ byCell: new Map(), loading: false });
+  return useRef<RelatedPreviewState>({
+    byCell: new Map(),
+    loading: false,
+    loadingSourceIds: new Set(),
+    errorsBySourceId: new Map(),
+  });
 }
 
 export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
@@ -80,14 +90,17 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
             supportsServerSorting &&
             getSortableFields(entity).includes(columnId),
           meta,
-          cell: (info) => (
-            <RelatedPreviewCell
-              group={relatedStateRef.current?.byCell.get(
-                `${info.row.original.id}:${view.key}`,
-              )}
-              loading={relatedStateRef.current?.loading ?? false}
-            />
-          ),
+          cell: (info) => {
+            const state = relatedStateRef.current;
+            const sourceId = info.row.original.id;
+            return (
+              <RelatedPreviewCell
+                group={state?.byCell.get(`${sourceId}:${view.key}`)}
+                loading={state?.loadingSourceIds.has(sourceId) ?? false}
+                error={state?.errorsBySourceId.get(sourceId)}
+              />
+            );
+          },
         });
       }),
     [
@@ -114,30 +127,70 @@ export function useRelatedPreviewData({
   relatedStateRef: RefObject<RelatedPreviewState>;
   operations?: RelatedPreviewOperations;
 }): RelatedPreviewState {
-  const relatedQuery = useQuery({
-    ...operations.previews.queryOptions({
-      source: entity,
-      sourceIds,
-      relationKeys: visibleRelationKeys,
-    }),
-    enabled: sourceIds.length > 0 && visibleRelationKeys.length > 0,
-  });
-  const relatedByCell = useMemo(() => {
-    const map = new Map<string, RelatedPreviewGroup>();
-    for (const group of relatedQuery.data ?? []) {
-      map.set(`${group.sourceId}:${group.relationKey}`, group);
+  const relatedQueryInputs = useMemo(() => {
+    if (sourceIds.length === 0 || visibleRelationKeys.length === 0) {
+      return { queries: [], sourceIdChunks: [] };
     }
-    return map;
-  }, [relatedQuery.data]);
-  relatedStateRef.current = {
-    byCell: relatedByCell,
-    loading: relatedQuery.isLoading,
-  };
 
-  return useMemo(
-    () => ({ byCell: relatedByCell, loading: relatedQuery.isLoading }),
-    [relatedByCell, relatedQuery.isLoading],
+    const queries: ReturnType<typeof operations.previews.queryOptions>[] = [];
+    const sourceIdChunks: string[][] = [];
+    for (
+      let start = 0;
+      start < sourceIds.length;
+      start += RELATED_PREVIEW_SOURCE_ID_LIMIT
+    ) {
+      const chunkIds = sourceIds.slice(
+        start,
+        start + RELATED_PREVIEW_SOURCE_ID_LIMIT,
+      );
+      sourceIdChunks.push(chunkIds);
+      queries.push(
+        operations.previews.queryOptions({
+          source: entity,
+          sourceIds: chunkIds,
+          relationKeys: visibleRelationKeys,
+        }),
+      );
+    }
+    return { queries, sourceIdChunks };
+  }, [entity, operations, sourceIds, visibleRelationKeys]);
+  const combineRelatedQueries = useMemo(
+    () =>
+      (
+        results: readonly UseQueryResult<RelatedPreviewGroup[], Error>[],
+      ): RelatedPreviewState => {
+        const byCell = new Map<string, RelatedPreviewGroup>();
+        const loadingSourceIds = new Set<string>();
+        const errorsBySourceId = new Map<string, Error>();
+        results.forEach((result, index) => {
+          const chunkIds = relatedQueryInputs.sourceIdChunks[index] ?? [];
+          if (result.isLoading) {
+            for (const sourceId of chunkIds) loadingSourceIds.add(sourceId);
+          }
+          if (result.error) {
+            for (const sourceId of chunkIds)
+              errorsBySourceId.set(sourceId, result.error);
+          }
+          for (const group of result.data ?? []) {
+            byCell.set(`${group.sourceId}:${group.relationKey}`, group);
+          }
+        });
+        return {
+          byCell,
+          loading: loadingSourceIds.size > 0,
+          loadingSourceIds,
+          errorsBySourceId,
+        };
+      },
+    [relatedQueryInputs.sourceIdChunks],
   );
+  const relatedState = useQueries({
+    queries: relatedQueryInputs.queries,
+    combine: combineRelatedQueries,
+  });
+  relatedStateRef.current = relatedState;
+
+  return useMemo(() => relatedState, [relatedState]);
 }
 
 /**

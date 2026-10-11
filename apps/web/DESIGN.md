@@ -19,6 +19,7 @@ Cubby is a household field guide: a place to find a record, understand its evide
 - Use a system serif or Georgia for page and record identity only. Body, labels, controls, and tables use Inter with system fallbacks; shortcodes use mono. Quantities and money use tabular numbers.
 - Spacing comes from the shared token steps 4/8/12/12/16/16px (`packages/design-tokens/tokens.json`); the layout gap scale reads them, so web and native density move together. Desktop inputs, selects, and tab lists are 32px, matching the default button; menu items are 28px.
 - Panels have a 16px radius; controls 8px; compact chips 7px. Nested surfaces follow concentric radii. Resting surfaces use tone and 1px structural rules, with shadow only for floating overlays.
+  Web status, enum, category, and suggestion pills share `Pill` geometry. Saved values retain their semantic tint; suggestion mode uses a quiet dashed boundary with the same height and radius. Applying a suggestion shows pending feedback in that cell while the surrounding records remain readable.
 - Images use a faint neutral outline. Give real record photos room in detail; use the declared entity symbol when there is no image. Never place an unrelated illustration in an empty hero.
 - Motion explains state or space. High-frequency search, keyboard, table, and navigation actions respond immediately. Transitions name only changed properties and respect reduced motion.
 

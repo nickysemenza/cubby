@@ -107,6 +107,85 @@ function Surface({
 }
 
 describe("record suggestions", () => {
+  it.each([
+    { field: "categoryId", readKey: "categoryId", proposal: food },
+    {
+      field: "ingredientId",
+      readKey: "ingredient",
+      proposal: {
+        ...food,
+        value: testShortcode("ingredient", "synthetic-fill"),
+        label: "Synthetic ingredient",
+      },
+    },
+  ])(
+    "waits for deferred $field and preserves its explicit empty projection",
+    async ({ field, readKey, proposal }) => {
+      let finishStored!: (rows: []) => void;
+      const stored = {
+        ...emptyStoredSuggestionOperations,
+        list: vi.fn(
+          () =>
+            new Promise<[]>((resolve) => {
+              finishStored = resolve;
+            }),
+        ),
+      };
+      const operations = {
+        suggestFields: ai.suggestFields.withTransport(async () => ({
+          suggestions: { [field]: proposal },
+          outcomes: {
+            [field]: {
+              kind: "evaluated",
+              answer: "pick",
+              confidence: "high",
+              probability: food.probability,
+              alternatives: [],
+            },
+          },
+        })),
+      };
+      function Cell({ loaded }: { loaded: boolean }) {
+        const base = { id, name: "Synthetic product" };
+        const record = loaded ? { ...base, [readKey]: null } : base;
+        return (
+          <RecordSuggestionsProvider
+            entity="product"
+            records={[record]}
+            fieldKeys={[field]}
+            operations={operations}
+            storedSuggestionOperations={stored}
+          >
+            <RecordFieldSuggestion
+              record={record}
+              field={field}
+              surface="cell"
+              renderValue={() => <span>Food</span>}
+            >
+              <span>Current category</span>
+            </RecordFieldSuggestion>
+          </RecordSuggestionsProvider>
+        );
+      }
+      const view = render(<Cell loaded={false} />, {
+        wrapper: harness.wrapper,
+      });
+      await waitFor(() => expect(stored.list).toHaveBeenCalled());
+      await act(async () => finishStored([]));
+      // Query notifications cross a task boundary before starting live reads.
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      expect(
+        screen.queryByRole("button", { name: /^Accept suggested value/ }),
+      ).toBeNull();
+      view.rerender(<Cell loaded />);
+      expect(
+        await screen.findByRole("button", { name: /^Accept suggested value/ }),
+      ).toBeVisible();
+    },
+  );
+
   it("loads hidden suggest fields for bulk acceptance and skips live queries for stored pairs", async () => {
     const recordId = "11111111-1111-4111-8111-111111111111";
     const storedRow = suggestionReviewRowSchema.parse({
@@ -280,7 +359,7 @@ describe("record suggestions", () => {
     expect(calls).toHaveLength(3);
   });
 
-  it("shows a confident live answer in a table cell as a ghost pill and a weak one as nothing", async () => {
+  it("shows a confident live answer as a ghost pill and a weak one in the review menu", async () => {
     const answers = {
       "red apple": 0.97,
       "green pear": 0.97,
@@ -296,7 +375,21 @@ describe("record suggestions", () => {
               .parse(input.basis.name)
           ];
         return {
-          suggestions: { categoryId: { ...food, probability } },
+          suggestions: {
+            categoryId: {
+              ...food,
+              probability,
+              reasoning: "Synthetic category evidence",
+              alternatives: [
+                {
+                  value: "CAT-CCCC",
+                  label: "Tools / Drivers",
+                  detail: null,
+                  probability: 0.3,
+                },
+              ],
+            },
+          },
           outcomes: {
             categoryId: {
               kind: "evaluated" as const,
@@ -381,6 +474,12 @@ describe("record suggestions", () => {
     expect(
       screen.queryByRole("button", { name: /^Accept suggested value/ }),
     ).toBeNull();
+    // A weak proposal remains inspectable without becoming the inline action.
+    fireEvent.click(screen.getByRole("button", { name: "Suggestion actions" }));
+    expect(
+      await screen.findByText("Synthetic category evidence"),
+    ).toBeVisible();
+    expect(screen.getByText("Tools / Drivers")).toBeVisible();
   });
 
   it("opens the normal editor with the saved value after acceptance fails", async () => {

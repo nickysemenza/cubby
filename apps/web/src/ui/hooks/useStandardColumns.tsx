@@ -220,7 +220,76 @@ export function useStandardColumns<TData extends BaseListRow>({
     [],
   );
   const hasMappings = mappingsMap !== null;
-  return useMemo(
+  // Related/custom metadata can also change the collection. Standard renderers
+  // depend only on their own behavior, never on that collection's identity.
+  const standardDefinitions = useMemo(() => {
+    const imageField = standardColumns.find(
+      (field) => field.display.standard === "image",
+    );
+    const mappingsId =
+      entity === "product" ? "unitMappingQuality" : "unitMappings";
+    return {
+      image: createImageColumn(columnHelper, {
+        entity,
+        getImages: (row) => row.displayImages ?? [],
+        provenance: imageField?.provenance ?? null,
+      }),
+      identity: createNameColumn(columnHelper, entity, undefined, {
+        id: titleField,
+        header: entitySummary[entity].singular,
+        enableSorting: getSortableFields(entity).includes(titleField),
+        className: nameClassName ?? identityWidth,
+        // Computed titles stay read-only unless an explicit adapter maps the
+        // edit gesture to an underlying stored field (for example, Meal name).
+        editable: nameEditable,
+        nameSuffix,
+        namePrefix,
+        expandable,
+        rowLink,
+        getValue: (row: TData) =>
+          z
+            .string()
+            .nullish()
+            .catch(null)
+            .parse(z.looseObject({}).parse(row)[titleField]) ?? null,
+      }),
+      quality: createEntityDisplayColumns(entity, columnHelper, undefined, {
+        only: ["dataQuality"],
+      }),
+      mappings:
+        shouldUseMappings && hasMappings
+          ? createUnitMappingsColumn(columnHelper, mappingsFor, {
+              id: mappingsId,
+              enableSorting: false,
+            })
+          : null,
+      createdAt: createTimestampColumn(columnHelper, "createdAt"),
+      updatedAt: createTimestampColumn(columnHelper, "updatedAt"),
+      actions: createActionsColumn(columnHelper, entity, {
+        extraActions: combinedExtraActions,
+        rowLink,
+        subject,
+      }),
+    };
+  }, [
+    columnHelper,
+    entity,
+    standardColumns,
+    titleField,
+    shouldUseMappings,
+    hasMappings,
+    mappingsFor,
+    combinedExtraActions,
+    rowLink,
+    subject,
+    nameClassName,
+    identityWidth,
+    nameEditable,
+    nameSuffix,
+    namePrefix,
+    expandable,
+  ]);
+  const baseColumns = useMemo(
     () =>
       createCubbyColumnCollection<TData>((add) => {
         // The filter manifest is the source of truth for what a column can be
@@ -231,11 +300,7 @@ export function useStandardColumns<TData extends BaseListRow>({
         ): FilterConfig | undefined => {
           if (hiddenFilterColumnSet.has(columnId)) return undefined;
 
-          const fromManifest = manifestFilterConfig(
-            entity,
-            columnId,
-            filterOptions,
-          );
+          const fromManifest = manifestFilterConfig(entity, columnId);
           if (fromManifest) return fromManifest;
 
           const filterDef = stableFilters.find((filter) =>
@@ -289,52 +354,9 @@ export function useStandardColumns<TData extends BaseListRow>({
           .visit((column) => isImageColumnId(columnIdentifier(column)))
           .some(Boolean);
         if (!hasExplicitImageColumn) {
-          const imageField = standardColumns.find(
-            (field) => field.display.standard === "image",
-          );
-          add(
-            withManifestFilter(
-              createImageColumn(columnHelper, {
-                entity,
-                getImages: (row) => row.displayImages ?? [],
-                provenance: imageField?.provenance ?? null,
-              }),
-              "image",
-            ),
-          );
+          add(withManifestFilter(standardDefinitions.image, "image"));
         }
-        {
-          const identityFilterConfig = getFilterConfig(titleField);
-          const identityColumnOptions = {
-            id: titleField,
-            header: entitySummary[entity].singular,
-            filterConfig: identityFilterConfig,
-            enableSorting: getSortableFields(entity).includes(titleField),
-            className: nameClassName ?? identityWidth,
-            // Computed titles stay read-only unless the list explicitly maps
-            // the edit gesture to an underlying stored field (Meal name is the
-            // canonical example).
-            editable: nameEditable,
-            nameSuffix,
-            namePrefix,
-            expandable,
-            rowLink,
-            getValue: (row: TData) =>
-              z
-                .string()
-                .nullish()
-                .catch(null)
-                .parse(z.looseObject({}).parse(row)[titleField]) ?? null,
-          };
-          add(
-            createNameColumn(
-              columnHelper,
-              entity,
-              undefined,
-              identityColumnOptions,
-            ),
-          );
-        }
+        add(withManifestFilter(standardDefinitions.identity, titleField));
 
         // Custom columns get two things applied from the registries: sorting from
         // `sortableFields`, and their filter control from the manifest.
@@ -344,9 +366,7 @@ export function useStandardColumns<TData extends BaseListRow>({
             .visit((column) => columnIdentifier(column) === "dataQuality")
             .some(Boolean)
         ) {
-          createEntityDisplayColumns(entity, columnHelper, undefined, {
-            only: ["dataQuality"],
-          }).visit(add);
+          standardDefinitions.quality.visit(add);
         }
 
         customColumns
@@ -386,7 +406,7 @@ export function useStandardColumns<TData extends BaseListRow>({
           });
 
         // Append unit mappings column if configured
-        if (shouldUseMappings && hasMappings) {
+        if (standardDefinitions.mappings) {
           // The product id stays "unitMappingQuality" — it's what the manifest's
           // presence filter hangs on. NOT sortable: the cell grades conversion
           // COVERAGE (a graph reachability run through the unit engine, over
@@ -395,53 +415,46 @@ export function useStandardColumns<TData extends BaseListRow>({
           // by a quantity that isn't on screen.
           const mappingsColId =
             entity === "product" ? "unitMappingQuality" : "unitMappings";
-          add(
-            withManifestFilter(
-              createUnitMappingsColumn(columnHelper, mappingsFor, {
-                id: mappingsColId,
-                enableSorting: false,
-              }),
-              mappingsColId,
-            ),
-          );
+          add(withManifestFilter(standardDefinitions.mappings, mappingsColId));
         }
 
         // Top-level lists reveal the audit pair by default; embedded lists keep
         // it available through the column visibility controls.
-        add(createTimestampColumn(columnHelper, "createdAt"));
-        add(createTimestampColumn(columnHelper, "updatedAt"));
+        add(standardDefinitions.createdAt);
+        add(standardDefinitions.updatedAt);
 
         // Append actions column (always last)
-        add(
-          createActionsColumn(columnHelper, entity, {
-            extraActions: combinedExtraActions,
-            rowLink,
-            subject,
-          }),
-        );
+        add(standardDefinitions.actions);
       }),
     [
-      columnHelper,
       customColumns,
       entity,
-      shouldUseMappings,
-      standardColumns,
+      standardDefinitions,
       titleField,
-      hasMappings,
-      mappingsFor,
       stableFilters,
-      filterOptions,
       enableRowSelection,
-      combinedExtraActions,
-      rowLink,
-      subject,
-      nameClassName,
-      identityWidth,
-      nameEditable,
-      nameSuffix,
-      namePrefix,
-      expandable,
       hiddenFilterColumnSet,
     ],
+  );
+
+  // Runtime filter rosters change independently of cell editors. Overlay their
+  // metadata without rebuilding the component functions that own open drafts.
+  return useMemo(
+    () =>
+      createCubbyColumnCollection<TData>((add) => {
+        baseColumns.visit((column) => {
+          const id = columnIdentifier(column);
+          const filterConfig =
+            id && !hiddenFilterColumnSet.has(id)
+              ? manifestFilterConfig(entity, id, filterOptions)
+              : undefined;
+          add(
+            filterConfig
+              ? { ...column, meta: { ...column.meta, filterConfig } }
+              : column,
+          );
+        });
+      }),
+    [baseColumns, entity, filterOptions, hiddenFilterColumnSet],
   );
 }

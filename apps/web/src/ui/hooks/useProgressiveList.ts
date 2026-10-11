@@ -39,6 +39,10 @@ export function useProgressiveList<T extends { id: string }>({
   const queryClient = useQueryClient();
   const [readGeneration, retire] = useReducer((value: number) => value + 1, 0);
   const firstPage = pages?.[0];
+  const previousSession = useRef<{
+    scope: string;
+    session: ProgressiveListSession<T>;
+  } | null>(null);
   // Structural sharing can preserve the first page after a mutation. Cache
   // invalidation retires the read synchronously, even if fetching is batched.
   const session = useMemo(() => {
@@ -46,6 +50,9 @@ export function useProgressiveList<T extends { id: string }>({
     next.reset(
       `${scope}:${firstPage?.meta.pageIndex}:${refreshing}:${readGeneration}`,
     );
+    if (previousSession.current?.scope === scope)
+      next.retain(previousSession.current.session);
+    previousSession.current = { scope, session: next };
     return next;
   }, [firstPage, scope, refreshing, readGeneration]);
   const activeSession = useRef(session);
@@ -72,6 +79,7 @@ export function useProgressiveList<T extends { id: string }>({
     0,
   );
   const [summary, setSummary] = useState<{
+    scope: string;
     session: ProgressiveListSession<T>;
     state: ListGroupState;
     sums?: Record<string, number>;
@@ -112,16 +120,21 @@ export function useProgressiveList<T extends { id: string }>({
     if (!activePlan || paused || refreshing || !firstPage) return;
     // `dispose` swaps the session's controller, so hold this run's signal.
     const signal = session.signal;
-    setSummary({ session, state: { state: "loading" } });
+    setSummary((previous) =>
+      previous?.scope === scope && previous.state.state === "ready"
+        ? { ...previous, session }
+        : { scope, session, state: { state: "loading" } },
+    );
     void activePlan
       .summary(signal)
       .then((sums) => {
         if (!signal.aborted)
-          setSummary({ session, state: { state: "ready" }, sums });
+          setSummary({ scope, session, state: { state: "ready" }, sums });
       })
       .catch((error) => {
         if (!signal.aborted)
           setSummary({
+            scope,
             session,
             state: {
               state: "error",
@@ -130,7 +143,7 @@ export function useProgressiveList<T extends { id: string }>({
             },
           });
       });
-  }, [firstPage, paused, enabled, refreshing, session, summaryAttempt]);
+  }, [firstPage, scope, paused, enabled, refreshing, session, summaryAttempt]);
   const stateRef = useRef({ session, pages, enabled });
   stateRef.current = { session, pages, enabled };
   const enrichmentState = useCallback(
@@ -184,9 +197,9 @@ export function useProgressiveList<T extends { id: string }>({
     deferredFields:
       firstPage?.deferredGroups?.flatMap((group) => group.fields) ?? [],
     data: session.rows(),
-    sums: summary?.session === session && !paused ? summary.sums : undefined,
+    sums: summary?.scope === scope && !paused ? summary.sums : undefined,
     summaryState:
-      summary?.session === session && !paused ? summary.state : PENDING_STATE,
+      summary?.scope === scope && !paused ? summary.state : PENDING_STATE,
     enrichmentState,
   };
 }

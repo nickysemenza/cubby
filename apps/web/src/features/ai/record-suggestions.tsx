@@ -7,6 +7,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import { parseShortcode } from "@cubby/shared";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
@@ -46,6 +47,7 @@ import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -53,9 +55,13 @@ import { Description } from "~/ui/primitives/description";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
+import { Pill } from "~/ui/primitives/pill";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import {
   fieldSuggestionBasisFromRecord,
@@ -342,17 +348,44 @@ function suggestionRequestsForRecord(
   targets: ReturnType<typeof suggestTargetsFor>,
   runKey: string,
 ) {
-  const basis = recordSuggestionBasis(entity, targets, record);
+  // Include saved assignments using the same projection and labels as the
+  // acceptance drift check, without widening older callers' basis contracts.
+  const basis = recordSuggestionBasis(
+    entity,
+    {
+      ...targets,
+      basisKeys: [
+        ...new Set([
+          ...targets.basisKeys,
+          ...targets.targets
+            .filter((target) => target.mode !== "prune")
+            .map((target) => target.key),
+        ]),
+      ],
+    },
+    record,
+  );
   if (!isBasisSufficient(entity, targets, basis)) return [];
   const resolutions = recordFieldResolutions(record);
-  const available = targets.targets.filter(
-    (target) =>
+  const available = targets.targets.filter((target) => {
+    const field = entityFieldModels[entity].fields.find(
+      (entry) => entry.key === target.key,
+    );
+    const loaded =
+      record[field?.readKey ?? target.key] !== undefined ||
+      (field?.reference != null &&
+        record[target.key.replace(/Ids?$/u, "")] !== undefined) ||
+      resolutions[target.key] !== undefined ||
+      recordValue(entity, record, target.key).value !== null;
+    return (
+      loaded &&
       !(
         entity === "expense" &&
         target.key === "projectId" &&
         record.lineKind !== "principal"
-      ),
-  );
+      )
+    );
+  });
   // A `mode: "prune"` target always provides its own current entries as
   // basis — it is never an empty field waiting to be filled, so it gets its
   // own request group rather than joining the fill suggested/alternatives
@@ -568,12 +601,46 @@ function liveRequestsAfterStoredRead(
 
 function storedSuggestionIndex(
   rows: readonly SuggestionReviewRow[] | undefined,
+  entity: StandardEntity,
+  records: readonly unknown[],
 ) {
+  const categories = new Map<string, z.infer<typeof productCategorySummary>>();
+  if (entity === "product") {
+    for (const record of records) {
+      const parsed = z
+        .object({
+          id: z.string(),
+          categoryId: z.string().nullable(),
+          category: productCategorySummary,
+        })
+        .safeParse(record);
+      if (parsed.success && parsed.data.categoryId === parsed.data.category.id)
+        categories.set(parsed.data.id, parsed.data.category);
+    }
+  }
   return new Map(
-    (rows ?? []).map((suggestion) => [
-      storedSuggestionKey(suggestion.recordId, suggestion.field),
-      suggestion,
-    ]),
+    (rows ?? [])
+      .filter((suggestion) => {
+        const current = categories.get(suggestion.recordId);
+        if (
+          entity === "product" &&
+          suggestion.field === "categoryId" &&
+          suggestion.kind === "correction" &&
+          !current
+        )
+          return false;
+        return !(
+          suggestion.field === "categoryId" &&
+          current &&
+          suggestion.currentValue === current.id &&
+          suggestion.suggestedValue !== current.id &&
+          current.path.some((node) => node.id === suggestion.suggestedValue)
+        );
+      })
+      .map((suggestion) => [
+        storedSuggestionKey(suggestion.recordId, suggestion.field),
+        suggestion,
+      ]),
   );
 }
 
@@ -737,7 +804,7 @@ function BoundRecordSuggestions({
     mutationFn: storedSuggestionOperations.reject,
     onSuccess: (_result, input) => afterStoredReview(input.id),
   });
-  const stored = storedSuggestionIndex(storedQuery?.data);
+  const stored = storedSuggestionIndex(storedQuery?.data, entity, records);
   const requests = liveRequestsAfterStoredRead(
     hydrated,
     pageRecordIds,
@@ -1062,11 +1129,8 @@ function ResolvedFieldSuggestion({
     // Prune proposals keep the popover review: removing chips has no pill.
     if (
       suggestion?.operation !== "remove" &&
-      actionableSuggestion(
-        suggestion,
-        current.value,
-        source.basisMode === "provided",
-      ) &&
+      suggestion?.value &&
+      suggestion.value !== current.value &&
       suggestion.probability !== null
     )
       return (
@@ -1075,10 +1139,19 @@ function ResolvedFieldSuggestion({
             context={context}
             record={row.record}
             field={field}
-            suggestion={{ ...suggestion, probability: suggestion.probability }}
+            suggestion={{
+              ...suggestion,
+              value: suggestion.value,
+              probability: suggestion.probability,
+            }}
             currentValue={current.value}
             questionKey={questionKey}
             pending={row.pending}
+            inline={actionableSuggestion(
+              suggestion,
+              current.value,
+              source.basisMode === "provided",
+            )}
             apply={apply}
             dismiss={dismiss}
           >
@@ -1204,9 +1277,8 @@ function StoredSuggestionField({
   );
 }
 
-/** A live answer in a table cell reads like a stored one — a ghost pill, not
- * a hover-only glyph — and a cell with nothing confident to offer shows only
- * its value. */
+/** Strong live proposals share stored-pill chrome; weaker proposals remain
+ * available for review beside the current value. */
 function LiveSuggestionCell({
   context,
   record,
@@ -1215,6 +1287,7 @@ function LiveSuggestionCell({
   currentValue,
   questionKey,
   pending,
+  inline,
   apply,
   dismiss,
   children,
@@ -1226,6 +1299,7 @@ function LiveSuggestionCell({
   currentValue: string | null;
   questionKey: string;
   pending: boolean;
+  inline: boolean;
   apply: () => Promise<void>;
   dismiss: () => Promise<void>;
   children: ReactNode;
@@ -1245,6 +1319,11 @@ function LiveSuggestionCell({
       kind={currentValue?.trim() ? "correction" : "addition"}
       value={suggestion.value}
       confidence={suggestion.probability}
+      label={suggestion.detail ?? suggestion.label ?? undefined}
+      reasoning={suggestion.reasoning}
+      alternatives={suggestion.alternatives}
+      inline={inline}
+      pending={pending || actions.saving}
       accept={actions.apply}
       reject={actions.dismiss}
       onCorrected={actions.dismiss}
@@ -1275,6 +1354,10 @@ function useRenderedText() {
   return { ref, text };
 }
 
+function suggestionAcceptLabel(text: string) {
+  return text ? `Accept suggested value: ${text}` : "Accept suggested value";
+}
+
 function GhostSuggestionCell({
   context,
   record,
@@ -1282,6 +1365,11 @@ function GhostSuggestionCell({
   kind,
   value,
   confidence,
+  label,
+  reasoning,
+  alternatives = [],
+  inline = true,
+  pending = false,
   renderValue,
   accept,
   reject,
@@ -1295,6 +1383,11 @@ function GhostSuggestionCell({
   kind: SuggestionReviewRow["kind"];
   value: JsonValue;
   confidence: number;
+  label?: string;
+  reasoning?: string;
+  alternatives?: FieldSuggestion["alternatives"];
+  inline?: boolean;
+  pending?: boolean;
   renderValue?: (value: JsonValue) => ReactNode;
   accept: () => Promise<void>;
   reject: () => Promise<void>;
@@ -1305,6 +1398,22 @@ function GhostSuggestionCell({
   children: ReactNode;
 }) {
   const [editOpen, setEditOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const active = useRef(false);
+  const busy = pending || saving;
+  const run = async (action: () => Promise<void>) => {
+    if (active.current || busy) return;
+    active.current = true;
+    setSaving(true);
+    try {
+      await action();
+    } catch (error) {
+      showErrorToast(error);
+    } finally {
+      active.current = false;
+      setSaving(false);
+    }
+  };
   const valueText = useRenderedText();
   // Inert: a reference value renders as a navigating link, which would
   // swallow the click meant to accept it (and nest a link in a button).
@@ -1314,43 +1423,63 @@ function GhostSuggestionCell({
     <span
       ref={valueText.ref}
       inert
-      className="pointer-events-none inline-flex min-w-0 items-center gap-1 rounded-sm border border-dashed border-muted-foreground/50 px-1 opacity-65"
+      className="pointer-events-none inline-flex min-w-0 items-center gap-1"
     >
-      <SparkleIcon aria-hidden className="size-3 shrink-0" />
+      {busy ? (
+        <Spinner className="size-3 shrink-0" />
+      ) : (
+        <SparkleIcon aria-hidden className="size-3 shrink-0" />
+      )}
       {renderValue?.(value) ??
-        renderSuggestedListFieldValue(context.entity, record, field, value)}
+        renderSuggestedListFieldValue(
+          context.entity,
+          record,
+          field,
+          value,
+          label,
+        )}
     </span>
   );
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
-      {kind === "correction" ? (
+      {kind === "correction" || !inline ? (
         <>
           {children}
-          <ArrowRightIcon
-            aria-label="Suggested replacement"
-            className="size-3 shrink-0"
-          />
+          {inline ? (
+            <ArrowRightIcon
+              aria-label="Suggested replacement"
+              className="size-3 shrink-0"
+            />
+          ) : null}
         </>
       ) : null}
-      <span title={`${Math.floor(confidence * 100)}% confidence`}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-6 max-w-full min-w-0 px-1"
-          aria-label={
-            valueText.text
-              ? `Accept suggested value: ${valueText.text}`
-              : "Accept suggested value"
+      {inline ? (
+        <Pill
+          mode="suggestion"
+          render={
+            <button
+              type="button"
+              disabled={busy}
+              aria-label={suggestionAcceptLabel(valueText.text)}
+              onClick={(event) => {
+                event.stopPropagation();
+                void run(accept);
+              }}
+            />
           }
-          onClick={(event) => {
-            event.stopPropagation();
-            void accept();
-          }}
+          aria-busy={busy}
+          title={[
+            reasoning,
+            `${Math.floor(confidence * 100)}% model confidence`,
+          ]
+            .filter(Boolean)
+            .join("\n")}
+          className="max-w-full min-w-0 cursor-pointer gap-1 overflow-hidden hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait max-md:min-h-11"
+          aria-label={suggestionAcceptLabel(valueText.text)}
         >
           {ghost}
-        </Button>
-      </span>
+        </Pill>
+      ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -1360,16 +1489,49 @@ function GhostSuggestionCell({
               size="icon"
               className="size-6"
               aria-label="Suggestion actions"
+              disabled={busy}
             />
           }
         >
           <span aria-hidden>···</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => void accept()}>
-            Accept
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => void reject()}>
+          {reasoning || alternatives.length > 0 || !inline ? (
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Suggestions</DropdownMenuLabel>
+              {!inline && label ? (
+                <p className="px-2 py-1 text-xs">
+                  {label} · {Math.floor(confidence * 100)}% model confidence
+                </p>
+              ) : null}
+              {reasoning ? (
+                <p className="max-w-xs px-2 py-1 text-xs text-muted-foreground">
+                  {reasoning}
+                </p>
+              ) : null}
+              {alternatives.map((alternative) => (
+                <DropdownMenuItem
+                  key={alternative.value}
+                  onClick={() => setEditOpen(true)}
+                >
+                  <span className="flex min-w-0 flex-col">
+                    <span>{alternative.label}</span>
+                    <span className="text-2xs text-muted-foreground">
+                      {alternative.detail ? `${alternative.detail} · ` : ""}
+                      {Math.floor(alternative.probability * 100)}% · Review in
+                      editor
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          ) : null}
+          {inline ? (
+            <DropdownMenuItem disabled={busy} onClick={() => void run(accept)}>
+              Accept
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem disabled={busy} onClick={() => void run(reject)}>
             Reject (Miss)
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setEditOpen(true)}>
