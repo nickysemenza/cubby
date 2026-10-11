@@ -51,6 +51,8 @@ import {
   imageList,
   getImageHashIndex,
   setImagePerceptualHashes,
+  updateImage,
+  getImageById,
 } from "./image";
 
 /** Integration tests reach no R2: the stored object is served from memory. */
@@ -134,6 +136,41 @@ const mkRunTargetRow = (
 
 describe("image repository", () => {
   const ctx = withTestDb();
+
+  it("persists reviewed catalog provenance without replacing stored image bytes", async () => {
+    const original = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "catalog-item.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+      source: "own",
+    });
+    const before = await getImageById(ctx.db, original.id);
+    await updateImage(ctx.db, original.id, {
+      source: "catalog",
+      sourcePageUrl: "https://supplier.example.test/products/item",
+      sourceAssetUrl: "https://supplier.example.test/images/item.jpg",
+      sourceName: "Example supplier",
+    });
+    const persisted = await getImageById(ctx.db, original.id);
+    expect(persisted).toMatchObject({
+      source: "catalog",
+      sourcePageUrl: "https://supplier.example.test/products/item",
+      sourceAssetUrl: "https://supplier.example.test/images/item.jpg",
+      sourceName: "Example supplier",
+      key: before.key,
+      url: before.url,
+      size: before.size,
+      contentType: before.contentType,
+    });
+    await updateImage(ctx.db, original.id, { sourceName: null });
+    expect(await getImageById(ctx.db, original.id)).toMatchObject({
+      source: "catalog",
+      sourcePageUrl: persisted.sourcePageUrl,
+      sourceAssetUrl: persisted.sourceAssetUrl,
+      sourceName: null,
+    });
+  });
 
   it("prioritizes recent uploads in the hash repair queue", async () => {
     const older = await createUploadedImageRecord(ctx.db, {

@@ -1431,9 +1431,8 @@ export const getImagesByShortcodes = async (
 };
 
 /**
- * Rename an image. `filename` is the only safely user-editable column — `key`/
- * `url`/`size`/`contentType`/`status` are all derived from the upload itself,
- * so this is intentionally the entire update surface (see `imageUpdateInput`).
+ * Update reviewed image metadata without replacing upload-derived bytes or
+ * identity. Provenance fields follow the declared image update contract.
  * Re-reads via {@link getImageById} so the output matches `getByID`'s shape
  * (including the resolved entity association) rather than a bare row.
  */
@@ -1458,6 +1457,10 @@ export const updateImage = async (
     const values: PgUpdateSetSource<typeof image> = {
       filename: data.filename,
       useOriginal: data.useOriginal,
+      source: data.source,
+      sourcePageUrl: data.sourcePageUrl,
+      sourceAssetUrl: data.sourceAssetUrl,
+      sourceName: data.sourceName,
     };
     if (manualCapture) {
       values.capturedAt = data.capturedAt;

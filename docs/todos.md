@@ -238,6 +238,13 @@ Run is the one unit of unattended work (Mail import, photo inventory, a member's
 import) and the attempt history the shared activity projection presents.
 Burn-down writes are not Runs: they are audited member writes with Sources.
 
+- 🐛 **Repair Run-list attention projection validation.** A live Runs page can
+  reject its attention and list payload when a target's `entityKind` falls
+  outside the declared purchase/product/image/run enum. Reproduce using a
+  synthetic target, align the shared projection contract with supported target
+  kinds, and verify the list and attention summaries render. Individual Run
+  detail pages still load; preserve their retained history.
+
 - ⏳ **Show the Research queue count where the household looks.** Surface the
   `research-queue` saved-view counts on Home or Activity, linking to the views,
   so Burn-down happens; no notifications or scheduling.
