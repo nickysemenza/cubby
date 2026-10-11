@@ -6,7 +6,8 @@ import { z } from "zod";
 
 import { entities, entityDetailParams } from "~/entity/entities";
 import { renderCompactFieldValue } from "~/entity/entity-display";
-import { ShelfCard, ShelfEmpty, ShelfGrid } from "~/ui/data-table/shelf";
+import { EntityEmptyState } from "~/ui/data-table/entity-empty-states";
+import { ShelfCard, ShelfGrid } from "~/ui/data-table/shelf";
 import type { GroupConfig } from "~/ui/data-table/useGroupedList";
 import type { ListGroupState } from "~/ui/hooks/progressive-list";
 import type { InfiniteScrollControls } from "~/ui/hooks/useInfiniteTableList";
@@ -100,7 +101,9 @@ export function EntityShelf<TRow extends { id: string }>({
   currentRowId,
   onRetry,
   enrichmentState,
+  emptyState,
 }: {
+  emptyState?: ReactNode;
   entity: BrowserRoutedEntity;
   items: TRow[];
   isLoading?: boolean;
@@ -115,7 +118,6 @@ export function EntityShelf<TRow extends { id: string }>({
   onRetry?: () => void;
   enrichmentState?: (id: string, field: string) => ListGroupState | undefined;
 }) {
-  const { emptyState } = entitySummary[entity];
   return (
     <ShelfGrid
       items={items}
@@ -126,7 +128,7 @@ export function EntityShelf<TRow extends { id: string }>({
       groups={groupConfig?.groups}
       getGroupKey={groupConfig?.keyFn}
       onRetry={onRetry}
-      emptyState={<ShelfEmpty entity={entity} label={emptyState.title} />}
+      emptyState={emptyState ?? <EntityEmptyState entity={entity} />}
       renderCard={(record) => {
         const row = shelfRowSchema.parse(record);
         const images = shelfImages(entity, row);

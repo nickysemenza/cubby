@@ -30,11 +30,7 @@ import { Spinner } from "~/ui/primitives/spinner";
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DebugDialog } from "./DebugDialog";
-import {
-  EntityEmptyState,
-  FilteredEmptyState,
-  isNarrowed,
-} from "./entity-empty-states";
+import { TableEmptyState } from "./entity-empty-states";
 import { SectionHeader } from "./SectionHeader";
 import type { CubbyRow as Row, CubbyTable as ITable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
@@ -676,10 +672,7 @@ function MobileCardEmptyState<TItem extends RowData>({
       </div>
     );
   }
-  if (entity && isBrowserRoutedEntity(entity)) {
-    return <EntityEmptyState entity={entity} isFiltered={isNarrowed(table)} />;
-  }
-  return <FilteredEmptyState isFiltered={isNarrowed(table)} />;
+  return <TableEmptyState entity={entity} table={table} />;
 }
 
 interface MobileCardViewProps<TItem extends RowData> {

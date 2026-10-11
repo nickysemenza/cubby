@@ -1,12 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
-import { EntityIcon } from "~/entity/entities";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
@@ -123,29 +121,12 @@ function ShelfIdentityFallback({
       className="relative flex h-full w-full flex-col items-center justify-center gap-3 bg-[var(--brand-paper-alt)] text-foreground"
       aria-hidden
     >
-      {!compact && (
-        <span className="absolute top-3 left-3 font-mono text-2xs tracking-[0.16em] text-muted-foreground uppercase">
-          Field guide
-        </span>
-      )}
-      <span
-        className={cn(
-          "flex items-center justify-center border border-border bg-card shadow-sm",
-          compact ? "size-10 rounded-xl" : "size-16 rounded-2xl",
-        )}
-      >
-        <RecordEmoji
-          entity={entity}
-          record={record}
-          size={compact ? 20 : 32}
-          className={compact ? "size-5" : "size-8"}
-        />
-      </span>
-      {!compact && (
-        <span className="font-mono text-2xs tracking-[0.16em] text-muted-foreground uppercase">
-          {entitySummary[entity].singular}
-        </span>
-      )}
+      <RecordEmoji
+        entity={entity}
+        record={record}
+        size={compact ? 20 : 32}
+        className={compact ? "size-5 opacity-50" : "size-8 opacity-50"}
+      />
     </div>
   );
 }
@@ -280,31 +261,6 @@ export function ShelfCard({
           <ArrowUpRightIcon className="size-4" />
         </Link>
       )}
-    </div>
-  );
-}
-
-/** Centered empty state for an empty shelf. */
-export function ShelfEmpty({
-  entity,
-  label,
-  detail,
-}: {
-  entity: Entity;
-  label: string;
-  /**
-   * A second line under the label, for an empty state that can say WHERE the
-   * thing actually is rather than only that it is not here.
-   */
-  detail?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-1 py-6 text-sm text-muted-foreground">
-      <div className="flex items-center gap-2">
-        <EntityIcon entity={entity} className="size-4 opacity-40" />
-        {label}
-      </div>
-      {detail}
     </div>
   );
 }

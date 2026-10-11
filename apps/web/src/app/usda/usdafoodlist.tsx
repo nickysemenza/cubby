@@ -20,6 +20,7 @@ import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
 import { DataTableToolbar } from "~/ui/data-table/data-table-toolbar";
+import { TableEmptyState } from "~/ui/data-table/entity-empty-states";
 import { ListWorkbench } from "~/ui/data-table/ListWorkbench";
 import {
   createCubbyColumnCollection,
@@ -390,6 +391,9 @@ export function USDAFoodList({
           >
             <div className="min-w-0">
               <EntityShelf
+                emptyState={
+                  <TableEmptyState entity="usda-food" table={workbench.table} />
+                }
                 entity="usda-food"
                 items={workbench.table
                   .getRowModel()

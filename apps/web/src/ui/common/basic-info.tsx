@@ -11,6 +11,8 @@ export interface BasicInfoField {
    * from), kept off the value line so its row actions stay put. */
   caption?: ReactNode;
   hide?: boolean;
+  /** Prose gets the full fact-grid width instead of a narrow value column. */
+  fullWidth?: boolean;
 }
 
 interface BasicInfoProps {
@@ -31,7 +33,7 @@ export const BasicInfo: FC<BasicInfoProps> = ({
   return (
     <Stack gap="sm">
       {header}
-      <div
+      <dl
         className={
           // Facts grid: a real two-column CSS grid (not one grid per row) so
           // every label lines up, sentence-case secondary text rather than
@@ -42,18 +44,26 @@ export const BasicInfo: FC<BasicInfoProps> = ({
       >
         {visibleFields.map((field) => (
           <Fragment key={field.label}>
-            <span
+            <dt
               data-slot="basic-info-label"
-              className="min-w-0 text-muted-foreground"
+              className={
+                field.fullWidth
+                  ? "col-span-2 min-w-0 text-muted-foreground"
+                  : "min-w-0 text-muted-foreground"
+              }
             >
               {field.label}
-            </span>
+            </dt>
             {/* A value is often one inline-flex control (an edit trigger); as a
                 flex child its min-width is its content, so it has to be told
                 to shrink or a long note escapes the rail. */}
-            <span
+            <dd
               data-slot="basic-info-value"
-              className="grid min-w-0 content-start gap-0.5"
+              className={
+                field.fullWidth
+                  ? "col-span-2 grid min-w-0 content-start gap-0.5"
+                  : "grid min-w-0 content-start gap-0.5"
+              }
             >
               {/* Row actions wrap under a value that needs the width rather
                   than truncating it — the value is what the row is for. */}
@@ -62,10 +72,10 @@ export const BasicInfo: FC<BasicInfoProps> = ({
                 {field.filterAction}
               </span>
               {field.caption}
-            </span>
+            </dd>
           </Fragment>
         ))}
-      </div>
+      </dl>
       {footer}
       {actions && <div className="pt-2">{actions}</div>}
     </Stack>
