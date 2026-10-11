@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { type JSONType, z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
-import { photoRunImage, suggestion } from "~/server/db/schema";
+import { photoRunImage, suggestion, runFinding } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
@@ -17,6 +17,7 @@ import {
   createImageFixture,
   makeExpenseInput,
 } from "~/server/repo/repo.fixtures";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
 import { ensureRun } from "~/server/runs/ensure-run";
@@ -520,6 +521,133 @@ describe("MCP catalog", () => {
       "photo_context",
       "photo_proposals",
     ]);
+  });
+
+  // Failure modes: the outer action hides the writer's choice; omission or
+  // an unsupported choice must not resolve the retained finding.
+  it("dismisses and applies retained findings through the published operation action", async () => {
+    const { tools } = await listMcpToolCatalog();
+    expect(
+      tools.find((tool) => tool.name === "run")?.inputSchema,
+    ).toMatchObject({
+      properties: { operationAction: { enum: ["apply", "dismiss"] } },
+    });
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic finding member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    const [finding] = await getDb(ctx.db)
+      .insert(runFinding)
+      .values({
+        runId,
+        ledgerPartyId: party.id,
+        entityKind: "run",
+        entityId: runId,
+        kind: "synthetic-review",
+        summary: "Synthetic review finding",
+        evidenceFingerprint: "synthetic-review-fingerprint",
+      })
+      .returning();
+    if (!finding) throw new Error("Synthetic finding missing");
+    const kernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const call = (operationAction?: string) => {
+      const args: ToolArguments = { action: "resolve_finding", id: finding.id };
+      if (operationAction !== undefined) args.operationAction = operationAction;
+      return callMcpTool(
+        createMcpServer(),
+        "run",
+        args,
+        kernelRequestContext(kernel),
+        { entityKernel: kernel },
+      );
+    };
+    expect((await call()).isError).toBe(true);
+    expect((await call("unsupported")).isError).toBe(true);
+    const result = await call("dismiss");
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      id: finding.id,
+      status: "dismissed",
+    });
+    const retained = await getDb(ctx.db).select().from(runFinding);
+    expect(retained).toMatchObject([
+      {
+        id: finding.id,
+        status: "dismissed",
+        resolvedByUserId: ctx.actor.userId,
+      },
+    ]);
+    const product = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic finding Product",
+      manufacturer: "Synthetic maker",
+    });
+    const { output: expense } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Synthetic unbound line",
+        cost: 12,
+        productId: null,
+      }),
+    );
+    const expenseId = await resolveOrThrow(ctx.db, "expense", expense.id);
+    const [proposal] = await getDb(ctx.db)
+      .insert(runFinding)
+      .values({
+        ledgerPartyId: party.id,
+        entityKind: "expense",
+        entityId: expenseId,
+        kind: "product_unresolved",
+        summary: "Synthetic reviewed Product identity",
+        evidenceFingerprint: "synthetic-product-fingerprint",
+        proposedFix: {
+          kind: "relink_product",
+          expenseId,
+          productId: product.id,
+        },
+      })
+      .returning();
+    if (!proposal) throw new Error("Synthetic proposal missing");
+    const applied = await callMcpTool(
+      createMcpServer(),
+      "run",
+      {
+        action: "resolve_finding",
+        operationAction: "apply",
+        id: proposal.id,
+      },
+      kernelRequestContext(kernel),
+      { entityKernel: kernel },
+    );
+    expect(applied.isError).not.toBe(true);
+    expect(applied.structuredContent).toMatchObject({
+      id: proposal.id,
+      status: "applied",
+    });
+    const readback = await callMcpTool(
+      createMcpServer(),
+      "entity_read",
+      {
+        action: "get",
+        entity: "expense",
+        id: expense.id,
+        resultDetail: "full",
+      },
+      kernelRequestContext(kernel),
+      { entityKernel: kernel },
+    );
+    expect(readback.isError).not.toBe(true);
+    expect(readback.structuredContent).toMatchObject({
+      item: { cost: 12, productId: product.shortcode },
+    });
   });
 
   // Regression: the unfiltered queue returned each suggestion's stored record

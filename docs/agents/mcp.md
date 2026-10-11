@@ -22,6 +22,12 @@ deterministic idempotency key. Multiple attachments to one Product are
 dependent count changes; prefer independent target batches and retry only
 failed items after a fresh read.
 
+A tool’s `action` selects the mounted operation. When that operation also
+accepts an `action`, MCP publishes it as `operationAction` and maps it back
+before validation; for example, `run.resolve_finding` requires
+`operationAction: "apply" | "dismiss"`. Batched items retain their own nested
+`action` field. HTTP and native operation inputs keep their original shape.
+
 ## Runs and Burn-down
 
 Runs are started by Mail discovery (scheduled, or `run.discover_mail` on the

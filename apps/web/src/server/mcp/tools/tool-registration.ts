@@ -415,6 +415,8 @@ type CompiledAction = {
   /** The member's own input declares the purchase-agent `_runExecution` envelope. */
   keepsRunExecution: boolean;
   input: z.ZodType;
+  /** Published aliases leave the member operation contract unchanged. */
+  publishedInput?: z.ZodType;
   /** Tool arguments (minus `action` and the run envelope) → action input. */
   prepareInput: (args: ToolArguments) => ToolArguments;
   output: z.ZodType;
@@ -436,6 +438,26 @@ const commandItems = z.object({ commands: z.array(z.json()) });
 const firstItem = (input: ActionValue) =>
   batchItems.safeParse(input).data?.items[0] ??
   commandItems.safeParse(input).data?.commands[0];
+
+/** The tool reserves `action`; a member's discriminator uses `operationAction`. */
+function publishMemberAction(input: z.ZodType): z.ZodType {
+  if (input instanceof z.ZodObject && "action" in input.shape) {
+    if ("operationAction" in input.shape)
+      throw new Error(
+        "MCP member input declares both action and operationAction",
+      );
+    return input
+      .omit({ action: true })
+      .extend({ operationAction: input.shape.action });
+  }
+  if (input instanceof z.ZodUnion) {
+    const options = input.options.map(publishMemberAction);
+    if (options.every((option, index) => option === input.options[index]))
+      return input;
+    return z.union([options[0]!, options[1]!, ...options.slice(2)]);
+  }
+  return input;
+}
 
 function compileAction(
   toolAction: string,
@@ -547,15 +569,21 @@ function compileAction(
     };
   }
 
+  const publishedInput = publishMemberAction(published);
   return {
     name: toolAction,
     kind,
     spec,
     batch: false,
+    publishedInput,
     keepsRunExecution:
       published instanceof z.ZodObject && "_runExecution" in published.shape,
     input: published,
-    prepareInput: (args) => args,
+    prepareInput: (args) => {
+      if (publishedInput === published) return args;
+      const { operationAction, ...member } = args;
+      return { ...member, action: operationAction };
+    },
     output: memberOutput,
     readPolicy,
     telemetryEntity: (input) =>
@@ -581,7 +609,7 @@ const runExecutionJsonSchema = safeToJsonSchema(
 );
 
 function actionJsonSchema(action: CompiledAction): JsonObject {
-  return safeToJsonSchema(action.input, "input");
+  return safeToJsonSchema(action.publishedInput ?? action.input, "input");
 }
 
 const shortName = (action: CompiledAction) => action.name.split(".")[1]!;
