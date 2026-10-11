@@ -39,7 +39,7 @@ A complete record uses a clear human identity, optional true media, compact meta
 
 Specialist workflows such as photo review, import, calendar, Gantt, camera, reconciliation, and matrices keep their task-specific controls inside the shared frame. Preserve status wording and raw diagnostics where the product contract requires them.
 
-RTable owns interactive record work: virtualization, pinned and resizable columns, saved layouts, filters, selection, clipboard, grouping, inline editing, and aggregate footers. Desktop data rows remain 32px by default. Every cell value gets the same 8px start padding; decorated cells render through `CellFrame`. A table view never becomes a stack of decorative cards on desktop. Phone rows use a semantic projection with a 44px minimum target.
+RTable owns interactive record work: virtualization, pinned and resizable columns, saved layouts, filters, selection, clipboard, grouping, inline editing, and aggregate footers. Desktop data rows remain 32px by default. Every cell value gets the same 8px start padding; decorated cells render through `CellFrame`. Columns are as narrow as their content kind allows and spare width goes to the record's identity first ([column widths](../../docs/agents/web-ui-reference.md#column-widths)). A table view never becomes a stack of decorative cards on desktop. Phone rows use a semantic projection with a 44px minimum target.
 
 ## Data visualization
 

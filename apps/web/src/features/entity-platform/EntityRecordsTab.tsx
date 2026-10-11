@@ -168,7 +168,6 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
         id,
         header,
         meta: attachCubbyColumnMeta<EntityRecord>({
-          className: "w-32",
           mobile: { slot: "meta" },
           cellData: timestampCellData<EntityRecord>((row) => row[id]),
         }),

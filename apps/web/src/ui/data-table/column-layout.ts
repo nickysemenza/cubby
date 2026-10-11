@@ -300,6 +300,7 @@ type TableWidthColumn = {
 const FIXED_WIDTH_KINDS = new Set([
   "boolean",
   "date",
+  "timestamp",
   "number",
   "currency",
   "amount",
@@ -326,33 +327,16 @@ const SPACER_WIDTH_VARIABLE: ColumnWidthVariable = "--cubby-column-spacer";
 export const spacerWidthValue = `var(${SPACER_WIDTH_VARIABLE}, 0px)`;
 
 /**
- * Resolves the widths the browser should paint without mutating TanStack's own
- * column-sizing state. A user's deliberate resize remains the source of truth
- * (`userSized` never receives slack). Pane slack is shared across the flexible
- * columns in proportion to their configured width, each capped at its
- * `maxSize`; what no column can use goes to the trailing spacer.
- *
- * Regression: all slack used to go to one column past its maxSize, so a
- * three-column table (Product Categories) painted a 1200px name beside
- * crammed facts.
+ * Shares `slack` across `candidates` in proportion to configured width, each
+ * column capped at its `maxSize`; returns what no column could take.
  */
-export function resolvedTableColumnWidths(
-  columns: readonly TableWidthColumn[],
-  availableWidth: number,
-  userSized: ReadonlySet<string> = new Set(),
+function distributeSlack(
+  widths: Record<string, number>,
+  candidates: readonly TableWidthColumn[],
+  slack: number,
 ) {
-  const widths: Record<string, number> = {};
-  for (const column of columns) {
-    widths[column.id] = column.getSize();
-  }
-  const configuredWidth = Object.values(widths).reduce(
-    (total, width) => total + width,
-    0,
-  );
-  let remaining = Math.floor(availableWidth - configuredWidth);
-  let pool = columns.filter(
-    (column) => isFlexibleColumn(column) && !userSized.has(column.id),
-  );
+  let remaining = slack;
+  let pool = candidates;
   while (remaining > 0 && pool.length > 0) {
     const totalWeight = pool.reduce((total, column) => {
       return total + column.getSize();
@@ -374,6 +358,50 @@ export function resolvedTableColumnWidths(
     if (open.length === pool.length || distributed === 0) break;
     pool = open;
   }
+  return remaining;
+}
+
+/**
+ * Resolves the widths the browser should paint without mutating TanStack's own
+ * column-sizing state. A user's deliberate resize remains the source of truth
+ * (`userSized` and pinned columns never receive slack). Pane slack goes to
+ * the record identity first, up to its `maxSize`; the other flexible columns then share what is
+ * left in proportion to their configured width, each capped at its
+ * `maxSize`; what no column can use goes to the trailing spacer.
+ *
+ * Regressions: all slack used to go to one column past its maxSize, so a
+ * three-column table (Product Categories) painted a 1200px name beside
+ * crammed facts; spreading slack evenly then widened every free-text column
+ * while the title it exists for stayed truncated.
+ */
+export function resolvedTableColumnWidths(
+  columns: readonly TableWidthColumn[],
+  availableWidth: number,
+  userSized: ReadonlySet<string> = new Set(),
+) {
+  const widths: Record<string, number> = {};
+  for (const column of columns) {
+    widths[column.id] = column.getSize();
+  }
+  const configuredWidth = Object.values(widths).reduce(
+    (total, width) => total + width,
+    0,
+  );
+  const flexible = columns.filter(
+    (column) => isFlexibleColumn(column) && !userSized.has(column.id),
+  );
+  const isIdentity = (column: TableWidthColumn) =>
+    column.columnDef.meta?.entityColumnRole === "identity";
+  let remaining = distributeSlack(
+    widths,
+    flexible.filter(isIdentity),
+    Math.floor(availableWidth - configuredWidth),
+  );
+  remaining = distributeSlack(
+    widths,
+    flexible.filter((column) => !isIdentity(column)),
+    remaining,
+  );
   return { widths, spacer: Math.max(0, remaining) };
 }
 
@@ -440,20 +468,43 @@ function tailwindWidth(className: string, prefix: "w" | "min-w" | "max-w") {
   return scale ? Number(scale) * 4 : undefined;
 }
 
+/** Every plain-date column that declares no width of its own. */
+const DATE_COLUMN_WIDTH = 232;
+
+/** Above this, a long header truncates rather than widening its column. */
+const HEADER_FIT_MAX = 160;
+
 /**
  * Width for a column that declares none, from what its cells hold, so an
  * undeclared manifest column no longer inherits TanStack's blind 150px.
+ * Tuned against the 1440px list sweep: a status pill or Yes/No fits, while
+ * free text and relation labels truncate with their full value in a title.
  */
 function defaultColumnSize(meta: CubbyColumnMeta | undefined) {
   if (meta?.entityColumnRole === "identity") return 280;
   const kind = meta?.cellData?.kind;
-  if (kind === "boolean") return 72;
-  if (kind === "date") return 120;
-  if (meta?.numeric || kind === "number" || kind === "currency") return 104;
-  if (kind === "amount") return 112;
-  if (kind === "select") return 136;
+  if (kind === "boolean") return 56;
+  // Compact relative instants ("1h", "3mo"); the header sets the width.
+  if (kind === "timestamp") return 64;
+  // `formatDateSpan` keeps its relative context unclipped: the longest
+  // single-day label, "Sep 30, 2024 (about 2 years ago)", paints 209px.
+  if (kind === "date") return DATE_COLUMN_WIDTH;
+  if (meta?.numeric || kind === "number" || kind === "currency") return 88;
+  if (kind === "amount") return 104;
+  if (kind === "select") return 104;
   if (kind?.startsWith("entity:")) return 184;
-  return 176;
+  return 160;
+}
+
+/**
+ * The width a short header label needs beside its sort arrow (and source
+ * icon), estimated from the 12px medium header face (~6.5px per character)
+ * plus cell padding, so a narrow kind default never truncates
+ * "Storage status".
+ */
+function headerFitWidth(label: string, meta: CubbyColumnMeta | undefined) {
+  const icon = meta?.provenance ? 18 : 0;
+  return Math.min(Math.ceil(label.length * 6.5) + 32 + icon, HEADER_FIT_MAX);
 }
 
 /**
@@ -485,7 +536,14 @@ function normalizedColumnSize<TData extends RowData>(
     return { size: fixed, minSize: fixed, maxSize: fixed };
   }
   const rail = isLockedRole(role) ? 0 : columnRailWidth(definition.meta);
-  const size = (declared ?? defaultColumnSize(definition.meta)) + rail;
+  const size =
+    (declared ??
+      Math.max(
+        defaultColumnSize(definition.meta),
+        isNonEmptyColumnHeader(definition.header)
+          ? headerFitWidth(definition.header, definition.meta)
+          : 0,
+      )) + rail;
   const minSize =
     definition.minSize ??
     tailwindWidth(className, "min-w") ??

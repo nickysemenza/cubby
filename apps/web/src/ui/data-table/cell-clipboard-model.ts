@@ -14,6 +14,7 @@ export type CellKind =
   | "number"
   | "currency"
   | "date"
+  | "timestamp"
   | "boolean"
   | "select"
   | "amount"

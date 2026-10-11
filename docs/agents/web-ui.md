@@ -11,7 +11,7 @@ share this formatter through `CalendarDate`. Mounted labels subscribe to
 `useHouseholdToday`, whose shared clock refreshes at household midnight, on
 focus, and on visibility changes; cached records must not need a query refetch
 to update relative context. Calendar metadata passes the same reactive day to
-the pure formatter. Date columns reserve 256px and declared spans 320px so
+the pure formatter. Date columns reserve 232px and declared spans 320px so
 relative context stays visible by default; full labels remain available in the
 title when a column is resized narrower. Task summaries pass the optional end
 so an ongoing window cannot collapse to a past start day. Browser checks verify
