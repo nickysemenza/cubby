@@ -335,6 +335,7 @@ struct TaskBoardListView: View {
                     }
                     .disabled(index == lane.count - 1)
                 }
+                .accessibilityLabel("Move \(task["name"]?.stringValue ?? id)")
             }
         }
     }

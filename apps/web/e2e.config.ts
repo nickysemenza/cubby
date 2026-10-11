@@ -36,6 +36,8 @@ export default {
           engine: mobile({
             // Touch-overlay export can exceed hosted cleanup time; raw failure video remains.
             videoTouches: false,
+            // AX bounds can arrive before scrolling pixels settle on the simulator.
+            transition: 2_000,
             platform: "ios",
             device: z.string().min(1).parse(process.env.TESTER_ARMY_DEVICE_ID),
             session: z.string().min(1).parse(process.env.TESTER_ARMY_SESSION),

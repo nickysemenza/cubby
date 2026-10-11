@@ -53,6 +53,7 @@ struct SplitExpenseSheet: View {
                     totals(start)
                 }
             }
+            .accessibilityIdentifier("split.form")
             .formStyle(.grouped)
             .keyboardDismissBar()
             .navigationTitle(session.start?.title ?? "Split")
@@ -112,6 +113,7 @@ struct SplitExpenseSheet: View {
                 text: Binding(
                     get: { part.name }, set: { value in session.update(part.id) { $0.name = value } })
             )
+            .accessibilityLabel("Part \(number) name")
             .accessibilityIdentifier("split.part.\(number).name")
             TextField(
                 "0.00",

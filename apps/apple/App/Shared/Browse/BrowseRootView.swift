@@ -47,6 +47,7 @@ struct BrowseRootView: View {
                 }
             }
         }
+        .accessibilityIdentifier("browse.catalog")
         .listStyle(.plain)
         .fieldGuideScreen()
         .navigationTitle("Browse")
