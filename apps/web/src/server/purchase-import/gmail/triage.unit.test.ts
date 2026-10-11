@@ -1,5 +1,5 @@
-/** Failures: snippets classify missing bodies negatively; MIME truncation loses evidence;
- * large inputs get silently sliced; uncertain routing becomes a negative label. */
+/** Failures: missing originals classify negatively; omitted body evidence is discarded;
+ * transport headers or HTML styling consume the entire decision context. */
 import { describe, expect, it, vi } from "vitest";
 
 import { normalizeMessage } from "./normalize";
@@ -20,18 +20,105 @@ const message = (body?: string): GmailMessage => ({
   },
 });
 describe("transient Gmail triage", () => {
-  it("escalates missing bodies and oversized content without calling or truncating Jev", async () => {
+  it("escalates missing bodies without classifying a provider snippet", async () => {
     const choose = vi.fn(async () => "unrelated" as const);
-    for (const raw of [message(), message("x".repeat(40_000))]) {
-      expect(
-        await routeGmailMessage(
-          raw,
-          normalizeMessage("google-subject", raw),
-          choose,
-        ),
-      ).toMatchObject({ classification: "uncertain", stage: "rule" });
-    }
+    const raw = { ...message(), snippet: "Your order shipped" };
+    expect(
+      await routeGmailMessage(
+        raw,
+        normalizeMessage("google-subject", raw),
+        choose,
+      ),
+    ).toMatchObject({ classification: "uncertain", stage: "rule" });
     expect(choose).not.toHaveBeenCalled();
+  });
+  it("classifies an oversized original from bounded sender, subject and body evidence", async () => {
+    const raw = message(
+      "Your order shipped. " + "x".repeat(40_000) + " Tracking: synthetic",
+    );
+    raw.payload = {
+      ...raw.payload,
+      headers: [
+        { name: "From", value: "Forge Orders <orders@shop.example>" },
+        { name: "Subject", value: "Your order is on its way" },
+        { name: "DKIM-Signature", value: "transport-data".repeat(8_000) },
+      ],
+    };
+    let content = "";
+    const result = await routeGmailMessage(
+      raw,
+      normalizeMessage("google-subject", raw),
+      async (input) => {
+        content = input;
+        return "related";
+      },
+    );
+    expect(result).toMatchObject({ classification: "related", stage: "jev" });
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
+    expect(JSON.parse(content)).toMatchObject({
+      senderDomain: "shop.example",
+      headers: {
+        from: "Forge Orders <orders@shop.example>",
+        subject: "Your order is on its way",
+      },
+      bodyComplete: false,
+    });
+    expect(content).toContain("Your order shipped");
+    expect(content).toContain("Tracking: synthetic");
+    expect(content).not.toContain("transport-data");
+  });
+  it("cannot discard an oversized original from an unrelated partial verdict", async () => {
+    const raw = message(
+      "Newsletter " + "x".repeat(40_000) + " Receipt for your purchase",
+    );
+    const choose = vi.fn(async () => "unrelated" as const);
+    expect(
+      await routeGmailMessage(
+        raw,
+        normalizeMessage("google-subject", raw),
+        choose,
+      ),
+    ).toMatchObject({ classification: "uncertain", stage: "rule" });
+    expect(choose).toHaveBeenCalledOnce();
+  });
+  it("bounds serialized Unicode and escaped body bytes without broken characters", async () => {
+    const raw = message('Receipt 🧾 "\\\n'.repeat(5_000));
+    let content = "";
+    expect(
+      await routeGmailMessage(
+        raw,
+        normalizeMessage("google-subject", raw),
+        async (input) => {
+          content = input;
+          return "uncertain";
+        },
+      ),
+    ).toMatchObject({ classification: "uncertain", stage: "jev" });
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
+    expect(content).not.toContain("�");
+    expect(JSON.parse(content).bodyComplete).toBe(false);
+  });
+  it("uses readable HTML instead of spending context on styles", async () => {
+    const raw = message(
+      "<html><head><style>" +
+        ".layout { color: red; }".repeat(8_000) +
+        "</style></head><body><p>Your subscription renewed at Forge Services.</p></body></html>",
+    );
+    raw.payload = { ...raw.payload, mimeType: "text/html" };
+    let content = "";
+    expect(
+      await routeGmailMessage(
+        raw,
+        normalizeMessage("google-subject", raw),
+        async (input) => {
+          content = input;
+          return "related";
+        },
+      ),
+    ).toMatchObject({ classification: "related", stage: "jev" });
+    expect(content).toContain("Your subscription renewed");
+    expect(content).not.toContain("color: red");
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
   });
   it("escalates MIME data that is shorter than the provider's declared bytes", async () => {
     const raw = message("receipt");

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { purchaseShortcode } from "./identifier-fields";
 import { executionAuthorizationRef } from "./execution-authorization.js";
 
-export const MAILBOX_RESEARCH_VERSION = "2026-10-10.1";
+export const MAILBOX_RESEARCH_VERSION = "2026-10-11.1";
 export const mailboxClassification = z.enum([
   "related",
   "unrelated",
