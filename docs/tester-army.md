@@ -169,7 +169,7 @@ uses fresh fixture state. Install the Chromium browser with
 `pnpm --dir apps/web exec playwright install chromium` if needed.
 The iOS prerequisites are the same as `pnpm test:e2e:sim`.
 
-Manual GitHub web and native lanes reuse the regular CI Worker artifact when
+GitHub web and native lanes reuse the regular CI Worker artifact when
 a successful push run published one for the exact tested commit. The existing
 source and output fingerprint checks still run; missing, expired or invalid
 artifacts fall back to a normal build. Pull-request merge artifacts are excluded
@@ -177,10 +177,14 @@ because they were built from a different commit.
 
 The shared Node setup restores the portable WASM package from the exact Rust
 source key used by Linux jobs, avoiding a second macOS compilation.
-The two optional macOS lanes disable pnpm store caching: measured installs took
+The two macOS journey lanes disable pnpm store caching: measured installs took
 47–76 seconds without it, while packing a store miss added 4m20s after tests
 completed. A warm restore plus install took 91 seconds. Regular jobs retain
 their existing pnpm cache; the WASM and Apple build caches remain enabled.
+Apple FFI uses the same target-specific action as required Apple CI. On a
+GitHub output-cache miss, jobs with installed workspace dependencies use the
+existing Nx artifact cache before compiling. Archive jobs without those
+dependencies retain their direct build path.
 Both manual simulator lanes restore the same Xcode-versioned DerivedData cache
 as the regular Apple build gate. Hosted builds use its SPM clone directory,
 content-based source mtimes, native arm64 slice, and batch compilation. They
@@ -219,7 +223,11 @@ standard web journeys. Native, shared package, backend/API/contract, tooling,
 workflow and root configuration changes also run iOS; import/vendor/run changes
 and shared/backend changes also run the coupled import journeys. Prose-only PRs
 and fork PRs do not automatically call paid models. Changed-file routing lives
-in `scripts/lib/tester-army-routing.ts`; renamed files include their old paths.
+in `scripts/tester-army-ci.ts`; renamed files include their old paths.
+The routing step selects every lane for PR, manual and scheduled events; each
+job only checks its selected output, without repeating event/label logic.
+Standard and coupled web harnesses share one matrix job and setup; only the
+harness, lane key and timeout differ.
 Labels `tester-army`, `tester-army:ios` and `tester-army:import` force their lane
 on the PR source revision and subsequent pushes. Label events retain affected
 automatic coverage rather than canceling it without replacement.
@@ -279,19 +287,10 @@ seeds the sources:
   `cubby-system` decisions, the Purchase is dated by placement and belongs to
   the member's mail-only account, and the new Product keeps the email's
   product link.
-- `import-order-mail-enrich`: the same on a browser-synced account; the
-  commit also starts one `product_enrichment` run on that account at the
-  product page.
 - `import-photo-inventory`: two synthetic photos uploaded over the native HTTP
   API (create run, stage, PUT, finalize). The journey waits for their cloud
   descriptions, starts grouping, waits for the agent's proposals, and
   approves them; two Products must result.
-- `import-account-sync`: a browser-synced vendor account with one finished
-  sync and a simulated Mac browser (the queue producer's `/browser-connect`)
-  answering its order-history page and one order by URL with a DOM snapshot,
-  as the thin Mac app does; the server derives each page. The member starts the
-  next sync from the finished run; the agent walks the history, captures the
-  order, and imports it.
 
 Cloud description fetches the photo back through its public object URL, and
 the external-fetch guard refuses loopback hosts by name, so the harness serves
@@ -386,21 +385,31 @@ device behavior.
 
 Synthetic CI enables `TESTER_ARMY_CI_EVIDENCE=1`: each completed journey saves a
 `verified-outcome` screenshot; failed attempts retain screenshots, semantic
-failure traces and failure video. The reporter copies only PNG/video and the
-SDK's `trace.md`/`screen-at-failure.txt`, scrubs credentials from text, rejects
-symlinks and excludes sessions, downloads and full debug transcripts. Native
-video depends on the SDK/device support. These files and a fixed case/attempt
-status projection are uploaded separately under `artifacts/tester-army-evidence/`
-with seven-day retention; the existing sealed run bundle remains the provenance
-record. Use only the disposable synthetic harness for this export.
+failure traces and failure video. Artifact upload globs select the SDK's
+`results/*/attempt-*/screenshots/*.png`, `trace.md`, `screen-at-failure.txt`
+`attempt-*/video/` files, and the canonical `report.json`/`junit.xml` directly from `apps/web/.e2e/runs/web/` or
+`apps/web/.e2e/runs/sim-tester-army-e2e/`.
+The SDK redacts the inference token and session cookies registered in
+`e2e.config.ts` before writing report/evidence text. Sessions, downloads
+and full debug transcripts are outside the upload globs. Native video depends
+on SDK/device support. Retention is seven days; the sealed run bundle remains
+the provenance record. Use only the disposable synthetic harness for this export.
 
-Each lane updates one bot-owned PR comment and the job summary with its source
-revision, result, journey counts, scenario duration (setup excluded), calls,
-tokens, available estimated cost, replay counts and a link to run artifacts.
-Arbitrary model/case/error text stays out of comments. Missing results are
-incomplete; failed setup remains failed even without installed dependencies.
-Superseded source revisions cannot replace the current PR comment. Manual and
-scheduled runs publish job summaries without PR comments.
+The built-in `@e2e-dev/github` reporter posts results, usage/replay metrics and
+evidence links to the PR and job summary. It updates its comment on reruns;
+The web/import matrix uses lane keys to distinguish its comments. The SDK owns comment formatting and
+escaping. Setup failures before the SDK starts are visible in the workflow's
+failed job; they do not produce a fresh comment. Read the linked source revision
+when reviewing results: the SDK does not check the current PR head before
+updating its comment, so a cancellation race can publish an older revision.
+Scheduled/manual runs write job summaries without PR
+comments. The existing `agent-summary.json` remains the machine-readable metrics
+artifact. See [the SDK reporter docs](https://e2e.tester.army/docs/github).
+
+Visual baseline comparisons are deferred to a separate change. Start with a few
+stable shared screens using `toHaveScreenshot`, with baselines captured on the
+same CI OS/device and dynamic values masked. Saving diagnostic screenshots does
+not assert that the layout matches a baseline.
 
 Retain a small set of semantic UI journeys over shared primitives and important
 workflows, backed by persisted-state read-backs. Do not grow copy-only or

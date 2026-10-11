@@ -13,7 +13,8 @@ deployment never waits for post-merge CI.
 Tester Army background coverage lives in `e2e-journeys.yaml`: standard web on
 same-repository code PRs, iOS for native/shared/backend changes, and coupled
 imports for affected import/shared/backend changes. All remain informational,
-with verified action replay and synthetic evidence plus updated PR comments.
+with verified action replay, SDK evidence uploads and the built-in GitHub
+reporter. One routing step selects the jobs; job conditions only read its outputs.
 The weekly matrix disables action replay. Manual dispatch and PR labels can
 select additional journeys; deterministic simulator journeys stay optional.
 See [Tester Army](tester-army.md) for routing, replay, evidence and timing limits.
