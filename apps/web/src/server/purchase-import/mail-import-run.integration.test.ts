@@ -645,7 +645,19 @@ describe("mail research admission", () => {
 describe("retired mail import status", () => {
   const ctx = withTestDb();
 
-  it("reads a Run whose unrelated-source retirement erased its input and progress", async () => {
+  const runStatus = (runId: string) => {
+    const entityKernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    return callMcpTool(
+      createMcpServer(),
+      "imports_read",
+      { action: "run_status", runId: runShortcode.parse(runId) },
+      kernelRequestContext(entityKernel),
+      { entityKernel },
+    );
+  };
+  const mailRun = async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Retired mail member",
       kind: "member",
@@ -657,6 +669,25 @@ describe("retired mail import status", () => {
     const child = await startAgentRunFixture(ctx.db, {
       ledgerPartyId: party.id,
     });
+    return { parent, child };
+  };
+
+  it("refuses a live mail Run whose admitted roster is missing", async () => {
+    const { child } = await mailRun();
+    await getDb(ctx.db)
+      .update(run)
+      .set({ input: null })
+      .where(eq(run.id, parseEntityId("run", child.id)));
+
+    const response = await runStatus(child.publicId);
+    expect(response.isError).toBe(true);
+    expect(JSON.stringify(response.content)).toMatch(
+      /expected object, received null/u,
+    );
+  });
+
+  it("reads a Run whose unrelated-source retirement erased its input and progress", async () => {
+    const { parent, child } = await mailRun();
     await getDb(ctx.db)
       .update(run)
       .set({
@@ -672,16 +703,7 @@ describe("retired mail import status", () => {
         agentSessionId: null,
       })
       .where(eq(run.id, parseEntityId("run", child.id)));
-    const entityKernel = entityKernelContextSchema.parse(
-      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
-    );
-    const response = await callMcpTool(
-      createMcpServer(),
-      "imports_read",
-      { action: "run_status", runId: runShortcode.parse(child.publicId) },
-      kernelRequestContext(entityKernel),
-      { entityKernel },
-    );
+    const response = await runStatus(child.publicId);
 
     expect(response.isError ? response.content : null).toBeNull();
     expect(response.structuredContent).toMatchObject({
@@ -692,5 +714,9 @@ describe("retired mail import status", () => {
       imported: 4,
       targets: [],
     });
+    // Nothing remains to copy, so the Run offers no restart.
+    expect(
+      (await loadRunDetail(ctx.db, child.publicId)).restartInputs,
+    ).toBeNull();
   });
 });

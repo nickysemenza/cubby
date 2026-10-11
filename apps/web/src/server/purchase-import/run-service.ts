@@ -48,6 +48,7 @@ import {
   orderMailImportRunOrders,
   type RunRestartInput,
   runProgressEvent,
+  runInputsErased,
   runProgressStamp,
   runRetirementReason,
   runTargetEntityKind,
@@ -1774,33 +1775,37 @@ export async function loadRunDetail(
       ? runShortcode.parse(successor[0].publicId)
       : null,
     // What `restart` writes to its successor: this run's settings and targets.
-    restartInputs: agentImportRunPurpose.safeParse(header.purpose).success
-      ? {
-          purpose: header.purpose,
-          trigger: "manual",
-          coordinatorModel: coordinatorModelFor(header.purpose),
-          vendor: header.vendorId,
-          vendorAccount: header.vendorAccountId,
-          input: restartInputSummary(run.input, header.vendorId),
-          notes: header.notes,
-          skillRevision: header.skillRevision,
-          runtimeRevision: header.runtimeRevision,
-          targets: restartTargets.map((target) => ({
-            position: target.position,
-            image: target.entityKind === "image" ? target.entityCode : null,
-            purchase:
-              target.entityKind === "purchase" ? target.entityCode : null,
-            product: target.entityKind === "product" ? target.entityCode : null,
-            vendorAccount: target.vendorAccountCode,
-            sourceKind: target.sourceKind,
-            sourceExternalKey: publicSourceKey(target),
-            targetFingerprint:
-              target.sourceKind === "mail_message"
-                ? null
-                : target.targetFingerprint,
-          })),
-        }
-      : null,
+    // An erased Run has nothing left to copy.
+    restartInputs:
+      agentImportRunPurpose.safeParse(header.purpose).success &&
+      !runInputsErased(run.retirementReason)
+        ? {
+            purpose: header.purpose,
+            trigger: "manual",
+            coordinatorModel: coordinatorModelFor(header.purpose),
+            vendor: header.vendorId,
+            vendorAccount: header.vendorAccountId,
+            input: restartInputSummary(run.input, header.vendorId),
+            notes: header.notes,
+            skillRevision: header.skillRevision,
+            runtimeRevision: header.runtimeRevision,
+            targets: restartTargets.map((target) => ({
+              position: target.position,
+              image: target.entityKind === "image" ? target.entityCode : null,
+              purchase:
+                target.entityKind === "purchase" ? target.entityCode : null,
+              product:
+                target.entityKind === "product" ? target.entityCode : null,
+              vendorAccount: target.vendorAccountCode,
+              sourceKind: target.sourceKind,
+              sourceExternalKey: publicSourceKey(target),
+              targetFingerprint:
+                target.sourceKind === "mail_message"
+                  ? null
+                  : target.targetFingerprint,
+            })),
+          }
+        : null,
     coordinatorModel: header.coordinatorModel,
     skillRevision: header.skillRevision,
     runtimeRevision: header.runtimeRevision,

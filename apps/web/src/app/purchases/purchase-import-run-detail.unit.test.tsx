@@ -276,6 +276,32 @@ describe("import run slots", () => {
   });
 });
 
+// Unrelated-source retirement erased the Run's inputs and targets; it must
+// explain the empty Run instead of offering controls that cannot succeed.
+it("explains an erased retired run and offers no retry or restart", async () => {
+  detailRun = {
+    ...run,
+    status: "needs_review",
+    retirementReason: "unrelated_source",
+    restartInputs: null,
+    parentRunId: runShortcode.parse("RUN-5K8N"),
+    targets: [],
+  };
+  render(<RunImportControls record={record} />, { wrapper: harness.wrapper });
+  expect(
+    await screen.findByText(/inputs and targets were erased/u),
+  ).toBeInTheDocument();
+  expect(
+    screen.getAllByRole("link", { name: /Parent run RUN-5K8N/ })[0],
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Retry unresolved work" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /Start (new|another) run/u }),
+  ).not.toBeInTheDocument();
+});
+
 it("separates the source parent from retry lineage and shows the declared cause and attempt", async () => {
   detailRun = {
     ...run,

@@ -1,5 +1,8 @@
 import type { RunId } from "@cubby/schemas/identifiers";
-import { mailResearchRunInput } from "@cubby/schemas/run-fields";
+import {
+  mailResearchRunInput,
+  runInputsErased,
+} from "@cubby/schemas/run-fields";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -19,10 +22,9 @@ export async function readMailRunSources(
     .from(run)
     .where(eq(run.id, runId));
   if (owner?.purpose !== "mail_import") return [];
-  // Unrelated-source retirement erased the roster (`input` is NULL) along
-  // with the Email it named; such a Run admits no sources. A live Run with a
+  // An erased Run's roster is NULL and admits no sources. A live Run with a
   // missing roster still fails the parse below.
-  if (owner.retirementReason === "unrelated_source" && owner.input === null)
+  if (runInputsErased(owner.retirementReason) && owner.input === null)
     return [];
   const frozen = mailResearchRunInput.parse(owner.input).sources;
   const messages = await client
