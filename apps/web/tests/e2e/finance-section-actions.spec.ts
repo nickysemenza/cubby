@@ -100,7 +100,7 @@ test.describe("split and attach, with the server's rules", () => {
 
     await gotoAuthenticatedPage(
       page,
-      `/purchases/${target.shortcode}`,
+      `/purchases/${target.shortcode}#work`,
       page.getByRole("button", { name: "Attach existing expenses" }),
     );
     await page
@@ -155,7 +155,7 @@ test.describe("split and attach, with the server's rules", () => {
 
     await gotoAuthenticatedPage(
       page,
-      `/purchases/${target.shortcode}`,
+      `/purchases/${target.shortcode}#work`,
       page.getByRole("button", { name: "Attach products" }),
     );
     await page.getByRole("button", { name: "Attach products" }).click();

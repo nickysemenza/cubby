@@ -163,8 +163,12 @@ export async function applyReviewedSourceReconciliation(
     .innerJoin(schema.run, eq(schema.run.id, schema.runFinding.runId))
     .where(eq(schema.runFinding.id, finding.id));
   if (!run) throw new Error("Reconciliation Run missing");
-  await gotoAuthenticatedPage(page, `/runs/${run.shortcode}#import-findings`);
   const apply = page.getByRole("button", { name: "Apply fix", exact: true });
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${run.shortcode}#import-findings`,
+    apply,
+  );
   await expect(apply).toHaveCount(1);
   await apply.click();
   await expect(
@@ -399,7 +403,7 @@ export async function createConvergenceHarness(
     );
     await gotoAuthenticatedPage(
       page,
-      `/runs/${run.runId}`,
+      `/runs/${run.runId}#work`,
       page.getByRole("heading", { name: "Photo review", exact: true }),
     );
     await page

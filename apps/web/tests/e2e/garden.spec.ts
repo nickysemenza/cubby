@@ -48,13 +48,13 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   // `hideWhenEmpty` hides through the `hidden` attribute rather than an
   // unmount (`detail-page.tsx`), so the section stays in the DOM but is not
   // visible — not merely absent.
-  await gotoAuthenticatedPage(page, `/locations/${emptyShelf.id}`);
+  await gotoAuthenticatedPage(page, `/locations/${emptyShelf.id}#work`);
   await expect(plantingsSection).not.toBeVisible();
   await expect(gardenEntriesSection).not.toBeVisible();
 
   // The growing bed already has one planting, so its Plantings section is
   // visible; its Garden entries section is still empty and hidden.
-  await gotoAuthenticatedPage(page, `/locations/${growingBed.id}`);
+  await gotoAuthenticatedPage(page, `/locations/${growingBed.id}#work`);
   await expect(plantingsSection).toBeVisible();
   await expect(gardenEntriesSection).not.toBeVisible();
 
@@ -108,6 +108,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
 
   // The Journal relation section's create button opens the generic garden
   // entry dialog seeded with this planting's id.
+  await page.getByRole("tab", { name: "Work", exact: true }).click();
   await page.getByRole("button", { name: "Log entry...", exact: true }).click();
   dialog = page.getByRole("dialog");
   await expect(dialog.getByText("New Garden Entry")).toBeVisible();
@@ -140,7 +141,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   // The entry it just logged (`locationId: growingBed`) is a garden entry
   // for the bed too, so the bed's Garden entries section now shows it —
   // `hideWhenEmpty` flips back once its first page is non-empty.
-  await gotoAuthenticatedPage(page, `/locations/${growingBed.id}`);
+  await gotoAuthenticatedPage(page, `/locations/${growingBed.id}#work`);
   await expect(gardenEntriesSection).toBeVisible();
   const gardenEntries = page.getByRole("table", { name: "Garden entries" });
   await expect(gardenEntries).toBeVisible();
@@ -169,7 +170,7 @@ test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred inter
     locationId: bed.id,
   });
 
-  await gotoAuthenticatedPage(page, `/locations/${bed.id}`);
+  await gotoAuthenticatedPage(page, `/locations/${bed.id}#work`);
   await page.getByRole("button", { name: "New planting", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("New Planting")).toBeVisible();

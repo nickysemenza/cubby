@@ -93,7 +93,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     actions.getByRole("button", { name: "Start grouping" }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Overview", exact: true }).click();
+  await page.getByRole("tab", { name: "Work", exact: true }).click();
   if (recordingVideo) await page.waitForTimeout(1_500);
   const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
     data: { runId: seed.runId, groups: seed.groups },
@@ -211,7 +211,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await page
     .getByRole("button", { name: "Start new run with same inputs" })
     .click();
-  await expect(page).not.toHaveURL(new RegExp(`/runs/${seed.runId}$`));
+  await expect(page).not.toHaveURL(new RegExp(`/runs/${seed.runId}(?:#|$)`));
   const restartedId = new URL(page.url()).pathname.split("/").at(-1);
   expect(restartedId).toBeTruthy();
   const restarted = await page.request.get(

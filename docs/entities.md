@@ -421,7 +421,9 @@ alongside the initial workspace can leave its lazy sections pending until a tab
 is clicked. The persisted-counts Run E2E guards initial loading without that
 interaction. Workspace selection starts
 in Overview on the server and initial client render, then follows the fragment
-after commit because HTTP does not carry URL fragments. Photo comparison grids
+after commit because HTTP does not carry URL fragments. Browser journeys select
+Work before using relation actions and wait for record navigation by pathname,
+so a workspace fragment cannot falsely satisfy a restart navigation check. Photo comparison grids
 respond to their own width so the workspace rail cannot collapse identity
 evidence into a zero-width column. Apple
 retains its native detail renderer; the Run evidence pilot renders only the
