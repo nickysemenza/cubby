@@ -46,7 +46,11 @@ Record "searched, not available" with `data_exception.set`.
 ## Failures and timeouts
 
 Published input schemas keep an object root and share repeated nested fields
-through definitions. When adding an action exceeds the catalog size budget,
+through definitions. Any change to a tool's input schema or its `.describe`
+text, including a shared Zod schema a tool imports, runs
+`pnpm test:postgres src/server/mcp/catalog.integration.test.ts` and the
+`mcp-contract` project before push: the budget and uuid-boundary checks live
+there, not in typecheck. When a change exceeds the catalog size budget,
 reduce repeated schema text without dropping validation or raising the budget.
 Source-order reconciliation preparation belongs to the mutating `purchase_import`
 tool because it persists the reviewed fingerprint and may promote a validated
