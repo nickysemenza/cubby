@@ -451,6 +451,7 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
   const trigger = row.getByRole("button", {
     name: /How (data )?quality is determined/,
   });
+  await expect(row).toContainText(/\d+\/100/);
   await expect(trigger).toBeVisible();
   expect(requests).toHaveLength(0);
   let release = () => {};

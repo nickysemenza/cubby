@@ -30,8 +30,8 @@ async function expectAuditTimestamps(page: Page, row: Locator) {
     await expect(timestamp).toHaveText(/^(now|\d+(m|h|d|w|mo|y))$/);
     await timestamp.getByRole("button").hover();
     await expect(
-      page.getByText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
-    ).toBeVisible();
+      page.locator('[data-slot="tooltip-content"][data-open]'),
+    ).toHaveText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
   }
 }
 
