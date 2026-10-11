@@ -43,6 +43,12 @@ proposal and original graph; changed proposals or edited originals fail.
 Photo groups remain editable and require approval before Product and inventory
 writes. Imported source claims alone do not establish reviewed itemization.
 
+Prepared candidate reviews preserve their original evidence. New preparations
+record exact name/alias equality explicitly. Historical candidates that never
+recorded that judgment expose `exactNameMatch: null`, rather than a fabricated
+non-match or a reconstruction from today's catalog. Reading a review does not
+rewrite its saved snapshot; commit independently rechecks current identities.
+
 ## Validation boundaries
 
 `import-order-convergence.integration.test.ts` exercises all 24 arrival
