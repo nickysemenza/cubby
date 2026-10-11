@@ -394,6 +394,21 @@ function assertImmutableStatementOccurrence(
     );
 }
 
+async function insertStatementEvidence(
+  tx: DrizzleTransaction,
+  rows: (typeof statementRow.$inferInsert)[],
+) {
+  if (!rows.length) return [];
+  return unwrapDb(tx)
+    .insert(statementRow)
+    .values(rows)
+    .onConflictDoNothing({
+      target: [statementRow.source, statementRow.externalId],
+      where: sql`"StatementRow"."deletedAt" IS NULL`,
+    })
+    .returning({ id: statementRow.id });
+}
+
 /**
  * Record provider rows verbatim. Not an importer: it creates no account, no
  * transaction and no link, and makes no match. The server derives every
@@ -410,6 +425,23 @@ export async function recordStatementRows(
   _actor: ActorContext,
 ) {
   const { source } = input.import;
+  for (const row of input.rows) {
+    if (row.reviewedLegacyAccountDescriptor === undefined) continue;
+    const mask = row.accountDescriptor.match(
+      /(?:\(\.\.\.(\d+)\)|\.\.\.(\d+))$/u,
+    );
+    const digits = mask?.[1] ?? mask?.[2];
+    if (
+      row.rowPosition !== undefined ||
+      !digits ||
+      row.reviewedLegacyAccountDescriptor !==
+        `${row.accountDescriptor} (...${digits})`
+    )
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Reviewed legacy membership requires exactly one repeated identical account mask and no physical occurrence position.",
+      );
+  }
   const rows = await Promise.all(
     input.rows.map(async (row) => ({
       ...row,
@@ -424,7 +456,8 @@ export async function recordStatementRows(
             )
           : await statementRowExternalId({
               source,
-              account: row.accountDescriptor,
+              account:
+                row.reviewedLegacyAccountDescriptor ?? row.accountDescriptor,
               date: row.statementDate,
               amount: row.providerAmount,
               originalStatement: row.rawDescription,
@@ -485,6 +518,9 @@ export async function recordStatementRows(
     // count of rows that landed, and the three ways a row can fail to land
     // have three different remedies.
     const distinctIds = [...idCounts.keys()];
+    const canonicalIds = rows
+      .filter((row) => row.reviewedLegacyAccountDescriptor !== undefined)
+      .map((row) => row.legacyExternalId);
     const stored = await unwrapDb(tx)
       .select({
         id: statementRow.id,
@@ -504,10 +540,32 @@ export async function recordStatementRows(
       .where(
         and(
           eq(statementRow.source, source),
-          inArray(statementRow.externalId, distinctIds),
+          inArray(statementRow.externalId, [
+            ...new Set([...distinctIds, ...canonicalIds]),
+          ]),
           notDeleted(statementRow),
         ),
       );
+    for (const row of rows) {
+      if (row.reviewedLegacyAccountDescriptor === undefined) continue;
+      const target = stored.find(
+        (saved) => saved.externalId === row.externalId,
+      );
+      if (
+        !target ||
+        target.accountDescriptor !== row.reviewedLegacyAccountDescriptor ||
+        target.statementDate !== row.statementDate ||
+        target.providerAmount !== row.providerAmount ||
+        target.rawDescription !== row.rawDescription ||
+        [...stored, ...rows].some(
+          (saved) => saved.externalId === row.legacyExternalId,
+        )
+      )
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Reviewed legacy membership target is missing, conflicts with the source evidence, or has a competing canonical row.",
+        );
+    }
     for (const saved of stored) {
       const incoming = rows.find((row) => row.externalId === saved.externalId);
       if (incoming) assertImmutableStatementOccurrence(saved, incoming);
@@ -569,17 +627,18 @@ export async function recordStatementRows(
         "Failed to create statement import batch.",
       );
 
-    const inserted = await unwrapDb(tx)
-      .insert(statementRow)
-      .values(rows.map((row) => ({ ...row, batchId })))
-      // The partial unique index is the idempotency mechanism: a re-submitted
-      // export is a no-op rather than a conflict, and a row already recorded
-      // under a different batch keeps its original batch.
-      .onConflictDoNothing({
-        target: [statementRow.source, statementRow.externalId],
-        where: sql`"StatementRow"."deletedAt" IS NULL`,
-      })
-      .returning({ id: statementRow.id });
+    const insertable = rows.filter(
+      (row) => row.reviewedLegacyAccountDescriptor === undefined,
+    );
+    const inserted = await insertStatementEvidence(
+      tx,
+      insertable.map(
+        ({ reviewedLegacyAccountDescriptor: _reviewed, ...row }) => ({
+          ...row,
+          batchId,
+        }),
+      ),
+    );
 
     // Re-read after conflict handling: another export may have retained the row.
     const retained = await unwrapDb(tx)

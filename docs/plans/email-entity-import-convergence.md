@@ -29,6 +29,12 @@ Burn-down and acceptance remain in progress.
   original occurrence evidence. An incomplete first-owning-batch count does
   not prove source rows are missing; do not lower declared counts or replay
   new identities to silence the detector.
+  Reviewed repeated-mask legacy membership uses
+  `reviewedLegacyAccountDescriptor` on a positionless statement row. The writer
+  accepts only one additional identical complete trailing mask, requires the
+  retained legacy identity, and refuses a competing canonical identity. It adds
+  export membership without changing provider columns or settlement references;
+  it never equates accounts or converts legacy evidence into physical occurrences.
 - Verify actual continuous new-mail processing, ownership, classification-only
   routing, retained history and bounded budget accounting. Model estimates are
   distinct from provider billing and independently measured accuracy.

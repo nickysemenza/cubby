@@ -72,6 +72,68 @@ const record = (
 describe("statement row ledger", () => {
   const ctx = withTestDb();
 
+  // Failure modes: reviewed normalization creates another row, moves first
+  // ownership, rewrites provider evidence, or accepts a different account mask.
+  it("links reviewed repeated-mask evidence without creating or rewriting statement rows", async () => {
+    const originalAccount = "Test Card ...4242 (...4242)";
+    await record(
+      ctx.db,
+      ctx.actor,
+      [rowInput({ accountDescriptor: originalAccount })],
+      { rowCountDeclared: 1 },
+    );
+    const before = (await listStatementRows(ctx.db, {})).data;
+    const input = recordStatementRowsInput.parse({
+      import: importInput({
+        fingerprint: "reviewed-export",
+        rowCountDeclared: 1,
+      }),
+      rows: [
+        {
+          ...rowInput({ accountDescriptor: "Test Card ...4242" }),
+          reviewedLegacyAccountDescriptor: originalAccount,
+        },
+      ],
+    });
+    expect(
+      await recordStatementRows(ctx.db, { ...input, dryRun: true }, ctx.actor),
+    ).toMatchObject({ inserted: 0, unchanged: 1, alreadyInAnotherBatch: 1 });
+    expect((await listStatementImports(ctx.db)).count).toBe(1);
+    expect(await recordStatementRows(ctx.db, input, ctx.actor)).toMatchObject({
+      inserted: 0,
+      unchanged: 1,
+      rowCountStored: 1,
+    });
+    expect((await listStatementRows(ctx.db, {})).data).toEqual(before);
+    expect(await recordStatementRows(ctx.db, input, ctx.actor)).toMatchObject({
+      inserted: 0,
+      alreadyInThisBatch: 1,
+    });
+    expect(await findIncompleteStatementImports(ctx.db)).toEqual([]);
+    const mixed = recordStatementRowsInput.parse({
+      ...input,
+      rows: [
+        ...input.rows,
+        rowInput({ accountDescriptor: "Test Card ...4242" }),
+      ],
+    });
+    await expect(
+      recordStatementRows(ctx.db, { ...mixed, dryRun: true }, ctx.actor),
+    ).rejects.toThrow("competing canonical row");
+    await expect(recordStatementRows(ctx.db, mixed, ctx.actor)).rejects.toThrow(
+      "competing canonical row",
+    );
+    expect((await listStatementRows(ctx.db, {})).data).toEqual(before);
+    const changedMask = recordStatementRowsInput.parse({
+      ...input,
+      rows: [{ ...input.rows[0], accountDescriptor: "Test Card ...5252" }],
+    });
+    await expect(
+      recordStatementRows(ctx.db, changedMask, ctx.actor),
+    ).rejects.toThrow("repeated identical account mask");
+    expect((await listStatementRows(ctx.db, {})).data).toEqual(before);
+  });
+
   // This exercises the real PostgreSQL identity/ref constraints and shared
   // web/native CSV writer; a browser cannot expose duplicate ref ownership.
   it("retains identical and zero CSV occurrences, then reviews date/provider drift without another charge", async () => {
