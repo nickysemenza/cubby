@@ -37,7 +37,9 @@ decisions are reachable on MCP too
 on the member's explicit instruction for that specific budget or scope. No run
 purpose holds the `start_run` or `member_decision` capability
 (`server/purchase-import/capabilities.ts`), so a coordinator never starts
-another run or makes a member's decision.
+another run or makes a member's decision. That gate applies only to
+Run-delegated tokens: a member OAuth session, including an automated routine
+holding a member token, can call every `member_decision` write.
 
 Burn-down works the Research queue (`research-queue` saved views) with the
 caller's own browser. Record where each fact was seen with `sources` on
@@ -112,7 +114,9 @@ reason on the member itself — there is no contract-level default — and add a
   it with the `member_decision` capability.
 
 Exposing an operation means adding its action and deleting its `mcp`
-declaration (and its todo line when deferred). A member input publishes as an
+declaration (and its todo line when deferred). A write's review handle
+(suggestion id, fingerprint, event id, finding id) must be produced by an
+exposed read; when the producer cannot be exposed, defer the write too. A member input publishes as an
 object, an optional object, a union of objects, or no input; a tool's
 actions are all queries or all mutations, so an operation's reads and writes
 land in different tools.

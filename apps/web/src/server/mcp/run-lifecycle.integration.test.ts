@@ -10,7 +10,7 @@ import { type JSONType, z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
 import { account, user } from "~/server/db/auth.schema";
-import { run as runTable } from "~/server/db/schema";
+import { runApproval, run as runTable } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { createMcpServer } from "~/server/mcp/server";
 import { admitMailImport } from "~/server/purchase-import/mail-import-run";
@@ -22,6 +22,9 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 import type { WorkflowRunParams } from "~/server/workflow-runs/contract";
 
 import { callMcpTool } from "./mcp-test-utils";
+import { McpOperationContext } from "./operation-context";
+import { executePurchaseAgentMutation } from "./purchase-agent-protocol";
+import type { ToolExtra } from "./tools/tool-registration";
 
 // Failure modes: lifecycle controls are unavailable; approval leaks through the
 // narrower surface; foreign Runs can be stopped; retries mutate settled attempts
@@ -190,7 +193,11 @@ describe("Mail execution approval and discovery through MCP", () => {
   });
   afterEach(() => setCfEnv(undefined));
 
-  const call = (tool: string, input: Record<string, JSONType>) => {
+  const call = (
+    tool: string,
+    input: Record<string, JSONType>,
+    delegatedRunId?: string,
+  ) => {
     const request = requireActor(
       createTestRequestContext(ctx.db, {
         auth: { userId: ctx.actor.userId },
@@ -198,6 +205,9 @@ describe("Mail execution approval and discovery through MCP", () => {
     );
     return callMcpTool(createMcpServer(), tool, input, request, {
       entityKernel: entityKernelContextSchema.parse(request),
+      ...(delegatedRunId && {
+        purchaseAgent: { runId: delegatedRunId, grantId: "synthetic-grant" },
+      }),
     });
   };
   const connect = (accountId: string) =>
@@ -285,5 +295,81 @@ describe("Mail execution approval and discovery through MCP", () => {
     ).toBe(true);
     expect(await getDb(ctx.db).select().from(runTable)).toEqual([]);
     expect(launched).toEqual([]);
+  });
+
+  const agentRun = async (purpose?: "mail_import") => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic MCP approval member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    return insertWithShortcode(ctx.db, "run", {
+      ...(purpose && { purpose, status: "running" }),
+      ledgerPartyId: party.id,
+      actorUserId: ctx.actor.userId,
+      actorName: party.name,
+      actorEmail: "approval@example.test",
+      actorLedgerPartyShortcode: party.shortcode,
+      actorLedgerPartyName: party.name,
+      actorLedgerPartyKind: party.kind,
+      trigger: "manual",
+      agentSessionId: "synthetic-mcp-approval-session",
+      // An approval wakes the agent at its admitted dispatch generation.
+      dispatchEventId: crypto.randomUUID(),
+    });
+  };
+
+  it("refuses a Run-delegated agent granting a paid execution budget", async () => {
+    const run = await agentRun("mail_import");
+    await connect(mailboxId);
+    const refused = await call("run", approval(), run.id);
+    expect(refused.isError).toBe(true);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.purpose, "background")),
+    ).toEqual([]);
+  });
+
+  // Replaces the old "lifecycle refuses approve" assertion: approval is now an
+  // intended member control on run.lifecycle.
+  it("grants an agent Run's pending approval through run.lifecycle", async () => {
+    const run = await agentRun();
+    const pending = {
+      db: ctx.db,
+      actor: ctx.actor,
+      operationContext: new McpOperationContext(
+        requireActor(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: ctx.actor.userId },
+          }),
+        ),
+      ),
+      trusted: { runId: run.id, grantId: "synthetic-grant" },
+      toolName: "statement_rows.update",
+      args: {
+        selector: { source: "synthetic", externalIds: ["row-a"] },
+        data: { disposition: "open", dispositionNote: null },
+      },
+      execution: { runId: run.id, operationId: "synthetic:mcp-approve" },
+      run: async () => ({ accepted: true }),
+      baseExtra: fromPartial<ToolExtra>({}),
+    };
+    await expect(executePurchaseAgentMutation(pending)).rejects.toThrow(
+      "awaiting exact human approval",
+    );
+    const approved = await call("run", {
+      action: "lifecycle",
+      runId: run.shortcode,
+      controlAction: "approve",
+      operationId: pending.execution.operationId,
+    });
+    expect(approved.isError).not.toBe(true);
+    const [grant] = await getDb(ctx.db)
+      .select()
+      .from(runApproval)
+      .where(eq(runApproval.runId, run.id));
+    expect(grant?.state).toBe("granted");
   });
 });

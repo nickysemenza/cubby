@@ -97,6 +97,26 @@ export const MCP_TOOLS = defineMcpTools({
     description:
       "Read household entities: get one, list or search a kind, preview a create or a link change without writing, read an attachable relation or one-hop connections, and resolve Product names or external ids. Every action is read-only. Ingredient usuallyOnHand means assumed planning availability; recorded inventory remains separate. Recipe availability includes planning coverage and incomplete-quantity warnings. Consult entities://catalog only when the schema leaves a supported entity/action unclear.",
     actions: {
+      suggest_fields: mcpAction({
+        op: aiContract.ops.suggestFields,
+        modelBacked: true,
+        description:
+          "Jev's field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint spending_classification_write.apply_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss.",
+      }),
+      suggestion_queue: mcpAction({
+        op: aiContract.ops.listSuggestionReviewQueue,
+        project: (items) => ({ items }),
+        output: z.object({
+          items: aiContract.ops.listSuggestionReviewQueue.output,
+        }),
+        description:
+          "Pending field suggestions to review, filtered by entity, field, kind, confidence or recordIds; each id feeds entity.accept_suggestion(s) or reject_suggestion.",
+      }),
+      inventory_ownership_context: mcpAction({
+        op: expenseContract.ops.inventoryOwnershipContext,
+        description:
+          "An inventory entry's inherited owner and beneficiary evidence with its evidenceFingerprint, for entity.confirm_inventory_owner and expenses.confirm_beneficiary.",
+      }),
       get: mcpAction({
         op: kernelAction("get", "query"),
         description:
@@ -561,6 +581,11 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Weighted pipeline and known Jev/Clef-only confusion matrices, conditional precision/recall, sampling probabilities and excluded/unknown denominators for an independently graded frozen Email sample.",
       }),
+      order_mail: mcpAction({
+        op: vendorContract.ops.orderMail,
+        description:
+          "A Vendor's order Email events with suggested Purchase matches; each event's id and evidenceChecksum feed mail.decide_order_mail.",
+      }),
       execution_mailboxes: mcpAction({
         op: runContract.ops.executionMailboxes,
         description:
@@ -584,27 +609,22 @@ export const MCP_TOOLS = defineMcpTools({
       }),
       run_status: mcpAction({
         op: runContract.ops.workSnapshot,
-        // A finding's row id and proposed fix are private handles for the
-        // member's review screen; an agent reads the finding and whether a
-        // fix exists.
         project: (output) => ({
           ...output,
-          findings: output.findings.map(
-            ({ id: _id, proposedFix, ...finding }) => ({
-              ...finding,
-              hasProposedFix: proposedFix !== null,
-            }),
-          ),
+          findings: output.findings.map(({ proposedFix, ...finding }) => ({
+            ...finding,
+            hasProposedFix: proposedFix !== null,
+          })),
         }),
         output: runContract.ops.workSnapshot.output.extend({
           findings: z.array(
             runContract.ops.workSnapshot.output.shape.findings.element
-              .omit({ id: true, proposedFix: true })
+              .omit({ proposedFix: true })
               .extend({ hasProposedFix: z.boolean() }),
           ),
         }),
         description:
-          "One Run's live state: status, counts, findings, each target's outcome (`warning` holds a skip's reason), the agent's progress history, and its write operations. Read this to follow a run instead of polling entity_read.",
+          "One Run's live state: status, counts, findings (each `id` is what run.resolve_finding takes; activity.problems shows a proposed fix), each target's outcome (`warning` holds a skip's reason), the agent's progress history, and its write operations. Read this to follow a run instead of polling entity_read.",
       }),
       photo_context: mcpAction({
         op: photoImportContract.ops.runContext,

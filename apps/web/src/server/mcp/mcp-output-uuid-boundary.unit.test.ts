@@ -75,6 +75,11 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "entity.id",
   "entity.results[].id",
   "mail.eventId",
+  // The producing reads: entity_read.suggestion_queue rows (id and their
+  // ai_suggest Run) and imports_read.order_mail events.
+  "entity_read.items[].id",
+  "entity_read.items[].runId",
+  "imports_read.items[].events[].id",
   "run.id",
   // run.approve_execution returns the authorization Run's internal id beside
   // its approvalFingerprint: the exact reference discovery records.

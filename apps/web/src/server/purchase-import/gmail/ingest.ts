@@ -490,7 +490,8 @@ function unchangedRetainedOutcome(
 /**
  * A member's search retains only new matches as `uncertain`; an Email whose
  * Relevance is already decided keeps its classification, stage and retained
- * content even when its version or checksum is stale. Removed Email is new again.
+ * content even when its version or checksum is stale. Removed Email, or an
+ * uncertain match whose content was disposed, is new again.
  */
 function memberSearchOwnership(
   input: IngestInput,
@@ -501,7 +502,8 @@ function memberSearchOwnership(
     input.callerJudges &&
     prior?.classification &&
     prior.status !== "excluded" &&
-    prior.status !== "deleted",
+    prior.status !== "deleted" &&
+    !(prior.classification === "uncertain" && prior.contentClearedAt),
   );
   return {
     // A decided Email keeps its policy and search ownership: marking it a
@@ -870,12 +872,17 @@ export async function ingestGmailMessages(
             });
           if (message) {
             const normalized = normalizeMessage(input.mailboxId, message);
+            const search = memberSearchOwnership(
+              input,
+              beforeFetch,
+              executionPolicy,
+            );
             await saveMailboxMetadata(tx, {
               ledgerPartyId: input.ledgerPartyId,
               mail: normalized.mail,
               checksum: await originalChecksum(normalized),
-              executionPolicy,
-              memberSearch: input.callerJudges,
+              executionPolicy: search.executionPolicy,
+              memberSearch: search.memberSearch,
             });
           }
           await markEmailRemoved(tx, { ...identity, status: removed });

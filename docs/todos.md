@@ -665,8 +665,7 @@ consume the declarations.
   `pnpm generate` requires it to be named here
   ([MCP exposure](agents/mcp.md#exposure)). Decide per group whether and how
   to expose it, then drop the group when it ships:
-  - Order mail: `vendor.orderMail`, `vendor.importOrderMail`,
-    `vendor.importSelectedOrderMail`.
+  - Order mail: `vendor.importOrderMail`, `vendor.importSelectedOrderMail`.
   - Inventory receiving: `inventory.receiveExpense`,
     `inventory.receivingContext`, `problems.resolveArrivedFindings`.
   - Discarding units: `inventory.bulkDiscard`, `product.discard`.

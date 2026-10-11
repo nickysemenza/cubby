@@ -138,7 +138,6 @@ export const aiContract = defineContract("ai", {
     native: "Reviewed saved finance category suggestions",
   }),
   suggestFields: query({
-    mcp: { omit: "model_assist" },
     readPolicy: "strong",
     input: fieldSuggestionsInput,
     output: fieldSuggestionsOut,
@@ -146,7 +145,11 @@ export const aiContract = defineContract("ai", {
     cache: { profile: "stable" },
   }),
   suggestFieldsReview: query({
-    mcp: { omit: "model_assist" },
+    mcp: {
+      omit: "agent_twin",
+      twin: "ai.suggestFields",
+      note: "The same suggestions as a list for Swift",
+    },
     readPolicy: "strong",
     input: fieldSuggestionsInput,
     output: fieldSuggestionsReviewOut,
@@ -155,7 +158,6 @@ export const aiContract = defineContract("ai", {
     cache: { profile: "stable" },
   }),
   listSuggestionReviewQueue: query({
-    mcp: { omit: "operator_maintenance" },
     input: suggestionReviewListInput,
     output: suggestionReviewListOut,
     readPolicy: "strong",

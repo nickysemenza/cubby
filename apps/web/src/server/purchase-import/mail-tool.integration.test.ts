@@ -424,11 +424,30 @@ describe("public mail tool", () => {
         classificationVersion: "synthetic-v1",
         status: "completed",
       });
+      // An expired, disposed search match is not a decision: refinding it
+      // retains its content again.
+      const cleared = await retainedMailFixture(ctx.db, {
+        ledgerPartyId: f.party.id,
+        messageId: "synthetic-cleared",
+        checksum: await sha256Hex("synthetic-cleared-earlier-capture"),
+        content: { snippet: null, bodyText: null, bodyHtml: null },
+      });
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({
+          classification: "uncertain",
+          classificationStage: "rule",
+          searchOrigin: "member_search",
+          searchExpiresAt: new Date("2026-01-01T00:00:00Z"),
+          contentClearedAt: new Date("2026-01-01T00:00:00Z"),
+        })
+        .where(eq(emailTable.messageId, "synthetic-cleared"));
       f.list.mockResolvedValueOnce({
         messages: [
           { id: "synthetic-first" },
           { id: "synthetic-negative" },
           { id: "synthetic-second" },
+          { id: "synthetic-cleared" },
         ],
       });
       await searchMail(ctx.db, f.input, ctx.actor);
@@ -477,6 +496,26 @@ describe("public mail tool", () => {
         rawChecksum: related.rawChecksum,
         content: { bodyText: "Synthetic earlier capture" },
       });
+      const [refound] = await getDb(ctx.db)
+        .select({
+          classification: emailTable.classification,
+          contentClearedAt: emailTable.contentClearedAt,
+          searchExpiresAt: emailTable.searchExpiresAt,
+          orderMailId: emailTable.orderMailId,
+        })
+        .from(emailTable)
+        .where(eq(emailTable.messageId, "synthetic-cleared"));
+      expect(refound).toMatchObject({
+        classification: "uncertain",
+        contentClearedAt: null,
+        orderMailId: cleared.id,
+      });
+      expect(refound?.searchExpiresAt?.getTime()).toBeGreaterThan(Date.now());
+      const [retained] = await readRetainedMail(ctx.db, {
+        ledgerPartyIds: [f.party.id],
+        orderMailIds: [cleared.id],
+      });
+      expect(retained?.content.bodyText).toContain("synthetic copper kettle");
     });
   });
 

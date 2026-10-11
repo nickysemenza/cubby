@@ -20,10 +20,6 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 export const vendorContract = defineContract("vendor", {
   orderMail: query({
-    mcp: {
-      omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
-    },
     native:
       "Review member-scoped order email on Vendor and Vendor account detail",
     input: vendorOrderMailInput,

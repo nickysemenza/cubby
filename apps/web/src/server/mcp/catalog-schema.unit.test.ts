@@ -525,6 +525,12 @@ describe("MCP catalog schemas", () => {
       // kind's shortcode, resolved by the handler.
       "entity.id",
       "entity.entityId",
+      // entity_read.suggest_fields names its record by the `entity` kind's
+      // shortcode; suggestion_queue filters by records of that kind and by
+      // the suggestions' ai_suggest Run id.
+      "entity_read.entityId",
+      "entity_read.recordIds",
+      "entity_read.runId",
       "spending_classification_write.entityId",
       "mail.eventId",
       // run.lifecycle settles a Run's pending operation or approval by its

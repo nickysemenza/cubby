@@ -55,7 +55,6 @@ export const expenseContract = defineContract("expense", {
     output: schemas.expenseChargeContextOut,
   }),
   inventoryOwnershipContext: query({
-    mcp: { omit: "client_view" },
     input: expenseInventoryOwnershipContextInput,
     output: expenseInventoryOwnershipContextOut,
   }),

@@ -18,6 +18,18 @@ describe("import run capabilities", () => {
       ).toThrow("forbids start_run");
   });
 
+  // A Run-delegated agent must never grant budgets or settle a member's review.
+  it("lets no run purpose hold start_run or member_decision", () => {
+    for (const purpose of runPurpose.options)
+      for (const capability of ["start_run", "member_decision"] as const)
+        expect(() => assertRunCapability(purpose, capability)).toThrow(
+          `forbids ${capability}`,
+        );
+    expect(capabilityForPurchaseAgentAction("run.approve_execution")).toBe(
+      "member_decision",
+    );
+  });
+
   it("keys capability on the tool action, so one action never authorizes another", () => {
     expect(capabilityForPurchaseAgentAction("purchase_import.prepare")).toBe(
       "prepare",
