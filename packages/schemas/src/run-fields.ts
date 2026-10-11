@@ -323,6 +323,10 @@ export const mailReclassifyRunInput = z.strictObject({
     .max(EMAIL_RECLASSIFY_LIMIT),
 });
 export type MailReclassifyRunInput = z.infer<typeof mailReclassifyRunInput>;
+/** A member's Reclassify Run: classification-tier work that never admits import. */
+export const isMailReclassifyRun = (run: { purpose: string; input: unknown }) =>
+  run.purpose === "background" &&
+  mailReclassifyRunInput.safeParse(run.input).success;
 export type RunInput =
   | ExecutionAuthorizationInput
   | MailReclassifyRunInput
@@ -352,11 +356,7 @@ export function runWorkLabel(run: {
 }): string {
   const purpose = runPurpose.safeParse(run.purpose);
   if (!purpose.success) return run.purpose;
-  if (
-    purpose.data === "background" &&
-    mailReclassifyRunInput.safeParse(run.input).success
-  )
-    return "Email reclassification";
+  if (isMailReclassifyRun(run)) return "Email reclassification";
   if (purpose.data !== "account_sync") return RUN_PURPOSE_LABEL[purpose.data];
   const kind = z.object({ kind: z.string() }).safeParse(run.input);
   switch (kind.success ? kind.data.kind : null) {

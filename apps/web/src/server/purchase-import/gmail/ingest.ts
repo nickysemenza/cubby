@@ -283,10 +283,29 @@ type ReclassifyKeptReason = Extract<
   EmailReclassifyOutcome,
   "awaiting_acceptance" | "resolution_kept"
 >;
+async function hasRetainedContent(
+  db: Database,
+  email: NonNullable<PriorMessage>,
+) {
+  if (!email.orderMailId || email.contentClearedAt) return false;
+  const [original] = await getDb(db)
+    .select({ content: orderMail.content })
+    .from(orderMail)
+    .where(eq(orderMail.id, email.orderMailId))
+    .limit(1);
+  return hasRetainedEmailImportContent(
+    getDb(db),
+    email.orderMailId,
+    original?.content ?? null,
+  );
+}
+
 /**
  * Reclassify replaces Relevance only when the member keeps what they have: a
  * resolution stands, and a rerun that would drop retained content or an
- * imported Email waits for the member to accept it. `null` publishes normally.
+ * imported Email waits for the member to accept it. A confirming rerun of an
+ * Email whose content is gone publishes normally so the refetched original is
+ * retained again. `null` publishes normally.
  */
 async function reclassifyPublication(
   db: Database,
@@ -296,7 +315,12 @@ async function reclassifyPublication(
 ): Promise<GmailAcquisitionOutcome | null> {
   if (current.classificationStage === "resolution")
     return { kind: "kept", reason: "resolution_kept" };
+  const imported =
+    current.classification !== "unrelated" &&
+    (current.status === "completed" || current.status === "researching");
   if (decision.classification === current.classification) {
+    if (retain && !imported && !(await hasRetainedContent(db, current)))
+      return null;
     await getDb(db)
       .update(emailTable)
       .set({
@@ -308,22 +332,8 @@ async function reclassifyPublication(
       .where(eq(emailTable.id, current.id));
     return { kind: "confirmed" };
   }
-  if (
-    current.classification !== "unrelated" &&
-    (current.status === "completed" || current.status === "researching")
-  )
-    return { kind: "kept", reason: "awaiting_acceptance" };
-  if (retain || !current.orderMailId || current.contentClearedAt) return null;
-  const [original] = await getDb(db)
-    .select({ content: orderMail.content })
-    .from(orderMail)
-    .where(eq(orderMail.id, current.orderMailId))
-    .limit(1);
-  return (await hasRetainedEmailImportContent(
-    getDb(db),
-    current.orderMailId,
-    original?.content ?? null,
-  ))
+  if (imported) return { kind: "kept", reason: "awaiting_acceptance" };
+  return !retain && (await hasRetainedContent(db, current))
     ? { kind: "kept", reason: "awaiting_acceptance" }
     : null;
 }

@@ -124,7 +124,9 @@ no retained content or import would be dropped; otherwise the Email keeps its
 Relevance until the member accepts the rerun (resolving it unrelated). A
 member resolution is never overridden. A rule, Jev or model prediction that
 disagrees with the member's resolution or latest review of the same checksum
-records a `member_review` conflict; one shared predicate drives the list's
+records a `member_review` conflict. One request stops starting Emails after a
+time budget and reports the rest `deferred` for the member to rerun. One shared
+predicate drives the list's
 review-conflict filter and saved view, and the Accuracy view counts conflicts
 by stage and model. Email quality scores these pipeline gaps per Relevance:
 undecided, unreviewed, missing original, missing preview and not imported; an

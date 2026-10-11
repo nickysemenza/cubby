@@ -23,7 +23,10 @@ import {
 import { getDb } from "~/server/repo/database-helpers";
 import { listEmailsRead } from "~/server/repo/email";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
+import {
+  issueExecutionAuthorization,
+  revokeExecutionAuthorization,
+} from "~/server/runs/execution-authorization";
 
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../mail-source-identity";
 import { productionOrderMailAttachmentStorage } from "./attachment-storage";
@@ -53,7 +56,9 @@ describe("member Reclassify", () => {
   const ctx = withTestDb();
   afterEach(() => vi.restoreAllMocks());
 
-  async function fixture() {
+  async function fixture(
+    approvals: readonly ("backfill" | "continuous")[] = ["backfill"],
+  ) {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic reclassify member",
       kind: "member",
@@ -66,18 +71,32 @@ describe("member Reclassify", () => {
       userId: ctx.actor.userId,
       updatedAt: new Date(),
     });
-    await issueExecutionAuthorization(
-      ctx.db,
-      ctx.actor,
-      executionAuthorizationInput.parse({
-        kind: "execution_authorization",
-        version: 1,
-        owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
-        scope: { kind: "backfill", mailboxId, discovery: "all_history" },
-        meteredBudget: { period: "lifetime", limitMicroUSD: 1_000_000 },
-        expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      }),
-    );
+    const refs = new Map<
+      "backfill" | "continuous",
+      Awaited<ReturnType<typeof issueExecutionAuthorization>>
+    >();
+    for (const kind of approvals)
+      refs.set(
+        kind,
+        await issueExecutionAuthorization(
+          ctx.db,
+          ctx.actor,
+          executionAuthorizationInput.parse({
+            kind: "execution_authorization",
+            version: 1,
+            owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
+            scope:
+              kind === "backfill"
+                ? { kind, mailboxId, discovery: "all_history" }
+                : { kind, mailboxId, discovery: "new_mail" },
+            meteredBudget: {
+              period: kind === "backfill" ? "lifetime" : "utc_calendar_month",
+              limitMicroUSD: 1_000_000,
+            },
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          }),
+        ),
+      );
     const originals = new Map<string, GmailMessage>();
     const getMessage = vi.fn<GmailProvider["getMessage"]>(async (id) => {
       const found = originals.get(id);
@@ -165,6 +184,7 @@ describe("member Reclassify", () => {
       )[0]!;
     return {
       party,
+      refs,
       seed,
       retain,
       history,
@@ -404,6 +424,99 @@ describe("member Reclassify", () => {
       classification: "uncertain",
       classificationStage: "rule",
     });
+  });
+
+  it("re-retains a cleared original when the rerun confirms its Relevance", async () => {
+    const f = await fixture();
+    const email = await f.seed(
+      "synthetic-cleared",
+      "Your synthetic order 2002 shipped.",
+      {
+        classification: "related",
+        classificationStage: "model",
+        status: "pending",
+        contentClearedAt: new Date(),
+      },
+    );
+    const result = await reclassifyEmails(
+      ctx.db,
+      { ids: [email.shortcode] },
+      ctx.actor,
+      { triage: f.triage, relevance: f.relevance },
+    );
+    expect(result.results[0]).toMatchObject({
+      outcome: "confirmed",
+      classification: "related",
+    });
+    const after = await f.current(email.id);
+    expect(after.contentClearedAt).toBeNull();
+    const [retained] = await getDb(ctx.db)
+      .select()
+      .from(orderMail)
+      .where(eq(orderMail.id, after.orderMailId!));
+    expect(retained?.content.bodyText).toContain("synthetic order 2002");
+  });
+
+  it("binds the continuous approval when the backfill approval is revoked", async () => {
+    const f = await fixture(["backfill", "continuous"]);
+    await revokeExecutionAuthorization(
+      ctx.db,
+      ctx.actor,
+      f.refs.get("backfill")!,
+    );
+    const email = await f.seed("synthetic-continuous", "Synthetic body.", {});
+    const result = await reclassifyEmails(
+      ctx.db,
+      { ids: [email.shortcode] },
+      ctx.actor,
+      { triage: f.triage, relevance: f.relevance },
+    );
+    expect(result.results[0]?.outcome).toBe("replaced");
+    const [recorded] = await getDb(ctx.db)
+      .select({ input: run.input })
+      .from(run)
+      .where(eq(run.shortcode, result.runIds[0]!));
+    expect(
+      mailReclassifyRunInput.parse(recorded!.input).executionAuthorization,
+    ).toEqual(f.refs.get("continuous"));
+  });
+
+  it("refuses before any Run or Gmail read when the mailbox has no usable approval", async () => {
+    const f = await fixture([]);
+    const email = await f.seed("synthetic-unapproved", "Synthetic body.", {});
+    await expect(
+      reclassifyEmails(ctx.db, { ids: [email.shortcode] }, ctx.actor, {
+        triage: f.triage,
+        relevance: f.relevance,
+      }),
+    ).rejects.toThrow(/execution approval/iu);
+    expect(f.getMessage).not.toHaveBeenCalled();
+  });
+
+  it("defers Emails past the request's time budget and finishes the Run", async () => {
+    const f = await fixture();
+    const first = await f.seed("synthetic-first", "Synthetic order 3003.", {});
+    const second = await f.seed(
+      "synthetic-second",
+      "Synthetic order 3004.",
+      {},
+    );
+    const result = await reclassifyEmails(
+      ctx.db,
+      { ids: [first.shortcode, second.shortcode] },
+      ctx.actor,
+      { triage: f.triage, relevance: f.relevance, timeBudgetMs: 0 },
+    );
+    expect(result.results.map((item) => item.outcome)).toEqual([
+      "replaced",
+      "deferred",
+    ]);
+    expect(f.getMessage).toHaveBeenCalledTimes(1);
+    const [recorded] = await getDb(ctx.db)
+      .select({ status: run.status })
+      .from(run)
+      .where(eq(run.shortcode, result.runIds[0]!));
+    expect(recorded?.status).toBe("completed");
   });
 
   it("refuses more than 200 Emails before any Run or Gmail read", async () => {

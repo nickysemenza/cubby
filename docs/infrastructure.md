@@ -117,8 +117,10 @@ The Run row is the record; an instance is one attempt at it, named
   `gmail/discovery.ts`, `gmail/sync.ts`, and `gmail/ingest.ts`.
 - A member's Email Reclassify or extraction-preview rerun opens a `background`
   Run (`mail_reclassify` input) per mailbox and binds that mailbox's latest
-  backfill approval, else its continuous one; without either, paid Jev calls
-  refuse with the raw authorization error. It never admits import.
+  usable backfill approval, else its continuous one (an expired or revoked one
+  is skipped); with neither it refuses before any Run or Gmail read. Jev/Clef
+  calls are unmetered as in discovery. It never admits import. One request
+  stops starting Emails after 150 s and reports the rest `deferred`.
 - A completed scheduled pass that saved no message and recorded no history
   event is `routine`; the Runs list hides routine Runs by default.
 

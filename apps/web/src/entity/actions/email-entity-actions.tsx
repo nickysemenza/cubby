@@ -32,7 +32,11 @@ export function reclassifySummary({ runIds, results }: ReclassifyEmailsOut) {
   const outcomes = [...counts]
     .map(([outcome, count]) => `${count} ${outcome.replaceAll("_", " ")}`)
     .join(", ");
-  return `Reclassified: ${outcomes || "nothing"}${runIds.length > 0 ? ` (${runIds.join(", ")})` : ""}`;
+  // Failures keep their raw diagnostics (README tenets: errors are never masked).
+  const errors = results.flatMap(({ id, error }) =>
+    error ? [`${id}: ${error}`] : [],
+  );
+  return `Reclassified: ${outcomes || "nothing"}${runIds.length > 0 ? ` (${runIds.join(", ")})` : ""}${errors.length > 0 ? `. ${errors.join("; ")}` : ""}`;
 }
 
 /**

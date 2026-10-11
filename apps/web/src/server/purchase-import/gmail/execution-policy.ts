@@ -4,7 +4,10 @@ import {
 } from "@cubby/schemas/email-fields";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
-import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
+import {
+  isMailReclassifyRun,
+  mailReclassifyRunInput,
+} from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -58,8 +61,5 @@ export async function gmailRelevanceAllowed(db: Database, runId: string) {
     .from(run)
     .where(eq(run.id, runEntityId.parse(runId)))
     .limit(1);
-  return (
-    current?.purpose === "background" &&
-    mailReclassifyRunInput.safeParse(current.input).success
-  );
+  return current !== undefined && isMailReclassifyRun(current);
 }

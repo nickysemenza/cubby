@@ -55,7 +55,9 @@ export const reclassifyEmailsInput = z
  * the deciding stage. The rest only record history: `awaiting_acceptance`
  * would drop retained content or an import, `resolution_kept` honors a
  * member's resolution, `frozen` is an admitted or unresolved historical
- * import source, and `removed` is deleted or in Spam/Trash at Gmail.
+ * import source, `changed` means the Email changed during the rerun, and
+ * `removed` is deleted or in Spam/Trash at Gmail. `deferred` Emails were not
+ * reached within one request's time budget; reclassify them again.
  */
 export const emailReclassifyOutcome = z.enum([
   "replaced",
@@ -64,6 +66,8 @@ export const emailReclassifyOutcome = z.enum([
   "resolution_kept",
   "frozen",
   "removed",
+  "changed",
+  "deferred",
   "failed",
 ]);
 export type EmailReclassifyOutcome = z.infer<typeof emailReclassifyOutcome>;
