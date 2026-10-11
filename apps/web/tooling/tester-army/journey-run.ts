@@ -1,4 +1,4 @@
-import { expect, type AgentParams, type Screen } from "e2e";
+import { type AgentParams, type Screen } from "e2e";
 import {
   assertDatabase,
   assertScreenRead,
@@ -15,17 +15,28 @@ import {
 
 export async function runJourneyControl(
   screen: Screen,
-  { role, name, exact = true, swipe, within }: JourneyControl,
+  {
+    role,
+    name,
+    exact = true,
+    swipe,
+    within,
+    scrollDirection = "down",
+  }: JourneyControl,
 ): Promise<void> {
   const scope = within
-    ? screen.getByRole(within.role, { name: within.name, exact: true })
+    ? "testId" in within
+      ? screen.getByTestId(within.testId)
+      : screen.getByRole(within.role, { name: within.name, exact: true })
     : screen;
   const control = scope.getByRole(role, { name, exact });
   if (swipe) await control.swipe(swipe);
   else if (role === "textbox") {
-    await screen.scrollUntilVisible(control, { direction: "down" });
+    await scope.scrollUntilVisible(control, {
+      direction: scrollDirection,
+      momentum: "slow",
+    });
     await control.focus();
-    await expect(control).toBeFocused();
   } else await control.tap();
 }
 

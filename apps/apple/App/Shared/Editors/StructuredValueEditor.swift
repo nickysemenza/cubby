@@ -55,17 +55,11 @@ private struct StructuredSchemaView: View {
 
     private var value: JSONValue { context.value(path) }
 
-    /// Composite values are added and removed as a whole; a nullable scalar is just left empty.
-    private var addedAsWhole: Bool {
-        if case .amount = schema.node { return true }
-        return schema.isComposite
-    }
-
     var body: some View {
         if let notice = schema.notice {
             Text(notice).font(.caption).foregroundStyle(.secondary)
         }
-        if schema.nullable && addedAsWhole {
+        if schema.nullable && schema.isComposite {
             nullableComposite
         } else {
             content
@@ -184,49 +178,63 @@ private struct StructuredSchemaView: View {
         .accessibilityIdentifier(context.identifier(path))
     }
 
+    @ViewBuilder
     private func amountRow(upper: Bool) -> some View {
-        LabeledContent(title) {
-            HStack {
+        if !title.isEmpty {
+            Text(title).font(.fieldGuideLabel.weight(.semibold))
+        }
+        LabeledContent("Amount") {
+            TextField(
+                "Amount",
+                value: Binding(
+                    get: { context.value(path + ["value"]).doubleValue },
+                    set: { context.set(path + ["value"], $0.map(JSONValue.number) ?? .null) }),
+                format: .number,
+                prompt: Text("0")
+            )
+            .multilineTextAlignment(.trailing)
+            .labelsHidden()
+            .textFieldStyle(.roundedBorder)
+            .accessibilityIdentifier(context.identifier(path + ["value"]))
+            #if os(iOS)
+                .keyboardType(.decimalPad)
+            #endif
+        }
+        if upper {
+            LabeledContent("Upper amount") {
                 TextField(
-                    "0",
+                    "Upper amount",
                     value: Binding(
-                        get: { context.value(path + ["value"]).doubleValue },
-                        set: { context.set(path + ["value"], $0.map(JSONValue.number) ?? .null) }),
-                    format: .number
+                        get: { context.value(path + ["upperValue"]).doubleValue },
+                        set: { context.set(path + ["upperValue"], $0.map(JSONValue.number) ?? .null) }),
+                    format: .number,
+                    prompt: Text("up to")
                 )
                 .multilineTextAlignment(.trailing)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier(context.identifier(path + ["upperValue"]))
                 #if os(iOS)
                     .keyboardType(.decimalPad)
                 #endif
-                .accessibilityIdentifier(context.identifier(path + ["value"]))
-                if upper {
-                    TextField(
-                        "up to",
-                        value: Binding(
-                            get: { context.value(path + ["upperValue"]).doubleValue },
-                            set: { context.set(path + ["upperValue"], $0.map(JSONValue.number) ?? .null) }),
-                        format: .number
-                    )
-                    .multilineTextAlignment(.trailing)
-                    .frame(maxWidth: 72)
-                    #if os(iOS)
-                        .keyboardType(.decimalPad)
-                    #endif
-                    .accessibilityIdentifier(context.identifier(path + ["upperValue"]))
-                }
-                TextField(
-                    "unit",
-                    text: Binding(
-                        get: { context.value(path + ["unit"]).stringValue ?? "" },
-                        set: { context.set(path + ["unit"], .string($0)) })
-                )
-                .frame(maxWidth: 96)
-                .autocorrectionDisabled()
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                #endif
-                .accessibilityIdentifier(context.identifier(path + ["unit"]))
             }
+        }
+        LabeledContent("Unit") {
+            TextField(
+                "Unit",
+                text: Binding(
+                    get: { context.value(path + ["unit"]).stringValue ?? "" },
+                    set: { context.set(path + ["unit"], .string($0)) }),
+                prompt: Text("unit")
+            )
+            .multilineTextAlignment(.trailing)
+            .labelsHidden()
+            .textFieldStyle(.roundedBorder)
+            .autocorrectionDisabled()
+            .accessibilityIdentifier(context.identifier(path + ["unit"]))
+            #if os(iOS)
+                .textInputAutocapitalization(.never)
+            #endif
         }
     }
 
@@ -411,7 +419,7 @@ extension ValueSchema {
     /// An object, list or other value drawn as a titled group rather than one row.
     fileprivate var isComposite: Bool {
         switch node {
-        case .object, .array, .map, .variant: true
+        case .object, .array, .map, .variant, .amount: true
         default: false
         }
     }

@@ -115,13 +115,16 @@ struct EntityFieldControl: View {
         case .number:
             LabeledContent(label) {
                 TextField(
-                    field.placeholder ?? "0",
+                    label,
                     value: Binding(
                         get: { value.doubleValue },
                         set: { model.draft[key] = $0.map(JSONValue.number) ?? .null }),
-                    format: .number
+                    format: .number,
+                    prompt: Text(field.placeholder ?? "0")
                 )
                 .multilineTextAlignment(.trailing)
+                .labelsHidden()
+                .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key)")
                 #if os(iOS)
                     .keyboardType(.decimalPad)
                 #endif
@@ -203,14 +206,15 @@ struct EntityFieldControl: View {
     private var moneyControl: some View {
         LabeledContent(label) {
             TextField(
-                field.placeholder ?? "0",
+                label,
                 value: Binding(
                     get: { value.doubleValue },
                     set: { model.draft[key] = $0.map(JSONValue.number) ?? .null }),
-                format: .usd
+                format: .usd,
+                prompt: Text(field.placeholder ?? "0")
             )
             .multilineTextAlignment(.trailing)
-            .accessibilityLabel(label)
+            .labelsHidden()
             .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key)")
         }
     }

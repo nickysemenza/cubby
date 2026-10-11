@@ -197,6 +197,9 @@ const coupledJourneys: Journey[] = [
           ],
           timeoutMs: 240_000,
         },
+        check: { visible: () => ["Start grouping"] },
+      },
+      {
         goal: "Press Start grouping once. Finish when Start grouping disappears and the Progress section says the agent is preparing item groups.",
         check: {
           db: [
@@ -215,10 +218,7 @@ const coupledJourneys: Journey[] = [
         check: { visible: () => ["Approved"] },
       },
       {
-        web: "Check the remaining Review item's checkbox for batch approval. Finish with Approve 1 selected item enabled.",
-        tapControl: {
-          web: { role: "button", name: "Approve 1 selected item" },
-        },
+        web: "Select the remaining item and approve it using batch approval.",
       },
     ],
     awaitRun: photoRun("completed"),
@@ -433,7 +433,15 @@ export const journeys: Journey[] = [
           'Open Record sale and enter Name "Synthetic chair sale" and Cost -12.50. Leave the dialog open.',
         ],
       },
-      { tapControl: { ios: { role: "textbox", name: "Cost" } } },
+      {
+        tapControl: {
+          ios: {
+            role: "textbox",
+            name: "Cost",
+            within: { testId: "editor.expense" },
+          },
+        },
+      },
       {
         ios: [
           "Set Cost to -12.50. Leave the expense editor open with that Cost.",
@@ -599,10 +607,7 @@ export const journeys: Journey[] = [
           'Type "synthetic-new-tag" into Add tag and press Return to add it. Leave the editor open with the new tag and existing tags.',
         ],
         tapTestId: { ios: "editor.product.save" },
-        web: [
-          'Open Edit Product. In the Tags section, type "synthetic-new-tag" into the textbox with placeholder "e.g. grinder-4.5in, M18" and press Enter. Leave Collections unchanged. Finish with synthetic-new-tag and synthetic-old-tag chips in Tags and the editor still open.',
-          "Save changes. Finish with the editor closed.",
-        ],
+        web: 'Edit this product. Type "synthetic-new-tag" into Tags and use its Add value button to add it. Keep the existing tags and collections, then save.',
       },
     ],
     visible: () => ["synthetic-new-tag"],
@@ -811,7 +816,13 @@ export const journeys: Journey[] = [
       },
       {
         ios: "Scroll down until Prepared orders is visible below Findings and Synthetic finding to resolve. Leave the finding open.",
-        tapControl: { ios: { role: "button", name: "Dismiss" } },
+        tapControl: {
+          ios: {
+            role: "button",
+            name: "Dismiss",
+            within: { testId: "run.console" },
+          },
+        },
       },
     ],
     visible: () => [],
@@ -831,7 +842,7 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: "Edit this recipe and change the flour ingredient amount from 250 g to 300 g, then save.",
-        ios: "Edit this recipe and change the flour ingredient amount from 250 g to 300 g. Leave the recipe editor open with the amount 300 g.",
+        ios: "Set Amount to 300.",
         tapTestId: { ios: "editor.recipe.save" },
       },
     ],
@@ -871,7 +882,17 @@ export const journeys: Journey[] = [
         tapControl: { ios: { role: "button", name: "Done" } },
       },
       {
-        ios: 'Scroll to Part 2 and set its name to "Synthetic part two". Leave the Split sheet open with that Name.',
+        ios: [],
+        tapControl: {
+          ios: {
+            role: "textbox",
+            name: "Part 2 name",
+            within: { testId: "split.form" },
+          },
+        },
+      },
+      {
+        ios: 'Set the focused Part 2 name to "Synthetic part two". Leave the Split sheet open with that Name.',
         tapControl: { ios: { role: "button", name: "Done" } },
       },
       {
@@ -879,11 +900,22 @@ export const journeys: Journey[] = [
         tapControl: { ios: { role: "button", name: "Done" } },
       },
       {
-        ios: "Scroll to the split totals and warning. Finish with the warning that the parts must add up to the original cost exactly visible.",
+        ios: [],
         check: {
           visible: () => ["add up to the original cost exactly"],
           disabledButtons: { web: ["Split into 2"], ios: ["Split into 2"] },
           db: [purchaseParts(1, 1001)],
+        },
+      },
+      {
+        ios: [],
+        tapControl: {
+          ios: {
+            role: "textbox",
+            name: "Part 2 cost",
+            scrollDirection: "up",
+            within: { testId: "split.form" },
+          },
         },
       },
       {
@@ -940,7 +972,7 @@ export const journeys: Journey[] = [
         },
       },
       {
-        ios: "Do not edit either cost field. Scroll down in the open Split sheet until the warning that the original has no cost recorded and to enter a cost is visible. Finish on that warning with the Split sheet still open.",
+        ios: [],
       },
     ],
     visible: () => ["enter a cost"],
@@ -1034,10 +1066,17 @@ export const journeys: Journey[] = [
       {
         goal: `Open the task board grouped by project. Confirm the lanes include "Inbox" and "${JOURNEY_NAMES.boardProjectA}".`,
         web: `This is the task board with lanes grouped by project. Confirm the lanes include "Inbox" and "${JOURNEY_NAMES.boardProjectA}".`,
-        ios: [
-          "Open the Library tab, then Browse catalog. Finish on the Browse catalog list.",
-          "Scroll down through the Browse catalog and open Tasks. Finish with Synthetic inbox card and List controls visible.",
-        ],
+        ios: "Open the Library tab, then Browse catalog. Finish on the Browse catalog list.",
+        tapControl: {
+          ios: {
+            role: "button",
+            name: "Tasks",
+            exact: false,
+            within: { testId: "browse.catalog" },
+          },
+        },
+      },
+      {
         tapControl: { ios: { role: "button", name: "List controls" } },
       },
       {
@@ -1052,7 +1091,12 @@ export const journeys: Journey[] = [
       {
         goal: `Move the card "Synthetic inbox card" from Inbox into the "${JOURNEY_NAMES.boardProjectA}" lane.`,
         web: `Drag the "Drag Synthetic inbox card" handle onto the "${JOURNEY_NAMES.boardProjectA} task drop target". Finish with Synthetic inbox card inside that project column and Inbox empty.`,
-        ios: 'Open the Move menu beside "Synthetic inbox card". Leave the menu open without selecting a status or lane.',
+        ios: [],
+        tapControl: {
+          ios: { role: "button", name: "Move Synthetic inbox card" },
+        },
+      },
+      {
         tapControl: {
           ios: { role: "button", name: `Lane: ${JOURNEY_NAMES.boardProjectA}` },
         },

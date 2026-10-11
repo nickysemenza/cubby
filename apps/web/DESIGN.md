@@ -55,4 +55,5 @@ Share the visual grammar, never the domain arithmetic. Statistical charts (ranke
 - One leading action per region; secondary actions are nearby and destructive actions are unmistakable. Primary controls use ink and light text. Status chips use text or icons as well as color.
 - Search, filters, current row, batch selection, and inspector opening remain independent. Keep focus, hover, active, loading, empty, error, offline, and disabled states distinct.
 - Keyboard and screen-reader users can reach the same navigation and actions. Focus is visible without layout shift. Phone targets are at least 44×44px. Text and panels reflow without horizontal page overflow.
+- Form labels connect to their input controls; placeholders provide examples and never substitute for the field's accessible name. Adjacent Tags and Collections inputs retain distinct names.
 - Validate the real desktop and phone flows after styling. Use synthetic records in tests, previews, screenshots, and engineering text.

@@ -20,12 +20,31 @@ async function centerInEditor(screen: Screen, target: Locator, editor: string) {
     if (!box) throw new Error("Setup control bounds are unavailable");
     const center = box.y + box.height / 2;
     if (center >= top && center <= bottom) return;
+    const middle = form.y + form.height / 2;
+    const distance = Math.max(
+      -form.height / 4,
+      Math.min(form.height / 4, middle - center),
+    );
+    const x = form.x + form.width / 8;
     await screen.swipe({
-      direction: center < top ? "up" : "down",
-      momentum: "slow",
+      from: { x, y: middle },
+      to: { x, y: middle + distance },
+      duration: 500,
     });
   }
   throw new Error("Setup control did not reach the editor viewport");
+}
+
+async function revealInContainer(
+  screen: Screen,
+  target: Locator,
+  container: string,
+) {
+  await screen.getByTestId(container).scrollUntilVisible(target, {
+    direction: "down",
+    momentum: "slow",
+  });
+  await centerInEditor(screen, target, container);
 }
 
 async function clearKeyboardAccessory(
@@ -68,15 +87,43 @@ for (const journey of selectedJourneys(journeys, "ios"))
       agent,
       // iOS 26 can echo the identifier onto a wrapper and its button.
       tapTestId: (id) => device.locator(`id=${id} role=button`).tap(),
-      tapControl: (control) => runJourneyControl(screen, control),
+      tapControl: async (control) => {
+        if (
+          control.role === "button" &&
+          control.within &&
+          "testId" in control.within
+        ) {
+          const container = control.within.testId;
+          const target = screen.getByTestId(container).getByRole(control.role, {
+            name: control.name,
+            exact: control.exact ?? true,
+          });
+          await revealInContainer(screen, target, container);
+        }
+        await runJourneyControl(screen, control);
+        if (control.role === "button" && control.name === "Done")
+          await expect(
+            screen.getByRole("button", { name: "Done", exact: true }),
+          ).toBeHidden();
+      },
       expectButtonDisabled: (name) =>
         expect(
           screen.getByRole("button", { name, exact: true }),
         ).toBeDisabled(),
       expectText: async (text, visible) => {
-        const target = screen.getByText(text, { exact: false }).first();
-        if (visible) await expect(target).toBeVisible();
-        else await expect(target).toBeHidden();
+        const split = screen.getByTestId("split.form");
+        const inSplit = await split.isVisible();
+        const target = (inSplit ? split : screen)
+          .getByText(text, { exact: false })
+          .first();
+        if (visible) {
+          if (inSplit)
+            await split.scrollUntilVisible(target, {
+              direction: "down",
+              momentum: "slow",
+            });
+          await expect(target).toBeVisible();
+        } else await expect(target).toBeHidden();
       },
       open: async ({ entity, ios }) => {
         const confirmation = device.locator(
@@ -85,6 +132,10 @@ for (const journey of selectedJourneys(journeys, "ios"))
         // A failed case can leave a pending URL; discard it before opening this case's URL.
         if (await confirmation.isVisible()) await device.alert("dismiss");
         await app.open();
+        // Launch returns while session restoration can still be replacing the root view.
+        await expect(
+          screen.getByText("Library", { exact: true }).first(),
+        ).toBeVisible({ timeout: 60_000 });
         const link = ios ?? (entity ? `cubby://entity/${entity}` : undefined);
         const target = entity
           ? screen.getByText(entity, { exact: true }).first()
@@ -118,8 +169,7 @@ for (const journey of selectedJourneys(journeys, "ios"))
           const add = device.locator(
             `id=${editor}.${setup.field}.add role=button`,
           );
-          await screen.scrollUntilVisible(add, { direction: "down" });
-          await centerInEditor(screen, add, editor);
+          await revealInContainer(screen, add, editor);
           await add.tap();
           await expect(
             screen.getByTestId(`${editor}.${setup.field}.0.source`),
@@ -133,17 +183,20 @@ for (const journey of selectedJourneys(journeys, "ios"))
               }
             : journey.id === "field-label-nutrition"
               ? { entity: "product", field: "labelNutrition.nutrients.kcal" }
-              : undefined;
+              : journey.id === "field-recipe-line"
+                ? {
+                    entity: "recipe",
+                    field: "sections.0.ingredients.0.amounts.0.value",
+                  }
+                : undefined;
         if (input) {
           await device
             .locator(`id=detail.${input.entity}.edit role=button`)
             .tap();
           const editor = `editor.${input.entity}`;
           const field = screen.getByTestId(`${editor}.${input.field}`);
-          await screen.scrollUntilVisible(field, { direction: "down" });
-          await centerInEditor(screen, field, editor);
-          await field.focus();
-          await expect(field).toBeFocused();
+          await revealInContainer(screen, field, editor);
+          if (journey.id !== "field-recipe-line") await field.focus();
           if (journey.id === "field-source-claim")
             await clearKeyboardAccessory(screen, field, editor);
         }
@@ -166,14 +219,12 @@ for (const journey of selectedJourneys(journeys, "ios"))
         if (report) {
           // The lazy report must appear before its actions enter the AX tree.
           const heading = report.heading;
-          await screen.scrollUntilVisible(heading, { direction: "down" });
-          await centerInEditor(screen, heading, report.detail);
+          await revealInContainer(screen, heading, report.detail);
           await expect(
             device.locator(`id=${report.control} role=button`),
           ).toBeAttached();
           const control = device.locator(`id=${report.control} role=button`);
-          await screen.scrollUntilVisible(control, { direction: "down" });
-          await centerInEditor(screen, control, report.detail);
+          await revealInContainer(screen, control, report.detail);
         }
       },
       reload: () =>
