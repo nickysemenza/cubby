@@ -119,7 +119,7 @@ export const extractedPurchaseLine = z.object({
   title: z.string().trim().min(1).max(500),
   amount: money,
   lineKind: expenseLineKindSchema.default("principal"),
-  costType: costTypeSchema.default("materials").describe(LINE_COST_TYPE),
+  costType: costTypeSchema.optional().describe(LINE_COST_TYPE),
   quantity: z.number().positive().finite().optional(),
   productUrl: z.url().optional(),
   imageUrl: z.url().optional(),
@@ -277,8 +277,8 @@ export function normalizeImportExtractionModelOutput(
             title: line.title,
             amount: line.amount,
             lineKind: line.lineKind ?? "principal",
-            costType: line.costType ?? "materials",
           };
+          if (line.costType !== null) normalized.costType = line.costType;
           if (line.quantity !== null) normalized.quantity = line.quantity;
           if (line.productUrl !== null) normalized.productUrl = line.productUrl;
           if (line.imageUrl !== null) normalized.imageUrl = line.imageUrl;

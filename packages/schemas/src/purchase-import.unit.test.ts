@@ -135,7 +135,6 @@ describe("purchase import contracts", () => {
             title: "Replacement filter",
             amount: 24,
             lineKind: "principal",
-            costType: "materials",
           },
         ],
         payments: [{ amount: 24 }],

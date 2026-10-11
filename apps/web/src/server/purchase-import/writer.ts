@@ -1684,7 +1684,9 @@ export async function importVendorOrder(
             date: orderDate,
             lineKind: identity.lineKind,
             lineBasis: "item_line",
-            costType: line.costType,
+            // Optional so stored extractions and source snapshots keep their
+            // shape; a line whose source states no role stays materials.
+            costType: line.costType ?? "materials",
             trade: null,
             economicRole: "vendor",
             productId,
