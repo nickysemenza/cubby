@@ -7,6 +7,12 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { formatCurrency } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 
+const compactSummaryLabels = {
+  ...spendingCategorySummaryLabels,
+  mixed: "Mixed",
+  partial: "Partial",
+} satisfies Record<SpendingCategorySummary["state"], string>;
+
 export function SpendingCategorySummaryValue({
   summary,
   contextOnly = false,
@@ -17,12 +23,15 @@ export function SpendingCategorySummaryValue({
   compact?: boolean;
 }) {
   if (compact)
-    // Dense list rows: state and category chips on one line.
+    // Dense list rows: the chips are the value. A lone chip needs no state
+    // word; a muted state names what the chips cannot (mixed, partial, none).
     return (
       <Row gap="sm" className="min-w-0 overflow-hidden whitespace-nowrap">
-        <span className="shrink-0 font-medium">
-          {spendingCategorySummaryLabels[summary.state]}
-        </span>
+        {summary.state !== "single" && (
+          <span className="shrink-0 text-muted-foreground">
+            {compactSummaryLabels[summary.state]}
+          </span>
+        )}
         {summary.categories.map((category) => (
           <EntityRefLink
             key={category.id}
