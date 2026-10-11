@@ -17,6 +17,8 @@ import { financialTransaction, financialAccount } from "~/server/db/schema";
 import { gapCondition } from "~/server/repo/data-quality/sql";
 import { getDb } from "~/server/repo/database-helpers";
 
+import { statementImportMembers } from "../statement-import-membership";
+
 /** Finance JSON is evidence received from imports/MCP; one malformed legacy row
  * must produce a defect, never make the complete Problems scan unavailable. */
 export async function findInvalidFinancialJson(
@@ -288,8 +290,9 @@ export async function findIncompleteStatementImports(
            si."rowCountDeclared" AS "rowCountDeclared",
            count(sr.id)::int AS "rowCountStored"
     FROM "StatementImport" si
+    LEFT JOIN ${statementImportMembers} member ON member."importId" = si.id
     LEFT JOIN "StatementRow" sr
-      ON sr."batchId" = si.id AND sr."deletedAt" IS NULL
+      ON sr.id = member."statementRowId" AND sr."deletedAt" IS NULL
     WHERE si."deletedAt" IS NULL AND si."rowCountDeclared" IS NOT NULL
     GROUP BY si.id, si.source, si.label, si.fingerprint, si."rowCountDeclared"
     HAVING count(sr.id) < si."rowCountDeclared"

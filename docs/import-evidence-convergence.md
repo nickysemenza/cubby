@@ -36,6 +36,17 @@ identity aliases remain recognized. A date/amount/status change is a reviewed
 candidate attachment, not an automatic merge. Ambiguous same-amount transactions
 remain separate candidates. Source rows and their original dates stay intact.
 
+Export coverage records every retained statement identity observed in that
+export, independently of which export first inserted its row. Replaying an
+overlapping export adds membership evidence without moving original rows,
+changing provider values, or creating transactions. Partial exports remain
+incomplete; a dry run records no membership. Historical migration seeds only
+known first-ingesting memberships; other exports require original-source replay.
+Original first ownership remains membership proof through the deployment
+window. Drift excludes row pairs known to coexist in any export, even when
+another export first retained one. Legacy identities cannot establish distinct
+physical occurrences by themselves.
+
 Provider account masks retain all supplied digits, including non-card masks
 longer than four digits. An account name already containing that mask does not
 receive a second suffix. These descriptors participate in statement identity;

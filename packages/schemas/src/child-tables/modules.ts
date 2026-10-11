@@ -511,6 +511,39 @@ export const modulesChildren = [
       },
     ],
   }),
+  /** Export membership is independent of a statement's first-ingesting batch. */
+  defineChildTable({
+    name: "StatementImportRow",
+    exportName: "statementImportRow",
+    columns: [
+      {
+        key: "importId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "statementImport", column: "id" },
+      },
+      {
+        key: "statementRowId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "statementRow", column: "id" },
+      },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+    ],
+    indexes: [
+      {
+        name: "StatementImportRow_import_row_key",
+        unique: true,
+        on: ["importId", "statementRowId"],
+      },
+      { name: "StatementImportRow_row_idx", on: ["statementRowId"] },
+    ],
+  }),
   /**
    * One verbatim row from a provider export.
    *
