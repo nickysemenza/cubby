@@ -776,9 +776,9 @@ export async function claimMailImportWork(db: Database, runId: string) {
 /**
  * Scoped live Gmail search for a missing original. Spam and Trash are
  * excluded; under Pi's Mail import Run matches are classified exactly as
- * discovery would, while a member's own search retains every other match as an
- * `uncertain` candidate for the caller to settle with `mail.resolve`. Search
- * never advances mailbox coverage.
+ * discovery would, while a member's own search retains each new match as an `uncertain`
+ * candidate for the caller to settle with `mail.resolve` and leaves an Email
+ * with a decided Relevance as it is. Search never advances mailbox coverage.
  */
 export async function searchMail(
   db: Database,

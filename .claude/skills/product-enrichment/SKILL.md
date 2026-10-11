@@ -47,8 +47,8 @@ Start with the purchased item: the original order Email (`imports_read.mail`, by
 the Gmail ids in the Purchase's Email history, or your own Gmail connector) and
 its order-line links, then the member's authenticated order details/history in
 your browser. Recover missing saved originals
-through owned mail (`mail.search` retains each match as an `uncertain`
-candidate; settle every one with `mail.resolve`) and account history before
+through owned mail (`mail.search` retains each new match as an
+`uncertain` candidate; settle every one with `mail.resolve`) and account history before
 assuming only a name is available.
 Do not begin with generic name search when usable purchase sources exist. Use
 broader search for unavailable sources or facts those sources cannot establish.

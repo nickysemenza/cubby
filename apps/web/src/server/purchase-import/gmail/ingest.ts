@@ -487,6 +487,35 @@ function unchangedRetainedOutcome(
     : null;
 }
 
+/**
+ * A member's search retains only new matches as `uncertain`; an Email whose
+ * Relevance is already decided keeps its classification, stage and retained
+ * content even when its version or checksum is stale. Removed Email is new again.
+ */
+function memberSearchOwnership(
+  input: IngestInput,
+  prior: PriorMessage,
+  executionPolicy: Awaited<ReturnType<typeof gmailExecutionPolicy>>,
+) {
+  const keep = Boolean(
+    input.callerJudges &&
+    prior?.classification &&
+    prior.status !== "excluded" &&
+    prior.status !== "deleted",
+  );
+  return {
+    // A decided Email keeps its policy and search ownership: marking it a
+    // member-search match would let search expiry dispose its retained content.
+    executionPolicy: (keep && prior?.executionPolicy) || executionPolicy,
+    memberSearch: keep
+      ? prior?.searchOrigin === "member_search"
+      : input.callerJudges,
+    replay: keep
+      ? (unchangedRetainedOutcome(prior) ?? { kind: "skipped" as const })
+      : null,
+  };
+}
+
 async function acquireEligible(
   db: Database,
   provider: GmailProvider,
@@ -505,6 +534,7 @@ async function acquireEligible(
     return { kind: "blocked" };
   const unchanged =
     !input.reclassify && unchangedClassification(prior, checksum);
+  const search = memberSearchOwnership(input, prior, executionPolicy);
   const publication = {
     ...identity,
     runId: input.runId,
@@ -515,10 +545,11 @@ async function acquireEligible(
     ledgerPartyId: input.ledgerPartyId,
     mail: normalized.mail,
     checksum,
-    executionPolicy,
-    memberSearch: input.callerJudges,
+    executionPolicy: search.executionPolicy,
+    memberSearch: search.memberSearch,
   };
-  const replay = unchanged ? unchangedRetainedOutcome(prior) : null;
+  const replay =
+    search.replay ?? (unchanged ? unchangedRetainedOutcome(prior) : null);
   if (replay)
     return (
       (await publishGmailEvidence<GmailAcquisitionOutcome>(
