@@ -27,7 +27,10 @@ relevance escalation or admission to Pi. It keeps related/uncertain content and
 only the Email row for unrelated mail. Jev/Clef classification and extraction
 have no dollar ceiling, while execution/retry bounds and cost accounting remain.
 Jev receives bounded sender/domain and subject hints, readable HTML text or plain
-text, body head/end excerpts and attachment descriptors. The serialized view stays
+text, body head/end excerpts and attachment descriptors. HTML-only input also keeps
+bounded link labels and destinations, image URLs and alternative text, and raw
+JSON-LD excerpts from the existing page condenser. These remain untrusted evidence;
+clipped structured data is an excerpt, not a parsed order. The serialized view stays
 within its context budget and marks omitted evidence explicitly. An unrelated
 verdict from a partial view becomes uncertain. Readable HTML is always a partial
 view because markup and visual evidence are omitted; retained originals and checksums
