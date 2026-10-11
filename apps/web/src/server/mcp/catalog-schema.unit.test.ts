@@ -51,9 +51,25 @@ function schemaHasMock<T>(value: T): boolean {
   return parsed.success && jsonHasMock(parsed.data);
 }
 
-function stringSchemas(node: JSONType): JsonObject[] {
-  if (Array.isArray(node)) return node.flatMap(stringSchemas);
+function stringSchemas(
+  node: JSONType,
+  definitions: JsonObject,
+  seen = new Set<string>(),
+): JsonObject[] {
+  if (Array.isArray(node))
+    return node.flatMap((entry) => stringSchemas(entry, definitions, seen));
   if (!isJsonObject(node)) return [];
+  if (node.$ref !== undefined && isString(node.$ref)) {
+    const name = node.$ref.split("/").at(-1);
+    if (!name || definitions[name] === undefined)
+      throw new Error(`Dangling input schema reference: ${node.$ref}`);
+    if (seen.has(name)) return [];
+    return stringSchemas(
+      definitions[name],
+      definitions,
+      new Set([...seen, name]),
+    );
+  }
   // zod 4.5 emits nullable strings as `type: ["string", "null"]` rather than
   // an `anyOf` branch; both spellings must stay visible to the id-field guard.
   if (
@@ -63,10 +79,10 @@ function stringSchemas(node: JSONType): JsonObject[] {
     return [node];
   }
   if (node.type === "array" && node.items !== undefined) {
-    return stringSchemas(node.items);
+    return stringSchemas(node.items, definitions, seen);
   }
   return [node.anyOf, node.oneOf, node.allOf].flatMap((branches) =>
-    branches === undefined ? [] : stringSchemas(branches),
+    branches === undefined ? [] : stringSchemas(branches, definitions, seen),
   );
 }
 
@@ -98,7 +114,7 @@ function collectIdFields(
     );
     for (const [key, value] of entityProperties) {
       const next = path ? `${path}.${key}` : key;
-      const strings = stringSchemas(value);
+      const strings = stringSchemas(value, definitions);
       if (
         (key === "id" || key === "ids" || /Ids?$/u.test(key)) &&
         strings.length > 0
@@ -502,6 +518,15 @@ describe("MCP catalog schemas", () => {
       "imports_read.attachmentId",
       "mail.mailboxId",
       "mail.messageId",
+      "entity_read.filters.mailboxId",
+      // Reconciliation is addressed by its finding or accepted source order,
+      // and accuracy review by its evaluation and frozen prediction: none of
+      // those rows has a shortcode.
+      "purchase_import.id",
+      "purchase_import.sourceOrderId",
+      "imports_read.evaluationId",
+      "mail.evaluationId",
+      "mail.predictionId",
     ]);
     const freeTextIds = new Set([
       "orderId",
@@ -533,16 +558,18 @@ describe("MCP catalog schemas", () => {
         const key = `${tool.name}.${path}`;
         const leaf = path.split(".").at(-1)?.replaceAll("[]", "") ?? "";
         if (freeTextIds.has(leaf)) continue;
-        const missingPattern = stringSchemas(node).some((stringSchema) => {
-          const pattern = stringSchema.pattern;
-          return (
-            pattern === undefined ||
-            !isString(pattern) ||
-            !PUBLIC_SHORTCODE_PREFIXES.some((prefix) =>
-              pattern.includes(prefix),
-            )
-          );
-        });
+        const missingPattern = stringSchemas(node, definitions).some(
+          (stringSchema) => {
+            const pattern = stringSchema.pattern;
+            return (
+              pattern === undefined ||
+              !isString(pattern) ||
+              !PUBLIC_SHORTCODE_PREFIXES.some((prefix) =>
+                pattern.includes(prefix),
+              )
+            );
+          },
+        );
         if (uuidExceptions.has(key)) {
           if (missingPattern) stillExceptional.add(key);
         } else if (missingPattern) {

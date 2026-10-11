@@ -52,6 +52,23 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // the approval fingerprint and attribution comparison in applyFix.
   "activity.runFindings[].proposedFix.reviewedLineIdentities[].productId",
   "activity.runFindings[].proposedFix.reviewedLineAttributions[].partyId",
+  // The source observation a reconcile_source_order proposal was built from;
+  // applyFix commits exactly that observation, never a newer one.
+  "activity.runFindings[].proposedFix.observationId",
+  // purchase_import.prepare_reconciliation echoes the finding id it reviewed
+  // (the same row handle as activity.runFindings[].id) or the accepted source
+  // order it reviewed, and its commits take those handles back. An accepted
+  // source order has no shortcode, and photo candidates cite it so a caller
+  // can prepare that order's reconciliation.
+  "purchase_import.id",
+  "purchase_import.sourceOrderId",
+  "imports_read.candidates[].purchaseLines[].acceptedSourceLines[].sourceOrderId",
+  // Email accuracy evaluations and their frozen predictions have no
+  // shortcode; list/grade/report take these ids back.
+  "imports_read.evaluationId",
+  "imports_read.items[].predictionId",
+  "mail.evaluationId",
+  "mail.predictionId",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];

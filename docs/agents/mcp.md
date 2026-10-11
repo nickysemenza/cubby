@@ -45,6 +45,13 @@ Record "searched, not available" with `data_exception.set`.
 
 ## Failures and timeouts
 
+Published input schemas keep an object root and share repeated nested fields
+through definitions. When adding an action exceeds the catalog size budget,
+reduce repeated schema text without dropping validation or raising the budget.
+Source-order reconciliation preparation belongs to the mutating `purchase_import`
+tool because it persists the reviewed fingerprint and may promote a validated
+historical observation; it changes no ledger or stock.
+
 A tool failure comes back as an `isError` result whose text names the cause
 and whose `_meta["cubby/error"]` carries `code`, `reason`, `requestId`, and
 `diagnostics` (operation, stage, causes, `cfRayId`, Sentry link). An output

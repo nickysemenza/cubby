@@ -136,7 +136,15 @@ export const extractedPaymentEvidence = z.object({
 export type ExtractedPaymentEvidence = z.infer<typeof extractedPaymentEvidence>;
 
 const extractedOrderDate = z
-  .union([plainDate.pipe(z.iso.date()), z.iso.datetime({ offset: true })])
+  .union([
+    // A refinement, not `.pipe(z.iso.date())`: a pipe advertises its output
+    // side's bare `format: date`, which the MCP catalog forbids.
+    plainDate.refine(
+      (value) => z.iso.date().safeParse(value).success,
+      "expected a real calendar day",
+    ),
+    z.iso.datetime({ offset: true }),
+  ])
   .nullable()
   .describe(
     "Source-printed order date as YYYY-MM-DD, or an explicit ISO timestamp with timezone. Preserve a printed calendar day without inventing a time or timezone. Null when absent; email receipt time is not an order date.",
@@ -347,6 +355,12 @@ export const replacementLineAttribution = z.object({
   weight: z.number().int().positive().safe(),
 });
 
+/** The public reviewed split: a LedgerParty by shortcode, unlike the stored
+ * `replacementLineAttribution` whose uuid joins the aggregate approval. */
+export const sourceOrderReconciliationAttribution = replacementLineAttribution
+  .omit({ partyId: true, partyCode: true })
+  .extend({ partyId: ledgerPartyShortcode.nullable() });
+
 export const aggregateReplacementSnapshot = z.object({
   fingerprint: z.string(),
   expenseCode: expenseShortcode,
@@ -443,7 +457,7 @@ export const sourceOrderReconciliationReview = z.object({
       amount: money,
     }),
   ),
-  attributions: z.array(replacementLineAttribution),
+  attributions: z.array(sourceOrderReconciliationAttribution),
 });
 export type SourceOrderReconciliationReview = z.infer<
   typeof sourceOrderReconciliationReview

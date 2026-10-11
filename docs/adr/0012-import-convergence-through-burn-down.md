@@ -22,6 +22,13 @@ does not refresh accepted payment evidence automatically. Commit rechecks the
 accepted lines, payment evidence, allocations, identities and proposed changes
 transactionally.
 
+Reconciliation preparation is a mutation: it persists the reviewed finding
+snapshot and may preserve a validated historical source observation, while
+leaving ledger and stock unchanged. MCP exposes it as
+`purchase_import.prepare_reconciliation`, never an auto-approved read action.
+Public review attributions identify LedgerParties by shortcode; internal stored
+replacement allocations retain UUID references.
+
 A reviewed commit may adopt the proposed Vendor order identity when the target
 Purchase has no order ID. Preparation and commit refuse an identity already
 owned by another live Purchase for that Vendor; an existing distinct target

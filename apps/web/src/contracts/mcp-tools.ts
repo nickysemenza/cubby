@@ -513,11 +513,6 @@ export const MCP_TOOLS = defineMcpTools({
           "Weighted pipeline and known Jev/Clef-only confusion matrices, conditional precision/recall, sampling probabilities and excluded/unknown denominators for an independently graded frozen Email sample.",
       }),
 
-      prepare_reconciliation: mcpAction({
-        op: purchaseImportContract.ops.prepareReconciliation,
-        description:
-          "Inspect a source-order conflict and preview explicit line bindings, affected Expenses, original party cents, payment evidence, statement allocations and spend delta. Writes no ledger changes. Review with the member, then apply the finding using its returned reviewedFingerprint; changed state refuses the commit.",
-      }),
       mail: mcpAction({
         op: purchaseImportContract.ops.mailRead,
         description:
@@ -683,6 +678,11 @@ export const MCP_TOOLS = defineMcpTools({
     description:
       "Import a purchase from its source: prepare then commit one immutable import plan; confirm a merchant's Vendor; reclassify a Purchase document. A member's Claude/Codex session and Pi's Mail import use the same writers.",
     actions: {
+      prepare_reconciliation: mcpAction({
+        op: purchaseImportContract.ops.prepareReconciliation,
+        description:
+          "Persist a reviewed source-order preview with explicit line bindings, affected Expenses, original party cents, payment evidence, statement allocations and spend delta. Writes the finding's reviewed snapshot and may preserve a validated historical source observation; changes no ledger or stock. Review with the member, then apply the finding using its returned reviewedFingerprint or commit its accepted-source review; changed state refuses the commit.",
+      }),
       commit_accepted_reconciliation: mcpAction({
         op: purchaseImportContract.ops.commitAcceptedReconciliation,
         description:

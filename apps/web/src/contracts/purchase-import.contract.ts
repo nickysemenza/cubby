@@ -87,12 +87,11 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     native: "Explicit selected Email import",
     invalidates: ["email", "runOnly"],
   }),
-  prepareReconciliation: query({
+  prepareReconciliation: mutation({
     input: prepareSourceOrderReconciliationInput,
     output: prepareSourceOrderReconciliationOut,
-    readPolicy: "strong",
-    transport: "post",
     native: "Reviewed source-order reconciliation preview",
+    invalidates: ["runOnly"],
   }),
   /** Persist an immutable proposed import; writes no Purchase, Expense, or Product. */
   prepare: mutation({

@@ -1,8 +1,21 @@
 import {
   seedProductPrerequisite,
   seedInventoryPrerequisites,
-  seedUnlinkedExpensePrerequisite,
 } from "./fixtures-catalog";
+import { and, eq } from "drizzle-orm";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { memberImport } from "~/server/purchase-import/order-import.fixtures";
+import {
+  prepareSourceOrderReconciliation,
+  commitAcceptedSourceOrderReconciliation,
+} from "~/server/purchase-import/reconciliation";
+import { getDb } from "~/server/repo/database-helpers";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import * as schema from "~/server/db/schema";
+import {
+  createEvidenceHarnessContext,
+  createEntityFixture,
+} from "./fixtures-core";
 import {
   seedPhotoGroupReviewRun,
   seedPhotoReviewProcessingFailure,
@@ -317,10 +330,68 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     locationName: `${name} shelf`,
     products: [{ name: existingName, quantity: 2, unit: "each" }],
   });
-  const expense = await seedUnlinkedExpensePrerequisite(
-    page,
-    `${existingName} purchase line`,
-  );
+  const context = await createEvidenceHarnessContext(page);
+  const db = getDb(context.db);
+  const member = await db.query.ledgerParty.findFirst({
+    where: and(
+      eq(schema.ledgerParty.userId, context.actor.userId),
+      eq(schema.ledgerParty.kind, "member"),
+    ),
+  });
+  if (!member) {
+    await insertWithShortcode(context.db, "ledgerParty", {
+      kind: "member",
+      userId: context.actor.userId,
+      name: `Synthetic reviewer ${name}`,
+    });
+  }
+  const merchant = `Synthetic photo retailer ${name}`;
+  const vendor = await createEntityFixture(page, "vendor", { name: merchant });
+  const sourceKey = `synthetic:photo-link:${crypto.randomUUID()}`;
+  await memberImport(context.db, context.actor, {
+    key: sourceKey,
+    orders: [
+      {
+        stableOrderId: sourceKey,
+        vendorId: parseShortcodeFor("vendor", vendor.id),
+        source: {
+          kind: "receipt_photo",
+          externalKey: sourceKey,
+          checksum: "b".repeat(64),
+        },
+        extraction: {
+          status: "ready",
+          candidate: {
+            orderId: sourceKey,
+            orderedAt: "2026-01-05T12:00:00Z",
+            merchant,
+            currency: "USD",
+            printedGrandTotal: 87,
+            lines: [
+              {
+                title: `${existingName} purchase line`,
+                amount: 87,
+                lineKind: "principal",
+                quantity: 1,
+              },
+            ],
+            payments: [{ amount: 87 }],
+            allShipmentsDelivered: false,
+          },
+        },
+      },
+    ],
+  });
+  const expense = await db.query.expense.findFirst({
+    where: eq(schema.expense.name, `${existingName} purchase line`),
+  });
+  if (!expense?.purchaseId)
+    throw new Error("Accepted unlinked Expense missing");
+  const association = await db.query.importSourceOrder.findFirst({
+    where: eq(schema.importSourceOrder.purchaseId, expense.purchaseId),
+  });
+  if (!association?.acceptedObservationId)
+    throw new Error("Accepted source snapshot missing");
   const seed = await seedPhotoGroupReviewRun(
     page,
     name,
@@ -389,15 +460,61 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
   await expect(
     linkSection.getByText(/expected quantity remains uncertain/),
   ).toBeVisible();
-  await linkSection.getByRole("button", { name: "Link this line" }).click();
+  const preserved = async () => ({
+    inventory: await db.select().from(schema.inventoryEntry),
+    payments: await db.select().from(schema.purchasePaymentEvidence),
+    allocations: await db.select().from(schema.financialTransactionAllocation),
+    attributions: await db.select().from(schema.expenseAttribution),
+  });
+  const beforeLink = await preserved();
+  const reviewed = await prepareSourceOrderReconciliation(
+    context.db,
+    {
+      sourceOrderId: association.id,
+      resolution: {
+        kind: "attach_only",
+        lines: [
+          {
+            lineIndex: 0,
+            expenseId: parseShortcodeFor("expense", expense.shortcode),
+            productId: parseShortcodeFor("product", stock.products[0]!.id),
+          },
+        ],
+      },
+    },
+    context.actor,
+  );
+  expect(await preserved()).toEqual(beforeLink);
+  await linkSection.getByRole("button", { name: "Review this link" }).click();
+  const linkReview = linkSection.getByLabel("Reviewed Expense association");
+  await expect(linkReview).toContainText("$87.00");
+  await linkReview
+    .getByRole("button", { name: "Confirm reviewed link" })
+    .click();
   await expect(
     linkSection.getByText(`${existingName} purchase line`),
   ).toHaveCount(0);
-  const repeated = await page.request.post("/api/v1/photoImport/linkExpense", {
-    data: { runId: seed.runId, groupKey: "g1", expenseId: expense.id },
-    headers: { Origin: baseURL! },
+  const linked = await db.query.expense.findFirst({
+    where: eq(schema.expense.id, expense.id),
   });
-  expect(repeated.ok()).toBe(false);
+  expect(linked).toMatchObject({
+    id: expense.id,
+    cost: expense.cost,
+    productQuantity: 1,
+  });
+  expect(linked?.productId).not.toBeNull();
+  expect(await preserved()).toEqual(beforeLink);
+  expect(
+    await commitAcceptedSourceOrderReconciliation(
+      context.db,
+      {
+        sourceOrderId: association.id,
+        review: reviewed,
+      },
+      context.actor,
+    ),
+  ).toMatchObject({ alreadyApplied: true });
+  expect(await preserved()).toEqual(beforeLink);
 });
 
 test("distinguishes blocking description failure from optional cutout failure", async ({

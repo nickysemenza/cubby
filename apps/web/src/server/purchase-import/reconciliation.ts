@@ -211,8 +211,9 @@ export async function reviewResolution(
     ? state.expenses.reduce((sum, row) => sum + cents(row.cost!), 0)
     : null;
   let afterCents = beforeCents;
-  let attributions: typeof sourceOrderReconciliationReview._output.attributions =
-    [];
+  let attributions: Awaited<
+    ReturnType<typeof redistributeReplacementAttributions>
+  > = [];
   const originalAllocations = await loadExpenseAllocations(tx, {
     expenseIds: state.expenses.map((row) => row.id),
     includeFuture: true,
@@ -402,8 +403,34 @@ export async function reviewResolution(
         null,
       amount: Number(row.cents) / 100,
     })),
-    attributions,
+    attributions: attributions.map((row) => ({
+      lineIndex: row.lineIndex,
+      role: row.role,
+      partyId: row.partyId ? partyShortcode(state, row.partyId) : null,
+      amount: row.amount,
+      weight: row.weight,
+    })),
   });
+}
+
+// A reviewed money split must name the exact party; never fall back to
+// unattributed when a party is missing from the locked state.
+function partyShortcode(
+  state: Pick<ReconciliationState, "parties">,
+  id: string,
+) {
+  const party = state.parties.find((row) => row.id === id);
+  if (!party) throw new Error("A reviewed attribution party is not live.");
+  return party.shortcode;
+}
+
+function partyIdForShortcode(
+  state: Pick<ReconciliationState, "parties">,
+  shortcode: string,
+) {
+  const party = state.parties.find((row) => row.shortcode === shortcode);
+  if (!party) throw new Error("A reviewed attribution party is not live.");
+  return party.id;
 }
 
 export function prepareSourceOrderReconciliation(
@@ -664,7 +691,7 @@ export async function commitSourceOrderReconciliation(
           expenseId: row.id,
           role: allocation.role,
           ledgerPartyId: allocation.partyId
-            ? parseEntityId("ledgerParty", allocation.partyId)
+            ? partyIdForShortcode(state, allocation.partyId)
             : null,
           weight: allocation.weight,
         })),

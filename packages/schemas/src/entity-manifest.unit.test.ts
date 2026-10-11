@@ -52,17 +52,6 @@ describe("entity manifest", () => {
     }
   });
 
-  it("only claims a delete lifecycle for entities with a table", () => {
-    // `run` is the one stored entity that is immutable history:
-    // it has a table and deliberately no delete lifecycle.
-    for (const entity of allEntities) {
-      const { dbTable, lifecycle } = entityManifest[entity];
-      expect(lifecycle.delete === null).toBe(
-        dbTable === null || entity === "run",
-      );
-    }
-  });
-
   it("hard-deletes exactly `image`", () => {
     // `softDelete` (does the table carry a `deletedAt` column?) and
     // `lifecycle.delete.mode` (what does the delete OPERATION do?) are

@@ -330,9 +330,11 @@ test("imports saved order mail from the generic Vendor report and follows the li
       .where(eq(schema.email.orderMailId, source.id)),
   ).toEqual([{ runId: run.id, status: "completed", checksum }]);
   expect(
-    (await loadRunDetail(getFixtureDb(), run.id)).targets.map(({ state }) => ({
-      state,
-    })),
+    (await loadRunDetail(getFixtureDb(), runShortcode)).targets.map(
+      ({ state }) => ({
+        state,
+      }),
+    ),
   ).toEqual([{ state: "completed" }]);
   const productId = graph.expenses[0]?.productId;
   if (!productId) throw new Error("The imported line has no Product");
@@ -410,9 +412,11 @@ test("admits several retained confirmations as separate tasks in the same Run", 
   const db = getDb(getFixtureDb());
   // The frozen admission roster preserves every Email independently.
   expect(
-    (await loadRunDetail(getFixtureDb(), run.id)).targets.map(({ id }) => ({
-      id,
-    })),
+    (await loadRunDetail(getFixtureDb(), runShortcode)).targets.map(
+      ({ id }) => ({
+        id,
+      }),
+    ),
   ).toEqual(
     expect.arrayContaining(
       await db

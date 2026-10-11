@@ -26,7 +26,9 @@ export interface ActionInputSchema {
   schema: JsonObject;
 }
 
-const HOIST_MIN_CHARS = 600;
+// Repeated workflow fields also need sharing: keeping only large entity
+// subtrees shared made a reviewed import action exceed the catalog budget.
+const HOIST_MIN_CHARS = 200;
 const ROOT_KEYS = new Set(["action", "_runExecution"]);
 
 function isObject(value: JSONType | undefined): value is JsonObject {

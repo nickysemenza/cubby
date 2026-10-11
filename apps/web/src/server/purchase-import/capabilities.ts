@@ -89,6 +89,7 @@ const actionCapability = {
   "purchase_import.commit_accepted_reconciliation": "generic_mutation",
   "mail.resolve": "commit_purchase_import",
   "purchase_import.prepare": "prepare",
+  "purchase_import.prepare_reconciliation": "prepare",
   "purchase_import.commit": "commit_purchase_import",
   "purchase_import.confirm_vendor": "generic_mutation",
   "purchase_import.reclassify": "generic_mutation",

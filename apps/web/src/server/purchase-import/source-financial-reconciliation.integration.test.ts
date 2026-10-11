@@ -661,6 +661,22 @@ describe("accepted source financial reconciliation", () => {
       ctx.actor,
     );
     expect(preview.spend).toEqual({ before: 40, after: 40, delta: 0 });
+    // The reviewed split names LedgerParties by shortcode, never uuid, both in
+    // the response and in the stored proposal the commit replays.
+    expect(new Set(preview.attributions.map((row) => row.partyId))).toEqual(
+      new Set(parties.map((party) => party.shortcode)),
+    );
+    expect(preview.attributions.some((row) => "partyCode" in row)).toBe(false);
+    const [prepared] = await database
+      .select()
+      .from(runFinding)
+      .where(eq(runFinding.id, finding!.id));
+    const storedFix = storedImportFix.parse(prepared!.proposedFix);
+    expect(
+      storedFix?.kind === "reconcile_source_order"
+        ? storedFix.review?.attributions
+        : null,
+    ).toEqual(preview.attributions);
     await resolveRunFinding(
       ctx.db,
       {

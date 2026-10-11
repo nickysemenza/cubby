@@ -27,11 +27,12 @@ import {
   selectComboboxItem,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { applyReviewedSourceReconciliation } from "./import-order-convergence.helpers";
 
 // Failure boundaries: OAuth callback must persist its real account, mailbox
 // original acquisition must use its stored credentials and actual MIME evidence, conflicting identities must
 // require an explicit Product decision, and both arrivals must converge after
-// reviewed booking/correction without another Product or economic line.
+// reviewed booking/reconciliation without another Product or economic line.
 for (const statementFirst of [true, false]) {
   test(`input-first Google, ${statementFirst ? "statement then retailer" : "retailer then statement"}, and reviewed Product merge`, async ({
     page,
@@ -479,17 +480,13 @@ for (const statementFirst of [true, false]) {
       await expect(approve).toBeEnabled();
       await mergeReviewedProducts();
       await approve.click();
-      if (statementFirst) {
-        const apply = page.getByRole("button", {
-          name: "Apply fix",
-          exact: true,
+      if (purchaseCode)
+        await applyReviewedSourceReconciliation(page, {
+          db,
+          baseURL: e2eRuntime.baseURL,
+          purchaseCode,
+          productCode: product.id,
         });
-        await expect(apply).toBeEnabled();
-        await apply.click();
-        await expect(
-          page.getByText("Applied import correction", { exact: true }),
-        ).toBeVisible();
-      }
       await expect
         .poll(async () => {
           const purchase = await database.query.purchase.findFirst({
