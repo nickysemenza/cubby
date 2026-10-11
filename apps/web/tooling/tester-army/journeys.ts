@@ -997,7 +997,7 @@ export const journeys: Journey[] = [
       {
         goal: `Move the card "Synthetic inbox card" from Inbox into the "${JOURNEY_NAMES.boardProjectA}" lane.`,
         web: `Drag the "Drag Synthetic inbox card" handle onto the "${JOURNEY_NAMES.boardProjectA} task drop target". Finish with Synthetic inbox card inside that project column and Inbox empty.`,
-        ios: `Open the Move menu beside "Synthetic inbox card". Finish with the "Lane: ${JOURNEY_NAMES.boardProjectA}" option visible and the menu still open.`,
+        ios: 'Open the Move menu beside "Synthetic inbox card". Leave the menu open without selecting a status or lane.',
         tapControl: {
           ios: { role: "button", name: `Lane: ${JOURNEY_NAMES.boardProjectA}` },
         },

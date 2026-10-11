@@ -78,9 +78,9 @@ inference failures fail once at Cubby's gateway boundary; aborts stay aborts.
 Native keyboard Done uses the SDK’s exact button tap; editor Save and hero-action confirmations use `tapTestId` rather than model completion: both compound
 and simple Save goals returned inconclusive after successfully saving. The
 following visible-value check and exact SQL assertions verify the saved external
-ID, source and kind. Jev still enters the fields and drives product rename.
+ID, source and kind. Jev still enters the fields and drives product rename. Board movement asks Jev only to open Move and leave its menu open; the existing exact lane tap commits the change before SQL read-back.
 
-Native deep links wait for the selected fixture code to be visible before setup or agent actions; hosted sign-in can outlast the initial launch. Expense split setup reuses the SDK's bounded scroll-to-control and viewport centering. Unbounded downward model scrolling skipped the Purchase report and kept scrolling at the bottom, so cents conservation and unknown-cost refusal begin with its Split control reachable. The final Split tap is scoped to its confirmation group because the underlying detail action remains in the native accessibility tree.
+Native deep links accept the system Open in Cubby confirmation when it appears, then wait for the selected fixture code to be visible before setup or agent actions; hosted sign-in can outlast the initial launch. Expense split setup reuses the SDK's bounded scroll-to-control and viewport centering. Unbounded downward model scrolling skipped the Purchase report and kept scrolling at the bottom, so cents conservation and unknown-cost refusal begin with its Split control reachable. The final Split tap is scoped to its confirmation group because the underlying detail action remains in the native accessibility tree.
 
 ## Failure modes and acceptance
 

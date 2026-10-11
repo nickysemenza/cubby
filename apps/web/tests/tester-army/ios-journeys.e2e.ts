@@ -47,6 +47,11 @@ for (const journey of selectedJourneys(journeys, "ios"))
         await app.open();
         const link = ios ?? (entity ? `cubby://entity/${entity}` : undefined);
         if (link) await device.openLink(link);
+        const confirmation = screen.getByRole("alert", {
+          name: "Open in “Cubby”?",
+          exact: true,
+        });
+        if (await confirmation.isVisible()) await device.alert("accept");
         if (entity)
           await expect(
             screen.getByText(entity, { exact: true }).first(),
