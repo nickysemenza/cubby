@@ -156,6 +156,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
                 title: orderNames.productName,
                 amount: 42.5,
                 lineKind: "principal",
+                costType: null,
                 sku,
                 quantity: 1,
                 productUrl,

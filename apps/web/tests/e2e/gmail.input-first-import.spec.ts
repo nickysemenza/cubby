@@ -185,6 +185,7 @@ for (const statementFirst of [true, false]) {
                 title: names.productName,
                 amount: 42.5,
                 lineKind: "principal",
+                costType: null,
                 sku,
                 quantity: 1,
                 productUrl: `https://www.amazon.com/dp/${asin}`,

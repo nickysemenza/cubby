@@ -73,6 +73,7 @@ const tradeDescriptions = {
   metalworking: "Welding, fabrication, and metal machining",
   crafts: "Arts, crafts, and small hand-made projects",
   auto: "Vehicle maintenance, repair, and parts",
+  travel: "Airfare, lodging, car rental, and trip taxes and fees",
   other: "Anything that doesn't fit a listed trade",
 };
 const cost_typeDescriptions = {

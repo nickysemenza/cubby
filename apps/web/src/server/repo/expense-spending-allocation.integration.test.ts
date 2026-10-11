@@ -274,6 +274,40 @@ describe("joint expense spending allocation", () => {
     expect(await loadExpenseJointAllocations(ctx.db, [])).toEqual([]);
     expect((await loadExpenseSpendingAllocations(ctx.db, [])).size).toBe(0);
   });
+  // Regression: an award ticket's $0 fare left every tax and fee on the
+  // booking without a category or Project share.
+  it("splits adjustments evenly across priced $0 principals", async () => {
+    const { projects, categories, vendor } = await fixture();
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-09-20",
+    });
+    for (const index of [0, 1])
+      await line(`Synthetic award fare ${index}`, 0, "principal", {
+        purchaseId: purchase.id,
+        projectId: projects[index]!.id,
+        spendingCategoryId: categories[index]!.id,
+      });
+    const tax = await line("Synthetic award tax", 0.05, "tax", {
+      purchaseId: purchase.id,
+    });
+    const rows = await loadExpenseJointAllocations(ctx.db, [tax.id]);
+    expect(rows).toHaveLength(2);
+    expect(
+      rows.reduce((sum, row) => sum + (row.attributedCents ?? 0n), 0n),
+    ).toBe(5n);
+    expect(
+      rows.map((row) => [row.projectId, row.spendingCategoryId]).sort(),
+    ).toEqual(
+      [0, 1]
+        .map((index) => [projects[index]!.id, categories[index]!.id])
+        .sort(),
+    );
+    expect(
+      rows.every((row) => !row.incomplete && !row.categoryIncomplete),
+    ).toBe(true);
+  });
+
   it("previews principal category changes in adjustment allocations without writes", async () => {
     const { projects, categories, purchase } = await fixture();
     const principal = await line("Synthetic preview item", 1, "principal", {

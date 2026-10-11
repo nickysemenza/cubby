@@ -1684,7 +1684,7 @@ export async function importVendorOrder(
             date: orderDate,
             lineKind: identity.lineKind,
             lineBasis: "item_line",
-            costType: "materials",
+            costType: line.costType,
             trade: null,
             economicRole: "vendor",
             productId,

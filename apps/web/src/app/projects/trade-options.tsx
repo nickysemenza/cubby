@@ -1,4 +1,5 @@
 import { type Trade, tradeValues } from "@cubby/schemas/project";
+import { AirplaneTiltIcon } from "@phosphor-icons/react/dist/csr/AirplaneTilt";
 import { ArchiveIcon } from "@phosphor-icons/react/dist/csr/Archive";
 import { CarIcon } from "@phosphor-icons/react/dist/csr/Car";
 import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
@@ -61,6 +62,7 @@ const TRADE_ICONS = {
   metalworking: WrenchIcon,
   crafts: PaletteIcon,
   auto: CarIcon,
+  travel: AirplaneTiltIcon,
   other: ShapesIcon,
 } satisfies Record<Trade, Icon>;
 

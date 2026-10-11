@@ -302,7 +302,7 @@ export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
   maxTokens: 4_000,
   effort: "low",
   cache: false,
-  promptVersion: "2026-10-06.1",
+  promptVersion: "2026-10-11.2",
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
@@ -312,7 +312,7 @@ export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   maxTokens: 4_000,
   effort: "low",
   cache: false,
-  promptVersion: "2026-09-19.1",
+  promptVersion: "2026-10-11.2",
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
@@ -359,7 +359,7 @@ export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
   maxTokens: 4_000,
   effort: "high",
   cache: false,
-  promptVersion: "2026-09-19.1",
+  promptVersion: "2026-10-11.2",
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
