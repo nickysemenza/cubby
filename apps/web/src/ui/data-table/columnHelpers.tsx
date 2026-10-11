@@ -414,7 +414,7 @@ export function createTimestampColumn<T extends BaseRow>(
     meta: attachCubbyColumnMeta({
       entityColumnRole: "fact",
       mobile: { slot: "hidden" },
-      // Copy-only: the display is relative ("5 months ago") but the copy
+      // Copy-only: the display is compact relative ("3mo") but the copy
       // payload is the ISO date-time, which pastes usefully into a spreadsheet.
       cellData: timestampCellData<T>((row) => row[id]),
     }),

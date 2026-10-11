@@ -364,8 +364,8 @@ function distributeSlack(
 /**
  * Resolves the widths the browser should paint without mutating TanStack's own
  * column-sizing state. A user's deliberate resize remains the source of truth
- * (`userSized` never receives slack). Pane slack goes to the record identity
- * first, up to its `maxSize`; the other flexible columns then share what is
+ * (`userSized` and pinned columns never receive slack). Pane slack goes to
+ * the record identity first, up to its `maxSize`; the other flexible columns then share what is
  * left in proportion to their configured width, each capped at its
  * `maxSize`; what no column can use goes to the trailing spacer.
  *
