@@ -637,7 +637,10 @@ export async function commitSourceOrderReconciliation(
         ? (template?.spendingCategoryId ?? null)
         : null,
       trade: tradeSchema.nullable().parse(template?.trade ?? null),
-      costType: costTypeSchema.parse(template?.costType ?? "materials"),
+      // A source-stated cost type wins; a replaced aggregate's was a placeholder.
+      costType: costTypeSchema.parse(
+        line.costType ?? template?.costType ?? "materials",
+      ),
       date: template?.date ?? state.target.date,
       notes: template?.notes ?? null,
       future: template?.future ?? false,

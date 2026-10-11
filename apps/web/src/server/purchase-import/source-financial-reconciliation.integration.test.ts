@@ -363,7 +363,8 @@ describe("accepted source financial reconciliation", () => {
     await submit("corrected-cost", "d".repeat(64), {
       ...candidate,
       printedGrandTotal: 45,
-      lines: [{ ...candidate.lines[0]!, amount: 45 }],
+      // A source-stated cost type replaces the reviewed line's old one.
+      lines: [{ ...candidate.lines[0]!, amount: 45, costType: "services" }],
       // The original settlement stays valid until separately corrected.
       payments: candidate.payments,
     });
@@ -413,6 +414,11 @@ describe("accepted source financial reconciliation", () => {
     const after = await state();
     expect(after.expenses.map((row) => row.cost)).toEqual([45]);
     expect(after.expenses[0]!.id).toBe(initial.expenses[0]!.id);
+    const [corrected] = await database
+      .select({ costType: expense.costType })
+      .from(expense)
+      .where(eq(expense.id, initial.expenses[0]!.id));
+    expect(corrected?.costType).toBe("services");
     expect(after.orders[0]!.originalOrder).toEqual(
       initial.orders[0]!.originalOrder,
     );
