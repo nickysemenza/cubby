@@ -942,6 +942,12 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const evidenceSections = workspaceSections.filter(
     (section) => section.workspace === "evidence",
   );
+  const hasWork = workSections.some(
+    (section) => sectionVisibility.get(section.id) !== false,
+  );
+  const hasEvidence = evidenceSections.some(
+    (section) => sectionVisibility.get(section.id) !== false,
+  );
   const dedicatedSections = visibleSections.filter(
     (section) =>
       section.overview === false && !workspaceSections.includes(section),
@@ -972,12 +978,12 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     (hash: string) => {
       const id = normalizedHash(hash);
       const workspace = workspaceSections.find(
-        (section) => section.id === id,
+        (section) =>
+          section.id === id && sectionVisibility.get(section.id) !== false,
       )?.workspace;
       if (workspace) return { mode: workspace, valid: true };
-      if (id === "work" && workSections.length > 0)
-        return { mode: "work", valid: true };
-      if (id === "evidence" && evidenceSections.length > 0)
+      if (id === "work" && hasWork) return { mode: "work", valid: true };
+      if (id === "evidence" && hasEvidence)
         return { mode: "evidence", valid: true };
       return modeForHash({
         hash,
@@ -993,8 +999,9 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       overviewIds,
       dedicatedIds,
       workspaceSections,
-      workSections.length,
-      evidenceSections.length,
+      hasWork,
+      hasEvidence,
+      sectionVisibility,
     ],
   );
   const [activeMode, setActiveMode] = useState<DetailMode>(
@@ -1103,8 +1110,8 @@ export const DetailSections: FC<DetailSectionsProps> = ({
               wide={wide}
               hasRelations={hasRelations}
               hasActivity={hasActivity}
-              hasWork={workSections.length > 0}
-              hasEvidence={evidenceSections.length > 0}
+              hasWork={hasWork}
+              hasEvidence={hasEvidence}
               hasOverviewTools={hasOverviewTools}
               overviewSections={indexEligibleSections}
               dedicatedSections={dedicatedSections}

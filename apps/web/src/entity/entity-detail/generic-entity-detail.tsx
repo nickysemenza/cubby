@@ -611,6 +611,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     sections.push({
       id: `connected-${view.key}`,
       title: view.title,
+      workspace: "work",
       icon: LinkIcon,
       placement: "primary",
       content: (
