@@ -24,6 +24,14 @@ _Avoid_: dry run, Jev-only scan
 Unattended interpretation of classified Emails into Purchases, Expenses and Product resolutions.
 _Avoid_: mail research, email processing
 
+**Exact identity match**:
+An existing Product that already owns one of an imported line's identifiers, or whose name or alias equals the line's name apart from letter case and surrounding spaces. A merely similar name is never an exact identity match.
+_Avoid_: fuzzy match, likely duplicate
+
+**Distinct-from decision**:
+A recorded judgment that an imported line is a different Product from an exact identity match, carrying a Source that shows the difference (model, size, pack or kit contents). Without one, an import may not create a Product beside its exact identity match.
+_Avoid_: force new, override
+
 **Vendor alias**:
 Another name a Vendor trades under, recorded by a member, a Vendor merge, or Sender proof, so import finds the existing Vendor by that name.
 _Avoid_: vendor nickname, similar vendor

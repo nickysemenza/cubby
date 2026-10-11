@@ -35,6 +35,7 @@ const TRADE_PHASE = {
   metalworking: "site",
   crafts: "site",
   auto: "site",
+  travel: "site",
   other: "site",
 } satisfies Record<Trade, Phase>;
 

@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { GTIN_KIND, GTIN_SOURCE } from "@cubby/schemas/external-id";
 import {
   type LedgerPartyId,
   type RunId,
@@ -28,7 +27,6 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import {
   expense,
@@ -56,7 +54,10 @@ import {
   type ProductHit,
   type ExternalIdPair,
 } from "~/server/repo/product/find-by-external-ids";
-import { findProductNameCandidates } from "~/server/repo/product/resolve-names";
+import {
+  findExactProductNameMatches,
+  findProductNameCandidates,
+} from "~/server/repo/product/resolve-names";
 import {
   retainedMailJoin,
   retainedMailProjection,
@@ -75,14 +76,17 @@ import { assertMailRunMembership } from "./mail-run-membership";
 import { linkImportedMail } from "./mail-tool";
 import {
   MODEL_STYLE_MATCH_REASON,
-  manufacturerPartRequests,
   modelStyleTokens,
   sharesModelWithinManufacturer,
 } from "./manufacturer-identity";
 import { auditAllImportBatches } from "./run-service";
 import { resolveImportSourceOrder } from "./source-claim-family";
 import { sourceOrderKey } from "./source-order-key";
-import { amazonAsin, importVendorOrder } from "./writer";
+import {
+  amazonAsin,
+  importVendorOrder,
+  lineIdentifierRequests,
+} from "./writer";
 
 const operationArgs = (input: {
   prepareOperationId: string;
@@ -295,32 +299,6 @@ async function retainedMailSources(
   return retained;
 }
 
-const lineIdentifierRequests = (
-  source: string,
-  line: z.infer<typeof extractedPurchaseLine>,
-): ExternalIdPair[] => {
-  const ids = [
-    ...new Set(
-      [line.sku, amazonAsin(line.productUrl)].filter((id): id is string =>
-        Boolean(id),
-      ),
-    ),
-  ];
-  return [
-    ...ids.flatMap((externalId) => [
-      { source, externalId, kind: "retailer_sku" as const },
-      { source, externalId, kind: "asin" as const },
-    ]),
-    ...ids.flatMap<ExternalIdPair>((id) => {
-      const gtin = wasm.scan_code_gtin14(id);
-      return gtin
-        ? [{ source: GTIN_SOURCE, externalId: gtin, kind: GTIN_KIND }]
-        : [];
-    }),
-    ...manufacturerPartRequests(line),
-  ];
-};
-
 async function productCandidates(
   db: Database,
   requests: readonly ExternalIdPair[],
@@ -337,6 +315,9 @@ async function productCandidates(
   ];
   const fuzzy = await findProductNameCandidates(db, line.title);
   const exactProductIds = new Set(exact.map(({ id }) => id));
+  const exactNameIds = new Set(
+    (await findExactProductNameMatches(db, line.title)).map(({ id }) => id),
+  );
   const modelTokens = modelStyleTokens(line.title).map((token) =>
     token.toLowerCase(),
   );
@@ -365,18 +346,23 @@ async function productCandidates(
       sharesModelWithinManufacturer(line.title, hit),
   );
   const modelRankedIds = new Set(modelRanked.map(({ id }) => id));
+  // Exact names rank right after exact identifiers: commit refuses a new
+  // Product beside either without a Distinct-from decision.
+  const fuzzyRest = fuzzy.filter(
+    ({ id }) => !exactProductIds.has(id) && !modelRankedIds.has(id),
+  );
   return [
     ...exact,
+    ...fuzzyRest.filter(({ id }) => exactNameIds.has(id)),
     ...modelRanked,
-    ...fuzzy.filter(
-      ({ id }) => !exactProductIds.has(id) && !modelRankedIds.has(id),
-    ),
+    ...fuzzyRest.filter(({ id }) => !exactNameIds.has(id)),
   ]
     .slice(0, 20)
     .map(({ id, shortcode, ...candidate }) => ({
       productId: shortcode,
       ...candidate,
       exactIdentifierMatch: exactProductIds.has(id),
+      exactNameMatch: exactNameIds.has(id),
       matchReason: modelRankedIds.has(id)
         ? MODEL_STYLE_MATCH_REASON
         : undefined,
@@ -953,9 +939,20 @@ export async function commitPurchaseImport(
                   ),
                 });
               } else if (resolution.kind === "new") {
+                const distinctFrom = [];
+                for (const distinct of resolution.distinctFrom ?? [])
+                  distinctFrom.push({
+                    ...distinct,
+                    productId: await resolveOrThrow(
+                      transactionDb,
+                      "product",
+                      distinct.productId,
+                    ),
+                  });
                 productResolutions.push({
                   kind: "new" as const,
                   lineIndex: line.position,
+                  distinctFrom,
                 });
               } else if (resolution.kind === "expense_only") {
                 productResolutions.push({

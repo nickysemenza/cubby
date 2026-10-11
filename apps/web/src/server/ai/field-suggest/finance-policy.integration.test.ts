@@ -154,6 +154,69 @@ describe("reviewed finance suggestions", () => {
     },
   );
 
+  // Regression: classified Purchases listed a Fallback suggestion equal to the
+  // category their Expense lines already resolve to — accepting it changes nothing.
+  it("withholds a Purchase fallback its Expense lines already resolve to", async () => {
+    const [garden, groceries] = await Promise.all(
+      ["Fixture garden", "Fixture groceries"].map((name) =>
+        insertWithShortcode(ctx.db, "spendingCategory", {
+          name,
+          evidenceExpectation: "unknown",
+          productExpectation: "unknown",
+        }),
+      ),
+    );
+    const vendorId = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Fixture nursery",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendorId.id,
+      date: "2026-01-01",
+      displayLabel: "Fixture seedlings",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Fixture seedling tray",
+      cost: 12,
+      date: "2026-01-01",
+      costType: "materials",
+      lineKind: "principal",
+      purchaseId: purchase.id,
+      spendingCategoryId: garden!.id,
+    });
+    const input: FieldSuggestionsInput = {
+      entity: "purchase",
+      entityId: purchase.shortcode,
+      basisMode: "provided",
+      targets: ["spendingCategoryId"],
+      basis: { displayLabel: "Fixture seedlings" },
+    };
+
+    const same = await suggest(input, modelPicking(garden!.shortcode));
+    expect(same.suggestions.spendingCategoryId).toBeNull();
+    expect(same.outcomes?.spendingCategoryId).toMatchObject({
+      kind: "evaluated",
+      answer: "none",
+    });
+
+    const different = await suggest(input, modelPicking(groceries!.shortcode));
+    expect(different.suggestions.spendingCategoryId?.value).toBe(
+      groceries!.shortcode,
+    );
+
+    // An unresolved principal line would take the fallback, so the same
+    // category is no longer a no-op.
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Fixture potting mix",
+      cost: 8,
+      date: "2026-01-01",
+      costType: "materials",
+      lineKind: "principal",
+      purchaseId: purchase.id,
+    });
+    const fills = await suggest(input, modelPicking(garden!.shortcode));
+    expect(fills.suggestions.spendingCategoryId?.value).toBe(garden!.shortcode);
+  });
+
   it("does not call the model or invent a category when no live roster exists", async () => {
     await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Deleted fixture",

@@ -137,7 +137,12 @@ same outcome without prescribing an agent runtime.
    (`existing`). So does a candidate whose name or alias is the line's exact
    title (same brand, item, size, count, and variant) when none of its
    recorded fields contradicts the line: a missing identifier alone is no
-   reason to fork it. A descriptive-only match — a similar but not identical
+   reason to fork it. Commit enforces this: `new` is refused beside a
+   candidate flagged `exactIdentifierMatch`, and beside one flagged
+   `exactNameMatch` unless the resolution's `distinctFrom` names it with the
+   url and quoted text that show the difference (model, size, pack, kit
+   contents). Browse the listings to find that difference; without one,
+   resolve to the match. A descriptive-only match — a similar but not identical
    name, such as a photo Product described from its tag — does not resolve
    the line: choose `new` for this line's own vendor Product instead, then
    call `product_enrichment.propose_match` with the candidate pair and

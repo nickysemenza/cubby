@@ -16,7 +16,7 @@ import {
 } from "@cubby/schemas/project-output-fields";
 import { projectStatusValues } from "../project-fields.js";
 import { z } from "zod";
-import { tradeSchema } from "@cubby/schemas/task-fields";
+import { TRADE_SUGGEST_RULE, tradeSchema } from "@cubby/schemas/task-fields";
 import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 export default defineEntity({
@@ -324,15 +324,7 @@ Rules:
           // signal available.
           suggest: {
             basis: ["name", "notes", "kind"],
-            rules: [
-              `You are a home-project trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
-
-Rules:
-1. Match the physical work being described, not the room it happens in.
-2. A product or vendor name is a strong signal: electrical supply vendors imply "electrical", lumber implies "building".
-3. Prefer the most specific trade that fits over "other".
-4. "planning" is for pre-work (design, permits, estimates), not the work itself.`,
-            ],
+            rules: [TRADE_SUGGEST_RULE],
           },
         },
         display: { detail: true },

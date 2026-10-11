@@ -101,6 +101,7 @@ describe("purchase import contracts", () => {
             title: "Replacement filter",
             amount: 24,
             lineKind: null,
+            costType: null,
             quantity: null,
             productUrl: null,
             imageUrl: null,
