@@ -52,6 +52,11 @@ the preceding attempt remains immutable.
    an incomplete identified Purchase while itemization stays unknown. What an
    Email cannot establish (a logged-in order page, the exact variant, an
    image) waits in the Research queue for a member's Claude or Codex session.
+   That session opens the Vendor's `orderUrlTemplate` page for the order id
+   in the member's signed-in browser before deciding whether an order was
+   cancelled, returned, partly shipped or a specific variant, and before
+   asking the member: the order page is the authoritative record, and an
+   email's later silence is not.
 2. For a statement CSV, use `/statement-rows/import` or parse the export in the
    MCP client. Known provider columns (Monarch, Mint, Copilot, Apple Card) use
    deterministic adapters; other CSVs need a reviewed column, account, source,
