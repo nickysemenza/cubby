@@ -126,7 +126,7 @@ function ActionsMenu<TData extends RowData>({
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="outline" size="sm" className="relative shrink-0" />
+            <Button variant="ghost" size="sm" className="relative shrink-0" />
           }
         >
           Actions
@@ -206,6 +206,22 @@ function QueryTierFieldset<TData extends RowData>({
   actions?: ReactNode;
   grouping?: FilterSheetGrouping | undefined;
 }) {
+  const actionsTarget = usePageWorkbenchTarget("actions");
+  const menu =
+    isPage && !isMobileFilterTier ? (
+      <fieldset
+        disabled={isTransitioning}
+        data-workbench-table-actions
+        className={actionsTarget ? "hidden md:block" : undefined}
+      >
+        <ActionsMenu
+          table={table}
+          entity={entity}
+          showColumns={showViewOptions}
+          extra={actionsMenuExtra}
+        />
+      </fieldset>
+    ) : null;
   return (
     <fieldset
       disabled={isTransitioning}
@@ -229,22 +245,13 @@ function QueryTierFieldset<TData extends RowData>({
           <LedgerFilters
             table={table}
             entity={entity}
+            collapsed={isPage}
             optionHints={filterOptionHints}
             variant={isMobileFilterTier ? "mobile" : "desktop"}
             grouping={isMobileFilterTier ? grouping : undefined}
           />
         </div>
-        {/* The phone band has no `Actions ▾` — its three rows (identity,
-            search+Filter, active chips) are the whole workbench; Columns
-            lives in the Filter sheet's footer instead (`MobileFilterTier`). */}
-        {isPage && !isMobileFilterTier && (
-          <ActionsMenu
-            table={table}
-            entity={entity}
-            showColumns={showViewOptions}
-            extra={actionsMenuExtra}
-          />
-        )}
+        {actionsTarget ? createPortal(menu, actionsTarget) : menu}
         {actions}
       </Row>
     </fieldset>

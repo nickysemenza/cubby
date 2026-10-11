@@ -88,10 +88,8 @@ const PRODUCT_SUBJECT = {
   }),
 };
 
-// "Created" is low-signal when browsing inventory; the product attributes
-// exist so "show me the Milwaukee stuff" is a header filter.
+// Product attributes remain available as optional header filters.
 const INVENTORY_INITIAL_COLUMN_VISIBILITY = {
-  createdAt: false,
   manufacturer: false,
   category: false,
 };

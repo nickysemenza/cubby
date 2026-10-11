@@ -35,6 +35,7 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
   private pages: readonly (readonly T[])[] = [];
   private patches = new Map<string, ListReadRow>();
   private states = new Map<string, ListGroupState>();
+  private retained = new Set<string>();
   constructor(private readonly publish: () => void) {}
 
   reset(generation: string) {
@@ -43,6 +44,14 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
     this.generation = generation;
     this.patches.clear();
     this.states.clear();
+    this.retained.clear();
+  }
+  /** Same-scope refreshes retain completed values, never in-flight reads. */
+  retain(previous: ProgressiveListSession<T>) {
+    this.patches = new Map(previous.patches);
+    this.retained = new Set(previous.retained);
+    for (const [key, state] of previous.states)
+      if (state.state === "ready") this.retained.add(key);
   }
   get signal() {
     return this.controller.signal;
@@ -63,7 +72,12 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
     this.pages = pages;
   }
   state(id: string, group: ListReadGroup): ListGroupState {
-    return this.states.get(`${id}:${group}`) ?? { state: "pending" };
+    const key = `${id}:${group}`;
+    const state = this.states.get(key) ?? { state: "pending" as const };
+    return this.retained.has(key) &&
+      (state.state === "pending" || state.state === "loading")
+      ? { state: "ready" }
+      : state;
   }
   rows(): T[] {
     const seen = new Set<string>();
@@ -81,7 +95,10 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
     loader: LoadListEnrichment,
   ) {
     const groups = requested.filter((group) =>
-      rows.some((row) => this.state(row.id, group).state === "pending"),
+      rows.some((row) => {
+        const state = this.states.get(`${row.id}:${group}`);
+        return !state || state.state === "pending";
+      }),
     );
     if (rows.length === 0 || groups.length === 0) return;
     const generation = this.generation;
@@ -132,6 +149,7 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
     const allowed = new Set(ids.filter((id) => !missing.has(id)));
     for (const group of groups) {
       const result = response.groups.find((entry) => entry.id === group);
+      for (const id of ids) this.retained.delete(`${id}:${group}`);
       for (const id of ids)
         this.states.set(
           `${id}:${group}`,

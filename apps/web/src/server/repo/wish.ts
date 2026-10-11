@@ -78,14 +78,18 @@ const WISH_DELETE_EDGE_POLICY = {
       "Deleting a wishlist item soft-deletes its candidate alternatives; the products themselves are unchanged.",
   },
 } as const satisfies IncomingEdgePolicy<"wish", OperationDisposition>;
-type CandidateRow = {
+type CandidateRow = Pick<
+  typeof product.$inferSelect,
+  | "id"
+  | "shortcode"
+  | "name"
+  | "manufacturer"
+  | "model"
+  | "price"
+  | "createdAt"
+  | "updatedAt"
+> & {
   wishId: WishId;
-  id: ProductId;
-  shortcode: string;
-  name: string;
-  manufacturer: string;
-  model: string | null;
-  price: number | null;
   inventoried: boolean;
 };
 
@@ -103,6 +107,8 @@ const candidateRowsForWishes = async (
       manufacturer: product.manufacturer,
       model: product.model,
       price: product.price,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
       // includes-installed: excluding installed rows would make the wish
       // list recommend re-buying a product already installed in the wall.
       inventoried: sql<boolean>`EXISTS (
@@ -145,6 +151,8 @@ const publicWishCandidates = (candidates: CandidateRow[]) =>
     model: candidate.model,
     price: candidate.price,
     inventoried: candidate.inventoried,
+    createdAt: candidate.createdAt,
+    updatedAt: candidate.updatedAt,
   }));
 
 const toWishOut = (

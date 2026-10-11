@@ -4,6 +4,11 @@ import type { DatabaseRuntime } from "./db/database";
 export interface RequestDbConnections {
   strong: string;
   boundedStale: string;
+  /**
+   * Workerd harness only: a shorter pg-pool idle timeout, so a socket test's
+   * quiet window need not outlast production's ten-second default.
+   */
+  poolIdleTimeoutMs?: number;
 }
 
 export interface RequestDatabaseRuntimeScope {
@@ -17,6 +22,7 @@ type DatabaseRuntimeFactory = (
   maxConnections: number,
   role: RequestDbRole,
   nextClientOrdinal?: () => number,
+  idleTimeoutMs?: number,
 ) => DatabaseRuntime;
 
 /**
@@ -57,6 +63,7 @@ export class DatabaseRuntimeResolver {
         role === "strong" ? 5 : 1,
         role,
         () => (scope.clientOrdinal = (scope.clientOrdinal ?? 0) + 1),
+        scope.connections.poolIdleTimeoutMs,
       );
       scope.runtimes[role] = runtime;
       return runtime;

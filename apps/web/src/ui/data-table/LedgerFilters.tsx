@@ -61,6 +61,7 @@ export function LedgerFilters<TData extends RowData>({
   optionHints,
   variant = "desktop",
   grouping,
+  collapsed = false,
 }: {
   table: Table<TData>;
   /** Drives the search placeholder ("Search products"); omitted tables get no plural. */
@@ -73,6 +74,7 @@ export function LedgerFilters<TData extends RowData>({
    * fields, same draft state, different presentation.
    */
   variant?: "desktop" | "mobile";
+  collapsed?: boolean;
   /** Phone only: the grouped toggle, which lives in the Filter sheet. */
   grouping?: FilterSheetGrouping | undefined;
 }) {
@@ -143,6 +145,7 @@ export function LedgerFilters<TData extends RowData>({
 
   return (
     <FilterBar
+      collapsed={collapsed}
       filters={draftFilters}
       fields={fields}
       onChange={handleChange}

@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import type { WorkerdProfile } from "./tooling/workerd-harness";
+
 // The spec files import server modules (`~/server/db`, repositories) whose
 // `~/env` schema validates at import and whose module scope reads values like
 // `new URL(env.R2_PUBLIC_URL)`, so the Playwright process itself needs a
@@ -29,7 +31,7 @@ for (const [key, value] of Object.entries(e2eProcessEnvDefaults)) {
  */
 const isCI = !!process.env.CI;
 
-export default defineConfig({
+export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
   testDir: "./tests/e2e",
   /* Public-repository ubuntu-latest CI runners have 4 vCPU, shared by the
      browser, Worker, and database. CI shards desktop tests across four runners;
@@ -86,22 +88,28 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
 
-  /* Authentication modes share one desktop browser. Patterns anchor on the
-     basename so a mid-name match cannot move a spec between projects. */
+  /* Projects share one desktop browser. Patterns anchor on the basename so a
+     mid-name match cannot move a spec between projects. */
   projects: [
+    /* `gmail.*` specs run on the Gmail harness profile. One worker runs them
+       all, and listing the project first puts them at the start of a shard,
+       so that shard boots the Gmail harness once instead of once per worker,
+       each later switching back to the default profile. */
     {
-      name: "Unauthenticated tests",
-      testMatch: /(^|\/)unauth\.[^/]*\.spec\.ts$/,
-      metadata: { authenticated: false },
+      name: "Gmail profile tests",
+      testMatch: /(^|\/)gmail\.[^/]*\.spec\.ts$/,
+      workers: 1,
       use: {
         ...devices["Desktop Chrome"],
+        workerdProfile: "gmail",
       },
     },
+    /* Signed-out specs set `test.use({ signedIn: false })`, a test-scoped
+       option, so they share this project's workers. */
     {
       name: "Authenticated tests",
       testMatch: /\.spec\.ts$/,
-      testIgnore: /(^|\/)(unauth\.[^/]*|purchase-import-run)\.spec\.ts$/,
-      metadata: { authenticated: true },
+      testIgnore: /(^|\/)(gmail\.[^/]*|purchase-import-run)\.spec\.ts$/,
       use: {
         ...devices["Desktop Chrome"],
       },
@@ -111,7 +119,6 @@ export default defineConfig({
     {
       name: "Purchase import agent",
       testMatch: /(^|\/)purchase-import-run\.spec\.ts$/,
-      metadata: { authenticated: true },
       use: {
         ...devices["Desktop Chrome"],
       },

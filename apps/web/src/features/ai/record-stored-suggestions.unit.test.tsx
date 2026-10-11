@@ -3,6 +3,10 @@ import {
   suggestionReviewListInput,
   suggestionReviewListOut,
 } from "@cubby/schemas/ai";
+import {
+  productCategorySummary,
+  type ProductCategorySummary,
+} from "@cubby/schemas/product-category-fields";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   fireEvent,
@@ -81,7 +85,11 @@ function setup(
     accept: vi.fn(async () => ({ id: rowId, status: "applied" as const })),
     reject: vi.fn(async () => ({ id: rowId, status: "rejected" as const })),
   },
+  currentCategory?: ProductCategorySummary,
 ) {
+  const currentRecord = currentCategory
+    ? { ...record, categoryId: currentCategory.id, category: currentCategory }
+    : record;
   const harness = createBrowserTestHarness();
   const operations: StoredSuggestionOperations = {
     list: vi.fn(async () => stored),
@@ -96,13 +104,13 @@ function setup(
   const view = render(
     <RecordSuggestionsProvider
       entity="product"
-      records={[record]}
+      records={[currentRecord]}
       fieldKeys={["categoryId"]}
       operations={liveOperations}
       storedSuggestionOperations={operations}
     >
       <RecordFieldSuggestion
-        record={record}
+        record={currentRecord}
         field="categoryId"
         surface="cell"
         renderValue={(value) => (
@@ -111,7 +119,7 @@ function setup(
       >
         <span>Current category</span>
       </RecordFieldSuggestion>
-      <RecordSuggestionsBulkAction records={[record]} />
+      <RecordSuggestionsBulkAction records={[currentRecord]} />
     </RecordSuggestionsProvider>,
     { wrapper: harness.wrapper },
   );
@@ -119,6 +127,83 @@ function setup(
 }
 
 describe("stored suggestions in generic list cells", () => {
+  it.each([false, true])(
+    "withholds a stored ancestor correction from cell and bulk acceptance (hierarchy loaded: %s)",
+    async (hierarchyLoaded) => {
+      const harness = createBrowserTestHarness();
+      const base = {
+        ...record,
+        name: "Synthetic driver",
+        categoryId: "CAT-BBBB",
+      };
+      const specific = hierarchyLoaded
+        ? {
+            ...base,
+            category: {
+              id: "CAT-BBBB",
+              name: "Drivers",
+              feature: "tools",
+              path: [
+                { id: "CAT-AAAA", name: "Tools" },
+                { id: "CAT-BBBB", name: "Drivers" },
+              ],
+            },
+          }
+        : base;
+      const operations = validatedStoredOperations([
+        suggestion({
+          recordId: specific.id,
+          currentValue: "CAT-BBBB",
+          suggestedValue: "CAT-AAAA",
+          kind: "correction",
+        }),
+      ]);
+      render(
+        <RecordSuggestionsProvider
+          entity="product"
+          records={[specific]}
+          fieldKeys={["categoryId"]}
+          operations={{
+            suggestFields: ai.suggestFields.withTransport(async () => ({
+              suggestions: {},
+              outcomes: {
+                categoryId: {
+                  kind: "evaluated",
+                  answer: "none",
+                  confidence: "high",
+                  probability: 0.97,
+                  alternatives: [],
+                },
+              },
+            })),
+          }}
+          storedSuggestionOperations={operations}
+        >
+          <RecordFieldSuggestion
+            record={specific}
+            field="categoryId"
+            surface="cell"
+            renderValue={() => <span>Broad category</span>}
+          >
+            <span>Tools / Drivers</span>
+          </RecordFieldSuggestion>
+          <RecordSuggestionsBulkAction records={[specific]} />
+        </RecordSuggestionsProvider>,
+        { wrapper: harness.wrapper },
+      );
+      await waitFor(() => expect(operations.list).toHaveBeenCalled());
+      await screen.findByText("No suggestions · 1 field checked");
+      expect(
+        screen.queryByRole("button", { name: /^Accept suggested value/ }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /^Accept suggestions/ }),
+      ).toBeNull();
+      expect(screen.getByText("Tools / Drivers")).toBeVisible();
+      harness.dispose();
+    },
+  );
+
   it("edits only the suggested field and commits through the correction operation", async () => {
     const harness = createBrowserTestHarness();
     const reject = vi.fn(async () => ({
@@ -471,13 +556,22 @@ describe("stored suggestions in generic list cells", () => {
   });
 
   it("renders a Correction as the current value followed by its ghost", async () => {
-    const { harness } = setup([
-      suggestion({
-        kind: "correction",
-        currentValue: "CAT-1111",
-        suggestedValue: "CAT-2222",
+    const { harness } = setup(
+      [
+        suggestion({
+          kind: "correction",
+          currentValue: "CAT-AAAA",
+          suggestedValue: "CAT-2222",
+        }),
+      ],
+      undefined,
+      productCategorySummary.parse({
+        id: "CAT-AAAA",
+        name: "Tools",
+        feature: "tools",
+        path: [{ id: "CAT-AAAA", name: "Tools" }],
       }),
-    ]);
+    );
     expect(await screen.findByText("Current category")).toBeInTheDocument();
     expect(await screen.findByText("Food")).toBeInTheDocument();
     expect(screen.getByLabelText("Suggested replacement")).toBeInTheDocument();

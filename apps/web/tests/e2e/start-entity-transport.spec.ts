@@ -1,3 +1,4 @@
+import { chooseListView } from "./e2e-helpers";
 /**
  * The core entity browser runtime uses named operations
  * (docs/entities.md, "Transports").
@@ -320,7 +321,7 @@ test("base list keeps row identity, selection and phone cards while enrichment f
     ).toBeChecked();
     await expect(page.getByLabel("Loading field").first()).toBeVisible();
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.getByRole("button", { name: "Cards view", exact: true }).click();
+    await chooseListView(page, "Cards");
     const card = page
       .locator("[data-entity-card]")
       .filter({ has: page.getByRole("link", { name, exact: true }) });

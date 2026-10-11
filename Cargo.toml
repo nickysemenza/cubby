@@ -20,6 +20,17 @@ opt-level = 2
 [profile.test]
 opt-level = 1
 
+# The Rust gate runs sub-second tests; dependency optimization only adds compile
+# time. Keep clippy and tests on the same profile, separate from dev and shipped builds.
+[profile.ci]
+inherits = "dev"
+debug = 0
+opt-level = 0
+incremental = false
+
+[profile.ci.package."*"]
+opt-level = 0
+
 # Plain release is cubby-ffi's inner-loop profile (`build-rust.sh` default).
 # Do NOT set `panic = "abort"` here or in `dist`: UniFFI's generated
 # scaffolding wraps every export in `catch_unwind`, which needs unwinding to

@@ -238,6 +238,21 @@ function useListColumns(
   return { columns, identityEditable };
 }
 
+function useListInitialColumnVisibility(
+  entity: BrowserRoutedEntity,
+  overrides?: Record<string, boolean>,
+) {
+  return useMemo(
+    () => ({
+      ...entityListHiddenColumns(entity),
+      ...overrides,
+      createdAt: true,
+      updatedAt: true,
+    }),
+    [entity, overrides],
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Component                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -332,11 +347,9 @@ function ServerListBody({
 
   // `deletable` defaults ON: a top-level list page owns its entity's rows,
   // where an embedded relationship ledger does not.
-  // Declared `display.listHidden` columns start hidden even for an entity
-  // with no list module; a module's own visibility map still wins.
-  const initialColumnVisibility = useMemo(
-    () => entityListHiddenColumns(entity),
-    [entity],
+  const initialColumnVisibility = useListInitialColumnVisibility(
+    entity,
+    listOptions?.initialColumnVisibility,
   );
   const additionalReadFields = useMemo(() => {
     const parentField = entitySummary[entity].list.tree?.parentField;
@@ -376,8 +389,8 @@ function ServerListBody({
     columns,
     deletable: true,
     preview: DEFAULT_PREVIEW,
-    initialColumnVisibility,
     ...listOptions,
+    initialColumnVisibility,
     additionalReadFields,
     filterOptions,
     // SAFETY: the flat and tree overloads only differ in whether `tree` is
@@ -437,13 +450,19 @@ function ServerListBody({
   const body = (
     <>
       {parts.above?.(list)}
-      <ListTotalSummary
-        totals={entitySummary[entity].list.totals}
-        sums={list.sums}
-        state={list.summaryState}
-        onRetry={list.retrySummary}
-      />
-      {sweepAction}
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-2 py-1 text-xs md:px-4">
+        <ListTotalSummary
+          totals={entitySummary[entity].list.totals}
+          sums={list.sums}
+          state={list.summaryState}
+          onRetry={list.retrySummary}
+        />
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          {sweepAction}
+          <div data-workbench-status className="min-w-0" />
+          {contextualStatus}
+        </div>
+      </div>
       {list.enrichmentFailures?.map(({ pageIndex, group, state }) => (
         <div key={`${pageIndex}:${group}`} className="min-w-0 text-sm">
           <p role="alert" className="text-destructive">
@@ -483,7 +502,7 @@ function ServerListBody({
             desktopInspector={dockedInspector}
             inspectorToggle={inspectorToggle}
             {...workbenchProps}
-            contextualStatus={contextualStatus}
+            contextualStatus={null}
           />
         )}
         {renderedView === "shelf" && (
@@ -649,6 +668,10 @@ function ClientListBody({
   const { density } = useEntityListCardDensity();
   const parts = override.use(context);
   const { columns } = useListColumns(entity, parts, false);
+  const initialColumnVisibility = useListInitialColumnVisibility(
+    entity,
+    parts.list?.initialColumnVisibility,
+  );
   const client = parts.client;
   if (!client)
     throw new Error(`${entity} list override declares no client rows`);
@@ -663,6 +686,7 @@ function ClientListBody({
     columns,
     preview: DEFAULT_PREVIEW,
     ...parts.list,
+    initialColumnVisibility,
   });
   usePageCount(
     client.isLoading
@@ -701,7 +725,11 @@ function ClientListBody({
         />
       ) : (
         <Stack gap="sm">
-          <DataTableToolbar table={workbench.table} entity={entity} />
+          <DataTableToolbar
+            table={workbench.table}
+            entity={entity}
+            portalWorkbenchUtilities
+          />
           {inspectorToggle}
           <div
             className={

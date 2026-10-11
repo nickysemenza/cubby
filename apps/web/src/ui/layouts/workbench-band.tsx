@@ -33,37 +33,32 @@ export function WorkbenchBand({
   actions,
 }: WorkbenchBandProps) {
   return (
-    // Below `md` this wraps into two lines — identity+New, then the
-    // seg+query tier (a third line, the active-chip strip, lives inside the
-    // portal target's own mobile fragment — see `MobileFilterTier`) — via
-    // `flex-wrap` + `order` + a `basis-full` break, not by mounting `actions`
-    // twice: a duplicate node stays in the a11y tree at both breakpoints in
-    // any environment that doesn't compute real CSS media queries (jsdom
-    // tests included), so it must be one node repositioned, not two.
-    // Sticky below `md` only — the desktop shell doesn't need it, and
-    // `--app-chrome-top` accounts for the phone's fixed top nav.
-    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border bg-card px-2 py-1.5 max-md:sticky max-md:top-[var(--app-chrome-top)] max-md:z-20 md:min-h-11 md:flex-nowrap md:py-1">
-      <div className="order-1 flex min-w-0 shrink-0 items-baseline gap-2">
-        <h1 className="truncate font-heading text-xl leading-6 font-bold tracking-tight sm:text-lg sm:leading-6">
-          {title}
-        </h1>
-        {count !== undefined && (
-          <span className="shrink-0 font-mono text-2xs tracking-wider text-slate uppercase tabular-nums">
-            {countLabel ?? formatCount(count)}
-          </span>
-        )}
-      </div>
-      {actions && (
-        <div className="order-2 flex min-w-0 [scrollbar-width:none] items-center gap-2 overflow-x-auto overscroll-x-contain md:order-3 md:shrink-0 [&::-webkit-scrollbar]:hidden">
+    <div
+      data-workbench-band
+      className="flex flex-col gap-2 border-b border-border bg-card px-2 py-3 max-md:sticky max-md:top-[var(--app-chrome-top)] max-md:z-20 md:px-4"
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h1 className="truncate font-display text-2xl leading-8 tracking-tight">
+            {title}
+          </h1>
+          {count !== undefined && (
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+              {countLabel ?? formatCount(count)}
+            </span>
+          )}
+        </div>
+        <div className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain">
+          <div data-workbench-actions className="contents" />
           {actions}
         </div>
-      )}
-      <div className="order-3 flex min-w-0 basis-full [scrollbar-width:none] items-center gap-1 overflow-x-auto overscroll-x-contain md:order-2 md:flex-1 md:basis-auto [&::-webkit-scrollbar]:hidden">
-        {controls}
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <div
-          className="flex min-w-0 flex-1 items-center gap-1"
+          className="flex min-w-0 flex-1 items-center gap-2 max-md:basis-full"
           data-workbench-utilities
         />
+        {controls && <div className="shrink-0">{controls}</div>}
       </div>
     </div>
   );

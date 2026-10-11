@@ -56,11 +56,13 @@ const createPoolRuntime = (
   max: number,
   role: RequestDbRole,
   nextClientOrdinal?: () => number,
+  idleTimeoutMillis?: number,
 ): DatabaseRuntime =>
   runtimeForPool(
     new pg.Pool({
       connectionString,
       max,
+      ...(idleTimeoutMillis !== undefined && { idleTimeoutMillis }),
       Client: createDatabaseClientConstructor(role, nextClientOrdinal),
     }),
     role,

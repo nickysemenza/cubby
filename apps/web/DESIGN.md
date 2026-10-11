@@ -19,6 +19,7 @@ Cubby is a household field guide: a place to find a record, understand its evide
 - Use a system serif or Georgia for page and record identity only. Body, labels, controls, and tables use Inter with system fallbacks; shortcodes use mono. Quantities and money use tabular numbers.
 - Spacing comes from the shared token steps 4/8/12/12/16/16px (`packages/design-tokens/tokens.json`); the layout gap scale reads them, so web and native density move together. Desktop inputs, selects, and tab lists are 32px, matching the default button; menu items are 28px.
 - Panels have a 16px radius; controls 8px; compact chips 7px. Nested surfaces follow concentric radii. Resting surfaces use tone and 1px structural rules, with shadow only for floating overlays.
+  Web status, enum, category, and suggestion pills share `Pill` geometry. Saved values retain their semantic tint; suggestion mode uses a quiet dashed boundary with the same height and radius. Applying a suggestion shows pending feedback in that cell while the surrounding records remain readable.
 - Images use a faint neutral outline. Give real record photos room in detail; use the declared entity symbol when there is no image. Never place an unrelated illustration in an empty hero.
 - Motion explains state or space. High-frequency search, keyboard, table, and navigation actions respond immediately. Transitions name only changed properties and respect reduced motion.
 
@@ -32,7 +33,7 @@ Today/Home uses only the existing task, problem, meal, activity, nutrition, inve
 
 ## Generic records
 
-Entity declarations own names, domains, images, fields, view choices, relations, sections, and action availability. Generated route shells and `GenericEntityList`/`GenericEntityDetail` render them. An entity-specific page may supply a declared slot or necessary query adapter; it does not introduce its own page chrome. The external USDA catalog remains an external-reference exception.
+Entity declarations own names, domains, images, fields, view choices, relations, sections, and action availability. Generated route shells and `GenericEntityList`/`GenericEntityDetail` render them. An entity-specific page may supply a declared slot or necessary query adapter; it does not introduce its own page chrome. List workbenches use two stable rows: editorial identity and count beside primary actions, then search, active filter chips, a Filters disclosure, and a single manifest-driven view menu. Inactive filters stay inside the disclosure. Full filtered totals and suggestion sweep/review status share one compact wrapping strip directly above the records; errors and diagnostics remain visible with their controls. Phone query tools get their own full-width row and retain the filter/sort sheet. The external USDA catalog remains an external-reference exception.
 
 A complete record uses a clear human identity, optional true media, compact metadata, declared facts, direct relationships, supporting evidence, and actions the entity can actually perform. An inspector is a bounded preview of the loaded record and its direct context, never a second canonical detail page or a separate batch selection state. A row click inspects; a checkbox selects for batch work.
 

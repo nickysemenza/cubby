@@ -44,6 +44,38 @@ function renderBar(
 }
 
 describe("FilterBar", () => {
+  it("keeps active filters visible while inactive filters remain reachable through Filters", async () => {
+    const onChange = vi.fn();
+    render(
+      <FilterBar
+        collapsed
+        fields={fields}
+        filters={[
+          {
+            id: "filter-status",
+            field: "status",
+            operator: "is",
+            values: ["open"],
+          },
+        ]}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Status: Open" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Name: any" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Name: any" }));
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Filter Name" }),
+      { target: { value: "brush" } },
+    );
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "status", values: ["open"] }),
+        expect.objectContaining({ field: "name", values: ["brush"] }),
+      ]),
+    );
+  });
   it("renders one chip per declared field, inactive ones reading 'any'", () => {
     renderBar([
       {

@@ -604,7 +604,8 @@ export type FieldSuggestion = z.infer<typeof fieldSuggestionSchema>;
  * `resolved` (inheritance already answers the field — see
  * `fieldResolutions`). `evaluated` means it answered: `pick` chose a
  * candidate (the proposal is in `suggestions`), `none` declined every
- * candidate (a fill target) or kept every entry (a prune target).
+ * candidate (a fill target), withheld a pick under suggestion policy, or kept
+ * every entry (a prune target).
  */
 export const fieldSuggestionOutcomeSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -616,7 +617,8 @@ export const fieldSuggestionOutcomeSchema = z.discriminatedUnion("kind", [
     answer: z.enum(["pick", "none"]),
     confidence,
     /** Calibrated probability of `answer` — the winner's for a pick, `none`'s
-     * for a decline. Null only on the roster-overflow chat tier. */
+     * for a decline. Null on the roster-overflow chat tier or a policy decline
+     * without a calibrated probability. */
     probability: z.number().min(0).max(1).nullable(),
     /** Ranked runners-up; for a decline, the closest calls. */
     alternatives: z.array(fieldSuggestionAlternativeSchema).default([]),

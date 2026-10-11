@@ -1,31 +1,20 @@
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
 
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { pollUntil } from "@cubby/shared/retry";
-import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import type { TestHarness } from "wrangler";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createE2EDatabase } from "../tests/e2e/e2e-database";
 import { createE2EWorkerRuntime } from "../tests/e2e/e2e-worker-runtime";
 import { createE2EObjectStorage } from "./local-object-storage";
-import { scenarioControls } from "./purchase-agent-workerd-harness";
 import { prepareTemplate } from "./test-database-lease";
 import { withTestDb } from "./test-setup";
-import {
-  HOLD_WORKERD_HARNESS_TIMEOUT_MS,
-  holdWorkerdHarness,
-  type WorkerdProfile,
-} from "./workerd-harness";
 import { openWorkerdRuntime, withWorkerdRuntime } from "./workerd-runtime";
+import { expectWriteLands } from "./workerd-runtime-fixtures";
 
-// Failure modes pinned at the real workerd boundary:
-// - a profile silently stops running a real queue consumer (or starts one it
-//   should not), so a lane "passes" without exercising background work;
-// - a runtime points the Worker at the wrong database;
-// - a start that fails partway leaks workerd, a database lease, or the
-//   process environment, and wedges the next start.
+// Failure modes pinned at the real workerd boundary: a start that fails
+// partway leaks workerd, a database lease, or the process environment, and
+// wedges the next start. Profile routing lives in
+// workerd-runtime-profiles.integration.test.ts.
 
 const databaseEnvironmentKeys = [
   "E2E_DATABASE_URL",
@@ -51,225 +40,44 @@ function workerdChildren(): number[] {
     .map(([pid]) => Number(pid));
 }
 
-async function signUp(origin: string) {
-  const email = `runtime-${randomUUID()}@example.test`;
-  const response = await fetch(`${origin}/api/auth/sign-up/email`, {
-    method: "POST",
-    headers: { "content-type": "application/json", Origin: origin },
-    body: JSON.stringify({
-      email,
-      password: "synthetic-runtime-password",
-      name: "Synthetic Runtime Member",
-    }),
-  });
-  if (!response.ok)
-    throw new Error(`Sign-up ${response.status}: ${await response.text()}`);
-  return email;
-}
-
-async function hasUser(databaseUrl: string, email: string) {
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
-  try {
-    const { rows } = await pool.query('SELECT 1 FROM "user" WHERE email = $1', [
-      email,
-    ]);
-    return rows.length === 1;
-  } finally {
-    await pool.end();
-  }
-}
-
-// What each real consumer logs for a body it cannot parse. Peers that drop
-// messages log nothing, and an unconsumed queue never delivers.
-const queues = {
-  "cubby-background": {
-    producer: "BACKGROUND_QUEUE",
-    consumerLog: "[background-tasks] unreadable message",
-  },
-  "cubby-telemetry": {
-    producer: "TELEMETRY_QUEUE",
-    consumerLog: "[telemetry] dropped invalid queue message",
-  },
-  "cubby-purchase-agent": {
-    producer: "PURCHASE_AGENT_QUEUE",
-    consumerLog: "[purchase-agent] queue event was not dispatched",
-  },
-} as const;
-/** A queue producer binding, reached from Node through `getEnv()`. */
-type QueueSend = {
-  send(body: { probe: string } | PurchaseAgentEvent): Promise<void>;
-};
-
-/**
- * Send an unreadable probe on every production queue through the Worker's own
- * producers and return the queues whose real consumer handled it.
- */
-async function realConsumers(harness: TestHarness, expected: string[]) {
-  const env = await harness.getWorker<Record<string, QueueSend>>().getEnv();
-  harness.clearLogs();
-  for (const { producer } of Object.values(queues))
-    await env[producer]?.send({ probe: randomUUID() });
-  const consumed = () =>
-    Object.entries(queues)
-      .filter(([, { consumerLog }]) =>
-        harness.getLogs().some((log) => log.message.includes(consumerLog)),
-      )
-      .map(([queue]) => queue);
-  await pollUntil(
-    () =>
-      expected.every((queue) => consumed().includes(queue)) ? true : undefined,
-    { label: `real consumers ${expected.join(", ")}`, timeoutMs: 20_000 },
-  );
-  // A consumer that should not exist gets the same grace to show up.
-  await new Promise((resolve) => setTimeout(resolve, 1_000));
-  return consumed();
-}
-
 const ctx = withTestDb();
-let releaseHarness: (() => Promise<void>) | undefined;
-beforeAll(async () => {
-  releaseHarness = await holdWorkerdHarness();
-  await prepareTemplate("browser");
-}, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
-afterAll(() => releaseHarness?.());
-
-async function start(profile: WorkerdProfile) {
-  const { runtime } = await openWorkerdRuntime(
-    {
-      profile,
-      database: { borrowed: ctx.databaseUrl },
-      objectStorage: {},
-    },
-    async () => undefined,
-  );
-  return runtime;
-}
-
-/** Authenticate, write through the Worker, and find the write in this database. */
-async function expectWriteLands(started: {
-  origin: string;
-  databaseUrl: string;
-}) {
-  const email = await signUp(started.origin);
-  expect(await hasUser(started.databaseUrl, email)).toBe(true);
-}
-
-describe("workerd test runtime profiles", () => {
-  it("offline drops background work and runs no consumer", async () => {
-    const started = await start("offline");
-    try {
-      await expectWriteLands(started);
-      expect(await realConsumers(started.harness, [])).toEqual([]);
-    } finally {
-      await started.close();
-    }
-  }, 120_000);
-
-  it("gmail runs the real background consumer against the local Google provider", async () => {
-    const started = await start("gmail");
-    try {
-      await expectWriteLands(started);
-      const env = await started.harness
-        .getWorker<{ E2E_GOOGLE_PROVIDER_URL: string }>()
-        .getEnv();
-      expect(env.E2E_GOOGLE_PROVIDER_URL).toBe(started.googleProvider?.url);
-      expect(
-        await realConsumers(started.harness, ["cubby-background"]),
-      ).toEqual(["cubby-background"]);
-    } finally {
-      await started.close();
-    }
-  }, 120_000);
-
-  it("purchase-agent runs the real agent and telemetry consumers with scripted peers", async () => {
-    const started = await start("purchase-agent");
-    try {
-      await expectWriteLands(started);
-      const controls = scenarioControls(started.harness);
-      await controls.configure({ steps: [] });
-      expect(await controls.violations()).toEqual([]);
-      expect(
-        await realConsumers(started.harness, [
-          "cubby-telemetry",
-          "cubby-purchase-agent",
-        ]),
-      ).toEqual(["cubby-telemetry", "cubby-purchase-agent"]);
-    } finally {
-      await started.close();
-    }
-  }, 120_000);
-
-  it("coupled runs every real consumer", async () => {
-    const started = await start("coupled");
-    try {
-      await expectWriteLands(started);
-      expect(
-        await realConsumers(started.harness, [
-          "cubby-background",
-          "cubby-telemetry",
-          "cubby-purchase-agent",
-        ]),
-      ).toEqual([
-        "cubby-background",
-        "cubby-telemetry",
-        "cubby-purchase-agent",
-      ]);
-    } finally {
-      await started.close();
-    }
-  }, 120_000);
-});
+beforeAll(() => prepareTemplate("browser"), 120_000);
 
 describe("workerd test runtime lifecycle", () => {
-  // Caller-owned storage must survive both normal close and failed prepare;
+  // Caller-owned storage survives close (here) and a failed prepare (below);
   // its public URL can differ from the S3 endpoint.
-  it.each([false, true])(
-    "borrows storage without closing it (prepare fails: %s)",
-    async (prepareFails) => {
-      const storage = await createE2EObjectStorage();
-      try {
-        const opened = openWorkerdRuntime(
-          {
-            profile: "offline",
-            database: { borrowed: ctx.databaseUrl },
-            objectStorage: {
-              borrowed: {
-                endpoint: storage.url,
-                publicUrl: "https://objects.example.test",
-              },
+  it("borrows storage without closing it", async () => {
+    const storage = await createE2EObjectStorage();
+    try {
+      const { runtime } = await openWorkerdRuntime(
+        {
+          profile: "offline",
+          database: { borrowed: ctx.databaseUrl },
+          objectStorage: {
+            borrowed: {
+              endpoint: storage.url,
+              publicUrl: "https://objects.example.test",
             },
           },
-          async (runtime) => {
-            const env = await runtime.harness
-              .getWorker<{ R2_ENDPOINT: string; R2_PUBLIC_URL: string }>()
-              .getEnv();
-            expect(env.R2_ENDPOINT).toBe(storage.url);
-            expect(env.R2_PUBLIC_URL).toBe("https://objects.example.test");
-            if (prepareFails)
-              throw new Error("synthetic borrowed prepare failure");
-          },
-        );
-        const outcome = await opened.then(
-          async ({ runtime }) => {
-            await runtime.close();
-            await runtime.close();
-            return "closed";
-          },
-          (error) => (error instanceof Error ? error.message : String(error)),
-        );
-        expect(outcome).toBe(
-          prepareFails ? "synthetic borrowed prepare failure" : "closed",
-        );
-        await storage.bucket.put("survives-close", "synthetic object");
-        expect(await (await storage.bucket.get("survives-close"))?.text()).toBe(
-          "synthetic object",
-        );
-      } finally {
-        await storage.close();
-      }
-    },
-    120_000,
-  );
+        },
+        async (started) => {
+          const env = await started.harness
+            .getWorker<{ R2_ENDPOINT: string; R2_PUBLIC_URL: string }>()
+            .getEnv();
+          expect(env.R2_ENDPOINT).toBe(storage.url);
+          expect(env.R2_PUBLIC_URL).toBe("https://objects.example.test");
+        },
+      );
+      await runtime.close();
+      await runtime.close();
+      await storage.bucket.put("survives-close", "synthetic object");
+      expect(await (await storage.bucket.get("survives-close"))?.text()).toBe(
+        "synthetic object",
+      );
+    } finally {
+      await storage.close();
+    }
+  }, 120_000);
 
   it("a start that fails partway leaks nothing and the next start works", async () => {
     const before = environment();
@@ -317,7 +125,6 @@ describe("workerd test runtime lifecycle", () => {
       profile: "offline",
       publish: () => Promise.reject(new Error("synthetic publish failure")),
       models: undefined,
-      prepareFails: false,
       error: /synthetic publish failure/u,
     },
     {
@@ -325,20 +132,11 @@ describe("workerd test runtime lifecycle", () => {
       profile: "purchase-agent",
       publish: undefined,
       models: { agent: { main: "tooling/synthetic-missing-model-peer.ts" } },
-      prepareFails: false,
       error: /synthetic-missing-model-peer/u,
-    },
-    {
-      step: "preparing the listening runtime",
-      profile: "offline",
-      publish: undefined,
-      models: undefined,
-      prepareFails: true,
-      error: /synthetic prepare failure/u,
     },
   ] as const)(
     "a failure while $step releases everything acquired before it",
-    async ({ profile, publish, models, prepareFails, error }) => {
+    async ({ profile, publish, models, error }) => {
       const before = environment();
       const workerdBefore = workerdChildren().length;
       let released = 0;
@@ -361,9 +159,7 @@ describe("workerd test runtime lifecycle", () => {
             objectStorage: { publish },
             models,
           },
-          async () => {
-            if (prepareFails) throw new Error("synthetic prepare failure");
-          },
+          async () => undefined,
         ),
       ).rejects.toThrow(error);
       expect(released).toBe(1);
@@ -375,6 +171,60 @@ describe("workerd test runtime lifecycle", () => {
     },
     120_000,
   );
+
+  it("a failure while preparing the listening runtime releases everything acquired before it, but not borrowed storage", async () => {
+    const storage = await createE2EObjectStorage();
+    try {
+      const before = environment();
+      const workerdBefore = workerdChildren().length;
+      let released = 0;
+      await expect(
+        openWorkerdRuntime(
+          {
+            profile: "offline",
+            database: {
+              lease: async () => {
+                const lease = await createE2EDatabase();
+                return {
+                  ...lease,
+                  close: () => {
+                    released += 1;
+                    return lease.close();
+                  },
+                };
+              },
+            },
+            objectStorage: {
+              borrowed: {
+                endpoint: storage.url,
+                publicUrl: "https://objects.example.test",
+              },
+            },
+          },
+          async (started) => {
+            const env = await started.harness
+              .getWorker<{ R2_ENDPOINT: string; R2_PUBLIC_URL: string }>()
+              .getEnv();
+            expect(env.R2_ENDPOINT).toBe(storage.url);
+            expect(env.R2_PUBLIC_URL).toBe("https://objects.example.test");
+            throw new Error("synthetic prepare failure");
+          },
+        ),
+      ).rejects.toThrow(/synthetic prepare failure/u);
+      expect(released).toBe(1);
+      expect(environment()).toEqual(before);
+      await pollUntil(
+        () => (workerdChildren().length === workerdBefore ? true : undefined),
+        { label: "workerd exited after the failed prepare", timeoutMs: 20_000 },
+      );
+      await storage.bucket.put("survives-failure", "synthetic object");
+      expect(await (await storage.bucket.get("survives-failure"))?.text()).toBe(
+        "synthetic object",
+      );
+    } finally {
+      await storage.close();
+    }
+  }, 120_000);
 
   // The live evals run billed cases inside `withWorkerdRuntime`; a case or
   // report failure after startup must still stop workerd before Vitest

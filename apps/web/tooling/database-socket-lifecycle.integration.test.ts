@@ -27,12 +27,20 @@ const censusGroup = z.object({
   oldestStateSeconds: z.number().nullable(),
 });
 
-// Request pools can legitimately retain young idle clients for pg-pool's ten
-// second timeout. A background standalone client has no such idle timer:
-// repeated freshness writes must not accumulate old idle sockets indefinitely.
+// Request pools can legitimately retain young idle clients for pg-pool's idle
+// timeout (shortened here; production's is ten seconds). A background
+// standalone client has no such idle timer: repeated freshness writes must not
+// accumulate old idle sockets indefinitely. Each quiet window outlasts the
+// pool's idle timeout, so only a socket nothing will ever close remains.
+const POOL_IDLE_TIMEOUT_MS = 500;
+const QUIET_MS = 3 * POOL_IDLE_TIMEOUT_MS;
 it("real Worker reads and freshness writes release database sockets after quiet", async () => {
   await withWorkerdRuntime(
-    { profile: "offline", database: { borrowed: ctx.databaseUrl } },
+    {
+      profile: "offline",
+      database: { borrowed: ctx.databaseUrl },
+      poolIdleTimeoutMs: POOL_IDLE_TIMEOUT_MS,
+    },
     async ({ origin: baseURL }) => {
       const api = await request.newContext({
         baseURL,
@@ -108,7 +116,7 @@ it("real Worker reads and freshness writes release database sockets after quiet"
           await reads();
           await census("warm load");
           // This delay observes real socket expiry, not readiness of a UI control.
-          await delay(12_000);
+          await delay(QUIET_MS);
           const baseline = await census("warm quiet");
           const quietSamples = [];
           for (let round = 1; round <= 3; round++) {
@@ -121,7 +129,7 @@ it("real Worker reads and freshness writes release database sockets after quiet"
             }).toMatchObject({ status: 200 });
             await reads();
             await census(`round ${round} load`);
-            await delay(12_000);
+            await delay(QUIET_MS);
             quietSamples.push(await census(`round ${round} quiet`));
           }
           for (const sample of quietSamples)

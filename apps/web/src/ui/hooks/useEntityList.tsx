@@ -595,6 +595,9 @@ export function useEntityList<
   }, [allColumns, columnVisibility, entity]);
 
   const deferredFieldKey = JSON.stringify(infiniteResult.deferredFields);
+  const progressiveCellCache = useRef(
+    new Map<string, { source: unknown; fields: string; cell: unknown }>(),
+  );
   const progressiveColumns = useMemo(() => {
     const deferredFields = new Set(
       z.array(z.string()).parse(JSON.parse(deferredFieldKey)),
@@ -613,6 +616,24 @@ export function useEntityList<
           fields
             .map((field) => enrichmentState(row.id, field))
             .find((state) => state && state.state !== "ready");
+        const id = listReadColumnId(column);
+        const fieldsKey = JSON.stringify(fields);
+        const cached = progressiveCellCache.current.get(id);
+        // SAFETY: reuse requires the same source renderer and field signature
+        // for the same column, preserving its captured accessor value type.
+        const cell: typeof column.cell =
+          cached && cached.source === column.cell && cached.fields === fieldsKey
+            ? (cached.cell as typeof column.cell)
+            : (info) => (
+                <DeferredListValue state={stateFor(info.row.original)}>
+                  {flexRender(column.cell, info)}
+                </DeferredListValue>
+              );
+        progressiveCellCache.current.set(id, {
+          source: column.cell,
+          fields: fieldsKey,
+          cell,
+        });
         add({
           ...column,
           meta: attachCubbyColumnMeta<TData>({
@@ -622,14 +643,7 @@ export function useEntityList<
               ? (row) => (stateFor(row) ? [] : meta.entityRefs!(row))
               : undefined,
           }),
-          cell: (info) => {
-            const state = stateFor(info.row.original);
-            return (
-              <DeferredListValue state={state}>
-                {flexRender(column.cell, info)}
-              </DeferredListValue>
-            );
-          },
+          cell,
         });
       }),
     );

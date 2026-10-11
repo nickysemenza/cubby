@@ -22,7 +22,6 @@ describe("purchase reconciliation statuses", () => {
     );
 
     const label = screen.getByText("Refund-adjusted -$127.10");
-    expect(label.parentElement).toHaveClass("inline-flex", "rounded-full");
     expect(label.parentElement).toHaveStyle("--enum-pill-color: var(--slate)");
   });
 
@@ -60,7 +59,6 @@ describe("purchase reconciliation statuses", () => {
 
     // "Settled", not the raw `match` enum this status used to interpolate.
     const label = screen.getByText("Settled · 2");
-    expect(label.parentElement).toHaveClass("rounded-full");
     expect(label.parentElement).toHaveStyle(
       "--enum-pill-color: var(--positive)",
     );

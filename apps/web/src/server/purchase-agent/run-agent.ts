@@ -55,7 +55,7 @@ import type {
   RunServices,
 } from "./environment";
 import { workflowForRun } from "./import-run-workflows";
-import { RunSettlement } from "./run-settlement";
+import { RunSettlement, SETTLEMENT_POLL_MS } from "./run-settlement";
 import { renderSignal } from "./signals";
 import { runAgentTools } from "./tools";
 
@@ -145,6 +145,7 @@ export class PurchaseImportRunAgent
       },
       receivedEventIds: () => this.receivedEventIds(),
     },
+    () => this.agentEnv.settlementPollMs ?? SETTLEMENT_POLL_MS,
   );
 
   constructor(

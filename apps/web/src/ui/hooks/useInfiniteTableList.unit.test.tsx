@@ -52,6 +52,89 @@ afterEach(() => {
 });
 
 describe("useInfiniteTableList", () => {
+  // Invalidation must retire stale reads without replacing hydrated cells
+  // with skeletons while either the base page or enrichment is refreshing.
+  it("retains hydrated cells throughout mutation invalidation and refresh", async () => {
+    const wrapper = createWrapper();
+    const client = clients.at(-1)!;
+    const baseRefresh = Promise.withResolvers<ListQueryResponse<TestRow>>();
+    const enrichmentRefresh =
+      Promise.withResolvers<
+        import("./progressive-list").ListEnrichmentResponse
+      >();
+    const initial = {
+      ...page("first", 0, 1),
+      deferredGroups: [{ id: "derived" as const, fields: ["count"] }],
+    };
+    let baseReads = 0;
+    let enrichmentReads = 0;
+    const queryOptions = () => ({
+      queryKey: ["hydrated-mutation"],
+      meta: { cacheTags: entityRipple("product") },
+      execute: async () => (++baseReads === 1 ? initial : baseRefresh.promise),
+      progressive: {
+        enrich: async () =>
+          ++enrichmentReads === 1
+            ? {
+                groups: [
+                  {
+                    id: "derived" as const,
+                    state: "ready" as const,
+                    data: [{ id: "first", count: 1 }],
+                  },
+                ],
+                missingIds: [],
+              }
+            : enrichmentRefresh.promise,
+        summary: async () => ({ count: 1 }),
+      },
+    });
+    const { result } = renderHook(
+      () =>
+        useInfiniteTableList({
+          queryOptions,
+          buildFilters: () => ({}),
+          tableState,
+        }),
+      { wrapper },
+    );
+    await waitFor(() =>
+      expect(result.current.data).toEqual([{ id: "first", count: 1 }]),
+    );
+    await waitFor(() => expect(result.current.sums).toEqual({ count: 1 }));
+    let refresh: Promise<void>;
+    act(() => {
+      refresh = invalidateOperationTags(client, entityRipple("product"));
+    });
+    await waitFor(() => expect(baseReads).toBe(2));
+    expect(result.current.sums).toEqual({ count: 1 });
+    expect(result.current.summaryState).toEqual({ state: "ready" });
+    expect(result.current.enrichmentState?.("first", "count")).toEqual({
+      state: "ready",
+    });
+    expect(result.current.data).toEqual([{ id: "first", count: 1 }]);
+    await act(async () => {
+      baseRefresh.resolve(initial);
+      await refresh;
+    });
+    await waitFor(() => expect(enrichmentReads).toBeGreaterThan(1));
+    expect(result.current.enrichmentState?.("first", "count")).toEqual({
+      state: "ready",
+    });
+    expect(result.current.data).toEqual([{ id: "first", count: 1 }]);
+    await act(async () =>
+      enrichmentRefresh.resolve({
+        groups: [
+          { id: "derived", state: "ready", data: [{ id: "first", count: 2 }] },
+        ],
+        missingIds: [],
+      }),
+    );
+    await waitFor(() =>
+      expect(result.current.data).toEqual([{ id: "first", count: 2 }]),
+    );
+  });
+
   it("invalidates the generated base catalog plan after an entity mutation", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: Infinity } },

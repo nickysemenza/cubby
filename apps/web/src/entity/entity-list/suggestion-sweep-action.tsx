@@ -85,7 +85,10 @@ export function SuggestionSweepAction({
   const progress = parsedProgress.success ? parsedProgress.data : null;
   if (fields.length === 0) return null;
   return (
-    <div className="flex items-center gap-2" aria-label="Suggestion sweep">
+    <div
+      className="flex min-w-0 items-center gap-2"
+      aria-label="Suggestion sweep"
+    >
       {start.isPending || current?.status === "running" ? (
         <>
           <output className="text-xs text-muted-foreground">
@@ -94,7 +97,7 @@ export function SuggestionSweepAction({
           {current?.latestRunId && (
             <Button
               size="sm"
-              variant="outline"
+              variant="ghost"
               onClick={() =>
                 void (current.paused
                   ? resume.mutateAsync({ runId: current.latestRunId! })
@@ -108,7 +111,7 @@ export function SuggestionSweepAction({
       ) : (
         <Button
           size="sm"
-          variant="outline"
+          variant="ghost"
           disabled={start.isPending}
           onClick={() =>
             start.mutate({

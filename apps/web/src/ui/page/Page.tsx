@@ -50,16 +50,21 @@ const PageIdentityContext = createContext<PageIdentity | null>(null);
 const isTextTitle = (value: ReactNode): value is string =>
   typeof value === "string";
 
-/** Portal target for table-owned Display and Saved views controls. */
-export function usePageWorkbenchTarget(): HTMLDivElement | null {
+/** Stable slots for table-owned query tools, actions, and suggestion status. */
+export function usePageWorkbenchTarget(
+  slot: "utilities" | "actions" | "status" = "utilities",
+  enabled = true,
+): HTMLDivElement | null {
   const [target, setTarget] = useState<HTMLDivElement | null>(null);
   // Portal placement must finish before the inline toolbar can accept edits:
   // moving it later remounts the filter input and discards its pending draft.
   useLayoutEffect(() => {
     setTarget(
-      document.querySelector<HTMLDivElement>("[data-workbench-utilities]"),
+      enabled
+        ? document.querySelector<HTMLDivElement>(`[data-workbench-${slot}]`)
+        : null,
     );
-  }, []);
+  }, [slot, enabled]);
   return target;
 }
 
@@ -83,7 +88,7 @@ export function usePageDetailContext() {
 
 /**
  * Report a list's true filtered record count up to the enclosing `<Page>`
- * header, rendered as "1,240 EXPENSES" at the end of the eyebrow line. Pass
+ * header, beside the title as "1,240 expenses" in a workbench. Pass
  * `useEntityList`'s `totalCount`.
  *
  * Effect-based and client-only by design: SSR/first paint renders with no
@@ -133,7 +138,7 @@ interface PageListProps extends PageBaseProps {
    * renderers, so page identity and primary actions never jump with the view.
    */
   listChrome?: "hero" | "workbench";
-  /** View/mode control rendered in the workbench's first tier. */
+  /** View/mode control rendered beside the workbench query tier. */
   workbenchControls?: ReactNode;
   /** Today keeps its compact greeting visible; other phone route titles live in the contextual bar. */
   mobileTitleVisible?: boolean;
@@ -218,6 +223,7 @@ function ListPageShell(props: PageListProps) {
         <PageIdentityContext.Provider value={identity}>
           <ListPageBody
             bodyGutter={bodyGutter}
+            workbench={listChrome === "workbench"}
             loadingLabel={loadingLabel}
             setCount={setCount}
           >
@@ -231,11 +237,13 @@ function ListPageShell(props: PageListProps) {
 
 function ListPageBody({
   bodyGutter,
+  workbench,
   children,
   loadingLabel,
   setCount,
 }: {
   bodyGutter: PageListProps["bodyGutter"];
+  workbench: boolean;
   children: ReactNode;
   loadingLabel: string;
   setCount: React.Dispatch<React.SetStateAction<number | undefined>>;
@@ -246,7 +254,7 @@ function ListPageBody({
         <Suspense fallback={<ListLoadingSkeleton label={loadingLabel} />}>
           <div
             className={cn(
-              "space-y-2 md:space-y-8",
+              workbench ? "space-y-0" : "space-y-2 md:space-y-8",
               bodyGutter === "standard" && "px-2 md:px-6",
             )}
           >

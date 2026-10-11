@@ -14,7 +14,7 @@ import type { WishCandidateOut, WishListItemOut } from "@cubby/schemas/wish";
  * product shortcode would make those wishes share row state. `productId` keeps
  * the real shortcode for the detail link.
  */
-export type WishRow =
+export type WishRow = (
   | {
       kind: "wish";
       id: string;
@@ -32,7 +32,9 @@ export type WishRow =
       name: string;
       productId: WishCandidateOut["id"];
       candidate: WishCandidateOut;
-    };
+    }
+) &
+  Pick<WishListItemOut, "createdAt" | "updatedAt">;
 
 /**
  * Nest each wish's candidates as its child rows.
@@ -48,6 +50,8 @@ export const buildWishRows = (wishes: readonly WishListItemOut[]): WishRow[] =>
     entityKind: "wish",
     previewId: wish.id,
     name: wish.name,
+    createdAt: wish.createdAt,
+    updatedAt: wish.updatedAt,
     wish,
     subRows: (wish.candidates ?? []).map((candidate) => ({
       kind: "candidate",
@@ -55,6 +59,8 @@ export const buildWishRows = (wishes: readonly WishListItemOut[]): WishRow[] =>
       entityKind: "product",
       previewId: candidate.id,
       name: candidate.name,
+      createdAt: candidate.createdAt,
+      updatedAt: candidate.updatedAt,
       productId: candidate.id,
       candidate,
     })),

@@ -251,10 +251,12 @@ struct NativeListAdaptersTests {
         CookbookSummary(
             id: "CKB-1", name: "Alpha Cookbook", author: ["Author A"], subjects: ["Soup"],
             recipeCount: 1, sourceRecipeCount: 1, needsReextract: false,
+            createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0),
             dataQuality: completeDataQuality, displayImages: []),
         CookbookSummary(
             id: "CKB-2", name: "Beta Cookbook", author: ["Author B"], subjects: ["Bread"],
             recipeCount: 2, sourceRecipeCount: 2, needsReextract: false,
+            createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0),
             dataQuality: completeDataQuality, displayImages: []),
     ]
 

@@ -19,8 +19,6 @@ import { escapeRegExp, gotoAuthenticatedPage } from "./e2e-helpers";
 import { prepareCapturedRetailerOrder } from "./prepare-retailer-source";
 import { expect, test } from "./e2e-test";
 
-test.use({ workerdProfile: "gmail" });
-
 // Signed refund/group allocations must conserve actual CSV activity without
 // auto-booking Expense, duplicating retries, or creating owned Inventory.
 test("reviews CSV charge groups and refunds against captured retailer orders", async ({

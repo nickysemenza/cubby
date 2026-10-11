@@ -206,10 +206,21 @@ struct LibraryMetadataSyncTests {
         for page in 1...3 {
             await pages.arrivals(page)
             #expect(inFlight.withLock { $0 } == 1)
+            #expect(
+                try await store.librarySightingsSent(
+                    host: "cubby.example", version: LibraryMetadataSync.version
+                ).count == (page - 1) * 50)
             pages.release()
         }
         await sync.idle()
         #expect(maxObserved.withLock { $0 } == 1)
+        #expect(sizes.withLock { $0 } == [50, 50, 20])
+        #expect(
+            try await store.librarySightingsSent(
+                host: "cubby.example", version: LibraryMetadataSync.version
+            ).count == 120)
+        sync.reconcile()
+        await sync.idle()
         #expect(sizes.withLock { $0 } == [50, 50, 20])
     }
 

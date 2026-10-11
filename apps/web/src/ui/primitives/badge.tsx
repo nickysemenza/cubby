@@ -2,11 +2,15 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "~/lib/utils";
+import { pillVariants } from "~/ui/primitives/pill";
 
 // Compact statuses pair text with a quiet tinted chip. Domain color remains a
 // separate wayfinding channel and is never substituted for status meaning.
 const badgeVariants = cva(
-  "h-5 gap-1 rounded-full border px-1.5 py-0.5 text-2xs font-medium transition-colors duration-150 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&>svg]:size-2.5! inline-flex items-center justify-center w-fit whitespace-nowrap shrink-0 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[2px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive overflow-hidden group/badge",
+  cn(
+    pillVariants({ mode: "value" }),
+    "gap-1 leading-none transition-colors duration-150 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&>svg]:size-2.5! justify-center w-fit whitespace-nowrap shrink-0 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[2px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive overflow-hidden group/badge",
+  ),
   {
     variants: {
       variant: {

@@ -86,6 +86,16 @@ List actions must accept the base row before progressive enrichment arrives.
 Merge row guards validate the owner identifier and required display fields;
 optional statistics such as a Product barcode cannot gate opening the dialog.
 
+Same-query list refreshes retain completed enrichment while cancelling obsolete
+reads. Invalidation and base-page refetch must not turn loaded cells back into
+skeletons; filter/sort scope changes must not reuse another scope's enrichment.
+Fresh enrichment replaces retained values, and failures still expose diagnostics.
+The same scope retains completed totals during refresh. Related previews send
+at most 1000 source IDs per request and send none when no relation is visible;
+loading and raw read errors belong to the affected batch's cells.
+Live suggestions wait for their target projection; an absent deferred field is
+not an empty saved value. Explicit nulls and resolved references remain eligible.
+
 Lists, filtering, sorting, totals, and pagination belong on the server. A saved
 view is visible manifest-backed URL state; `scopeFilters` is only a visible
 contextual scope. Missing filters never widen a query; renderer omissions are

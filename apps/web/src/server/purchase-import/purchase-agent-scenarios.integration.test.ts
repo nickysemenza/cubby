@@ -30,19 +30,7 @@ import {
   type ScriptStep,
 } from "tooling/purchase-agent-script";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
-import {
-  HOLD_WORKERD_HARNESS_TIMEOUT_MS,
-  holdWorkerdHarness,
-} from "tooling/workerd-harness";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
@@ -114,11 +102,6 @@ const readScenarioEvidence = async (active: ScenarioHarness | undefined) => ({
 
 describe("current purchase-agent system boundaries", () => {
   const ctx = withTestDb();
-  let releaseHarness: (() => Promise<void>) | undefined;
-  beforeAll(async () => {
-    releaseHarness = await holdWorkerdHarness();
-  }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
-  afterAll(() => releaseHarness?.());
   beforeEach(() => {
     identity = captureE2ERunIdentity(repoRoot);
     began = Date.now();

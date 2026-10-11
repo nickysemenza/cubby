@@ -47,13 +47,16 @@ function RelatedEntityLink({
 export function RelatedPreviewCell({
   group,
   loading,
+  error,
 }: {
   group?: RelatedPreviewGroup;
   loading: boolean;
+  error?: Error;
 }) {
   if (loading) {
     return <span className="text-muted-foreground">…</span>;
   }
+  if (error) return <span className="text-destructive">{error.message}</span>;
   if (!group || group.totalCount === 0) return <NoneValue />;
   const overflow = group.totalCount - group.items.length;
   return (

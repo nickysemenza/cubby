@@ -217,6 +217,8 @@ describe("wishCandidateItems", () => {
           model: "CI-12",
           price: 34.5,
           inventoried: true,
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
         },
         {
           id: panId,
@@ -225,6 +227,8 @@ describe("wishCandidateItems", () => {
           model: null,
           price: null,
           inventoried: false,
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
         },
       ]),
     ).toEqual([

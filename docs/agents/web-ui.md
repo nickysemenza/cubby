@@ -66,6 +66,8 @@ shell; detail bodies use `DetailSections`.
 Column factories reuse module-level render components for selection controls:
 `flexRender` treats callbacks as React component types, so refreshing column
 metadata must not remount a focused row or header checkbox.
+Standard editable cell renderers also retain their identity when filter rosters
+or related-column metadata refresh; open drafts and focus survive those reads.
 
 Component traps that typecheck cannot catch: `DropdownMenuLabel` crashes at
 runtime unless wrapped in `DropdownMenuGroup` (Base UI, not Radix). A column
@@ -74,6 +76,8 @@ renderer, never `info.getValue()` — TanStack Table freezes accessor results in
 `row._valuesCache` and rebuilds rows only on data changes. Every entity
 hovercard renders through one `ManifestCard`; an image appears only when the
 entity's `toXCard` spec pushes a `{kind: "thumb"}` block.
+Base UI `useRender` wrappers retain their default tag's prop types; put
+button-only props on the button supplied through `render`.
 
 For component-level exceptions and examples, load the relevant heading in [the
 preserved web UI reference](web-ui-reference.md).

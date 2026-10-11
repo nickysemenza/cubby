@@ -54,7 +54,7 @@ export function ListTotalSummary({
   }));
   if (values.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm">
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
       <span className="text-muted-foreground">All matching</span>
       {state?.state === "error" && (
         <span role="alert" className="text-destructive">
@@ -71,7 +71,7 @@ export function ListTotalSummary({
           )}
         </>
       )}
-      <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+      <dl className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         {values.map(({ id, label, value }) => (
           <div key={id} className="flex min-w-0 items-baseline gap-1.5">
             <dt className="text-muted-foreground">{label}</dt>

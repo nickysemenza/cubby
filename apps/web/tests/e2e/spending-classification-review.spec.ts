@@ -296,9 +296,11 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(async () => {
     if (!(await page.locator('[data-slot="popover-content"]').isVisible()))
       await tableExplanation.click();
+    // Short attempts: an early click can miss hydration, and the default
+    // expect timeout would spend the whole budget before the retry click.
     await expect(
       page.getByText("Resolution order", { exact: true }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 2_000 });
   }).toPass();
   const winningValue = page
     .locator('[data-slot="popover-content"] [data-role="wins"]')
@@ -333,9 +335,11 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(async () => {
     if (!(await page.locator('[data-slot="popover-content"]').isVisible()))
       await phoneExplanation.click();
+    // Short attempts: an early click can miss hydration, and the default
+    // expect timeout would spend the whole budget before the retry click.
     await expect(
       page.getByText("Resolution order", { exact: true }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 2_000 });
   }).toPass();
   expect(
     await winningLabel.evaluate((label) => label.scrollWidth),
@@ -359,7 +363,7 @@ test("reviews historical item classification and preserves explicit purpose", as
       await phoneExplanation.click();
     await expect(
       page.getByText("Resolution order", { exact: true }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 2_000 });
   }).toPass();
   await expect(page.getByText("Blocked", { exact: true })).toBeVisible();
 });

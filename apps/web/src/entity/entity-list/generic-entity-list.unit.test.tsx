@@ -203,10 +203,11 @@ describe("listPage", () => {
         link.path,
       );
     }
-    const switcher = screen.getByRole("group", { name: "Recipes view" });
+    fireEvent.click(screen.getByRole("button", { name: /Recipes view:/ }));
+    const switcher = await screen.findByRole("menu");
     expect(
       within(switcher)
-        .getAllByRole("button")
+        .getAllByRole("menuitem")
         .map((option) => option.getAttribute("aria-label")),
     ).toEqual(["List view", "Cards view", "Compact view"]);
   });
@@ -214,8 +215,9 @@ describe("listPage", () => {
   it("offers every declared view and marks the `?view=` one selected", async () => {
     // The built-in timeline view: a slot view would mount its own route API.
     await renderListPage("task", "/tasks?view=timeline", []);
-    const switcher = screen.getByRole("group", { name: "Tasks view" });
-    const options = within(switcher).getAllByRole("button");
+    fireEvent.click(screen.getByRole("button", { name: /Tasks view:/ }));
+    const switcher = await screen.findByRole("menu");
+    const options = within(switcher).getAllByRole("menuitem");
     expect(options.map((option) => option.getAttribute("aria-label"))).toEqual(
       entitySummary.task.list.views.flatMap((view) => {
         const label = isSlotListView(view)
@@ -231,8 +233,8 @@ describe("listPage", () => {
       }),
     );
     expect(
-      within(switcher).getByRole("button", { name: "Timeline view" }),
-    ).toHaveAttribute("aria-pressed", "true");
+      within(switcher).getByRole("menuitem", { name: "Timeline view" }),
+    ).toHaveAttribute("aria-current", "true");
   });
 
   it("clears table selection and bulk actions after browsing Cards and returning to List", async () => {
@@ -253,10 +255,18 @@ describe("listPage", () => {
     expect(rowSelection).toBeChecked();
     expect(screen.getByText("1 selected")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: "Cards view" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Ledger parties view:/i }),
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Cards view" }),
+    );
     expect(await screen.findByTestId("entity-card-grid")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: "List view" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Ledger parties view:/i }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "List view" }));
     const restoredRowSelection = await screen.findByRole("checkbox", {
       name: "Select row",
     });

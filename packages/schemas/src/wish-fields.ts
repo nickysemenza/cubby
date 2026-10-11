@@ -1,4 +1,5 @@
 import { moneyNullable } from "./money";
+import { timestampedFields } from "./base-entity";
 import { productShortcode } from "./identifier-fields";
 import { z } from "zod";
 
@@ -9,6 +10,7 @@ export const wishCandidateOut = z.object({
   model: z.string().nullable(),
   price: moneyNullable,
   inventoried: z.boolean(),
+  ...timestampedFields,
 });
 export type WishCandidateOut = z.infer<typeof wishCandidateOut>;
 

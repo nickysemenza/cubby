@@ -28,8 +28,6 @@ import {
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-test.use({ workerdProfile: "gmail" });
-
 // Failure boundaries: OAuth callback must persist its real account, mailbox
 // original acquisition must use its stored credentials and actual MIME evidence, conflicting identities must
 // require an explicit Product decision, and both arrivals must converge after
