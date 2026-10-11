@@ -81,6 +81,27 @@ describe("transient Gmail triage", () => {
     ).toMatchObject({ classification: "uncertain", stage: "rule" });
     expect(choose).toHaveBeenCalledOnce();
   });
+  it.each([
+    '<script type="application/ld+json">{"@type":"Order","orderNumber":"synthetic-order"}</script>',
+    '<a href="https://shop.example/orders/synthetic-order">View details</a>',
+  ])(
+    "preserves HTML evidence omitted from readable text: %s",
+    async (evidence) => {
+      const raw = message(
+        `<html><body>Account update${evidence}</body></html>`,
+      );
+      raw.payload = { ...raw.payload, mimeType: "text/html" };
+      const choose = vi.fn(async () => "unrelated" as const);
+      expect(
+        await routeGmailMessage(
+          raw,
+          normalizeMessage("google-subject", raw),
+          choose,
+        ),
+      ).toMatchObject({ classification: "uncertain", stage: "rule" });
+      expect(choose).toHaveBeenCalledOnce();
+    },
+  );
   it("bounds serialized Unicode and escaped body bytes without broken characters", async () => {
     const raw = message('Receipt 🧾 "\\\n'.repeat(5_000));
     let content = "";

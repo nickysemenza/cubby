@@ -67,7 +67,8 @@ function readableBody(normalized: GmailNormalizedMessage) {
     complete:
       !html ||
       (utf8Bytes(bodyHtml ?? "") < 200 * 1024 &&
-        html.links.length < 500 &&
+        html.links.length === 0 &&
+        html.json_ld.length === 0 &&
         html.json_ld_omitted === 0 &&
         !/<img\b/iu.test(bodyHtml ?? "")),
   };
