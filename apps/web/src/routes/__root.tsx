@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-router";
 import { createClientOnlyFn } from "@tanstack/react-start";
 import * as React from "react";
+import { z } from "zod";
 
 import {
   loadCommandMenu,
@@ -24,6 +25,11 @@ import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { buildMetadataQueryOptions } from "~/lib/build-metadata";
 import { FLAGS } from "~/lib/flags";
+import {
+  isNativeRunEvidence,
+  NativeRunEvidenceContext,
+  NativeWorkspaceBridge,
+} from "~/lib/native-workspace";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import { ErrorDetailsDialogHost } from "~/ui/feedback/error-details-dialog";
 import { AppFooter } from "~/ui/footer";
@@ -77,7 +83,12 @@ interface MyRouterContext {
   queryClient: QueryClient;
 }
 
+const workspaceSearch = z.object({
+  nativeWorkspace: z.literal("run-evidence").optional().catch(undefined),
+});
+
 export const Route = createRootRouteWithContext<MyRouterContext>()({
+  validateSearch: workspaceSearch,
   // Resolve `isAuthed` for nav chrome (MainNav, BottomNav) + the child guards
   // (`/`, `_authenticated`). On the SERVER (SSR / direct + refresh loads) read
   // the signed session cookie in-process so the first paint isn't a flash and
@@ -145,6 +156,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 });
 
 function RootComponent() {
+  const search = Route.useSearch();
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const nativeWorkspace = isNativeRunEvidence(pathname, search.nativeWorkspace);
   const buildMetadata = Route.useLoaderData();
   const footer = <AppFooter metadata={buildMetadata} />;
   const { queryClient } = Route.useRouteContext();
@@ -171,6 +187,7 @@ function RootComponent() {
   // Shell-owned ⌘K hotkey (toggles), so the shortcut works before the lazily
   // loaded menu has mounted. The menu no longer registers its own listener.
   React.useEffect(() => {
+    if (nativeWorkspace) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -182,7 +199,7 @@ function RootComponent() {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [commandMenuOpen]);
+  }, [commandMenuOpen, nativeWorkspace]);
 
   const routeContent = (
     <PerfProfiler id="route">
@@ -199,7 +216,19 @@ function RootComponent() {
         >
           Skip to main content
         </a>
-        {authed && isWorkspaceRoute ? (
+        {nativeWorkspace ? (
+          <main
+            id={mainContentId}
+            tabIndex={-1}
+            data-native-workspace
+            className="w-full min-w-0 [--app-chrome-bottom:0px] [--app-chrome-top:0px]"
+          >
+            <NativeRunEvidenceContext.Provider value>
+              <NativeWorkspaceBridge />
+              {routeContent}
+            </NativeRunEvidenceContext.Provider>
+          </main>
+        ) : authed && isWorkspaceRoute ? (
           <AuthenticatedAppShell
             footer={footer}
             mainContentId={mainContentId}
@@ -226,8 +255,8 @@ function RootComponent() {
             {footer}
           </div>
         )}
-        <BottomNav />
-        {commandMenuMounted && (
+        {!nativeWorkspace && <BottomNav />}
+        {!nativeWorkspace && commandMenuMounted && (
           <React.Suspense fallback={null}>
             <GlobalCommandMenu
               open={commandMenuOpen}

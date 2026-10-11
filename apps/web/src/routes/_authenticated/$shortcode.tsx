@@ -43,6 +43,7 @@ export const Route = createFileRoute("/_authenticated/$shortcode")({
     throw redirect({
       to: entities[parsed.type].routes.detail,
       params: entityDetailParams(parsed.shortcode),
+      search: (previous) => previous,
       replace: true,
     });
   },

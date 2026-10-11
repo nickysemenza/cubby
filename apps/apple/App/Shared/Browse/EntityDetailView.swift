@@ -126,6 +126,9 @@ struct EntityDetailView: View {
             ToolbarItem { copyDiagnosticsButton(row: row, fetchedAt: model?.fetchedAt) }
         }
         if let row = model?.row {
+            if key == .run {
+                ToolbarItem { RunEvidenceLink(runID: row.id) }
+            }
             if key.nativeActions.contains(.update) {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Edit") { editing = true }
@@ -425,18 +428,16 @@ struct EntityDetailContent: View {
                 }
             }
             if presentation.detailSections.contains(where: { !$0.overview }) {
-                Section {
-                    LabeledContent("Record view") {
-                        Picker("Record view", selection: $selectedSection) {
-                            Text("Overview").tag("overview")
-                            ForEach(presentation.detailSections.filter { !$0.overview }) { section in
-                                Text(section.title ?? section.id).tag(section.id)
-                            }
+                LabeledContent("Record view") {
+                    Picker("Record view", selection: $selectedSection) {
+                        Text("Overview").tag("overview")
+                        ForEach(presentation.detailSections.filter { !$0.overview }) { section in
+                            Text(section.title ?? section.id).tag(section.id)
                         }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .accessibilityIdentifier("detail.record-view")
                     }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .accessibilityIdentifier("detail.record-view")
                 }
             }
             if selectedSection == "overview", let journal = journalSection {
@@ -449,34 +450,6 @@ struct EntityDetailContent: View {
                     declared(section)
                 }
             }
-            ForEach(connectedSections) { section in
-                ConnectedSectionView(model: section)
-            }
-            if let physicalConnections {
-                Section("Physical connections") {
-                    if physicalConnections.groups.isEmpty {
-                        Text("No physical connections").foregroundStyle(.secondary)
-                    }
-                    ForEach(Array(physicalConnections.groups.enumerated()), id: \.offset) { indexed in
-                        let group = indexed.element
-                        DisclosureGroup("\(group.label) · \(group.count)") {
-                            ForEach(group.items, id: \.id) { item in
-                                if let key = EntityKey(rawValue: item.kind.rawValue) {
-                                    NavigationLink(
-                                        value: Route.entityDetail(key, id: item.id)
-                                    ) {
-                                        Text(item.name ?? item.id)
-                                    }
-                                } else {
-                                    Text(item.name ?? item.id)
-                                }
-                            }
-                        }
-                    }
-                }
-            } else if let physicalError {
-                Section("Physical connections") { Text(physicalError).foregroundStyle(.secondary) }
-            }
             if hasUnsupportedPresentation {
                 Section("More details") {
                     Text("Additional details are available on web.")
@@ -484,26 +457,59 @@ struct EntityDetailContent: View {
                     Link("Open on web", destination: appModel.webURL(for: descriptor.key, id: row.id))
                 }
             }
-            if let relationshipsModel {
-                Section("Relationships") {
-                    EntityRelationshipsSection(model: relationshipsModel, onAccepted: onRelationshipAccepted)
+            if selectedSection == "overview" {
+                ForEach(connectedSections) { section in
+                    ConnectedSectionView(model: section)
                 }
-            }
-            let sources = row.sources
-            if !sources.isEmpty {
-                Section("Sources") {
-                    ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
-                        EntitySourceRow(
-                            label: source.fieldPath.map { descriptor.field($0)?.label ?? $0 } ?? "Record",
-                            supportsCurrentValue: source.fieldPath == nil ? nil : source.supportsCurrentValue,
-                            quote: source.quote, selectedVariant: source.selectedVariant, url: source.url,
-                            seenAt: source.observedAt ?? source.createdAt, runID: source.recorder.runId)
+                if let physicalConnections {
+                    Section("Physical connections") {
+                        if physicalConnections.groups.isEmpty {
+                            Text("No physical connections").foregroundStyle(.secondary)
+                        }
+                        ForEach(Array(physicalConnections.groups.enumerated()), id: \.offset) { indexed in
+                            let group = indexed.element
+                            DisclosureGroup("\(group.label) · \(group.count)") {
+                                ForEach(group.items, id: \.id) { item in
+                                    if let key = EntityKey(rawValue: item.kind.rawValue) {
+                                        NavigationLink(
+                                            value: Route.entityDetail(key, id: item.id)
+                                        ) {
+                                            Text(item.name ?? item.id)
+                                        }
+                                    } else {
+                                        Text(item.name ?? item.id)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if let physicalError {
+                    Section("Physical connections") { Text(physicalError).foregroundStyle(.secondary) }
+                }
+                if let relationshipsModel {
+                    Section("Relationships") {
+                        EntityRelationshipsSection(
+                            model: relationshipsModel, onAccepted: onRelationshipAccepted)
                     }
                 }
+                let sources = row.sources
+                if !sources.isEmpty {
+                    Section("Sources") {
+                        ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
+                            EntitySourceRow(
+                                label: source.fieldPath.map { descriptor.field($0)?.label ?? $0 } ?? "Record",
+                                supportsCurrentValue: source.fieldPath == nil
+                                    ? nil : source.supportsCurrentValue,
+                                quote: source.quote, selectedVariant: source.selectedVariant, url: source.url,
+                                seenAt: source.observedAt ?? source.createdAt, runID: source.recorder.runId)
+                        }
+                    }
+                }
+                Section { RawRecordDisclosure(raw: row.raw) }
             }
-            Section { RawRecordDisclosure(raw: row.raw) }
         }
         .formStyle(.grouped)
+        .fieldGuideDetailDensity()
         .scrollContentBackground(.hidden)
         .background(FieldGuideTokens.canvas)
         .frame(maxWidth: 900)

@@ -12,6 +12,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { z } from "zod";
@@ -113,6 +114,7 @@ export interface DetailSection {
   placement: DetailPlacement;
   /** Independently excludes this section from Overview; its id remains reachable. */
   overview?: boolean;
+  workspace?: "overview" | "work" | "evidence";
   /** Exclude low-value/debug regions from the jump index. */
   includeInIndex?: boolean;
   /** Right-aligned header slot: a toolbar, action cluster, or rolled-up stat. */
@@ -403,7 +405,9 @@ function heroVisual({
 function DetailAnchorIndex({
   sections,
   onSelect,
+  wide = false,
 }: {
+  wide?: boolean;
   sections: Array<Pick<DetailSection, "id" | "title" | "includeInIndex">>;
   onSelect: (id: string) => void;
 }) {
@@ -464,7 +468,12 @@ function DetailAnchorIndex({
           height), hairline-left, same IntersectionObserver. */}
       <nav
         aria-label="Section index"
-        className="hidden min-w-0 [scrollbar-width:none] flex-nowrap items-center gap-x-3 gap-y-1 overflow-x-auto border-l border-border [mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)] pl-2 text-xs text-nowrap text-muted-foreground [-ms-overflow-style:none] md:flex [&::-webkit-scrollbar]:hidden"
+        className={cn(
+          "hidden min-w-0 gap-x-3 gap-y-1 text-xs text-muted-foreground md:flex",
+          wide
+            ? "flex-col items-start border-t border-border pt-3"
+            : "flex-nowrap items-center overflow-x-auto border-l border-border pl-2 text-nowrap",
+        )}
       >
         {indexed.map((section) => (
           <a
@@ -522,11 +531,19 @@ function DetailAnchorIndex({
   );
 }
 
+const detailTabClass = (wide: boolean) =>
+  wide ? "w-full flex-none justify-start px-2 py-2" : undefined;
+const dedicatedViewLabel = (sections: DetailSection[], activeMode: string) =>
+  sections.find((section) => section.id === activeMode)?.title;
+
 function DetailCommandStrip({
   activeMode,
   hasRelations,
   hasActivity,
   hasOverviewTools,
+  hasWork,
+  hasEvidence,
+  wide,
   overviewSections,
   dedicatedSections,
   onSelectDedicatedSection,
@@ -536,6 +553,9 @@ function DetailCommandStrip({
   hasRelations: boolean;
   hasActivity: boolean;
   hasOverviewTools: boolean;
+  hasWork: boolean;
+  hasEvidence: boolean;
+  wide: boolean;
   overviewSections: DetailSection[];
   dedicatedSections: DetailSection[];
   onSelectDedicatedSection: (sectionId: string) => void;
@@ -543,24 +563,63 @@ function DetailCommandStrip({
 }) {
   const showOverviewTools = activeMode === "overview" && hasOverviewTools;
   return (
-    <div className="sticky top-[var(--app-chrome-top)] z-30 border-y border-border bg-card">
-      <div className="flex min-h-11 flex-wrap items-stretch md:min-h-9 md:flex-nowrap md:items-center md:px-2">
+    <div
+      className={cn(
+        "sticky top-[var(--app-chrome-top)] z-30 bg-card",
+        wide
+          ? "w-40 shrink-0 self-start border-r border-border py-2 pr-3"
+          : "border-y border-border",
+      )}
+    >
+      <div
+        className={cn(
+          "flex min-h-11",
+          wide
+            ? "flex-col items-stretch gap-2"
+            : "flex-wrap items-stretch md:min-h-9 md:flex-nowrap md:items-center md:px-2",
+        )}
+      >
         <TabsList
           variant="line"
           aria-label="Record views"
-          className="h-11 w-full justify-start px-1 md:h-9 md:w-auto md:px-0"
+          className={cn(
+            "justify-start",
+            wide
+              ? "h-auto w-full flex-col items-stretch gap-1"
+              : "h-11 min-w-0 flex-1 overflow-x-auto px-1 md:h-9 md:flex-none md:px-0",
+          )}
         >
-          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger className={detailTabClass(wide)} value="overview">
+            Overview
+          </TabsTrigger>
+          {hasWork && (
+            <TabsTrigger className={detailTabClass(wide)} value="work">
+              Work
+            </TabsTrigger>
+          )}
+          {hasEvidence && (
+            <TabsTrigger className={detailTabClass(wide)} value="evidence">
+              Evidence
+            </TabsTrigger>
+          )}
           {hasRelations ? (
-            <TabsTrigger value="relations">Relations</TabsTrigger>
+            <TabsTrigger className={detailTabClass(wide)} value="relations">
+              Relations
+            </TabsTrigger>
           ) : null}
           {hasActivity ? (
-            <TabsTrigger value="activity">Activity</TabsTrigger>
+            <TabsTrigger className={detailTabClass(wide)} value="activity">
+              Activity
+            </TabsTrigger>
           ) : null}
         </TabsList>
         {dedicatedSections.length > 0 ? (
           <DropdownMenu>
             <DropdownMenuTrigger
+              aria-label={
+                dedicatedViewLabel(dedicatedSections, activeMode) ??
+                "More details"
+              }
               render={
                 <Button
                   variant="ghost"
@@ -568,8 +627,8 @@ function DetailCommandStrip({
                 />
               }
             >
-              {dedicatedSections.find((section) => section.id === activeMode)
-                ?.title ?? "More details"}
+              {dedicatedViewLabel(dedicatedSections, activeMode) ??
+                (wide ? "More details" : "More")}
               <CaretDownIcon className="size-3.5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
@@ -589,11 +648,17 @@ function DetailCommandStrip({
         {showOverviewTools ? (
           <div
             data-testid="detail-overview-tools"
-            className="flex min-h-11 w-full min-w-0 items-center gap-2 border-t border-border px-2 md:min-h-0 md:flex-1 md:border-t-0 md:px-0 md:pl-2"
+            className={cn(
+              "flex w-full min-w-0 gap-2",
+              wide
+                ? "flex-col px-2"
+                : "min-h-11 items-center border-t border-border px-2 md:min-h-0 md:flex-1 md:border-t-0 md:px-0 md:pl-2",
+            )}
           >
             <DetailAnchorIndex
               sections={overviewSections}
               onSelect={onSelectOverviewSection}
+              wide={wide}
             />
           </div>
         ) : null}
@@ -683,6 +748,7 @@ function renderResponsiveLayout({
 }
 
 interface DetailSectionsProps {
+  onlyWorkspace?: "evidence";
   sections: DetailSection[];
   rawData: unknown;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
@@ -778,11 +844,23 @@ function contextSourceId(
 }
 
 export const DetailSections: FC<DetailSectionsProps> = ({
+  onlyWorkspace,
   sections,
   rawData,
   heroImages,
   heroMedia,
 }) => {
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const element = workspaceRef.current;
+    if (!element || !("ResizeObserver" in window)) return;
+    const observer = new ResizeObserver((entries) => {
+      setWide((entries[0]?.contentRect.width ?? 0) >= 800);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const { isDebugEnabled } = useDebug();
   const pageDetail = usePageDetailContext();
   const parsedDetailRecord = pageDetail
@@ -848,13 +926,25 @@ export const DetailSections: FC<DetailSectionsProps> = ({
         (section) =>
           section.id !== RELATIONS_SECTION_ID &&
           section.id !== ACTIVITY_SECTION_ID &&
-          section.overview !== false,
+          section.overview !== false &&
+          (!section.workspace || section.workspace === "overview"),
       ),
     [visibleSections],
   );
 
+  const workspaceSections = visibleSections.filter(
+    (section) =>
+      section.workspace === "work" || section.workspace === "evidence",
+  );
+  const workSections = workspaceSections.filter(
+    (section) => section.workspace === "work",
+  );
+  const evidenceSections = workspaceSections.filter(
+    (section) => section.workspace === "evidence",
+  );
   const dedicatedSections = visibleSections.filter(
-    (section) => section.overview === false,
+    (section) =>
+      section.overview === false && !workspaceSections.includes(section),
   );
   const dedicatedIdKey = dedicatedSections
     .map((section) => section.id)
@@ -879,15 +969,33 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const hasRelations = Boolean(relationshipSection);
   const hasActivity = Boolean(resolvedActivitySection);
   const resolveHash = useCallback(
-    (hash: string) =>
-      modeForHash({
+    (hash: string) => {
+      const id = normalizedHash(hash);
+      const workspace = workspaceSections.find(
+        (section) => section.id === id,
+      )?.workspace;
+      if (workspace) return { mode: workspace, valid: true };
+      if (id === "work" && workSections.length > 0)
+        return { mode: "work", valid: true };
+      if (id === "evidence" && evidenceSections.length > 0)
+        return { mode: "evidence", valid: true };
+      return modeForHash({
         hash,
         overviewIds,
         dedicatedIds,
         hasRelations,
         hasActivity,
-      }),
-    [hasActivity, hasRelations, overviewIds, dedicatedIds],
+      });
+    },
+    [
+      hasActivity,
+      hasRelations,
+      overviewIds,
+      dedicatedIds,
+      workspaceSections,
+      workSections.length,
+      evidenceSections.length,
+    ],
   );
   const [activeMode, setActiveMode] = useState<DetailMode>(
     () => resolveHash(locationHash).mode,
@@ -926,7 +1034,9 @@ export const DetailSections: FC<DetailSectionsProps> = ({
 
   const selectMode = (nextMode: string) => {
     if (
-      !["overview", "relations", "activity"].includes(nextMode) &&
+      !["overview", "work", "evidence", "relations", "activity"].includes(
+        nextMode,
+      ) &&
       !dedicatedIds.has(nextMode)
     )
       return;
@@ -938,7 +1048,12 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       return;
     }
     setActiveMode(mode);
-    setHash(dedicatedIds.has(mode) ? mode : hashForDetailMode(mode), false);
+    setHash(
+      dedicatedIds.has(mode) || mode === "work" || mode === "evidence"
+        ? mode
+        : hashForDetailMode(mode),
+      false,
+    );
   };
 
   const selectOverviewSection = (sectionId: string) => {
@@ -961,33 +1076,45 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     heroMedia: heroMedia ?? pageDetail?.heroMedia,
   });
 
-  return (
-    <SectionVisibilityRegistryContext.Provider
-      value={registerSectionVisibility}
-    >
-      <SectionIndexPendingRegistryContext.Provider
-        value={registerSectionIndexPending}
-      >
-        <Tabs
-          value={activeMode}
-          onValueChange={selectMode}
-          className="gap-4 md:gap-2"
-        >
-          <DetailCommandStrip
-            activeMode={activeMode}
-            hasRelations={hasRelations}
-            hasActivity={hasActivity}
-            hasOverviewTools={hasOverviewTools}
-            overviewSections={indexEligibleSections}
-            dedicatedSections={dedicatedSections}
-            onSelectDedicatedSection={selectMode}
-            onSelectOverviewSection={selectOverviewSection}
-          />
+  if (onlyWorkspace === "evidence") {
+    return (
+      <div className="space-y-2" data-run-evidence>
+        {renderSectionStack(evidenceSections)}
+      </div>
+    );
+  }
 
-          {activeMode === "overview" ? (
-            <TabsContent value="overview" className="text-sm/5">
+  return (
+    <div ref={workspaceRef} className="min-w-0">
+      <SectionVisibilityRegistryContext.Provider
+        value={registerSectionVisibility}
+      >
+        <SectionIndexPendingRegistryContext.Provider
+          value={registerSectionIndexPending}
+        >
+          <Tabs
+            value={activeMode}
+            orientation={wide ? "vertical" : "horizontal"}
+            onValueChange={selectMode}
+            className="min-w-0 gap-3"
+          >
+            <DetailCommandStrip
+              activeMode={activeMode}
+              wide={wide}
+              hasRelations={hasRelations}
+              hasActivity={hasActivity}
+              hasWork={workSections.length > 0}
+              hasEvidence={evidenceSections.length > 0}
+              hasOverviewTools={hasOverviewTools}
+              overviewSections={indexEligibleSections}
+              dedicatedSections={dedicatedSections}
+              onSelectDedicatedSection={selectMode}
+              onSelectOverviewSection={selectOverviewSection}
+            />
+
+            <TabsContent value="overview" keepMounted className="text-sm/5">
               <div className="space-y-4 md:space-y-2">
-                <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
+                <div className="min-w-0">
                   {renderResponsiveLayout({
                     sections: overviewSections,
                     visual,
@@ -1006,43 +1133,57 @@ export const DetailSections: FC<DetailSectionsProps> = ({
                 )}
               </div>
             </TabsContent>
-          ) : null}
-
-          {dedicatedSections
-            .filter((section) => section.id === activeMode)
-            .map((section) => (
+            {(["work", "evidence"] as const).map((mode) => (
               <TabsContent
-                key={section.id}
-                value={section.id}
+                key={mode}
+                value={mode}
+                keepMounted
                 className="text-sm/5"
               >
                 {renderResponsiveLayout({
-                  sections: [{ ...section, placement: "full" }],
+                  sections: mode === "work" ? workSections : evidenceSections,
                 })}
               </TabsContent>
             ))}
 
-          {activeMode === "relations" && relationshipSection ? (
-            <TabsContent value="relations" className="text-sm/5">
-              <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
-                {renderResponsiveLayout({
-                  sections: [{ ...relationshipSection, placement: "full" }],
-                })}
-              </div>
-            </TabsContent>
-          ) : null}
+            {dedicatedSections
+              .filter((section) => section.id === activeMode)
+              .map((section) => (
+                <TabsContent
+                  key={section.id}
+                  value={section.id}
+                  className="text-sm/5"
+                >
+                  {renderResponsiveLayout({
+                    sections: [{ ...section, placement: "full" }],
+                  })}
+                </TabsContent>
+              ))}
 
-          {activeMode === "activity" && resolvedActivitySection ? (
-            <TabsContent value="activity" className="text-sm/5">
-              <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
-                {renderResponsiveLayout({
-                  sections: [{ ...resolvedActivitySection, placement: "full" }],
-                })}
-              </div>
-            </TabsContent>
-          ) : null}
-        </Tabs>
-      </SectionIndexPendingRegistryContext.Provider>
-    </SectionVisibilityRegistryContext.Provider>
+            {activeMode === "relations" && relationshipSection ? (
+              <TabsContent value="relations" className="text-sm/5">
+                <div className="min-w-0">
+                  {renderResponsiveLayout({
+                    sections: [{ ...relationshipSection, placement: "full" }],
+                  })}
+                </div>
+              </TabsContent>
+            ) : null}
+
+            {activeMode === "activity" && resolvedActivitySection ? (
+              <TabsContent value="activity" className="text-sm/5">
+                <div className="min-w-0">
+                  {renderResponsiveLayout({
+                    sections: [
+                      { ...resolvedActivitySection, placement: "full" },
+                    ],
+                  })}
+                </div>
+              </TabsContent>
+            ) : null}
+          </Tabs>
+        </SectionIndexPendingRegistryContext.Provider>
+      </SectionVisibilityRegistryContext.Provider>
+    </div>
   );
 };

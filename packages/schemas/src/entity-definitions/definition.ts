@@ -894,6 +894,8 @@ const buildMetadataSchemas = () => {
     id: sectionId,
     title: nonEmptyString(),
     placement: sectionPlacement,
+    /** Focused detail workspace; omission follows the section's semantic kind. */
+    workspace: z.enum(["overview", "work", "evidence"]).optional(),
     collapsed: z
       .boolean({ error: "must be a boolean" })
       .optional()
@@ -986,6 +988,7 @@ const buildMetadataSchemas = () => {
         title: nonEmptyString().nullable().optional().default(null),
         /** Declared computed field whose explanation applies to this slot. */
         explanationField: fieldKey.nullable().optional().default(null),
+        workspace: z.enum(["overview", "work", "evidence"]).optional(),
         placement: sectionPlacement,
         collapsed: z
           .boolean({ error: "must be a boolean" })

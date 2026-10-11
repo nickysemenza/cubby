@@ -50,6 +50,7 @@ import { heroChipLabel } from "~/entity/enum-field-display";
 import { FieldExplanation } from "~/entity/field-explanation";
 import { RecordSuggestionsProvider } from "~/features/ai/record-suggestions";
 import { getErrorMessage } from "~/lib/error-utils";
+import { useNativeRunEvidence } from "~/lib/native-workspace";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { DetailHeroActions, DetailHeroStat } from "~/ui/layouts/page-hero";
 import { Page } from "~/ui/page/Page";
@@ -373,6 +374,13 @@ function declaredSections<E extends GenericDetailEntity>(
       icon: sectionIcon(section.kind),
       collapsed: section.collapsed,
       overview: section.overview,
+      workspace:
+        section.workspace ??
+        (section.kind === "timeline"
+          ? "evidence"
+          : section.kind === "relation"
+            ? "work"
+            : undefined),
     };
     switch (section.kind) {
       case "fields":
@@ -529,7 +537,53 @@ function detailWayfinding<E extends GenericDetailEntity>(
  * from `entitySummary[entity].detail`; a slot is the only hand-written fill
  * and renders only where `detailSlots` provides it.
  */
-export function GenericEntityDetail<E extends GenericDetailEntity>({
+type GenericEntityDetailProps<E extends GenericDetailEntity> = {
+  entity: E;
+  record: DetailRecordOf<E>;
+  operations?: GenericEntityDetailOperations;
+};
+
+export function GenericEntityDetail<E extends GenericDetailEntity>(
+  props: GenericEntityDetailProps<E>,
+) {
+  return useNativeRunEvidence() ? (
+    <RunEvidenceDetail {...props} />
+  ) : (
+    <FullEntityDetail {...props} />
+  );
+}
+
+function RunEvidenceDetail<E extends GenericDetailEntity>({
+  entity,
+  record,
+  operations = {},
+}: GenericEntityDetailProps<E>) {
+  const bag = detailRecordSchema.parse(record);
+  const { titleField } = presentationOf(entity);
+  const title =
+    readRecordField(record, titleField, z.string().catch("")) || bag.id;
+  const sections = declaredSections(entity, record, bag, operations).filter(
+    (section) => section.workspace === "evidence",
+  );
+  return (
+    <DetailActionProvider>
+      <Page
+        variant="detail"
+        entity={entity}
+        title={`${title} · Evidence`}
+        rawData={record}
+      >
+        <DetailSections
+          onlyWorkspace="evidence"
+          sections={sections}
+          rawData={record}
+        />
+      </Page>
+    </DetailActionProvider>
+  );
+}
+
+function FullEntityDetail<E extends GenericDetailEntity>({
   entity,
   record,
   operations = {},

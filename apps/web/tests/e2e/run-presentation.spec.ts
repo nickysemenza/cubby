@@ -34,7 +34,7 @@ test("related Runs show account labels and shared quality", async ({
     endedAt: new Date("2026-09-01T10:01:00Z"),
   });
   await gotoAuthenticatedPage(page, `/vendors/${vendor.shortcode}`);
-  await page.getByRole("tab", { name: "Overview", exact: true }).click();
+  await page.getByRole("tab", { name: "Work", exact: true }).click();
   const row = page
     .getByRole("table", { name: "Runs", exact: true })
     .getByRole("row")

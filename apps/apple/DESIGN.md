@@ -26,11 +26,21 @@ The Mac root browser owns split selection even while its detail pane has related
 
 Native Mac table cells explicitly receive the owning AppModel so sorting and row reuse preserve field explanation dependencies. Reference cells in the root split browser open through its detail navigator; nested tables use their enclosing navigation stack. The browse screen contains its accessibility children, preserving the table, column control, and summary identifiers.
 
+## Run evidence pilot
+
+Every entity retains its native detail renderer. A Run’s native console and detail offer one hosted destination for transcript, logs, and AI usage. Native overview, actions, photo review, editors, routing, and coverage remain in place. The evidence sheet has native Done and hands record links back to the native navigator; it does not own record history.
+
+The pilot opens `/RUN-4K7M?nativeWorkspace=run-evidence#evidence` and accepts its canonical `/runs/RUN-4K7M` redirect on the selected server, retaining the pilot query and Evidence hash. A bearer-only POST to `/api/native-workspace/session` creates the configured HttpOnly browser cookie in a fresh nonpersistent WebKit store. It sends no ambient cookies. Logout, host changes, dismissal, and credential revision changes destroy the presentation’s browser state. Exact-origin main-frame version-1 messages support ready, native navigate, changed, authRequired, and updateRequired. Native mutations dispatch `cubby-workspace-refresh`. Authentication redirects and 401 return to native sign-in; 426 uses the existing update gate. Retry reboots the session after network failures or web-process termination. External HTTP(S), mail, and telephone links use the system opener; new-window evidence links reuse the pilot, and other records open natively. JavaScript alerts close, confirmations refuse, and prompts cancel; native owns confirmation UI.
+
+The hosted sheet disables global web search and blocks SPA navigation outside its evidence document. Related records hand off to native navigation. Retry replaces both the session host and the displayed WebKit view, so recovery cannot load an unattached browser.
+
 ## Density and feedback
 
 Mac list rows prioritize comparison and native selection; iPhone rows use a readable primary line and concise supporting facts. A photo, summary, or inspector never pushes the next action off the useful first screen without purpose. At accessibility text sizes, columns and metrics wrap or stack. Preserve keyboard and VoiceOver labels, Reduce Motion, and Reduce Transparency.
 
 Spacing follows the compact 4/8/12/12/16/16 rhythm (`FieldGuideTokens.Space` xs…xxl, generated from the shared tokens): `lg` equals `md` and `xxl` equals `xl`. Screen and sheet content uses explicit token padding (`Space.md`/`Space.lg`, 12 points), never SwiftUI's default `.padding()`. Tab roots and pushed screens use inline navigation titles with no second in-content title. A record detail's title uses `fieldGuideRecordTitle`: the headline size on iPhone and the display size on Mac. Record counts beside a sidebar or catalog row are plain, muted, tabular digits at the trailing edge, with no badge box. Density never shrinks a phone target below 44 points.
+
+Generic details place the hero and declared essentials first. The record-view picker shares the content rhythm instead of adding a separate panel. Focused views show the selected declared section; connected records, physical connections, relationships, sources, and raw disclosure stay in Overview. Detail forms, Image details and Run lists use the shared `fieldGuideDetailDensity` helper for compact 12-point edges, 4-point vertical row insets, warm surfaces, compact section gaps, and a 44-point minimum phone row height. Mac retains its native row sizing. Text retains system scaling.
 
 Entity List rows keep one primary title line and a concise supporting band at standard text sizes, using smaller thumbnails and inline status and explanation controls. Accessibility text sizes allow those facts to wrap, and phone rows and controls retain 44-point touch targets. Data-quality explanations, source attribution, and deferred-detail loading or failure remain available in the compact presentation.
 
