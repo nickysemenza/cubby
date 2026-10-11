@@ -22,6 +22,7 @@ const vendor = vendorOut.parse({
   website: null,
   orderUrlTemplate: null,
   orderEvidence: null,
+  aliases: [],
   orderEmailSenders: [],
   browserDomains: [],
   agentHints: {
