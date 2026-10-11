@@ -2,7 +2,8 @@ import { testUserId } from "@cubby/schemas/testing";
 import type { Pool } from "pg";
 
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { runTarget } from "~/server/db/schema";
+import { photoRunImage } from "~/server/db/schema";
+import { writeOutcomeReceipts } from "~/server/purchase-import/run-outcome.fixtures";
 import { proposePhotoGroups } from "~/server/photo-import-run/proposals";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 import { getDb } from "~/server/repo/database-helpers";
@@ -154,9 +155,8 @@ export async function seedNativeQa(
     actorLedgerPartyName: member.name,
     actorLedgerPartyKind: "member",
   });
-  await getDb(db)
-    .insert(runTarget)
-    .values({
+  await writeOutcomeReceipts(db, [
+    {
       runId: research.id,
       entityKind: "product",
       entityId: parseEntityId("product", productId),
@@ -167,7 +167,8 @@ export async function seedNativeQa(
       completedAt: new Date("2026-09-20T12:00:00Z"),
       warning: "Exact model remains unsupported",
       diff: {},
-    });
+    },
+  ]);
   const photoRun = await seedProposedPhotoRun(pool, userId);
   const garden = await seedScopedPlantingPicker(pool, context);
   return {
@@ -392,12 +393,12 @@ export async function seedProposedPhotoRun(
   );
   // No describe job exists for these images, so neither group waits on an AI description.
   await getDb(db)
-    .insert(runTarget)
+    .insert(photoRunImage)
     .values(
       images.map((image, position) => ({
         runId: parseEntityId("run", runRow.rows[0]?.id ?? ""),
-        entityKind: "image" as const,
-        entityId: parseEntityId("image", image.id),
+        imageId: parseEntityId("image", image.id),
+        workKey: image.id,
         position,
         state: "pending" as const,
         targetFingerprint: `synthetic-qa-photo-${position}`,

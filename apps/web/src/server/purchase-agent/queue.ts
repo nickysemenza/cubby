@@ -42,6 +42,7 @@ async function deliverEvent(
     return "fenced";
   }
   const scope = await services.loadScope();
+  if (scope.generation !== event.generation) return "fenced";
   if (scope.agentId !== importRunAgentIdentity(event.runId, scope.purpose)) {
     throw new Error("Import run agent identity does not match its purpose");
   }
@@ -51,6 +52,8 @@ async function deliverEvent(
   if (accepted && event.type === "start_or_resume")
     await services.updateAgentProgress({
       eventId: `coordinator-started:${event.eventId}`,
+      generation: event.generation,
+      sequence: 0,
       phase: "preparing",
       detail: "Coordinator started",
     });

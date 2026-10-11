@@ -192,6 +192,7 @@ export const ripple = {
   relatednessProduct: exactRippleTags([["relatedness", "product"]]),
   projectOnly: exactRippleTags([["project"]]),
   /** The Run record the generic run detail page reads (`run.detail`). */
+  email: rippleTags([["email"], ["run"], ["dashboard"]]),
   runOnly: exactRippleTags([["run"]]),
   memberLogins: exactRippleTags([["ledgerParty"], ["run"]]),
   productOnly: exactRippleTags([["product"]]),

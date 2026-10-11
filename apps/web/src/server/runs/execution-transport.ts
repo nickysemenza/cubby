@@ -50,6 +50,7 @@ export function paidResearchPreflight(
       const [current] = await getDb(db)
         .select({
           status: run.status,
+          purpose: run.purpose,
           retiredAt: run.retiredAt,
           input: run.input,
           actorUserId: run.actorUserId,
@@ -68,6 +69,7 @@ export function paidResearchPreflight(
         current.ledgerPartyId !== authority.owner.ledgerPartyId
       )
         throw new Error("Execution authorization Run binding changed.");
+      return current;
     };
     const body = await request.query();
     const quote =
@@ -97,7 +99,19 @@ export function paidResearchPreflight(
       throw new Error(
         "Paid research allowance exceeds safe integer accounting.",
       );
-    await assertCurrentRun();
+    const current = await assertCurrentRun();
+    // The household authorizes unlimited classification-tier dollars. A
+    // classification Run still needs live ownership, authorization and bounds;
+    // responses and other models retain their original monetary allowance.
+    if (
+      (current.purpose === "mail_discovery" ||
+        current.purpose === "mail_import") &&
+      request.endpoint !== "responses" &&
+      ["typesafe/jev", "@cf/cloudflare/clef"].includes(
+        workersAiModel(request.endpoint),
+      )
+    )
+      return;
     if (reservationMicroUSD === 0) return;
     const decision = await reserveExecutionAuthorization(db, {
       ...authority,

@@ -45,12 +45,8 @@
  * in `entity-edges.ts`.
  */
 
-import type { Entity } from "@cubby/schemas/entity";
-import type { EdgeSemantics } from "@cubby/schemas/entity-integrity";
-
 import type { EntityEdge } from "./entity-edges";
 import { ENTITY_EDGES } from "./entity-edges";
-import type { IncomingEdgeMap } from "./entity-incoming-edges";
 
 /** Project one entity's edge map down to its stable-semantics fields only. */
 function projectSemantics<T extends Record<string, EntityEdge>>(
@@ -75,32 +71,19 @@ function projectSemantics<T extends Record<string, EntityEdge>>(
   };
 }
 
-export const ENTITY_EDGE_SEMANTICS = {
-  cookbook: projectSemantics(ENTITY_EDGES.cookbook),
-  image: projectSemantics(ENTITY_EDGES.image),
-  recipe: projectSemantics(ENTITY_EDGES.recipe),
-  ingredient: projectSemantics(ENTITY_EDGES.ingredient),
-  meal: projectSemantics(ENTITY_EDGES.meal),
-  ledgerParty: projectSemantics(ENTITY_EDGES.ledgerParty),
-  product: projectSemantics(ENTITY_EDGES.product),
-  productCategory: projectSemantics(ENTITY_EDGES.productCategory),
-  spendingCategory: projectSemantics(ENTITY_EDGES.spendingCategory),
-  location: projectSemantics(ENTITY_EDGES.location),
-  project: projectSemantics(ENTITY_EDGES.project),
-  task: projectSemantics(ENTITY_EDGES.task),
-  vendor: projectSemantics(ENTITY_EDGES.vendor),
-  vendorAccount: projectSemantics(ENTITY_EDGES.vendorAccount),
-  run: projectSemantics(ENTITY_EDGES.run),
-  purchase: projectSemantics(ENTITY_EDGES.purchase),
-  financialAccount: projectSemantics(ENTITY_EDGES.financialAccount),
-  financialTransaction: projectSemantics(ENTITY_EDGES.financialTransaction),
-  wish: projectSemantics(ENTITY_EDGES.wish),
-  expense: projectSemantics(ENTITY_EDGES.expense),
-  ledgerTransfer: projectSemantics(ENTITY_EDGES.ledgerTransfer),
-  plant: projectSemantics(ENTITY_EDGES.plant),
-  planting: projectSemantics(ENTITY_EDGES.planting),
-  gardenEntry: projectSemantics(ENTITY_EDGES.gardenEntry),
-  inventory: projectSemantics(ENTITY_EDGES.inventory),
-  "usda-food": projectSemantics(ENTITY_EDGES["usda-food"]),
-  device: projectSemantics(ENTITY_EDGES.device),
-} satisfies { [E in Entity]: IncomingEdgeMap<E, EdgeSemantics> };
+// SAFETY: the projection keeps the exact entity and edge keys of ENTITY_EDGES.
+const ENTITY_EDGE_SEMANTICS = Object.fromEntries(
+  Object.entries(ENTITY_EDGES).map(([entity, edgeMap]) => [
+    entity,
+    projectSemantics(edgeMap),
+  ]),
+) as {
+  [E in keyof typeof ENTITY_EDGES]: {
+    [K in keyof (typeof ENTITY_EDGES)[E]]: Pick<
+      Extract<(typeof ENTITY_EDGES)[E][K], EntityEdge>,
+      "role" | "label" | "description" | "liveness"
+    >;
+  };
+};
+
+export { ENTITY_EDGE_SEMANTICS };

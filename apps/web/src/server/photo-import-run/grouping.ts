@@ -47,6 +47,7 @@ export async function startPhotoGroupingForActor(
       version: 1,
       runId: run.id,
       eventId: run.eventId,
+      generation: run.eventId,
       purpose: "photo_inventory",
       type: "start_or_resume",
     });

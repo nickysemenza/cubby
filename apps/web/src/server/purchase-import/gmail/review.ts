@@ -27,10 +27,9 @@ import {
 } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
-  importSourceClaim,
   importSourceOrder,
   ledgerParty,
-  mailboxMessage,
+  email as emailTable,
   orderMail,
   orderMailCandidateDecision,
   orderMailEvent,
@@ -46,6 +45,12 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { emailAcceptedEvidenceSql } from "~/server/repo/email";
+import {
+  retainedMailJoin,
+  retainedMailProjection,
+  type RetainedMail,
+} from "~/server/repo/retained-mail";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { assertMailSourceIdentityReady } from "../mail-source-identity";
@@ -62,8 +67,9 @@ async function lockOwnedMailSource(
   },
 ) {
   const [owned] = await getDb(db)
-    .select({ source: orderMail })
+    .select({ source: retainedMailProjection })
     .from(orderMail)
+    .innerJoin(emailTable, retainedMailJoin)
     .innerJoin(
       ledgerParty,
       and(
@@ -81,6 +87,8 @@ async function lockOwnedMailSource(
           parseEntityId("ledgerParty", input.ledgerPartyId),
         ),
         eq(orderMail.rawChecksum, input.checksum),
+        eq(emailTable.provider, "gmail"),
+        notDeleted(emailTable),
       ),
     )
     .for("update", { of: orderMail });
@@ -89,16 +97,7 @@ async function lockOwnedMailSource(
   return owned.source;
 }
 
-const mailSourceIdentity = and(
-  eq(importSourceClaim.ledgerPartyId, orderMail.ledgerPartyId),
-  eq(importSourceClaim.kind, "mail_message"),
-  eq(
-    importSourceClaim.externalKey,
-    sql`'gmail:' || ${orderMail.mailboxId} || ':' || ${orderMail.messageId}`,
-  ),
-);
-
-/** Source ownership survives a multi-Vendor original and nullable discovery hints. */
+/** Accepted source families share the Email repository's ownership policy. */
 const acceptedMailScope = (
   db: ReturnType<typeof getDb>,
   target: {
@@ -108,33 +107,17 @@ const acceptedMailScope = (
 ) =>
   exists(
     db
-      .select({ id: importSourceOrder.id })
-      .from(importSourceClaim)
-      .innerJoin(
-        importSourceOrder,
-        eq(
-          importSourceOrder.sourceClaimId,
-          sql`coalesce(${importSourceClaim.canonicalClaimId}, ${importSourceClaim.id})`,
-        ),
-      )
-      .innerJoin(purchase, eq(purchase.id, importSourceOrder.purchaseId))
-      .leftJoin(
-        vendorAccount,
-        and(
-          eq(vendorAccount.id, purchase.vendorAccountId),
-          notDeleted(vendorAccount),
-        ),
-      )
+      .select({ id: purchase.id })
+      .from(purchase)
       .where(
         and(
-          mailSourceIdentity,
+          sql`${purchase.id} IN (
+            SELECT accepted_evidence."purchaseId"
+            FROM (${emailAcceptedEvidenceSql()}) accepted_evidence
+          )`,
           notDeleted(purchase),
           target.vendorId ? eq(purchase.vendorId, target.vendorId) : undefined,
           target.purchaseId ? eq(purchase.id, target.purchaseId) : undefined,
-          or(
-            isNull(vendorAccount.ledgerPartyId),
-            eq(vendorAccount.ledgerPartyId, orderMail.ledgerPartyId),
-          ),
         ),
       ),
   );
@@ -182,7 +165,7 @@ const reviewedMailScope = (
 
 const candidateReason = (
   event: Pick<typeof orderMailEvent.$inferSelect, "orderId" | "amount"> &
-    Pick<typeof orderMail.$inferSelect, "receivedAt">,
+    Pick<RetainedMail, "receivedAt">,
   candidate: {
     orderId: string | null;
     statedTotal: number | null;
@@ -211,7 +194,7 @@ const candidateReason = (
 };
 
 const candidateMailDateWindow = (
-  mails: ReadonlyArray<Pick<typeof orderMail.$inferSelect, "receivedAt">>,
+  mails: ReadonlyArray<Pick<RetainedMail, "receivedAt">>,
 ) => {
   const times = mails.flatMap((mail) =>
     mail.receivedAt ? [mail.receivedAt.getTime()] : [],
@@ -242,12 +225,17 @@ export async function listVendorOrderMail(
   const members = await database
     .selectDistinct({ id: ledgerParty.shortcode, name: ledgerParty.name })
     .from(orderMail)
+    .innerJoin(emailTable, retainedMailJoin)
     .innerJoin(ledgerParty, eq(ledgerParty.id, orderMail.ledgerPartyId))
     .where(
-      or(
-        eq(orderMail.vendorId, vendorId),
-        acceptedMailScope(database, { vendorId }),
-        reviewedMailScope(database, { vendorId }),
+      and(
+        eq(emailTable.provider, "gmail"),
+        notDeleted(emailTable),
+        or(
+          eq(orderMail.vendorId, vendorId),
+          acceptedMailScope(database, { vendorId }),
+          reviewedMailScope(database, { vendorId }),
+        ),
       ),
     );
   const mails = await database
@@ -255,42 +243,37 @@ export async function listVendorOrderMail(
       id: orderMail.id,
       ledgerPartyId: orderMail.ledgerPartyId,
       ledgerPartyShortcode: ledgerParty.shortcode,
-      messageId: orderMail.messageId,
-      threadId: orderMail.threadId,
-      sender: orderMail.sender,
-      subject: orderMail.subject,
-      receivedAt: orderMail.receivedAt,
+      messageId: emailTable.messageId,
+      threadId: emailTable.threadId,
+      sender: emailTable.sender,
+      subject: emailTable.subject,
+      receivedAt: emailTable.receivedAt,
       rawChecksum: orderMail.rawChecksum,
       researchRunId: run.shortcode,
       researchRunStatus: run.status,
-      researchSourceStatus: mailboxMessage.status,
-      researchChecksum: mailboxMessage.checksum,
-      classification: mailboxMessage.classification,
-      classificationVersion: mailboxMessage.classificationVersion,
-      processingUpdatedAt: mailboxMessage.updatedAt,
+      researchSourceStatus: emailTable.status,
+      researchChecksum: emailTable.checksum,
+      classification: emailTable.classification,
+      classificationVersion: emailTable.classificationVersion,
+      processingUpdatedAt: emailTable.updatedAt,
       researchStartedAt: run.startedAt,
       researchEndedAt: run.endedAt,
     })
     .from(orderMail)
     .innerJoin(ledgerParty, eq(ledgerParty.id, orderMail.ledgerPartyId))
-    .leftJoin(
-      mailboxMessage,
-      and(
-        eq(mailboxMessage.ledgerPartyId, orderMail.ledgerPartyId),
-        eq(mailboxMessage.mailboxId, orderMail.mailboxId),
-        eq(mailboxMessage.messageId, orderMail.messageId),
-      ),
-    )
+    .innerJoin(emailTable, retainedMailJoin)
     .leftJoin(
       run,
       and(
-        eq(run.id, mailboxMessage.runId),
-        eq(mailboxMessage.orderMailId, orderMail.id),
+        eq(run.id, emailTable.runId),
+        eq(emailTable.orderMailId, orderMail.id),
         notDeleted(run),
       ),
     )
     .where(
       and(
+        eq(emailTable.provider, "gmail"),
+        notDeleted(emailTable),
         or(
           eq(orderMail.vendorId, vendorId),
           acceptedMailScope(database, { vendorId }),
@@ -298,14 +281,14 @@ export async function listVendorOrderMail(
         ),
         ledgerPartyId ? eq(orderMail.ledgerPartyId, ledgerPartyId) : undefined,
         options.messageIds
-          ? inArray(orderMail.messageId, options.messageIds)
+          ? inArray(emailTable.messageId, options.messageIds)
           : undefined,
         options.orderMailIds
           ? inArray(orderMail.id, options.orderMailIds)
           : undefined,
       ),
     )
-    .orderBy(desc(orderMail.receivedAt))
+    .orderBy(desc(emailTable.receivedAt))
     .limit(
       options.messageIds || options.orderMailIds
         ? Math.max(
@@ -317,46 +300,34 @@ export async function listVendorOrderMail(
   if (mails.length === 0)
     return purchaseOrderMailOut.parse({ members, items: [] });
   const associations = await database
-    .select({
+    .selectDistinct({
       orderMailId: orderMail.id,
       purchaseId: purchase.shortcode,
-      evidenceChecksum: importSourceOrder.checksum,
-      acceptedAt: importSourceOrder.createdAt,
+      evidenceChecksum: sql`accepted_evidence."evidenceChecksum"`.mapWith(
+        importSourceOrder.checksum,
+      ),
+      acceptedAt: sql`accepted_evidence."acceptedAt"`.mapWith(
+        importSourceOrder.createdAt,
+      ),
     })
     .from(orderMail)
-    .innerJoin(importSourceClaim, mailSourceIdentity)
+    .innerJoin(emailTable, retainedMailJoin)
     .innerJoin(
-      importSourceOrder,
-      eq(
-        importSourceOrder.sourceClaimId,
-        sql`coalesce(${importSourceClaim.canonicalClaimId}, ${importSourceClaim.id})`,
-      ),
+      sql`LATERAL (${emailAcceptedEvidenceSql()}) accepted_evidence`,
+      sql`true`,
     )
     .innerJoin(
       purchase,
       and(
-        eq(purchase.id, importSourceOrder.purchaseId),
+        eq(purchase.id, sql`accepted_evidence."purchaseId"`),
         notDeleted(purchase),
         eq(purchase.vendorId, vendorId),
       ),
     )
-    .leftJoin(
-      vendorAccount,
-      and(
-        eq(vendorAccount.id, purchase.vendorAccountId),
-        notDeleted(vendorAccount),
-      ),
-    )
     .where(
-      and(
-        inArray(
-          orderMail.id,
-          mails.map((mail) => mail.id),
-        ),
-        or(
-          isNull(vendorAccount.ledgerPartyId),
-          eq(vendorAccount.ledgerPartyId, orderMail.ledgerPartyId),
-        ),
+      inArray(
+        orderMail.id,
+        mails.map((mail) => mail.id),
       ),
     );
   const events = await database
@@ -550,6 +521,7 @@ export async function listPurchaseOrderMail(
   const related = await database
     .select({ mailId: orderMail.id })
     .from(orderMail)
+    .innerJoin(emailTable, retainedMailJoin)
     .where(
       or(
         acceptedMailScope(database, { purchaseId: target.id }),

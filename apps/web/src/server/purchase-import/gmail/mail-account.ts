@@ -7,10 +7,9 @@ import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 /**
- * The member's VendorAccount for a Vendor, created mail-only (disabled, no
- * browser sync) when order mail is the first evidence of the relationship. An
- * existing account — mail-only or browser-synced — is returned unchanged, so
- * this never turns browser sync on or moves a history cursor.
+ * The member's VendorAccount for a Vendor, created disabled when order mail
+ * is the first evidence of the relationship. Existing accounts keep their status
+ * and history cursor.
  */
 export async function ensureMailVendorAccount(
   db: Database | DrizzleTransaction,
@@ -27,7 +26,6 @@ export async function ensureMailVendorAccount(
       vendorId: input.vendorId,
       ledgerPartyId: input.ledgerPartyId,
       status: "disabled",
-      browserSyncEnabled: false,
     }),
   });
   return row;

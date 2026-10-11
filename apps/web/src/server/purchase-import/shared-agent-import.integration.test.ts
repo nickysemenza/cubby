@@ -2,7 +2,6 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   type ExtractedOrderCandidate,
   commitPurchaseImportInput,
-  aggregateReplacementSnapshot,
   proposedImportFix,
 } from "@cubby/schemas/purchase-import";
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -16,6 +15,7 @@ import {
   expense,
   financialTransactionAllocation,
   importSourceClaim,
+  sourceOrderObservation,
   importSourceProduct,
   inventoryEntry,
   product,
@@ -32,10 +32,6 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import {
-  aggregateReplacementApprovalFingerprint,
-  loadAggregateReplacementSnapshot,
-} from "./aggregate-replacement";
 import { resolveRunFinding } from "./findings";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { startImportRunFixture } from "./import-run.fixtures";
@@ -44,6 +40,7 @@ import {
   prepareMemberImport,
   type MemberImportOrder,
 } from "./order-import.fixtures";
+import { prepareSourceOrderReconciliation } from "./reconciliation";
 
 const checksum = (digit: string) => digit.repeat(64);
 
@@ -446,7 +443,7 @@ describe("shared purchase-import prepare and commit", () => {
           stableLineId: "adjustments-order-1:line-1",
           resolution: {
             kind: "existing" as const,
-            productId: productRow.shortcode,
+            productId: parseShortcodeFor("product", productRow.shortcode),
           },
         },
       ],
@@ -714,47 +711,85 @@ describe("shared purchase-import prepare and commit", () => {
           stableLineId: "manual-order-1:line-1",
           resolution: {
             kind: "existing" as const,
-            productId: productRow.shortcode,
+            productId: parseShortcodeFor("product", productRow.shortcode),
           },
         },
       ],
     });
     const result = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
-    return { manualPurchase, manualExpense, existingProduct, category, result };
+    return {
+      manualPurchase,
+      manualExpense,
+      existingProduct,
+      productRow,
+      category,
+      result,
+    };
+  }
+
+  async function replacementFinding(
+    purchaseId: typeof purchase.$inferSelect.id,
+  ) {
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(runFinding)
+      .where(
+        and(eq(runFinding.entityId, purchaseId), eq(runFinding.status, "open")),
+      );
+    const finding = rows.find(
+      (row) =>
+        proposedImportFix.safeParse(row.proposedFix).data?.kind ===
+        "reconcile_source_order",
+    );
+    if (!finding)
+      throw new Error("Expected source-order reconciliation finding");
+    return finding;
   }
 
   it("replaces a categorized aggregate with an uncategorized tax line", async () => {
-    const { manualPurchase, manualExpense, category } =
+    const { manualPurchase, manualExpense, category, productRow, result } =
       await importOverManualAggregate(false, true, true);
     if (!category) throw new Error("Expected the category fixture");
-    const [finding] = await getDb(ctx.db)
-      .select({ id: runFinding.id, proposedFix: runFinding.proposedFix })
-      .from(runFinding)
-      .where(
-        and(
-          eq(runFinding.entityId, manualPurchase.id),
-          eq(runFinding.kind, "duplicate_lines"),
-        ),
-      );
-    if (!finding) throw new Error("Expected replacement finding");
-    const fix = proposedImportFix.parse(finding.proposedFix);
-    if (fix.kind !== "replace_aggregate_line")
-      throw new Error("Expected replacement preview");
+    expect(result.items[0]?.outcome).toBe("conflict");
+    const finding = await replacementFinding(manualPurchase.id);
+    const before = await getDb(ctx.db).select().from(expense);
+    const inventoryBefore = await getDb(ctx.db).select().from(inventoryEntry);
+    const review = await prepareSourceOrderReconciliation(
+      ctx.db,
+      {
+        id: finding.id,
+        resolution: {
+          kind: "replace_lines",
+          expenseIds: [manualExpense.shortcode],
+          lines: [
+            {
+              lineIndex: 0,
+              expenseId: manualExpense.shortcode,
+              productId: parseShortcodeFor("product", productRow.shortcode),
+            },
+            {
+              lineIndex: 1,
+              expenseId: manualExpense.shortcode,
+              productId: null,
+            },
+          ],
+        },
+      },
+      ctx.actor,
+    );
+    expect(review.spend).toEqual({ before: 45, after: 45, delta: 0 });
+    expect(await getDb(ctx.db).select().from(expense)).toEqual(before);
     await resolveRunFinding(
       ctx.db,
       {
         id: finding.id,
         action: "apply",
-        reviewedFingerprint: fix.reviewSnapshot?.fingerprint,
+        reviewedFingerprint: review.reviewedFingerprint,
       },
       ctx.actor,
     );
     const rows = await getDb(ctx.db)
-      .select({
-        name: expense.name,
-        lineKind: expense.lineKind,
-        spendingCategoryId: expense.spendingCategoryId,
-      })
+      .select()
       .from(expense)
       .where(
         and(
@@ -762,19 +797,19 @@ describe("shared purchase-import prepare and commit", () => {
           isNull(expense.deletedAt),
         ),
       );
-    expect(
-      rows.find((row) => row.lineKind === "principal")?.spendingCategoryId,
-    ).toBe(category.id);
-    expect(
-      rows.find((row) => row.lineKind === "tax")?.spendingCategoryId,
-    ).toBeNull();
+    expect(rows.find((row) => row.lineKind === "principal")).toMatchObject({
+      id: manualExpense.id,
+      cost: 40,
+      spendingCategoryId: category.id,
+    });
+    expect(rows.find((row) => row.lineKind === "tax")).toMatchObject({
+      cost: 5,
+      spendingCategoryId: null,
+    });
     expect(rows).toHaveLength(2);
-    expect(
-      await getDb(ctx.db).query.expense.findFirst({
-        where: eq(expense.id, manualExpense.id),
-        columns: { deletedAt: true },
-      }),
-    ).toMatchObject({ deletedAt: expect.any(Date) });
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual(
+      inventoryBefore,
+    );
   });
 
   it.each([
@@ -785,170 +820,258 @@ describe("shared purchase-import prepare and commit", () => {
   ])(
     "keeps an exact aggregate until its unchanged replacement preview is approved (edited: %s, orderless: %s, proposal changed: %s)",
     async (editAfterPreview, targetOrderless, editProposal) => {
-      const { manualPurchase, manualExpense, existingProduct, result } =
-        await importOverManualAggregate(targetOrderless);
-      // The order was already a Purchase (found by vendor + orderId), so this
-      // is an update to it, never a second Purchase for the same order.
-      expect(result.items[0]?.outcome).toBe("updated");
+      const {
+        manualPurchase,
+        manualExpense,
+        existingProduct,
+        productRow,
+        result,
+      } = await importOverManualAggregate(targetOrderless);
+      expect(result.items[0]?.outcome).toBe("conflict");
       expect(result.items[0]?.purchaseId).toBe(manualPurchase.shortcode);
-
-      const purchasesForOrder = await getDb(ctx.db)
-        .select({ id: purchase.id })
-        .from(purchase)
-        .where(eq(purchase.orderId, "MANUAL-ORDER-1"));
-      expect(purchasesForOrder).toHaveLength(1);
-      expect(purchasesForOrder[0]?.id).toBe(manualPurchase.id);
-
-      const [pendingAggregate] = await getDb(ctx.db)
-        .select({ deletedAt: expense.deletedAt })
-        .from(expense)
-        .where(eq(expense.id, manualExpense.id));
-      expect(pendingAggregate?.deletedAt).toBeNull();
-      const [replacementFinding] = await getDb(ctx.db)
-        .select({ id: runFinding.id, proposedFix: runFinding.proposedFix })
-        .from(runFinding)
-        .where(
-          and(
-            eq(runFinding.entityId, manualPurchase.id),
-            eq(runFinding.kind, "duplicate_lines"),
-          ),
-        );
-      expect(replacementFinding?.proposedFix).toMatchObject({
-        kind: "replace_aggregate_line",
-      });
-      if (!replacementFinding) throw new Error("Expected replacement preview");
-      const reviewedFix = proposedImportFix.parse(
-        replacementFinding.proposedFix,
-      );
-      if (reviewedFix.kind !== "replace_aggregate_line")
-        throw new Error("Expected replacement fix");
-      const reviewSnapshot = aggregateReplacementSnapshot.parse(
-        reviewedFix.reviewSnapshot,
-      );
+      const before = await getDb(ctx.db).select().from(expense);
+      expect(before).toEqual([manualExpense]);
+      expect(await getDb(ctx.db).select().from(purchase)).toEqual([
+        manualPurchase,
+      ]);
+      const stock = await getDb(ctx.db).select().from(inventoryEntry);
+      const allocations = await getDb(ctx.db)
+        .select()
+        .from(financialTransactionAllocation);
+      const finding = await replacementFinding(manualPurchase.id);
       await expect(
         resolveRunFinding(
           ctx.db,
-          { id: replacementFinding.id, action: "apply" },
+          { id: finding.id, action: "apply" },
           ctx.actor,
         ),
-      ).rejects.toThrow(/preview|review/i);
-
-      if (editAfterPreview) {
+      ).rejects.toThrow(/review/i);
+      const review = await prepareSourceOrderReconciliation(
+        ctx.db,
+        {
+          id: finding.id,
+          resolution: {
+            kind: "replace_lines",
+            expenseIds: [manualExpense.shortcode],
+            lines: [
+              {
+                lineIndex: 0,
+                expenseId: manualExpense.shortcode,
+                productId: parseShortcodeFor("product", productRow.shortcode),
+              },
+            ],
+          },
+        },
+        ctx.actor,
+      );
+      expect(review.spend).toEqual({ before: 45, after: 45, delta: 0 });
+      expect(await getDb(ctx.db).select().from(expense)).toEqual(before);
+      if (editAfterPreview)
         await getDb(ctx.db)
           .update(expense)
           .set({ notes: "Changed after preview" })
           .where(eq(expense.id, manualExpense.id));
-      }
       if (editProposal) {
+        const [stored] = await getDb(ctx.db)
+          .select()
+          .from(runFinding)
+          .where(eq(runFinding.id, finding.id));
+        const fix = proposedImportFix.parse(stored!.proposedFix);
+        if (
+          fix.kind !== "reconcile_source_order" ||
+          !fix.proposedExtraction.candidate
+        )
+          throw new Error("Expected reconciliation proposal");
         await getDb(ctx.db)
           .update(runFinding)
           .set({
             proposedFix: {
-              ...reviewedFix,
-              lines: reviewedFix.lines.map((line) => ({
-                ...line,
-                title: "Different unreviewed item",
-              })),
+              ...fix,
+              proposedExtraction: {
+                ...fix.proposedExtraction,
+                candidate: {
+                  ...fix.proposedExtraction.candidate,
+                  lines: fix.proposedExtraction.candidate.lines.map((line) => ({
+                    ...line,
+                    title: "Different unreviewed item",
+                  })),
+                },
+              },
             },
           })
-          .where(eq(runFinding.id, replacementFinding.id));
+          .where(eq(runFinding.id, finding.id));
       }
-      const previewChanged = editAfterPreview || editProposal;
-      const outcome = await resolveRunFinding(
-        ctx.db,
-        {
-          id: replacementFinding.id,
-          action: "apply",
-          reviewedFingerprint: reviewSnapshot.fingerprint,
-        },
-        ctx.actor,
-      ).then(
+      const changed = editAfterPreview || editProposal;
+      const input = {
+        id: finding.id,
+        action: "apply" as const,
+        reviewedFingerprint: review.reviewedFingerprint,
+      };
+      const outcome = await resolveRunFinding(ctx.db, input, ctx.actor).then(
         () => "applied",
         (error) => (error instanceof Error ? error.message : String(error)),
       );
       expect(outcome).toMatch(
-        previewChanged ? /changed|preview/i : /^applied$/,
+        changed ? /changed|preview|stale|again/i : /^applied$/,
       );
-      const original = await getDb(ctx.db).query.expense.findFirst({
-        where: eq(expense.id, manualExpense.id),
+      expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual(stock);
+      expect(
+        await getDb(ctx.db).select().from(financialTransactionAllocation),
+      ).toEqual(allocations);
+      const live = await getDb(ctx.db)
+        .select()
+        .from(expense)
+        .where(isNull(expense.deletedAt));
+      expect(live).toHaveLength(1);
+      expect(live[0]).toMatchObject({
+        id: manualExpense.id,
+        cost: 45,
+        productId: changed ? null : existingProduct.entityId,
       });
-      expect(original?.deletedAt !== null).toBe(!previewChanged);
-      if (previewChanged) return;
-
-      const liveExpenses = await getDb(ctx.db)
-        .select({
-          id: expense.id,
-          productId: expense.productId,
-          cost: expense.cost,
-        })
+      if (changed) return;
+      expect(await resolveRunFinding(ctx.db, input, ctx.actor)).toMatchObject({
+        status: "applied",
+      });
+      const after = await getDb(ctx.db)
+        .select()
         .from(expense)
-        .where(
-          and(
-            eq(expense.purchaseId, manualPurchase.id),
-            isNull(expense.deletedAt),
-          ),
-        );
-      // Approval replaces the aggregate; import itself preserved it.
-      expect(liveExpenses).toHaveLength(1);
-      expect(liveExpenses[0]?.productId).toBe(existingProduct.entityId);
-      expect(Number(liveExpenses[0]?.cost)).toBe(45);
-
-      const [deletedManualExpense] = await getDb(ctx.db)
-        .select({ deletedAt: expense.deletedAt })
-        .from(expense)
-        .where(eq(expense.id, manualExpense.id));
-      expect(deletedManualExpense?.deletedAt).not.toBeNull();
+        .where(isNull(expense.deletedAt));
+      expect(after).toHaveLength(1);
+      expect(after[0]).toMatchObject({
+        id: manualExpense.id,
+        productId: existingProduct.entityId,
+        cost: 45,
+      });
+      expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(1);
+      expect((await getDb(ctx.db).select().from(purchase))[0]?.orderId).toBe(
+        "MANUAL-ORDER-1",
+      );
+      expect(await resolveRunFinding(ctx.db, input, ctx.actor)).toMatchObject({
+        status: "applied",
+      });
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(expense)
+          .where(isNull(expense.deletedAt)),
+      ).toEqual(after);
+      const observations = await getDb(ctx.db)
+        .select()
+        .from(sourceOrderObservation);
+      expect(
+        observations.every(
+          (row) => row.extraction.candidate?.printedGrandTotal === 45,
+        ),
+      ).toBe(true);
+      expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual(stock);
+      expect(
+        await getDb(ctx.db).select().from(financialTransactionAllocation),
+      ).toEqual(allocations);
     },
   );
 
-  // Delivery mail asks to receive only Product lines or open unresolved
-  // goods, so goods a replacement leaves unresolved must keep that finding.
+  it.each(["accepted_identity", "competing_purchase"] as const)(
+    "refuses reviewed orderless identity adoption after %s changes",
+    async (change) => {
+      const { manualPurchase, manualExpense, productRow } =
+        await importOverManualAggregate(true);
+      const finding = await replacementFinding(manualPurchase.id);
+      const review = await prepareSourceOrderReconciliation(
+        ctx.db,
+        {
+          id: finding.id,
+          resolution: {
+            kind: "replace_lines",
+            expenseIds: [manualExpense.shortcode],
+            lines: [
+              {
+                lineIndex: 0,
+                expenseId: manualExpense.shortcode,
+                productId: parseShortcodeFor("product", productRow.shortcode),
+              },
+            ],
+          },
+        },
+        ctx.actor,
+      );
+      if (change === "accepted_identity") {
+        await getDb(ctx.db)
+          .update(purchase)
+          .set({ orderId: "DISTINCT-ACCEPTED-ORDER" })
+          .where(eq(purchase.id, manualPurchase.id));
+      } else {
+        await insertWithShortcode(ctx.db, "purchase", {
+          vendorId: manualPurchase.vendorId,
+          orderId: "MANUAL-ORDER-1",
+          date: "2026-09-18",
+          statedTotal: 45,
+        });
+      }
+      const before = {
+        purchases: await getDb(ctx.db).select().from(purchase),
+        expenses: await getDb(ctx.db).select().from(expense),
+        observations: await getDb(ctx.db).select().from(sourceOrderObservation),
+        stock: await getDb(ctx.db).select().from(inventoryEntry),
+      };
+      await expect(
+        resolveRunFinding(
+          ctx.db,
+          {
+            id: finding.id,
+            action: "apply",
+            reviewedFingerprint: review.reviewedFingerprint,
+          },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/changed|identity|owns|order|unique/i);
+      expect(await getDb(ctx.db).select().from(purchase)).toEqual(
+        before.purchases,
+      );
+      expect(await getDb(ctx.db).select().from(expense)).toEqual(
+        before.expenses,
+      );
+      expect(await getDb(ctx.db).select().from(sourceOrderObservation)).toEqual(
+        before.observations,
+      );
+      expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual(
+        before.stock,
+      );
+    },
+  );
+
   it("files product_unresolved for goods an applied replacement leaves unresolved", async () => {
     const { manualPurchase, manualExpense } =
       await importOverManualAggregate(false);
-    const [finding] = await getDb(ctx.db)
-      .select({ id: runFinding.id, proposedFix: runFinding.proposedFix })
-      .from(runFinding)
-      .where(
-        and(
-          eq(runFinding.entityId, manualPurchase.id),
-          eq(runFinding.kind, "duplicate_lines"),
-        ),
-      );
-    const fix = proposedImportFix.parse(finding?.proposedFix);
-    if (!finding || fix.kind !== "replace_aggregate_line")
-      throw new Error("Expected a replacement preview");
-    // The member reviewed the line as goods they could not match yet.
-    const identities = (fix.reviewedLineIdentities ?? []).map((identity) => ({
-      ...identity,
-      productId: null,
-      promote: false,
-      unresolvedReason: "The receipt names no model.",
-    }));
-    const { snapshot } = await withTransaction(ctx.db, (tx) =>
-      loadAggregateReplacementSnapshot(tx, manualPurchase.id, manualExpense.id),
-    );
-    const fingerprint = await aggregateReplacementApprovalFingerprint(
-      snapshot.fingerprint,
-      fix.lines,
-      identities,
-      fix.reviewedLineAttributions ?? [],
-    );
-    await getDb(ctx.db)
-      .update(runFinding)
-      .set({
-        proposedFix: {
-          ...fix,
-          reviewedLineIdentities: identities,
-          reviewSnapshot: { ...fix.reviewSnapshot!, fingerprint },
-        },
-      })
-      .where(eq(runFinding.id, finding.id));
-    await resolveRunFinding(
+    const finding = await replacementFinding(manualPurchase.id);
+    const review = await prepareSourceOrderReconciliation(
       ctx.db,
-      { id: finding.id, action: "apply", reviewedFingerprint: fingerprint },
+      {
+        id: finding.id,
+        resolution: {
+          kind: "replace_lines",
+          expenseIds: [manualExpense.shortcode],
+          lines: [
+            {
+              lineIndex: 0,
+              expenseId: manualExpense.shortcode,
+              productId: null,
+            },
+          ],
+        },
+      },
       ctx.actor,
     );
+    const input = {
+      id: finding.id,
+      action: "apply" as const,
+      reviewedFingerprint: review.reviewedFingerprint,
+    };
+    expect(await resolveRunFinding(ctx.db, input, ctx.actor)).toMatchObject({
+      status: "applied",
+    });
+    expect(await resolveRunFinding(ctx.db, input, ctx.actor)).toMatchObject({
+      status: "applied",
+    });
     const unresolved = await getDb(ctx.db)
       .select({ id: runFinding.id })
       .from(runFinding)
@@ -960,9 +1083,10 @@ describe("shared purchase-import prepare and commit", () => {
         ),
       );
     expect(unresolved).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
   });
 
-  it("files a conflict finding instead of duplicating a manual Purchase whose Expense is already identified", async () => {
+  it("associates equivalent evidence instead of duplicating a manual Purchase whose Expense is already identified", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Manual conflict member",
       kind: "member",
@@ -1075,7 +1199,7 @@ describe("shared purchase-import prepare and commit", () => {
     });
     const result = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
     expect(result.items[0]?.outcome).toBe("updated");
-    expect(result.items[0]?.findingCount).toBeGreaterThan(0);
+    expect(result.items[0]?.findingCount).toBe(0);
 
     const purchasesForOrder = await getDb(ctx.db)
       .select({ id: purchase.id })
@@ -1100,7 +1224,7 @@ describe("shared purchase-import prepare and commit", () => {
       .select({ kind: runFinding.kind })
       .from(runFinding)
       .where(eq(runFinding.entityId, manualPurchase.id));
-    expect(findings.some((row) => row.kind === "duplicate_lines")).toBe(true);
+    expect(findings).toEqual([]);
   });
 });
 

@@ -47,7 +47,7 @@ export async function recoverMissedWork(db: Database) {
     { reconcileWorkflowRuns },
     { pruneRoutineRuns },
     { retireSettledCoordinators },
-    { disposeUnrelatedOriginals },
+    { disposeUnrelatedOriginals, disposeExpiredSearchOriginals },
     { productionOrderMailAttachmentStorage },
   ] = await Promise.all([
     import("~/server/repo/image-processing-maintenance"),
@@ -66,6 +66,7 @@ export async function recoverMissedWork(db: Database) {
     pruneResult,
     retireResult,
     disposalResult,
+    searchExpiryResult,
   ] = await Promise.allSettled([
     repairImageProcessingWork(db),
     expireStaleRuns(db),
@@ -86,6 +87,7 @@ export async function recoverMissedWork(db: Database) {
         : Promise.resolve(null),
     // Retries an unrelated Email's disposal lost after its disposition.
     disposeUnrelatedOriginals(db, productionOrderMailAttachmentStorage),
+    disposeExpiredSearchOriginals(db, productionOrderMailAttachmentStorage),
   ]);
   const errors = [
     image,
@@ -94,6 +96,7 @@ export async function recoverMissedWork(db: Database) {
     pruneResult,
     retireResult,
     disposalResult,
+    searchExpiryResult,
   ]
     .filter((result) => result.status === "rejected")
     .map((result) => String(result.reason));
@@ -107,6 +110,10 @@ export async function recoverMissedWork(db: Database) {
       pruneResult.status === "fulfilled" ? pruneResult.value : null,
     coordinatorsRetired:
       retireResult.status === "fulfilled" ? retireResult.value?.retired : null,
+    expiredSearchContentCleared:
+      searchExpiryResult.status === "fulfilled"
+        ? searchExpiryResult.value
+        : null,
     unrelatedDisposalsChecked:
       disposalResult.status === "fulfilled" ? disposalResult.value : null,
   });

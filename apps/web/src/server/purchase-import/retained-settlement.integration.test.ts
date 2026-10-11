@@ -3,7 +3,7 @@ import type {
   PurchaseId,
 } from "@cubby/schemas/identifiers";
 import { commitPurchaseImportInput } from "@cubby/schemas/purchase-import";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -12,6 +12,10 @@ import {
   inventoryEntry,
   merchantVendorRule,
   purchase,
+  expense,
+  purchasePaymentEvidence,
+  runFinding,
+  sourceOrderObservation,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -348,13 +352,18 @@ describe("settlement from retained order evidence", () => {
     expect(await allocationsFor([purchaseId])).toEqual([]);
   });
 
-  it("leaves an order whose sources disagree about its payments for review", async () => {
+  it("leaves disagreeing new payment evidence for review while settling only the accepted source", async () => {
     const { card, run } = await world();
     const purchaseId = await importOrder(run, {
       orderId: "FW-8001",
       total: 40,
       payments: [{ amount: 40, chargedAt: "2026-09-02T12:00:00.000Z" }],
     });
+    const beforeExpenses = await getDb(ctx.db).select().from(expense);
+    const beforePayments = await getDb(ctx.db)
+      .select()
+      .from(purchasePaymentEvidence);
+    const beforeStock = await getDb(ctx.db).select().from(inventoryEntry);
     await importOrder(run, {
       orderId: "FW-8001",
       total: 40,
@@ -364,9 +373,44 @@ describe("settlement from retained order evidence", () => {
         { amount: 20, chargedAt: "2026-09-02T12:00:00.000Z" },
       ],
     });
-    await charge(card.id, { amount: 40, postedDate: "2026-09-03" });
+    expect(await getDb(ctx.db).select().from(expense)).toEqual(beforeExpenses);
+    expect(await getDb(ctx.db).select().from(purchasePaymentEvidence)).toEqual(
+      beforePayments,
+    );
+    const observations = await getDb(ctx.db)
+      .select()
+      .from(sourceOrderObservation);
+    expect(observations).toHaveLength(2);
+    expect(
+      observations
+        .map((row) => row.extraction.candidate?.payments.length)
+        .sort(),
+    ).toEqual([1, 2]);
+    const findings = await getDb(ctx.db)
+      .select()
+      .from(runFinding)
+      .where(
+        and(
+          eq(runFinding.entityId, purchaseId),
+          eq(runFinding.status, "open"),
+          eq(runFinding.kind, "other"),
+        ),
+      );
+    expect(findings).toHaveLength(1);
+    const posted = await charge(card.id, {
+      amount: 40,
+      postedDate: "2026-09-03",
+    });
     await settleRetainedPaymentEvidence(ctx.db);
-    expect(await allocationsFor([purchaseId])).toEqual([]);
+    expect(await allocationsFor([purchaseId])).toEqual([
+      { transactionId: posted.id, purchaseId, amount: 40 },
+    ]);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual(
+      beforeStock,
+    );
+    expect(await getDb(ctx.db).select().from(purchasePaymentEvidence)).toEqual(
+      beforePayments,
+    );
   });
 
   it("treats a partly settled order with an open payment line as a competitor", async () => {

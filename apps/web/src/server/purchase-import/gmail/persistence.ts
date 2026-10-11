@@ -1,3 +1,4 @@
+import type { EmailExecutionPolicy } from "@cubby/schemas/email-fields";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   mailboxCoverage,
@@ -6,31 +7,63 @@ import {
   type MailboxCoverage,
   type MailboxClassification,
   type MailboxClassificationStage,
-  type MailboxMessageStatus,
+  type EmailStatus,
 } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import {
+  and,
+  arrayContains,
+  asc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  ne,
+  sql,
+} from "drizzle-orm";
 
+import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
   mailboxCursor,
-  mailboxMessage,
-  orderMailCandidateDecision,
+  email as emailTable,
   orderMail,
   orderMailAttachment,
   orderMailEvent,
   importSourceClaim,
+  run,
 } from "~/server/db/schema";
-import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  databaseForTransaction,
+  notDeleted,
+  withTransaction,
+  withTransactionDatabase,
+} from "~/server/repo/database-helpers";
+import { runAfterCommit } from "~/server/repo/database-helpers/core";
+import { hasAcceptedEmailAssociation } from "~/server/repo/email";
+import {
+  reserveMailAttachmentUpload,
+  lockMailAttachmentUpload,
+  finalizeMailAttachmentUpload,
+  cleanupAbandonedMailAttachmentUploads,
+} from "~/server/repo/mail-attachment-uploads";
+import {
+  readRetainedMail,
+  retainedMailJoin,
+} from "~/server/repo/retained-mail";
+import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
   assertMailSourceIdentityReady,
   HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
-  loadMailSourceClaimIds,
   mailSourceIdentityBlocked,
 } from "../mail-source-identity";
 import { readImportSourceClaimFamily } from "../source-claim-family";
+import { deferClassificationRefresh } from "./admitted-source";
 import {
   orderMailAttachmentKey,
   type OrderMailAttachmentStorage,
@@ -132,25 +165,25 @@ const messageWhere = (input: {
 }) =>
   and(
     eq(
-      mailboxMessage.ledgerPartyId,
+      emailTable.ledgerPartyId,
       parseEntityId("ledgerParty", input.ledgerPartyId),
     ),
-    eq(mailboxMessage.provider, "gmail"),
-    eq(mailboxMessage.mailboxId, input.mailboxId),
-    eq(mailboxMessage.messageId, input.messageId),
+    eq(emailTable.provider, "gmail"),
+    eq(emailTable.mailboxId, input.mailboxId),
+    eq(emailTable.messageId, input.messageId),
   );
-export async function readMailboxMessage(
+export async function readEmail(
   db: Database,
   input: { ledgerPartyId: string; mailboxId: string; messageId: string },
 ) {
   const [row] = await getDb(db)
     .select()
-    .from(mailboxMessage)
+    .from(emailTable)
     .where(messageWhere(input))
     .limit(1);
   return row ?? null;
 }
-export async function saveMailboxMessage(
+export async function saveEmail(
   db: Database,
   input: {
     ledgerPartyId: string;
@@ -160,7 +193,7 @@ export async function saveMailboxMessage(
     classification: MailboxClassification;
     classificationStage?: MailboxClassificationStage;
     classificationReason?: string;
-    status: MailboxMessageStatus;
+    status: EmailStatus;
     orderMailId?: string | null;
   },
 ) {
@@ -171,110 +204,266 @@ export async function saveMailboxMessage(
     classificationReason: input.classificationReason ?? null,
     classificationVersion: MAILBOX_RESEARCH_VERSION,
     status: input.status,
-    orderMailId: input.orderMailId ?? null,
-    runId: null,
+    orderMailId: input.orderMailId,
   };
-  await getDb(db)
-    .insert(mailboxMessage)
-    .values({
-      ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
-      mailboxId: input.mailboxId,
-      provider: "gmail",
-      messageId: input.messageId,
-      ...fields,
-    })
-    .onConflictDoUpdate({
-      target: [
-        mailboxMessage.ledgerPartyId,
-        mailboxMessage.provider,
-        mailboxMessage.mailboxId,
-        mailboxMessage.messageId,
-      ],
-      set: { ...fields, updatedAt: new Date() },
-      // Routine routing and provider removal cannot resolve historical ownership.
-      setWhere: ne(
-        mailboxMessage.classificationVersion,
-        HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
-      ),
+  await withTransaction(db, async (tx) => {
+    const { row, created } = await findOrCreateWithShortcode(tx, "email", {
+      where: messageWhere(input),
+      values: () => ({
+        ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
+        mailboxId: input.mailboxId,
+        provider: "gmail",
+        messageId: input.messageId,
+        ...fields,
+      }),
     });
+    if (created) return;
+    // Routine routing and provider removal cannot resolve historical ownership.
+    await tx
+      .update(emailTable)
+      .set({ ...fields, updatedAt: new Date() })
+      .where(
+        and(
+          eq(emailTable.id, row.id),
+          or(
+            isNull(emailTable.classificationVersion),
+            ne(
+              emailTable.classificationVersion,
+              HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+            ),
+          ),
+        ),
+      );
+  });
 }
 
-/** Rejected legacy originals survive only when a historical decision or source uses them. */
+/** A provider removal is a status observation, never a replacement classification or checksum. */
+export async function markEmailRemoved(
+  db: Database,
+  input: {
+    ledgerPartyId: string;
+    mailboxId: string;
+    messageId: string;
+    status: "deleted" | "excluded";
+  },
+) {
+  await withTransaction(db, async (tx) => {
+    const { row } = await findOrCreateWithShortcode(tx, "email", {
+      where: messageWhere(input),
+      values: () => ({
+        ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
+        provider: "gmail",
+        mailboxId: input.mailboxId,
+        messageId: input.messageId,
+        checksum: input.status,
+        status: input.status,
+      }),
+    });
+    if (row.classificationVersion === HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION)
+      return;
+    await tx
+      .update(emailTable)
+      .set({ status: input.status })
+      .where(eq(emailTable.id, row.id));
+  });
+}
+
+/** Headers survive content disposal; only an explicit member search renews its cache. */
+export async function saveMailboxMetadata(
+  db: Database,
+  input: {
+    ledgerPartyId: string;
+    mail: GmailOrderMail;
+    checksum: string;
+    executionPolicy: EmailExecutionPolicy;
+    memberSearch?: boolean;
+  },
+) {
+  const identity = {
+    ledgerPartyId: input.ledgerPartyId,
+    mailboxId: input.mail.mailboxId,
+    messageId: input.mail.messageId,
+  };
+  await withTransaction(db, async (tx) => {
+    const { row } = await findOrCreateWithShortcode(tx, "email", {
+      where: messageWhere(identity),
+      values: () => ({
+        ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
+        provider: "gmail",
+        mailboxId: identity.mailboxId,
+        messageId: identity.messageId,
+        checksum: input.checksum,
+        status: "pending",
+      }),
+    });
+    const fields = mailboxMetadataFields(input, row);
+    const changed =
+      (
+        [
+          "orderMailId",
+          "sender",
+          "subject",
+          "threadId",
+          "historyId",
+          "executionPolicy",
+          "searchOrigin",
+        ] as const
+      ).some((key) => fields[key] !== row[key]) ||
+      fields.receivedAt?.getTime() !== row.receivedAt?.getTime() ||
+      fields.searchExpiresAt?.getTime() !== row.searchExpiresAt?.getTime();
+    if (changed)
+      await tx
+        .update(emailTable)
+        .set({ ...fields, updatedAt: new Date() })
+        .where(eq(emailTable.id, row.id));
+  });
+}
+
+function mailboxMetadataFields(
+  input: Parameters<typeof saveMailboxMetadata>[1],
+  row: typeof emailTable.$inferSelect,
+) {
+  return {
+    orderMailId: row.orderMailId,
+    sender: input.mail.headers.from?.trim() || row.sender || null,
+    subject: input.mail.headers.subject?.trim() || row.subject || null,
+    receivedAt: dateFromInternalDate(input.mail.internalDate) ?? row.receivedAt,
+    threadId: input.mail.threadId ?? row.threadId,
+    historyId: input.mail.historyId ?? row.historyId,
+    executionPolicy: input.executionPolicy,
+    searchOrigin: input.memberSearch
+      ? ("member_search" as const)
+      : (row.searchOrigin ?? ("discovery" as const)),
+    searchExpiresAt: input.memberSearch
+      ? new Date(Date.now() + 7 * 86_400_000)
+      : row.searchExpiresAt,
+  };
+}
+
+/** Content disposal keeps identity, checksums and history; accepted evidence remains protected. */
 export async function clearUnrelatedOriginal(
   db: Database,
   input: { ledgerPartyId: string; mailboxId: string; messageId: string },
   storage: OrderMailAttachmentStorage,
 ): Promise<{ orderMailId: string; checksum: string } | null> {
   return withTransaction(db, async (tx) => {
-    const [original] = await tx
-      .select()
-      .from(orderMail)
-      .where(
-        and(
-          eq(
-            orderMail.ledgerPartyId,
-            parseEntityId("ledgerParty", input.ledgerPartyId),
-          ),
-          eq(orderMail.mailboxId, input.mailboxId),
-          eq(orderMail.messageId, input.messageId),
-        ),
-      )
-      .for("update")
-      .limit(1);
+    const [original] = await readRetainedMail(
+      tx,
+      {
+        ledgerPartyIds: [parseEntityId("ledgerParty", input.ledgerPartyId)],
+        mailboxId: input.mailboxId,
+        messageId: input.messageId,
+      },
+      "update",
+    );
     if (!original) return null;
     const protectedOriginal = {
       orderMailId: original.id,
       checksum: original.rawChecksum,
     };
     if (await mailSourceIdentityBlocked(tx, original)) return protectedOriginal;
-    const [decision] = await tx
-      .select({ id: orderMailCandidateDecision.id })
-      .from(orderMailCandidateDecision)
-      .innerJoin(
-        orderMailEvent,
-        eq(orderMailEvent.id, orderMailCandidateDecision.eventId),
-      )
-      .where(eq(orderMailEvent.orderMailId, original.id))
-      .limit(1);
+    if (await hasAcceptedEmailAssociation(tx, input)) return protectedOriginal;
     const attachments = await tx
       .select({
         id: orderMailAttachment.id,
         key: orderMailAttachment.pendingObjectKey,
         imageId: orderMailAttachment.imageId,
-        providerAttachmentId: orderMailAttachment.providerAttachmentId,
       })
       .from(orderMailAttachment)
-      .where(eq(orderMailAttachment.orderMailId, original.id));
-    const sourceClaimIds = await loadMailSourceClaimIds(
-      tx,
-      original,
-      attachments.map((attachment) => attachment.providerAttachmentId),
-    );
-    if (
-      decision ||
-      sourceClaimIds.length ||
-      attachments.some((attachment) => attachment.imageId)
-    )
-      return protectedOriginal;
+      .where(eq(orderMailAttachment.orderMailId, original.id))
+      .orderBy(asc(orderMailAttachment.id))
+      .for("update");
     for (const attachment of attachments)
-      if (attachment.key) await storage.delete(attachment.key);
+      if (attachment.key && !attachment.imageId) {
+        const key = attachment.key;
+        await tx
+          .update(orderMailAttachment)
+          .set({
+            pendingObjectKey: null,
+            pendingDeleteKeys: sql`array_append(${orderMailAttachment.pendingDeleteKeys}, ${key})`,
+          })
+          .where(eq(orderMailAttachment.id, attachment.id));
+        await runAfterCommit(databaseForTransaction(tx), async (committedDb) =>
+          deleteRetiredAttachmentKey(committedDb, storage, {
+            id: attachment.id,
+            key,
+          }),
+        );
+      }
     await tx
-      .delete(orderMailAttachment)
-      .where(eq(orderMailAttachment.orderMailId, original.id));
+      .update(orderMail)
+      .set({
+        content: {
+          snippet: null,
+          bodyText: null,
+          bodyHtml: null,
+          headers: original.content.headers,
+        },
+      })
+      .where(eq(orderMail.id, original.id));
     await tx
-      .delete(orderMailEvent)
-      .where(eq(orderMailEvent.orderMailId, original.id));
-    await tx
-      .update(mailboxMessage)
-      .set({ orderMailId: null })
-      .where(eq(mailboxMessage.orderMailId, original.id));
-    await tx.delete(orderMail).where(eq(orderMail.id, original.id));
+      .update(emailTable)
+      .set({ contentClearedAt: new Date() })
+      .where(messageWhere(input));
     return null;
   });
 }
 
+/** Only the exact retired upload is disposable; its durable receipt survives errors/crashes. */
+async function deleteRetiredAttachmentKey(
+  db: Database,
+  storage: OrderMailAttachmentStorage,
+  retired: Pick<typeof orderMailAttachment.$inferSelect, "id"> & {
+    key: string;
+  },
+) {
+  const [pending] = await getDb(db)
+    .select({ key: orderMailAttachment.pendingObjectKey })
+    .from(orderMailAttachment)
+    .where(
+      and(
+        eq(orderMailAttachment.id, retired.id),
+        arrayContains(orderMailAttachment.pendingDeleteKeys, [retired.key]),
+      ),
+    )
+    .limit(1);
+  if (!pending || pending.key === retired.key) return;
+  await storage.delete(retired.key);
+  await getDb(db)
+    .update(orderMailAttachment)
+    .set({
+      pendingDeleteKeys: sql`array_remove(${orderMailAttachment.pendingDeleteKeys}, ${retired.key})`,
+    })
+    .where(eq(orderMailAttachment.id, retired.id));
+}
+
+/** A correction can restore readable bytes while unrelated retired uploads still need disposal. */
+async function retryRetiredAttachmentKeys(
+  db: Database,
+  storage: OrderMailAttachmentStorage,
+) {
+  const pending = await getDb(db)
+    .select({
+      id: orderMailAttachment.id,
+      keys: orderMailAttachment.pendingDeleteKeys,
+    })
+    .from(orderMailAttachment)
+    .where(sql`cardinality(${orderMailAttachment.pendingDeleteKeys}) > 0`)
+    .orderBy(asc(orderMailAttachment.createdAt), asc(orderMailAttachment.id));
+  const failures: unknown[] = [];
+  for (const row of pending)
+    for (const key of row.keys) {
+      try {
+        await deleteRetiredAttachmentKey(db, storage, { id: row.id, key });
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+  return failures;
+}
+
 /**
- * Durable retry for disposal: an unrelated MailboxMessage whose original
+ * Durable retry for disposal: an unrelated Email whose original
  * survived (disposal failed after its disposition committed) is disposed of
  * again; a protected original is kept, as at resolve time.
  */
@@ -282,22 +471,120 @@ export async function disposeUnrelatedOriginals(
   db: Database,
   storage: OrderMailAttachmentStorage,
 ) {
+  const failures = await retryRetiredAttachmentKeys(db, storage);
+  try {
+    await cleanupAbandonedMailAttachmentUploads(db, storage);
+  } catch (error) {
+    failures.push(error);
+  }
   const retained = await getDb(db)
     .select({
-      ledgerPartyId: mailboxMessage.ledgerPartyId,
-      mailboxId: mailboxMessage.mailboxId,
-      messageId: mailboxMessage.messageId,
+      ledgerPartyId: emailTable.ledgerPartyId,
+      mailboxId: emailTable.mailboxId,
+      messageId: emailTable.messageId,
     })
-    .from(mailboxMessage)
+    .from(emailTable)
     .where(
       and(
-        eq(mailboxMessage.classification, "unrelated"),
-        isNotNull(mailboxMessage.orderMailId),
+        eq(emailTable.classification, "unrelated"),
+        isNotNull(emailTable.orderMailId),
+        isNull(emailTable.contentClearedAt),
       ),
     );
-  for (const message of retained)
-    await clearUnrelatedOriginal(db, message, storage);
+  for (const message of retained) {
+    try {
+      await clearUnrelatedOriginal(db, message, storage);
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length)
+    throw new AggregateError(
+      failures,
+      failures
+        .flatMap((error) =>
+          describeErrorCauses(error).causes.map((cause) => cause.message),
+        )
+        .join("\n"),
+    );
   return retained.length;
+}
+
+/** Expiry disposes abandoned member-search caches; assigned import evidence stays frozen. */
+export async function disposeExpiredSearchOriginals(
+  db: Database,
+  storage: OrderMailAttachmentStorage,
+  now = new Date(),
+) {
+  const expired = await getDb(db)
+    .select({ id: emailTable.id, runId: emailTable.runId })
+    .from(emailTable)
+    .where(
+      and(
+        eq(emailTable.searchOrigin, "member_search"),
+        lte(emailTable.searchExpiresAt, now),
+        isNull(emailTable.contentClearedAt),
+      ),
+    );
+  let cleared = 0;
+  const failures: unknown[] = [];
+  for (const candidate of expired) {
+    try {
+      const disposed = await withTransactionDatabase(db, async (tx) => {
+        // Mail reads and controls lock Run before Email. A changed assignment is
+        // preserved for the next pass instead of acquiring another Run out of order.
+        if (candidate.runId)
+          await getDb(tx)
+            .select({ id: run.id })
+            .from(run)
+            .where(eq(run.id, candidate.runId))
+            .for("share");
+        const [email] = await getDb(tx)
+          .select()
+          .from(emailTable)
+          .where(
+            and(
+              eq(emailTable.id, candidate.id),
+              eq(emailTable.searchOrigin, "member_search"),
+              lte(emailTable.searchExpiresAt, now),
+              isNull(emailTable.contentClearedAt),
+            ),
+          )
+          .for("update")
+          .limit(1);
+        if (
+          !email ||
+          email.runId !== candidate.runId ||
+          (await deferClassificationRefresh(
+            tx,
+            "classification_only",
+            email,
+          )) ||
+          (await hasAcceptedEmailAssociation(tx, email))
+        )
+          return false;
+        if (await clearUnrelatedOriginal(tx, email, storage)) return false;
+        await getDb(tx)
+          .update(emailTable)
+          .set({ contentClearedAt: now })
+          .where(eq(emailTable.id, email.id));
+        return true;
+      });
+      if (disposed) cleared += 1;
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length)
+    throw new AggregateError(
+      failures,
+      failures
+        .flatMap((error) =>
+          describeErrorCauses(error).causes.map((cause) => cause.message),
+        )
+        .join("\n"),
+    );
+  return cleared;
 }
 
 class GmailPersistenceError extends Error {
@@ -307,9 +594,8 @@ class GmailPersistenceError extends Error {
   }
 }
 
-const dateFromInternalDate = (value: string | null): Date => {
-  if (!value)
-    throw new GmailPersistenceError("Gmail message has no internal date");
+const dateFromInternalDate = (value: string | null): Date | null => {
+  if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     throw new GmailPersistenceError(
@@ -319,60 +605,85 @@ const dateFromInternalDate = (value: string | null): Date => {
   return date;
 };
 
-const header = (mail: GmailOrderMail, name: string): string =>
-  mail.headers[name.toLowerCase()]?.trim() || "(unknown)";
-
-/** Upsert one message row by `(ledgerPartyId, messageId)`; returns its id. */
+/** Email serializes shell acquisition; retries update its content pointer in place. */
 export const upsertOrderMail = async (
   db: Database,
   ledgerPartyId: string,
   mail: GmailOrderMail,
   originalChecksum?: string,
 ): Promise<string> => {
-  const content = retainedMailContent.parse({
-    snippet: mail.snippet,
-    bodyText: mail.bodyText,
-    bodyHtml: mail.bodyHtml,
-    headers: mail.headers,
-  });
+  const ownerId = parseEntityId("ledgerParty", ledgerPartyId);
   const fields = {
-    threadId: mail.threadId,
-    historyId: mail.historyId,
-    sender: header(mail, "from"),
-    subject: header(mail, "subject"),
-    receivedAt: dateFromInternalDate(mail.internalDate),
     rawChecksum: originalChecksum ?? (await sha256Hex(JSON.stringify(mail))),
-    content,
+    content: retainedMailContent.parse({
+      snippet: mail.snippet,
+      bodyText: mail.bodyText,
+      bodyHtml: mail.bodyHtml,
+      headers: mail.headers,
+    }),
   };
   return withTransaction(db, async (tx) => {
-    const [row] = await tx
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: parseEntityId("ledgerParty", ledgerPartyId),
-        messageId: mail.messageId,
-        mailboxId: mail.mailboxId,
-        ...fields,
-      })
-      .onConflictDoUpdate({
-        target: [
-          orderMail.ledgerPartyId,
-          orderMail.mailboxId,
-          orderMail.messageId,
-        ],
-        set: { ...fields, updatedAt: new Date() },
-      })
-      .returning();
+    const [email] = await tx
+      .select()
+      .from(emailTable)
+      .where(
+        and(
+          messageWhere({
+            ledgerPartyId,
+            mailboxId: mail.mailboxId,
+            messageId: mail.messageId,
+          }),
+          notDeleted(emailTable),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!email)
+      throw new GmailPersistenceError("Gmail original has no live Email owner");
+    const [existing] = email.orderMailId
+      ? await readRetainedMail(
+          tx,
+          {
+            ledgerPartyIds: [ownerId],
+            mailboxId: mail.mailboxId,
+            messageId: mail.messageId,
+            orderMailIds: [email.orderMailId],
+          },
+          "update",
+        )
+      : [];
+    if (email.orderMailId && !existing)
+      throw new GmailPersistenceError(
+        "Gmail Email original pointer is outside its owner",
+      );
+    if (existing) await assertMailSourceIdentityReady(tx, existing);
+    const [row] = existing
+      ? await tx
+          .update(orderMail)
+          .set({ ...fields, updatedAt: new Date() })
+          .where(eq(orderMail.id, existing.id))
+          .returning()
+      : await tx
+          .insert(orderMail)
+          .values({ ledgerPartyId: ownerId, ...fields })
+          .returning();
     if (!row)
       throw new GmailPersistenceError("Gmail mail upsert returned no id");
-    await assertMailSourceIdentityReady(tx, row);
-    // Original-before-root matches research source authorization and retirement.
-    // Advance current bytes without altering accepted association/alias history.
+    await assertMailSourceIdentityReady(tx, {
+      ...row,
+      mailboxId: email.mailboxId,
+      messageId: email.messageId,
+    });
+    await tx
+      .update(emailTable)
+      .set({ orderMailId: row.id })
+      .where(eq(emailTable.id, email.id));
     const family = await readImportSourceClaimFamily(
       tx,
       {
         ledgerPartyId: row.ledgerPartyId,
         kind: "mail_message",
-        externalKey: `gmail:${row.mailboxId}:${row.messageId}`,
+        externalKey: `gmail:${email.mailboxId}:${email.messageId}`,
       },
       { lock: "update", writable: true },
     );
@@ -421,23 +732,69 @@ const adoptLegacyAttachment = async (
   return Boolean(adopted?.pendingObjectKey || adopted?.imageId);
 };
 
-/**
- * Store one attachment: its row, then its bytes in object storage, one
- * attachment at a time so a batch never holds more than one payload.
- *
- * Identity is the MIME part (`sourceKey`), not Gmail's attachment id, which
- * Gmail re-mints on every fetch — keyed on it, a replayed message would add a
- * row and an object each time. A row that already has bytes (or a Purchase
- * image) is skipped before any fetch. The upload follows the row because its
- * key embeds the row id; an upload failure leaves the row keyless, and the
- * replay stores it while Gmail still has the bytes.
- */
+/** Stage only missing bytes; adoption itself remains inside the publication transaction. */
+export async function attachmentHasRetainedBytes(
+  db: Database,
+  input: { orderMailId: string; attachment: GmailOrderMailAttachment },
+) {
+  const rows = await getDb(db)
+    .select()
+    .from(orderMailAttachment)
+    .where(eq(orderMailAttachment.orderMailId, input.orderMailId))
+    .orderBy(asc(orderMailAttachment.createdAt), asc(orderMailAttachment.id));
+  const row =
+    rows.find(
+      (part) => part.providerAttachmentId === input.attachment.sourceKey,
+    ) ??
+    rows.find(
+      (part) =>
+        (!part.providerAttachmentId.startsWith("gmail:") ||
+          part.providerAttachmentId.startsWith("gmail:me:")) &&
+        part.filename === input.attachment.filename &&
+        part.mimeType === input.attachment.mimeType,
+    );
+  return Boolean(row?.pendingObjectKey || row?.imageId);
+}
+
+/** Register only missing staged payloads before publication can PUT any bytes.
+ * Reservations outlive enclosing rollbacks; unused attempts are reaped daily. */
+export async function reserveGmailAttachmentUploads(
+  db: Database,
+  input: {
+    orderMailId: string | null;
+    attachments: readonly GmailOrderMailAttachment[];
+    payloads: ReadonlyMap<string, string>;
+  },
+): Promise<ReadonlyMap<string, string>> {
+  const keys = new Map<string, string>();
+  for (const attachment of input.attachments) {
+    if (!(attachment.dataBase64Url ?? input.payloads.get(attachment.sourceKey)))
+      continue;
+    if (
+      input.orderMailId &&
+      (await attachmentHasRetainedBytes(db, {
+        orderMailId: input.orderMailId,
+        attachment,
+      }))
+    )
+      continue;
+    const attemptId = crypto.randomUUID();
+    const key = `${orderMailAttachmentKey(crypto.randomUUID())}/${attemptId}`;
+    await reserveMailAttachmentUpload(db, { key, attemptId });
+    keys.set(attachment.sourceKey, key);
+  }
+  return keys;
+}
+
+/** Store staged originals under a durable per-upload reservation. Existing
+ * current/promoted keys are read verbatim and skipped before any PUT. */
 export const storeOrderMailAttachment = async (
   db: Database,
   input: {
     orderMailId: string;
     attachment: GmailOrderMailAttachment;
     fetchData: () => Promise<string | undefined>;
+    uploadKey?: string;
     storage: OrderMailAttachmentStorage;
   },
 ): Promise<void> => {
@@ -482,12 +839,18 @@ export const storeOrderMailAttachment = async (
     .returning({ id: orderMailAttachment.id });
   if (!row) throw new GmailPersistenceError("Attachment upsert had no id");
   if (!bytes) return;
-  const key = orderMailAttachmentKey(row.id);
+  const key = input.uploadKey;
+  if (!key)
+    throw new GmailPersistenceError(
+      "Attachment upload has no durable reservation",
+    );
+  await lockMailAttachmentUpload(db, key);
   await input.storage.put(key, bytes, input.attachment.mimeType);
   await database
     .update(orderMailAttachment)
     .set({ pendingObjectKey: key })
     .where(eq(orderMailAttachment.id, row.id));
+  await finalizeMailAttachmentUpload(db, key);
 };
 
 /**
@@ -509,13 +872,16 @@ export const persistGmailEvents = async (
     const known = new Map(
       (
         await tx
-          .select({ messageId: orderMail.messageId, id: orderMail.id })
+          .select({ messageId: emailTable.messageId, id: orderMail.id })
           .from(orderMail)
+          .innerJoin(emailTable, retainedMailJoin)
           .where(
             and(
               eq(orderMail.ledgerPartyId, ledgerPartyId),
-              eq(orderMail.mailboxId, input.mailboxId),
-              inArray(orderMail.messageId, [
+              eq(emailTable.provider, "gmail"),
+              notDeleted(emailTable),
+              eq(emailTable.mailboxId, input.mailboxId),
+              inArray(emailTable.messageId, [
                 ...new Set(input.events.map((event) => event.messageId)),
               ]),
             ),

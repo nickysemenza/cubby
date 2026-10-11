@@ -53,6 +53,8 @@ import {
   loadAggregateReplacementSnapshot,
   redistributeReplacementAttributions,
 } from "./aggregate-replacement";
+import { commitSourceOrderReconciliation } from "./reconciliation";
+import { lockFindingSettlement } from "./reconciliation-state";
 import {
   existingExpenses,
   resolveLineProduct,
@@ -210,6 +212,15 @@ async function applyFix(
   ledgerPartyId: string,
   runId: (typeof runFinding.$inferSelect)["runId"],
 ) {
+  if (fix.kind === "reconcile_source_order") {
+    await commitSourceOrderReconciliation(
+      tx,
+      fix,
+      actor,
+      parseEntityId("ledgerParty", ledgerPartyId),
+    );
+    return;
+  }
   if (fix.kind === "receive_purchase") {
     throw new Error(
       "Receiving stays interactive. Open the Purchase and use its existing receive flow.",
@@ -492,6 +503,7 @@ export async function resolveRunFinding(
 ) {
   const input = resolveRunFindingInput.parse(rawInput);
   return withTransaction(db, async (tx) => {
+    await lockFindingSettlement(tx, input.id, actor);
     const [finding] = await tx
       .select({
         id: runFinding.id,
@@ -517,6 +529,18 @@ export async function resolveRunFinding(
     if (!finding) throw new Error("Import finding not found for this member.");
     await assertFindingOwner(tx, actor, finding.ledgerPartyId);
     if (finding.status !== "open") {
+      const fix = storedImportFix.parse(finding.proposedFix);
+      if (
+        finding.status === "applied" &&
+        input.action === "apply" &&
+        fix?.kind === "reconcile_source_order" &&
+        fix.review &&
+        input.reviewedFingerprint === fix.reviewedFingerprint
+      )
+        return resolveRunFindingOut.parse({
+          id: finding.id,
+          status: finding.status,
+        });
       throw new Error("This import finding has already been resolved.");
     }
     if (input.action === "apply") {
@@ -530,9 +554,18 @@ export async function resolveRunFinding(
         throw new Error(
           "Review the current replacement preview before applying it.",
         );
+      if (
+        fix.kind === "reconcile_source_order" &&
+        (!fix.review || input.reviewedFingerprint !== fix.reviewedFingerprint)
+      )
+        throw new Error(
+          "Review the source-order reconciliation before applying it.",
+        );
       assertFixTargetsFinding(finding, fix);
       {
-        await assertRunProvenance(tx, finding);
+        // A refused source wrote no accepted record; its proposal cannot apply.
+        if (fix.kind !== "reconcile_source_order")
+          await assertRunProvenance(tx, finding);
         await applyFix(tx, fix, actor, finding.ledgerPartyId, finding.runId);
       }
     }

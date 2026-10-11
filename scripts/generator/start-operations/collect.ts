@@ -71,9 +71,10 @@ export type DeclaredOperation = {
   member: string;
 };
 
-const sourceFiles = (directory: string): string[] =>
+export const sourceFiles = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
+    if (entry.name.startsWith(".lint-fixture-")) return [];
     if (entry.isDirectory()) return sourceFiles(path);
     return /\.[jt]sx?$/u.test(entry.name) &&
       !/\.(?:test|spec)\./u.test(entry.name)

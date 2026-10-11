@@ -523,7 +523,6 @@ function VendorAccountCaptureFields() {
       label: "",
       vendorId: "",
       ledgerPartyId: "",
-      browser: "chrome",
     },
   });
   return (
@@ -684,7 +683,6 @@ describe("EntityIntentFields", () => {
     expect(screen.getByLabelText("Label")).toBeInTheDocument();
     expect(screen.getByLabelText("Vendor")).toBeInTheDocument();
     expect(screen.getByLabelText("Ledger party")).toBeInTheDocument();
-    expect(screen.getByLabelText("Browser")).toBeInTheDocument();
   });
 
   it("renders a declared section as a titled region, leaving main fields ungrouped", () => {

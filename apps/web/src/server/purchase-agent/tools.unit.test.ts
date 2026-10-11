@@ -16,7 +16,11 @@ function fakeApi(): ToolExecutionApi {
     },
   });
 }
-const tools = (services: RunServices) => runAgentTools(() => services);
+const tools = (services: RunServices) =>
+  runAgentTools(
+    () => services,
+    async () => ({ generation: "synthetic-generation", sequence: 1 }),
+  );
 describe("run agent tool behavior", () => {
   it("ends the submission when a claim finds the run already stopped", async () => {
     const tool = tools(

@@ -1,3 +1,4 @@
+import type { ChildTableDeclaration } from "../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import { servesKernelGet } from "./list-capabilities.ts";
 import { humanize } from "../../../packages/shared/src/text-case.ts";
 import { colorizeEnumOptions } from "../../../packages/shared/src/enum-palette.ts";
@@ -2742,6 +2743,7 @@ const validateImagePolicies = (entities: readonly CompiledEntity[]): void => {
 
 export const compileEntityDeclarations = (
   declarations: readonly unknown[],
+  moduleChildren: readonly ChildTableDeclaration[] = [],
 ): CompiledEntity[] => {
   if (declarations.length === 0)
     throw new EntityDeclarationError("Entity declarations must not be empty.");
@@ -2786,7 +2788,7 @@ export const compileEntityDeclarations = (
       }
     }
   }
-  validateEntityTables(entities);
+  validateEntityTables(entities, moduleChildren);
   validateReferenceScopes(entities);
   validatePhotoCategoryLabels(photoCategories);
   validateImagePolicies(entities);

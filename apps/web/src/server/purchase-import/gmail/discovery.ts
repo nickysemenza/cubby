@@ -16,7 +16,7 @@ import { and, eq, lt, sql } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
-import { run as runTable, runProgress } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import { reportServerError } from "~/server/errors/report-error";
 import {
@@ -24,6 +24,7 @@ import {
   withTransaction,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
+import { recordRunProgress } from "~/server/repo/run-progress";
 import { ensureRun } from "~/server/runs/ensure-run";
 import { assertExecutionAuthorization } from "~/server/runs/execution-authorization";
 import {
@@ -40,7 +41,6 @@ import {
   claimWorkflowRun,
   failWorkflowRun,
   launchWorkflowRun,
-  recordRunProgress,
   runFailureText,
 } from "~/server/workflow-runs/lifecycle";
 
@@ -51,7 +51,7 @@ import {
   checkpointMailboxCoverage,
   loadGmailCursor,
   persistGmailEvents,
-  saveMailboxMessage,
+  markEmailRemoved,
 } from "./persistence";
 import { gmailProviderForUser } from "./provider";
 import type { MailRelevance } from "./relevance";
@@ -246,6 +246,7 @@ export async function startMailDiscovery(
           input: {
             mailboxId: target.mailboxId,
             scopedQueries: target.scopedQueries,
+            executionPolicy: "classification_only",
             ...allowance,
           },
           progress: {
@@ -392,12 +393,10 @@ export async function saveMailDiscoveryBatch(
         .map((event) => [event.messageId, "deleted" as const]),
     );
     for (const [messageId, status] of removed)
-      await saveMailboxMessage(db, {
+      await markEmailRemoved(db, {
         ledgerPartyId: claimed.ledgerPartyId,
         mailboxId: claimed.input.mailboxId,
         messageId,
-        checksum: status,
-        classification: "uncertain",
         status,
       });
     const ingested = await ingestGmailMessages(db, provider, {
@@ -410,7 +409,12 @@ export async function saveMailDiscoveryBatch(
       storage: ports.storage,
     });
     if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
-    for (let offset = 0; offset < ingested.orderMailIds.length; offset += 50) {
+    for (
+      let offset = 0;
+      claimed.input.executionPolicy === "import" &&
+      offset < ingested.orderMailIds.length;
+      offset += 50
+    ) {
       if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
       const results = await (
         ports.research ?? (await import("../mail-import-run")).startMailImport
@@ -467,12 +471,14 @@ export async function saveMailDiscoveryBatch(
         .update(runTable)
         .set({ progress })
         .where(eq(runTable.id, current.row.id));
-      await recordRunProgress(
-        tx,
-        current.row.id,
-        "page_saved",
-        `Processed Gmail page ${index + 1}; ${ingested.orderMailIds.length} sources retained, ${ingested.unrelated.length} unrelated messages`,
-      );
+      await recordRunProgress(tx, {
+        runId: current.row.id,
+        eventId: `gmail:${params.attempt}:page:${index}`,
+        generation: `workflow:${params.attempt}`,
+        sequence: index + 1,
+        phase: "page_saved",
+        detail: `Processed Gmail page ${index + 1}; ${ingested.orderMailIds.length} sources retained, ${ingested.unrelated.length} unrelated messages`,
+      });
       return { kind: "done" as const };
     });
   } catch (error) {
@@ -500,6 +506,19 @@ export async function finishMailDiscovery(
     })
     .where(eligibleAttempt(params))
     .returning({ id: runTable.id });
+  if (finished)
+    await recordRunProgress(
+      db,
+      {
+        runId: finished.id,
+        eventId: `gmail:${params.attempt}:completed`,
+        generation: `workflow:${params.attempt}`,
+        sequence: claimed.progress.pagesDone + 1,
+        phase: "completed",
+        detail: "Gmail discovery pass completed",
+      },
+      now,
+    );
   return finished ? { kind: "done" } : { kind: "stopped" };
 }
 
@@ -534,6 +553,17 @@ export async function continueMailDiscovery(
     Number(mailboxDiscoveryProgress.parse(existing.progress).attempt) > 0
   )
     return;
+  if (existing && input.executionPolicy === "classification_only") {
+    await getDb(db)
+      .update(runTable)
+      .set({
+        input: {
+          ...mailboxDiscoveryInput.parse(existing.input),
+          executionPolicy: "classification_only",
+        },
+      })
+      .where(eq(runTable.id, existing.id));
+  }
   let nextRunId = existing?.id;
   if (!nextRunId) {
     const allowance = await nextDiscoveryAllowance(
@@ -557,7 +587,11 @@ export async function continueMailDiscovery(
           status: "running",
           clientKey,
           notes: "Continue Gmail history coverage",
-          input: { ...input, ...allowance },
+          input: {
+            ...input,
+            ...allowance,
+            executionPolicy: input.executionPolicy,
+          },
           progress: {
             attempt: 0,
             phase: "listing",
@@ -602,9 +636,9 @@ export async function failMailDiscovery(
 }
 
 /**
- * Delete routine passes older than a month with their progress lines. A
- * routine Run saved and recorded nothing, so it carries no evidence; one
- * that anything references (AI usage) is kept.
+ * Delete month-old routine passes only when they own no durable evidence.
+ * Unpaid predictions, retrieval failures, previews, and operation receipts
+ * preserve the original Run and its history just as paid usage does.
  */
 export async function pruneRoutineRuns(
   db: Database,
@@ -624,6 +658,18 @@ export async function pruneRoutineRuns(
     sql.raw(
       `NOT EXISTS (SELECT 1 FROM "RunFinding" f WHERE f."runId" = "Run"."id")`,
     ),
+    sql.raw(
+      `NOT EXISTS (SELECT 1 FROM "EmailClassificationObservation" o WHERE o."runId" = "Run"."id")`,
+    ),
+    sql.raw(
+      `NOT EXISTS (SELECT 1 FROM "EmailRetrievalFailure" f WHERE f."runId" = "Run"."id")`,
+    ),
+    sql.raw(
+      `NOT EXISTS (SELECT 1 FROM "EmailCandidateObservation" o WHERE o."runId" = "Run"."id")`,
+    ),
+    sql.raw(
+      `NOT EXISTS (SELECT 1 FROM "RunOperation" o WHERE o."runId" = "Run"."id")`,
+    ),
   );
   return withTransaction(db, async (tx) => {
     const ids = (
@@ -631,7 +677,6 @@ export async function pruneRoutineRuns(
     ).map((row) => row.id);
     if (ids.length === 0) return 0;
     for (const id of ids) {
-      await tx.delete(runProgress).where(eq(runProgress.runId, id));
       await tx.delete(runTable).where(eq(runTable.id, id));
     }
     return ids.length;

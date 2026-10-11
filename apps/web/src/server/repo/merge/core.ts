@@ -1,10 +1,9 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * Shared merge mechanics. Finalization keeps row removal and embedding/audit
  * cascade in one transaction; removal order remains caller-controlled because
  * partial unique indexes make it load-bearing.
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { EntityId } from "@cubby/schemas/identifiers";
@@ -13,6 +12,7 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdge } from "~/server/db/entity-incoming-edges";
 import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { runFinding } from "~/server/db/schema";
@@ -87,9 +87,8 @@ const edgeColumn = <E extends Entity>(
   entity: E,
   edgeKey: IncomingEdgeKey<E>,
 ): AnyColumn => {
-  const edge = Object.entries(INCOMING_EDGES[entity]).find(
-    ([key]) => key === edgeKey,
-  )?.[1];
+  const edges: Readonly<Record<string, IncomingEdge>> = INCOMING_EDGES[entity];
+  const edge = Object.entries(edges).find(([key]) => key === edgeKey)?.[1];
   if (!edge) {
     throw new Error(`No incoming edge ${String(edgeKey)} on ${entity}`);
   }

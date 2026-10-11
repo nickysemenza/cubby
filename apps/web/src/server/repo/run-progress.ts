@@ -1,10 +1,20 @@
-import { runShortcode } from "@cubby/schemas/identifiers";
-import { mailDiscoveryRunProgress, runStatus } from "@cubby/schemas/run-fields";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { runEntityId, runShortcode } from "@cubby/schemas/identifiers";
+import type { AgentProgressEvent } from "@cubby/schemas/purchase-agent-services";
+import {
+  mailDiscoveryRunProgress,
+  runProgressEvent,
+  runStatus,
+  type RunProgressEvent,
+} from "@cubby/schemas/run-fields";
+import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { run, runProgress } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { run } from "~/server/db/schema";
+import {
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 import {
   isWorkflowRunPurpose,
   workflowInstanceId,
@@ -73,23 +83,18 @@ export async function getRunLiveProgress(
     record.run,
     discovery?.attempt ?? 0,
   );
-  const events = await database
-    .select({
-      id: runProgress.eventId,
-      phase: runProgress.phase,
-      detail: runProgress.detail,
-      createdAt: runProgress.createdAt,
-      ageSeconds: sql<number>`greatest(0, floor(extract(epoch from (now()::timestamp - ${runProgress.createdAt}))))::int`,
-    })
-    .from(runProgress)
-    .where(eq(runProgress.runId, record.run.id))
-    .orderBy(desc(runProgress.createdAt), desc(runProgress.id))
-    .limit(100);
+  const events = record.run.progressHistory ?? [];
   return {
     status: runStatus.parse(record.run.status),
-    progress: events.reverse().map((event) => ({
-      ...event,
-      createdAt: event.createdAt.toISOString(),
+    progress: events.map((event) => ({
+      id: event.eventId,
+      phase: event.phase,
+      detail: event.detail,
+      createdAt: event.createdAt,
+      ageSeconds: Math.max(
+        0,
+        Math.floor((Date.now() - Date.parse(event.createdAt)) / 1000),
+      ),
     })),
     discovery: discovery
       ? {
@@ -105,4 +110,52 @@ export async function getRunLiveProgress(
       : null,
     workflow,
   };
+}
+
+/** Run row locking makes deduplication, delivery fencing and heartbeat one write. */
+export async function recordRunProgress(
+  db: Database,
+  input: AgentProgressEvent,
+  now = new Date(),
+): Promise<{ recorded: boolean }> {
+  const id = runEntityId.parse(input.runId);
+  return withTransaction(db, async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(run)
+      .where(eq(run.id, id))
+      .for("no key update");
+    if (!current) throw new Error("Progress Run does not exist");
+    const eventIds = current.progressEventIds ?? [];
+    if (eventIds.includes(input.eventId)) return { recorded: false };
+    const workflow = mailDiscoveryRunProgress.safeParse(current.progress);
+    const generation =
+      current.dispatchEventId ??
+      (workflow.success ? `workflow:${workflow.data.attempt}` : null);
+    if (generation !== input.generation) return { recorded: false };
+    if (
+      current.liveProgress?.generation === input.generation &&
+      current.liveProgress.sequence >= input.sequence
+    )
+      return { recorded: false };
+    const event: RunProgressEvent = runProgressEvent.parse({
+      ...input,
+      currentItem: input.currentItem ?? null,
+      awaitingApproval: input.awaitingApproval ?? false,
+      detail: input.detail ?? null,
+      createdAt: now.toISOString(),
+    });
+    await tx
+      .update(run)
+      .set({
+        liveProgress: event,
+        progressHistory: [...(current.progressHistory ?? []), event].slice(
+          -100,
+        ),
+        progressEventIds: [...eventIds, input.eventId],
+        heartbeatAt: now,
+      })
+      .where(eq(run.id, id));
+    return { recorded: true };
+  });
 }

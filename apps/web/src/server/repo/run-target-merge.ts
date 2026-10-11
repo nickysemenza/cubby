@@ -1,51 +1,69 @@
-import { type RunTargetEntityKind } from "@cubby/schemas/run-fields";
+import type { ImageId } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { runTarget } from "~/server/db/schema";
+import { photoRunImage } from "~/server/db/schema";
 
-/**
- * Merge only colliding tasks of the same Run, entity kind, and frozen work key:
- * the loser's colliding target is deleted, the rest move to the keeper. Source
- * work rosters remain separate even on the same subject.
- */
-export const mergeRunTargets = async (
+type Membership = typeof photoRunImage.$inferSelect;
+const settled = (row: Membership) =>
+  row.state === "completed" || row.state === "skipped";
+const sameReceipt = (a: Membership, b: Membership) =>
+  a.state === b.state &&
+  a.outcome === b.outcome &&
+  a.skipReason === b.skipReason &&
+  a.commitReceipt?.groupKey === b.commitReceipt?.groupKey &&
+  a.commitReceipt?.productId === b.commitReceipt?.productId &&
+  a.commitReceipt?.purpose === b.commitReceipt?.purpose &&
+  a.commitReceipt?.inventoryId === b.commitReceipt?.inventoryId;
+
+/** Collisions retain settled replay data; conflicting commits require a decision. */
+export const mergePhotoRunImages = async (
   tx: DrizzleTransaction,
-  entityKind: RunTargetEntityKind,
-  keepId: string,
-  loserIds: readonly string[],
+  keepId: ImageId,
+  loserIds: readonly ImageId[],
 ): Promise<void> => {
-  const targetedRuns = await tx
+  if (!loserIds.length) return;
+  const memberships = await tx
     .select()
-    .from(runTarget)
-    .where(
-      and(
-        eq(runTarget.entityKind, entityKind),
-        inArray(runTarget.entityId, [...loserIds]),
-      ),
-    )
-    .orderBy(asc(runTarget.id))
+    .from(photoRunImage)
+    .where(inArray(photoRunImage.imageId, [keepId, ...loserIds]))
+    .orderBy(asc(photoRunImage.id))
     .for("update");
-  for (const target of targetedRuns) {
+  for (const target of memberships.filter((row) => row.imageId !== keepId)) {
     const [existing] = await tx
-      .select({ id: runTarget.id })
-      .from(runTarget)
+      .select()
+      .from(photoRunImage)
       .where(
         and(
-          eq(runTarget.runId, target.runId),
-          eq(runTarget.entityKind, entityKind),
-          eq(runTarget.entityId, keepId),
-          eq(runTarget.workKey, target.workKey),
+          eq(photoRunImage.runId, target.runId),
+          eq(photoRunImage.imageId, keepId),
+          eq(photoRunImage.workKey, target.workKey),
         ),
-      )
-      .for("update");
-    if (existing) {
-      await tx.delete(runTarget).where(eq(runTarget.id, target.id));
-    } else {
+      );
+    if (!existing) {
       await tx
-        .update(runTarget)
-        .set({ entityId: keepId, updatedAt: new Date() })
-        .where(eq(runTarget.id, target.id));
+        .update(photoRunImage)
+        .set({ imageId: keepId, updatedAt: new Date() })
+        .where(eq(photoRunImage.id, target.id));
+      continue;
     }
+    if (settled(existing) && settled(target) && !sameReceipt(existing, target))
+      throw new Error("Image merge has conflicting settled photo receipts");
+    if (settled(target) && !settled(existing)) {
+      const { id: _id, imageId: _imageId, ...receiptState } = target;
+      await tx
+        .update(photoRunImage)
+        .set({
+          ...receiptState,
+          position: existing.position ?? target.position,
+          createdAt:
+            existing.createdAt < target.createdAt
+              ? existing.createdAt
+              : target.createdAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(photoRunImage.id, existing.id));
+    }
+    await tx.delete(photoRunImage).where(eq(photoRunImage.id, target.id));
   }
 };

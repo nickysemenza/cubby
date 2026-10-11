@@ -16,6 +16,7 @@ import {
   product,
   productMatchCandidate,
   purchase,
+  sourceOrderObservation,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { syncProductExternalIds } from "~/server/repo/product/update-helpers";
@@ -447,9 +448,19 @@ describe("purchase import identifier collisions", () => {
     expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
       4,
     );
+    // Equivalent second sources retain both orders without duplicating the
+    // accepted Product bindings, Expenses or physical receipts.
     expect(await getDb(ctx.db).select().from(importSourceProduct)).toHaveLength(
-      4,
+      2,
     );
+    expect(
+      await getDb(ctx.db).select().from(sourceOrderObservation),
+    ).toHaveLength(4);
+    const lines = await getDb(ctx.db).select().from(expense);
+    expect(lines.map((row) => row.productId).sort()).toEqual(
+      [f.copper.entityId, f.blue.entityId].sort(),
+    );
+    expect(lines.reduce((total, row) => total + Number(row.cost), 0)).toBe(48);
     expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
   });
 });

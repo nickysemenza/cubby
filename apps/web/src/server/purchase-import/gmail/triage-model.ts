@@ -1,5 +1,8 @@
+import type { emailClassificationObservationInput } from "@cubby/schemas/email-observations";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import type { MailboxClassification } from "@cubby/schemas/mailbox-research";
+import { selectDecisionModel } from "@cubby/shared/ai/models";
+import type { z } from "zod";
 
 import {
   MAILBOX_RELEVANCE_FEATURE,
@@ -10,8 +13,16 @@ import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { paidResearchPreflight } from "~/server/runs/execution-transport";
 
+import { gmailExecutionPolicy } from "./execution-policy";
 import type { MailRelevance } from "./relevance";
 import type { MailTriage } from "./triage";
+
+export type GmailClassificationCall = Pick<
+  z.output<typeof emailClassificationObservationInput>,
+  "model" | "promptVersion" | "operation"
+>;
+
+type OnClassificationCall = (call: GmailClassificationCall) => void;
 
 const choices = [
   "related",
@@ -30,19 +41,26 @@ export const mailTriagePrompt = (subject: string) => ({
 });
 
 export const productionMailTriage =
-  (db: Database, runId: string): MailTriage =>
+  (db: Database, runId: string, onCall?: OnClassificationCall): MailTriage =>
   async (subject) => {
     const prompt = mailTriagePrompt(subject);
     if (!jevChoiceFitsContext(prompt)) return "uncertain";
+    const model = selectDecisionModel();
     const result = await runJevChoice({
       ...prompt,
       feature: MAILBOX_TRIAGE_FEATURE,
+      decisionModel: model,
       usage: {
         db,
         runId: runEntityId.parse(runId),
         operation: "mailbox-triage",
         beforePaidRequest: paidResearchPreflight(db, runEntityId.parse(runId)),
       },
+    });
+    onCall?.({
+      model,
+      promptVersion: MAILBOX_TRIAGE_FEATURE.promptVersion,
+      operation: "mailbox-triage",
     });
     if (result.selectedIndex === null) return "uncertain";
     const choice = choices[result.selectedIndex] ?? "uncertain";
@@ -52,13 +70,28 @@ export const productionMailTriage =
   };
 
 export const productionMailRelevance =
-  (db: Database, runId: string): MailRelevance =>
-  (request) =>
-    runStructuredFeature(MAILBOX_RELEVANCE_FEATURE, request, {
-      db,
-      runId: runEntityId.parse(runId),
+  (db: Database, runId: string, onCall?: OnClassificationCall): MailRelevance =>
+  async (request) => {
+    if ((await gmailExecutionPolicy(db, runId)) !== "import")
+      throw new Error(
+        "Classification-only Gmail Runs cannot use the relevance model.",
+      );
+    const result = await runStructuredFeature(
+      MAILBOX_RELEVANCE_FEATURE,
+      request,
+      {
+        db,
+        runId: runEntityId.parse(runId),
+        operation: "mailbox-relevance",
+        subscriptionRequired: true,
+        subscriptionFallback: "budgeted",
+        beforePaidRequest: paidResearchPreflight(db, runEntityId.parse(runId)),
+      },
+    );
+    onCall?.({
+      model: MAILBOX_RELEVANCE_FEATURE.model,
+      promptVersion: MAILBOX_RELEVANCE_FEATURE.promptVersion,
       operation: "mailbox-relevance",
-      subscriptionRequired: true,
-      subscriptionFallback: "budgeted",
-      beforePaidRequest: paidResearchPreflight(db, runEntityId.parse(runId)),
     });
+    return result;
+  };

@@ -514,6 +514,8 @@ type RelatedViewSource = (typeof relatedViewRegistry)[number]["source"];
  * same empty `.filter()` result.
  */
 const ENTITIES_WITHOUT_RELATED_VIEWS = {
+  email:
+    "Email report generic records derive accepted source-family/lifecycle Purchases, their Expenses/Products and same-Purchase owned Emails; mailbox-scoped thread context and dismissed candidates remain separate. Owner/Run use declared related views.",
   spendingCategory:
     "Spending classification links are rendered on each financial record.",
   cookbook: "the cookbook page IS its recipe list",

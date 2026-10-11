@@ -95,17 +95,20 @@ describe("EntityManifestGrid schema sheet", () => {
     const firstEntity = () =>
       within(within(sheet()).getAllByRole("row")[2]!).getAllByRole("button")[0]!
         .textContent;
-    const byOverrides = [...allEntities].sort(
+    const descendingByOverrides = [...allEntities].sort(
+      (left, right) => overridesFor(right).length - overridesFor(left).length,
+    );
+    const ascendingByOverrides = [...allEntities].sort(
       (left, right) => overridesFor(left).length - overridesFor(right).length,
     );
 
     fireEvent.click(header);
     expect(header.closest("th")).toHaveAttribute("aria-sort", "descending");
-    expect(firstEntity()).toBe(byOverrides.at(-1));
+    expect(firstEntity()).toBe(descendingByOverrides[0]);
 
     fireEvent.click(header);
     expect(header.closest("th")).toHaveAttribute("aria-sort", "ascending");
-    expect(firstEntity()).toBe(byOverrides[0]);
+    expect(firstEntity()).toBe(ascendingByOverrides[0]);
 
     fireEvent.click(header);
     expect(header.closest("th")).not.toHaveAttribute("aria-sort");

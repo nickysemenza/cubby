@@ -13,6 +13,7 @@ describe("purchase-agent queue dispatch", () => {
       // A historical body: the field must not reach the member-visible transcript.
       coordinatorModel: "gpt-6-sol",
       eventId: "retry-9",
+      generation: "synthetic-generation",
       retryOf: "operation-9",
     });
 
@@ -20,6 +21,7 @@ describe("purchase-agent queue dispatch", () => {
 
     expect(input).toEqual({
       identity: { runId, purpose: "mail_import" },
+      generation: "synthetic-generation",
       operationId: `purchase-agent:${runId}:retry:retry-9`,
       signal: {
         type: "purchase-import.retry",
@@ -27,6 +29,7 @@ describe("purchase-agent queue dispatch", () => {
         body: JSON.stringify({
           version: 1,
           eventId: "retry-9",
+          generation: "synthetic-generation",
           type: "retry",
           retryOf: "operation-9",
         }),

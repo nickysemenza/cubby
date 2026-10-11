@@ -11,6 +11,17 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 
 import { photoRunReviewResponse } from "@cubby/schemas/photo-import-run";
 
+import {
+  resolveRunFindingOut,
+  type ResolveRunFindingInput,
+} from "@cubby/schemas/problems";
+
+import {
+  prepareSourceOrderReconciliationOut,
+  proposedImportFix,
+  type PrepareSourceOrderReconciliationInput,
+} from "@cubby/schemas/purchase-import";
+
 import type { Page } from "@playwright/test";
 import { and, eq, sql } from "drizzle-orm";
 import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
@@ -57,6 +68,133 @@ export const BROWSER_SOURCE_ORDERS = [
   ["gmail", "csv", "photo", "retailer"],
 ] as const satisfies readonly (readonly EvidenceSource[])[];
 
+/** Itemization that arrives after a booked aggregate stays a `conflict` until
+ * the member reviews it: prepare the replacement through the reconciliation
+ * API, apply it from the Run page, then replay the apply. Money, stock,
+ * payment evidence and statement allocations survive unchanged. */
+export async function applyReviewedSourceReconciliation(
+  page: Page,
+  input: {
+    db: Awaited<ReturnType<typeof createEvidenceHarnessContext>>["db"];
+    baseURL: string;
+    purchaseCode: string;
+    productCode: string;
+  },
+) {
+  const database = getDb(input.db);
+  const purchaseId = await resolveOrThrow(
+    input.db,
+    "purchase",
+    input.purchaseCode,
+  );
+  const openReconciliations = async () =>
+    (
+      await database.query.runFinding.findMany({
+        where: and(
+          eq(schema.runFinding.entityId, purchaseId),
+          eq(schema.runFinding.status, "open"),
+        ),
+      })
+    ).filter(
+      (row) =>
+        proposedImportFix.safeParse(row.proposedFix).data?.kind ===
+        "reconcile_source_order",
+    );
+  // A browser approval commits after its click returns.
+  await expect.poll(async () => (await openReconciliations()).length).toBe(1);
+  const [finding] = await openReconciliations();
+  if (!finding) throw new Error("Reconciliation finding missing");
+  const lines = () =>
+    database.query.expense.findMany({
+      where: and(
+        eq(schema.expense.purchaseId, purchaseId),
+        notDeleted(schema.expense),
+      ),
+    });
+  const aggregate = await lines();
+  expect(aggregate).toMatchObject([{ cost: 42.5, productId: null }]);
+  const preserved = async () => ({
+    inventory: await database.select().from(schema.inventoryEntry),
+    payments: await database.select().from(schema.purchasePaymentEvidence),
+    allocations: await database
+      .select()
+      .from(schema.financialTransactionAllocation),
+  });
+  const before = await preserved();
+  const send = async <Output>(
+    path: string,
+    data: PrepareSourceOrderReconciliationInput | ResolveRunFindingInput,
+    output: { parse(value: unknown): Output },
+  ) => {
+    const response = await page.request.post(`/api/v1/${path}`, {
+      data,
+      headers: { Origin: input.baseURL },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    return output.parse(await response.json());
+  };
+  const expenseId = parseShortcodeFor("expense", aggregate[0]!.shortcode);
+  const review = await send(
+    "purchaseImport/prepareReconciliation",
+    {
+      id: finding.id,
+      resolution: {
+        kind: "replace_lines",
+        expenseIds: [expenseId],
+        lines: [
+          {
+            lineIndex: 0,
+            expenseId,
+            productId: parseShortcodeFor("product", input.productCode),
+          },
+        ],
+      },
+    },
+    prepareSourceOrderReconciliationOut,
+  );
+  expect(review.spend).toEqual({ before: 42.5, after: 42.5, delta: 0 });
+  // Preparing records the review; it writes no ledger, stock or settlement.
+  expect(await lines()).toEqual(aggregate);
+  expect(await preserved()).toEqual(before);
+
+  const [run] = await database
+    .select({ shortcode: schema.run.shortcode })
+    .from(schema.runFinding)
+    .innerJoin(schema.run, eq(schema.run.id, schema.runFinding.runId))
+    .where(eq(schema.runFinding.id, finding.id));
+  if (!run) throw new Error("Reconciliation Run missing");
+  await gotoAuthenticatedPage(page, `/runs/${run.shortcode}#import-findings`);
+  const apply = page.getByRole("button", { name: "Apply fix", exact: true });
+  await expect(apply).toHaveCount(1);
+  await apply.click();
+  await expect(
+    page.getByText("Applied import correction", { exact: true }),
+  ).toBeVisible();
+  await expect(apply).toHaveCount(0);
+  await expect(
+    page.locator("#import-findings").getByText("applied", { exact: true }),
+  ).toBeVisible();
+  // A repeated apply of the same reviewed fingerprint is a no-op.
+  expect(
+    await send(
+      "problems/resolveRunFinding",
+      {
+        id: finding.id,
+        action: "apply",
+        reviewedFingerprint: review.reviewedFingerprint,
+      },
+      resolveRunFindingOut,
+    ),
+  ).toEqual({ id: finding.id, status: "applied" });
+  const productId = await resolveOrThrow(
+    input.db,
+    "product",
+    input.productCode,
+  );
+  expect(await lines()).toMatchObject([{ cost: 42.5, productId }]);
+  expect(await preserved()).toEqual(before);
+}
+
 /** Only account, vendor and location prerequisites are fixtures. Every economic
  * record and observation below enters through an import writer or real route. */
 export async function createConvergenceHarness(
@@ -93,6 +231,7 @@ export async function createConvergenceHarness(
   const cardId = await resolveOrThrow(db, "financialAccount", card.id);
   let bookedPurchaseCode: string | undefined;
   let retailerDone = false;
+  let reconcileBookedAggregate = false;
   let productCode: string | undefined;
   let photoRunId: string | undefined;
   const post = async <Input, Output>(
@@ -152,29 +291,13 @@ export async function createConvergenceHarness(
       targetPurchaseId: bookedPurchaseCode,
       resolveProduct: readProduct,
     });
-    expect(committed.items[0]?.outcome).toMatch(/created|updated|replayed/);
-    if (bookedPurchaseCode) {
-      await gotoAuthenticatedPage(
-        page,
-        `/runs/${committed.runId}#import-findings`,
-      );
-      const apply = page.getByRole("button", {
-        name: "Apply fix",
-        exact: true,
-      });
-      await expect(apply).toHaveCount(1);
-      await expect(
-        page.getByText(/Replace .+42.50.+with the receipt lines below/),
-      ).toBeVisible();
-      await apply.click();
-      await expect(
-        page.getByText("Applied import correction", { exact: true }),
-      ).toBeVisible();
-      await expect(apply).toHaveCount(0);
-      await expect(
-        page.locator("#import-findings").getByText("applied", { exact: true }),
-      ).toBeVisible();
-    }
+    // A booked statement aggregate is not replaced automatically: the receipt
+    // waits as a reviewed reconciliation that settle() applies.
+    if (bookedPurchaseCode)
+      expect(committed.items[0]?.outcome).toBe("conflict");
+    else
+      expect(committed.items[0]?.outcome).toMatch(/created|updated|replayed/);
+    reconcileBookedAggregate = Boolean(bookedPurchaseCode);
     retailerDone = true;
     await readProduct();
   }
@@ -369,6 +492,15 @@ export async function createConvergenceHarness(
   }
 
   async function settle() {
+    await readProduct();
+    if (!productCode) throw new Error("Reviewed photo Product missing");
+    if (reconcileBookedAggregate)
+      await applyReviewedSourceReconciliation(page, {
+        db,
+        baseURL,
+        purchaseCode: bookedPurchaseCode!,
+        productCode,
+      });
     const [purchase] = await database
       .select()
       .from(schema.purchase)
@@ -398,8 +530,12 @@ export async function createConvergenceHarness(
       FROM "OrderMailCandidateDecision" d
       JOIN "OrderMailEvent" e ON e.id = d."eventId"
       JOIN "OrderMail" m ON m.id = e."orderMailId"
+      JOIN "Email" email ON email."orderMailId" = m.id
+        AND email."ledgerPartyId" = m."ledgerPartyId"
       JOIN "Purchase" p ON p.id = d."purchaseId"
-      WHERE m."messageId" = ${names.messageId} AND d.decision = 'linked'
+      WHERE email."messageId" = ${names.messageId}
+        AND email."deletedAt" IS NULL
+        AND d.decision = 'linked'
     `);
     expect(links).toEqual([{ purchaseCode: purchase.shortcode }]);
     expect(purchase.shortcode).toBe(bookedPurchaseCode);

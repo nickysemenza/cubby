@@ -29,10 +29,6 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
     SELECT 1 FROM "ImportSourceProduct" dq_orphan_original
     WHERE dq_orphan_original."productId" = ${t.id}
   )`,
-  "RunTarget.entityId": (t) => sql`NOT EXISTS (
-    SELECT 1 FROM "RunTarget" dq_orphan_target
-    WHERE dq_orphan_target."entityId" = ${t.id}
-  )`,
   "Planting.sourceProductId": (t) => sql`NOT EXISTS (
     SELECT 1 FROM "Planting" dq_orphan_planting
     WHERE dq_orphan_planting."sourceProductId" = ${t.id}

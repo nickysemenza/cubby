@@ -1,3 +1,5 @@
+import { readRetainedMail } from "~/server/repo/retained-mail";
+import { loadRunDetail } from "~/server/purchase-import/run-service";
 import { orderMailImportOut } from "@cubby/schemas/order-mail-review";
 import { sha256Hex } from "@cubby/shared/sha256";
 import superjson from "superjson";
@@ -127,16 +129,15 @@ function importOrder(
 }
 /** Retained originals in the order Pi claims them (received time, then id). */
 async function claimOrder(seed: Seed): Promise<Source[]> {
-  const rows = await getDb(getFixtureDb())
-    .select()
-    .from(schema.orderMail)
-    .where(
-      inArray(
-        schema.orderMail.id,
-        seed.events.map(({ orderMailId }) => orderMailId),
-      ),
-    )
-    .orderBy(schema.orderMail.receivedAt, schema.orderMail.id);
+  const rows = await readRetainedMail(getFixtureDb(), {
+    ledgerPartyIds: [seed.member.id],
+    orderMailIds: seed.events.map(({ orderMailId }) => orderMailId),
+  });
+  rows.sort(
+    (a, b) =>
+      (a.receivedAt?.getTime() ?? 0) - (b.receivedAt?.getTime() ?? 0) ||
+      a.id.localeCompare(b.id),
+  );
   return rows.map((row) => ({
     mailboxId: row.mailboxId,
     messageId: row.messageId,
@@ -157,10 +158,10 @@ async function authorizeSeed(
   context: Awaited<ReturnType<typeof createEvidenceHarnessContext>>,
   seed: Seed,
 ) {
-  const [source] = await getDb(context.db)
-    .select()
-    .from(schema.orderMail)
-    .where(eq(schema.orderMail.id, seed.events[0]!.orderMailId));
+  const [source] = await readRetainedMail(context.db, {
+    ledgerPartyIds: [seed.member.id],
+    orderMailIds: [seed.events[0]!.orderMailId],
+  });
   if (!source) throw new Error("Synthetic original is missing");
   return authorizeSyntheticBackfill(context, seed.member.id, source.mailboxId);
 }
@@ -254,10 +255,10 @@ test("imports saved order mail from the generic Vendor report and follows the li
     .getByRole("listitem")
     .filter({ hasText: "Synthetic itemized confirmation" });
   const db = getDb(getFixtureDb());
-  const [source] = await db
-    .select()
-    .from(schema.orderMail)
-    .where(eq(schema.orderMail.id, seed.events[0]!.orderMailId));
+  const [source] = await readRetainedMail(getFixtureDb(), {
+    ledgerPartyIds: [seed.member.id],
+    orderMailIds: [seed.events[0]!.orderMailId],
+  });
   if (!source?.content?.bodyText) throw new Error("Seeded original is missing");
   // A changed original refuses the stale command and admits nothing.
   const bodyText = `${source.content.bodyText} Reference reissued.`;
@@ -267,9 +268,9 @@ test("imports saved order mail from the generic Vendor report and follows the li
     .set({ rawChecksum: checksum, content: { ...source.content, bodyText } })
     .where(eq(schema.orderMail.id, source.id));
   await db
-    .update(schema.mailboxMessage)
+    .update(schema.email)
     .set({ checksum })
-    .where(eq(schema.mailboxMessage.orderMailId, source.id));
+    .where(eq(schema.email.orderMailId, source.id));
   await original
     .getByRole("button", { name: "Research original", exact: true })
     .click();
@@ -281,9 +282,9 @@ test("imports saved order mail from the generic Vendor report and follows the li
   ).toBeVisible();
   expect(
     await db
-      .select({ runId: schema.mailboxMessage.runId })
-      .from(schema.mailboxMessage)
-      .where(eq(schema.mailboxMessage.orderMailId, source.id)),
+      .select({ runId: schema.email.runId })
+      .from(schema.email)
+      .where(eq(schema.email.orderMailId, source.id)),
   ).toEqual([{ runId: null }]);
 
   await page.reload();
@@ -321,18 +322,19 @@ test("imports saved order mail from the generic Vendor report and follows the li
   expect(
     await db
       .select({
-        runId: schema.mailboxMessage.runId,
-        status: schema.mailboxMessage.status,
-        checksum: schema.mailboxMessage.checksum,
+        runId: schema.email.runId,
+        status: schema.email.status,
+        checksum: schema.email.checksum,
       })
-      .from(schema.mailboxMessage)
-      .where(eq(schema.mailboxMessage.orderMailId, source.id)),
+      .from(schema.email)
+      .where(eq(schema.email.orderMailId, source.id)),
   ).toEqual([{ runId: run.id, status: "completed", checksum }]);
   expect(
-    await db
-      .select({ state: schema.runTarget.state })
-      .from(schema.runTarget)
-      .where(eq(schema.runTarget.runId, run.id)),
+    (await loadRunDetail(getFixtureDb(), runShortcode)).targets.map(
+      ({ state }) => ({
+        state,
+      }),
+    ),
   ).toEqual([{ state: "completed" }]);
   const productId = graph.expenses[0]?.productId;
   if (!productId) throw new Error("The imported line has no Product");
@@ -408,15 +410,24 @@ test("admits several retained confirmations as separate tasks in the same Run", 
   const runShortcode = runIds[0]!;
   const run = await runByShortcode(runShortcode);
   const db = getDb(getFixtureDb());
-  // One RunTarget per admitted Email.
+  // The frozen admission roster preserves every Email independently.
   expect(
-    await db
-      .select({ workKey: schema.runTarget.workKey })
-      .from(schema.runTarget)
-      .where(eq(schema.runTarget.runId, run.id)),
+    (await loadRunDetail(getFixtureDb(), runShortcode)).targets.map(
+      ({ id }) => ({
+        id,
+      }),
+    ),
   ).toEqual(
     expect.arrayContaining(
-      seed.events.map(({ orderMailId }) => ({ workKey: orderMailId })),
+      await db
+        .select({ id: schema.email.id })
+        .from(schema.email)
+        .where(
+          inArray(
+            schema.email.orderMailId,
+            seed.events.map(({ orderMailId }) => orderMailId),
+          ),
+        ),
     ),
   );
   await gotoAuthenticatedPage(
@@ -444,14 +455,14 @@ test("admits several retained confirmations as separate tasks in the same Run", 
   expect(graph.claims).toHaveLength(2);
   const owned = await db
     .select({
-      orderMailId: schema.mailboxMessage.orderMailId,
-      runId: schema.mailboxMessage.runId,
-      status: schema.mailboxMessage.status,
+      orderMailId: schema.email.orderMailId,
+      runId: schema.email.runId,
+      status: schema.email.status,
     })
-    .from(schema.mailboxMessage)
+    .from(schema.email)
     .where(
       inArray(
-        schema.mailboxMessage.orderMailId,
+        schema.email.orderMailId,
         seed.events.map(({ orderMailId }) => orderMailId),
       ),
     );

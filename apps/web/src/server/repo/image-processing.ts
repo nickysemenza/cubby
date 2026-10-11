@@ -18,7 +18,7 @@ import type {
   ImageProcessingTerminalResult as ImageProcessingResult,
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
-import { and, asc, desc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lte, ne, or, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -41,6 +41,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/repo/mail-attachment-uploads";
 import { refreshDirectImageOwnerSearchDocuments } from "~/server/repo/search-document";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import {
@@ -1229,7 +1230,12 @@ export async function claimImageProcessingOrphans(
     const rows = await tx
       .select({ id: imageProcessingOrphan.id, key: imageProcessingOrphan.key })
       .from(imageProcessingOrphan)
-      .where(lte(imageProcessingOrphan.createdAt, expiredBefore))
+      .where(
+        and(
+          lte(imageProcessingOrphan.createdAt, expiredBefore),
+          ne(imageProcessingOrphan.reason, MAIL_ATTACHMENT_UPLOAD_REASON),
+        ),
+      )
       .orderBy(asc(imageProcessingOrphan.createdAt))
       .limit(limit)
       .for("update", { skipLocked: true });

@@ -146,6 +146,7 @@ describe("purchase agent OAuth callback", () => {
       runId: "15119902-3ed6-4f04-a9cc-8c9860c399b2",
       purpose: "mail_import",
       eventId: "persisted-event",
+      generation: "persisted-event",
       type: "start_or_resume",
     });
     expect(ports.recordDispatch).toHaveBeenCalledWith(database, {

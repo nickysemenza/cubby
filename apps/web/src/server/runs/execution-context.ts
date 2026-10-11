@@ -15,12 +15,18 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
-import { run, orderMail, importSourceClaim } from "~/server/db/schema";
+import {
+  run,
+  orderMail,
+  email as emailTable,
+  importSourceClaim,
+} from "~/server/db/schema";
 import {
   unwrapDb,
   notDeleted,
   databaseForTransaction,
 } from "~/server/repo/database-helpers";
+import { retainedMailJoin } from "~/server/repo/retained-mail";
 
 import {
   assertExecutionAuthorization,
@@ -112,14 +118,17 @@ export async function bindRetainedMailBackfill<T extends RunInput>(
   );
   const originals = await tx
     .select({
-      messageId: orderMail.messageId,
+      messageId: emailTable.messageId,
       checksum: orderMail.rawChecksum,
     })
     .from(orderMail)
+    .innerJoin(emailTable, retainedMailJoin)
     .where(
       and(
         eq(orderMail.ledgerPartyId, owner.ledgerPartyId),
-        eq(orderMail.mailboxId, mailbox.id),
+        eq(emailTable.provider, "gmail"),
+        notDeleted(emailTable),
+        eq(emailTable.mailboxId, mailbox.id),
         // Cleanup preserves identity/checksum tombstones; only readable content
         // can establish a retained original.
         sql`COALESCE(
@@ -129,11 +138,11 @@ export async function bindRetainedMailBackfill<T extends RunInput>(
         ) IS NOT NULL`,
         or(
           inArray(
-            sql<string>`'gmail:' || ${orderMail.mailboxId} || ':' || ${orderMail.messageId}`,
+            sql<string>`'gmail:' || ${emailTable.mailboxId} || ':' || ${emailTable.messageId}`,
             sourceKeys,
           ),
           historicalMessages.size
-            ? inArray(orderMail.messageId, [...historicalMessages.values()])
+            ? inArray(emailTable.messageId, [...historicalMessages.values()])
             : undefined,
         ),
       ),

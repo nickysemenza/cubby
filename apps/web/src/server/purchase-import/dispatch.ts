@@ -113,6 +113,7 @@ export async function dispatchStartedRun(
       runId: run.id,
       purpose: agentImportRunPurpose.parse(run.purpose),
       eventId: run.eventId,
+      generation: run.eventId,
       type: "start_or_resume",
     });
     return "running";

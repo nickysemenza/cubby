@@ -81,16 +81,31 @@ import {
 } from "./external-id-learning";
 import { manufacturerPartRequests } from "./manufacturer-identity";
 import {
+  acceptedSourceExtraction,
+  recordSourceOrderObservation,
+  promoteHistoricalAcceptedObservation,
+  mergedVendorSourceOrder,
+} from "./reconciliation-observations";
+import {
+  loadSourceReconciliationState,
+  sourceReconciliationStateFingerprint,
+} from "./reconciliation-state";
+import {
   lockPartySettlement,
   settlePurchaseFromRetainedPayments,
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
 import {
   lockImportSourceClaimFamily,
+  readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "./source-claim-family";
 import { sourceOrderKey } from "./source-order-key";
-import { decideLineWrite, type ExistingExpenseSnapshot } from "./writer-policy";
+import {
+  decideLineWrite,
+  sourceFinancialFacts,
+  type ExistingExpenseSnapshot,
+} from "./writer-policy";
 
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
 export const PRODUCT_IDENTITY_RULES =
@@ -223,6 +238,8 @@ export async function existingExpenses(
       title: expense.name,
       amount: expense.cost,
       lineKind: expense.lineKind,
+      lineBasis: expense.lineBasis,
+      productQuantity: expense.productQuantity,
       productId: expense.productId,
       tradeId: expense.trade,
       projectId: expense.projectId,
@@ -249,6 +266,8 @@ export async function existingExpenses(
     title: row.title,
     amount: row.amount,
     lineKind: row.lineKind,
+    lineBasis: row.lineBasis,
+    productQuantity: row.productQuantity,
     productId: row.productId,
     tradeId: row.tradeId,
     projectId: row.projectId,
@@ -728,7 +747,12 @@ async function fileFinding(
   proposedFix: ProposedImportFix | null,
 ): Promise<string> {
   const evidenceFingerprint = await sha256Hex(
-    JSON.stringify({ source: input.source, kind, purchaseId, proposedFix }),
+    JSON.stringify({
+      source: input.source,
+      kind,
+      purchaseId,
+      proposedFix,
+    }),
   );
   const [row] = await tx
     .insert(runFinding)
@@ -761,6 +785,49 @@ async function fileFinding(
   return existing.id;
 }
 
+async function fileSourceReconciliation(
+  tx: DrizzleTransaction,
+  input: ImportWriterInput,
+  purchaseId: typeof purchase.$inferSelect.id,
+  sourceClaimId: typeof importSourceClaim.$inferSelect.id,
+  orderKey: string,
+  accepted: typeof importSourceOrder.$inferSelect | null,
+) {
+  const observation = await recordSourceOrderObservation(
+    tx,
+    { sourceClaimId, orderKey, purchaseId },
+    input,
+  );
+  const fix: Extract<ProposedImportFix, { kind: "reconcile_source_order" }> = {
+    kind: "reconcile_source_order",
+    purchaseId,
+    source: input.source,
+    orderKey,
+    acceptedChecksum: accepted?.checksum ?? null,
+    proposedExtraction: input.extraction,
+    observationId: observation.id,
+    reviewedFingerprint: "0".repeat(64),
+  };
+  const state = await loadSourceReconciliationState(
+    tx,
+    fix,
+    parseEntityId("ledgerParty", input.ledgerPartyId),
+  );
+  fix.reviewedFingerprint = await sourceReconciliationStateFingerprint(
+    state,
+    fix,
+    undefined,
+  );
+  return fileFinding(
+    tx,
+    input,
+    purchaseId,
+    "other",
+    "Source order evidence differs from the accepted ledger. Review the proposed money, payments and Product bindings before accepting it.",
+    fix,
+  );
+}
+
 type ImportSourceAssociationInput = Pick<
   ImportWriterInput,
   | "ledgerPartyId"
@@ -772,6 +839,8 @@ type ImportSourceAssociationInput = Pick<
 > & {
   orderId: NonNullable<ImportWriterInput["extraction"]["candidate"]>["orderId"];
   originalOrder?: AcceptedSourceOrder;
+  primaryDocumentImageId?: ImportWriterInput["primaryDocumentImageId"];
+  screenshotImageId?: ImportWriterInput["screenshotImageId"];
   productBindings?: ReadonlyArray<
     Pick<typeof importSourceProduct.$inferInsert, "lineIndex" | "productId">
   >;
@@ -810,6 +879,8 @@ async function recordOriginalProductBindings(
 }
 
 /** Source ownership and accepted order identity are shared by imports and lifecycle links. */
+// Accepted observation and original Product identity must be retained atomically.
+// eslint-disable-next-line complexity
 async function recordImportSourceAssociation(
   tx: Pick<DrizzleTransaction, "insert" | "select" | "update">,
   input: ImportSourceAssociationInput,
@@ -885,14 +956,22 @@ async function recordImportSourceAssociation(
     firstRunId: input.runId,
     lastRunId: input.runId,
   });
-  const orderKey = sourceOrderKey({
+  let orderKey = sourceOrderKey({
     vendorId: input.vendorId,
     orderId: input.orderId,
     orderLocator: input.orderLocator,
   });
   const retained = await readSourceFamilyOrder(tx, family, orderKey, "update");
-  const existing = retained?.association;
-  const ownerId = retained?.claim.id ?? family.root.id;
+  const existing =
+    retained?.association ??
+    (await mergedVendorSourceOrder(
+      tx,
+      family.members.map((row) => row.id),
+      orderKey,
+      parseEntityId("vendor", input.vendorId),
+    ));
+  if (existing) orderKey = existing.orderKey;
+  const ownerId = existing?.sourceClaimId ?? family.root.id;
   if (existing && existing.purchaseId !== purchaseId)
     throw new Error(
       "This source order already belongs to a different Purchase.",
@@ -912,18 +991,40 @@ async function recordImportSourceAssociation(
       set: {
         checksum: input.source.checksum,
         outputFingerprint,
-        originalOrder: existing?.originalOrder ?? input.originalOrder ?? null,
+        originalOrder: existing
+          ? existing.originalOrder
+          : (input.originalOrder ?? null),
         updatedAt: new Date(),
       },
     })
     .returning({ id: importSourceOrder.id });
   if (!association) throw new Error("Import source order was not persisted");
-  await recordOriginalProductBindings(
-    tx,
-    association.id,
-    existing?.originalOrder,
-    input,
-  );
+  if (!existing)
+    await recordOriginalProductBindings(tx, association.id, null, input);
+  if (input.originalOrder) {
+    const observation = await recordSourceOrderObservation(
+      tx,
+      { sourceClaimId: ownerId, orderKey, purchaseId },
+      {
+        runId: input.runId,
+        vendorId: input.vendorId,
+        source: input.source,
+        extraction: input.originalOrder.extraction,
+        primaryDocumentImageId: input.primaryDocumentImageId ?? null,
+        screenshotImageId: input.screenshotImageId ?? null,
+      },
+      input.originalOrder.extraction.candidate?.lines.map((_, lineIndex) => ({
+        lineIndex,
+        productId:
+          input.productBindings?.find((row) => row.lineIndex === lineIndex)
+            ?.productId ?? null,
+      })) ?? [],
+    );
+    await tx
+      .update(importSourceOrder)
+      .set({ acceptedObservationId: observation.id })
+      .where(eq(importSourceOrder.id, association.id));
+  }
   await tx
     .update(importSourceClaim)
     .set({
@@ -931,7 +1032,7 @@ async function recordImportSourceAssociation(
       lastRunId: input.runId,
       updatedAt: new Date(),
     })
-    .where(eq(importSourceClaim.id, ownerId));
+    .where(eq(importSourceClaim.id, family.root.id));
   return ownerId;
 }
 
@@ -1022,7 +1123,7 @@ export async function importVendorOrder(
     if (!ownedScope) {
       throw new Error("Import source is not owned by the authenticated member");
     }
-    const family = await lockImportSourceClaimFamily(tx, {
+    const sourceIdentity = {
       ledgerPartyId: partyId,
       vendorAccountId: input.vendorAccountId
         ? parseEntityId("vendorAccount", input.vendorAccountId)
@@ -1032,20 +1133,33 @@ export async function importVendorOrder(
       checksum: input.source.checksum,
       firstRunId: input.runId,
       lastRunId: input.runId,
-    });
+    };
+    // The family lock must not advance accepted bytes before reconciliation.
+    const family =
+      (await readImportSourceClaimFamily(tx, sourceIdentity, {
+        lock: "update",
+        writable: true,
+      })) ?? (await lockImportSourceClaimFamily(tx, sourceIdentity));
     const candidate = input.extraction.candidate;
     if (!candidate)
       throw new Error(
         "Unreadable imports require a typed candidate before writing",
       );
-    const orderKey = sourceOrderKey({
+    let orderKey = sourceOrderKey({
       vendorId: input.vendorId,
       orderId: candidate.orderId,
       orderLocator: input.orderLocator,
     });
-    const existingOrder = (
-      await readSourceFamilyOrder(tx, family, orderKey, "update")
-    )?.association;
+    const existingOrder =
+      (await readSourceFamilyOrder(tx, family, orderKey, "update"))
+        ?.association ??
+      (await mergedVendorSourceOrder(
+        tx,
+        family.members.map((row) => row.id),
+        orderKey,
+        parseEntityId("vendor", input.vendorId),
+      ));
+    if (existingOrder) orderKey = existingOrder.orderKey;
     if (
       input.targetPurchaseId &&
       existingOrder &&
@@ -1054,11 +1168,28 @@ export async function importVendorOrder(
       throw new Error(
         "This source order already belongs to a different Purchase.",
       );
-    if (existingOrder && existingOrder.checksum === input.source.checksum) {
+    const acceptedSnapshot = existingOrder
+      ? await acceptedSourceExtraction(tx, existingOrder)
+      : null;
+    const financialProjectionUnchanged = acceptedSnapshot?.extraction.candidate
+      ? JSON.stringify(
+          sourceFinancialFacts(acceptedSnapshot.extraction.candidate),
+        ) === JSON.stringify(sourceFinancialFacts(candidate))
+      : true;
+    if (
+      existingOrder &&
+      existingOrder.checksum === input.source.checksum &&
+      financialProjectionUnchanged
+    ) {
+      await promoteHistoricalAcceptedObservation(tx, existingOrder.id);
       await tx
         .update(importSourceClaim)
-        .set({ lastRunId: input.runId })
-        .where(eq(importSourceClaim.id, existingOrder.sourceClaimId));
+        .set({
+          checksum: input.source.checksum,
+          lastRunId: input.runId,
+          updatedAt: new Date(),
+        })
+        .where(eq(importSourceClaim.id, family.root.id));
       return importWriterOutput.parse({
         outcome: "replayed",
         purchaseId: existingOrder.purchaseId,
@@ -1066,14 +1197,94 @@ export async function importVendorOrder(
         outputFingerprint: existingOrder.outputFingerprint,
       });
     }
-    const isSourceRefresh = existingOrder !== undefined;
-
+    if (existingOrder) {
+      const target = await tx.query.purchase.findFirst({
+        where: and(
+          eq(purchase.id, existingOrder.purchaseId),
+          eq(purchase.vendorId, parseEntityId("vendor", input.vendorId)),
+          notDeleted(purchase),
+        ),
+      });
+      if (!target)
+        throw new Error(
+          "The accepted source Purchase no longer exists for this vendor.",
+        );
+      const accepted = await acceptedSourceExtraction(tx, existingOrder);
+      const acceptedCandidate = accepted?.extraction.candidate;
+      const retainedPayments = await tx
+        .select()
+        .from(purchasePaymentEvidence)
+        .where(
+          and(
+            eq(
+              purchasePaymentEvidence.sourceClaimId,
+              existingOrder.sourceClaimId,
+            ),
+            eq(purchasePaymentEvidence.purchaseId, existingOrder.purchaseId),
+          ),
+        );
+      const proposedFacts = sourceFinancialFacts(candidate);
+      const acceptedFacts = acceptedCandidate
+        ? sourceFinancialFacts(acceptedCandidate)
+        : null;
+      const retainedFacts = sourceFinancialFacts({
+        ...candidate,
+        payments: retainedPayments.map((payment) => ({
+          amount: payment.amount,
+          chargedAt: payment.chargedAt?.toISOString(),
+          cardLastFour: payment.cardLastFour ?? undefined,
+        })),
+      });
+      if (
+        !acceptedFacts ||
+        JSON.stringify(acceptedFacts) !== JSON.stringify(proposedFacts) ||
+        (candidate.currency === "USD" &&
+          JSON.stringify(retainedFacts.payments) !==
+            JSON.stringify(proposedFacts.payments))
+      ) {
+        const findingId = await fileSourceReconciliation(
+          tx,
+          input,
+          existingOrder.purchaseId,
+          existingOrder.sourceClaimId,
+          orderKey,
+          existingOrder,
+        );
+        return importWriterOutput.parse({
+          outcome: "conflict",
+          purchaseId: existingOrder.purchaseId,
+          findingIds: [findingId],
+          outputFingerprint: existingOrder.outputFingerprint,
+        });
+      }
+      const purchaseId = parseEntityId("purchase", existingOrder.purchaseId);
+      await attachEvidence(tx, purchaseId, input);
+      await recordImportSourceAssociation(
+        tx,
+        {
+          ...input,
+          orderId: candidate.orderId,
+          originalOrder: {
+            checksum: input.source.checksum,
+            extraction: input.extraction,
+          },
+        },
+        purchaseId,
+        existingOrder.outputFingerprint,
+      );
+      return importWriterOutput.parse({
+        outcome: "updated",
+        purchaseId,
+        findingIds: [],
+        outputFingerprint: existingOrder.outputFingerprint,
+      });
+    }
     const vendorId = parseEntityId("vendor", input.vendorId);
     const vendorAccountId = input.vendorAccountId
       ? parseEntityId("vendorAccount", input.vendorAccountId)
       : null;
     const ordered = await findPurchase(tx, vendorId, candidate.orderId);
-    const selectedId = input.targetPurchaseId ?? existingOrder?.purchaseId;
+    const selectedId = input.targetPurchaseId;
     const chosen = selectedId
       ? await tx.query.purchase.findFirst({
           where: and(
@@ -1100,6 +1311,63 @@ export async function importVendorOrder(
       );
     let target = chosen ?? ordered;
     const created = target == null;
+    if (target && !identityOnly) {
+      const current = await existingExpenses(tx, target.id);
+      const decision = decideLineWrite(current, candidate.lines);
+      const retainedPayments = await tx
+        .select()
+        .from(purchasePaymentEvidence)
+        .where(eq(purchasePaymentEvidence.purchaseId, target.id));
+      const firstClaim = retainedPayments[0]?.sourceClaimId;
+      const priorPaymentFacts = sourceFinancialFacts({
+        ...candidate,
+        payments: retainedPayments
+          .filter((row) => row.sourceClaimId === firstClaim)
+          .map((row) => ({
+            amount: row.amount,
+            chargedAt: row.chargedAt?.toISOString(),
+            cardLastFour: row.cardLastFour ?? undefined,
+          })),
+      }).payments;
+      const incompatiblePayments =
+        candidate.payments.length > 0 &&
+        retainedPayments.length > 0 &&
+        JSON.stringify(priorPaymentFacts) !==
+          JSON.stringify(sourceFinancialFacts(candidate).payments);
+      const changedBinding = explicitResolutions?.some(
+        (resolution) =>
+          resolution.kind === "existing" &&
+          current.some(
+            (row) =>
+              row.title === candidate.lines[resolution.lineIndex]?.title &&
+              row.productId &&
+              row.productId !== resolution.productId,
+          ),
+      );
+      if (
+        decision.kind === "conflict" ||
+        decision.kind === "review_aggregate" ||
+        incompatiblePayments ||
+        changedBinding
+      ) {
+        const findingId = await fileSourceReconciliation(
+          tx,
+          input,
+          target.id,
+          family.root.id,
+          orderKey,
+          null,
+        );
+        return importWriterOutput.parse({
+          outcome: "conflict",
+          purchaseId: target.id,
+          findingIds: [findingId],
+          outputFingerprint: await sha256Hex(
+            JSON.stringify({ purchaseId: target.id, source: input.source }),
+          ),
+        });
+      }
+    }
     const orderDate = purchaseDateFor(
       candidate.orderedAt,
       target?.date ?? null,
@@ -1119,7 +1387,7 @@ export async function importVendorOrder(
         statedTotal:
           candidate.currency === "USD" ? candidate.printedGrandTotal : null,
       });
-    } else if (!isSourceRefresh) {
+    } else {
       // A null trade can be intentional Project inheritance. Filling a
       // Purchase default would take precedence over existing line Projects.
       const canFillTrade =
@@ -1179,6 +1447,45 @@ export async function importVendorOrder(
       fields: string[];
     }> = [];
 
+    const knownProducts =
+      explicitResolutions?.flatMap((resolution) =>
+        resolution.kind === "existing"
+          ? [parseEntityId("product", resolution.productId)]
+          : [],
+      ) ?? [];
+    const unlinked = knownProducts.length
+      ? await tx
+          .select({ id: expense.id })
+          .from(expense)
+          .where(
+            and(
+              isNull(expense.purchaseId),
+              inArray(expense.productId, knownProducts),
+              eq(expense.lineKind, "principal"),
+              eq(expense.economicRole, "vendor"),
+              notDeleted(expense),
+            ),
+          )
+          .limit(1)
+      : [];
+    if (unlinked.length) {
+      const findingId = await fileSourceReconciliation(
+        tx,
+        input,
+        purchaseId,
+        family.root.id,
+        orderKey,
+        null,
+      );
+      return importWriterOutput.parse({
+        outcome: "conflict",
+        purchaseId,
+        findingIds: [findingId],
+        outputFingerprint: await sha256Hex(
+          JSON.stringify({ purchaseId, source: input.source }),
+        ),
+      });
+    }
     await attachEvidence(tx, purchaseId, input);
 
     const reviewReason =
@@ -1193,51 +1500,47 @@ export async function importVendorOrder(
     // pricing or dates can support canonical Expense rows.
     const lines = identityOnly ? [] : candidate.lines;
     if (identityOnly) {
-      // A changed source preserves its first accepted snapshot; it cannot mint
-      // a new unbound Product while overwriting that immutable ordered context.
-      if (!isSourceRefresh) {
-        const productsByExternalIdentity = new Map<string, string>();
-        for (const [lineIndex, line] of candidate.lines.entries()) {
-          const identity = identityDecisions[lineIndex];
-          if (!identity || identity.lineKind !== "principal") continue;
-          const productId = await resolveLineProduct(
-            tx,
-            line,
-            identity,
-            input.vendorId,
-            productsByExternalIdentity,
-            (createdId) =>
-              rowMutations.push({
-                targetKind: "product",
-                targetId: createdId,
-                mutationKind: "create",
-                fields: ["name", "externalIds"],
-              }),
+      const productsByExternalIdentity = new Map<string, string>();
+      for (const [lineIndex, line] of candidate.lines.entries()) {
+        const identity = identityDecisions[lineIndex];
+        if (!identity || identity.lineKind !== "principal") continue;
+        const productId = await resolveLineProduct(
+          tx,
+          line,
+          identity,
+          input.vendorId,
+          productsByExternalIdentity,
+          (createdId) =>
+            rowMutations.push({
+              targetKind: "product",
+              targetId: createdId,
+              mutationKind: "create",
+              fields: ["name", "externalIds"],
+            }),
+        );
+        if (productId) productLines.push({ lineIndex, productId });
+        if (identity.unresolvedReason)
+          findingIds.push(
+            await fileFinding(
+              tx,
+              input,
+              purchaseId,
+              "product_unresolved",
+              `Product resolution is required for “${line.title}”: ${identity.unresolvedReason}`,
+              null,
+            ),
           );
-          if (productId) productLines.push({ lineIndex, productId });
-          if (identity.unresolvedReason)
-            findingIds.push(
-              await fileFinding(
-                tx,
-                input,
-                purchaseId,
-                "product_unresolved",
-                `Product resolution is required for “${line.title}”: ${identity.unresolvedReason}`,
-                null,
-              ),
-            );
-          if (identity.variantDoubt)
-            findingIds.push(
-              await fileFinding(
-                tx,
-                input,
-                purchaseId,
-                "variant_doubt",
-                `The existing match for “${line.title}” does not establish its exact ordered variant. Review the distinct Product before merging.`,
-                null,
-              ),
-            );
-        }
+        if (identity.variantDoubt)
+          findingIds.push(
+            await fileFinding(
+              tx,
+              input,
+              purchaseId,
+              "variant_doubt",
+              `The existing match for “${line.title}” does not establish its exact ordered variant. Review the distinct Product before merging.`,
+              null,
+            ),
+          );
       }
     } else if (
       reviewReason === "sum_mismatch" ||
@@ -1576,16 +1879,6 @@ export async function importVendorOrder(
     // Canonical amounts are USD. Unknown or foreign units remain in the
     // immutable original and cannot replace accepted payments or settle charges.
     if (candidate.currency === "USD") {
-      if (isSourceRefresh) {
-        await tx
-          .delete(purchasePaymentEvidence)
-          .where(
-            and(
-              eq(purchasePaymentEvidence.sourceClaimId, sourceClaimId),
-              eq(purchasePaymentEvidence.purchaseId, purchaseId),
-            ),
-          );
-      }
       for (const [evidenceIndex, payment] of candidate.payments.entries()) {
         await tx.insert(purchasePaymentEvidence).values({
           purchaseId,

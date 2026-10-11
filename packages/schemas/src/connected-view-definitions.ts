@@ -15,6 +15,7 @@ export interface ConnectedView {
  * or project into unrelated sibling records are intentionally absent.
  */
 export const connectedViews = {
+  email: [],
   product: [
     {
       key: "recipes",

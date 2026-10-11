@@ -693,6 +693,32 @@ export default defineEntity({
         kind: "json",
         type: { module: "@cubby/schemas/run-fields", export: "RunInput" },
       },
+      {
+        key: "liveProgress",
+        kind: "json",
+        type: {
+          module: "@cubby/schemas/run-fields",
+          export: "RunProgressEvent",
+        },
+      },
+      {
+        key: "progressHistory",
+        kind: "json",
+        type: {
+          module: "@cubby/schemas/run-fields",
+          export: "RunProgressHistory",
+        },
+      },
+      // Display history is bounded; replay identity is retained for the Run's lifetime.
+      {
+        key: "progressEventIds",
+        kind: "json",
+        type: {
+          module: "@cubby/schemas/run-fields",
+          export: "RunProgressEventIds",
+        },
+      },
+      { key: "heartbeatAt", kind: "timestamp" },
       // Resumable position within `input`; the shape belongs to its purpose.
       {
         key: "progress",

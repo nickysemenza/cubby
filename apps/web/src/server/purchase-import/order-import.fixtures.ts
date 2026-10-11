@@ -3,6 +3,7 @@ import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import { parseEntityId, vendorAccountId } from "@cubby/schemas/identifiers";
 import {
   commitPurchaseImportInput,
+  importExtractionOutcome,
   type PreparePurchaseImportInput,
   type preparedProductResolution,
 } from "@cubby/schemas/purchase-import";
@@ -13,19 +14,29 @@ import type { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   expense,
-  mailboxMessage,
   orderMail,
   product,
   purchase,
+  sourceOrderObservation,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 import {
   createProductFixture,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import {
+  readRetainedMail,
+  type RetainedMail,
+} from "~/server/repo/retained-mail";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { startImportRunFixture } from "./import-run.fixtures";
+import { recordSourceOrderObservation } from "./reconciliation-observations";
 
 type HistoryLine = {
   title: string;
@@ -167,25 +178,27 @@ export async function purchasesForOrder(db: Database, orderId: string) {
 /** A member's retained, related Email awaiting import. */
 export async function retainedMailFixture(
   db: Database,
-  input: {
-    ledgerPartyId: typeof orderMail.$inferInsert.ledgerPartyId;
-    messageId: string;
+  input: Pick<RetainedMail, "ledgerPartyId" | "messageId"> & {
     checksum: string;
     bodyText?: string;
     mailboxId?: string;
+    vendorId?: RetainedMail["vendorId"];
+    content?: RetainedMail["content"];
+    sender?: RetainedMail["sender"];
+    subject?: RetainedMail["subject"];
+    receivedAt?: RetainedMail["receivedAt"];
+    threadId?: RetainedMail["threadId"];
+    historyId?: RetainedMail["historyId"];
+    classificationVersion?: string;
   },
 ) {
   const [mail] = await getDb(db)
     .insert(orderMail)
     .values({
       ledgerPartyId: input.ledgerPartyId,
-      mailboxId: input.mailboxId ?? "synthetic-mailbox",
-      messageId: input.messageId,
-      sender: "orders@shop.example",
-      subject: `Synthetic ${input.messageId}`,
-      receivedAt: new Date("2026-09-20T18:00:00Z"),
+      vendorId: input.vendorId,
       rawChecksum: input.checksum,
-      content: {
+      content: input.content ?? {
         snippet: null,
         bodyText: input.bodyText ?? `Synthetic ${input.messageId}`,
         bodyHtml: null,
@@ -193,20 +206,86 @@ export async function retainedMailFixture(
     })
     .returning();
   if (!mail) throw new Error("Synthetic mail fixture did not persist");
-  await getDb(db).insert(mailboxMessage).values({
+  await insertWithShortcode(db, "email", {
     ledgerPartyId: input.ledgerPartyId,
-    mailboxId: mail.mailboxId,
-    messageId: mail.messageId,
+    mailboxId: input.mailboxId ?? "synthetic-mailbox",
+    messageId: input.messageId,
+    sender: input.sender === undefined ? "orders@shop.example" : input.sender,
+    subject:
+      input.subject === undefined
+        ? `Synthetic ${input.messageId}`
+        : input.subject,
+    receivedAt:
+      input.receivedAt === undefined
+        ? new Date("2026-09-20T18:00:00Z")
+        : input.receivedAt,
+    threadId: input.threadId,
+    historyId: input.historyId,
     checksum: mail.rawChecksum,
     classification: "related",
-    classificationVersion: "synthetic-v1",
+    classificationVersion: input.classificationVersion ?? "synthetic-v1",
     status: "pending",
     orderMailId: mail.id,
   });
-  return mail;
+  const [retained] = await readRetainedMail(db, {
+    ledgerPartyIds: [input.ledgerPartyId],
+    orderMailIds: [mail.id],
+  });
+  if (!retained) throw new Error("Synthetic retained Email did not persist");
+  return retained;
 }
 
-export const mailSource = (mail: typeof orderMail.$inferSelect) => ({
+/** A real immutable capture for an already imported Purchase in integrity fixtures. */
+export async function sourceOrderObservationFixture(
+  db: Database,
+  input: Pick<
+    typeof sourceOrderObservation.$inferInsert,
+    "sourceClaimId" | "orderKey" | "purchaseId" | "vendorId"
+  > &
+    Partial<
+      Pick<
+        typeof sourceOrderObservation.$inferInsert,
+        "runId" | "primaryDocumentImageId" | "screenshotImageId"
+      >
+    >,
+) {
+  return withTransaction(db, (tx) =>
+    recordSourceOrderObservation(
+      tx,
+      {
+        sourceClaimId: input.sourceClaimId,
+        orderKey: input.orderKey,
+        purchaseId: input.purchaseId,
+      },
+      {
+        vendorId: input.vendorId,
+        runId: input.runId ?? null,
+        source: {
+          kind: "vendor_export",
+          externalKey: "synthetic:integrity-observation",
+          checksum: "a".repeat(64),
+        },
+        extraction: importExtractionOutcome.parse({
+          status: "ready",
+          candidate: {
+            orderId: input.orderKey,
+            orderedAt: "2026-09-01T18:00:00Z",
+            merchant: "Synthetic integrity vendor",
+            currency: "USD",
+            printedGrandTotal: null,
+            lines: [],
+            payments: [],
+            allShipmentsDelivered: false,
+          },
+        }),
+        primaryDocumentImageId: input.primaryDocumentImageId ?? null,
+        screenshotImageId: input.screenshotImageId ?? null,
+      },
+    ),
+  );
+}
+
+export const mailSource = (mail: RetainedMail) => ({
   kind: "mail_message" as const,
   externalKey: `gmail:${mail.mailboxId}:${mail.messageId}`,
   checksum: mail.rawChecksum,
@@ -298,6 +377,7 @@ export async function prepareMemberImport(
   };
 }
 
+/** Seed a live member LedgerParty with actor.userId before this real member prepare/commit boundary. */
 export async function memberImport(
   db: Database,
   actor: ActorContext,

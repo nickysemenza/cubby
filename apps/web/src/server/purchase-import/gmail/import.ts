@@ -12,12 +12,17 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ledgerParty,
+  email as emailTable,
   orderMail,
   orderMailEvent,
   run,
 } from "~/server/db/schema";
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  retainedMailProjection,
+  retainedMailJoin,
+} from "~/server/repo/retained-mail";
 
 import type { startMailImport } from "../mail-import-run";
 
@@ -37,10 +42,11 @@ async function startSelectedSources(
     .select({
       eventId: orderMailEvent.id,
       supersededAt: orderMailEvent.supersededAt,
-      mail: orderMail,
+      mail: retainedMailProjection,
     })
     .from(orderMailEvent)
     .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
+    .innerJoin(emailTable, retainedMailJoin)
     .innerJoin(
       ledgerParty,
       and(
@@ -50,9 +56,13 @@ async function startSelectedSources(
       ),
     )
     .where(
-      inArray(
-        orderMailEvent.id,
-        orders.map((source) => source.eventId),
+      and(
+        eq(emailTable.provider, "gmail"),
+        notDeleted(emailTable),
+        inArray(
+          orderMailEvent.id,
+          orders.map((source) => source.eventId),
+        ),
       ),
     );
   if (rows.length !== orders.length)

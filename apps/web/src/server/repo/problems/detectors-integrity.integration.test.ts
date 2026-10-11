@@ -2,6 +2,7 @@ import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import type { EdgeRole } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
+import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { generateShortcode } from "@cubby/shared";
 import { eq, getTableColumns, getTableName, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -11,6 +12,7 @@ import type { Database } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
+  email as emailTable,
   entityAttachment,
   entityExternalId,
   entityIdentity,
@@ -29,7 +31,7 @@ import {
   ledgerParty,
   ledgerSourceClaim,
   mailboxCursor,
-  mailboxMessage,
+  photoRunImage,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
@@ -49,12 +51,14 @@ import {
   runControlEvent,
   runFinding,
   runOperation,
-  runProgress,
-  runTarget,
   statementImport,
   statementRow,
   user,
 } from "~/server/db/schema";
+import {
+  retainedMailFixture,
+  sourceOrderObservationFixture,
+} from "~/server/purchase-import/order-import.fixtures";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { linkValues } from "~/server/repo/entity-links";
@@ -277,7 +281,7 @@ const mkImageSighting = async (
   >,
 ) =>
   insertAndReturn(db, imageSighting, {
-    imageId: values.imageId ?? (await mkImage(db)).id,
+    imageId: values.imageId ?? parseEntityId("image", (await mkImage(db)).id),
     ledgerPartyId: values.ledgerPartyId ?? (await mkLedgerParty(db)).id,
     deviceId: values.deviceId ?? (await mkDevice(db)).id,
     assetKey: uniq("asset"),
@@ -297,6 +301,7 @@ const mkRun = async (
       | "vendorId"
       | "predecessorRunId"
       | "parentRunId"
+      | "purpose"
     >
   > = {},
 ) => {
@@ -328,6 +333,7 @@ const mkRun = async (
     predecessorRunId: values.predecessorRunId,
     parentRunId: values.parentRunId,
     trigger: "manual",
+    purpose: values.purpose,
   });
 };
 
@@ -367,25 +373,45 @@ const entityKindOf = async (db: Database, id: string) => {
   return row.kind;
 };
 
-const runTargetKindOf = async (db: Database, id: string) => {
-  const kind = await entityKindOf(db, id);
-  if (kind !== "purchase" && kind !== "product" && kind !== "image")
-    throw new Error(`A run target cannot name a ${kind}`);
-  return kind;
+const mkPhotoRunImage = async (
+  db: Database,
+  values: Partial<
+    Pick<
+      typeof photoRunImage.$inferInsert,
+      "imageId" | "runId" | "deviceWorkDeviceId"
+    >
+  > = {},
+) => {
+  const run = values.runId
+    ? { id: values.runId }
+    : await mkRun(db, { purpose: "photo_inventory" });
+  await getDb(db)
+    .update(runTable)
+    .set({ purpose: "photo_inventory" })
+    .where(eq(runTable.id, run.id));
+  return insertAndReturn(db, photoRunImage, {
+    runId: run.id,
+    imageId: values.imageId ?? parseEntityId("image", (await mkImage(db)).id),
+    deviceWorkDeviceId: values.deviceWorkDeviceId,
+    targetFingerprint: uniq("photo-image-fingerprint"),
+  });
 };
 
-const mkRunTarget = async (
+const mkEmail = async (
   db: Database,
-  values: Pick<typeof runTarget.$inferInsert, "entityId" | "entityKind"> &
-    Partial<Pick<typeof runTarget.$inferInsert, "vendorAccountId" | "runId">>,
+  values: Partial<
+    Pick<typeof emailTable.$inferInsert, "ledgerPartyId" | "runId">
+  > = {},
 ) => {
-  const run = values.runId ? { id: values.runId } : await mkRun(db);
-  return insertAndReturn(db, runTarget, {
-    runId: run.id,
-    entityId: values.entityId,
-    entityKind: values.entityKind,
-    vendorAccountId: values.vendorAccountId,
-    targetFingerprint: uniq("target-fingerprint"),
+  return insertWithShortcode(db, "email", {
+    ledgerPartyId: values.ledgerPartyId ?? (await mkLedgerParty(db)).id,
+    runId: values.runId,
+    mailboxId: uniq("mailbox"),
+    messageId: uniq("message"),
+    checksum: "a".repeat(64),
+    classification: "related",
+    classificationVersion: "synthetic-v1",
+    status: "pending",
   });
 };
 
@@ -418,7 +444,7 @@ const mkOrderMail = async (
   > = {},
 ) => {
   const party = values.ledgerPartyId ?? (await mkLedgerParty(db)).id;
-  return insertAndReturn(db, orderMail, {
+  const original = await retainedMailFixture(db, {
     ledgerPartyId: party,
     vendorId: values.vendorId,
     mailboxId: uniq("mailbox"),
@@ -426,8 +452,42 @@ const mkOrderMail = async (
     sender: "orders@example.test",
     subject: "Liveness fixture order",
     receivedAt: new Date("2026-01-01T12:00:00Z"),
-    rawChecksum: uniq("mail-checksum"),
+    checksum: uniq("mail-checksum"),
   });
+  if (values.ledgerPartyId) {
+    // Isolate the shell's broken owner edge from its separately tested Email edge.
+    await getDb(db)
+      .update(emailTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(emailTable.orderMailId, original.id));
+  }
+  return original;
+};
+
+const mkSourceOrderObservation = async (
+  db: Database,
+  media: { primaryDocumentImageId?: string; screenshotImageId?: string },
+) => {
+  const imported = await mkPurchase(db);
+  const claim = await mkImportSourceClaim(db);
+  const observation = await sourceOrderObservationFixture(db, {
+    sourceClaimId: claim.id,
+    purchaseId: imported.id,
+    vendorId: imported.vendorId,
+    orderKey: uniq("observed-order"),
+    runId: claim.firstRunId,
+    ...media,
+  });
+  await insertAndReturn(db, importSourceOrder, {
+    sourceClaimId: claim.id,
+    purchaseId: imported.id,
+    orderKey: observation.orderKey,
+    checksum: observation.checksum,
+    outputFingerprint: observation.contentFingerprint,
+    originalOrder: acceptedSourceOrder.parse(observation),
+    acceptedObservationId: observation.id,
+  });
+  return observation;
 };
 
 const mkRecipeSection = async (db: Database) => {
@@ -450,6 +510,7 @@ const TARGET_FACTORIES = {
   cookbook: mkCookbook,
   expense: mkExpense,
   image: mkImage,
+  email: mkEmail,
   recipe: mkRecipe,
   ingredient: mkIngredient,
   plant: mkPlant,
@@ -578,19 +639,23 @@ const SOURCE_FACTORIES = {
       description: "Confirmed liveness fixture description",
     }),
 
+  "SourceOrderObservation.primaryDocumentImageId": (db, targetId) =>
+    mkSourceOrderObservation(db, { primaryDocumentImageId: targetId }),
+  "SourceOrderObservation.screenshotImageId": (db, targetId) =>
+    mkSourceOrderObservation(db, { screenshotImageId: targetId }),
   "ImportPreparedOrder.primaryDocumentImageId": (db, targetId) =>
     mkImportPreparedOrder(db, { primaryDocumentImageId: targetId }),
 
   "ImportPreparedOrder.screenshotImageId": (db, targetId) =>
     mkImportPreparedOrder(db, { screenshotImageId: targetId }),
 
-  // One factory serves the image, product and purchase targets: the target's
-  // own stored kind is what the row must carry.
-  "RunTarget.entityId": async (db, targetId) =>
-    mkRunTarget(db, {
-      entityId: targetId,
-      entityKind: await runTargetKindOf(db, targetId),
+  "PhotoRunImage.deviceWorkDeviceId": (db, targetId) =>
+    mkPhotoRunImage(db, {
+      deviceWorkDeviceId: parseEntityId("device", targetId),
     }),
+
+  "PhotoRunImage.imageId": (db, targetId) =>
+    mkPhotoRunImage(db, { imageId: parseEntityId("image", targetId) }),
 
   "OrderMailAttachment.imageId": async (db, targetId) => {
     const mail = await mkOrderMail(db);
@@ -650,16 +715,8 @@ const SOURCE_FACTORIES = {
       mailboxId: uniq("mailbox"),
     }),
 
-  "MailboxMessage.ledgerPartyId": (db, targetId) =>
-    insertAndReturn(db, mailboxMessage, {
-      ledgerPartyId: parseEntityId("ledgerParty", targetId),
-      mailboxId: uniq("mailbox"),
-      messageId: uniq("message"),
-      checksum: uniq("checksum"),
-      classification: "related",
-      classificationVersion: "synthetic-v1",
-      status: "pending",
-    }),
+  "Email.ledgerPartyId": (db, targetId) =>
+    mkEmail(db, { ledgerPartyId: parseEntityId("ledgerParty", targetId) }),
 
   "OrderMail.ledgerPartyId": (db, targetId) =>
     mkOrderMail(db, {
@@ -742,15 +799,6 @@ const SOURCE_FACTORIES = {
       productId: parseEntityId("product", targetId),
     });
   },
-
-  "RunTarget.vendorAccountId": (db, targetId) =>
-    mkProduct(db).then((product) =>
-      mkRunTarget(db, {
-        entityId: product.id,
-        entityKind: "product",
-        vendorAccountId: parseEntityId("vendorAccount", targetId),
-      }),
-    ),
 
   "ImportSourceClaim.vendorAccountId": (db, targetId) =>
     mkImportSourceClaim(db, { vendorAccountId: targetId }),
@@ -1517,14 +1565,8 @@ const SOURCE_FACTORIES = {
       productCreate: { name: uniq("Proposal") },
     }),
 
-  "RunTarget.runId": async (db, targetId) => {
-    const product = await mkProduct(db);
-    return mkRunTarget(db, {
-      runId: parseEntityId("run", targetId),
-      entityId: product.id,
-      entityKind: "product",
-    });
-  },
+  "PhotoRunImage.runId": (db, targetId) =>
+    mkPhotoRunImage(db, { runId: parseEntityId("run", targetId) }),
 
   "Suggestion.runId": async (db, targetId) => {
     const product = await mkProduct(db);
@@ -1548,26 +1590,8 @@ const SOURCE_FACTORIES = {
       inputFingerprint: uniq("input-fingerprint"),
     }),
 
-  "MailboxMessage.runId": async (db, targetId) => {
-    const party = await mkLedgerParty(db);
-    return insertAndReturn(db, mailboxMessage, {
-      ledgerPartyId: party.id,
-      runId: parseEntityId("run", targetId),
-      mailboxId: uniq("mailbox"),
-      messageId: uniq("message"),
-      checksum: uniq("checksum"),
-      classification: "related",
-      classificationVersion: "synthetic-v1",
-      status: "researching",
-    });
-  },
-
-  "RunProgress.runId": (db, targetId) =>
-    insertAndReturn(db, runProgress, {
-      runId: parseEntityId("run", targetId),
-      eventId: uniq("progress-event"),
-      phase: "liveness-fixture",
-    }),
+  "Email.runId": (db, targetId) =>
+    mkEmail(db, { runId: parseEntityId("run", targetId) }),
 
   "RunControlEvent.runId": (db, targetId) =>
     insertAndReturn(db, runControlEvent, {
@@ -1773,7 +1797,9 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {
+  it("reports every derived edge when a live source points at a soft-deleted target", async () => {
+    // The real persisted matrix also owns exact fixture coverage, so a new
+    // live edge cannot disappear behind a declaration-only test.
     expect(Object.keys(SOURCE_FACTORIES).sort()).toEqual(
       [...new Set(derivedMustTargetLiveEdges.map((s) => s.edgeKey))].sort(),
     );
@@ -1783,9 +1809,6 @@ describe("findReferentialLivenessViolations", () => {
         `no TARGET_FACTORIES entry for "${spec.targetEntity}" (edge "${spec.edgeKey}")`,
       ).toBe(true);
     }
-  });
-
-  it("reports every derived edge when a live source points at a soft-deleted target", async () => {
     // Authoritative owner for the old per-edge "reports exactly one" cases:
     // make one violation for every derived edge, then prove the detector returns
     // that complete edge/source/target map in one scan. This retains complete

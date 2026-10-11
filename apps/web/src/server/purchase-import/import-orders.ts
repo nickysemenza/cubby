@@ -34,7 +34,7 @@ import {
   expense,
   importPreparedLine,
   importPreparedOrder,
-  mailboxMessage,
+  email as emailTable,
   orderMail,
   orderMailAttachment,
   orderMailCandidateDecision,
@@ -42,7 +42,6 @@ import {
   product,
   purchase,
   run as runTable,
-  runTarget,
   vendor,
 } from "~/server/db/schema";
 import {
@@ -58,6 +57,11 @@ import {
   type ExternalIdPair,
 } from "~/server/repo/product/find-by-external-ids";
 import { findProductNameCandidates } from "~/server/repo/product/resolve-names";
+import {
+  retainedMailJoin,
+  retainedMailProjection,
+  type RetainedMail,
+} from "~/server/repo/retained-mail";
 import { readOperation } from "~/server/repo/run-operation";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { findOrCreateVendor } from "~/server/repo/vendor";
@@ -67,6 +71,7 @@ import { executeAtomicOperation } from "~/server/runs/operation";
 import { assertRunCapability } from "./capabilities";
 import { ensureMailVendorAccount } from "./gmail/mail-account";
 import { attachOrderLineThumbnails } from "./line-thumbnails";
+import { assertMailRunMembership } from "./mail-run-membership";
 import { linkImportedMail } from "./mail-tool";
 import {
   MODEL_STYLE_MATCH_REASON,
@@ -184,7 +189,7 @@ async function preparedOrderVendor(
   return vendorId;
 }
 
-type RetainedMailSource = typeof orderMail.$inferSelect;
+type RetainedMailSource = RetainedMail;
 
 /**
  * A mail-sourced order must name the member's own retained Email unchanged,
@@ -214,21 +219,16 @@ async function retainedMailSource(
     );
   const database = getDb(db);
   const [retained] = await database
-    .select({ mail: orderMail, message: mailboxMessage })
+    .select({ mail: retainedMailProjection, message: emailTable })
     .from(orderMail)
-    .innerJoin(
-      mailboxMessage,
-      and(
-        eq(mailboxMessage.ledgerPartyId, orderMail.ledgerPartyId),
-        eq(mailboxMessage.mailboxId, orderMail.mailboxId),
-        eq(mailboxMessage.messageId, orderMail.messageId),
-      ),
-    )
+    .innerJoin(emailTable, retainedMailJoin)
     .where(
       and(
         eq(orderMail.ledgerPartyId, scope.ledgerPartyId),
-        eq(orderMail.mailboxId, mailboxId),
-        eq(orderMail.messageId, messageId),
+        eq(emailTable.provider, "gmail"),
+        notDeleted(emailTable),
+        eq(emailTable.mailboxId, mailboxId),
+        eq(emailTable.messageId, messageId),
       ),
     )
     .limit(1);
@@ -259,20 +259,8 @@ async function retainedMailSource(
     throw new Error(
       "Purchase import must use the member's retained Email unchanged.",
     );
-  if (scope.purpose === "mail_import") {
-    const [target] = await database
-      .select({ id: runTarget.id })
-      .from(runTarget)
-      .where(
-        and(
-          eq(runTarget.runId, scope.runId),
-          eq(runTarget.workKey, retained.mail.id),
-        ),
-      )
-      .limit(1);
-    if (!target)
-      throw new Error("This Mail import Run did not admit that Email.");
-  }
+  if (scope.purpose === "mail_import")
+    await assertMailRunMembership(database, scope.runId, retained.mail.id);
   return retained.mail;
 }
 

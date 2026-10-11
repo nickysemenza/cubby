@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { entityAttachment } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { updateProduct } from "~/server/repo/product/crud";
+import { getProductByID, updateProduct } from "~/server/repo/product/crud";
 import {
   createImageFixture,
   createProductFixture as createProduct,
@@ -94,6 +94,9 @@ describe("pending Product image roles", () => {
       columns: { purpose: true },
     });
     expect(row?.purpose).toBe("label");
+    const projected = await getProductByID(ctx.db, product.entityId);
+    expect(projected.labelReviewedRevision).toBeNull();
+    expect(projected.labelEvidenceRevision).toMatch(/^label-v1:/);
     // Summary and project galleries use this lighter read instead of the
     // Product detail mapper; confirmed labels must be excluded here too.
     const galleries = await getProductImagesByProductIds(ctx.db, [

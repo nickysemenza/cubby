@@ -9,7 +9,7 @@ import {
   importPreparedOrder,
   importSourceClaim,
   importSourceOrder,
-  mailboxMessage,
+  email as emailTable,
   orderMail,
   orderMailCandidateDecision,
   orderMailEvent,
@@ -40,23 +40,20 @@ describe("retained mail source associations", () => {
     messageId: string,
     checksum: string,
   ) {
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId,
-        mailboxId: "synthetic-mailbox",
-        messageId,
-        sender: "receipts@example.test",
-        subject: "Several workshop orders",
-        receivedAt: new Date("2026-09-01T18:00:00Z"),
-        rawChecksum: checksum,
-        content: {
-          snippet: null,
-          bodyText: "Two workshop orders",
-          bodyHtml: null,
-        },
-      })
-      .returning();
+    const mail = await retainedMailFixture(ctx.db, {
+      ledgerPartyId,
+      mailboxId: "synthetic-mailbox",
+      messageId,
+      sender: "receipts@example.test",
+      subject: "Several workshop orders",
+      receivedAt: new Date("2026-09-01T18:00:00Z"),
+      checksum: checksum,
+      content: {
+        snippet: null,
+        bodyText: "Two workshop orders",
+        bodyHtml: null,
+      },
+    });
     if (!mail) throw new Error("Synthetic retained mail did not persist");
     return mail;
   }
@@ -408,7 +405,7 @@ describe("retained mail source associations", () => {
         (finding) => finding.kind === "arrived",
       ),
     ).toEqual([]);
-    expect((await getDb(ctx.db).select().from(mailboxMessage))[0]?.status).toBe(
+    expect((await getDb(ctx.db).select().from(emailTable))[0]?.status).toBe(
       "completed",
     );
     // The member's import Run ended with its commit.

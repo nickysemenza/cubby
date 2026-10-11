@@ -35,6 +35,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { inventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import {
+  photoRunImageState,
   commitPhotoGroupProduct,
   photoGroupProposalList,
   proposePhotoGroupsInput,
@@ -47,11 +48,7 @@ import {
   type PhotoRunImage,
   type ProposePhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
-import {
-  runPurpose,
-  runStatus,
-  runTargetState,
-} from "@cubby/schemas/purchase-import";
+import { runPurpose, runStatus } from "@cubby/schemas/purchase-import";
 import { getErrorMessage } from "@cubby/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -63,7 +60,7 @@ import {
   imageProcessingJob,
   imageProcessingAttempt,
   run as runTable,
-  runTarget,
+  photoRunImage,
   ledgerParty,
   location,
   photoGroupProposal,
@@ -93,7 +90,7 @@ type RunImage = {
   imageId: ImageId;
   shortcode: string;
   state: string;
-  diff: unknown;
+  diff: typeof photoRunImage.$inferSelect.commitReceipt;
 };
 
 const storedCreate = commitPhotoGroupProduct.options[1].shape.create;
@@ -152,13 +149,13 @@ async function loadRunImages(db: Database, runId: RunId) {
     .select({
       imageId: image.id,
       shortcode: image.shortcode,
-      state: runTarget.state,
-      diff: runTarget.diff,
+      state: photoRunImage.state,
+      diff: photoRunImage.commitReceipt,
     })
-    .from(runTarget)
-    .innerJoin(image, eq(image.id, runTarget.entityId))
-    .where(eq(runTarget.runId, runId))
-    .orderBy(runTarget.position)
+    .from(photoRunImage)
+    .innerJoin(image, eq(image.id, photoRunImage.imageId))
+    .where(eq(photoRunImage.runId, runId))
+    .orderBy(photoRunImage.position)
     .limit(RUN_IMAGE_LIMIT);
   const ordered: RunImage[] = rows.map((row) => ({
     ...row,
@@ -188,7 +185,7 @@ type LiveRoster = {
 
 /**
  * A row's roster minus images that left the run: deleting an image
- * hard-deletes its `RunTarget` but not the id stored in this row's
+ * hard-deletes its `PhotoRunImage` but not the id stored in this row's
  * JSON, and a missing id must not break listing, approval, or discard.
  */
 function liveRoster(
@@ -1137,16 +1134,16 @@ export async function listPhotoRunImages(
       imageId: image.id,
       shortcode: image.shortcode,
       sha256: image.sha256,
-      position: runTarget.position,
-      state: runTarget.state,
-      deviceWorkState: runTarget.deviceWorkState,
-      deviceWorkError: runTarget.deviceWorkError,
-      deviceWorkAttempts: runTarget.deviceWorkAttempts,
+      position: photoRunImage.position,
+      state: photoRunImage.state,
+      deviceWorkState: photoRunImage.deviceWorkState,
+      deviceWorkError: photoRunImage.deviceWorkError,
+      deviceWorkAttempts: photoRunImage.deviceWorkAttempts,
     })
-    .from(runTarget)
-    .innerJoin(image, eq(image.id, runTarget.entityId))
-    .where(eq(runTarget.runId, run.id))
-    .orderBy(runTarget.position, image.shortcode)
+    .from(photoRunImage)
+    .innerJoin(image, eq(image.id, photoRunImage.imageId))
+    .where(eq(photoRunImage.runId, run.id))
+    .orderBy(photoRunImage.position, image.shortcode)
     .limit(RUN_IMAGE_LIMIT);
   if (!rows.length) return [];
   const shortcodes = rows.map((row) => row.shortcode);
@@ -1219,7 +1216,7 @@ export async function listPhotoRunImages(
     return {
       id: parseShortcodeFor("image", row.shortcode),
       position: row.position,
-      targetState: runTargetState.parse(row.state),
+      targetState: photoRunImageState.parse(row.state),
       originalUrl: rendition.original,
       cutoutUrl: rendition.transparent,
       cutout: cutout?.state ?? null,

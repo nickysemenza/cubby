@@ -18,6 +18,7 @@ import { runHref } from "~/app/purchases/purchase-import-links";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   meal,
+  purchaseImport,
   problems,
   recipe,
   run,
@@ -40,6 +41,17 @@ export function useReportCommands() {
   const mailDecision = useActionMutation({
     mutationFn: vendor.decideOrderMail.mutationOptions,
     error: "Could not update the email relationship",
+  });
+  const emailAccuracy = useActionMutation({
+    mutationFn: purchaseImport.emailAccuracyCreate.mutationOptions,
+    error: "Could not create the independent review sample",
+    success: ({ sampleSize }) =>
+      `Independent review sample: ${sampleSize} Emails`,
+  });
+  const emailImport = useActionMutation({
+    mutationFn: purchaseImport.emailImport.mutationOptions,
+    error: "Could not import this Email",
+    success: ({ runIds }) => `Import Runs: ${runIds.join(", ")}`,
   });
   const mailResearch = useActionMutation({
     mutationFn: vendor.importOrderMail.mutationOptions,
@@ -110,11 +122,19 @@ export function useReportCommands() {
         mailResearch.variables.evidenceChecksum === request.evidenceChecksum
       )
         return mailResearch.data?.runIds ?? [];
+      if (
+        request.kind === "import-email" &&
+        emailImport.variables?.id === request.id &&
+        emailImport.variables.expectedChecksum === request.expectedChecksum
+      )
+        return emailImport.data?.runIds ?? [];
       return [];
     },
     pending:
       mailDecision.isPending ||
       mailResearch.isPending ||
+      emailImport.isPending ||
+      emailAccuracy.isPending ||
       control.isPending ||
       finding.isPending ||
       reparse.isPending ||
@@ -138,6 +158,15 @@ export function useReportCommands() {
     },
     run: (request: ReportCommandRequest) =>
       match(request)
+        .with({ kind: "create-email-accuracy" }, (r) =>
+          emailAccuracy.mutate({ sampleSize: r.sampleSize }),
+        )
+        .with({ kind: "import-email" }, (r) =>
+          emailImport.mutate({
+            id: r.id,
+            expectedChecksum: r.expectedChecksum,
+          }),
+        )
         .with({ kind: "decide-order-mail" }, (r) => {
           if (r.purchaseId)
             mailDecision.mutate({

@@ -12,7 +12,7 @@ import {
   imageProcessingJob,
   imageProcessingAttempt,
   run as runTable,
-  runTarget,
+  photoRunImage,
   inventoryEntry,
   photoGroupProposal,
   product,
@@ -72,6 +72,7 @@ describe("photo group proposals", () => {
         actorLedgerPartyName: party.name,
         actorLedgerPartyKind: "member",
         agentSessionId: `photo-proposal-test:${id}`,
+        dispatchEventId: crypto.randomUUID(),
         purpose: "photo_inventory",
         trigger: "manual",
         status: "running",
@@ -84,12 +85,11 @@ describe("photo group proposals", () => {
       ),
     );
     await getDb(ctx.db)
-      .insert(runTarget)
+      .insert(photoRunImage)
       .values(
         images.map((image, index) => ({
           runId: run.id,
-          entityKind: "image" as const,
-          entityId: parseEntityId("image", image.id),
+          imageId: parseEntityId("image", image.id),
           position: index,
           state: "pending" as const,
           targetFingerprint: `fixture-${crypto.randomUUID()}`,
@@ -157,6 +157,9 @@ describe("photo group proposals", () => {
     const settled = await reconcileSettledRun(ctx.db, {
       runId: run.id,
       operationId: "synthetic-photo-settle",
+      generation: run.dispatchEventId!,
+      sequence: 1,
+      receivedEventIds: new Set([run.dispatchEventId!]),
     });
     expect(settled).toEqual({ reconciled: false, status: "running" });
     expect(
@@ -730,11 +733,11 @@ describe("photo group proposals", () => {
       result.proposals.find((entry) => entry.groupKey === "junk")?.state,
     ).toBe("discarded");
     const targets = await getDb(ctx.db)
-      .select({ state: runTarget.state })
-      .from(runTarget)
+      .select({ state: photoRunImage.state })
+      .from(photoRunImage)
       .where(
         eq(
-          runTarget.entityId,
+          photoRunImage.imageId,
           parseEntityId(
             "image",
             (await readRow(run.id, "junk"))!.images[0]!.imageId,
@@ -886,7 +889,7 @@ describe("photo group proposals", () => {
     expect(await readRow(run.id, "late")).toBeUndefined();
   });
 
-  // Regression: deleting a run photo hard-deletes its RunTarget but not
+  // Regression: deleting a run photo hard-deletes its PhotoRunImage but not
   // the id in the proposal's JSON, and every reader threw "left its run" —
   // breaking the review page, approve-all, and discard.
   it("tolerates a proposal photo deleted after proposing: lists, approves and discards without it", async () => {
@@ -905,8 +908,8 @@ describe("photo group proposals", () => {
     ];
     for (const deleted of deletedIds)
       await getDb(ctx.db)
-        .delete(runTarget)
-        .where(eq(runTarget.entityId, parseEntityId("image", deleted)));
+        .delete(photoRunImage)
+        .where(eq(photoRunImage.imageId, parseEntityId("image", deleted)));
 
     const listed = await listPhotoGroupProposals(ctx.db, run.shortcode);
     const kept = listed.proposals.find((entry) => entry.groupKey === "kept");
@@ -960,12 +963,12 @@ describe("photo group proposals", () => {
     // reused across tests, so the trigger is dropped in `finally`.
     const firstId = (await readRow(run.id, "hat"))!.images[0]!.imageId;
     const [other] = await getDb(ctx.db)
-      .select({ imageId: runTarget.entityId })
-      .from(runTarget)
+      .select({ imageId: photoRunImage.imageId })
+      .from(photoRunImage)
       .where(
         and(
-          eq(runTarget.runId, run.id),
-          sql`${runTarget.entityId} <> ${firstId}`,
+          eq(photoRunImage.runId, run.id),
+          sql`${photoRunImage.imageId} <> ${firstId}`,
         ),
       );
     const db = getDb(ctx.db);
@@ -980,7 +983,7 @@ describe("photo group proposals", () => {
         END $$ LANGUAGE plpgsql`),
     );
     await db.execute(
-      sql.raw(`CREATE TRIGGER test_mid_approval_save AFTER UPDATE ON "RunTarget"
+      sql.raw(`CREATE TRIGGER test_mid_approval_save AFTER UPDATE ON "PhotoRunImage"
         FOR EACH ROW EXECUTE FUNCTION test_mid_approval_save()`),
     );
 
@@ -993,7 +996,7 @@ describe("photo group proposals", () => {
       );
     } finally {
       await db.execute(
-        sql.raw(`DROP TRIGGER test_mid_approval_save ON "RunTarget"`),
+        sql.raw(`DROP TRIGGER test_mid_approval_save ON "PhotoRunImage"`),
       );
       await db.execute(sql.raw(`DROP FUNCTION test_mid_approval_save()`));
     }

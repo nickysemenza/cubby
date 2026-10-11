@@ -1,5 +1,6 @@
 import type { AgentConversationSettlement } from "@cubby/schemas/agent-conversation";
 import type { reconcileSettledRunInput } from "@cubby/schemas/purchase-agent-services";
+import type { RunProgressStamp } from "@cubby/schemas/run-fields";
 import type { PiHarness, PiOperationResult } from "agents/harness/pi";
 import type { z } from "zod";
 
@@ -37,6 +38,7 @@ export function settlementReport(result: PiOperationResult): SettlementReport {
 export type SubmissionLedger = {
   /** The operation id of the newest accepted submission. */
   latest(): string | undefined;
+  progressStamp(operationId: string): RunProgressStamp;
   /** Every queue event id this agent has received for its run. */
   receivedEventIds(): string[];
   /** A host generation allowance stopped research; unfinished work needs review. */
@@ -82,21 +84,24 @@ export async function reportSettlement(
   const settledId = `submission-settled:${operationId}`;
   // Both outcomes pass the server's wake fence: a run with a wake still
   // queued for this agent is neither reviewed nor failed by this report.
-  const input: z.input<typeof reconcileSettledRunInput> = {
-    operationId: settledId,
-    receivedEventIds: deps.submissions.receivedEventIds(),
-  };
-  if (reviewDetail) input.detail = reviewDetail;
-  else if (outcome.kind === "fail")
-    input.failure = {
-      failureCode: outcome.failureCode,
-      detail: outcome.detail,
-    };
   try {
+    const stamp = deps.submissions.progressStamp(operationId);
+    const input: z.input<typeof reconcileSettledRunInput> = {
+      ...stamp,
+      operationId: settledId,
+      receivedEventIds: deps.submissions.receivedEventIds(),
+    };
+    if (reviewDetail) input.detail = reviewDetail;
+    else if (outcome.kind === "fail")
+      input.failure = {
+        failureCode: outcome.failureCode,
+        detail: outcome.detail,
+      };
     const reconciled = await deps.services.reconcileSettledRun(input);
     if (reconciled.reconciled && (reviewDetail || outcome.kind === "fail"))
       await deps.services.updateAgentProgress({
         eventId: settledId,
+        ...stamp,
         phase: "review",
         detail:
           reviewDetail ??

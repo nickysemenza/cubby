@@ -26,16 +26,20 @@ drive a real interaction still has value; incidental wording is not an outcome.
 For every deletion, record either the stronger retained regression or why the
 test guarded no runtime behavior in the commit message that deletes it. Preserve named regressions before removal.
 
-Reuse a healthy HMR session for iteration and fingerprint-verified native
-builds. Report setup separately from scenario time. A failed provenance/startup
-check is not a scenario result. Measure CI's natural job timings before changing
+Reuse a healthy HMR session for iteration and fingerprint-verified builds.
+Report setup separately from scenario time. A failed provenance/startup check
+is not a scenario result. Before declaring shared schema inputs ready, run the
+read-only `loadEntityDeclarationBundle` strict probe; do not infer readiness from
+field spelling. Root owns generation and migration readiness during parallel work. Measure CI's natural job timings before changing
 shards; keep test-lane cache keys broad.
 
 ## During implementation
 
-For persistent HMR, fixture packs, runtime discovery, or manual simulator work,
-load [local development](../local-development.md). Disposable E2E lanes keep
-owning their test databases and replay artifacts.
+For persistent HMR, fixture packs, or runtime discovery, load
+[local development](../local-development.md). Disposable E2E lanes own their
+test databases. Keep the existing CI Playwright HTML reports and traces, and
+local native `sim-e2e` artifacts; no custom bundle is required for every E2E
+journey or runtime acquisition.
 
 Run one affected E2E scenario when it exposes the behavior. For an isolated web
 contract, run `pnpm test:file src/...` from the repository root; paths are
@@ -48,15 +52,12 @@ Forward named-case flags directly, for example `pnpm test:postgres src/...
 does not apply the intended filter. Likewise, use `pnpm db:generate
 --name=description` without an extra separator.
 
-Before a PR, run focused checks and the affected local-only native/simulator
-lane that CI cannot cover. `pnpm test:e2e:local` defaults to headless + simulator
-smoke; UI editing/view-switch changes require `sim:extended` or
-`--extended-journey`. Choose domain lanes by name or `--all` for the extended matrix
-(one lane: `pnpm test:e2e:sim -- <flags>`; `-- --help` lists
-modes, env, and artifact paths; see the
-[local development](../local-development.md#native-iteration-and-validation)), plus focused tests for
-the change. CI runs the PostgreSQL, fast, typecheck, lint, and knip tiers on every PR; do not
-repeat them locally as a gate.
+Before a PR, run focused checks for the change and the automated client checks
+that cover it: Apple host tests, a simulator build, a TestFlight build, and the
+server version-gate test. An automated phone-width browser check may supplement
+these checks for web layout or interaction. No manual device verification is
+required. CI runs the PostgreSQL, fast, typecheck, lint, and knip tiers on every
+PR; do not repeat them locally as a gate.
 
 One root agent owns any broad validation that the change needs. A subagent runs
 only focused tests and returns its result, command, duration, relevant output,
@@ -99,6 +100,12 @@ migration (`DROP COLUMN`, or a constraint the deployed code would violate) is
 the exception: ship the code that stops reading or writing the old shape first,
 then apply the migration right after that deploy and read it back
 ([domain rules](domain-rules.md)).
+An explicitly authorized breaking cutover may consolidate expansion and contraction
+before merge. Follow its owning runbook: normally quiesce writers, or honor an
+explicit services-enabled request with transaction-held copy/drop locks. Verify SQL
+preservation before merge, deploy matching code immediately, and run historical
+accepted-reference promotion only after old in-flight work finishes. Verify household
+preservation, client delivery and the final catalog before normal use.
 
 ## Explicit local diagnostics
 
@@ -114,5 +121,13 @@ Coverage remains manually dispatchable in GitHub Actions.
   changed `.tsx`, PostgreSQL, E2E, WASM, or package test work.
 - [Quality and local diagnostics](validation-quality.md) for lint/type failures,
   dependencies, generated surfaces, or broad local verification.
-- [PR, CI, and device acceptance](validation-delivery.md) for a PR, failing
-  hosted check, deployment path, or phone browser behavior.
+- [PR, CI, and client acceptance](validation-delivery.md) for a PR, failing
+  hosted check, deployment path, or automated phone-width browser check.
+
+Vitest reuses source/config-keyed module transforms (`fsModuleCache`) across focused
+runs. Keep it enabled for local feedback; changed source still recompiles and
+tests still execute. Reuse successful unchanged cases rather than restarting a tier.
+
+Temporary `.lint-fixture-*` directories belong only to lint regressions. Keep them
+out of generator discovery and input fingerprints so parallel validation cannot
+read a fixture after its owner removes it.

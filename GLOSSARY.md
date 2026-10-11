@@ -5,7 +5,7 @@ One trusted household's record of what it owns, buys, eats and grows.
 ## Purchase research
 
 **Email**:
-A message Cubby scanned from a member's mailbox. Its Relevance decides whether Cubby keeps its content and links it to the Purchases it supports.
+A message Cubby scanned from a member's mailbox, including unrelated messages. Every Email retains its sender, subject and received date; its Relevance determines whether its body and attachments are retained.
 _Avoid_: OrderMail, order mail, receipt email, scanned message
 
 **Relevance**:

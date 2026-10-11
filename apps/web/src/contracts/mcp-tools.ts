@@ -502,6 +502,17 @@ export const MCP_TOOLS = defineMcpTools({
     description:
       "Import reads: one retained Email, purchase-import operation status, one run's live status and target outcomes, vendor coverage, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
     actions: {
+      email_accuracy_blind: mcpAction({
+        op: purchaseImportContract.ops.emailAccuracyBlind,
+        description:
+          "Read an owned frozen sample without prediction labels, reasons or models. Review the exact message through your Gmail connector before grading; missing originals are unavailable, never inferred from cache disposal.",
+      }),
+      email_accuracy_report: mcpAction({
+        op: purchaseImportContract.ops.emailAccuracyReport,
+        description:
+          "Weighted pipeline and known Jev/Clef-only confusion matrices, conditional precision/recall, sampling probabilities and excluded/unknown denominators for an independently graded frozen Email sample.",
+      }),
+
       mail: mcpAction({
         op: purchaseImportContract.ops.mailRead,
         description:
@@ -629,6 +640,27 @@ export const MCP_TOOLS = defineMcpTools({
     description:
       "A member's retained order Email: search Gmail for a missing original and record what an Email means for Purchases (read one with imports_read.mail). Emails are named by their Gmail mailboxId and messageId, so they correlate with your own Gmail connector.",
     actions: {
+      correct_relevance: mcpAction({
+        op: purchaseImportContract.ops.correctEmailRelevance,
+        description:
+          "Correct a false-negative Email only after independently reading the exact message. Supply prior expectedChecksum, canonical reviewedChecksum and your reason. Recovers bounded original content with no models, Pi admission or routing-policy change; frozen import sources refuse.",
+      }),
+      accuracy_sample: mcpAction({
+        op: purchaseImportContract.ops.emailAccuracyCreate,
+        description:
+          "Freeze an owned stratified Email accuracy sample, including predicted-unrelated messages. Sample membership and inclusion probabilities never change with later classifications. Independent grading starts with imports_read.email_accuracy_blind.",
+      }),
+      accuracy_grade: mcpAction({
+        op: purchaseImportContract.ops.emailAccuracyGrade,
+        description:
+          "Record an independent grade after reading the real frozen-checksum message without viewing its prediction. Preserve original predictions; unavailable messages need no invented label. Exact retries replay, contradictory grades refuse.",
+      }),
+
+      import: mcpAction({
+        op: purchaseImportContract.ops.emailImport,
+        description:
+          "Explicitly authorize paid Pi import for this selected Email and exact checksum. Automatic discovery remains classification-only. Review its cost estimate and relevance first; no other Email is admitted.",
+      }),
       search: mcpAction({
         op: purchaseImportContract.ops.mailSearch,
         description:
@@ -637,7 +669,7 @@ export const MCP_TOOLS = defineMcpTools({
       resolve: mcpAction({
         op: purchaseImportContract.ops.mailResolve,
         description:
-          "Record what one retained Email means, using the checksum imports_read.mail returned: `linked` (a lifecycle event — shipped, delivered, cancelled, refunded … — of an existing Purchase; writes no Expenses), `unresolved` (an order whose Purchase cannot be established yet, with the gap), or `unrelated` (not a purchase; Cubby deletes its retained copy). An order Email you import with purchase_import.commit is linked automatically. Idempotent.",
+          "Record what one retained Email means, using the checksum imports_read.mail returned: `linked` (a lifecycle event — shipped, delivered, cancelled, refunded … — of an existing Purchase; writes no Expenses), `unresolved` (an order whose Purchase cannot be established yet, with the gap), or `unrelated` (not a purchase; Cubby clears its unaccepted content while retaining Email metadata and provenance). An order Email you import with purchase_import.commit is linked automatically. Idempotent.",
       }),
     },
   },
@@ -646,6 +678,16 @@ export const MCP_TOOLS = defineMcpTools({
     description:
       "Import a purchase from its source: prepare then commit one immutable import plan; confirm a merchant's Vendor; reclassify a Purchase document. A member's Claude/Codex session and Pi's Mail import use the same writers.",
     actions: {
+      prepare_reconciliation: mcpAction({
+        op: purchaseImportContract.ops.prepareReconciliation,
+        description:
+          "Persist a reviewed source-order preview with explicit line bindings, affected Expenses, original party cents, payment evidence, statement allocations and spend delta. Writes the finding's reviewed snapshot and may preserve a validated historical source observation; changes no ledger or stock. Review with the member, then apply the finding using its returned reviewedFingerprint or commit its accepted-source review; changed state refuses the commit.",
+      }),
+      commit_accepted_reconciliation: mcpAction({
+        op: purchaseImportContract.ops.commitAcceptedReconciliation,
+        description:
+          "Commit the exact reviewed accepted-source preview to bind existing item Expenses to existing Products. Pass the full preview as review and its sourceOrderId. Rechecks ownership, source, money, party cents, payment allocations and Products; changed state refuses. Creates no Expense or Inventory and never receives stock.",
+      }),
       prepare: mcpAction({
         op: purchaseImportContract.ops.prepare,
         description:

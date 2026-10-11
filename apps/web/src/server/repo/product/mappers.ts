@@ -128,6 +128,7 @@ type ProductTopLevelDB = Omit<typeof product.$inferSelect, "growsPlantId"> & {
   externalIds?: MappableProductExternalId[] | null;
   dataQuality: ProductTopLevelOut["dataQuality"];
   pricing?: ProductPricing;
+  labelEvidenceRevision?: string | null;
   // Batch-resolved by the caller via `getProductCoverImageUrlsByProductIds`
   // (same rule the picker uses). Optional: callers that never asked for it
   // (e.g. ingredient-relation reads) fall back to `null` below.
@@ -228,6 +229,8 @@ export const mapDbProductToTopLevel = (
     kind: productData.kind,
     acquisitionOrigin: productData.acquisitionOrigin,
     labelNutrition: productData.labelNutrition,
+    labelReviewedRevision: productData.labelReviewedRevision,
+    labelEvidenceRevision: productData.labelEvidenceRevision ?? null,
     dataQuality: productData.dataQuality,
     images: imageGroups.itemImages,
     labelImages: imageGroups.labelImages,
@@ -443,7 +446,7 @@ export const deriveProductQuantitySummary = (
 };
 
 export const dbProductToListAPI = (
-  productData: ProductListDB,
+  productData: ProductListDB & Pick<ProductTopLevelDB, "labelEvidenceRevision">,
   displayImages: DisplayImageSummary[],
 ): ProductListItem => {
   const inventoryEntry = mapProductListInventoryEntries(
@@ -491,7 +494,7 @@ export const dbProductToListAPI = (
  * throughout at no extra query cost.
  */
 export const dbProductToAPI = (
-  productData: ProductDeepDB,
+  productData: ProductDeepDB & Pick<ProductTopLevelDB, "labelEvidenceRevision">,
   dataQuality: ProductTopLevelOut["dataQuality"],
   analysisSummaries?: Map<string, ImageAnalysisSummary>,
 ): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
@@ -566,6 +569,8 @@ export const dbProductToAPI = (
     kind: productData.kind,
     acquisitionOrigin: productData.acquisitionOrigin,
     labelNutrition: productData.labelNutrition,
+    labelReviewedRevision: productData.labelReviewedRevision,
+    labelEvidenceRevision: productData.labelEvidenceRevision ?? null,
     dataQuality,
     createdAt: productData.createdAt,
     updatedAt: productData.updatedAt,

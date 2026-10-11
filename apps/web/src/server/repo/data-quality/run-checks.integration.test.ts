@@ -1,7 +1,8 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { run as runTable, runTarget } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
+import { writeOutcomeReceipts } from "~/server/purchase-import/run-outcome.fixtures";
 import { loadRunDetail } from "~/server/purchase-import/run-service";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { listRunsRead } from "~/server/repo/run";
@@ -49,36 +50,34 @@ describe("Run data quality", () => {
     const completed = await makeRun("completed");
     const skipped = await makeRun("completed");
     const active = await makeRun("running", null);
-    await unwrapDb(ctx.db)
-      .insert(runTarget)
-      .values([
-        {
-          runId: completed.id,
-          entityKind: "product",
-          entityId: product.id,
-          state: "completed",
-          outcome: "enriched",
-          completedAt: end,
-          targetFingerprint: "a".repeat(64),
-        },
-        {
-          runId: skipped.id,
-          entityKind: "product",
-          entityId: product.id,
-          state: "skipped",
-          outcome: "skipped",
-          warning: "The source cannot distinguish this variant",
-          completedAt: end,
-          targetFingerprint: "b".repeat(64),
-        },
-        {
-          runId: active.id,
-          entityKind: "product",
-          entityId: product.id,
-          state: "pending",
-          targetFingerprint: "c".repeat(64),
-        },
-      ]);
+    await writeOutcomeReceipts(ctx.db, [
+      {
+        runId: completed.id,
+        entityKind: "product",
+        entityId: product.id,
+        state: "completed",
+        outcome: "enriched",
+        completedAt: end,
+        targetFingerprint: "a".repeat(64),
+      },
+      {
+        runId: skipped.id,
+        entityKind: "product",
+        entityId: product.id,
+        state: "skipped",
+        outcome: "skipped",
+        warning: "The source cannot distinguish this variant",
+        completedAt: end,
+        targetFingerprint: "b".repeat(64),
+      },
+      {
+        runId: active.id,
+        entityKind: "product",
+        entityId: product.id,
+        state: "pending",
+        targetFingerprint: "c".repeat(64),
+      },
+    ]);
     const qualities = await loadDataQualities(ctx.db, "run", [
       completed.id,
       skipped.id,
@@ -101,26 +100,24 @@ describe("Run data quality", () => {
     const unexplained = await makeRun("completed");
     const empty = await makeRun("completed");
     const badClock = await makeRun("running", new Date("2026-09-01T09:59:00Z"));
-    await unwrapDb(ctx.db)
-      .insert(runTarget)
-      .values([
-        {
-          runId: unfinished.id,
-          entityKind: "product",
-          entityId: product.id,
-          state: "pending",
-          targetFingerprint: "d".repeat(64),
-        },
-        {
-          runId: unexplained.id,
-          entityKind: "product",
-          entityId: product.id,
-          state: "skipped",
-          outcome: "skipped",
-          completedAt: end,
-          targetFingerprint: "e".repeat(64),
-        },
-      ]);
+    await writeOutcomeReceipts(ctx.db, [
+      {
+        runId: unfinished.id,
+        entityKind: "product",
+        entityId: product.id,
+        state: "pending",
+        targetFingerprint: "d".repeat(64),
+      },
+      {
+        runId: unexplained.id,
+        entityKind: "product",
+        entityId: product.id,
+        state: "skipped",
+        outcome: "skipped",
+        completedAt: end,
+        targetFingerprint: "e".repeat(64),
+      },
+    ]);
     const qualities = await loadDataQualities(ctx.db, "run", [
       unfinished.id,
       unexplained.id,
@@ -170,9 +167,8 @@ describe("Run data quality", () => {
       label: "Fixture store login",
     });
     const run = await makeRun("completed");
-    await unwrapDb(ctx.db)
-      .insert(runTarget)
-      .values({
+    await writeOutcomeReceipts(ctx.db, [
+      {
         runId: run.id,
         vendorAccountId: account.id,
         entityKind: "product",
@@ -181,7 +177,8 @@ describe("Run data quality", () => {
         outcome: "enriched",
         completedAt: end,
         targetFingerprint: "f".repeat(64),
-      });
+      },
+    ]);
     expect(
       (await loadRunDetail(ctx.db, run.shortcode)).targets[0]
         ?.vendorAccountLabel,

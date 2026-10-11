@@ -349,6 +349,28 @@ function findingFix(finding: RunDetail["findings"][number]) {
   const lines: Line[] = [];
   if (fix === null || fix.kind === "receive_purchase")
     return { lines, applyConfirm: null };
+  if (fix.kind === "reconcile_source_order") {
+    if (!fix.review) {
+      lines.push(
+        line("Review the source-order reconciliation before applying it."),
+      );
+      return { lines, applyConfirm: null };
+    }
+    const review = fix.review;
+    lines.push(
+      line(
+        `Reviewed spend: ${formatCurrency(review.spend.before ?? 0)} → ${formatCurrency(review.spend.after ?? 0)}`,
+      ),
+    );
+    for (const expense of review.expenses)
+      lines.push(
+        line(`${expense.title} · ${formatCurrency(expense.amount ?? 0)}`),
+      );
+    return {
+      lines,
+      applyConfirm: "Apply this reviewed source-order reconciliation?",
+    };
+  }
   if (fix.kind !== "replace_aggregate_line")
     return { lines, applyConfirm: "Apply this correction to your records?" };
   const snapshot = fix.reviewSnapshot;
@@ -400,7 +422,9 @@ function findingActions(
   const reviewedFingerprint =
     finding.proposedFix?.kind === "replace_aggregate_line"
       ? (finding.proposedFix.reviewSnapshot?.fingerprint ?? null)
-      : null;
+      : finding.proposedFix?.kind === "reconcile_source_order"
+        ? (finding.proposedFix.review?.reviewedFingerprint ?? null)
+        : null;
   const apply: ReportCommand[] =
     applyConfirm === null
       ? []

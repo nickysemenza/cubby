@@ -1,18 +1,29 @@
+import { entitySourceRead } from "@cubby/schemas/entity-source";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   entityAttachment,
   run as runTable,
   runOperation,
-  runTarget,
+  photoRunImage,
   inventoryEntry,
   product,
+  image,
+  dataExceptionRecord,
 } from "~/server/db/schema";
+import {
+  entityKernelContextSchema,
+  executeEntity,
+  executeEntityAs,
+} from "~/server/entity-kernel";
+import { setDataException } from "~/server/repo/data-quality/exceptions";
 import { getDb } from "~/server/repo/database-helpers";
+import { getProductByShortcode } from "~/server/repo/product/crud";
 import {
   createImageFixture,
   createLocationFixture,
@@ -21,6 +32,7 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { commitPhotoGroup } from "./writer";
 
@@ -74,12 +86,12 @@ describe("commitPhotoGroup", () => {
     images: Awaited<ReturnType<typeof seedImages>>,
   ) => {
     await getDb(ctx.db)
-      .insert(runTarget)
+      .insert(photoRunImage)
       .values(
         images.map((image, index) => ({
-          runId,
-          entityKind: "image" as const,
-          entityId: parseEntityId("image", image.id),
+          runId: parseEntityId("run", runId),
+          workKey: image.id,
+          imageId: parseEntityId("image", image.id),
           position: index,
           state: "pending" as const,
           targetFingerprint: `fixture-fingerprint-${crypto.randomUUID()}`,
@@ -90,12 +102,43 @@ describe("commitPhotoGroup", () => {
   const readTargetStates = async (runId: string) =>
     getDb(ctx.db)
       .select({
-        imageId: runTarget.entityId,
-        state: runTarget.state,
-        outcome: runTarget.outcome,
+        imageId: photoRunImage.imageId,
+        state: photoRunImage.state,
+        outcome: photoRunImage.outcome,
       })
-      .from(runTarget)
-      .where(eq(runTarget.runId, runId));
+      .from(photoRunImage)
+      .where(eq(photoRunImage.runId, parseEntityId("run", runId)));
+
+  // The same retained file may be admitted to multiple Runs; settling one
+  // membership must preserve the other Run's picker/device/review state.
+  it("settles shared image membership independently across photo Runs", async () => {
+    const party = await seedMember();
+    const firstRun = await seedRun(party);
+    const secondRun = await seedRun(party);
+    const images = await seedImages(1);
+    await seedTargets(firstRun.id, images);
+    await seedTargets(secondRun.id, images);
+    const outcome = await commitPhotoGroup(
+      ctx.db,
+      {
+        runId: firstRun.shortcode,
+        groupKey: "synthetic-shared-file",
+        images: [{ id: images[0]!.shortcode, purpose: "item" }],
+        product: {
+          kind: "create",
+          create: { name: `Synthetic shared item ${crypto.randomUUID()}` },
+        },
+      },
+      ctx.actor,
+    );
+    expect(outcome.outcome).toBe("committed");
+    expect(await readTargetStates(firstRun.id)).toMatchObject([
+      { state: "completed" },
+    ]);
+    expect(await readTargetStates(secondRun.id)).toMatchObject([
+      { state: "pending" },
+    ]);
+  });
 
   it("creates a Product, attaches item+label images, and records a person-owned inventory entry", async () => {
     const party = await seedMember();
@@ -174,6 +217,313 @@ describe("commitPhotoGroup", () => {
       .where(eq(runTable.id, run.id));
     expect(updatedRun?.status).toBe("completed");
     expect(updatedRun?.imported).toBe(1);
+  });
+
+  it("keeps reused Product label transcription in Research despite existing notes", async () => {
+    const party = await seedMember();
+    const run = await seedRun(party);
+    const images = await seedImages(1);
+    await seedTargets(run.id, images);
+    const existing = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic Trail Shirt — Blue, Medium",
+        notes: "Existing notes describe an earlier catalog listing.",
+      }),
+      ctx.actor,
+    );
+    await commitPhotoGroup(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groupKey: "synthetic-label-handoff",
+        images: [{ id: images[0]!.shortcode, purpose: "label" }],
+        product: { kind: "existing", existingId: existing.id },
+      },
+      ctx.actor,
+    );
+    const enriched = await getProductByShortcode(ctx.db, existing.id);
+    expect(enriched?.notes).toBe(
+      "Existing notes describe an earlier catalog listing.",
+    );
+    expect(enriched?.dataQuality.gaps.map((gap) => gap.check)).toContain(
+      "product_label_review",
+    );
+  });
+
+  it("records unavailable label evidence and reopens Research when another label arrives", async () => {
+    const party = await seedMember();
+    const run = await seedRun(party);
+    const images = await seedImages(2);
+    await seedTargets(run.id, images);
+    const existing = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic Faded Label Shirt — Blue, Medium" }),
+      ctx.actor,
+    );
+    await commitPhotoGroup(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groupKey: "synthetic-unreadable-label",
+        images: [{ id: images[0]!.shortcode, purpose: "label" }],
+        product: { kind: "existing", existingId: existing.id },
+      },
+      ctx.actor,
+    );
+    const excepted = await setDataException(
+      ctx.db,
+      {
+        entityId: existing.id,
+        check: "product_label_review",
+        reason: "unavailable",
+        note: "The printed label is illegible in the available image.",
+      },
+      ctx.actor,
+    );
+    expect(excepted.exceptions).toContainEqual(
+      expect.objectContaining({
+        check: "product_label_review",
+        state: "active",
+      }),
+    );
+    expect(excepted.gaps.map((gap) => gap.check)).not.toContain(
+      "product_label_review",
+    );
+    await commitPhotoGroup(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groupKey: "synthetic-new-label",
+        images: [{ id: images[1]!.shortcode, purpose: "label" }],
+        product: { kind: "existing", existingId: existing.id },
+      },
+      ctx.actor,
+    );
+    const changed = await getProductByShortcode(ctx.db, existing.id);
+    expect(changed?.dataQuality.exceptions).toContainEqual(
+      expect.objectContaining({
+        check: "product_label_review",
+        state: "stale",
+      }),
+    );
+    expect(changed?.dataQuality.gaps.map((gap) => gap.check)).toContain(
+      "product_label_review",
+    );
+  });
+
+  it("reopens label review when unknown image content gains a fingerprint", async () => {
+    const party = await seedMember();
+    const run = await seedRun(party);
+    const images = await seedImages(1);
+    await seedTargets(run.id, images);
+    const existing = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic Label Shirt — Blue, Medium",
+      }),
+      ctx.actor,
+    );
+    await commitPhotoGroup(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groupKey: "synthetic-content-review",
+        images: [{ id: images[0]!.shortcode, purpose: "label" }],
+        product: { kind: "existing", existingId: existing.id },
+      },
+      ctx.actor,
+    );
+    const before = await getProductByShortcode(ctx.db, existing.id);
+    if (!before?.labelEvidenceRevision)
+      throw new Error("Label revision unavailable");
+    const revision = before.labelEvidenceRevision;
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    await executeEntity(context, {
+      action: "update",
+      entity: "product",
+      id: existing.id,
+      data: {
+        notes: "Printed tag: SYNTHETIC WORKS / M / BLUE",
+        labelReviewedRevision: revision,
+      },
+      sources: [
+        {
+          fieldPath: "notes",
+          quote: "SYNTHETIC WORKS / M / BLUE",
+          selectedVariant: "Blue, Medium",
+        },
+      ],
+    });
+    const reviewed = await getProductByShortcode(ctx.db, existing.id);
+    expect(reviewed?.dataQuality.gaps.map((gap) => gap.check)).not.toContain(
+      "product_label_review",
+    );
+    const detail = await executeEntityAs(context, "get", {
+      entity: "product",
+      id: existing.id,
+      missing: "error",
+    });
+    expect(
+      z.object({ sources: z.array(entitySourceRead) }).parse(detail.item)
+        .sources,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          quote: "SYNTHETIC WORKS / M / BLUE",
+          supportsCurrentValue: true,
+        }),
+      ]),
+    );
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: "a".repeat(64) })
+      .where(eq(image.id, images[0]!.id));
+    const changed = await getProductByShortcode(ctx.db, existing.id);
+    expect(changed?.labelEvidenceRevision).not.toBe(revision);
+    expect(changed?.labelReviewedRevision).toBe(revision);
+    expect(changed?.dataQuality.gaps.map((gap) => gap.check)).toContain(
+      "product_label_review",
+    );
+  });
+
+  it("refuses stale label review and its notes and Sources after another label arrives", async () => {
+    const party = await seedMember();
+    const run = await seedRun(party);
+    const images = await seedImages(2);
+    await seedTargets(run.id, images);
+    const existing = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic Review Shirt — Red, Small",
+        notes: "Earlier catalog notes.",
+      }),
+      ctx.actor,
+    );
+    await commitPhotoGroup(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groupKey: "synthetic-first-label",
+        images: [{ id: images[0]!.shortcode, purpose: "label" }],
+        product: { kind: "existing", existingId: existing.id },
+      },
+      ctx.actor,
+    );
+    const before = await getProductByShortcode(ctx.db, existing.id);
+    if (!before?.labelEvidenceRevision)
+      throw new Error("Label revision unavailable");
+    await commitPhotoGroup(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groupKey: "synthetic-second-label",
+        images: [{ id: images[1]!.shortcode, purpose: "label" }],
+        product: { kind: "existing", existingId: existing.id },
+      },
+      ctx.actor,
+    );
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    await expect(
+      executeEntity(context, {
+        action: "update",
+        entity: "product",
+        id: existing.id,
+        data: {
+          notes: "Stale tag transcription.",
+          labelReviewedRevision: before.labelEvidenceRevision,
+        },
+        sources: [{ fieldPath: "notes", quote: "STALE LABEL TEXT" }],
+      }),
+    ).rejects.toThrow(/Label evidence changed/);
+    const after = await getProductByShortcode(ctx.db, existing.id);
+    expect(after?.notes).toBe("Earlier catalog notes.");
+    expect(after?.labelReviewedRevision).toBeNull();
+    const detail = await executeEntityAs(context, "get", {
+      entity: "product",
+      id: existing.id,
+      missing: "error",
+    });
+    expect(
+      z.object({ sources: z.array(entitySourceRead) }).parse(detail.item)
+        .sources,
+    ).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ quote: "STALE LABEL TEXT" }),
+      ]),
+    );
+  });
+
+  it("reopens a negative identity exception when label evidence arrives", async () => {
+    const party = await seedMember();
+    const run = await seedRun(party);
+    const images = await seedImages(1);
+    await seedTargets(run.id, images);
+    const existing = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic Identity Shirt — Green, Large",
+        externalIds: [],
+      }),
+      ctx.actor,
+    );
+    const excepted = await setDataException(
+      ctx.db,
+      {
+        entityId: existing.id,
+        check: "product_external_id",
+        reason: "unavailable",
+        note: "No readable identifier was available in the earlier catalog evidence.",
+      },
+      ctx.actor,
+    );
+    expect(excepted.gaps.map((gap) => gap.check)).not.toContain(
+      "product_external_id",
+    );
+    expect(excepted.exceptions).toContainEqual(
+      expect.objectContaining({
+        check: "product_external_id",
+        state: "active",
+      }),
+    );
+    // Preserve the shipped fingerprint while no new label evidence exists.
+    await getDb(ctx.db)
+      .update(dataExceptionRecord)
+      .set({ fingerprint: "product_external_id:false" })
+      .where(
+        and(
+          eq(dataExceptionRecord.entityId, existing.entityId),
+          eq(dataExceptionRecord.check, "product_external_id"),
+        ),
+      );
+    const historical = await getProductByShortcode(ctx.db, existing.id);
+    expect(historical?.dataQuality.exceptions).toContainEqual(
+      expect.objectContaining({
+        check: "product_external_id",
+        state: "active",
+      }),
+    );
+    await commitPhotoGroup(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groupKey: "synthetic-identity-label",
+        images: [{ id: images[0]!.shortcode, purpose: "label" }],
+        product: { kind: "existing", existingId: existing.id },
+      },
+      ctx.actor,
+    );
+    const after = await getProductByShortcode(ctx.db, existing.id);
+    expect(after?.dataQuality.gaps.map((gap) => gap.check)).toContain(
+      "product_external_id",
+    );
+    expect(after?.dataQuality.exceptions).toContainEqual(
+      expect.objectContaining({ check: "product_external_id", state: "stale" }),
+    );
   });
 
   it("attaches to an existing Product by id", async () => {

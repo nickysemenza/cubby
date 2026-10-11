@@ -12,7 +12,6 @@ import { executeLeasedOperation } from "~/server/runs/operation";
 
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
 import { resolveRunFinding } from "./findings";
-import { startAgentRunFixture } from "./import-run.fixtures";
 import { admitMailImport } from "./mail-import-run";
 import {
   controlRun,
@@ -20,6 +19,7 @@ import {
   loadRunDetail,
   reconcileSettledRun,
   resumeAuthorizedRuns,
+  updateAgentProgress,
 } from "./run-service";
 
 describe("purchase import run admission", () => {
@@ -37,32 +37,47 @@ describe("purchase import run admission", () => {
 
   const startAgentRun = async (
     party: Awaited<ReturnType<typeof createMember>>,
-  ) => startAgentRunFixture(ctx.db, { ledgerPartyId: party.id });
+    messageIds?: string[],
+  ) => {
+    const sources =
+      messageIds ??
+      (await retainMail(party, ["Coordinator lifecycle receipt"])).map(
+        (source) => source.id,
+      );
+    const [admission] = await admitMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: sources,
+    });
+    if (!admission?.created || !admission.row.dispatchEventId)
+      throw new Error("Expected Mail import with a dispatch generation");
+    return {
+      ...admission.row,
+      publicId: admission.row.shortcode,
+      dispatchEventId: admission.row.dispatchEventId,
+    };
+  };
 
   const retainMail = async (
     party: Awaited<ReturnType<typeof createMember>>,
     subjects: string[],
   ) => {
-    const { orderMail } = await import("~/server/db/schema");
-    const { getDb } = await import("~/server/repo/database-helpers");
+    const { retainedMailFixture } = await import("./order-import.fixtures");
     const { sha256Hex } = await import("@cubby/shared/sha256");
-    return getDb(ctx.db)
-      .insert(orderMail)
-      .values(
-        await Promise.all(
-          subjects.map(async (subject) => ({
-            ledgerPartyId: party.id,
-            mailboxId: "synthetic-restart-mailbox",
-            messageId: `${subject.toLowerCase()}-${crypto.randomUUID()}`,
-            sender: "orders@shop.example.test",
-            subject,
-            receivedAt: new Date("2026-09-01T18:00:00Z"),
-            rawChecksum: await sha256Hex(`${subject}-${crypto.randomUUID()}`),
-            content: { snippet: null, bodyText: subject, bodyHtml: null },
-          })),
-        ),
-      )
-      .returning();
+    return Promise.all(
+      subjects.map(async (subject) =>
+        retainedMailFixture(ctx.db, {
+          ledgerPartyId: party.id,
+          mailboxId: "synthetic-restart-mailbox",
+          messageId: `${subject.toLowerCase()}-${crypto.randomUUID()}`,
+          sender: "orders@shop.example.test",
+          subject,
+          receivedAt: new Date("2026-09-01T18:00:00Z"),
+          checksum: await sha256Hex(`${subject}-${crypto.randomUUID()}`),
+          content: { snippet: null, bodyText: subject, bodyHtml: null },
+        }),
+      ),
+    );
   };
 
   it("discloses retained mail restart scope without exposing private source identities", async () => {
@@ -80,7 +95,20 @@ describe("purchase import run admission", () => {
       kind: "mail_research",
       sourceCount: 2,
     });
-    const disclosure = JSON.stringify(detail.restartInputs);
+    expect(detail.restartInputs?.targets).toHaveLength(2);
+    for (const target of detail.restartInputs!.targets) {
+      expect(target.sourceExternalKey).toBeNull();
+      expect(target.targetFingerprint).toBeNull();
+    }
+    expect(detail.targets).toHaveLength(2);
+    for (const target of detail.targets) {
+      expect(target.sourceId).toBeNull();
+      expect(target.fingerprint).toBeNull();
+    }
+    const disclosure = JSON.stringify({
+      restartInputs: detail.restartInputs,
+      targets: detail.targets,
+    });
     for (const source of sources) {
       expect(disclosure).not.toContain(source.id);
       expect(disclosure).not.toContain(source.rawChecksum);
@@ -319,6 +347,7 @@ describe("purchase import run admission", () => {
         version: 1,
         runId: run.id,
         eventId: run.dispatchEventId!,
+        generation: run.dispatchEventId!,
         type: "start_or_resume",
       },
     );
@@ -339,6 +368,9 @@ describe("purchase import run admission", () => {
       reconcileSettledRun(ctx.db, {
         runId: run.id,
         operationId: "settled:1",
+        generation: run.dispatchEventId!,
+        sequence: 1,
+        receivedEventIds: new Set([run.dispatchEventId]),
       }),
     ).resolves.toEqual({ reconciled: true, status: "needs_review" });
     const { runFinding, run: runTable } = await import("~/server/db/schema");
@@ -388,6 +420,8 @@ describe("purchase import run admission", () => {
       reconcileSettledRun(ctx.db, {
         runId: run.id,
         operationId: `submission-settled:${receivedEventIds.length}`,
+        generation: run.dispatchEventId!,
+        sequence: receivedEventIds.length + 1,
         receivedEventIds: new Set(receivedEventIds),
         failure,
       });
@@ -461,6 +495,75 @@ describe("purchase import run admission", () => {
     ).rejects.toThrow("no applicable fix");
   });
 
+  it("completes a stale Mail import whose frozen Emails are settled using its observed dispatch generation", async () => {
+    const party = await createMember();
+    const [source] = await retainMail(party, ["Settled confirmation"]);
+    if (!source) throw new Error("Synthetic retained source missing");
+    const [{ run: runTable, email: emailTable }, { eq }] = await Promise.all([
+      import("~/server/db/schema"),
+      import("drizzle-orm"),
+    ]);
+    const subject = await startAgentRun(party, [source.id]);
+    const now = new Date("2026-09-21T12:00:00.000Z");
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({
+        updatedAt: new Date(now.getTime() - 3 * 60 * 60_000),
+      })
+      .where(eq(runTable.id, subject.id));
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ runId: subject.id, status: "completed" })
+      .where(eq(emailTable.orderMailId, source.id));
+    expect(await expireStaleRuns(ctx.db, now)).toEqual({
+      expired: 1,
+      failures: [],
+    });
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, subject.id));
+    expect(stored).toMatchObject({
+      status: "completed",
+      dispatchEventId: subject.dispatchEventId,
+    });
+  });
+
+  it("refuses a stale recovery generation after a Mail import resumes without changing its status or findings", async () => {
+    const party = await createMember();
+    const subject = await startAgentRun(party);
+    const [{ run: runTable }, { eq }] = await Promise.all([
+      import("~/server/db/schema"),
+      import("drizzle-orm"),
+    ]);
+    const resumedGeneration = crypto.randomUUID();
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ dispatchEventId: resumedGeneration })
+      .where(eq(runTable.id, subject.id));
+    expect(
+      await reconcileSettledRun(ctx.db, {
+        runId: subject.id,
+        operationId: "stale-recovery-generation",
+        generation: subject.dispatchEventId,
+      }),
+    ).toEqual({ reconciled: false, status: "running" });
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, subject.id));
+    expect(stored).toMatchObject({
+      status: "running",
+      dispatchEventId: resumedGeneration,
+    });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runFinding)
+        .where(eq(runFinding.runId, subject.id)),
+    ).toEqual([]);
+  });
+
   it("expires only runs with no coordinator activity for two hours", async () => {
     const party = await createMember();
     const stale = await startAgentRun(party);
@@ -474,18 +577,19 @@ describe("purchase import run admission", () => {
       .update(runTable)
       .set({ updatedAt: threeHoursAgo })
       .where(inArray(runTable.id, [stale.id, live.id]));
-    // A progress report inside the window is activity even when the run row
-    // itself was not touched.
-    await executeLeasedOperation(
-      ctx.db,
-      {
-        runId: live.id,
-        operationId: "live:op",
-        kind: "claim_next_work",
-        payload: {},
-      },
-      async () => ({ ok: true }),
-    );
+    await updateAgentProgress(ctx.db, {
+      runId: live.id,
+      eventId: "live:progress",
+      phase: "investigating",
+      generation: live.dispatchEventId,
+      sequence: 1,
+    });
+    // The Run-owned progress heartbeat keeps the coordinator alive even
+    // when the general row timestamp remains outside the activity window.
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ updatedAt: threeHoursAgo })
+      .where(inArray(runTable.id, [live.id]));
     const outcome = await expireStaleRuns(ctx.db, now);
 
     expect(outcome).toEqual({ expired: 1, failures: [] });

@@ -30,6 +30,7 @@
     "db:generate": "node ../../scripts/generator/ensure.ts && tsx tooling/db-generate.ts",
     "db:check": "node ../../scripts/generator/ensure.ts && node ../../scripts/test-services.ts -- tsx tooling/db-check.ts",
     "db:migrate": "tsx tooling/db-migrate.ts",
+    "db:promote-historical-orders": "tsx tooling/historical-accepted-orders.ts",
     "db:pull": "drizzle-kit pull",
     "db:studio": "drizzle-kit studio",
     "types:generate": "wrangler types --env-interface Env --env-file .env.example --strict-vars=false --include-runtime=false && node scripts/worker-type-imports.ts",

@@ -420,12 +420,12 @@ export async function seedPhotoGroupReviewRun(
   const run = await startPhotoInventoryRun(db, { actorUserId: userId });
 
   await getDb(db)
-    .insert(schema.runTarget)
+    .insert(schema.photoRunImage)
     .values(
       [itemImage, labelImage, soloImage].map((image, index) => ({
         runId: run.id,
-        entityKind: "image" as const,
-        entityId: image.uuid,
+        imageId: image.uuid,
+        workKey: image.uuid,
         position: index,
         state: "pending" as const,
         targetFingerprint: `e2e-${name}-${index}`,

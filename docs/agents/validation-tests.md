@@ -113,11 +113,12 @@ The `integration-workerd` project acquires the machine-wide harness lock once,
 in its global setup (`tooling/workerd-integration-setup.ts`), and releases it
 at teardown; its files inherit it and run in parallel. Queue waits belong to
 setup and must not consume a scenario's behavioral timeout.
-Use the shared E2E identity and bundle for source provenance. Do not add a
-second recorder that buffers the entire Git diff: a large breaking change can
-overflow the subprocess buffer before the scenario and its cleanup begin, and
-the diff omits untracked replacement files. Fixture-specific hashes may remain
-in the scenario report.
+Use the shared E2E identity and bundle for source provenance. Keep acceptance
+tied to the exact revision and build fingerprint. Do not add a second recorder
+that buffers the entire Git diff: a large breaking change can overflow the
+subprocess buffer before the scenario and its cleanup begin, and the diff omits
+untracked replacement files. Fixture-specific hashes may remain in the scenario
+report.
 
 Target a browser spec as `pnpm test:e2e <spec>` without an extra `--`. E2E
 serves `dist/`, so build it before a standalone run; `verify:local` does. The
@@ -249,11 +250,6 @@ budget fences. Live-model peers forward catalog reads to models.dev. Keep this
 distinction when adding a peer so deterministic mail discovery does not depend
 on public catalog availability and live usage does not acquire fixture prices.
 
-Every built-Worker journey uses `captureE2ERunIdentity` before scenario work
-and `writeE2ERunBundle` after cleanup. A manual revision/build report alone
-does not verify source stability across execution. The bundle records both
-source boundaries, dirty-source limits, the exact replay command and checksums.
-
 Before a new Worker journey or a fixture-correction replay, compare the complete
 runtime options with the owning `WorkerdRuntimeOptions` and a working caller:
 profile, database ownership, storage endpoint/public URL, and required peers.
@@ -262,9 +258,7 @@ helpers. Scripted paid peers still require an explicit synthetic execution appro
 and complete synthetic pricing; bind the approval before dispatch and retain
 per-transmission reservation assertions. Never bypass paid admission for a fixture.
 Record startup failures as setup failures; behavioral red requires the
-scenario to reach its failing boundary. Wrap runtime acquisition in the artifact
-boundary so an exception before the scenario callback still records the failure
-phase, scrubbed diagnostic, available build identity, and evidence checksums.
+scenario to reach its failing boundary.
 
 Native runners keep their build, process, simulator,
 watchdog, scenario and artifact boundaries outside the runtime. Native
@@ -360,13 +354,14 @@ commit SHA. CI traces only the retry of a failed test (`on-first-retry`);
 local runs keep failure traces (`retain-on-failure`). Open
 `playwright-report/index.html` from the downloaded artifact to inspect the
 run. Local native runs keep the `sim-e2e` artifacts, which record their build,
-process, simulator, watchdog, scenario and replay evidence.
+process, simulator, watchdog, scenario and replay evidence. These established
+artifacts remain useful diagnostics; a custom run bundle is not required for
+every E2E journey or runtime acquisition.
 
 A failed E2E test attaches the Worker harness's structured workerd logs
 (`harness.getLogs()`, credential-shaped values scrubbed) to the Playwright
 result, where the HTML report can open the attachment. The local reporter also
-keeps its workerd logs and run bundle in `playwright-report`; CI excludes those
-custom bundle files. Each Playwright worker prints
+keeps its workerd logs in `playwright-report`. Each Playwright worker prints
 `<origin>/cdn-cgi/local/explorer` at startup, so a paused (`PWDEBUG`, headed, or
 `--ui`) test can be inspected for Durable Object, queue, workflow, and R2 state.
 The URL is only valid while that worker is alive.

@@ -1,4 +1,5 @@
 import { photoInventoryToolInputs } from "@cubby/schemas/purchase-agent-services";
+import type { RunProgressStamp } from "@cubby/schemas/run-fields";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import { Type, type TSchema } from "@earendil-works/pi-ai";
 import {
@@ -164,7 +165,13 @@ function tool<N extends ToolName>(
  * The host-owned tools every import Run's agent mounts beside its Cubby MCP
  * actions: claim the next admitted item, publish progress, stop for review.
  */
-export function runAgentTools(services: () => RunServices): ToolRegistration[] {
+export function runAgentTools(
+  services: () => RunServices,
+  progressStamp: (
+    api: ToolExecutionApi,
+    context: Context,
+  ) => Promise<RunProgressStamp>,
+): ToolRegistration[] {
   return [
     tool("claim_next_import_work", {
       description:
@@ -185,13 +192,15 @@ export function runAgentTools(services: () => RunServices): ToolRegistration[] {
         "Publish the current import phase for the live run UI. Set awaitingApproval when a Cubby tool requires a human decision; approval and review phases end this submission.",
       execute: async (args, api, context) => {
         await step(api, context, `agent-progress:${args.operationId}`, () =>
-          services().updateAgentProgress({
-            eventId: `agent-progress:${args.operationId}`,
-            phase: args.phase,
-            currentItem: args.currentItem,
-            awaitingApproval: args.awaitingApproval,
-            detail: args.detail,
-          }),
+          (async () =>
+            services().updateAgentProgress({
+              ...(await progressStamp(api, context)),
+              eventId: `agent-progress:${args.operationId}`,
+              phase: args.phase,
+              currentItem: args.currentItem,
+              awaitingApproval: args.awaitingApproval,
+              detail: args.detail,
+            }))(),
         );
         // A `review` report ends the run's submission, so it must also move
         // the run: a progress row alone left runs `running` with no

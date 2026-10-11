@@ -7,8 +7,9 @@ import {
   scrubErrorMessage,
 } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
-import { run as runTable, runProgress } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { recordRunProgress as recordProgress } from "~/server/repo/run-progress";
 
 import {
   WORKFLOW_RUN_PURPOSES,
@@ -63,16 +64,19 @@ export const runFailureText = (
 const attemptOf = sql<number>`coalesce((${runTable.progress}->>'attempt')::int, 0)`;
 const attemptIs = (attempt: number) => sql`${attemptOf} = ${attempt}`;
 
-/** Append one durable progress line to a Run. */
+/** Workflow producers carry their originating attempt and ordered delivery position. */
 export const recordRunProgress = (
   db: Database,
   runId: RunId,
   phase: string,
   detail: string,
+  stamp: { attempt: number; sequence: number },
 ) =>
-  getDb(db).insert(runProgress).values({
+  recordProgress(db, {
     runId,
     eventId: crypto.randomUUID(),
+    generation: `workflow:${stamp.attempt}`,
+    sequence: stamp.sequence,
     phase,
     detail,
   });
@@ -120,6 +124,7 @@ export async function launchWorkflowRun(
     input.runId,
     "attempt_started",
     `Started Workflow instance ${instanceId}`,
+    { attempt: reopened.attempt, sequence: 0 },
   );
   try {
     await launcher.create(input.purpose, instanceId, {
@@ -193,6 +198,7 @@ export async function failWorkflowRun(
     runId,
     "failed",
     input.message.split("\n", 1)[0] ?? "",
+    { attempt: params.attempt, sequence: Number.MAX_SAFE_INTEGER },
   );
   return true;
 }

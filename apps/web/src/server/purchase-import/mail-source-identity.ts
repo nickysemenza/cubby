@@ -1,13 +1,8 @@
 import { and, eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
-import {
-  importSourceClaim,
-  mailboxMessage,
-  orderMail,
-} from "~/server/db/schema";
-
-import { readImportSourceClaimFamily } from "./source-claim-family";
+import { email as emailTable } from "~/server/db/schema";
+import type { RetainedMail } from "~/server/repo/retained-mail";
 
 export const HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION =
   "legacy-source-identity-unresolved/v1";
@@ -15,21 +10,21 @@ export const HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION =
 export async function mailSourceIdentityBlocked(
   db: Pick<DrizzleTransaction, "select">,
   source: Pick<
-    typeof orderMail.$inferSelect,
+    RetainedMail,
     "id" | "ledgerPartyId" | "mailboxId" | "messageId"
   >,
 ) {
   const [blocked] = await db
-    .select({ id: mailboxMessage.id })
-    .from(mailboxMessage)
+    .select({ id: emailTable.id })
+    .from(emailTable)
     .where(
       and(
-        eq(mailboxMessage.ledgerPartyId, source.ledgerPartyId),
-        eq(mailboxMessage.mailboxId, source.mailboxId),
-        eq(mailboxMessage.messageId, source.messageId),
-        eq(mailboxMessage.orderMailId, source.id),
+        eq(emailTable.ledgerPartyId, source.ledgerPartyId),
+        eq(emailTable.mailboxId, source.mailboxId),
+        eq(emailTable.messageId, source.messageId),
+        eq(emailTable.orderMailId, source.id),
         eq(
-          mailboxMessage.classificationVersion,
+          emailTable.classificationVersion,
           HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
         ),
       ),
@@ -46,32 +41,4 @@ export async function assertMailSourceIdentityReady(
     throw new Error(
       "Historical mail source ownership is unresolved; verify the original mapping before research or cleanup.",
     );
-}
-
-/** Originals and their attachments retain every historical owner in the canonical family. */
-export async function loadMailSourceClaimIds(
-  db: Pick<DrizzleTransaction, "select">,
-  source: Pick<
-    typeof orderMail.$inferSelect,
-    "ledgerPartyId" | "mailboxId" | "messageId"
-  >,
-  attachmentIds: readonly string[] = [],
-) {
-  const key = `gmail:${source.mailboxId}:${source.messageId}`;
-  const identities = [
-    { kind: "mail_message", externalKey: key },
-    ...attachmentIds.map((id) => ({
-      kind: "mail_attachment",
-      externalKey: `${key}:attachment:${id}`,
-    })),
-  ];
-  const ids = new Set<typeof importSourceClaim.$inferSelect.id>();
-  for (const identity of identities) {
-    const family = await readImportSourceClaimFamily(db, {
-      ...identity,
-      ledgerPartyId: source.ledgerPartyId,
-    });
-    for (const claim of family?.members ?? []) ids.add(claim.id);
-  }
-  return [...ids];
 }

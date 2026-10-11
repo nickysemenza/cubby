@@ -82,6 +82,10 @@ describe("reportSettlement", () => {
       },
       submissions: {
         latest: () => input.latest,
+        progressStamp: () => ({
+          generation: "synthetic-generation",
+          sequence: 1,
+        }),
         receivedEventIds: () => ["event-1"],
         reviewDetail: () => input.reviewDetail,
       },
@@ -114,6 +118,8 @@ describe("reportSettlement", () => {
       expect(reports).toEqual([
         {
           operationId: "submission-settled:newest",
+          generation: "synthetic-generation",
+          sequence: 1,
           receivedEventIds: ["event-1"],
           detail: "Research generation limit (256) reached.",
         },
@@ -149,6 +155,8 @@ describe("reportSettlement", () => {
     expect(reports).toEqual([
       {
         operationId: "submission-settled:newest",
+        generation: "synthetic-generation",
+        sequence: 1,
         receivedEventIds: ["event-1"],
         failure: {
           failureCode: "agent_aborted",

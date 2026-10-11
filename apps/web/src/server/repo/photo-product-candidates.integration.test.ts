@@ -1,21 +1,229 @@
+import { parseShortcodeFor, userId } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityExternalId } from "~/server/db/schema";
+import {
+  entityExternalId,
+  importSourceOrder,
+  sourceOrderObservation,
+} from "~/server/db/schema";
+import { memberImport } from "~/server/purchase-import/order-import.fixtures";
 import { getDb } from "~/server/repo/database-helpers";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { createUploadedImageRecord } from "~/server/repo/image";
+import { mergePurchases } from "~/server/repo/purchase";
 import {
   createProductFixture,
   makeProductInput,
   insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { mergeVendors } from "~/server/repo/vendor";
 
 import { findPhotoProductCandidates } from "./photo-product-candidates";
 
 describe("photo product candidates", () => {
   const ctx = withTestDb();
+
+  it("exposes only known accepted line selectors owned by the reviewing member", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic candidate reviewer",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic Outfit canvas shirt blue medium",
+        manufacturer: "Synthetic Outfit",
+      }),
+      ctx.actor,
+    );
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic outfit retailer",
+    });
+    await memberImport(ctx.db, ctx.actor, {
+      key: "synthetic-photo-candidate-source",
+      orders: [
+        {
+          stableOrderId: "synthetic-photo-candidate-source",
+          vendorId: vendor.shortcode,
+          source: {
+            kind: "receipt_photo",
+            externalKey: "synthetic:candidate-source",
+            checksum: "a".repeat(64),
+          },
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId: "SYNTHETIC-CANDIDATE",
+              orderedAt: "2026-09-01T18:00:00Z",
+              merchant: "Synthetic outfit retailer",
+              currency: "USD",
+              printedGrandTotal: 40,
+              lines: [
+                {
+                  title: item.name,
+                  amount: 40,
+                  quantity: 2,
+                  lineKind: "principal",
+                },
+              ],
+              payments: [{ amount: 40 }],
+              allShipmentsDelivered: true,
+            },
+          },
+          resolutions: [{ kind: "existing", productId: item.id }],
+        },
+      ],
+    });
+    const association = await getDb(ctx.db).query.importSourceOrder.findFirst();
+    const line = await getDb(ctx.db).query.expense.findFirst();
+    if (!association?.acceptedObservationId || !line)
+      throw new Error("Known accepted fixture missing");
+    const input = { name: item.name, manufacturer: "Synthetic Outfit" };
+    const [known] = await findPhotoProductCandidates(ctx.db, input, ctx.actor);
+    expect(known?.purchaseLines).toContainEqual(
+      expect.objectContaining({
+        expenseId: line.shortcode,
+        acceptedSourceLines: [{ sourceOrderId: association.id, lineIndex: 0 }],
+      }),
+    );
+    const [otherMember] = await findPhotoProductCandidates(ctx.db, input, {
+      ...ctx.actor,
+      userId: userId.parse(crypto.randomUUID()),
+    });
+    expect(
+      otherMember?.purchaseLines?.every(
+        (row) => !row.acceptedSourceLines?.length,
+      ),
+    ).toBe(true);
+    await getDb(ctx.db)
+      .update(importSourceOrder)
+      .set({ acceptedObservationId: null, originalOrder: null })
+      .where(eq(importSourceOrder.id, association.id));
+    const [unknown] = await findPhotoProductCandidates(
+      ctx.db,
+      input,
+      ctx.actor,
+    );
+    expect(
+      unknown?.purchaseLines?.every((row) => !row.acceptedSourceLines?.length),
+    ).toBe(true);
+  });
+
+  it("keeps accepted photo line selectors discoverable across Purchase and Vendor merges without rewriting original evidence", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic merge reviewer",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic Outfit canvas shirt blue medium",
+        manufacturer: "Synthetic Outfit",
+      }),
+      ctx.actor,
+    );
+    const originalVendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic original retailer",
+    });
+    await memberImport(ctx.db, ctx.actor, {
+      key: "synthetic-photo-merge-source",
+      orders: [
+        {
+          stableOrderId: "synthetic-photo-merge-source",
+          vendorId: originalVendor.shortcode,
+          source: {
+            kind: "receipt_photo",
+            externalKey: "synthetic:photo-merge-source",
+            checksum: "d".repeat(64),
+          },
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId: "SYNTHETIC-MERGE",
+              orderedAt: "2026-09-01T18:00:00Z",
+              merchant: "Synthetic original retailer",
+              currency: "USD",
+              printedGrandTotal: 40,
+              lines: [
+                {
+                  title: item.name,
+                  amount: 40,
+                  quantity: 2,
+                  lineKind: "principal",
+                },
+              ],
+              payments: [{ amount: 40 }],
+              allShipmentsDelivered: true,
+            },
+          },
+          resolutions: [{ kind: "existing", productId: item.id }],
+        },
+      ],
+    });
+    const association = await getDb(ctx.db).query.importSourceOrder.findFirst();
+    const originalPurchase = await getDb(ctx.db).query.purchase.findFirst();
+    const line = await getDb(ctx.db).query.expense.findFirst();
+    if (!association?.acceptedObservationId || !originalPurchase || !line)
+      throw new Error("Synthetic accepted merge fixture missing");
+    const [originalEvidence] = await getDb(ctx.db)
+      .select()
+      .from(sourceOrderObservation)
+      .where(eq(sourceOrderObservation.id, association.acceptedObservationId));
+    const keeper = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: originalVendor.id,
+    });
+    await mergePurchases(
+      ctx.db,
+      {
+        keepId: keeper.shortcode,
+        mergeIds: [parseShortcodeFor("purchase", originalPurchase.shortcode)],
+      },
+      ctx.actor,
+    );
+    const keeperVendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic keeper retailer",
+    });
+    await mergeVendors(
+      ctx.db,
+      {
+        keepId: parseShortcodeFor("vendor", keeperVendor.shortcode),
+        mergeIds: [parseShortcodeFor("vendor", originalVendor.shortcode)],
+      },
+      ctx.actor,
+    );
+    const [candidate] = await findPhotoProductCandidates(
+      ctx.db,
+      { name: item.name, manufacturer: "Synthetic Outfit" },
+      ctx.actor,
+    );
+    expect(candidate?.purchaseLines).toContainEqual(
+      expect.objectContaining({
+        expenseId: line.shortcode,
+        purchaseId: keeper.shortcode,
+        acceptedSourceLines: [{ sourceOrderId: association.id, lineIndex: 0 }],
+      }),
+    );
+    const [unchanged] = await getDb(ctx.db)
+      .select()
+      .from(sourceOrderObservation)
+      .where(eq(sourceOrderObservation.id, association.acceptedObservationId));
+    expect(unchanged).toEqual(originalEvidence);
+    expect(unchanged).toMatchObject({
+      purchaseId: originalPurchase.id,
+      vendorId: originalVendor.id,
+    });
+    const unknown = await getDb(ctx.db).query.importSourceOrder.findFirst();
+    expect(unknown).toMatchObject({
+      id: association.id,
+      purchaseId: keeper.id,
+      acceptedObservationId: association.acceptedObservationId,
+    });
+  });
 
   it("returns existing variants and their own-photo provenance", async () => {
     const clean = await createProductFixture(
@@ -46,10 +254,14 @@ describe("photo product candidates", () => {
       imageId: photo.id,
     });
 
-    const matches = await findPhotoProductCandidates(ctx.db, {
-      name: "ForgeWear pocket tee black small",
-      manufacturer: "ForgeWear",
-    });
+    const matches = await findPhotoProductCandidates(
+      ctx.db,
+      {
+        name: "ForgeWear pocket tee black small",
+        manufacturer: "ForgeWear",
+      },
+      ctx.actor,
+    );
     expect(matches[0]?.id).toBe(clean.id);
     expect(matches[0]?.match).toMatchObject({
       source: "catalog_name",
@@ -94,15 +306,23 @@ describe("photo product candidates", () => {
         externalId: "FW-7744",
         isPrimary: true,
       });
-    const alias = await findPhotoProductCandidates(ctx.db, {
-      name: "ForgeWear work boots",
-      manufacturer: "ForgeWear",
-    });
+    const alias = await findPhotoProductCandidates(
+      ctx.db,
+      {
+        name: "ForgeWear work boots",
+        manufacturer: "ForgeWear",
+      },
+      ctx.actor,
+    );
     expect(alias.some((candidate) => candidate.id === item.id)).toBe(true);
-    const exact = await findPhotoProductCandidates(ctx.db, {
-      name: "Unidentified footwear",
-      evidenceTexts: [{ source: "label_ocr", text: "SKU FW-7744" }],
-    });
+    const exact = await findPhotoProductCandidates(
+      ctx.db,
+      {
+        name: "Unidentified footwear",
+        evidenceTexts: [{ source: "label_ocr", text: "SKU FW-7744" }],
+      },
+      ctx.actor,
+    );
     expect(exact[0]?.id).toBe(item.id);
     expect(exact[0]?.match.matchedIdentifiers).toEqual(["FW-7744"]);
     expect(exact[0]?.match.factors).toContainEqual({
@@ -138,10 +358,14 @@ describe("photo product candidates", () => {
         lineBasis: "item_line",
       });
     }
-    const [candidate] = await findPhotoProductCandidates(ctx.db, {
-      name: "ForgeWear tan work boots",
-      manufacturer: "ForgeWear",
-    });
+    const [candidate] = await findPhotoProductCandidates(
+      ctx.db,
+      {
+        name: "ForgeWear tan work boots",
+        manufacturer: "ForgeWear",
+      },
+      ctx.actor,
+    );
     expect(candidate?.quantity?.quantityLedger).toMatchObject({
       expectedQuantity: 1,
       acquiredUnits: 2,

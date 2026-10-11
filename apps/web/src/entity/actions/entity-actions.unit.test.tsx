@@ -1,5 +1,6 @@
 import {
   browserRoutedEntities,
+  entityManifest,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import { testShortcode } from "@cubby/schemas/testing";
@@ -104,11 +105,12 @@ describe("production entity action catalog", () => {
       deleteActions.flatMap((action) => action.entities),
     );
 
-    // `usda-food` has no local rows; `run` is immutable history.
+    // The manifest owns delete support. `usda-food` has no local rows, `run`
+    // is immutable history, and Email is read-only evidence.
     expect(deletableEntities).toEqual(
       new Set(
         browserRoutedEntities.filter(
-          (entity) => entity !== "usda-food" && entity !== "run",
+          (entity) => entityManifest[entity].lifecycle.delete,
         ),
       ),
     );

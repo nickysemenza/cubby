@@ -1,6 +1,6 @@
 /**
  * Mail import admission: classified Emails become one Pi Run's targets. The
- * Run freezes each Email's checksum and owns it through `MailboxMessage.runId`,
+ * Run freezes each Email's checksum and owns it through `Email.runId`,
  * so discovery replay and a member's import of the same Email converge on one
  * owner. Interpretation (Vendor, orders, Products) happens later, through the
  * public tools (ADR 0010).
@@ -12,20 +12,17 @@ import {
   type RunId,
 } from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
-import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
+import {
+  mailboxDiscoveryInput,
+  MAILBOX_RESEARCH_VERSION,
+} from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  ledgerParty,
-  mailboxMessage,
-  orderMail,
-  run,
-  runTarget,
-} from "~/server/db/schema";
+import { ledgerParty, email as emailTable, run } from "~/server/db/schema";
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import {
   getDb,
@@ -33,6 +30,10 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { runAfterCommit } from "~/server/repo/database-helpers/core";
+import {
+  readRetainedMail,
+  type RetainedMail,
+} from "~/server/repo/retained-mail";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { actorSnapshot, assertRunParent } from "~/server/runs/ensure-run";
 import {
@@ -59,18 +60,15 @@ async function lockMailSources(
   input: MailImportAdmission,
   partyId: NonNullable<typeof run.$inferSelect.ledgerPartyId>,
 ) {
-  const sources = await tx
-    .select()
-    .from(orderMail)
-    .where(
-      and(
-        eq(orderMail.ledgerPartyId, partyId),
-        input.mailboxId ? eq(orderMail.mailboxId, input.mailboxId) : undefined,
-        inArray(orderMail.id, [...input.messageIds]),
-      ),
-    )
-    .orderBy(asc(orderMail.id))
-    .for("update");
+  const sources = await readRetainedMail(
+    tx,
+    {
+      ledgerPartyIds: [partyId],
+      mailboxId: input.mailboxId,
+      orderMailIds: input.messageIds,
+    },
+    "update",
+  );
   if (sources.length !== input.messageIds.length)
     throw new Error("Mail source was not found for this member and mailbox.");
   for (const expected of input.expectedChecksums ?? [])
@@ -92,36 +90,19 @@ async function lockMailSources(
 async function partitionOwnership(
   tx: DrizzleTransaction,
   partyId: NonNullable<typeof run.$inferSelect.ledgerPartyId>,
-  sources: (typeof orderMail.$inferSelect)[],
+  sources: RetainedMail[],
 ) {
-  // Older retained originals predate the mailbox ledger. Establish their
-  // exact source identity without overwriting existing ownership.
-  await tx
-    .insert(mailboxMessage)
-    .values(
-      sources.map((source) => ({
-        ledgerPartyId: partyId,
-        mailboxId: source.mailboxId,
-        messageId: source.messageId,
-        orderMailId: source.id,
-        checksum: source.rawChecksum,
-        classification: "uncertain" as const,
-        classificationVersion: "retained-source-admission/v1",
-        status: "pending" as const,
-      })),
-    )
-    .onConflictDoNothing();
   const messages = await tx
     .select()
-    .from(mailboxMessage)
+    .from(emailTable)
     .where(
       and(
-        eq(mailboxMessage.ledgerPartyId, partyId),
+        eq(emailTable.ledgerPartyId, partyId),
         or(
           ...sources.map((source) =>
             and(
-              eq(mailboxMessage.mailboxId, source.mailboxId),
-              eq(mailboxMessage.messageId, source.messageId),
+              eq(emailTable.mailboxId, source.mailboxId),
+              eq(emailTable.messageId, source.messageId),
             ),
           ),
         ),
@@ -129,7 +110,7 @@ async function partitionOwnership(
     )
     .for("update");
   const owners = new Map<string, typeof run.$inferSelect>();
-  const fresh: (typeof orderMail.$inferSelect)[] = [];
+  const fresh: RetainedMail[] = [];
   for (const source of sources) {
     const message = messages.find(
       (candidate) =>
@@ -197,6 +178,21 @@ export async function admitMailImport(
         actorUserId: actorId,
         ledgerPartyId: partyId,
       });
+    if (input.parentRunId) {
+      const [parent] = await tx
+        .select({ purpose: run.purpose, input: run.input })
+        .from(run)
+        .where(eq(run.id, input.parentRunId));
+      const policy = mailboxDiscoveryInput.safeParse(parent?.input);
+      if (
+        parent?.purpose === "mail_discovery" &&
+        (!policy.success ||
+          policy.data.executionPolicy === "classification_only")
+      )
+        throw new Error(
+          "Classification-only discovery cannot admit Emails to Pi.",
+        );
+    }
     const sources = await lockMailSources(tx, input, partyId);
     const { owners, fresh } = await partitionOwnership(tx, partyId, sources);
     const existing = [...owners.values()].map((row) => ({
@@ -259,43 +255,23 @@ export async function admitMailImport(
       dispatchEventId: crypto.randomUUID(),
       agentSessionId: importRunAgentIdentity(id, "mail_import"),
     });
-    await tx.insert(runTarget).values(
-      await Promise.all(
-        fresh.map(async (source) => ({
-          runId: id,
-          entityKind: "run" as const,
-          entityId: id,
-          workKey: source.id,
-          sourceKind: "mail_message",
-          sourceExternalKey: source.id,
-          state: "pending",
-          targetFingerprint: await sha256Hex(
-            JSON.stringify([
-              source.id,
-              source.rawChecksum,
-              MAILBOX_RESEARCH_VERSION,
-            ]),
-          ),
-        })),
-      ),
-    );
     const assigned = await tx
-      .update(mailboxMessage)
+      .update(emailTable)
       .set({ status: "researching", runId: id })
       .where(
         or(
           ...fresh.map((source) =>
             and(
-              eq(mailboxMessage.ledgerPartyId, source.ledgerPartyId),
-              eq(mailboxMessage.mailboxId, source.mailboxId),
-              eq(mailboxMessage.messageId, source.messageId),
-              eq(mailboxMessage.orderMailId, source.id),
-              eq(mailboxMessage.checksum, source.rawChecksum),
+              eq(emailTable.ledgerPartyId, source.ledgerPartyId),
+              eq(emailTable.mailboxId, source.mailboxId),
+              eq(emailTable.messageId, source.messageId),
+              eq(emailTable.orderMailId, source.id),
+              eq(emailTable.checksum, source.rawChecksum),
             ),
           ),
         ),
       )
-      .returning({ orderMailId: mailboxMessage.orderMailId });
+      .returning({ orderMailId: emailTable.orderMailId });
     if (assigned.length !== fresh.length)
       throw new Error("Mail source ownership assignment is incomplete.");
     return [...existing, { created: true, row }];
@@ -353,6 +329,7 @@ export async function startMailImport(
             runId: admission.row.id,
             purpose: "mail_import",
             eventId,
+            generation: eventId,
           });
         } catch {
           // SILENT: dispatchRunEvent retained the error; the caller receives dispatch_failed and retries the same admission.

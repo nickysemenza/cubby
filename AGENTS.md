@@ -43,18 +43,20 @@
   duplicate cases. Preserve a named regression in a stronger test before
   removing its old assertion.
 - Keep the feedback loop outcome-driven: headless service/API checks establish
-  persisted state, money, provenance and ownership; a small Tester Army journey
-  establishes navigation and supported visible outcomes. Assert semantic states
-  and actions rather than incidental copy, ordering or DOM structure. Use
-  fingerprint-verified builds and the current HMR/device session for iteration;
-  retain exact-revision disposable runs for acceptance. See
+  persisted state, money, provenance and ownership; automated client checks
+  establish supported visible outcomes. Assert semantic states and actions
+  rather than incidental copy, ordering or DOM structure. Use
+  fingerprint-verified builds for iteration and exact-revision disposable runs
+  for acceptance. Client verification uses Apple host tests, simulator builds,
+  TestFlight builds, and the server version-gate test; automated phone-width
+  browser checks may supplement them. See
   [validation](docs/agents/validation.md) for test retention and deletion evidence.
 - Never write unit tests after writing the code they test. Before testing a
   system in isolation, write down all plausible ways it could fail, then write a failing
   test for the relevant behavior before implementation. Prefer E2E as the sole
   automated test for a feature when it covers those failures.
-- CI's Playwright HTML report and traces are the web E2E artifact; local native
-  runs keep `sim-e2e` artifacts. See
+- Keep CI's Playwright HTML report and traces for web E2E, and local
+  `sim-e2e` artifacts for native runs. See
   [test tiers and E2E artifacts](docs/agents/validation-tests.md).
 - Spend tool calls on bytes that earn their place. Batch independent read-only
   shell into one call, but prefer a targeted `Grep`/`Glob` over dumping a large

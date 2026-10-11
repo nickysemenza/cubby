@@ -26,7 +26,11 @@ import {
   imageDescriptionAnalysis,
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
-import { RUN_TARGET_BUCKET } from "@cubby/schemas/purchase-import";
+import {
+  importOperationStatusOut,
+  countRunTargets,
+  runTargetState,
+} from "@cubby/schemas/purchase-import";
 import {
   runStatus,
   runTargetEntityKind,
@@ -39,6 +43,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
 import { aiAnalysis, aiUsage } from "~/server/db/schema";
+import { listRunTargetOutcomes } from "~/server/purchase-import/run-target";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
@@ -47,6 +52,7 @@ import {
 } from "~/server/repo/entity-display-image";
 import {
   lookupEntityLabels,
+  lookupShortcodes,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 
@@ -266,20 +272,6 @@ const runWire = activityRun
   });
 type RunWire = z.infer<typeof runWire>;
 
-/** One count per `RUN_TARGET_BUCKET`, so SQL and every client agree. */
-const targetBucketCounts = sql.join(
-  (["completed", "skipped", "blocked", "pending"] as const).map(
-    (bucket) =>
-      sql`${bucket}::text, count(*) FILTER (WHERE t.state IN (${sql.join(
-        Object.entries(RUN_TARGET_BUCKET)
-          .filter(([, value]) => value === bucket)
-          .map(([state]) => sql`${state}`),
-        sql`, `,
-      )}))`,
-  ),
-  sql`, `,
-);
-
 /** How many targets a row names; the counts cover the rest. */
 const TARGET_PREVIEW_LIMIT = 3;
 
@@ -319,25 +311,9 @@ async function loadRunFacts(db: Database, internalIds: readonly string[]) {
             AND coalesce(o.result->'retries', '[]'::jsonb) = '[]'::jsonb
           ORDER BY o."updatedAt" DESC, o.id DESC LIMIT 1
         ) END,
-        (SELECT coalesce(p.detail, p.phase) FROM "RunProgress" p
-          WHERE p."runId" = r.id
-          ORDER BY p."createdAt" DESC, p.id DESC LIMIT 1)
+        coalesce(r."liveProgress"->>'detail', r."liveProgress"->>'phase',
+          (r."progressHistory"->-1)->>'detail', (r."progressHistory"->-1)->>'phase')
       ) AS "currentStep",
-      (SELECT jsonb_build_object('total', count(*), ${targetBucketCounts})
-        FROM "RunTarget" t WHERE t."runId" = r.id) AS "targetCounts",
-      coalesce((SELECT jsonb_agg(jsonb_build_object(
-          'entityKind', shown."entityKind", 'entityId', shown."entityId",
-          'shortcode', shown.shortcode, 'state', shown.state
-        ) ORDER BY shown.position NULLS LAST, shown."createdAt", shown.id)
-        FROM (
-          SELECT t.id, t.position, t."createdAt", t."entityKind", t."entityId", t.state, identity.shortcode
-          FROM "RunTarget" t
-          JOIN "Entity" identity ON identity.id = t."entityId"
-          WHERE t."runId" = r.id
-          -- The order the run works its targets in (targetWorkOrder).
-          ORDER BY t.position NULLS LAST, t."createdAt", t.id
-          LIMIT ${TARGET_PREVIEW_LIMIT}
-        ) shown), '[]'::jsonb) AS targets,
       (SELECT count(DISTINCT (a."entityKind", a."entityId"))
         FROM "AuditLog" a WHERE a."runId" = r.id) AS "changedCount"
     FROM "Run" r
@@ -346,10 +322,43 @@ async function loadRunFacts(db: Database, internalIds: readonly string[]) {
       sql`, `,
     )})
   `);
+  const outcomes = await listRunTargetOutcomes(
+    db,
+    internalIds.map((id) => runEntityId.parse(id)),
+  );
+  const codes = await lookupShortcodes(
+    db,
+    outcomes.map((target) =>
+      parseEntityRef(target.entityKind, target.entityId),
+    ),
+  );
   return new Map(
     query.rows.map((row) => {
-      const facts = runFactsRow.parse(row);
-      return [facts.internalId, facts] as const;
+      const raw = runFactsRow
+        .omit({ targetCounts: true, targets: true })
+        .parse(row);
+      const targets = outcomes
+        .filter((target) => target.runId === raw.internalId)
+        .sort(
+          (a, b) =>
+            (a.position ?? Number.MAX_SAFE_INTEGER) -
+            (b.position ?? Number.MAX_SAFE_INTEGER),
+        );
+      return [
+        raw.internalId,
+        runFactsRow.parse({
+          ...raw,
+          targetCounts: countRunTargets(
+            targets.map((target) => runTargetState.parse(target.state)),
+          ),
+          targets: targets.slice(0, TARGET_PREVIEW_LIMIT).map((target) => ({
+            ...target,
+            shortcode:
+              codes.get(entityRefKey(target.entityKind, target.entityId)) ??
+              target.entityId,
+          })),
+        }),
+      ] as const;
     }),
   );
 }
@@ -477,11 +486,16 @@ function listPredicate(input: ActivityListInput): SQL {
     clauses.push(sql`(
       "subjectId" = ${input.subjectId}
       OR internal_id IN (
-        SELECT t."runId"
-        FROM "RunTarget" t
-        LEFT JOIN "Product" product ON product.id = t."entityId" AND product."deletedAt" IS NULL
-        LEFT JOIN "Purchase" purchase ON purchase.id = t."entityId" AND purchase."deletedAt" IS NULL
-        WHERE product.shortcode = ${input.subjectId} OR purchase.shortcode = ${input.subjectId}
+        SELECT receipt."runId" FROM "RunOperation" receipt
+        JOIN "Entity" identity ON identity.id::text = receipt.result->${"target"}->>'entityId'
+        WHERE receipt.kind = ${"target_outcome"} AND receipt.state = ${importOperationStatusOut.shape.state.enum.completed}
+          AND identity.shortcode = ${input.subjectId}
+        UNION SELECT a."runId" FROM "AuditLog" a
+        JOIN "Entity" identity ON identity.id = a."entityId"
+        WHERE identity.shortcode = ${input.subjectId}
+        UNION SELECT f."runId" FROM "RunFinding" f
+        JOIN "Entity" identity ON identity.id = f."entityId"
+        WHERE identity.shortcode = ${input.subjectId}
       )
     )`);
   }
@@ -506,19 +520,19 @@ function listPredicate(input: ActivityListInput): SQL {
   if (input.executor === "cloud") {
     clauses.push(sql`EXISTS(
       SELECT 1 FROM jsonb_array_elements(executors) executor
-      WHERE executor->>'kind' = 'cloud'
+      WHERE executor->>${"kind"} = 'cloud'
     )`);
   }
   if (input.executor === "device") {
     clauses.push(sql`EXISTS(
       SELECT 1 FROM jsonb_array_elements(executors) executor
-      WHERE executor->>'kind' = 'device'
+      WHERE executor->>${"kind"} = 'device'
     )`);
   }
   if (input.deviceId) {
     clauses.push(sql`EXISTS(
       SELECT 1 FROM jsonb_array_elements(executors) executor
-      WHERE executor->>'kind' = 'device'
+      WHERE executor->>${"kind"} = 'device'
         AND executor->>'deviceId' = ${input.deviceId}
     )`);
   }
@@ -831,8 +845,8 @@ export async function activityEvents(
             ELSE "startedAt" END AS "occurredAt",
           CASE
             WHEN kind = '__debug_event' THEN 'device'
-            WHEN executor->>'kind' = 'device' THEN 'device'
-            WHEN executor->>'kind' = 'cloud' THEN 'cloud'
+            WHEN executor->>${"kind"} = 'device' THEN 'device'
+            WHEN executor->>${"kind"} = 'cloud' THEN 'cloud'
             ELSE 'server'
           END AS source,
           CASE WHEN kind = '__debug_event' THEN coalesce(result->>'event', 'device.event') ELSE 'operation.' || kind END AS event,
@@ -890,7 +904,7 @@ export async function activityDevices(db: Database, _partyId: string | null) {
       FROM "RunOperation" o JOIN runs r ON r.internal_id = o."runId" AND r.id LIKE 'RUN-%'
     )
     SELECT DISTINCT ON (executor->>'deviceId') executor FROM observations
-    WHERE executor->>'kind' = 'device' AND executor->>'deviceId' IS NOT NULL
+    WHERE executor->>${"kind"} = 'device' AND executor->>'deviceId' IS NOT NULL
     ORDER BY executor->>'deviceId', observed_at DESC, id DESC
   `);
   return activityDevicesOutput.parse({

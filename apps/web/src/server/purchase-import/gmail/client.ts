@@ -12,7 +12,6 @@ import {
 } from "./types";
 
 const DEFAULT_BASE_URL = "https://gmail.googleapis.com/gmail/v1";
-const MAX_ERROR_BODY = 1_000;
 
 export type GmailFetcher = (
   input: RequestInfo | URL,
@@ -49,20 +48,19 @@ const gmailErrorBody = z
   .loose();
 
 const parseError = async (response: Response): Promise<GmailApiError> => {
-  let message = `${response.status} ${response.statusText}`.trim();
+  const body = await response.text();
+  const status = `${response.status} ${response.statusText}`.trim();
+  const message = body ? `${status}\n${body}` : status;
   let reason: string | undefined;
   try {
-    const text = (await response.text()).slice(0, MAX_ERROR_BODY);
-    if (text) {
-      const decoded = gmailErrorBody.safeParse(JSON.parse(text));
+    if (body) {
+      const decoded = gmailErrorBody.safeParse(JSON.parse(body));
       if (decoded.success) {
-        message = decoded.data.error?.message ?? message;
         reason = decoded.data.error?.errors?.[0]?.reason;
       }
     }
   } catch {
-    // SILENT: a non-JSON error body falls back to the HTTP status line
-    // already computed above — `message`/`reason` just keep their defaults.
+    // SILENT: non-JSON provider diagnostics are retained verbatim above.
   }
   return new GmailApiError({ status: response.status, message, reason });
 };

@@ -3,10 +3,7 @@ import type { z } from "zod";
 
 import { photoImportContract } from "~/contracts/photo-import.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import {
-  linkablePhotoGroupExpenses,
-  linkPhotoGroupExpense,
-} from "~/server/photo-import-run/expense-link";
+import { linkablePhotoGroupExpenses } from "~/server/photo-import-run/expense-link";
 import { startPhotoGroupingForActor } from "~/server/photo-import-run/grouping";
 import {
   approvePhotoGroupProposals,
@@ -70,7 +67,12 @@ export const photoImportHandlers = implementOperationDomain(
       if (!group) throw new Error("Photo group was not found");
       const images = await listPhotoRunImages(context.db, input.runId);
       return {
-        candidates: await photoProductCandidates(context.db, group, images),
+        candidates: await photoProductCandidates(
+          context.db,
+          group,
+          images,
+          context.actorContext,
+        ),
       };
     },
     linkableExpenses: async (context, input) => {
@@ -79,15 +81,11 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
         input.runId,
       );
-      return linkablePhotoGroupExpenses(context.db, input);
-    },
-    linkExpense: async (context, input) => {
-      await assertPhotoRunReviewer(
+      return linkablePhotoGroupExpenses(
         context.db,
+        input,
         context.actorContext,
-        input.runId,
       );
-      return linkPhotoGroupExpense(context.db, input, context.actorContext);
     },
     chooseExisting: async (context, input) => {
       await assertPhotoRunReviewer(
@@ -194,7 +192,11 @@ export const photoImportHandlers = implementOperationDomain(
       };
     },
     productCandidates: async (context, input) => ({
-      candidates: await findPhotoProductCandidates(context.db, input),
+      candidates: await findPhotoProductCandidates(
+        context.db,
+        input,
+        context.actorContext,
+      ),
     }),
     proposals: (context, input) =>
       listPhotoGroupProposals(context.db, input.runId),

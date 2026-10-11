@@ -7,6 +7,7 @@
  * a party, account, vendor, SQL, script, or generic mutation target.
  */
 import { z } from "zod";
+import { runProgressStamp } from "./run-fields";
 
 import { aiUsageTransport } from "./telemetry";
 
@@ -34,15 +35,17 @@ export const markRunFailedInput = purchaseAgentOperationRef.extend({
   dispatchEventId: z.string().optional(),
 });
 
-export const reconcileSettledRunInput = purchaseAgentOperationRef.extend({
-  detail: z.string().optional(),
-  /** Every queue event id the agent has received for this run. */
-  receivedEventIds: z.array(z.string().min(1)).max(10_000),
-  /** The settled submission went unanswered: fail the run, not review it. */
-  failure: markRunFailedInput
-    .pick({ failureCode: true, detail: true })
-    .optional(),
-});
+export const reconcileSettledRunInput = purchaseAgentOperationRef
+  .merge(runProgressStamp)
+  .extend({
+    detail: z.string().optional(),
+    /** Every queue event id the agent has received for this run. */
+    receivedEventIds: z.array(z.string().min(1)).max(10_000),
+    /** The settled submission went unanswered: fail the run, not review it. */
+    failure: markRunFailedInput
+      .pick({ failureCode: true, detail: true })
+      .optional(),
+  });
 
 /** One model turn's token and cost accounting, recorded once per `eventId`. */
 export const agentUsageEvent = purchaseAgentEventRef.extend({
@@ -65,7 +68,7 @@ export const agentUsageEvent = purchaseAgentEventRef.extend({
 export type AgentUsageEvent = z.infer<typeof agentUsageEvent>;
 
 /** A coordinator progress breadcrumb, deduplicated by `(runId, eventId)`. */
-export const agentProgressEvent = z.object({
+export const agentProgressEvent = runProgressStamp.extend({
   runId: z.uuid(),
   eventId: z.string().trim().min(1).max(256),
   phase: z.string().trim().min(1).max(200),

@@ -1,3 +1,4 @@
+import { retainedMailFixture } from "~/server/purchase-import/order-import.fixtures";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { imageShortcode, runShortcode } from "@cubby/schemas/identifiers";
@@ -8,7 +9,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { Pool } from "pg";
 import { z } from "zod";
 
-import { ledgerParty, orderMail, orderMailEvent } from "~/server/db/schema";
+import { ledgerParty, orderMailEvent } from "~/server/db/schema";
 import { authorizePurchaseAgent } from "~/server/purchase-import/purchase-agent-workerd.fixtures";
 import type {
   PhotoImportFinalizeInput,
@@ -196,23 +197,19 @@ async function seedSavedConfirmation(
     receivedAt: string,
     content: { bodyHtml: string | null; bodyText: string },
   ) => {
-    const [saved] = await getDb(db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: party,
-        mailboxId: "synthetic-coupled-mailbox",
-        vendorId: vendor.id,
-        messageId: `synthetic-live-${event}-${crypto.randomUUID()}`,
-        sender: `orders@${source.host}`,
-        subject: `Synthetic order ${event}`,
-        receivedAt: new Date(receivedAt),
-        rawChecksum: createHash("sha256")
-          .update(`${source.orderId}:${event}`)
-          .digest("hex"),
-        content: { snippet: null, ...content },
-      })
-      .returning();
-    if (!saved) throw new Error(`Synthetic ${event} mail was not saved`);
+    const saved = await retainedMailFixture(db, {
+      ledgerPartyId: party,
+      mailboxId: "synthetic-coupled-mailbox",
+      vendorId: vendor.id,
+      messageId: `synthetic-live-${event}-${crypto.randomUUID()}`,
+      sender: `orders@${source.host}`,
+      subject: `Synthetic order ${event}`,
+      receivedAt: new Date(receivedAt),
+      checksum: createHash("sha256")
+        .update(`${source.orderId}:${event}`)
+        .digest("hex"),
+      content: { snippet: null, ...content },
+    });
     await getDb(db)
       .insert(orderMailEvent)
       .values({

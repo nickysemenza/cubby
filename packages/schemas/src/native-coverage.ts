@@ -260,6 +260,7 @@ export const nativeCoverage = {
       // The same report view draws these as `records` blocks (rows with a thumbnail, badges and a
       // record to open); their verbs are `nativeCollectionActionPlans`, run by the hero-action
       // runner.
+      "email.review",
       "product.labels",
       "product.cookbooks",
       "product.recipe-appearances",

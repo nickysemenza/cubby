@@ -365,3 +365,42 @@ export function runWorkLabel(run: {
       return run.vendorId ? "Order history sync" : "Unknown sender review";
   }
 }
+
+/** Delivery metadata and display state owned by the Run, separate from its checkpoint. */
+export const runProgressStamp = z.object({
+  generation: z.string().min(1),
+  sequence: z.number().int().nonnegative(),
+});
+export type RunProgressStamp = z.infer<typeof runProgressStamp>;
+export const runProgressEvent = runProgressStamp.extend({
+  eventId: z.string().min(1),
+  phase: z.string().min(1),
+  currentItem: z.string().nullable(),
+  awaitingApproval: z.boolean(),
+  detail: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export type RunProgressEvent = z.infer<typeof runProgressEvent>;
+export type RunProgressHistory = RunProgressEvent[];
+export type RunProgressEventIds = string[];
+
+/** Historical target attribution is immutable operation evidence after roster retirement. */
+export const runTargetOutcomeReceipt = z.object({
+  target: z.object({
+    entityKind: z.enum([...runTargetEntityKind.options, "email"]),
+    entityId: z.uuid(),
+    workKey: z.string(),
+    state: z.string(),
+    outcome: z.string().nullable(),
+    warning: z.string().nullable(),
+    diff: z.json().nullable(),
+    completedAt: z.iso.datetime().nullable(),
+    targetFingerprint: z.string(),
+    sourceKind: z.string().nullable().optional(),
+    sourceExternalKey: z.string().nullable().optional(),
+    vendorAccountId: z.uuid().nullable().optional(),
+    evidenceFingerprint: z.string().nullable().optional(),
+    position: z.number().int().nullable().optional(),
+  }),
+});
+export type RunTargetOutcomeReceipt = z.infer<typeof runTargetOutcomeReceipt>;

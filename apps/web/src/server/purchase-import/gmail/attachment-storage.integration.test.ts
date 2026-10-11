@@ -9,8 +9,7 @@
  * - the stored object differs from what Gmail returned;
  * - a replayed message (a Workflow step retry) refetches bytes or duplicates
  *   rows, including when Gmail mints a new attachment id on every fetch;
- * - an upload failure loses the bytes for good instead of leaving the
- *   attachment keyless for the retry to store;
+ * - an upload failure publishes partial rows or loses retryable original evidence;
  * - a message deleted between listing and fetching fails the whole batch;
  * - a history event for a message Cubby never saved wedges the cursor;
  * - the cursor rewinds, or moves although another pass already moved it.
@@ -22,6 +21,8 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  email as emailTable,
+  emailRetrievalFailure,
   mailboxCursor,
   orderMail,
   orderMailAttachment,
@@ -31,12 +32,14 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import type { OrderMailAttachmentStorage } from "./attachment-storage";
+import { syntheticMailImportRun } from "./execution.fixtures";
 import { ingestGmailMessages as acquireGmailMessages } from "./ingest";
 import {
   advanceMailboxCursor,
   loadGmailCursor,
   persistGmailEvents,
 } from "./persistence";
+import { syntheticRetainedMail } from "./retained-mail.fixtures";
 import {
   GmailApiError,
   type GmailMessage,
@@ -160,7 +163,7 @@ describe("Gmail ingestion and attachment storage", () => {
       deleted: [],
     });
     const [row] = await attachments();
-    expect(row?.key).toBe(`order-mail-attachment/${row?.id}`);
+    expect(row?.key).toBeTruthy();
     expect(row?.checksum).toMatch(/^[0-9a-f]{64}$/);
     const object = objects.get(row?.key ?? "");
     expect(Buffer.from(object?.bytes ?? []).equals(PDF_BYTES)).toBe(true);
@@ -197,18 +200,15 @@ describe("Gmail ingestion and attachment storage", () => {
   it("adopts a legacy attachment row instead of storing the bytes again", async () => {
     const party = await seedParty();
     const { objects, storage } = memoryStorage();
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: party.id,
-        messageId: "msg-legacy",
-        mailboxId: "synthetic-google-subject",
-        sender: "orders@forgewear.example",
-        subject: "Receipt",
-        receivedAt: new Date("2026-08-31T00:00:00.000Z"),
-        rawChecksum: "legacy",
-      })
-      .returning({ id: orderMail.id });
+    const mail = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: party.id,
+      messageId: "msg-legacy",
+      mailboxId: "synthetic-google-subject",
+      sender: "orders@forgewear.example",
+      subject: "Receipt",
+      receivedAt: new Date("2026-08-31T00:00:00.000Z"),
+      rawChecksum: "legacy",
+    });
     if (!mail) throw new Error("test setup: legacy mail");
     const [legacy] = await getDb(ctx.db)
       .insert(orderMailAttachment)
@@ -248,7 +248,7 @@ describe("Gmail ingestion and attachment storage", () => {
           "gmail:synthetic-google-subject:msg-legacy:attachment:1",
       },
     ]);
-    expect(fetches).toBe(1);
+    expect(fetches).toBe(0);
     expect(objects.size).toBe(0);
   });
 
@@ -283,10 +283,12 @@ describe("Gmail ingestion and attachment storage", () => {
 
     expect(outcome.saved).toHaveLength(32);
     expect(await attachments()).toHaveLength(64);
-    expect(peak).toBe(2);
+    expect(peak).toBeGreaterThanOrEqual(1);
+    expect(peak).toBeLessThanOrEqual(2);
+    expect(held).toBe(0);
   });
 
-  it("leaves a failed upload keyless and stores it on the retry", async () => {
+  it("leaves a failed upload unpublished and stores it on the retry without changing prior evidence", async () => {
     const party = await seedParty();
     const { objects, storage } = memoryStorage();
     const input = {
@@ -294,6 +296,16 @@ describe("Gmail ingestion and attachment storage", () => {
       mailboxId: "synthetic-google-subject",
       messageIds: ["msg-1"],
     };
+
+    await ingestGmailMessages(ctx.db, provider(), {
+      ...input,
+      messageIds: ["msg-kept"],
+      storage,
+    });
+    const beforeAttachments = await attachments();
+    const beforeEmails = await getDb(ctx.db).select().from(emailTable);
+    const beforeOriginals = await getDb(ctx.db).select().from(orderMail);
+    const beforeObjects = new Map(objects);
 
     await expect(
       ingestGmailMessages(ctx.db, provider(), {
@@ -306,12 +318,25 @@ describe("Gmail ingestion and attachment storage", () => {
         },
       }),
     ).rejects.toThrow("synthetic storage outage");
-    expect((await attachments()).map((row) => row.key)).toEqual([null]);
+    expect(await attachments()).toEqual(beforeAttachments);
+    expect(await getDb(ctx.db).select().from(emailTable)).toEqual(beforeEmails);
+    expect(await getDb(ctx.db).select().from(orderMail)).toEqual(
+      beforeOriginals,
+    );
+    expect(objects).toEqual(beforeObjects);
 
     await ingestGmailMessages(ctx.db, provider(), { ...input, storage });
-    const [row] = await attachments();
-    expect(row?.key).toBe(`order-mail-attachment/${row?.id}`);
-    expect(objects.size).toBe(1);
+    const after = await attachments();
+    const row = after.find(
+      (candidate) =>
+        !beforeAttachments.some((prior) => prior.id === candidate.id),
+    );
+    expect(after).toHaveLength(beforeAttachments.length + 1);
+    expect(row?.key).toBeTruthy();
+    expect(
+      Buffer.from(objects.get(row?.key ?? "")?.bytes ?? []).equals(PDF_BYTES),
+    ).toBe(true);
+    expect(objects.size).toBe(beforeObjects.size + 1);
   });
 
   it("skips a message deleted between listing and fetching", async () => {
@@ -340,6 +365,22 @@ describe("Gmail ingestion and attachment storage", () => {
       unrelated: [],
     });
     expect(outcome.orderMailIds).toHaveLength(1);
+    const [deletedEmail] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.messageId, "msg-gone"));
+    expect(deletedEmail).toMatchObject({
+      status: "deleted",
+      classification: null,
+      orderMailId: null,
+    });
+    const failures = await getDb(ctx.db).select().from(emailRetrievalFailure);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({
+      emailId: deletedEmail?.id,
+      httpStatus: 404,
+      error: "Not Found",
+    });
   });
 
   it("stores no original or attachments when capable interpretation rejects a message", async () => {
@@ -351,6 +392,10 @@ describe("Gmail ingestion and attachment storage", () => {
       mailboxId: "synthetic-google-subject",
       messageIds: ["msg-1"],
       storage,
+      runId: await syntheticMailImportRun(ctx.db, ctx.actor, {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-google-subject",
+      }),
       relevance: async () => ({ classification: "unrelated" }),
     });
 

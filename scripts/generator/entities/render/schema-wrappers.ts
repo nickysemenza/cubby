@@ -30,6 +30,7 @@ import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
  *   the hand-written module extends with its own extras.
  */
 const WRAPPERS = {
+  email: "out+ filters+",
   device: "create+ update+ updateInput out+ filters+",
   expense: "update+ updateInput+ out+ listItem+ filtersBase",
   financialAccount: "create+ update+ updateInput+ out+ filtersBase",
@@ -57,6 +58,7 @@ const WRAPPERS = {
 
 /** Entities whose complete filters schema is exported as `<key>Filters`. */
 const SHORT_FILTERS_NAME: ReadonlySet<string> = new Set([
+  "email",
   "device",
   "productCategory",
   "spendingCategory",

@@ -5,6 +5,28 @@ import { normalizeHistoryPage, normalizeMessage } from "./normalize";
 import { maxHistoryId } from "./sync";
 import type { GmailMessage } from "./types";
 
+// Retrieval failures must preserve provider diagnostics even when Gmail returns
+// non-JSON or a structured envelope whose extra fields carry the useful error.
+describe("Gmail retrieval diagnostics", () => {
+  it.each([
+    JSON.stringify({
+      error: {
+        message: "Synthetic forbidden",
+        errors: [{ reason: "insufficientPermissions" }],
+      },
+      diagnostic: "x".repeat(1_100),
+    }),
+    "Synthetic upstream diagnostic\n" + "x".repeat(1_100),
+  ])("keeps the complete upstream response body", async (body) => {
+    const client = createGmailApiClient({
+      accessToken: "synthetic-token",
+      fetcher: async () =>
+        new Response(body, { status: 403, statusText: "Forbidden" }),
+    });
+    await expect(client.getMessage("synthetic-source")).rejects.toThrow(body);
+  });
+});
+
 const orderMessage = (
   id: string,
   internalDate = "1789819200000",
@@ -197,7 +219,7 @@ describe("Gmail API client", () => {
       name: "GmailApiError",
       status: 404,
       reason: "historyIdInvalid",
-      message: "History id is too old",
+      message: expect.stringContaining("History id is too old"),
     });
   });
 

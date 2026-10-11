@@ -14,10 +14,10 @@ export interface OrderMailAttachmentStorage {
 }
 
 /**
- * Deterministic key: the cutover script and the migration fragment derive the
- * same string from the row id, so a stored key is `order-mail-attachment/<id>`
- * for every row. Deliberately not under `R2_KEY_PREFIX`: the key is stored
- * verbatim and must match the migration's `'order-mail-attachment/' || id`.
+ * Legacy migration key and prefix for new attempt-specific uploads. Stored keys
+ * are read verbatim; an upload appends its own UUID so delayed cleanup cannot
+ * delete a replacement's bytes. Keep this prefix outside R2_KEY_PREFIX for
+ * compatibility with migrated originals.
  */
 export const orderMailAttachmentKey = (id: string): string =>
   `order-mail-attachment/${id}`;

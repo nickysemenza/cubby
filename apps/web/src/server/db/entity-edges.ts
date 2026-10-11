@@ -107,12 +107,14 @@ import {
   imageSighting,
   runFinding,
   importPreparedOrder,
+  sourceOrderObservation,
+  emailCandidateObservation,
+  emailClassificationObservation,
+  emailRetrievalFailure,
   run as runTable,
   runApproval,
   runControlEvent,
   runOperation,
-  runProgress,
-  runTarget,
   importSourceClaim,
   importSourceOrder,
   importSourceProduct,
@@ -125,12 +127,13 @@ import {
   mealRecipe,
   mealRecipePortion,
   mailboxCursor,
-  mailboxMessage,
+  email as emailTable,
   merchantVendorRule,
   orderMail,
   orderMailCandidateDecision,
   orderMailAttachment,
   photoGroupProposal,
+  photoRunImage,
   product,
   productCategory,
   spendingCategory,
@@ -319,6 +322,44 @@ function linkEdgesFor<E extends Entity>(entity: E): LinkEdgesOf<E> {
 }
 
 export const ENTITY_EDGES = {
+  email: edges({
+    "EmailCandidateObservation.emailId": {
+      column: emailCandidateObservation.emailId,
+      role: "history",
+      label: "candidate observations",
+      description:
+        "Immutable evidence about the original Email, retained through its tombstone.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Immutable observation history retains its original subject UUID through deletion and merge.",
+      },
+    },
+    "EmailClassificationObservation.emailId": {
+      column: emailClassificationObservation.emailId,
+      role: "history",
+      label: "classification observations",
+      description:
+        "Immutable evidence about the original Email, retained through its tombstone.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Immutable observation history retains its original subject UUID through deletion and merge.",
+      },
+    },
+    "EmailRetrievalFailure.emailId": {
+      column: emailRetrievalFailure.emailId,
+      role: "history",
+      label: "retrieval failures",
+      description:
+        "Immutable evidence about the original Email, retained through its tombstone.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Immutable observation history retains its original subject UUID through deletion and merge.",
+      },
+    },
+  }),
   cookbook: edges({
     "EntityAttachment.entityId": {
       column: entityAttachment.entityId,
@@ -338,6 +379,23 @@ export const ENTITY_EDGES = {
     },
   }),
   image: edges({
+    "SourceOrderObservation.primaryDocumentImageId": {
+      column: sourceOrderObservation.primaryDocumentImageId,
+      role: "media",
+      label: "observed primary documents",
+      description:
+        "Optional source media for an immutable extraction; explicit Image deletion clears only this pointer.",
+      liveness: { kind: "must-target-live" },
+    },
+    "SourceOrderObservation.screenshotImageId": {
+      column: sourceOrderObservation.screenshotImageId,
+      role: "media",
+      label: "observed screenshots",
+      description:
+        "Optional source media for an immutable extraction; explicit Image deletion clears only this pointer.",
+      liveness: { kind: "must-target-live" },
+    },
+
     "EntityAttachment.imageId": {
       column: entityAttachment.imageId,
       role: "media",
@@ -346,12 +404,12 @@ export const ENTITY_EDGES = {
         "A file attached to an entity: a gallery photo, a document, a cookbook cover, or a vendor logo. Says nothing about ownership.",
       liveness: { kind: "must-target-live" },
     },
-    "RunTarget.entityId": {
-      column: runTarget.entityId,
+    "PhotoRunImage.imageId": {
+      column: photoRunImage.imageId,
       role: "history",
       label: "photo import runs",
       description:
-        "A photo-inventory run worklist row preserves the Image it grouped; it is not a gallery attachment.",
+        "A Run-owned image work item preserves picker and processing state.",
       liveness: { kind: "must-target-live" },
     },
     "ImageDerivative.imageId": {
@@ -580,8 +638,8 @@ export const ENTITY_EDGES = {
       description: "A member mailbox's durable Gmail history cursor.",
       liveness: { kind: "must-target-live" },
     },
-    "MailboxMessage.ledgerPartyId": {
-      column: mailboxMessage.ledgerPartyId,
+    "Email.ledgerPartyId": {
+      column: emailTable.ledgerPartyId,
       role: "metadata",
       label: "mailbox message status",
       description:
@@ -681,14 +739,6 @@ export const ENTITY_EDGES = {
         label: "original order lines",
         description:
           "The exact original ordered line identifies this Product without implying an inventory movement or financial amount.",
-        liveness: { kind: "must-target-live" },
-      },
-      "RunTarget.entityId": {
-        column: runTarget.entityId,
-        role: "history",
-        label: "targeted import runs",
-        description:
-          "A no-op validation or enrichment target preserves the Product it examined.",
         liveness: { kind: "must-target-live" },
       },
       "MealFoodEntry.productId": {
@@ -1000,6 +1050,19 @@ export const ENTITY_EDGES = {
     ...externalIdEdgesFor("task"),
   },
   vendor: edges({
+    "SourceOrderObservation.vendorId": {
+      column: sourceOrderObservation.vendorId,
+      role: "history",
+      label: "observed Vendors",
+      description:
+        "The original Vendor named by an immutable source extraction.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Immutable observation history retains its original subject UUID through deletion and merge.",
+      },
+    },
+
     "EntityAttachment.entityId": {
       column: entityAttachment.entityId,
       role: "media",
@@ -1076,6 +1139,18 @@ export const ENTITY_EDGES = {
   }),
   purchase: {
     ...edges({
+      "SourceOrderObservation.purchaseId": {
+        column: sourceOrderObservation.purchaseId,
+        role: "history",
+        label: "source order observations",
+        description:
+          "The original Purchase subject of an immutable source extraction.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
       "ImportPreparedOrder.targetPurchaseId": {
         column: importPreparedOrder.targetPurchaseId,
         role: "history",
@@ -1098,18 +1173,6 @@ export const ENTITY_EDGES = {
           kind: "allow-target-deleted",
           reason:
             "Purchase deletion retains reviewed mail history against its tombstone.",
-        },
-      },
-      "RunTarget.entityId": {
-        column: runTarget.entityId,
-        role: "history",
-        label: "targeted import runs",
-        description:
-          "A validation target preserves the Purchase it examined without claiming a business mutation.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "Purchase deletion preserves targeted-run history (see PURCHASE_DELETE_EDGE_POLICY), so the run target deliberately retains the Purchase tombstone.",
         },
       },
       "ImportSourceOrder.purchaseId": {
@@ -1265,14 +1328,6 @@ export const ENTITY_EDGES = {
   // usda-link-resolved-at-query-time).
   inventory: edges({}),
   vendorAccount: edges({
-    "RunTarget.vendorAccountId": {
-      column: runTarget.vendorAccountId,
-      role: "history",
-      label: "targeted import runs",
-      description:
-        "A targeted validation or enrichment target retains the selected member-owned vendor account that supplied its evidence.",
-      liveness: { kind: "must-target-live" },
-    },
     "Purchase.vendorAccountId": {
       column: purchase.vendorAccountId,
       role: "reference",
@@ -1304,25 +1359,69 @@ export const ENTITY_EDGES = {
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
   run: edges({
-    "MailboxMessage.runId": {
-      column: mailboxMessage.runId,
+    "SourceOrderObservation.runId": {
+      column: sourceOrderObservation.runId,
+      role: "history",
+      label: "source order observations",
+      description:
+        "The Run that captured an immutable source order extraction.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Immutable observation history retains its original subject UUID through deletion and merge.",
+      },
+    },
+    "EmailCandidateObservation.runId": {
+      column: emailCandidateObservation.runId,
+      role: "history",
+      label: "Email candidate observations",
+      description:
+        "The original Run that produced this immutable Email evidence.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Immutable observation history retains its original subject UUID through deletion and merge.",
+      },
+    },
+    "EmailClassificationObservation.runId": {
+      column: emailClassificationObservation.runId,
+      role: "history",
+      label: "Email classification observations",
+      description:
+        "The original Run that produced this immutable Email evidence.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Immutable observation history retains its original subject UUID through deletion and merge.",
+      },
+    },
+    "EmailRetrievalFailure.runId": {
+      column: emailRetrievalFailure.runId,
+      role: "history",
+      label: "Email retrieval failures",
+      description:
+        "The original Run that produced this immutable Email evidence.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Immutable observation history retains its original subject UUID through deletion and merge.",
+      },
+    },
+
+    "PhotoRunImage.runId": {
+      column: photoRunImage.runId,
+      role: "owned-child",
+      label: "photo work",
+      description: "The picker and processing membership owned by this Run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Email.runId": {
+      column: emailTable.runId,
       role: "association",
       label: "mail research assignments",
       description:
         "The durable researcher currently processing a retained mailbox message.",
       liveness: { kind: "must-target-live" },
-    },
-    "RunTarget.entityId": {
-      column: runTarget.entityId,
-      role: "owned-child",
-      label: "research source tasks",
-      description:
-        "A source-set task names its owning Run through the shared entity spine.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "The task and its evidence are retained with the Run tombstone.",
-      },
     },
     "AuditLog.runId": {
       column: auditLog.runId,
@@ -1387,26 +1486,11 @@ export const ENTITY_EDGES = {
       description: "Work caused by this Run, distinct from its retry attempts.",
       liveness: { kind: "must-target-live" },
     },
-    "RunTarget.runId": {
-      column: runTarget.runId,
-      role: "owned-child",
-      label: "targets",
-      description:
-        "A validation or enrichment target recorded for this run; it has no independent meaning apart from the run.",
-      liveness: { kind: "must-target-live" },
-    },
     "RunOperation.runId": {
       column: runOperation.runId,
       role: "owned-child",
       label: "operations",
       description: "One idempotent operation this run executed.",
-      liveness: { kind: "must-target-live" },
-    },
-    "RunProgress.runId": {
-      column: runProgress.runId,
-      role: "owned-child",
-      label: "progress checkpoints",
-      description: "A progress checkpoint recorded during this run.",
       liveness: { kind: "must-target-live" },
     },
     "RunControlEvent.runId": {
@@ -1464,6 +1548,13 @@ export const ENTITY_EDGES = {
   }),
   "usda-food": edges({}),
   device: edges({
+    "PhotoRunImage.deviceWorkDeviceId": {
+      column: photoRunImage.deviceWorkDeviceId,
+      role: "history",
+      label: "photo device work",
+      description: "The install processing this photo work item.",
+      liveness: { kind: "must-target-live" },
+    },
     "AuditLog.deviceId": {
       column: auditLog.deviceId,
       role: "history",
@@ -1483,18 +1574,6 @@ export const ENTITY_EDGES = {
       description:
         "A sighting reported by this device; meaningless without the reporting install.",
       liveness: { kind: "must-target-live" },
-    },
-    "RunTarget.deviceWorkDeviceId": {
-      column: runTarget.deviceWorkDeviceId,
-      role: "history",
-      label: "photo-run device work",
-      description:
-        "A run target this device reported processing; the column is cleared when the device goes.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Append-only provenance: a target keeps naming the device that last reported on it.",
-      },
     },
   }),
 } as const satisfies Record<Entity, Record<string, EntityEdge>>;

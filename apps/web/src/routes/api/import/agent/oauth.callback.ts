@@ -132,6 +132,7 @@ async function dispatchResumedRuns(
           runId: run.id,
           purpose: agentImportRunPurpose.parse(run.purpose),
           eventId: run.eventId,
+          generation: run.eventId,
           type: "start_or_resume",
         });
       } catch (error) {

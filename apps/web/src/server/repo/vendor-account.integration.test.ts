@@ -1,20 +1,21 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { VendorAccountUpdateData } from "@cubby/schemas/vendor-account";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { ledgerParty, run, vendor as vendorTable } from "~/server/db/schema";
+import {
+  ledgerParty,
+  run,
+  vendor as vendorTable,
+  vendorAccount,
+} from "~/server/db/schema";
 import { startImportRunFixture } from "~/server/purchase-import/import-run.fixtures";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
-import {
-  createVendorAccount,
-  getVendorAccountByShortcode,
-} from "~/server/repo/vendor-account";
+import { getVendorAccountByShortcode } from "~/server/repo/vendor-account";
 
 /**
  * `VendorAccount.lastRunAt` / `lastSuccessAt` are read from Run — the latest
@@ -71,77 +72,30 @@ describe("vendor account run activity", () => {
 });
 
 /**
- * A member's browser-synced account for a vendor with browser domains is clear
- * evidence the vendor has an online order trail. Failure modes: an explicit
- * choice overwritten; a disabled (mail-only) account or a vendor with no
- * browser domains treated as proof.
+ * Failure modes: account creation drops vendor/member ownership or the
+ * inventory-owner default; a created account fails to scope its import Run;
+ * browser-domain metadata triggers an automatic vendor classification.
  */
-describe("vendor account creation classifies order evidence", () => {
+describe("vendor account creation persistence", () => {
   const ctx = withTestDb();
 
-  let count = 0;
-  async function create(
-    vendorValues: {
-      orderEvidence?: "online_account" | "receipt_only" | "not_expected";
-      browserDomains?: string[];
-    },
-    status: "active" | "disabled" = "active",
-  ) {
+  it("persists owner defaults and keeps the created account on its import Run", async () => {
     const { row: party } = await findOrCreateWithShortcode(
       ctx.db,
       "ledgerParty",
       {
         where: eq(ledgerParty.userId, ctx.actor.userId),
         values: () => ({
-          name: "Classifier member",
+          name: "Import owner member",
           kind: "member" as const,
           userId: ctx.actor.userId,
         }),
       },
     );
-    count += 1;
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `Classifier vendor ${count}`,
-      ...vendorValues,
+      name: "Import owner vendor",
+      browserDomains: ["shop.example.test"],
     });
-    await createVendorAccount(
-      ctx.db,
-      {
-        label: "Classifier account",
-        vendorId: parseShortcodeFor("vendor", vendor.shortcode),
-        ledgerPartyId: parseShortcodeFor("ledgerParty", party.shortcode),
-        status,
-        browser: "chrome",
-        inventoryOwnerDefaultEnabled: false,
-        browserSyncEnabled: true,
-      },
-      ctx.actor,
-    );
-    const [row] = await getDb(ctx.db)
-      .select({ orderEvidence: vendorTable.orderEvidence })
-      .from(vendorTable)
-      .where(eq(vendorTable.id, vendor.id));
-    return row?.orderEvidence;
-  }
-
-  it("sets online_account only when the vendor has none and has browser domains", async () => {
-    await expect(
-      create({ browserDomains: ["shop.example.test"] }),
-    ).resolves.toBe("online_account");
-  });
-
-  it("preserves every explicit choice", async () => {
-    for (const orderEvidence of [
-      "receipt_only",
-      "not_expected",
-      "online_account",
-    ] as const)
-      await expect(
-        create({ orderEvidence, browserDomains: ["shop.example.test"] }),
-      ).resolves.toBe(orderEvidence);
-  });
-
-  it("classifies a mail-only account only once it is both active and synced", async () => {
     const { entityKernelContextSchema, executeEntity } =
       await import("~/server/entity-kernel");
     const { requireActor } = await import("~/server/request-context");
@@ -154,56 +108,61 @@ describe("vendor account creation classifies order evidence", () => {
         }),
       ),
     );
-    const { row: party } = await findOrCreateWithShortcode(
-      ctx.db,
-      "ledgerParty",
-      {
-        where: eq(ledgerParty.userId, ctx.actor.userId),
-        values: () => ({
-          name: "Classifier member",
-          kind: "member" as const,
-          userId: ctx.actor.userId,
-        }),
+    const created = await executeEntity(kernel, {
+      action: "create",
+      entity: "vendorAccount",
+      data: {
+        label: "Import owner account",
+        vendorId: parseShortcodeFor("vendor", vendor.shortcode),
+        ledgerPartyId: parseShortcodeFor("ledgerParty", party.shortcode),
+        status: "active",
+        inventoryOwnerDefaultEnabled: true,
       },
-    );
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Classifier mail-only vendor",
-      browserDomains: ["shop.example.test"],
     });
-    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Classifier mail",
+
+    const [createdRow] = await getDb(ctx.db)
+      .select({ id: vendorAccount.id })
+      .from(vendorAccount)
+      .where(eq(vendorAccount.shortcode, created.item.id));
+    if (!createdRow)
+      throw new Error("Created vendor account was not persisted");
+    const [persistedAccount] = await getDb(ctx.db)
+      .select({
+        vendorId: vendorAccount.vendorId,
+        ledgerPartyId: vendorAccount.ledgerPartyId,
+        inventoryOwnerDefaultEnabled:
+          vendorAccount.inventoryOwnerDefaultEnabled,
+        status: vendorAccount.status,
+      })
+      .from(vendorAccount)
+      .where(eq(vendorAccount.id, createdRow.id));
+    expect(persistedAccount).toEqual({
       vendorId: vendor.id,
       ledgerPartyId: party.id,
-      status: "disabled",
-      browserSyncEnabled: false,
+      inventoryOwnerDefaultEnabled: true,
+      status: "active",
     });
-    const evidence = async () =>
-      (
-        await getDb(ctx.db)
-          .select({ orderEvidence: vendorTable.orderEvidence })
-          .from(vendorTable)
-          .where(eq(vendorTable.id, vendor.id))
-      )[0]?.orderEvidence;
-    const update = (data: VendorAccountUpdateData) =>
-      executeEntity(kernel, {
-        action: "update",
-        entity: "vendorAccount",
-        id: account.shortcode,
-        data,
-      });
 
-    // Sync on while still disabled is not yet an online account.
-    await update({ browserSyncEnabled: true });
-    await expect(evidence()).resolves.toBeNull();
-    // Activating it later, without resending the sync flag, completes it.
-    await update({ status: "active" });
-    await expect(evidence()).resolves.toBe("online_account");
-  });
+    const started = await startImportRunFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: createdRow.id,
+    });
+    const [persistedRun] = await getDb(ctx.db)
+      .select({
+        vendorAccountId: run.vendorAccountId,
+        ledgerPartyId: run.ledgerPartyId,
+      })
+      .from(run)
+      .where(eq(run.id, started.id));
+    expect(persistedRun).toEqual({
+      vendorAccountId: createdRow.id,
+      ledgerPartyId: party.id,
+    });
 
-  it("leaves weak signals unclassified for review", async () => {
-    await expect(create({})).resolves.toBeNull();
-    await expect(
-      create({ browserDomains: ["shop.example.test"] }, "disabled"),
-    ).resolves.toBeNull();
+    const [persistedVendor] = await getDb(ctx.db)
+      .select({ orderEvidence: vendorTable.orderEvidence })
+      .from(vendorTable)
+      .where(eq(vendorTable.id, vendor.id));
+    expect(persistedVendor?.orderEvidence).toBeNull();
   });
 });

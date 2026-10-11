@@ -57,7 +57,7 @@ import { completeListReader } from "./list-read-adapters";
 
 /** `ImageSighting.deviceId` cascades: a sighting reported by a device is
  * meaningless once that device is gone. `AuditLog.deviceId` and
- * `RunTarget.deviceWorkDeviceId` are cleared. */
+ * `PhotoRunImage.deviceWorkDeviceId` are cleared. */
 const DEVICE_DELETE_EDGE_POLICY = {
   "AuditLog.deviceId": {
     code: "clearFk",
@@ -71,7 +71,7 @@ const DEVICE_DELETE_EDGE_POLICY = {
     description:
       "A device's reported sightings are removed with it; affected images are re-derived in the same transaction.",
   },
-  "RunTarget.deviceWorkDeviceId": {
+  "PhotoRunImage.deviceWorkDeviceId": {
     code: "clearFk",
     effect: "detach",
     description:

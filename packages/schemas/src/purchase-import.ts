@@ -16,6 +16,8 @@ import {
   runShortcode,
   purchaseShortcode,
   vendorShortcode,
+  ledgerPartyShortcode,
+  financialTransactionShortcode,
 } from "./identifier-fields";
 
 export const vendorOrderEvidence = z.enum([
@@ -134,7 +136,15 @@ export const extractedPaymentEvidence = z.object({
 export type ExtractedPaymentEvidence = z.infer<typeof extractedPaymentEvidence>;
 
 const extractedOrderDate = z
-  .union([plainDate.pipe(z.iso.date()), z.iso.datetime({ offset: true })])
+  .union([
+    // A refinement, not `.pipe(z.iso.date())`: a pipe advertises its output
+    // side's bare `format: date`, which the MCP catalog forbids.
+    plainDate.refine(
+      (value) => z.iso.date().safeParse(value).success,
+      "expected a real calendar day",
+    ),
+    z.iso.datetime({ offset: true }),
+  ])
   .nullable()
   .describe(
     "Source-printed order date as YYYY-MM-DD, or an explicit ISO timestamp with timezone. Preserve a printed calendar day without inventing a time or timezone. Null when absent; email receipt time is not an order date.",
@@ -190,6 +200,17 @@ export const acceptedSourceOrder = z.object({
   extraction: importExtractionOutcome,
 });
 export type AcceptedSourceOrder = z.infer<typeof acceptedSourceOrder>;
+
+/** An immutable extraction and the Product decisions supplied with that evidence. */
+export const sourceOrderObservationBindings = z.array(
+  z.object({
+    lineIndex: z.number().int().nonnegative(),
+    productId: z.uuid().nullable(),
+  }),
+);
+export type SourceOrderObservationBindings = z.infer<
+  typeof sourceOrderObservationBindings
+>;
 
 const extractedPurchaseLineModelOutput = z.object({
   title: z.string().trim().min(1).max(500),
@@ -334,6 +355,12 @@ export const replacementLineAttribution = z.object({
   weight: z.number().int().positive().safe(),
 });
 
+/** The public reviewed split: a LedgerParty by shortcode, unlike the stored
+ * `replacementLineAttribution` whose uuid joins the aggregate approval. */
+export const sourceOrderReconciliationAttribution = replacementLineAttribution
+  .omit({ partyId: true, partyCode: true })
+  .extend({ partyId: ledgerPartyShortcode.nullable() });
+
 export const aggregateReplacementSnapshot = z.object({
   fingerprint: z.string(),
   expenseCode: expenseShortcode,
@@ -348,7 +375,133 @@ export const aggregateReplacementSnapshot = z.object({
   bookingTransactionCode: z.string().nullable(),
 });
 
+const sourceReconciliationLineBinding = z.object({
+  lineIndex: z.number().int().nonnegative(),
+  expenseId: expenseShortcode.nullable(),
+  productId: productShortcode.nullable(),
+});
+export const sourceOrderReconciliationResolution = z.discriminatedUnion(
+  "kind",
+  [
+    z.object({
+      kind: z.literal("attach_only"),
+      lines: z.array(sourceReconciliationLineBinding).max(500),
+    }),
+    z.object({
+      kind: z.literal("replace_lines"),
+      expenseIds: z.array(expenseShortcode).max(500),
+      lines: z.array(sourceReconciliationLineBinding).max(500),
+      // Same-total replacements retain each party's exact cents. A cost correction
+      // requires reviewed targets for both roles, including unattributed money.
+      attributionTargets: z
+        .array(
+          z.object({
+            role: z.enum(["beneficiary", "funder"]),
+            partyId: ledgerPartyShortcode.nullable(),
+            amount: money,
+          }),
+        )
+        .max(500)
+        .optional(),
+    }),
+  ],
+);
+export type SourceOrderReconciliationResolution = z.infer<
+  typeof sourceOrderReconciliationResolution
+>;
+export const prepareSourceOrderReconciliationInput = z.union([
+  z.object({ id: z.uuid(), resolution: sourceOrderReconciliationResolution }),
+  z.object({
+    sourceOrderId: z.uuid(),
+    resolution: sourceOrderReconciliationResolution.options[0],
+  }),
+]);
+export type PrepareSourceOrderReconciliationInput = z.infer<
+  typeof prepareSourceOrderReconciliationInput
+>;
+export const sourceOrderReconciliationReview = z.object({
+  reviewedFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  resolution: sourceOrderReconciliationResolution,
+  source: importSourceIdentity,
+  orderKey: z.string(),
+  accepted: acceptedSourceOrder.nullable(),
+  proposed: acceptedSourceOrder,
+  spend: z.object({
+    before: money.nullable(),
+    after: money.nullable(),
+    delta: money.nullable(),
+  }),
+  expenses: z.array(
+    z.object({
+      id: expenseShortcode,
+      title: z.string(),
+      amount: money.nullable(),
+      productId: productShortcode.nullable(),
+    }),
+  ),
+  payments: z.array(extractedPaymentEvidence),
+  proposedPayments: z.array(extractedPaymentEvidence),
+  allocationTotal: money,
+  allocations: z.array(
+    z.object({
+      transactionId: financialTransactionShortcode,
+      amount: money,
+      postedDate: plainDate,
+    }),
+  ),
+  originalAttributions: z.array(
+    z.object({
+      expenseId: expenseShortcode,
+      role: z.enum(["beneficiary", "funder"]),
+      partyId: ledgerPartyShortcode.nullable(),
+      amount: money,
+    }),
+  ),
+  attributions: z.array(sourceOrderReconciliationAttribution),
+});
+export type SourceOrderReconciliationReview = z.infer<
+  typeof sourceOrderReconciliationReview
+>;
+export const prepareSourceOrderReconciliationOut = z.union([
+  z.object({ id: z.uuid(), ...sourceOrderReconciliationReview.shape }),
+  z.object({
+    sourceOrderId: z.uuid(),
+    ...sourceOrderReconciliationReview.shape,
+    resolution: sourceOrderReconciliationResolution.options[0],
+  }),
+]);
+export type PrepareSourceOrderReconciliationOut = z.infer<
+  typeof prepareSourceOrderReconciliationOut
+>;
+export const commitAcceptedSourceOrderReconciliationInput = z.object({
+  sourceOrderId: z.uuid(),
+  review: sourceOrderReconciliationReview.extend({
+    resolution: sourceOrderReconciliationResolution.options[0],
+  }),
+});
+export type CommitAcceptedSourceOrderReconciliationInput = z.infer<
+  typeof commitAcceptedSourceOrderReconciliationInput
+>;
+export const commitAcceptedSourceOrderReconciliationOut = z.object({
+  purchaseId: purchaseShortcode,
+  alreadyApplied: z.boolean(),
+});
+
 export const proposedImportFix = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("reconcile_source_order"),
+    purchaseId: z.uuid(),
+    source: importSourceIdentity,
+    orderKey: z.string(),
+    acceptedChecksum: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .nullable(),
+    proposedExtraction: importExtractionOutcome,
+    reviewedFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    observationId: z.uuid().optional(),
+    review: sourceOrderReconciliationReview.optional(),
+  }),
   z.object({
     kind: z.literal("replace_aggregate_line"),
     purchaseId: z.uuid(),
@@ -438,6 +591,7 @@ const agentEventBase = z.object({
   runId: z.uuid(),
   purpose: agentImportRunPurpose.optional(),
   eventId: z.string().trim().min(1).max(256),
+  generation: z.string().min(1),
 });
 const agentEventId = z.string().trim().min(1).max(256);
 export const purchaseAgentEvent = z.discriminatedUnion("type", [

@@ -2,9 +2,11 @@ import type { ProjectId } from "@cubby/schemas/identifiers";
 import {
   parseEntityId,
   parseShortcodeFor,
+  runEntityId,
   userId,
 } from "@cubby/schemas/identifiers";
 import { getImageByIdSchema } from "@cubby/schemas/image";
+import { photoRunImageState } from "@cubby/schemas/photo-import-run";
 import { generateShortcode } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { asc, eq, inArray } from "drizzle-orm";
@@ -19,7 +21,7 @@ import {
   image,
   imageProcessingJob,
   run as runTable,
-  runTarget,
+  photoRunImage,
   ledgerParty,
   user,
 } from "~/server/db/schema";
@@ -122,12 +124,11 @@ const mkRunTargetRow = (
   db: Database,
   values: { runId: string; imageId: string; position?: number; state?: string },
 ) =>
-  insertAndReturn(db, runTarget, {
-    runId: values.runId,
-    entityKind: "image",
-    entityId: parseEntityId("image", values.imageId),
+  insertAndReturn(db, photoRunImage, {
+    runId: runEntityId.parse(values.runId),
+    imageId: parseEntityId("image", values.imageId),
     position: values.position,
-    state: values.state ?? "pending",
+    state: photoRunImageState.parse(values.state ?? "pending"),
     targetFingerprint: uniqRunLabel("target-fingerprint"),
   });
 

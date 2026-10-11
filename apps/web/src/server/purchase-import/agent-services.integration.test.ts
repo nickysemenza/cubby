@@ -4,7 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
-import { run, runProgress } from "~/server/db/schema";
+import { run } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -82,17 +82,21 @@ describe("non-agent host service authority", () => {
     expect(
       await host.updateAgentProgress({
         eventId,
+        generation: owned.dispatchEventId!,
+        sequence: 1,
         phase: "preparing",
         detail: "Coordinator started Mail import.",
       }),
     ).toEqual({ recorded: true });
-    const rows = await getDb(ctx.db)
-      .select()
-      .from(runProgress)
-      .where(eq(runProgress.runId, owned.id));
-    expect(rows).toMatchObject([
+    const [row] = await getDb(ctx.db)
+      .select({ history: run.progressHistory })
+      .from(run)
+      .where(eq(run.id, owned.id));
+    expect(row?.history).toMatchObject([
       {
         eventId,
+        generation: owned.dispatchEventId!,
+        sequence: 1,
         phase: "preparing",
         detail: "Coordinator started Mail import.",
       },

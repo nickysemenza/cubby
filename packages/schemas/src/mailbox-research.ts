@@ -2,7 +2,7 @@ import { z } from "zod";
 import { purchaseShortcode } from "./identifier-fields";
 import { executionAuthorizationRef } from "./execution-authorization.js";
 
-export const MAILBOX_RESEARCH_VERSION = "2026-10-07.1";
+export const MAILBOX_RESEARCH_VERSION = "2026-10-10.1";
 export const mailboxClassification = z.enum([
   "related",
   "unrelated",
@@ -32,7 +32,7 @@ export const mailboxDiscoveryStartOutput = z.object({
 export type MailboxDiscoveryStartOutput = z.infer<
   typeof mailboxDiscoveryStartOutput
 >;
-export const mailboxMessageStatus = z.enum([
+export const emailStatus = z.enum([
   "pending",
   "researching",
   "completed",
@@ -40,7 +40,7 @@ export const mailboxMessageStatus = z.enum([
   "deleted",
   "excluded",
 ]);
-export type MailboxMessageStatus = z.infer<typeof mailboxMessageStatus>;
+export type EmailStatus = z.infer<typeof emailStatus>;
 export const mailboxScopedQuery = z.object({
   key: z.string().min(1),
   query: z.string().min(1),
@@ -87,6 +87,9 @@ export const mailboxPage = z.object({
 export type MailboxPage = z.infer<typeof mailboxPage>;
 export const mailboxDiscoveryInput = z.object({
   executionAuthorization: executionAuthorizationRef.optional(),
+  executionPolicy: z
+    .enum(["classification_only", "import"])
+    .default("classification_only"),
   mailboxId: z.string().min(1),
   scopedQueries: z.array(mailboxScopedQuery),
 });
@@ -203,7 +206,7 @@ export const mailResolveInput = mailMessageRef.extend({
 export type MailResolveInput = z.infer<typeof mailResolveInput>;
 
 export const mailResolveOut = mailMessageRef.extend({
-  status: mailboxMessageStatus,
+  status: emailStatus,
   disposition: z.enum(["linked", "unresolved", "unrelated"]),
   purchaseId: purchaseShortcode.nullable(),
 });
@@ -221,8 +224,8 @@ export type MailAttachmentOriginal = z.infer<typeof mailAttachmentOriginal>;
 export const mailReadOut = mailMessageRef.extend({
   threadId: z.string().nullable(),
   checksum: sha256,
-  sender: z.string(),
-  subject: z.string(),
+  sender: z.string().nullable(),
+  subject: z.string().nullable(),
   receivedAt: z.iso.datetime().nullable(),
   content: retainedMailContent,
   attachments: z.array(
@@ -230,7 +233,7 @@ export const mailReadOut = mailMessageRef.extend({
       attachmentId: z.string(),
       filename: z.string(),
       mimeType: z.string(),
-      checksum: z.string(),
+      checksum: z.string().nullable(),
     }),
   ),
   originalAttachment: mailAttachmentOriginal.optional(),
@@ -243,10 +246,10 @@ export const mailSearchOut = z.object({
   messages: z.array(
     mailMessageRef.extend({
       threadId: z.string().nullable(),
-      classification: mailboxClassification,
-      status: mailboxMessageStatus,
-      sender: z.string(),
-      subject: z.string(),
+      classification: mailboxClassification.nullable(),
+      status: emailStatus,
+      sender: z.string().nullable(),
+      subject: z.string().nullable(),
       receivedAt: z.iso.datetime().nullable(),
     }),
   ),

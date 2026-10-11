@@ -20,8 +20,7 @@ import { describe, expect, it } from "vitest";
 import {
   aiAnalysis,
   run as runTable,
-  runProgress,
-  runTarget,
+  photoRunImage,
   oauthRefreshToken,
   photoGroupProposal,
   session,
@@ -177,11 +176,10 @@ describe("photo coordinator model eval", () => {
                   },
                 });
               await getDb(ctx.db)
-                .insert(runTarget)
+                .insert(photoRunImage)
                 .values({
                   runId: runEntityId.parse(run.id),
-                  entityKind: "image",
-                  entityId: parseEntityId("image", fixture.id),
+                  imageId: parseEntityId("image", fixture.id),
                   position,
                   state: "pending",
                   targetFingerprint: `eval-${crypto.randomUUID()}`,
@@ -208,6 +206,7 @@ describe("photo coordinator model eval", () => {
                   runId: run.id,
                   purpose: "photo_inventory",
                   eventId: started.eventId,
+                  generation: started.eventId,
                 }),
               },
             );
@@ -222,17 +221,11 @@ describe("photo coordinator model eval", () => {
                 .from(runTable)
                 .where(eq(runTable.id, runId));
               if (row && row.status !== "running") return true;
-              const waiting = await getDb(ctx.db)
-                .select({ id: runProgress.id })
-                .from(runProgress)
-                .where(
-                  and(
-                    eq(runProgress.runId, runId),
-                    eq(runProgress.phase, "awaiting_approval"),
-                  ),
-                )
-                .limit(1);
-              return waiting.length > 0;
+              const [waiting] = await getDb(ctx.db)
+                .select({ live: runTable.liveProgress })
+                .from(runTable)
+                .where(eq(runTable.id, runId));
+              return waiting?.live?.phase === "awaiting_approval";
             });
             const wallMs = Date.now() - startedAt;
             const usage = evalUsageReport.parse(

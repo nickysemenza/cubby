@@ -1,3 +1,4 @@
+import { MAIL_ATTACHMENT_MAX_BYTES } from "@cubby/schemas/mailbox-research";
 /**
  * Failures: search reaches a mailbox the member never connected, follows a
  * page into another mailbox, pages without Spam/Trash exclusion, or advances
@@ -10,7 +11,7 @@
  * fails once the original is gone; a cancelled, retired or deleted Mail import
  * Run still reads, resolves, or spends on search.
  */
-import { MAIL_ATTACHMENT_MAX_BYTES } from "@cubby/schemas/mailbox-research";
+import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq } from "drizzle-orm";
@@ -20,18 +21,22 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { account } from "~/server/db/auth.schema";
 import {
+  emailClassificationObservation,
   importSourceClaim,
   importSourceOrder,
   mailboxCursor,
-  mailboxMessage,
+  email as emailTable,
   orderMail,
   orderMailAttachment,
   orderMailCandidateDecision,
   orderMailEvent,
   run,
-  runTarget,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import {
+  readRetainedMail,
+  retainedMailJoin,
+} from "~/server/repo/retained-mail";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import * as s3 from "~/server/utils/s3";
 
@@ -42,7 +47,7 @@ import * as gmail from "./gmail/provider";
 import { GmailAuthorizationError } from "./gmail/tokens";
 import * as routing from "./gmail/triage-model";
 import { GmailApiError, type GmailProvider } from "./gmail/types";
-import { readMail, resolveMail, searchMail } from "./mail-tool";
+import { readMail, resolveMail, searchMail, settleMail } from "./mail-tool";
 import { retainedMailFixture } from "./order-import.fixtures";
 
 const mailboxId = "synthetic-mailbox";
@@ -208,7 +213,7 @@ describe("public mail tool", () => {
       expect(await searchMail(ctx.db, f.input, f.actor)).toMatchObject({
         status: "gmail_reconnect_required",
       });
-      expect(await getDb(ctx.db).select().from(mailboxMessage)).toEqual([]);
+      expect(await getDb(ctx.db).select().from(emailTable)).toEqual([]);
       expect(await getDb(ctx.db).select().from(orderMail)).toEqual([]);
     });
 
@@ -244,8 +249,9 @@ describe("public mail tool", () => {
       });
       expect(await cursors()).toEqual([]);
       const originals = await getDb(ctx.db)
-        .select({ messageId: orderMail.messageId })
+        .select({ messageId: emailTable.messageId })
         .from(orderMail)
+        .innerJoin(emailTable, retainedMailJoin)
         .where(eq(orderMail.ledgerPartyId, f.party.id));
       expect(originals.map((row) => row.messageId).sort()).toEqual([
         "synthetic-first",
@@ -253,13 +259,13 @@ describe("public mail tool", () => {
       ]);
       const ledger = await getDb(ctx.db)
         .select({
-          messageId: mailboxMessage.messageId,
-          classification: mailboxMessage.classification,
-          status: mailboxMessage.status,
-          orderMailId: mailboxMessage.orderMailId,
+          messageId: emailTable.messageId,
+          classification: emailTable.classification,
+          status: emailTable.status,
+          orderMailId: emailTable.orderMailId,
         })
-        .from(mailboxMessage)
-        .where(eq(mailboxMessage.ledgerPartyId, f.party.id));
+        .from(emailTable)
+        .where(eq(emailTable.ledgerPartyId, f.party.id));
       expect(ledger).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -323,14 +329,14 @@ describe("public mail tool", () => {
       ]);
       const ledger = await getDb(ctx.db)
         .select({
-          messageId: mailboxMessage.messageId,
-          classification: mailboxMessage.classification,
-          classificationStage: mailboxMessage.classificationStage,
-          status: mailboxMessage.status,
-          orderMailId: mailboxMessage.orderMailId,
+          messageId: emailTable.messageId,
+          classification: emailTable.classification,
+          classificationStage: emailTable.classificationStage,
+          status: emailTable.status,
+          orderMailId: emailTable.orderMailId,
         })
-        .from(mailboxMessage)
-        .where(eq(mailboxMessage.ledgerPartyId, f.party.id));
+        .from(emailTable)
+        .where(eq(emailTable.ledgerPartyId, f.party.id));
       expect(ledger).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -348,10 +354,11 @@ describe("public mail tool", () => {
           }),
         ]),
       );
-      const [first] = await getDb(ctx.db)
-        .select()
-        .from(orderMail)
-        .where(eq(orderMail.messageId, "synthetic-first"));
+      const [first] = await readRetainedMail(ctx.db, {
+        ledgerPartyIds: [f.party.id],
+        mailboxId,
+        messageId: "synthetic-first",
+      });
       if (!first) throw new Error("Synthetic candidate was not retained");
       await resolveMail(
         ctx.db,
@@ -365,19 +372,29 @@ describe("public mail tool", () => {
       );
       expect(
         await getDb(ctx.db)
-          .select({ id: orderMail.id })
+          .select({
+            id: orderMail.id,
+            checksum: orderMail.rawChecksum,
+            content: orderMail.content,
+          })
           .from(orderMail)
           .where(eq(orderMail.id, first.id)),
-      ).toEqual([]);
+      ).toMatchObject([
+        {
+          id: first.id,
+          checksum: first.rawChecksum,
+          content: { bodyText: null, bodyHtml: null },
+        },
+      ]);
       expect(
         await getDb(ctx.db)
           .select({
-            classification: mailboxMessage.classification,
-            orderMailId: mailboxMessage.orderMailId,
+            classification: emailTable.classification,
+            orderMailId: emailTable.orderMailId,
           })
-          .from(mailboxMessage)
-          .where(eq(mailboxMessage.messageId, "synthetic-first")),
-      ).toEqual([{ classification: "unrelated", orderMailId: null }]);
+          .from(emailTable)
+          .where(eq(emailTable.messageId, "synthetic-first")),
+      ).toEqual([{ classification: "unrelated", orderMailId: first.id }]);
       expect(await cursors()).toEqual([]);
     });
   });
@@ -385,23 +402,20 @@ describe("public mail tool", () => {
   describe("read attachment originals", () => {
     async function fixture(bytes: Uint8Array = receiptBytes) {
       const party = await member();
-      const [mail] = await getDb(ctx.db)
-        .insert(orderMail)
-        .values({
-          ledgerPartyId: party.id,
-          mailboxId,
-          messageId: "synthetic-attachment-message",
-          sender: "receipts@example.test",
-          subject: "Your original receipt",
-          receivedAt: new Date("2026-10-01T12:00:00Z"),
-          rawChecksum: "a".repeat(64),
-          content: {
-            snippet: null,
-            bodyText: "The variant is only in the attached receipt.",
-            bodyHtml: null,
-          },
-        })
-        .returning();
+      const mail = await retainedMailFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId,
+        messageId: "synthetic-attachment-message",
+        sender: "receipts@example.test",
+        subject: "Your original receipt",
+        receivedAt: new Date("2026-10-01T12:00:00Z"),
+        checksum: "a".repeat(64),
+        content: {
+          snippet: null,
+          bodyText: "The variant is only in the attached receipt.",
+          bodyHtml: null,
+        },
+      });
       if (!mail) throw new Error("Synthetic mail missing");
       const [attachment] = await getDb(ctx.db)
         .insert(orderMailAttachment)
@@ -415,16 +429,6 @@ describe("public mail tool", () => {
         })
         .returning();
       if (!attachment) throw new Error("Synthetic attachment missing");
-      await getDb(ctx.db).insert(mailboxMessage).values({
-        ledgerPartyId: party.id,
-        mailboxId,
-        messageId: mail.messageId,
-        checksum: mail.rawChecksum,
-        classification: "related",
-        classificationVersion: "synthetic-v1",
-        status: "pending",
-        orderMailId: mail.id,
-      });
       const originals = new Map([[attachment.pendingObjectKey!, bytes]]);
       const reads = vi
         .spyOn(s3, "getS3Object")
@@ -444,7 +448,23 @@ describe("public mail tool", () => {
 
     it("returns an attachment original's bytes", async () => {
       const f = await fixture();
+      const receivedAt = new Date("2026-10-02T15:00:00Z");
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({
+          sender: "canonical@example.test",
+          subject: "Canonical Email receipt",
+          receivedAt,
+          threadId: "canonical-thread",
+        })
+        .where(eq(emailTable.orderMailId, f.mail.id));
       const read = await readMail(ctx.db, f.input, ctx.actor);
+      expect(read).toMatchObject({
+        sender: "canonical@example.test",
+        subject: "Canonical Email receipt",
+        receivedAt: receivedAt.toISOString(),
+        threadId: "canonical-thread",
+      });
       expect(read.originalAttachment).toEqual({
         attachmentId: "synthetic-receipt-part",
         filename: "receipt.pdf",
@@ -453,23 +473,42 @@ describe("public mail tool", () => {
         dataBase64: Buffer.from(f.bytes).toString("base64"),
       });
       expect(JSON.stringify(read)).not.toContain(f.attachment.pendingObjectKey);
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({ sender: null, subject: null, receivedAt: null, threadId: null })
+        .where(eq(emailTable.orderMailId, f.mail.id));
+      expect(await readMail(ctx.db, f.input, ctx.actor)).toMatchObject({
+        sender: null,
+        subject: null,
+        receivedAt: null,
+        threadId: null,
+        originalAttachment: read.originalAttachment,
+      });
+      const otherOwner = await insertWithShortcode(ctx.db, "ledgerParty", {
+        name: "Other retained Email owner",
+        kind: "guest",
+      });
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({ ledgerPartyId: otherOwner.id })
+        .where(eq(emailTable.orderMailId, f.mail.id));
+      await expect(readMail(ctx.db, f.input, ctx.actor)).rejects.toThrow(
+        /retained Email/iu,
+      );
     });
 
     it("rejects another retained message's attachment reference before reading bytes", async () => {
       const f = await fixture();
-      const [other] = await getDb(ctx.db)
-        .insert(orderMail)
-        .values({
-          ledgerPartyId: f.party.id,
-          mailboxId,
-          messageId: "synthetic-other-source",
-          sender: "other@example.test",
-          subject: "Other source",
-          receivedAt: new Date(),
-          rawChecksum: "b".repeat(64),
-          content: { snippet: null, bodyText: "Other source", bodyHtml: null },
-        })
-        .returning();
+      const other = await retainedMailFixture(ctx.db, {
+        ledgerPartyId: f.party.id,
+        mailboxId,
+        messageId: "synthetic-other-source",
+        sender: "other@example.test",
+        subject: "Other source",
+        receivedAt: new Date(),
+        checksum: "b".repeat(64),
+        content: { snippet: null, bodyText: "Other source", bodyHtml: null },
+      });
       if (!other) throw new Error("Synthetic other mail missing");
       const [foreign] = await getDb(ctx.db)
         .insert(orderMailAttachment)
@@ -545,30 +584,17 @@ describe("public mail tool", () => {
     async function fixture() {
       const party = await member();
       const content = "Synthetic message later judged unrelated";
-      const [source] = await getDb(ctx.db)
-        .insert(orderMail)
-        .values({
-          ledgerPartyId: party.id,
-          mailboxId,
-          messageId: "synthetic-message",
-          sender: "orders@shop.example.test",
-          subject: content,
-          receivedAt: new Date("2026-10-07T12:00:00Z"),
-          rawChecksum: await sha256Hex(content),
-          content: { snippet: content, bodyText: content, bodyHtml: null },
-        })
-        .returning();
-      if (!source) throw new Error("Synthetic source unavailable");
-      await getDb(ctx.db).insert(mailboxMessage).values({
+      const source = await retainedMailFixture(ctx.db, {
         ledgerPartyId: party.id,
         mailboxId,
-        messageId: source.messageId,
-        checksum: source.rawChecksum,
-        classification: "related",
-        classificationVersion: "synthetic-v1",
-        status: "pending",
-        orderMailId: source.id,
+        messageId: "synthetic-message",
+        sender: "orders@shop.example.test",
+        subject: content,
+        receivedAt: new Date("2026-10-07T12:00:00Z"),
+        checksum: await sha256Hex(content),
+        content: { snippet: content, bodyText: content, bodyHtml: null },
       });
+      if (!source) throw new Error("Synthetic source unavailable");
       await getDb(ctx.db)
         .insert(orderMailAttachment)
         .values({
@@ -643,12 +669,12 @@ describe("public mail tool", () => {
       ).toHaveLength(1);
       expect(f.deleted).toEqual([]);
       const [message] = await getDb(ctx.db)
-        .select({ orderMailId: mailboxMessage.orderMailId })
-        .from(mailboxMessage)
+        .select({ orderMailId: emailTable.orderMailId })
+        .from(emailTable)
         .where(
           and(
-            eq(mailboxMessage.mailboxId, mailboxId),
-            eq(mailboxMessage.messageId, f.source.messageId),
+            eq(emailTable.mailboxId, mailboxId),
+            eq(emailTable.messageId, f.source.messageId),
           ),
         );
       expect(message).toEqual({ orderMailId: f.source.id });
@@ -710,7 +736,44 @@ describe("public mail tool", () => {
       },
     );
 
-    it("retries a disposal lost after the disposition committed, then replays without the original", async () => {
+    it("preserves the previous prediction before a member settlement appends a resolution", async () => {
+      const f = await fixture();
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({
+          classification: "related",
+          classificationStage: null,
+          classificationReason: null,
+          classificationVersion: "synthetic-previous-version",
+        })
+        .where(eq(emailTable.orderMailId, f.source.id));
+      await settleMail(ctx.db, {
+        mail: f.source,
+        importRunId: null,
+        status: "completed",
+        classification: "unrelated",
+        detail: "Synthetic reviewed marketing",
+      });
+      const rows = await getDb(ctx.db)
+        .select()
+        .from(emailClassificationObservation);
+      expect(rows).toHaveLength(2);
+      expect(rows.find((row) => row.stage === null)).toMatchObject({
+        checksum: f.source.rawChecksum,
+        classification: "related",
+        reason: null,
+        classificationVersion: "synthetic-previous-version",
+        model: null,
+      });
+      expect(rows.find((row) => row.stage === "resolution")).toMatchObject({
+        checksum: f.source.rawChecksum,
+        classification: "unrelated",
+        reason: "Synthetic reviewed marketing",
+        model: null,
+      });
+    });
+
+    it("retries a disposal lost after disposition, preserving original shell and history while clearing bytes", async () => {
       const f = await fixture();
       const outage = fromPartial<OrderMailAttachmentStorage>({
         delete: async () => {
@@ -729,8 +792,25 @@ describe("public mail tool", () => {
           ctx.actor,
           outage,
         ),
-      ).rejects.toThrow("Synthetic storage outage");
-      await expectOriginalKept(f);
+      ).rejects.toBeInstanceOf(Error);
+      const [retired] = await getDb(ctx.db)
+        .select()
+        .from(orderMailAttachment)
+        .where(eq(orderMailAttachment.orderMailId, f.source.id));
+      expect(retired).toMatchObject({
+        pendingObjectKey: null,
+        pendingDeleteKeys: ["synthetic/private/protected-original"],
+        checksum: "c".repeat(64),
+      });
+      const [cleared] = await getDb(ctx.db)
+        .select()
+        .from(orderMail)
+        .where(eq(orderMail.id, f.source.id));
+      expect(cleared).toMatchObject({
+        rawChecksum: f.source.rawChecksum,
+        content: { bodyText: null, bodyHtml: null },
+      });
+      expect(f.deleted).toEqual([]);
 
       await disposeUnrelatedOriginals(ctx.db, f.storage);
       expect(f.deleted).toEqual(["synthetic/private/protected-original"]);
@@ -739,7 +819,24 @@ describe("public mail tool", () => {
           .select({ id: orderMail.id })
           .from(orderMail)
           .where(eq(orderMail.id, f.source.id)),
-      ).toEqual([]);
+      ).toEqual([{ id: f.source.id }]);
+      const [shell] = await getDb(ctx.db)
+        .select()
+        .from(orderMail)
+        .where(eq(orderMail.id, f.source.id));
+      expect(shell).toMatchObject({
+        rawChecksum: f.source.rawChecksum,
+        content: { bodyText: null, bodyHtml: null },
+      });
+      const [attachment] = await getDb(ctx.db)
+        .select()
+        .from(orderMailAttachment)
+        .where(eq(orderMailAttachment.orderMailId, f.source.id));
+      expect(attachment).toMatchObject({
+        checksum: "c".repeat(64),
+        pendingObjectKey: null,
+        pendingDeleteKeys: [],
+      });
 
       await expect(f.resolve()).resolves.toEqual({
         mailboxId,
@@ -777,6 +874,115 @@ describe("public mail tool", () => {
     });
   });
 
+  describe("member transient original fallback", () => {
+    it.each(["missing", "unrelated", "cleared"])(
+      "refetches the exact member Email with %s retained content without writing a new original",
+      async (mode) => {
+        const party = await member();
+        await connect(mailboxId);
+        const source =
+          mode === "missing"
+            ? null
+            : await retainedMailFixture(ctx.db, {
+                ledgerPartyId: party.id,
+                mailboxId,
+                messageId: "fallback-message",
+                checksum: "b".repeat(64),
+              });
+        if (source)
+          await getDb(ctx.db)
+            .update(emailTable)
+            .set({
+              classification: mode === "unrelated" ? "unrelated" : "related",
+              contentClearedAt: mode === "cleared" ? new Date() : null,
+            })
+            .where(eq(emailTable.orderMailId, source.id));
+        else
+          await insertWithShortcode(ctx.db, "email", {
+            ledgerPartyId: party.id,
+            mailboxId,
+            messageId: "fallback-message",
+            checksum: "b".repeat(64),
+            classification: "unrelated",
+            status: "completed",
+          });
+        const originals = await getDb(ctx.db).select().from(orderMail);
+        const emails = await getDb(ctx.db).select().from(emailTable);
+        const getMessage = vi.fn<GmailProvider["getMessage"]>(async (id) => ({
+          id,
+          payload: {
+            mimeType: "text/plain",
+            body: {
+              data: Buffer.from("Fresh synthetic transient body").toString(
+                "base64url",
+              ),
+            },
+          },
+        }));
+        const provider = fromPartial<GmailProvider>({ getMessage });
+        vi.spyOn(gmail, "gmailProviderForUser").mockResolvedValue(provider);
+        const result = await readMail(
+          ctx.db,
+          { mailboxId, messageId: "fallback-message" },
+          ctx.actor,
+        );
+        expect(result).toMatchObject({
+          boundToRun: false,
+          content: { bodyText: "Fresh synthetic transient body" },
+        });
+        expect(getMessage).toHaveBeenCalledExactlyOnceWith("fallback-message");
+        expect(await getDb(ctx.db).select().from(orderMail)).toEqual(originals);
+        expect(await getDb(ctx.db).select().from(emailTable)).toEqual(emails);
+      },
+    );
+    it("keeps admitted Run reads on frozen retained bytes without asking Gmail even when metadata is cleared", async () => {
+      const party = await member();
+      await connect(mailboxId);
+      const source = await retainedMailFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId,
+        messageId: "frozen-message",
+        checksum: "d".repeat(64),
+      });
+      const owner = await insertWithShortcode(ctx.db, "run", {
+        purpose: "mail_import",
+        status: "running",
+        trigger: "manual",
+        ledgerPartyId: party.id,
+        actorUserId: ctx.actor.userId,
+        actorName: party.name,
+        actorEmail: "synthetic@example.test",
+        actorLedgerPartyShortcode: party.shortcode,
+        actorLedgerPartyName: party.name,
+        actorLedgerPartyKind: "member",
+        input: mailResearchRunInput.parse({
+          kind: "mail_research",
+          sources: [{ orderMailId: source.id, checksum: source.rawChecksum }],
+        }),
+      });
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({
+          runId: owner.id,
+          status: "researching",
+          contentClearedAt: new Date(),
+        })
+        .where(eq(emailTable.orderMailId, source.id));
+      const provider = vi.spyOn(gmail, "gmailProviderForUser");
+      const result = await readMail(
+        ctx.db,
+        { mailboxId, messageId: source.messageId },
+        { ...ctx.actor, runId: owner.id },
+      );
+      expect(result).toMatchObject({
+        boundToRun: true,
+        checksum: source.rawChecksum,
+        content: source.content,
+      });
+      expect(provider).not.toHaveBeenCalled();
+    });
+  });
+
   describe("a delegated Mail import Run", () => {
     it.each([
       ["cancelled", { status: "failed", failureCode: "user_cancelled" }],
@@ -806,16 +1012,18 @@ describe("public mail tool", () => {
           actorLedgerPartyKind: "member",
         });
         await getDb(ctx.db)
-          .insert(runTarget)
-          .values({
-            runId: importRun.id,
-            entityKind: "run",
-            entityId: importRun.id,
-            workKey: mail.id,
-            sourceKind: "mail_message",
-            sourceExternalKey: mail.id,
-            targetFingerprint: "a".repeat(64),
-          });
+          .update(run)
+          .set({
+            input: mailResearchRunInput.parse({
+              kind: "mail_research",
+              sources: [{ orderMailId: mail.id, checksum: mail.rawChecksum }],
+            }),
+          })
+          .where(eq(run.id, importRun.id));
+        await getDb(ctx.db)
+          .update(emailTable)
+          .set({ runId: importRun.id, status: "researching" })
+          .where(eq(emailTable.orderMailId, mail.id));
         await getDb(ctx.db)
           .update(run)
           .set(fence)
@@ -844,15 +1052,15 @@ describe("public mail tool", () => {
         expect(providers).not.toHaveBeenCalled();
         const [message] = await getDb(ctx.db)
           .select({
-            classification: mailboxMessage.classification,
-            status: mailboxMessage.status,
-            orderMailId: mailboxMessage.orderMailId,
+            classification: emailTable.classification,
+            status: emailTable.status,
+            orderMailId: emailTable.orderMailId,
           })
-          .from(mailboxMessage)
-          .where(eq(mailboxMessage.messageId, mail.messageId));
+          .from(emailTable)
+          .where(eq(emailTable.messageId, mail.messageId));
         expect(message).toEqual({
           classification: "related",
-          status: "pending",
+          status: "researching",
           orderMailId: mail.id,
         });
       },
