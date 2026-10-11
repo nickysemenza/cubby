@@ -236,9 +236,16 @@ historical Runs stay readable through generic reports.
   ends early leaves those copies retained. Either expire unsettled member
   matches or let members retain one Email by Gmail id instead of searching.
 
+- 🤔 **Expose conflicting supplier specifications during research.** An exact
+  supplier page can give incompatible values in its description and detail
+  table. Retain both observations and ask for field-specific resolution before
+  accepting that specification; page authority alone does not resolve an
+  internal contradiction. Preserve already supported identity and assignments.
+
 - ⏳ **Accept live Mail import and Burn-down.** Live work stays paused until the
   member resumes it. Remaining acceptance: the approved 26-Product scope, the
-  remaining evidence-supported facts and the separate Row 7 naming question,
+  remaining evidence-supported facts, including unresolved packaging-brand
+  evidence,
   live verification that imports refuse exact-identity Product forks and
   resolve Vendors by Sender proof or Vendor alias, known-vendor and
   unmatched-transaction backfills, full Gmail history excluding Spam/Trash, separately verified
