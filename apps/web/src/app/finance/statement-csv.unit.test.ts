@@ -86,6 +86,23 @@ describe("statement CSV normalization", () => {
     expect(previewStatementBatch(parsed)?.rows).toHaveLength(1);
   });
 
+  it("preserves complete Copilot account masks without duplicating an existing suffix", () => {
+    const header =
+      "date,name,amount,status,category,parent category,excluded,tags,type,account,account mask,note,recurring";
+    const parsed = parseStatementCsv(
+      `${header}\n2026-09-21,Contribution,-12,posted,Income,,, ,regular,Fixture Retirement,12345,,\n2026-09-22,Contribution,-12,posted,Income,,, ,regular,Fixture Retirement ...12345,12345,,`,
+      "copilot.csv",
+      "mask-fp",
+    );
+    expect(parsed.recordRows.map((row) => row.accountDescriptor)).toEqual([
+      "Fixture Retirement (...12345)",
+      "Fixture Retirement ...12345",
+    ]);
+    expect(
+      previewStatementBatch(parsed)?.rows.map((row) => row.account),
+    ).toEqual(["Fixture Retirement (...12345)", "Fixture Retirement ...12345"]);
+  });
+
   it("allows a pending-only export to save evidence without a transaction preview", () => {
     const parsed = parseStatementCsv(
       "date,name,amount,status,category,type,account,account mask,note\n2026-09-21,Synthetic Shop,9.00,pending,Clothing,regular,Fixture Visa,4242,",

@@ -363,7 +363,7 @@ export function parseMappedStatementCsv(
 
 function accountWithMask(account: string, mask: string): string {
   const name = account.trim();
-  const digits = mask.replaceAll(/\D/g, "").slice(-4);
+  const digits = mask.replaceAll(/\D/g, "");
   if (!digits || name.includes(digits)) return name;
   return `${name} (...${digits})`;
 }
