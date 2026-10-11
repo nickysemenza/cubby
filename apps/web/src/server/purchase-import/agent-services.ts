@@ -29,6 +29,42 @@ const MCP_URL = "https://cubby.internal/api/mcp";
 
 type HostContext = { waitUntil(promise: Promise<unknown>): void };
 
+/** One database scope with this Worker's bindings. */
+function withHostDatabase<T>(
+  env: Env,
+  ctx: HostContext,
+  fn: (
+    database: typeof import("~/server/db").db,
+    service: typeof import("./run-service"),
+    operation: typeof import("~/server/runs/operation"),
+  ) => Promise<T>,
+): Promise<T> {
+  assertNotInMaintenance(env);
+  setCfEnv(env);
+  return runWithExecutionCtx(ctx, async () => {
+    const { db, withRequestDbClient } = await import("~/server/db");
+    return withRequestDbClient(env.HYPERDRIVE.connectionString, async () =>
+      fn(
+        db,
+        await import("./run-service"),
+        await import("~/server/runs/operation"),
+      ),
+    );
+  });
+}
+
+/** Retirement of a legacy coordinator, named by its stored session id. */
+export function authorizeLegacyRetirement(
+  env: Env,
+  ctx: HostContext,
+  agentSessionId: string,
+) {
+  return withHostDatabase(env, ctx, async (db) => {
+    const { assertRetirableLegacySession } = await import("./run-retirement");
+    await assertRetirableLegacySession(db, agentSessionId);
+  });
+}
+
 /** The services of `runId`, executing with this Worker's bindings. */
 export function runServicesFor(
   env: Env,
@@ -36,25 +72,8 @@ export function runServicesFor(
   runId: string,
 ): RunServices {
   const withDatabase = <T>(
-    fn: (
-      database: typeof import("~/server/db").db,
-      service: typeof import("./run-service"),
-      operation: typeof import("~/server/runs/operation"),
-    ) => Promise<T>,
-  ): Promise<T> => {
-    assertNotInMaintenance(env);
-    setCfEnv(env);
-    return runWithExecutionCtx(ctx, async () => {
-      const { db, withRequestDbClient } = await import("~/server/db");
-      return withRequestDbClient(env.HYPERDRIVE.connectionString, async () =>
-        fn(
-          db,
-          await import("./run-service"),
-          await import("~/server/runs/operation"),
-        ),
-      );
-    });
-  };
+    fn: Parameters<typeof withHostDatabase<T>>[2],
+  ): Promise<T> => withHostDatabase(env, ctx, fn);
 
   const requireAgentScope = async (
     db: typeof import("~/server/db").db,

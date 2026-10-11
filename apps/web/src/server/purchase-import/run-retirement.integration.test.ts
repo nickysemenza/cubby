@@ -43,6 +43,7 @@ import {
   type ScenarioHarness,
 } from "./purchase-agent-workerd.fixtures";
 import {
+  assertRetirableLegacySession,
   assertRetirableRun,
   coordinatorRetired,
   retireSettledCoordinators,
@@ -85,6 +86,15 @@ const retirePurpose = (runId: string) =>
     .update(run)
     .set({ purpose: "product_enrichment" })
     .where(eq(run.id, runEntityId.parse(runId)));
+
+// Legacy account_sync Runs stored a bare session UUID, not their Run id, as
+// the coordinator name.
+const legacySession = (runId: string, agentSessionId = crypto.randomUUID()) =>
+  getDb(ctx.db)
+    .update(run)
+    .set({ purpose: "account_sync", agentSessionId })
+    .where(eq(run.id, runEntityId.parse(runId)))
+    .then(() => agentSessionId);
 
 const readRun = async (runId: string) => {
   const [row] = await getDb(ctx.db)
@@ -238,6 +248,44 @@ describe("settled coordinator retirement", () => {
     });
     // A missing Run reads as retired, so no coordinator executes for it.
     expect(await coordinatorRetired(ctx.db, crypto.randomUUID())).toBe(true);
+  });
+
+  it("authorizes a legacy coordinator name only for the one settled Run storing it", async () => {
+    const legacy = await agentRun();
+    const agentId = await legacySession(legacy);
+    const refused =
+      "Only one settled Run storing this coordinator name can retire it.";
+    // Live mapping.
+    await expect(assertRetirableLegacySession(ctx.db, agentId)).rejects.toThrow(
+      refused,
+    );
+    await settle(legacy);
+    await expect(
+      assertRetirableLegacySession(ctx.db, agentId),
+    ).resolves.toBeUndefined();
+    // Missing mapping, and the Run id itself is not the stored name.
+    for (const name of [crypto.randomUUID(), legacy])
+      await expect(assertRetirableLegacySession(ctx.db, name)).rejects.toThrow(
+        refused,
+      );
+    // Ambiguous mapping.
+    const twin = await agentRun();
+    await legacySession(twin, agentId);
+    await settle(twin);
+    await expect(assertRetirableLegacySession(ctx.db, agentId)).rejects.toThrow(
+      refused,
+    );
+    // A current purpose is always addressed by its import Run identity.
+    const current = await agentRun();
+    await settle(current);
+    const currentName = crypto.randomUUID();
+    await getDb(ctx.db)
+      .update(run)
+      .set({ agentSessionId: currentName })
+      .where(eq(run.id, current));
+    await expect(
+      assertRetirableLegacySession(ctx.db, currentName),
+    ).rejects.toThrow(refused);
   });
 });
 
@@ -562,6 +610,116 @@ describe("coordinator host retirement", () => {
       actual: repeat.disposed,
     });
     expect(repeat).toEqual({ disposed: true });
+    status = "passed";
+  }, 90_000);
+
+  // Legacy SDK storage, seeded where a pre-identity coordinator left it.
+  const seedLegacyStorage = async (runtime: ScenarioHarness, name: string) => {
+    const storage = await runtime.harness
+      .getWorker()
+      .getDurableObjectStorage("PurchaseImportRunAgent", { name });
+    await storage.exec(
+      "CREATE TABLE cf_agents_state (id TEXT PRIMARY KEY, state TEXT)",
+    );
+    await storage.exec(
+      "INSERT INTO cf_agents_state VALUES ('synthetic', 'Synthetic legacy transcript')",
+    );
+    // A deleted table counts as no rows.
+    return async () => {
+      const [table] = z
+        .array(z.object({ rows: z.number() }))
+        .parse(
+          await storage.exec(
+            "SELECT count(*) AS rows FROM sqlite_master WHERE type = 'table' AND name = 'cf_agents_state'",
+          ),
+        );
+      if (!table?.rows) return 0;
+      const [row] = z
+        .array(z.object({ count: z.number() }))
+        .parse(
+          await storage.exec("SELECT count(*) AS count FROM cf_agents_state"),
+        );
+      return row?.count ?? 0;
+    };
+  };
+  const legacyCoordinator = (runtime: ScenarioHarness, agentId: string) => {
+    const request = (pathname: string) =>
+      runtime.harness
+        .getWorker("cubby-queue-producer")
+        .fetch(new URL(pathname, "https://queue.test"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ agentId }),
+        });
+    return {
+      request,
+      retire: async () => {
+        const response = await request("/coordinator-retire");
+        if (!response.ok) throw new Error(await response.text());
+        return disposal.parse(await response.json());
+      },
+    };
+  };
+
+  // Regression: legacy account_sync Runs persisted a bare session UUID as the
+  // coordinator name, which the import-Run identity parser refuses, so their
+  // settled transcripts could never be retired.
+  it("erases a settled legacy bare-session coordinator and acknowledges it cold", async () => {
+    const runId = await agentRun();
+    const agentId = await legacySession(runId);
+    await settle(runId);
+    const runtime = await sharedRuntime();
+    const stored = await seedLegacyStorage(runtime, agentId);
+    expect(await stored()).toBe(1);
+    const coordinator = legacyCoordinator(runtime, agentId);
+    const result = await retireSettledCoordinators(
+      ctx.db,
+      () => coordinator,
+      new Date(),
+    );
+    observations.push({
+      boundary: "legacy bare-session single-pass disposal",
+      expected: 1,
+      actual: result.retired,
+    });
+    expect(result).toEqual({ considered: 1, retired: 1 });
+    expect(await stored()).toBe(0);
+    expect(await readRun(runId)).toMatchObject({
+      agentSessionId: agentId,
+      retirementReason: "settled",
+      retiredAt: expect.any(Date),
+    });
+    expect((await coordinator.request("/coordinator-fetch")).status).toBe(410);
+    status = "passed";
+  }, 90_000);
+
+  it("keeps a legacy coordinator's storage unless exactly one settled Run stores its name", async () => {
+    const runtime = await sharedRuntime();
+    const refusedRetire = async (agentId: string) => {
+      const stored = await seedLegacyStorage(runtime, agentId);
+      const outcome = await legacyCoordinator(runtime, agentId)
+        .retire()
+        .then(() => "disposed", String);
+      observations.push({
+        boundary: "legacy refusal keeps storage",
+        expected: 1,
+        actual: await stored(),
+      });
+      expect(outcome).toMatch(
+        /Only one settled Run storing this coordinator name/,
+      );
+      expect(await stored()).toBe(1);
+    };
+    const live = await agentRun();
+    await refusedRetire(await legacySession(live));
+    await refusedRetire(crypto.randomUUID());
+    const shared = crypto.randomUUID();
+    for (const twin of [await agentRun(), await agentRun()]) {
+      await legacySession(twin, shared);
+      await settle(twin);
+    }
+    await refusedRetire(shared);
+    expect((await readRun(live))?.retiredAt).toBeNull();
     status = "passed";
   }, 90_000);
 });

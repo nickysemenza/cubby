@@ -35,7 +35,11 @@ import { connectedChatGptInference } from "../ai/chatgpt/client";
 import { gatewayEnvironment } from "../ai/gateway";
 import { testDurationOverrideMs } from "../test-duration-override";
 import { workerSentryOptions } from "../worker-sentry";
-import { purchaseAgentMcpTools, runServicesFor } from "./agent-services";
+import {
+  authorizeLegacyRetirement,
+  purchaseAgentMcpTools,
+  runServicesFor,
+} from "./agent-services";
 
 type HostContext = { waitUntil(promise: Promise<unknown>): void };
 const retirementLog = createLogger("purchase-agent.retirement");
@@ -183,11 +187,24 @@ class PurchaseImportRunAgentHost
 
   async retire(): Promise<{ disposed: boolean }> {
     assertNotInMaintenance(this.env);
-    const { current } = await this.services().authorizeRetirement();
+    const { current } = await this.authorizeRetirement();
     this.retiring = true;
     this.fence();
     await Promise.allSettled(this.admitted);
     return this.ctx.blockConcurrencyWhile(() => this.dispose(current));
+  }
+
+  /**
+   * A legacy name (a bare session id stored before import Run identities) is
+   * resolved only here, to the one settled Run storing it, and erased without
+   * loading the agent; every execution entry point still refuses it.
+   */
+  private async authorizeRetirement(): Promise<{ current: boolean }> {
+    const { name } = this.ctx.id;
+    if (!name || importRunIdFromAgentIdentity(name))
+      return this.services().authorizeRetirement();
+    await authorizeLegacyRetirement(this.env, this.ctx, name);
+    return { current: false };
   }
 
   private async dispose(current: boolean): Promise<{ disposed: boolean }> {
