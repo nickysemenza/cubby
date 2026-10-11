@@ -15,8 +15,10 @@ import {
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
 import { getDb } from "./database-helpers";
+import { findIncompleteStatementImports } from "./problems/detectors-financial";
 import {
   deleteStatementRows,
+  findStatementRowDrift,
   listStatementImports,
   listStatementRows,
   recordStatementRows,
@@ -402,6 +404,140 @@ describe("statement row ledger", () => {
       disposition: "open",
     });
     expect(charge?.externalId).toMatch(/^v1:[0-9a-f]{64}$/);
+  });
+
+  // Failure modes: overlap looks incomplete, replay inflates coverage, a
+  // preview persists membership, or an export steals another export's rows.
+  it("tracks overlapping export coverage without moving retained statement rows", async () => {
+    const shared = rowInput();
+    const later = rowInput({
+      statementDate: "2026-05-08",
+      rawDescription: "SECOND ORDER",
+    });
+    const first = await record(ctx.db, ctx.actor, [shared], {
+      rowCountDeclared: 1,
+    });
+    const original = (await listStatementRows(ctx.db, {})).data[0];
+    const overlapping = {
+      fingerprint: "fp-overlapping",
+      label: "overlapping.csv",
+      rowCountDeclared: 2,
+    };
+    expect(
+      await record(ctx.db, ctx.actor, [shared], overlapping, true),
+    ).toMatchObject({
+      batchCreated: false,
+      inserted: 0,
+      unchanged: 1,
+      alreadyInAnotherBatch: 1,
+    });
+    expect((await listStatementImports(ctx.db)).count).toBe(1);
+    const partial = await record(ctx.db, ctx.actor, [shared], overlapping);
+    expect(partial).toMatchObject({
+      inserted: 0,
+      unchanged: 1,
+      rowCountStored: 1,
+    });
+    expect(await findIncompleteStatementImports(ctx.db)).toMatchObject([
+      {
+        fingerprint: overlapping.fingerprint,
+        rowCountDeclared: 2,
+        rowCountStored: 1,
+      },
+    ]);
+    expect(await record(ctx.db, ctx.actor, [later], overlapping)).toMatchObject(
+      {
+        inserted: 1,
+        rowCountStored: 2,
+      },
+    );
+    expect(
+      await record(ctx.db, ctx.actor, [shared, later], overlapping),
+    ).toMatchObject({
+      inserted: 0,
+      unchanged: 2,
+      rowCountStored: 2,
+    });
+    expect(await findIncompleteStatementImports(ctx.db)).toEqual([]);
+    expect((await listStatementImports(ctx.db)).data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fingerprint: importInput().fingerprint,
+          rowCountStored: first.rowCountStored,
+        }),
+        expect.objectContaining({
+          fingerprint: overlapping.fingerprint,
+          rowCountStored: 2,
+        }),
+      ]),
+    );
+    const all = await listStatementRows(ctx.db, {});
+    expect(all.count).toBe(2);
+    expect(
+      all.data.find((row) => row.externalId === original?.externalId),
+    ).toEqual(original);
+    expect(
+      (
+        await listStatementRows(ctx.db, {
+          importFingerprint: overlapping.fingerprint,
+        })
+      ).count,
+    ).toBe(2);
+    const financial = await getDb(ctx.db).execute(
+      sql`SELECT count(*)::int AS count FROM "FinancialTransaction"`,
+    );
+    expect(financial.rows).toEqual([{ count: 0 }]);
+  });
+
+  it("retains first-owner coverage when an old writer omits membership", async () => {
+    const recorded = await record(ctx.db, ctx.actor, [rowInput()], {
+      rowCountDeclared: 1,
+    });
+    // Model a statement written by deployed old code after the schema migration.
+    await getDb(ctx.db).execute(
+      sql`DELETE FROM "StatementImportRow" WHERE "importId" = ${recorded.batchId}`,
+    );
+    expect((await listStatementImports(ctx.db)).data).toMatchObject([
+      { rowCountStored: 1 },
+    ]);
+    expect(
+      (
+        await listStatementRows(ctx.db, {
+          importFingerprint: importInput().fingerprint,
+        })
+      ).count,
+    ).toBe(1);
+    expect(await findIncompleteStatementImports(ctx.db)).toEqual([]);
+  });
+
+  it("excludes proven same-export pairs while retaining genuine cross-export drift", async () => {
+    const shared = rowInput();
+    const differentDescription = rowInput({
+      rawDescription: "DISTINCT PURCHASE",
+    });
+    await record(ctx.db, ctx.actor, [shared], { rowCountDeclared: 1 });
+    await record(ctx.db, ctx.actor, [shared, differentDescription], {
+      fingerprint: "fp-shared-export",
+    });
+    const input = { source: "monarch", includeSameBatch: false, limit: 100 };
+    expect(
+      (
+        await findStatementRowDrift(ctx.db, {
+          ...input,
+          importFingerprint: "fp-shared-export",
+        })
+      ).candidates,
+    ).toEqual([]);
+    expect((await findStatementRowDrift(ctx.db, input)).candidates).toEqual([]);
+    await record(
+      ctx.db,
+      ctx.actor,
+      [rowInput({ rawDescription: "POSSIBLE REEXPORT" })],
+      { fingerprint: "fp-separate-export", rowCountDeclared: 1 },
+    );
+    expect(
+      (await findStatementRowDrift(ctx.db, input)).candidates,
+    ).toMatchObject([{ crossBatch: true, rows: expect.any(Array) }]);
   });
 
   it("reports what a dryRun would insert and writes nothing", async () => {

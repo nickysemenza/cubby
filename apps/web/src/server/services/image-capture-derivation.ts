@@ -205,6 +205,11 @@ const cameraLabel = (camera: ImageSightingCamera | null): string | null => {
   return label.length > 0 ? label : null;
 };
 
+const sourceWithoutCaptureEvidence = (
+  source: DerivedImageSource,
+): DerivedImageSource =>
+  source === "catalog" || source === "screenshot" ? source : "own";
+
 /**
  * The pure derivation rule. Precedence across every writer of Image capture
  * evidence — including writers outside this function, such as `image.attach_files`'
@@ -329,7 +334,7 @@ export function deriveImageCapture(
   // by something outside this function and is left exactly as it was.
   if (currentBasis === "sighting") {
     return {
-      source: "own",
+      source: sourceWithoutCaptureEvidence(current.source),
       captureAttribution: "none",
       capturedAt: null,
       capturedAtOffsetMinutes: null,
@@ -340,9 +345,13 @@ export function deriveImageCapture(
       provenanceEvidence: null,
     };
   }
+  // A weak sighting supplies no evidence to undo a reviewed catalog or
+  // screenshot classification, even when no capture evidence was recorded.
   const setsOwnSource = currentBasis === null || currentBasis === "filename";
   return {
-    source: setsOwnSource ? "own" : current.source,
+    source: setsOwnSource
+      ? sourceWithoutCaptureEvidence(current.source)
+      : current.source,
     captureAttribution: current.captureAttribution,
     capturedAt: current.capturedAt,
     capturedAtOffsetMinutes: current.capturedAtOffsetMinutes,

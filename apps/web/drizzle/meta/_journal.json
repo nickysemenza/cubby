@@ -260,6 +260,13 @@
       "when": 1791736458406,
       "tag": "0036_vendor_aliases",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791758241897,
+      "tag": "0037_statement_export_membership",
+      "breakpoints": true
     }
   ]
 }

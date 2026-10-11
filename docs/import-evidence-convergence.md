@@ -36,12 +36,36 @@ identity aliases remain recognized. A date/amount/status change is a reviewed
 candidate attachment, not an automatic merge. Ambiguous same-amount transactions
 remain separate candidates. Source rows and their original dates stay intact.
 
+Export coverage records every retained statement identity observed in that
+export, independently of which export first inserted its row. Replaying an
+overlapping export adds membership evidence without moving original rows,
+changing provider values, or creating transactions. Partial exports remain
+incomplete; a dry run records no membership. Historical migration seeds only
+known first-ingesting memberships; other exports require original-source replay.
+Original first ownership remains membership proof through the deployment
+window. Drift excludes row pairs known to coexist in any export, even when
+another export first retained one. Retired import bookkeeping retains that
+coexistence evidence; live coverage still excludes deleted statement rows.
+Legacy identities cannot establish distinct
+physical occurrences by themselves.
+
+Provider account masks retain all supplied digits, including non-card masks
+longer than four digits. An account name already containing that mask does not
+receive a second suffix. These descriptors participate in statement identity;
+normalization must not truncate them into a different account reference.
+
 Retailer preparation can explicitly target an orderless Purchase. Receipt
 itemization proposes a replacement finding with original lines, proposed
 identities, and exact beneficiary/funder amounts. Approval binds the full
 proposal and original graph; changed proposals or edited originals fail.
 Photo groups remain editable and require approval before Product and inventory
 writes. Imported source claims alone do not establish reviewed itemization.
+
+Prepared candidate reviews preserve their original evidence. New preparations
+record exact name/alias equality explicitly. Historical candidates that never
+recorded that judgment expose `exactNameMatch: null`, rather than a fabricated
+non-match or a reconstruction from today's catalog. Reading a review does not
+rewrite its saved snapshot; commit independently rechecks current identities.
 
 ## Validation boundaries
 

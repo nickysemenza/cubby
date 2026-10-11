@@ -64,6 +64,22 @@ function readableBody(normalized: GmailNormalizedMessage) {
       : null;
   return {
     body: normalized.mail.bodyText || html?.text || "",
+    // These strings remain untrusted evidence, including clipped JSON-LD.
+    htmlEvidence: html
+      ? {
+          links: html.links.slice(0, 6).map(({ href, text }) => ({
+            href: boundedField(href, 256),
+            text: boundedField(text, 96),
+          })),
+          images: html.images.slice(0, 4).map(({ src, alt }) => ({
+            src: boundedField(src, 256),
+            alt: boundedField(alt, 128),
+          })),
+          structuredData: html.json_ld
+            .slice(0, 2)
+            .map((block) => boundedField(block, 768)),
+        }
+      : null,
     // Readable HTML omits markup, metadata and image evidence, even when short.
     complete: html === null,
   };
@@ -103,6 +119,8 @@ function triageView(normalized: GmailNormalizedMessage) {
       bodyComplete: complete && full,
       attachments,
       attachmentsComplete: attachments.length === normalized.attachments.length,
+      htmlEvidence: readable.htmlEvidence,
+      htmlEvidenceComplete: readable.htmlEvidence === null,
     });
   };
   let low = 0;

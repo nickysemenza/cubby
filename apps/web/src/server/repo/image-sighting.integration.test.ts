@@ -11,7 +11,11 @@ import { getAuditLog } from "~/server/repo/audit-log";
 import { getDb } from "~/server/repo/database-helpers";
 import { createDevice } from "~/server/repo/device";
 import { resolveEntityIdentity } from "~/server/repo/entity-identity";
-import { getImageById, listImageSightings } from "~/server/repo/image";
+import {
+  getImageById,
+  listImageSightings,
+  updateImage,
+} from "~/server/repo/image";
 import { recordImageSightings } from "~/server/repo/image-sighting";
 import {
   createLedgerParty,
@@ -73,6 +77,41 @@ describe("image-sighting", () => {
     observedAt: new Date("2026-06-01T10:00:00Z"),
     ...overrides,
   });
+
+  it.each([false, true])(
+    "preserves reviewed catalog source after a weak library sighting (prior strong: %s)",
+    async (priorStrong) => {
+      const image = await createImageFixture(ctx.db, "reviewed-catalog");
+      const member = await makeMember("Synthetic member");
+      const reporter = await makeDevice("Synthetic device", member);
+      if (priorStrong) {
+        await recordImageSightings(
+          ctx.db,
+          [report(image, member, reporter, "CATALOG-ASSET")],
+          ctx.actor,
+        );
+      }
+      await updateImage(ctx.db, image.id, {
+        source: "catalog",
+        sourceAssetUrl: "https://supplier.example.test/item.jpg",
+      });
+      await recordImageSightings(
+        ctx.db,
+        [
+          report(image, member, reporter, "CATALOG-ASSET", {
+            sourceType: "cloudShared",
+          }),
+        ],
+        ctx.actor,
+      );
+      expect(await getImageById(ctx.db, image.id)).toMatchObject({
+        source: "catalog",
+        sourceAssetUrl: "https://supplier.example.test/item.jpg",
+        captureAttribution: "none",
+        capturedByPartyId: null,
+      });
+    },
+  );
 
   const sightingRows = (imageId: string) =>
     getDb(ctx.db)

@@ -40,8 +40,10 @@ Vendor-reported card/payment hints do not establish a Financial Account
 identity; once the funding account is known, they belong in that account's
 `cardNumbers` (below), not in notes.
 
-Cubby signs are positive charge/outflow and negative refund/inflow. Monarch
-exports invert this for ordinary charges, so normalize before previewing.
+Cubby signs are positive charge/outflow and negative refund/inflow. Pass the
+raw Monarch signed amount to `finance_read.preview_import`; the preview inverts
+it into Cubby's sign convention. Do not invert the amount before previewing.
+`statement_rows.record.providerAmount` also retains the raw provider sign.
 
 **Verify the normalization from the preview's own output, every time.** The
 preview does not validate intent: hand it a charge with the wrong sign and it

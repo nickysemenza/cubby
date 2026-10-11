@@ -1,5 +1,5 @@
-/** Failures: missing originals classify negatively; omitted body evidence is discarded;
- * transport headers or HTML styling consume the entire decision context. */
+/** Failures: missing originals classify negatively; non-text order evidence is discarded;
+ * transport headers, styling or large HTML attributes consume the decision context. */
 import { describe, expect, it, vi } from "vitest";
 
 import { normalizeMessage } from "./normalize";
@@ -20,6 +20,52 @@ const message = (body?: string): GmailMessage => ({
   },
 });
 describe("transient Gmail triage", () => {
+  it("retains non-text order evidence in the bounded HTML decision input", async () => {
+    const raw = message(
+      '<html><body><p>Account update</p><a href="https://shop.example/orders/synthetic-order">View order</a><img src="https://shop.example/receipt.png" alt="Receipt paid $12.00"><script type="application/ld+json">{"@type":"Order","orderNumber":"synthetic-order"}</script></body></html>',
+    );
+    raw.payload = { ...raw.payload, mimeType: "text/html" };
+    let content = "";
+    await routeGmailMessage(
+      raw,
+      normalizeMessage("google-subject", raw),
+      async (input) => {
+        content = input;
+        return "related";
+      },
+    );
+    expect(content).toContain("https://shop.example/orders/synthetic-order");
+    expect(content).toContain("Receipt paid $12.00");
+    expect(content).toContain("orderNumber");
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
+    expect(JSON.parse(content).bodyComplete).toBe(false);
+  });
+  it("bounds HTML evidence without turning clipped evidence into a negative verdict", async () => {
+    const raw = message(
+      `<html><body>Newsletter${Array.from(
+        { length: 30 },
+        () =>
+          `<a href="https://shop.example/${"x".repeat(2_000)}">${"offer".repeat(500)}</a><img src="https://shop.example/image" alt="${"🧾".repeat(1_000)}"><script type="application/ld+json">${JSON.stringify({ "@type": "Order", description: "receipt".repeat(2_000) })}</script>`,
+      ).join("")}</body></html>`,
+    );
+    raw.payload = { ...raw.payload, mimeType: "text/html" };
+    let content = "";
+    const result = await routeGmailMessage(
+      raw,
+      normalizeMessage("google-subject", raw),
+      async (input) => {
+        content = input;
+        return "unrelated";
+      },
+    );
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
+    expect(content).not.toContain("�");
+    expect(JSON.parse(content).htmlEvidenceComplete).toBe(false);
+    expect(result).toMatchObject({
+      classification: "uncertain",
+      stage: "rule",
+    });
+  });
   it("escalates missing bodies without classifying a provider snippet", async () => {
     const choose = vi.fn(async () => "unrelated" as const);
     const raw = { ...message(), snippet: "Your order shipped" };

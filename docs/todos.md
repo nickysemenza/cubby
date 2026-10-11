@@ -195,6 +195,36 @@ historical Runs stay readable through generic reports.
   stage and model. Use those conflicts to revise the triage and relevance
   prompts, and measure with an accuracy sample before and after each change.
 
+- 🟢 **Repair the published Run finding-resolution connector contract.**
+  `run.resolve_finding` exposes the outer action but omits the operation's
+  required `apply`/`dismiss` choice, so a valid connector call refuses with
+  `INVALID_INPUT`. Preserve both discriminators in the generated connector
+  shape and verify one reviewed dismissal and one supported apply through the
+  published tool. A successfully loaded Run page remains the supported
+  workaround; historical prepared-candidate reads need the fix below.
+
+- ⏳ **Verify production delivery of historical prepared-candidate review.**
+  [PR #1892](https://github.com/nickysemenza/cubby/pull/1892) preserves missing
+  historical `exactNameMatch` judgments as null, with a persisted Run-detail
+  regression. It merged into its parent branch. Verify deployed public
+  `run_status` and the Findings panel before closing this delivery task;
+  preserve candidate snapshots and recheck current identity at commit.
+
+- 🤔 **Clarify identifier-issuer collision diagnostics.** A reviewed receipt
+  preparation refused because two Vendors claimed the product-page host. The
+  error text exposed the issuer ambiguity, while the connector's structured
+  result reported only `INVALID_ARGUMENT`. Preserve the diagnostic cause and
+  expose the conflicting Vendor identities so the member can correct their
+  recorded websites without merging distinct merchants. Read both error text
+  and structured content before diagnosing a connector validation failure.
+
+- 🤔 **Fix import commit errors after a completed durable operation.** A member
+  commit returned `Import run ownership is unavailable` after its operation
+  ledger had completed with a persisted source-reconciliation finding. Add a
+  failing boundary regression before changing the response/finalization path.
+  Return the durable result accurately; callers must read `purchase_status`
+  with the original operation identity before retrying an ambiguous response.
+
 - 🤔 **Run Reclassify in the background.** A 200-Email Reclassify runs inside
   the request and defers what its 150 s budget does not reach, so the member
   reruns the remainder. Dispatch the `mail_reclassify` Run to a background
@@ -206,9 +236,16 @@ historical Runs stay readable through generic reports.
   ends early leaves those copies retained. Either expire unsettled member
   matches or let members retain one Email by Gmail id instead of searching.
 
+- 🤔 **Expose conflicting supplier specifications during research.** An exact
+  supplier page can give incompatible values in its description and detail
+  table. Retain both observations and ask for field-specific resolution before
+  accepting that specification; page authority alone does not resolve an
+  internal contradiction. Preserve already supported identity and assignments.
+
 - ⏳ **Accept live Mail import and Burn-down.** Live work stays paused until the
   member resumes it. Remaining acceptance: the approved 26-Product scope, the
-  remaining evidence-supported facts and the separate Row 7 naming question,
+  remaining evidence-supported facts, including unresolved packaging-brand
+  evidence,
   live verification that imports refuse exact-identity Product forks and
   resolve Vendors by Sender proof or Vendor alias, known-vendor and
   unmatched-transaction backfills, full Gmail history excluding Spam/Trash, separately verified
@@ -237,6 +274,13 @@ historical Runs stay readable through generic reports.
 Run is the one unit of unattended work (Mail import, photo inventory, a member's
 import) and the attempt history the shared activity projection presents.
 Burn-down writes are not Runs: they are audited member writes with Sources.
+
+- 🐛 **Repair Run-list attention projection validation.** A live Runs page can
+  reject its attention and list payload when a target's `entityKind` falls
+  outside the declared purchase/product/image/run enum. Reproduce using a
+  synthetic target, align the shared projection contract with supported target
+  kinds, and verify the list and attention summaries render. Individual Run
+  detail pages still load; preserve their retained history.
 
 - ⏳ **Show the Research queue count where the household looks.** Surface the
   `research-queue` saved-view counts on Home or Activity, linking to the views,
@@ -841,6 +885,21 @@ historical records and stay readable. `oauth_client.requirePKCE` and
   singly, so replaying two settled identical charges fails (pass the resolved
   occurrence ref through). Keep `statementRowExternalId` frozen: stored
   `settlement_ref` values derive from it.
+- 🤔 **Verify statement export coverage independently of the first owning batch.**
+  The incomplete-import detector counts only rows first inserted by one export;
+  authentic replay can find every legacy identity already retained across other
+  exports while still reporting an incomplete batch. Preserve verified export
+  membership, source occurrence counts and immutable provider values instead
+  of lowering declared counts to silence the finding. Audit identity, account
+  and sign differences before replaying an old export through the newer
+  occurrence-ID adapter; preserve existing settlement references.
+- ⏳ **Verify delivery of complete provider account masks.**
+  [PR #1894](https://github.com/nickysemenza/cubby/pull/1894) removes Copilot's
+  four-digit truncation and adds a public-parser regression for a five-digit
+  non-card mask. Focused parser checks and source replay passed; independent
+  review approved. Verify production delivery before closing this task. Do
+  not infer a new account from the old truncated descriptor or rewrite stored
+  settlement identities.
 - 🧱 **Re-extract flat-array cookbooks, then delete their fallback.** A few
   cookbooks still store the retired flat-array extraction
   (`repo/cookbook.ts`, `isLegacyCookbookRawJson`); the list shows a

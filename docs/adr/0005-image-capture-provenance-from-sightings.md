@@ -21,6 +21,10 @@ need.
 
 ## Decision
 
+Reviewed Image updates persist `source`, `sourcePageUrl`, `sourceAssetUrl` and
+`sourceName` without replacing the uploaded bytes. Omitted provenance fields
+remain unchanged; nullable source metadata may be explicitly cleared.
+
 Image stays one row per stored pixel set. A new many-row `ImageSighting`
 (`IMS-`) entity records each report of an image in a member's photo library
 or cloud asset store — `(imageId, ledgerPartyId, assetKey)` unique, so a
@@ -55,6 +59,9 @@ The reduction rule, in order:
    (a `sighting` basis) is retracted if its last supporting sighting is gone,
    rather than left stale; evidence from anything else — a manual edit, an
    import URL, EXIF, or future provenance analysis — is left untouched.
+   A catalog or screenshot source classification also remains unchanged when
+   no stronger sighting or EXIF evidence exists; a weak library sighting cannot
+   establish household ownership of catalog pixels.
 
 Every `ImageSighting` create, update, and delete re-runs this derivation for
 its image in the same transaction, so an image's derived fields are never
