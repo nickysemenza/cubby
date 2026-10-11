@@ -275,6 +275,18 @@ Run is the one unit of unattended work (Mail import, photo inventory, a member's
 import) and the attempt history the shared activity projection presents.
 Burn-down writes are not Runs: they are audited member writes with Sources.
 
+- 🐛 **Preserve chronological timestamps for completed approval Runs.** A
+  completed execution-authorization root can end before its recorded start and
+  trigger a timeline defect. Reproduce with synthetic approval creation, use
+  one consistent clock for the terminal receipt, and preserve existing approval
+  fingerprints, receipts and budget state during any historical repair.
+
+- 🐛 **Refresh aggregate problem counts after statement membership and finding
+  writes.** Targeted reads can show repaired export coverage or dismissed
+  findings while aggregate counts retain older totals. Investigate cache
+  invalidation and shared read dependencies; verify both projections converge
+  without changing declared source counts or dismissing unresolved evidence.
+
 - 🐛 **Repair Run-list attention projection validation.** A live Runs page can
   reject its attention and list payload when a target's `entityKind` falls
   outside the declared purchase/product/image/run enum. Reproduce using a
