@@ -20,7 +20,8 @@ Burn-down and acceptance remain in progress.
   exact variants, retained Sources, image provenance and unresolved naming.
 - Deliver the reviewed image-provenance, bounded HTML evidence, historical
   prepared-candidate reader and provider account-mask corrections; distinguish
-  parent-branch merges from verified production deployment.
+  parent-branch merges from verified production deployment. Bounded HTML evidence
+  is tracked in [PR #1891](https://github.com/nickysemenza/cubby/pull/1891).
 - Correct statement-import coverage across overlapping exports and preserve
   original occurrence evidence. An incomplete first-owning-batch count does
   not prove source rows are missing; do not lower declared counts or replay

@@ -195,7 +195,7 @@ historical Runs stay readable through generic reports.
   stage and model. Use those conflicts to revise the triage and relevance
   prompts, and measure with an accuracy sample before and after each change.
 
-- **Repair the published Run finding-resolution connector contract.**
+- 🟢 **Repair the published Run finding-resolution connector contract.**
   `run.resolve_finding` exposes the outer action but omits the operation's
   required `apply`/`dismiss` choice, so a valid connector call refuses with
   `INVALID_INPUT`. Preserve both discriminators in the generated connector
@@ -203,14 +203,14 @@ historical Runs stay readable through generic reports.
   published tool. A successfully loaded Run page remains the supported
   workaround; historical prepared-candidate reads need the fix below.
 
-- **Verify production delivery of historical prepared-candidate review.**
+- ⏳ **Verify production delivery of historical prepared-candidate review.**
   [PR #1892](https://github.com/nickysemenza/cubby/pull/1892) preserves missing
   historical `exactNameMatch` judgments as null, with a persisted Run-detail
   regression. It merged into its parent branch. Verify deployed public
   `run_status` and the Findings panel before closing this delivery task;
   preserve candidate snapshots and recheck current identity at commit.
 
-- **Clarify identifier-issuer collision diagnostics.** A reviewed receipt
+- 🤔 **Clarify identifier-issuer collision diagnostics.** A reviewed receipt
   preparation refused because two Vendors claimed the product-page host. The
   error text exposed the issuer ambiguity, while the connector's structured
   result reported only `INVALID_ARGUMENT`. Preserve the diagnostic cause and
@@ -218,7 +218,7 @@ historical Runs stay readable through generic reports.
   recorded websites without merging distinct merchants. Read both error text
   and structured content before diagnosing a connector validation failure.
 
-- **Fix import commit errors after a completed durable operation.** A member
+- 🤔 **Fix import commit errors after a completed durable operation.** A member
   commit returned `Import run ownership is unavailable` after its operation
   ledger had completed with a persisted source-reconciliation finding. Add a
   failing boundary regression before changing the response/finalization path.
@@ -878,7 +878,7 @@ historical records and stay readable. `oauth_client.requirePKCE` and
   singly, so replaying two settled identical charges fails (pass the resolved
   occurrence ref through). Keep `statementRowExternalId` frozen: stored
   `settlement_ref` values derive from it.
-- **Verify statement export coverage independently of the first owning batch.**
+- 🤔 **Verify statement export coverage independently of the first owning batch.**
   The incomplete-import detector counts only rows first inserted by one export;
   authentic replay can find every legacy identity already retained across other
   exports while still reporting an incomplete batch. Preserve verified export
@@ -886,7 +886,7 @@ historical records and stay readable. `oauth_client.requirePKCE` and
   of lowering declared counts to silence the finding. Audit identity, account
   and sign differences before replaying an old export through the newer
   occurrence-ID adapter; preserve existing settlement references.
-- **Verify delivery of complete provider account masks.**
+- ⏳ **Verify delivery of complete provider account masks.**
   [PR #1894](https://github.com/nickysemenza/cubby/pull/1894) removes Copilot's
   four-digit truncation and adds a public-parser regression for a five-digit
   non-card mask. Focused parser checks and source replay passed; independent
