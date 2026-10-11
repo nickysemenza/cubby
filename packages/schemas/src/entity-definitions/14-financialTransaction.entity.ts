@@ -171,7 +171,7 @@ export default defineEntity({
             { value: "unclassified", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: {
           read: financialTransactionCoverage.shape.booking,
           create: null,
@@ -195,7 +195,7 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: {
           read: financialTransactionCoverage.shape.document,
           create: null,
@@ -219,7 +219,7 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: {
           read: financialTransactionCoverage.shape.itemization,
           create: null,
@@ -243,7 +243,7 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: {
           read: financialTransactionCoverage.shape.products,
           create: null,
@@ -513,7 +513,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          width: "xs",
           mobile: { slot: "meta", priority: 20 },
         },
         validation: {
@@ -553,7 +552,6 @@ export default defineEntity({
         control: { kind: "date" },
         display: {
           list: true,
-          width: "sm",
           format: "plainDate",
           mobile: { slot: "meta", priority: 25 },
         },
@@ -571,7 +569,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          width: "sm",
           format: "plainDate",
           mobile: { slot: "meta", priority: 30 },
         },

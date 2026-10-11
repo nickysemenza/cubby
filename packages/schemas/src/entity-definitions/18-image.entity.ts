@@ -181,7 +181,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          width: "sm",
           mobile: { slot: "meta", priority: 20 },
           // Read-only, so no select control declares the roster.
           valueOptions: [
@@ -443,7 +442,7 @@ export default defineEntity({
       {
         key: "captureAttribution",
         kind: "enum",
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: {
           read: imageCaptureAttribution,
           create: null,

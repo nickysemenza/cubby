@@ -274,7 +274,6 @@ Rules:
         display: {
           list: true,
           detail: true,
-          width: "sm",
           mobile: { slot: "subtitle", priority: 15 },
         },
         validation: {
@@ -412,7 +411,6 @@ Rules:
         display: {
           list: true,
           detail: true,
-          width: "sm",
           format: "timestamp",
           mobile: { slot: "meta", priority: 90 },
         },

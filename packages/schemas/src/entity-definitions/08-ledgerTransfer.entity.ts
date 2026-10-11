@@ -148,7 +148,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          width: "sm",
           format: "plainDate",
           mobile: { slot: "meta", priority: 20 },
         },

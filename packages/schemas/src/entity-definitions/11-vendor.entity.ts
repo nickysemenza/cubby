@@ -518,7 +518,6 @@ export default defineEntity({
           list: true,
           detail: true,
           format: "plainDate",
-          width: "sm",
           mobile: { slot: "meta", priority: 35 },
         },
         provenance: {

@@ -184,7 +184,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          width: "md",
           mobile: { slot: "meta", priority: 25 },
         },
         validation: {

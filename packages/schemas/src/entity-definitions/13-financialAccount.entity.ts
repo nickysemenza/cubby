@@ -123,7 +123,7 @@ export default defineEntity({
         key: "provisional",
         kind: "boolean",
         control: { kind: "checkbox" },
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
