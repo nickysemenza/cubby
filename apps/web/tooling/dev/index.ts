@@ -1,3 +1,4 @@
+import { createPostgresPool } from "../postgres-pool";
 import {
   devSessionSchema as sessionSchema,
   type DevSession as Session,
@@ -18,7 +19,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pollUntil } from "@cubby/shared/retry";
 import { runOrThrow } from "../../../../scripts/lib/run.ts";
-import { Pool } from "pg";
+
 import { z } from "zod";
 import {
   devProcessEnvironment,
@@ -493,7 +494,7 @@ async function diagnostics(
         checks.tools[tool] = false;
       }
     }
-    const pool = new Pool({
+    const pool = createPostgresPool({
       connectionString: profile.databaseUrl,
       connectionTimeoutMillis: 3_000,
     });

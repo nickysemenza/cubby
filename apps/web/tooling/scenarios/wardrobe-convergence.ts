@@ -1,3 +1,4 @@
+import { createPostgresPool } from "../postgres-pool";
 import { makeMcpCaller } from "./mcp-caller";
 import { buildActorContext } from "@cubby/schemas/context";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
@@ -12,7 +13,7 @@ import { chromium, expect, request } from "@playwright/test";
 import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { Pool } from "pg";
+import { type Pool } from "pg";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -1134,7 +1135,7 @@ export async function runWardrobeConvergenceScenario({
   artifacts,
   userId,
 }: ScenarioInput): Promise<void> {
-  const pool = new Pool({ connectionString: databaseURL });
+  const pool = createPostgresPool({ connectionString: databaseURL });
   try {
     const db = buildScenarioDatabase(pool);
     const kernel = buildKernelContext(db, testUserId(userId));

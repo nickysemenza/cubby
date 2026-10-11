@@ -1,5 +1,6 @@
+import { createPostgresPool } from "../../tooling/postgres-pool";
 import { createHash } from "node:crypto";
-import { Pool } from "pg";
+
 import "./build-constants";
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "../../src/server/ai/features";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
@@ -37,7 +38,7 @@ test.describe("Recipe Flow", () => {
     }
     const generatedAt = new Date().toISOString();
 
-    const pool = new Pool({ connectionString: databaseUrl });
+    const pool = createPostgresPool({ connectionString: databaseUrl });
     try {
       // The URL only carries the public shortcode; resolve it to the real row
       // (and its uuid `id`, which `AiAnalysis.entityId` below still stores).

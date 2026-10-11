@@ -1,0 +1,86 @@
+import { setTimeout as delay } from "node:timers/promises";
+import { pollUntil } from "@cubby/shared/retry";
+import { sql } from "drizzle-orm";
+import { describe, expect, it } from "vitest";
+import { getDb } from "~/server/repo/database-helpers";
+
+import { createPostgresPool } from "./postgres-pool";
+import { withTestDb } from "./test-setup";
+
+// Pool.end can resolve before a removed client's socket closes. Recreating its
+// database then sends 57P01 to that client after its owner believes it is gone.
+describe("PostgreSQL pool shutdown", () => {
+  const ctx = withTestDb();
+
+  it("delivers repeated shutdown errors to the callback", async () => {
+    const pool = createPostgresPool({ connectionString: ctx.databaseUrl });
+    await pool.end();
+    const error = await Promise.race([
+      new Promise<unknown>((resolve) => {
+        pool.end((...args: unknown[]) => resolve(args[0]));
+      }),
+      delay(100).then(() => "callback was not called"),
+    ]);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toHaveProperty(
+      "message",
+      "Called end on pool more than once",
+    );
+  });
+
+  it.each(["promise", "callback", "idle eviction", "connecting"] as const)(
+    "%s shutdown waits for the backend socket before permitting database cleanup",
+    async (mode) => {
+      const pool = createPostgresPool({
+        connectionString: ctx.databaseUrl,
+        idleTimeoutMillis: mode === "idle eviction" ? 1 : 10_000,
+      });
+      const acquiring = pool.connect();
+      let ending: Promise<void> | undefined =
+        mode === "connecting" ? pool.end() : undefined;
+      const client = await acquiring;
+      const socketClosed = new Promise<void>((resolve) =>
+        client.once("end", resolve),
+      );
+      const { rows } = await client.query<{ pid: number }>(
+        "SELECT pg_backend_pid() AS pid",
+      );
+      const pid = rows[0]?.pid;
+      expect(pid).toBeDefined();
+
+      // Delay the real Terminate packet, rather than mock pg's lifecycle.
+      const socket = client.connection.stream;
+      socket.cork();
+      client.release();
+      let finished = false;
+      try {
+        if (mode === "idle eviction") {
+          await pollUntil(() => (pool.totalCount === 0 ? true : undefined), {
+            label: "idle client removal",
+            timeoutMs: 1000,
+          });
+        }
+        ending ??=
+          mode === "callback"
+            ? new Promise<void>((resolve) => pool.end(resolve))
+            : pool.end();
+        void ending.then(() => {
+          finished = true;
+        });
+        await delay(25);
+        expect(finished).toBe(false);
+
+        socket.uncork();
+        await ending;
+        const observer = await getDb(ctx.db).execute(
+          sql`SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}`,
+        );
+        expect(observer.rows).toHaveLength(0);
+      } finally {
+        socket.uncork();
+        await socketClosed;
+        await (ending ?? pool.end());
+      }
+    },
+  );
+});

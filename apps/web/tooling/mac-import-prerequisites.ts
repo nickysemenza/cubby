@@ -1,4 +1,5 @@
-import { Pool } from "pg";
+import { createPostgresPool } from "./postgres-pool";
+
 import { testUserId } from "@cubby/schemas/testing";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -17,7 +18,7 @@ export async function seedMacStatementAccount(
   databaseURL: string,
   userId: string,
 ) {
-  const pool = new Pool({ connectionString: databaseURL });
+  const pool = createPostgresPool({ connectionString: databaseURL });
   try {
     const db = buildScenarioDatabase(pool);
     const kernel = buildKernelContext(db, testUserId(userId));

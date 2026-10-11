@@ -1,10 +1,11 @@
+import { createPostgresPool } from "./postgres-pool";
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Client, Pool } from "pg";
+import { Client } from "pg";
 import { beforeAll, expect, it } from "vitest";
 import { leaseNamedDatabase } from "./test-database-lease";
 
@@ -42,7 +43,7 @@ beforeAll(() => {
 }, 240_000);
 const name = () => `cubby_sim_${randomBytes(8).toString("hex")}`;
 async function exists(databaseName: string) {
-  const admin = new Pool({ connectionString: adminUrl });
+  const admin = createPostgresPool({ connectionString: adminUrl });
   try {
     const result = await admin.query(
       "SELECT 1 FROM pg_database WHERE datname = $1",
@@ -99,7 +100,7 @@ it("retains writes and preserves the holder's database on a colliding acquisitio
       await client.end();
     }
   } finally {
-    const admin = new Pool({ connectionString: adminUrl });
+    const admin = createPostgresPool({ connectionString: adminUrl });
     try {
       await admin.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
     } finally {
@@ -171,8 +172,8 @@ it("hands the database to its watchdog before migration, so a runner killed mid-
   );
   const target = new URL(adminUrl);
   target.pathname = `/${databaseName}`;
-  const holder = new Pool({ connectionString: target.toString() });
-  const admin = new Pool({ connectionString: adminUrl });
+  const holder = createPostgresPool({ connectionString: target.toString() });
+  const admin = createPostgresPool({ connectionString: adminUrl });
   try {
     await expect
       .poll(() => stdout, { timeout: 60_000, interval: 50 })

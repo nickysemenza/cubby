@@ -1,3 +1,4 @@
+import { createPostgresPool } from "./postgres-pool";
 import {
   readTesterArmySummary,
   testerArmyRawOutput,
@@ -23,7 +24,7 @@ import { homedir } from "node:os";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { request } from "@playwright/test";
-import { Pool } from "pg";
+import { type Pool } from "pg";
 import { z } from "zod";
 
 import { writeE2ERunBundle } from "./e2e-run-bundle";
@@ -350,7 +351,7 @@ async function assertNativeEdit(
   expectedName?: string,
   expectedEmoji?: string | null,
 ): Promise<void> {
-  const checkPool = new Pool({ connectionString: databaseURL });
+  const checkPool = createPostgresPool({ connectionString: databaseURL });
   try {
     const { SIM_PRODUCT_UPDATED_NAME } =
       await import("./scenarios/simulator-product-fixture");
@@ -396,7 +397,7 @@ async function assertNativePhotoImport(
   objectStorageUrl: string,
   expectedCount: number,
 ): Promise<string[]> {
-  const checkPool = new Pool({ connectionString: databaseURL });
+  const checkPool = createPostgresPool({ connectionString: databaseURL });
   try {
     const result = await checkPool.query<{
       id: string;
@@ -455,7 +456,7 @@ async function assertNativePhotoImport(
 }
 
 async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
-  const pool = new Pool({ connectionString: databaseURL });
+  const pool = createPostgresPool({ connectionString: databaseURL });
   try {
     const [scenario, processing, dispatch, schemas] = await Promise.all([
       import("./scenarios/context"),
@@ -839,7 +840,7 @@ async function runWarmSimulator(options: {
       iteration += 1;
       const originalName = `${SIM_PRODUCT_NAME} ${iteration}`;
       const updatedName = `${SIM_PRODUCT_UPDATED_NAME} ${iteration}`;
-      const nextPool = new Pool({ connectionString: databaseURL });
+      const nextPool = createPostgresPool({ connectionString: databaseURL });
       let nextID: string;
       try {
         nextID = await seedSimulatorScenario(nextPool, userId, originalName);
@@ -890,7 +891,7 @@ async function runHeadlessPhotoScenario(
   userId: string,
 ): Promise<void> {
   const scenarioStarted = performance.now();
-  const pool = new Pool({ connectionString: databaseURL });
+  const pool = createPostgresPool({ connectionString: databaseURL });
   try {
     const [{ seedSimulatorPhotoActor }, scenario, maintenance] =
       await Promise.all([
@@ -971,7 +972,7 @@ async function runHeadlessPhotoScenario(
         },
       },
     ];
-    const proposalPool = new Pool({ connectionString: databaseURL });
+    const proposalPool = createPostgresPool({ connectionString: databaseURL });
     try {
       const proposed = await context.post("/api/v1/photoImport/saveGroups", {
         data: { runId: runID, groups },
@@ -1023,7 +1024,7 @@ async function runHeadlessPhotoScenario(
       path.join(artifacts, "native-photo-approved.json"),
     );
     const reviewedAt = performance.now();
-    const pool = new Pool({ connectionString: databaseURL });
+    const pool = createPostgresPool({ connectionString: databaseURL });
     try {
       const result = await pool.query<{ status: string; completed: string }>(
         `SELECT r.status, count(*) FILTER (WHERE t.state = 'completed')::text AS completed
@@ -1143,7 +1144,7 @@ async function runHeadlessProductScenario(
         iteration += 1;
         const originalName = `${SIM_PRODUCT_NAME} ${iteration}`;
         const updatedName = `${SIM_PRODUCT_UPDATED_NAME} ${iteration}`;
-        const nextPool = new Pool({ connectionString: databaseURL });
+        const nextPool = createPostgresPool({ connectionString: databaseURL });
         let nextID: string;
         try {
           const { seedSimulatorScenario } =
@@ -1170,7 +1171,7 @@ async function runHeadlessStatementCsvScenario(url: URL, userId: string) {
   nativeBuildBinary = path.join(kitRoot, ".build/debug/cubby");
   nativeBuildReady = true;
   const binary = nativeBuildBinary;
-  const pool = new Pool({ connectionString: databaseURL });
+  const pool = createPostgresPool({ connectionString: databaseURL });
   try {
     const { runSwiftStatementCsvScenario } =
       await import("./scenarios/swift-statement-csv");
@@ -1378,7 +1379,7 @@ async function seedNativeScenario(userId: string): Promise<{
   layoutRunID?: string;
   purchaseId?: string;
 }> {
-  const seedPool = new Pool({ connectionString: databaseURL });
+  const seedPool = createPostgresPool({ connectionString: databaseURL });
   try {
     const {
       seedSimulatorPhotoActor,
@@ -1424,7 +1425,7 @@ async function seedNativeScenario(userId: string): Promise<{
 
 /** Reads the database back after the QA journeys: each native write must have landed exactly once. */
 async function assertQaOutcomes(): Promise<void> {
-  const checkPool = new Pool({ connectionString: databaseURL });
+  const checkPool = createPostgresPool({ connectionString: databaseURL });
   const rows = async <T extends object>(text: string, values: unknown[] = []) =>
     (await checkPool.query<T>(text, values)).rows;
   try {
@@ -1527,7 +1528,7 @@ async function assertQaOutcomes(): Promise<void> {
 async function reseedQaJourney(journey: string): Promise<void> {
   if (journey !== "qa-photo-selected-approval.ad") return;
   const { seedProposedPhotoRun } = await import("./scenarios/native-qa");
-  const seedPool = new Pool({ connectionString: databaseURL });
+  const seedPool = createPostgresPool({ connectionString: databaseURL });
   try {
     Object.assign(qaIds, await seedProposedPhotoRun(seedPool, qaUserId));
   } finally {
@@ -1606,7 +1607,7 @@ async function runQaJourneys(
   const completePhotoRun = async () => {
     const { runNativePhotoCompletionJourney } =
       await import("./scenarios/native-photo-completion");
-    const pool = new Pool({ connectionString: databaseURL });
+    const pool = createPostgresPool({ connectionString: databaseURL });
     try {
       await relaunch();
       scenarioEvidence.push(
@@ -1651,7 +1652,7 @@ async function runQaJourneys(
       // retry seeds a fresh running Run.
       const { runNativeRunStopJourney } =
         await import("./scenarios/native-run-stop");
-      const stopPool = new Pool({ connectionString: databaseURL });
+      const stopPool = createPostgresPool({ connectionString: databaseURL });
       try {
         for (let attempt = 1; ; attempt += 1) {
           await relaunch();
@@ -2188,7 +2189,7 @@ async function main(): Promise<void> {
           | undefined;
         let journeyPool: Pool | undefined;
         if (inputJourney) {
-          journeyPool = new Pool({ connectionString: databaseURL });
+          journeyPool = createPostgresPool({ connectionString: databaseURL });
           const { createSimulatorInputJourney } =
             await import("./scenarios/simulator-input-journey");
           try {

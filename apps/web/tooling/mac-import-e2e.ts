@@ -1,3 +1,4 @@
+import { createPostgresPool } from "./postgres-pool";
 import { execFileSync, spawn } from "node:child_process";
 import { withKitPackageResolution } from "../../../scripts/apple-package-resolution.ts";
 import { createHash, randomBytes } from "node:crypto";
@@ -19,7 +20,7 @@ import {
 } from "./mac-fixture-identity";
 import { seedBaseWorld } from "./factories/base-world";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+
 import { scrubErrorMessage } from "../src/lib/error-diagnostics";
 import { writeE2ERunBundle } from "./e2e-run-bundle";
 import { MacImportDriver } from "./mac-import-driver";
@@ -725,7 +726,9 @@ async function main(): Promise<void> {
                 },
               },
               async ({ databaseUrl }) => {
-                const pool = new Pool({ connectionString: databaseUrl });
+                const pool = createPostgresPool({
+                  connectionString: databaseUrl,
+                });
                 try {
                   await seedBaseWorld(drizzle(pool));
                 } finally {
@@ -777,7 +780,7 @@ async function main(): Promise<void> {
         seedSimulatorProductClarity,
         seedSimulatorScenario,
       } = await import("./scenarios/simulator");
-      const pool = new Pool({ connectionString: databaseURL });
+      const pool = createPostgresPool({ connectionString: databaseURL });
       try {
         await seedSimulatorPhotoActor(pool, fixtureUserId);
         productFixture = await seedSimulatorProductClarity(pool, fixtureUserId);
@@ -939,7 +942,7 @@ async function main(): Promise<void> {
       milestones.savedObserved = true;
       await driver.screenshot("csv-saved");
       phase = "database-readback";
-      const checkPool = new Pool({ connectionString: databaseURL });
+      const checkPool = createPostgresPool({ connectionString: databaseURL });
       try {
         const count = await checkPool.query<{
           rows: string;

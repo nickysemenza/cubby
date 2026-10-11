@@ -1,5 +1,6 @@
+import { createPostgresPool } from "../postgres-pool";
 import { request } from "@playwright/test";
-import { Pool } from "pg";
+import { type Pool } from "pg";
 import { z } from "zod";
 
 import { assertDevDatabaseUrl } from "./state";
@@ -79,7 +80,7 @@ export async function seedDevDatabase(options: {
     );
   }
   const pack = options.pack ?? "core";
-  const pool = new Pool({ connectionString: options.databaseUrl });
+  const pool = createPostgresPool({ connectionString: options.databaseUrl });
   let startedPack = false;
   try {
     // This development-only table deliberately has no production migration.

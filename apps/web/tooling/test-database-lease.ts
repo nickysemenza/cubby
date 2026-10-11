@@ -1,7 +1,8 @@
+import { createPostgresPool } from "./postgres-pool";
 import { createHash } from "node:crypto";
 import { IntegreSQLClient } from "@devoxa/integresql-client";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Client, Pool } from "pg";
+import { Client } from "pg";
 import { migrateDatabase } from "./db-migrate";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
 import {
@@ -79,7 +80,9 @@ export async function prepareTemplate(
       templateHash(namespace),
       async (config) => {
         console.log(`[test database] Migrating the ${namespace} template`);
-        const pool = new Pool({ connectionString: connectionUrl(config) });
+        const pool = createPostgresPool({
+          connectionString: connectionUrl(config),
+        });
         try {
           await migrateDatabase(drizzle(pool));
         } catch (error) {
@@ -193,7 +196,7 @@ export async function leaseNamedDatabase<T>(
   const target = new URL(adminUrl);
   target.pathname = `/${options.name}`;
   const databaseUrl = target.toString();
-  const admin = new Pool({ connectionString: adminUrl.toString() });
+  const admin = createPostgresPool({ connectionString: adminUrl.toString() });
   let created = false;
   let closed: Promise<void> | undefined;
   const close = async (drop: boolean) => {

@@ -1,10 +1,10 @@
+import { createPostgresPool } from "../../tooling/postgres-pool";
 import { seedBaseWorld } from "../../tooling/factories/base-world";
 import {
   type DatabaseLease,
   leaseDatabase,
 } from "../../tooling/test-database-lease";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
 
 /**
  * Check out one seeded browser-worker database after global setup has
@@ -13,7 +13,7 @@ import { Pool } from "pg";
 export async function createE2EDatabase(): Promise<DatabaseLease> {
   console.log("[E2E Worker] Getting fresh database from IntegreSQL...");
   const { lease } = await leaseDatabase("browser", async ({ databaseUrl }) => {
-    const seedPool = new Pool({ connectionString: databaseUrl });
+    const seedPool = createPostgresPool({ connectionString: databaseUrl });
     try {
       // Seeded in the checked-out database rather than the IntegreSQL template
       // so a cached older template is repaired before a worker starts.

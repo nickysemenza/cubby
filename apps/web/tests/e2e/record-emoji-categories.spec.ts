@@ -1,3 +1,4 @@
+import { createPostgresPool } from "../../tooling/postgres-pool";
 import { z } from "zod";
 import superjson from "superjson";
 import { fieldSuggestionsOut } from "@cubby/schemas/ai";
@@ -174,12 +175,11 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
   e2eRuntime,
 }) => {
   test.setTimeout(90_000);
-  const { Pool } = await import("pg");
   const { buildScenarioDatabase } =
     await import("../../tooling/scenarios/context");
   const { loadVendorSuggestionContext } =
     await import("~/server/repo/vendor-suggestion-context");
-  const pool = new Pool({ connectionString: e2eRuntime.databaseUrl });
+  const pool = createPostgresPool({ connectionString: e2eRuntime.databaseUrl });
   const db = buildScenarioDatabase(pool);
   const headers = { Origin: baseURL! };
   const create = async (

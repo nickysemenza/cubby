@@ -1,3 +1,4 @@
+import { createPostgresPool } from "./postgres-pool";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,7 +8,7 @@ import { sql } from "drizzle-orm";
 import { readMigrationFiles, type MigrationMeta } from "drizzle-orm/migrator";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { Pool } from "pg";
+
 import { z } from "zod";
 
 import { ensureDbExtensions } from "./db-extensions";
@@ -159,7 +160,9 @@ async function main(): Promise<void> {
   const { values } = parseArgs({
     options: { target: { type: "string" }, through: { type: "string" } },
   });
-  const pool = new Pool({ connectionString: resolveTargetUrl(values.target) });
+  const pool = createPostgresPool({
+    connectionString: resolveTargetUrl(values.target),
+  });
   try {
     await migrateDatabase(drizzle(pool), { through: values.through });
     console.log(

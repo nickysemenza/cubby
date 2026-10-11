@@ -288,6 +288,16 @@ on release before waiting for the forced DROP; returning it to the idle pool
 races cleanup and emits an unhandled PostgreSQL `57P01` error. IntegreSQL
 namespaces and reset policies stay unchanged.
 
+Tooling and browser fixtures create PostgreSQL pools with `createPostgresPool`
+from `tooling/postgres-pool.ts`. Raw `pg.Pool.end()` can resolve before its
+clients' sockets close, allowing database recreation or reset to terminate a
+backend after its owner considers it closed. The factory retains the pool API
+and waits for every connected client's `end` event, including idle-evicted
+clients and connections that finish opening during shutdown. Its promise and
+callback shutdown forms share this guarantee; errors remain observable.
+`postgres-pool.integration.test.ts` holds real termination packets to pin the
+ordering before database cleanup.
+
 A profile (`WORKERD_PROFILES` in `workerd-harness.ts`) routes each production
 queue consumer to one of:
 
