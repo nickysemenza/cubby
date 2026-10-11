@@ -114,6 +114,8 @@ export const imageMetadataExtractTaskSchema = z.object({
 export const maintenanceRecoverTaskSchema = z.object({
   kind: z.literal("maintenance.recover"),
   ...taskEnvelopeFields,
+  /** Operator recovery may retire newly settled coordinators through one fixed cutoff. */
+  coordinatorRetireBefore: z.iso.datetime().optional(),
 });
 
 export const maintenancePurchaseDiscoveryTaskSchema = z.object({

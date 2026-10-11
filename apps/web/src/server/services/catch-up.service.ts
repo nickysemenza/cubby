@@ -40,7 +40,10 @@ export async function requestCatchUp(
   return { status: "queued" };
 }
 
-export async function recoverMissedWork(db: Database) {
+export async function recoverMissedWork(
+  db: Database,
+  coordinatorRetireBefore = new Date(Date.now() - 24 * 60 * 60_000),
+) {
   const [
     { repairImageProcessingWork },
     { expireStaleRuns },
@@ -73,12 +76,12 @@ export async function recoverMissedWork(db: Database) {
     reconcileWorkflowRuns(db),
     pruneRoutineRuns(db),
     // A settled agent Run's transcript (including Email text it read) is
-    // destroyed after a day, leaving time to read the conversation.
+    // destroyed after a day unless operator recovery supplies its fixed cutoff.
     coordinators
       ? retireSettledCoordinators(
           db,
           (agentId) => coordinators.getByName(agentId),
-          new Date(Date.now() - 24 * 60 * 60_000),
+          coordinatorRetireBefore,
         )
       : isCloudflareRuntime()
         ? Promise.reject(

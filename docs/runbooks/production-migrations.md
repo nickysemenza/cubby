@@ -49,7 +49,13 @@ verify the matching server deployment:
 pnpm --filter @cubby/web db:migrate --target=production --through=0035_email_import_cutover
 ```
 
-After matching code deploys and old in-flight work finishes, run the transform:
+After matching code deploys and old in-flight work finishes, run the transform.
+For a standalone operator shell, initialize the imported application modules with
+`DATABASE_URL` equal to the explicit `PRODUCTION_DIRECT_DATABASE_URL`,
+`SKIP_ENV_VALIDATION=1`, and `R2_PUBLIC_URL=https://unused.example.invalid`.
+The transform selects only the explicit direct URL, validates migration bookkeeping
+and stored evidence, and never accesses object storage; these initialization values
+are not production storage credentials.
 
 ```sh
 pnpm --filter @cubby/web db:promote-historical-orders --target=production
@@ -66,3 +72,9 @@ every refusal, disclose unknown snapshots, verify accepted-reference consistency
 and confirm the second apply promotes zero. Never reconstruct unknown extractions
 from current Expenses or Products. Verify data/schema and automated client delivery
 before normal use. On migration failure, verify rollback/bookkeeping before retrying.
+
+After deployment, recovery-only queue messages may include
+`task.coordinatorRetireBefore` as a fixed ISO timestamp covering the settled Runs
+to retire. Repeat that same cutoff until readback finds zero; do not enqueue
+`maintenance.purchase-discovery` during this recovery. Ordinary recovery omits
+the override and preserves the 24-hour conversation window.

@@ -8,12 +8,14 @@ import path from "node:path";
  * coordinator never executes again, and a late in-flight result never
  * repopulates the erased content.
  */
+import { backgroundTaskSchema } from "@cubby/schemas/background-tasks";
 import { type LedgerPartyId, runEntityId } from "@cubby/schemas/identifiers";
 import {
   type AgentImportRunPurpose,
   importRunAgentIdentity,
 } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import {
   captureE2ERunIdentity,
@@ -25,6 +27,8 @@ import { withTestDb } from "tooling/test-setup";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { handleBackgroundTask } from "~/server/background-tasks/handle";
+import { setCfEnv } from "~/server/cf-env";
 import { run, runOperation } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -335,6 +339,7 @@ describe("coordinator host retirement", () => {
     shared?.harness.clearLogs();
   });
   afterEach(() => {
+    setCfEnv(undefined);
     const inventory = sanitizeWorkerdLogs(
       shared?.harness
         .getLogs()
@@ -411,17 +416,35 @@ describe("coordinator host retirement", () => {
     // SDK destroy aborts the destroying isolate (and may abort that RPC); the
     // immediate follow-up reaches a fresh instance whose empty inventory
     // acknowledges disposal, so one pass stamps retiredAt.
-    const first = await retireSettledCoordinators(
-      ctx.db,
-      coordinator,
-      new Date(),
+    setCfEnv(
+      fromPartial<Env>({
+        PURCHASE_IMPORT_RUN: { getByName: coordinator },
+      }),
     );
+    const requestedAt = new Date().toISOString();
+    await handleBackgroundTask(
+      ctx.db,
+      backgroundTaskSchema.parse({
+        kind: "maintenance.recover",
+        requestedAt,
+      }),
+    );
+    expect((await readRun(runId))?.retiredAt).toBeNull();
+    await handleBackgroundTask(
+      ctx.db,
+      backgroundTaskSchema.parse({
+        kind: "maintenance.recover",
+        requestedAt,
+        coordinatorRetireBefore: requestedAt,
+      }),
+    );
+    const disposed = (await readRun(runId))?.retiredAt !== null;
     observations.push({
       boundary: "single-pass disposal",
-      expected: 1,
-      actual: first.retired,
+      expected: true,
+      actual: disposed,
     });
-    expect(first).toEqual({ considered: 1, retired: 1 });
+    expect(disposed).toBe(true);
     expect(await readRun(runId)).toMatchObject({
       retirementReason: "settled",
       retiredAt: expect.any(Date),
