@@ -20,6 +20,42 @@ const message = (body?: string): GmailMessage => ({
   },
 });
 describe("transient Gmail triage", () => {
+  it("retains multipart HTML meaning and order evidence beside a plain fallback", async () => {
+    const raw = message();
+    raw.payload = {
+      ...raw.payload,
+      mimeType: "multipart/alternative",
+      parts: [
+        message("Your email client cannot display this message.").payload!,
+        {
+          ...message(
+            '<style>.layout { color: red; }</style><p>Your order was refunded $12.00.</p><a href="https://shop.example/orders/synthetic-order">View order</a><script type="application/ld+json">{"@type":"Order","orderNumber":"synthetic-order"}</script>',
+          ).payload!,
+          mimeType: "text/html",
+        },
+      ],
+    };
+    const original = JSON.stringify(raw);
+    let content = "";
+    const result = await routeGmailMessage(
+      raw,
+      normalizeMessage("google-subject", raw),
+      async (input) => {
+        content = input;
+        return "unrelated";
+      },
+    );
+    expect(content).toContain("Your order was refunded $12.00.");
+    expect(content).toContain("https://shop.example/orders/synthetic-order");
+    expect(content).toContain("orderNumber");
+    expect(content).not.toContain("color: red");
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
+    expect(result).toMatchObject({
+      classification: "uncertain",
+      stage: "rule",
+    });
+    expect(JSON.stringify(raw)).toBe(original);
+  });
   it("retains non-text order evidence in the bounded HTML decision input", async () => {
     const raw = message(
       '<html><body><p>Account update</p><a href="https://shop.example/orders/synthetic-order">View order</a><img src="https://shop.example/receipt.png" alt="Receipt paid $12.00"><script type="application/ld+json">{"@type":"Order","orderNumber":"synthetic-order"}</script></body></html>',

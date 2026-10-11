@@ -22,6 +22,9 @@ Burn-down and acceptance remain in progress.
   prepared-candidate reader and provider account-mask corrections; distinguish
   parent-branch merges from verified production deployment. Bounded HTML evidence
   is tracked in [PR #1891](https://github.com/nickysemenza/cubby/pull/1891).
+  Multipart triage retains distinct readable HTML alongside plain text and
+  bounded links, image descriptions and structured data. A plain fallback never
+  establishes that omitted HTML evidence is unrelated; the original stays intact.
 - Correct statement-import coverage across overlapping exports and preserve
   original occurrence evidence. An incomplete first-owning-batch count does
   not prove source rows are missing; do not lower declared counts or replay

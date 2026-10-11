@@ -58,12 +58,15 @@ function boundedField(value: string, bytes: number): string {
 
 function readableBody(normalized: GmailNormalizedMessage) {
   const bodyHtml = normalized.mail.bodyHtml;
-  const html =
-    !normalized.mail.bodyText && bodyHtml
-      ? wasm.compact_browser_page(bodyHtml, "")
-      : null;
+  const html = bodyHtml ? wasm.compact_browser_page(bodyHtml, "") : null;
+  const plain = normalized.mail.bodyText ?? "";
+  const htmlText = html?.text ?? "";
+  const body =
+    plain.trim() && htmlText.trim() && plain.trim() !== htmlText.trim()
+      ? `${plain}\n\n${htmlText}`
+      : plain || htmlText;
   return {
-    body: normalized.mail.bodyText || html?.text || "",
+    body,
     // These strings remain untrusted evidence, including clipped JSON-LD.
     htmlEvidence: html
       ? {
