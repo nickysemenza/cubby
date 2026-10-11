@@ -21,8 +21,7 @@ test("image-free records retain identity and a usable detail path on a phone", a
   );
   const card = page.locator("[data-entity-card]").filter({ hasText: name });
   await expect(card).toBeVisible();
-  await expect(card.getByText("Field guide", { exact: true })).toBeVisible();
-  await expect(card.getByText("Product", { exact: true })).toBeVisible();
+  await expect(card.getByRole("link", { name, exact: true })).toBeVisible();
   await expectViewportBounded(page);
   await page.screenshot({ path: testInfo.outputPath("phone-shelf.png") });
 

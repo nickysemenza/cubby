@@ -13,7 +13,7 @@ function QueryTools() {
   const target = usePageWorkbenchTarget();
   return target
     ? createPortal(
-        <Input aria-label="Search products" dense className="h-8" />,
+        <Input aria-label="Search products" className="h-8" />,
         target,
       )
     : null;

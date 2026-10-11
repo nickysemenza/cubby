@@ -86,7 +86,7 @@ export function EntityEmptyState({
   );
 }
 
-export function FilteredEmptyState({
+function FilteredEmptyState({
   isFiltered = true,
   onClearFilters,
 }: {

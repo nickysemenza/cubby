@@ -5,7 +5,6 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
-import { EntityIcon } from "~/entity/entities";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
@@ -262,31 +261,6 @@ export function ShelfCard({
           <ArrowUpRightIcon className="size-4" />
         </Link>
       )}
-    </div>
-  );
-}
-
-/** Centered empty state for an empty shelf. */
-export function ShelfEmpty({
-  entity,
-  label,
-  detail,
-}: {
-  entity: Entity;
-  label: string;
-  /**
-   * A second line under the label, for an empty state that can say WHERE the
-   * thing actually is rather than only that it is not here.
-   */
-  detail?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-1 py-6 text-sm text-muted-foreground">
-      <div className="flex items-center gap-2">
-        <EntityIcon entity={entity} className="size-4 opacity-40" />
-        {label}
-      </div>
-      {detail}
     </div>
   );
 }
