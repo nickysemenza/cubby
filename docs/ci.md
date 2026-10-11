@@ -123,7 +123,7 @@ it live in the [validation policy](agents/validation.md) and
 Commit hooks, push behavior, and the merge gate are defined in the
 [validation policy](agents/validation.md).
 
-Node 24, pnpm 12.7.0, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
+Node 24, pnpm 12.9.1, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available; [test tiers](agents/validation-tests.md) cover database setup.
 PostgreSQL remains the authoritative integration tier; Playwright defaults to
 one worker on hosted runners and two on local macOS in `playwright.config.ts`,
