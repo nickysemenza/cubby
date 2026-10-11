@@ -84,7 +84,14 @@ runs:
       env:
         CUBBY_FFI_PROFILE: ${{ inputs.profile }}
         CUBBY_FFI_TARGETS: ${{ inputs.targets }}
-      run: node scripts/ensure-apple-ffi.ts --build
+      # CI/journeys install Nx; archive jobs build before installing JS deps.
+      # Reuse the shared artifact cache whenever the workspace is available.
+      run: |
+        if node --input-type=module -e 'import.meta.resolve("nx/bin/nx.js")' >/dev/null 2>&1; then
+          node scripts/ensure-apple-ffi.ts
+        else
+          node scripts/ensure-apple-ffi.ts --build
+        fi
 
     - name: Check committed UniFFI bindings
       shell: bash

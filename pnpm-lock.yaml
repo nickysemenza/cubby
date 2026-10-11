@@ -623,6 +623,9 @@ importers:
       '@e2e-dev/decision':
         specifier: 0.2.0
         version: 0.2.0(ai@7.0.137(zod@4.6.5))(e2e@0.19.0(@ai-sdk/openai@4.0.91(zod@4.6.5))(ai@7.0.137(zod@4.6.5)))
+      '@e2e-dev/github':
+        specifier: 0.4.0
+        version: 0.4.0(e2e@0.19.0(@ai-sdk/openai@4.0.91(zod@4.6.5))(ai@7.0.137(zod@4.6.5)))
       '@e2e-dev/mobile':
         specifier: 0.11.0
         version: 0.11.0(ai@7.0.137(zod@4.6.5))(e2e@0.19.0(@ai-sdk/openai@4.0.91(zod@4.6.5))(ai@7.0.137(zod@4.6.5)))
@@ -1705,6 +1708,12 @@ packages:
     peerDependencies:
       ai: ^7.0.134
       e2e: '>=0.19.0 <1'
+
+  '@e2e-dev/github@0.4.0':
+    resolution: {integrity: sha512-h4F51Ncwk9VWgdPgAJCjXvqQrBd6sQSt3yvpl9XNJkLTOccndr3A6eAfw6iY49KvNOpZicdQ/glDHxs1c4Lm7Q==}
+    engines: {node: ^22.22.3 || >=24.8.0}
+    peerDependencies:
+      e2e: '>=0.15.0 <1'
 
   '@e2e-dev/mobile@0.11.0':
     resolution: {integrity: sha512-wvZ/VVUmNs65qnXqgh49huCw1Rgl1+3sngOEd4umLaNtPAcQBTzbX9Fz5zdXR5tQuN3HPejVez7IOSHYE3/dyQ==}
@@ -11443,6 +11452,10 @@ snapshots:
       e2e: 0.19.0(@ai-sdk/openai@4.0.91(zod@4.6.5))(ai@7.0.137(zod@4.6.5))
       pngjs: 7.0.0
       zod: 4.6.5
+
+  '@e2e-dev/github@0.4.0(e2e@0.19.0(@ai-sdk/openai@4.0.91(zod@4.6.5))(ai@7.0.137(zod@4.6.5)))':
+    dependencies:
+      e2e: 0.19.0(@ai-sdk/openai@4.0.91(zod@4.6.5))(ai@7.0.137(zod@4.6.5))
 
   '@e2e-dev/mobile@0.11.0(ai@7.0.137(zod@4.6.5))(e2e@0.19.0(@ai-sdk/openai@4.0.91(zod@4.6.5))(ai@7.0.137(zod@4.6.5)))':
     dependencies:

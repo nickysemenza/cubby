@@ -16,6 +16,7 @@
         // (production mode does not read those): .husky/commit-msg,
         // ci.yaml, and the Nx targets.
         "scripts/check-outward-text.ts!",
+        "scripts/tester-army-ci.ts!",
         "scripts/dev-db.ts!",
         "scripts/pristine-simulator-cache.ts!",
         "scripts/generator/ensure.ts!"

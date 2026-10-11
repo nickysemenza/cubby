@@ -1,4 +1,5 @@
 import type { E2EConfig } from "e2e";
+import { github } from "@e2e-dev/github";
 import { web } from "@e2e-dev/web";
 import { mobile } from "@e2e-dev/mobile";
 import { z } from "zod";
@@ -52,7 +53,16 @@ export default {
   assertionTimeout: 15_000,
   cleanupTimeout: 60_000,
   cache: process.env.TESTER_ARMY_REPLAY === "1" ? "read-write" : "off",
-  reporters: ["list", "junit", testerArmyReporter],
+  reporters: [
+    "list",
+    "junit",
+    testerArmyReporter,
+    github({
+      key: process.env.TESTER_ARMY_LANE ?? process.env.TESTER_ARMY_TARGET,
+    }),
+  ],
+  video:
+    process.env.TESTER_ARMY_CI_EVIDENCE === "1" ? "retain-on-failure" : "off",
   secrets: {
     ...Object.fromEntries(
       cookies.map((cookie, index) => [`session-${index}`, cookie.value]),
