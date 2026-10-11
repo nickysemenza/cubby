@@ -293,9 +293,10 @@ describe("joint expense spending allocation", () => {
     });
     const rows = await loadExpenseJointAllocations(ctx.db, [tax.id]);
     expect(rows).toHaveLength(2);
+    // Equal weights: 2¢ each, the leftover cent to the tie-break winner.
     expect(
-      rows.reduce((sum, row) => sum + (row.attributedCents ?? 0n), 0n),
-    ).toBe(5n);
+      rows.map((row) => row.attributedCents).sort((a, b) => Number(a! - b!)),
+    ).toEqual([2n, 3n]);
     expect(
       rows.map((row) => [row.projectId, row.spendingCategoryId]).sort(),
     ).toEqual(
