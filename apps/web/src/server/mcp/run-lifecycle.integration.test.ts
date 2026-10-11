@@ -8,10 +8,11 @@ import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
 import { user } from "~/server/db/auth.schema";
-import { orderMail, run as runTable } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { createMcpServer } from "~/server/mcp/server";
 import { admitMailImport } from "~/server/purchase-import/mail-import-run";
+import { retainedMailFixture } from "~/server/purchase-import/order-import.fixtures";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
@@ -61,19 +62,16 @@ describe("Run lifecycle through MCP", () => {
       kind: "member",
       userId: ctx.actor.userId,
     });
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: member.id,
-        mailboxId: "synthetic-mailbox",
-        messageId: "synthetic-order",
-        sender: "orders@example.test",
-        subject: "Synthetic order",
-        receivedAt: new Date("2026-09-01T18:00:00Z"),
-        rawChecksum: "a".repeat(64),
-        content: { snippet: null, bodyText: "Synthetic order", bodyHtml: null },
-      })
-      .returning();
+    const mail = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: member.id,
+      mailboxId: "synthetic-mailbox",
+      messageId: "synthetic-order",
+      sender: "orders@example.test",
+      subject: "Synthetic order",
+      receivedAt: new Date("2026-09-01T18:00:00Z"),
+      checksum: "a".repeat(64),
+      content: { snippet: null, bodyText: "Synthetic order", bodyHtml: null },
+    });
     if (!mail) throw new Error("Synthetic retained mail did not persist");
     const [admission] = await admitMailImport(ctx.db, {
       ledgerPartyId: member.id,

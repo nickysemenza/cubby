@@ -38,6 +38,7 @@ export type McpToolDefinition = {
 export type DispatchInput = {
   identity: { runId: string; purpose: AgentImportRunPurpose };
   operationId: string;
+  generation: string;
   signal: AgentSignal;
 };
 
@@ -70,7 +71,11 @@ export interface RunServices {
   /** Commit the bound Run allowance before one physical paid transmission. */
   admitPaidInference(request: GatewayFetchRequest): Promise<void>;
   /** The Run's public identity: its purpose and agent instance name. */
-  loadScope(): Promise<{ purpose: AgentImportRunPurpose; agentId: string }>;
+  loadScope(): Promise<{
+    purpose: AgentImportRunPurpose;
+    agentId: string;
+    generation: string | null;
+  }>;
   canDispatchCoordinator(eventId: string): Promise<boolean>;
   acknowledgeCoordinator(eventId: string): Promise<boolean>;
   claimNextWork(input: OperationRef): Promise<RunServiceResult>;

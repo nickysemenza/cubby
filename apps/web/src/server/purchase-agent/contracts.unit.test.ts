@@ -20,6 +20,7 @@ describe("PurchaseAgentEvent", () => {
         type: "retry",
         runId,
         eventId: "historical-retry",
+        generation: "synthetic-generation",
         coordinatorModel: "retired-model",
         retryOf: "operation-4",
       }),
@@ -30,6 +31,7 @@ describe("PurchaseAgentEvent", () => {
       type: "retry",
       runId,
       eventId: "historical-retry",
+      generation: "synthetic-generation",
       retryOf: "operation-4",
     });
     expect(purchaseAgentEventIdempotencyKey(event)).toBe(
@@ -42,6 +44,7 @@ describe("PurchaseAgentEvent", () => {
       type: "retry",
       runId,
       eventId: "retry-after-transient-failure",
+      generation: "synthetic-generation",
       retryOf: "operation-4",
     });
 

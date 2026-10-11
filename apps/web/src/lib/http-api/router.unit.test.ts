@@ -1,4 +1,3 @@
-import { httpByteReads } from "@cubby/schemas/http-byte-transports";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -76,10 +75,7 @@ describe("HTTP contract", () => {
     expect(flat?.query instanceof z.ZodType).toBe(true);
     expect(Object.keys(document.paths).sort()).toEqual(
       [
-        ...new Set([
-          ...routes.map((route) => route.path.replace(":id", "{id}")),
-          ...httpByteReads.map((transport) => transport.path),
-        ]),
+        ...new Set(routes.map((route) => route.path.replace(":id", "{id}"))),
       ].sort(),
     );
     expect(document.security).toEqual([

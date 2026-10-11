@@ -134,3 +134,6 @@ apps/web/.e2e/
 # Cargo workspace build output (CI builds into the repo root)
 /target
 /target-*
+
+# Ephemeral lint-rule regression fixtures are not application/generator inputs.
+.lint-fixture-*/

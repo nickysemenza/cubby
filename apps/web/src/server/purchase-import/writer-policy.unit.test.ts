@@ -8,6 +8,48 @@ describe("purchase import writer policy", () => {
     { title: "Shipping", amount: 2, lineKind: "shipping" as const },
   ];
 
+  it("attaches equivalent independently arriving item lines without duplicating spend", () => {
+    expect(
+      decideLineWrite(
+        lines.map((line, index) => ({
+          id: `expense-${index}`,
+          title: line.title,
+          amount: line.amount,
+          lineKind: line.lineKind,
+          productId: null,
+          tradeId: null,
+          projectId: null,
+          costType: "materials",
+          sourceClaimed: true,
+        })),
+        lines,
+      ),
+    ).toEqual({ kind: "no_op" });
+  });
+
+  it("does not attach an equivalent price when the owned Product quantity conflicts", () => {
+    expect(
+      decideLineWrite(
+        [
+          {
+            id: "expense-quantity",
+            title: "Filter",
+            amount: 18,
+            lineKind: "principal",
+            productId: "product-filter",
+            productQuantity: 2,
+            lineBasis: "item_line",
+            tradeId: null,
+            projectId: null,
+            costType: "materials",
+            sourceClaimed: false,
+          },
+        ],
+        [{ title: "Filter", amount: 18, lineKind: "principal", quantity: 3 }],
+      ),
+    ).toEqual({ kind: "conflict", reason: "duplicate_lines" });
+  });
+
   it("requires explicit review of even an exact, unlinked, unclaimed principal aggregate", () => {
     const decision = decideLineWrite(
       [

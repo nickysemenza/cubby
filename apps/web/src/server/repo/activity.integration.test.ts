@@ -20,10 +20,9 @@ import {
   image,
   run as runTable,
   runOperation,
-  runProgress,
-  runTarget,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { writeOutcomeReceipts } from "~/server/purchase-import/run-outcome.fixtures";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import {
@@ -490,15 +489,15 @@ describe("unified Runs history", () => {
       .select({ shortcode: runTable.shortcode })
       .from(runTable)
       .where(eq(runTable.id, coordinatorId));
-    await getDb(ctx.db)
-      .insert(runTarget)
-      .values({
+    await writeOutcomeReceipts(ctx.db, [
+      {
         runId: coordinatorId,
         entityKind: "run",
         entityId: subjectId,
         state: "pending",
         targetFingerprint: "a".repeat(64),
-      });
+      },
+    ]);
     const expected = {
       id: coordinators[0]!.shortcode,
       targetPreview: [
@@ -891,12 +890,21 @@ describe("unified Runs history", () => {
       .where(eq(runTable.id, childId));
     const pauseReason =
       "Enable screen recording, then resume the browser work.";
-    await getDb(ctx.db).insert(runProgress).values({
-      runId: childId,
-      eventId: "attention-progress",
-      phase: "research",
-      detail: "Reading an order",
-    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({
+        liveProgress: {
+          eventId: "attention-progress",
+          generation: "synthetic-generation",
+          sequence: 1,
+          phase: "research",
+          currentItem: null,
+          awaitingApproval: false,
+          detail: "Reading an order",
+          createdAt: new Date().toISOString(),
+        },
+      })
+      .where(eq(runTable.id, childId));
     await getDb(ctx.db)
       .insert(runOperation)
       .values([
@@ -1312,46 +1320,64 @@ describe("unified Runs history", () => {
         startedAt: new Date(),
       })
       .returning({ id: runTable.id });
+    await writeOutcomeReceipts(ctx.db, [
+      {
+        runId: run!.id,
+        entityKind: "product",
+        entityId: enriched.id,
+        position: 0,
+        state: "completed",
+        outcome: "enriched",
+        targetFingerprint: "1".repeat(64),
+      },
+      {
+        runId: run!.id,
+        entityKind: "product",
+        entityId: skipped.id,
+        position: 1,
+        state: "skipped",
+        outcome: "skipped",
+        warning: "The page lists several variants",
+        targetFingerprint: "2".repeat(64),
+      },
+    ]);
     await getDb(ctx.db)
-      .insert(runTarget)
-      .values([
-        {
-          runId: run!.id,
-          entityKind: "product",
-          entityId: enriched.id,
-          position: 0,
-          state: "completed",
-          outcome: "enriched",
-          targetFingerprint: "1".repeat(64),
-        },
-        {
-          runId: run!.id,
-          entityKind: "product",
-          entityId: skipped.id,
-          position: 1,
-          state: "skipped",
-          outcome: "skipped",
-          warning: "The page lists several variants",
-          targetFingerprint: "2".repeat(64),
-        },
-      ]);
-    await getDb(ctx.db)
-      .insert(runProgress)
-      .values([
-        {
-          runId: run!.id,
-          eventId: crypto.randomUUID(),
-          phase: "browsing",
-          detail: "Opening the first product page",
-          createdAt: new Date(Date.now() - 60_000),
-        },
-        {
-          runId: run!.id,
-          eventId: crypto.randomUUID(),
+      .update(runTable)
+      .set({
+        liveProgress: {
+          eventId: "synthetic-reading",
+          generation: "synthetic-generation",
+          sequence: 2,
           phase: "reading",
+          currentItem: null,
+          awaitingApproval: false,
           detail: "Reading Fixture Tomato",
+          createdAt: new Date().toISOString(),
         },
-      ]);
+        progressHistory: [
+          {
+            eventId: "synthetic-browsing",
+            generation: "synthetic-generation",
+            sequence: 1,
+            phase: "browsing",
+            currentItem: null,
+            awaitingApproval: false,
+            detail: "Opening the first product page",
+            createdAt: new Date(Date.now() - 60_000).toISOString(),
+          },
+          {
+            eventId: "synthetic-reading",
+            generation: "synthetic-generation",
+            sequence: 2,
+            phase: "reading",
+            currentItem: null,
+            awaitingApproval: false,
+            detail: "Reading Fixture Tomato",
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      })
+      .where(eq(runTable.id, run!.id));
     await getDb(ctx.db)
       .insert(auditLog)
       .values([
@@ -1482,19 +1508,18 @@ describe("unified Runs history", () => {
         }),
       );
     // Ids descend while creation ascends, so an id tiebreak would reverse them.
-    await getDb(ctx.db)
-      .insert(runTarget)
-      .values(
-        products.map((product, index) => ({
-          id: `0000000${9 - index}-0000-4000-8000-000000000000`,
-          runId: run!.id,
-          entityKind: "product" as const,
-          entityId: product.id,
-          position: 0,
-          targetFingerprint: String(index).repeat(64),
-          createdAt: new Date(Date.UTC(2026, 8, 1, 0, index)),
-        })),
-      );
+    await writeOutcomeReceipts(
+      ctx.db,
+      products.map((product, index) => ({
+        id: `0000000${9 - index}-0000-4000-8000-000000000000`,
+        runId: run!.id,
+        entityKind: "product" as const,
+        entityId: product.id,
+        position: 0,
+        targetFingerprint: String(index).repeat(64),
+        createdAt: new Date(Date.UTC(2026, 8, 1, 0, index)),
+      })),
+    );
 
     const list = await listActivity(ctx.db, null, {
       recordType: "run",

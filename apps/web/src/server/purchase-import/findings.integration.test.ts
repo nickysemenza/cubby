@@ -4,12 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import {
-  runFinding,
-  orderMail,
-  orderMailEvent,
-  user,
-} from "~/server/db/schema";
+import { runFinding, orderMailEvent, user } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   createInventoryFixture,
@@ -25,6 +20,7 @@ import {
   resolveArrivedFindingsForPurchase,
   resolveRunFinding,
 } from "./findings";
+import { retainedMailFixture } from "./order-import.fixtures";
 import {
   importOrderHistory,
   liveExpenseCents,
@@ -242,19 +238,16 @@ describe("create_refund findings", () => {
     input: { purchaseId: string; orderId: string; messageId: string },
   ) {
     const database = getDb(ctx.db);
-    const [mail] = await database
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: fixture.party.id,
-        vendorId: fixture.vendor.id,
-        mailboxId: "synthetic-refund-mailbox",
-        messageId: input.messageId,
-        sender: "orders@forgewear.example",
-        subject: `Your ForgeWear refund for ${input.orderId}`,
-        receivedAt: new Date("2026-09-05T12:00:00.000Z"),
-        rawChecksum: `raw-${input.messageId}`,
-      })
-      .returning({ id: orderMail.id });
+    const mail = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: fixture.party.id,
+      vendorId: fixture.vendor.id,
+      mailboxId: "synthetic-refund-mailbox",
+      messageId: input.messageId,
+      sender: "orders@forgewear.example",
+      subject: `Your ForgeWear refund for ${input.orderId}`,
+      receivedAt: new Date("2026-09-05T12:00:00.000Z"),
+      checksum: `raw-${input.messageId}`,
+    });
     if (!mail) throw new Error("test setup: order mail not inserted");
     const sourceKey = `classified:raw-${input.messageId}`;
     await database.insert(orderMailEvent).values({

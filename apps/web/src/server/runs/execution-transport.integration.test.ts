@@ -1,5 +1,6 @@
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
+import * as decisionModels from "@cubby/shared/ai/models";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -31,6 +32,7 @@ vi.hoisted(() => {
 describe("mail routing at the paid transport boundary", () => {
   const ctx = withTestDb();
   afterEach(() => {
+    vi.restoreAllMocks();
     setCfEnv(undefined);
     vi.unstubAllGlobals();
   });
@@ -38,7 +40,12 @@ describe("mail routing at the paid transport boundary", () => {
   async function routing(
     condition: "exhausted" | "unapproved" | "cancelled" | "active",
     beforePricing?: () => Promise<void>,
+    executionPolicy: "classification_only" | "import" = "import",
+    purpose: "mail_discovery" | "mail_import" = "mail_discovery",
   ) {
+    vi.spyOn(decisionModels, "selectDecisionModel").mockReturnValue(
+      "typesafe/jev",
+    );
     const member = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic routing member",
       kind: "member",
@@ -74,9 +81,14 @@ describe("mail routing at the paid transport boundary", () => {
           )
         : undefined;
     const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "mail_discovery",
+      purpose,
       trigger: "scheduled",
-      input: { mailboxId, scopedQueries: [], executionAuthorization },
+      input: {
+        mailboxId,
+        scopedQueries: [],
+        executionAuthorization,
+        executionPolicy,
+      },
     });
     if (condition === "cancelled")
       await getDb(ctx.db)
@@ -183,9 +195,53 @@ describe("mail routing at the paid transport boundary", () => {
       expect(transmit).not.toHaveBeenCalled();
     },
   );
+  it.each([
+    { policy: "classification_only", purpose: "mail_discovery" },
+    { policy: "import", purpose: "mail_discovery" },
+    { policy: "import", purpose: "mail_import" },
+  ] as const)(
+    "classifies with Jev beyond the dollar allowance in $purpose/$policy while paid research stays bounded",
+    async ({ policy, purpose }) => {
+      const { classify, transmit, runId } = await routing(
+        "exhausted",
+        undefined,
+        policy,
+        purpose,
+      );
+      await expect(classify()).resolves.toBe("related");
+      expect(transmit).toHaveBeenCalledTimes(1);
+      const [stored] = await getDb(ctx.db)
+        .select({ status: run.status })
+        .from(run)
+        .where(eq(run.id, runId));
+      expect(stored?.status).toBe("running");
+      const paid = gatewayFetchThrough({
+        provider: "openai",
+        beforePaidRequest: paidResearchPreflight(ctx.db, runId),
+        gateway: transmit,
+      });
+      await expect(
+        paid("https://ai-gateway.invalid/openai/responses", {
+          method: "POST",
+          body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+        }),
+      ).rejects.toThrow(/allowance/iu);
+      expect(transmit).toHaveBeenCalledTimes(1);
+    },
+  );
   it("pauses exhausted routing before transmission and scheduling until the next month", async () => {
-    const { classify, transmit, runId } = await routing("exhausted");
-    await expect(classify()).rejects.toThrow(/allowance/iu);
+    const { transmit, runId } = await routing("exhausted");
+    const paid = gatewayFetchThrough({
+      provider: "openai",
+      beforePaidRequest: paidResearchPreflight(ctx.db, runId),
+      gateway: transmit,
+    });
+    await expect(
+      paid("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      }),
+    ).rejects.toThrow(/allowance/iu);
     expect(transmit).not.toHaveBeenCalled();
     const [paused] = await getDb(ctx.db)
       .select()

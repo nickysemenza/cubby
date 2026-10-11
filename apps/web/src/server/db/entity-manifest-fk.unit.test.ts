@@ -89,8 +89,15 @@ const NON_ENTITY_FK_TARGETS = {
   // statement line by public id.
   StatementImport: "provider export bookkeeping, not a domain entity",
   StatementRow: "verbatim statement evidence, not a domain entity",
-  RunTarget:
-    "explicit operational target for a validation, enrichment or photo-inventory import run",
+  SourceOrderObservation:
+    "immutable source extraction history, not a domain entity",
+  AiUsage: "append-only model accounting, not a domain entity",
+  EmailClassificationObservation:
+    "immutable Email prediction evidence, not a domain entity",
+  EmailClassificationLabel:
+    "member review of a prediction, not a domain entity",
+  EmailAccuracyEvaluation:
+    "frozen prediction evaluation roster, not a domain entity",
   ImportPreparedOrder:
     "immutable purchase-import evidence preparation, not a domain entity",
   ImportSourceClaim: "retained source authority for imported evidence",
@@ -114,6 +121,64 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  "PhotoRunImage.runId": {
+    classification: "ownership",
+    reason: "actual photo membership owned by its Run",
+  },
+  "PhotoRunImage.imageId": {
+    classification: "metadata",
+    reason: "a photo Run member references its source Image",
+  },
+  "PhotoRunImage.deviceWorkDeviceId": {
+    classification: "metadata",
+    reason: "the device that last processed the photo",
+  },
+  "SourceOrderObservation.purchaseId": {
+    classification: "metadata",
+    reason:
+      "immutable extraction history retains the original Purchase identity",
+  },
+  "SourceOrderObservation.vendorId": {
+    classification: "metadata",
+    reason: "immutable extraction history retains the original Vendor identity",
+  },
+  "SourceOrderObservation.runId": {
+    classification: "metadata",
+    reason: "records the Run that captured the extraction",
+  },
+  "SourceOrderObservation.primaryDocumentImageId": {
+    classification: "metadata",
+    reason: "retains optional source media until explicit Image deletion",
+  },
+  "SourceOrderObservation.screenshotImageId": {
+    classification: "metadata",
+    reason: "retains optional screenshot media until explicit Image deletion",
+  },
+  "EmailCandidateObservation.emailId": {
+    classification: "metadata",
+    reason: "immutable evidence about an Email",
+  },
+  "EmailCandidateObservation.runId": {
+    classification: "metadata",
+    reason: "records the original Run that produced the evidence",
+  },
+  "EmailClassificationObservation.emailId": {
+    classification: "metadata",
+    reason: "immutable evidence about an Email",
+  },
+  "EmailClassificationObservation.runId": {
+    classification: "metadata",
+    reason: "records the original Run that produced the evidence",
+  },
+  "EmailRetrievalFailure.emailId": {
+    classification: "metadata",
+    reason: "immutable evidence about an Email",
+  },
+  "EmailRetrievalFailure.runId": {
+    classification: "metadata",
+    reason: "records the original Run that produced the evidence",
+  },
+
   "ImportPreparedOrder.targetPurchaseId": {
     classification: "metadata",
     reason:
@@ -152,10 +217,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Run that scheduled a queued image-processing job",
   },
-  "RunTarget.deviceWorkDeviceId": {
-    classification: "metadata",
-    reason: "records the device that last reported on-device processing",
-  },
   // ImageSighting is a child table of Image, not an entity, so no relation
   // path can start from it; the Image detail reads its sightings directly.
   "ImageSighting.imageId": {
@@ -190,11 +251,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "the category a proposed photo group's new Product is filed under",
   },
-  "RunTarget.vendorAccountId": {
-    classification: "metadata",
-    reason:
-      "freezes the member-owned vendor account selected for targeted evidence",
-  },
   // run's own child rows. Each source table is operational
   // bookkeeping (see NON_ENTITY_FK_TARGETS above), not an entity, so these
   // stay ordinary non-graph exemptions rather than needing a declared
@@ -207,21 +263,9 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   // which is out of scope here; see the failing case this leaves in
   // "accounts for every entity-targeting FK with a graph path or classified
   // non-entity edge".
-  "RunTarget.runId": {
-    classification: "ownership",
-    reason: "a validation/enrichment target exists only as part of its run",
-  },
-  "MailboxMessage.runId": {
-    classification: "metadata",
-    reason: "records which research Run owns the retained mailbox message",
-  },
   "RunOperation.runId": {
     classification: "ownership",
     reason: "one idempotent operation owned by its run",
-  },
-  "RunProgress.runId": {
-    classification: "ownership",
-    reason: "a progress checkpoint owned by its run",
   },
   "RunControlEvent.runId": {
     classification: "ownership",
@@ -255,11 +299,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "ImportPreparedOrder.screenshotImageId": {
     classification: "metadata",
     reason: "immutable prepared evidence retains its browser screenshot",
-  },
-  "MailboxMessage.ledgerPartyId": {
-    classification: "metadata",
-    reason:
-      "scopes mailbox acquisition and research coverage to a household member",
   },
   "ImportSourceClaim.ledgerPartyId": {
     classification: "metadata",

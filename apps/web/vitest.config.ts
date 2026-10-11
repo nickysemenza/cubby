@@ -180,6 +180,8 @@ export default defineConfig({
     },
   },
   test: {
+    // Reuse source/config-keyed transforms across focused runs; assertions still execute.
+    fsModuleCache: true,
     // Dependency prebundling regresses this import-heavy graph; remeasure before
     // enabling it. WASM initialization is not the material cost.
 

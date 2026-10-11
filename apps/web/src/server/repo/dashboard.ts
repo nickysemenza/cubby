@@ -5,7 +5,11 @@ import {
 import { type SQL, and, ne, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { run as runTable, plant } from "~/server/db/schema";
+import {
+  run as runTable,
+  plant,
+  email as emailTable,
+} from "~/server/db/schema";
 import { cookbookListWhere } from "~/server/repo/cookbook";
 import { getDb } from "~/server/repo/database-helpers";
 import { notDeleted } from "~/server/repo/database-helpers/query";
@@ -81,6 +85,7 @@ const COUNT_WHERE = {
   plant: () => notDeleted(plant),
   planting: () => buildPlantingWhere(),
   gardenEntry: () => buildGardenEntryWhere(),
+  email: () => notDeleted(emailTable),
   run: () => and(notDeleted(runTable), ne(runTable.trigger, "ephemeral")),
   ledgerParty: () => buildLedgerPartyWhere({}),
   ledgerTransfer: (db) => buildLedgerTransferWhere(db, {}),

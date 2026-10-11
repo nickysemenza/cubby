@@ -1,15 +1,10 @@
 import { defineChildTable } from "../entity-definitions/child-definition.js";
 
 export const runChildren = [
-  /**
-   * Explicit no-op-validation/enrichment targets; the Run's writes are
-   * AuditLog rows carrying its `runId`. A target names a purchase, product or image by `entityRef`;
-   * the composite FK targets `Entity`, whose rows outlive a hard delete, so a
-   * target keeps its tombstone the way the old Purchase FK's policy asked.
-   */
+  /** Photo membership and replay state belong to the Run, never to an Image singleton. */
   defineChildTable({
-    name: "RunTarget",
-    exportName: "runTarget",
+    name: "PhotoRunImage",
+    exportName: "photoRunImage",
     columns: [
       {
         key: "id",
@@ -21,39 +16,35 @@ export const runChildren = [
         key: "runId",
         kind: "uuid",
         notNull: true,
+        type: "RunId",
         reference: { table: "run", column: "id" },
       },
-      { key: "entityId", kind: "uuid", notNull: true },
-      /** Distinct source work can address the same entity without sharing a task. */
-      { key: "workKey", kind: "text", notNull: true, default: "" },
       {
-        key: "entityKind",
-        kind: "text",
+        key: "imageId",
+        kind: "uuid",
         notNull: true,
-        type: "RunTargetEntityKind",
+        type: "ImageId",
+        reference: { table: "image", column: "id" },
       },
-      /** Picker order within a photo-inventory run; the tiebreak when capture times collide. */
+      { key: "workKey", kind: "text", notNull: true, default: "" },
       { key: "position", kind: "integer" },
       {
-        key: "vendorAccountId",
-        kind: "uuid",
-        reference: { table: "vendorAccount", column: "id" },
+        key: "state",
+        kind: "text",
+        type: "PhotoRunImageState",
+        notNull: true,
+        default: "pending",
       },
-      { key: "sourceKind", kind: "text" },
-      { key: "sourceExternalKey", kind: "text" },
-      { key: "state", kind: "text", notNull: true, default: "pending" },
       { key: "targetFingerprint", kind: "text", notNull: true },
-      { key: "evidenceFingerprint", kind: "text" },
-      { key: "outcome", kind: "text" },
-      { key: "warning", kind: "text" },
-      { key: "diff", kind: "jsonb" },
+      { key: "outcome", kind: "text", type: "PhotoRunImageOutcome" },
+      { key: "skipReason", kind: "text" },
+      {
+        key: "commitReceipt",
+        kind: "jsonb",
+        type: "PhotoRunImageCommitReceipt",
+      },
       { key: "preparedAt", kind: "timestamp" },
       { key: "completedAt", kind: "timestamp" },
-      /**
-       * Device-side processing state for a photo-run image target, reported by
-       * `run.reportDeviceWork`. Null means no device has picked up this photo
-       * yet; distinct from `state` (the server-side prepare/complete pipeline).
-       */
       {
         key: "deviceWorkState",
         kind: "text",
@@ -84,54 +75,44 @@ export const runChildren = [
     ],
     types: [
       {
-        module: "@cubby/schemas/run-fields",
-        exports: ["RunTargetEntityKind"],
+        module: "@cubby/schemas/identifiers",
+        exports: ["RunId", "ImageId", "DeviceId"],
       },
       {
         module: "@cubby/schemas/photo-import-run",
-        exports: ["RunTargetDeviceWorkState"],
+        exports: [
+          "PhotoRunImageState",
+          "PhotoRunImageOutcome",
+          "PhotoRunImageCommitReceipt",
+          "RunTargetDeviceWorkState",
+        ],
       },
-      { module: "@cubby/schemas/identifiers", exports: ["DeviceId"] },
     ],
     indexes: [
-      { name: "RunTarget_run_idx", on: ["runId"] },
-      // The target's own lookups (product/purchase/image merge and delete).
-      { name: "RunTarget_entity_idx", on: ["entityId"] },
       {
-        name: "RunTarget_deviceWorkDeviceId_idx",
+        name: "PhotoRunImage_run_image_work_key",
+        unique: true,
+        on: ["runId", "imageId", "workKey"],
+      },
+      { name: "PhotoRunImage_image_idx", on: ["imageId"] },
+      {
+        name: "PhotoRunImage_device_idx",
         on: ["deviceWorkDeviceId"],
         where: "{deviceWorkDeviceId} IS NOT NULL",
-      },
-      {
-        name: "RunTarget_run_entity_key",
-        unique: true,
-        on: ["runId", "entityId", "workKey"],
       },
     ],
     checks: [
       {
-        name: "RunTarget_entityKind_check",
-        sql: "{entityKind} IN ('purchase', 'product', 'image', 'run')",
-      },
-      {
-        name: "RunTarget_state_check",
+        name: "PhotoRunImage_state_check",
         sql: "{state} IN ('pending', 'prepared', 'completed', 'skipped', 'unresolved', 'needs_evidence', 'unavailable')",
       },
       {
-        name: "RunTarget_outcome_check",
-        sql: "{outcome} IS NULL OR {outcome} IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached', 'verified', 'partially_verified', 'researched_with_gaps', 'ambiguous', 'temporarily_blocked', 'no_source_found', 'unrelated')",
+        name: "PhotoRunImage_outcome_check",
+        sql: "{outcome} IS NULL OR {outcome} IN ('attached', 'skipped')",
       },
       {
-        name: "RunTarget_deviceWorkState_check",
+        name: "PhotoRunImage_device_state_check",
         sql: "{deviceWorkState} IS NULL OR {deviceWorkState} IN ('queued', 'running', 'paused', 'failed', 'completed')",
-      },
-    ],
-    foreignKeys: [
-      {
-        name: "RunTarget_entity_fk",
-        columns: ["entityId", "entityKind"],
-        table: "entityIdentity",
-        references: ["id", "kind"],
       },
     ],
   }),
@@ -246,6 +227,11 @@ export const runChildren = [
       { key: "outputFingerprint", kind: "text", notNull: true },
       { key: "originalOrder", kind: "jsonb", type: "AcceptedSourceOrder" },
       {
+        key: "acceptedObservationId",
+        kind: "uuid",
+        reference: { table: "sourceOrderObservation", column: "id" },
+      },
+      {
         key: "createdAt",
         kind: "timestamp",
         notNull: true,
@@ -273,6 +259,10 @@ export const runChildren = [
         on: ["sourceClaimId", "orderKey"],
       },
       { name: "ImportSourceOrder_purchase_idx", on: ["purchaseId"] },
+      {
+        name: "ImportSourceOrder_acceptedObservation_idx",
+        on: ["acceptedObservationId"],
+      },
     ],
   }),
   /** Replay-safe boundary for the agent's durable tools and external side effects. */
@@ -493,48 +483,6 @@ export const runChildren = [
         columns: ["productCreateCategoryId"],
         table: "productCategory",
         references: ["id"],
-      },
-    ],
-  }),
-  /** Durable progress events for the agent and other background Runs. */
-  defineChildTable({
-    name: "RunProgress",
-    exportName: "runProgress",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      {
-        key: "runId",
-        kind: "uuid",
-        notNull: true,
-        reference: { table: "run", column: "id" },
-      },
-      { key: "eventId", kind: "text", notNull: true },
-      { key: "phase", kind: "text", notNull: true },
-      { key: "currentItem", kind: "text" },
-      {
-        key: "awaitingApproval",
-        kind: "boolean",
-        notNull: true,
-        default: false,
-      },
-      { key: "detail", kind: "text" },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-    ],
-    indexes: [
-      { name: "RunProgress_eventId_unique", unique: true, on: ["eventId"] },
-      {
-        name: "RunProgress_run_created_idx",
-        on: ["runId", { column: "createdAt", desc: true }],
       },
     ],
   }),
@@ -804,7 +752,7 @@ export const runChildren = [
         key: "entityKind",
         kind: "text",
         notNull: true,
-        type: '"purchase" | "expense" | "product" | "run"',
+        type: '"purchase" | "expense" | "product" | "run" | "email"',
       },
       { key: "kind", kind: "text", notNull: true },
       { key: "summary", kind: "text", notNull: true },
@@ -862,7 +810,7 @@ export const runChildren = [
       },
       {
         name: "RunFinding_entityKind_check",
-        sql: "{entityKind} IN ('purchase', 'expense', 'product', 'run')",
+        sql: "{entityKind} IN ('purchase', 'expense', 'product', 'run', 'email')",
       },
     ],
     foreignKeys: [

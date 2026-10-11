@@ -23,13 +23,13 @@ pending: nothing here starts Product research.
    `Run.progress`, and replays it until its page commits. `gmail/ingest.ts`
    classifies each message (`gmail/triage.ts` rule/Jev, then
    `gmail/relevance.ts` for uncertain mail) and records the deciding stage and
-   reason on `MailboxMessage`. Related originals become `OrderMail`; unrelated
+   reason on `Email`. Related originals become `OrderMail`; unrelated
    mail keeps only its provider identity. Coverage is checkpointed with a
    compare-and-swap in the same transaction as the page's events
    (`gmail/persistence.ts`).
 2. **Admission** (`mail-import-run.ts`) freezes up to 50 Emails' checksums into
    one `mail_import` Run with a RunTarget per Email, assigns ownership through
-   `MailboxMessage.runId`, and dispatches `start_or_resume` to
+   `Email.runId`, and dispatches `start_or_resume` to
    `PURCHASE_AGENT_QUEUE` after commit (`dispatch.ts`). Paid inference is
    admitted per call against the Run's execution authorization
    (`runs/execution-*`).

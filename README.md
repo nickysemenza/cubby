@@ -63,6 +63,9 @@ not deferred.
    a reason to reject a write. Card transactions are settlement evidence, not
    spend.
 
+6. **Never retain unrelated mail’s content.** Keep sender, subject and received
+   date for every scanned Email; unrelated mail keeps no body or attachments.
+
 ## Entities
 
 Every entity has a public **shortcode** such as `PRD-4K7M`. It appears in URLs,
@@ -267,7 +270,9 @@ flowchart LR
 Purchases arrive two ways ([ADR 0010](docs/adr/0010-mail-import-unattended-burn-down-interactive.md)):
 Gmail discovery admits order Email into Mail import Runs that Pi works through
 the same public MCP tools a member uses, and a member's Claude or Codex session
-burns down the Research queue with its own browser.
+burns down the Research queue with its own browser. Follow the
+[Burn-down guide](docs/burn-down.md) for Sources, collection patches, purchase
+reconciliation and wardrobe details.
 
 ```sh
 pnpm install
@@ -291,3 +296,51 @@ Further docs:
 - [docs/local-development.md](docs/local-development.md): the dev session.
 - [docs/todos.md](docs/todos.md): the backlog.
 - [docs/README.md](docs/README.md): everything else.
+
+## Import and Burn-down flows
+
+The agreed target flows below include the pending
+[Email entity](docs/adr/0011-email-as-a-first-class-entity.md) and
+[import convergence](docs/adr/0012-import-convergence-through-burn-down.md)
+changes. Sources can arrive in any order: later evidence supports the same
+Purchase and exact Product variant. Wardrobe uses apparel Products, Images and
+Inventory; Claude/Codex sessions also research wardrobe details through MCP.
+
+```mermaid
+flowchart TB
+  Gmail["Gmail discovery / backfill"] --> Classify["Rules → Jev / Clef"]
+  Classify --> Email["Email: metadata + Relevance<br/>Optional retained content"]
+  Email --> Accuracy["Independent accuracy review<br/>Classification and import costs"]
+  Email --> Manual["Member chooses one Email<br/>Run import + cost estimate"]
+  Manual --> Pi["Pi Mail import<br/>Public MCP tools"]
+  Email -. "automatic admission stays disabled<br/>during classification-only backfill" .-> Gate["Later member decision"]
+  Gate -. "may enable authorized import" .-> Pi
+
+  Retailer["Retailer history / export"] --> Client["Claude / Codex client<br/>Browser, connectors and MCP"]
+  Receipt["Receipt photo / document"] --> Client
+  Pi --> Import["Prepare import / reconciliation<br/>Match, attach, correct or replace"]
+  Client --> Import
+  Import --> Purchase["Purchase + Expenses<br/>Source identity and accepted observations"]
+  Purchase --> Product["Product<br/>One exact variant"]
+  Email -. "derived accepted links" .-> Purchase
+  Statement["Statement / card charge"] -- "settlement evidence" --> Purchase
+
+  Photos["Product / wardrobe photos<br/>Item views and labels"] --> Groups["Photo import Run<br/>Group items and match Products"]
+  Groups --> Approval["Member reviews groups<br/>Identity, owner, location and copies"]
+  Approval -- "create or reuse" --> Product
+  Approval -- "attach" --> Images["Item / label Images"]
+  Approval -- "receive when ownership<br/>and location are settled" --> Inventory["Inventory<br/>Owned copies and location"]
+  Product --> TagReview["Follow-up MCP enrichment<br/>Transcribe tags with Sources"]
+
+  Purchase -- "exposes declared gaps / conflicts" --> Queue["Derived Research / reconciliation views"]
+  Product -- "exposes declared identity gaps" --> Queue
+  Queue --> Burn["Claude / Codex Burn-down<br/>Read sources, compare and ask member"]
+  Wardrobe["Member selects wardrobe / Products"] --> Burn
+  Burn -- "prepare resolution" --> Import
+  Burn -- "source-backed field / collection patches" --> Product
+  Burn -- "verify stored facts or record<br/>searched, not available" --> Result["Resolved checks or explicit remaining gaps"]
+```
+
+All spending is `SUM(Expense.cost)`. A statement never adds spend, a photo never
+invents purchase facts, and purchase import or enrichment never changes stock.
+Inventory changes only through a deliberate receiving or recount action.

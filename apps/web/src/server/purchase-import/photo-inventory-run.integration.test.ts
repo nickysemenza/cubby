@@ -16,7 +16,7 @@ import {
   image,
   run as runTable,
   runFinding,
-  runTarget,
+  photoRunImage,
 } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { callMcpTool, kernelRequestContext } from "~/server/mcp/mcp-test-utils";
@@ -104,14 +104,13 @@ describe("photo import finalize", () => {
       });
       photos.push(photo);
       await getDb(ctx.db)
-        .insert(runTarget)
+        .insert(photoRunImage)
         .values({
           runId: run.id,
-          entityKind: "image",
-          entityId: parseImageId.parse(photo.id),
+          imageId: parseImageId.parse(photo.id),
           position,
           state: position === 0 ? "completed" : "skipped",
-          warning: position === 0 ? null : "Too blurry to identify",
+          skipReason: position === 0 ? null : "Too blurry to identify",
           targetFingerprint: String(position + 6).repeat(64),
         });
     }
@@ -171,11 +170,10 @@ describe("photo import finalize", () => {
         sha256: String(position).repeat(64),
       });
       await getDb(ctx.db)
-        .insert(runTarget)
+        .insert(photoRunImage)
         .values({
           runId: run.id,
-          entityKind: "image",
-          entityId: parseImageId.parse(photo.id),
+          imageId: parseImageId.parse(photo.id),
           position,
           state: "pending",
           targetFingerprint: String(position).repeat(64),
@@ -255,11 +253,10 @@ describe("photo import finalize", () => {
       sha256: "e".repeat(64),
     });
     await getDb(ctx.db)
-      .insert(runTarget)
+      .insert(photoRunImage)
       .values({
         runId: original.id,
-        entityKind: "image",
-        entityId: parseImageId.parse(photo.id),
+        imageId: parseImageId.parse(photo.id),
         position: 0,
         state: "completed",
         targetFingerprint: "e".repeat(64),
@@ -307,12 +304,12 @@ describe("photo import finalize", () => {
     expect(newRun?.dispatchEventId).toBeTruthy();
     const targets = await getDb(ctx.db)
       .select({
-        runId: runTarget.runId,
-        imageId: runTarget.entityId,
-        state: runTarget.state,
+        runId: photoRunImage.runId,
+        imageId: photoRunImage.imageId,
+        state: photoRunImage.state,
       })
-      .from(runTarget)
-      .where(eq(runTarget.entityId, parseImageId.parse(photo.id)));
+      .from(photoRunImage)
+      .where(eq(photoRunImage.imageId, parseImageId.parse(photo.id)));
     expect(targets).toEqual(
       expect.arrayContaining([
         { runId: original.id, imageId: photo.id, state: "completed" },
@@ -373,12 +370,12 @@ describe("photo import finalize", () => {
 
     const targets = await getDb(ctx.db)
       .select({
-        state: runTarget.state,
-        position: runTarget.position,
-        targetFingerprint: runTarget.targetFingerprint,
+        state: photoRunImage.state,
+        position: photoRunImage.position,
+        targetFingerprint: photoRunImage.targetFingerprint,
       })
-      .from(runTarget)
-      .where(eq(runTarget.entityId, parseImageId.parse(staged.id)));
+      .from(photoRunImage)
+      .where(eq(photoRunImage.imageId, parseImageId.parse(staged.id)));
     expect(targets).toEqual([
       { state: "pending", position: 0, targetFingerprint: sha256 },
     ]);
@@ -437,9 +434,9 @@ describe("photo import finalize", () => {
     expect(replay.alreadyFinalized).toEqual([staged.shortcode]);
 
     const targets = await getDb(ctx.db)
-      .select({ id: runTarget.id })
-      .from(runTarget)
-      .where(eq(runTarget.entityId, parseImageId.parse(staged.id)));
+      .select({ id: photoRunImage.id })
+      .from(photoRunImage)
+      .where(eq(photoRunImage.imageId, parseImageId.parse(staged.id)));
     expect(targets).toHaveLength(1);
   });
 

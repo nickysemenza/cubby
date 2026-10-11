@@ -1,13 +1,29 @@
-import type { EntityId } from "@cubby/schemas/identifiers";
+import type { EntityId, EntityRef, RunId } from "@cubby/schemas/identifiers";
 import type { RunTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
-import { and, desc, eq, exists, or, type SQL, sql } from "drizzle-orm";
+import {
+  runTargetOutcomeReceipt,
+  type RunTargetOutcomeReceipt,
+} from "@cubby/schemas/run-fields";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  inArray,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
   auditLog,
   run as runTable,
-  runTarget,
+  photoRunImage,
+  runFinding,
+  runOperation,
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
@@ -15,6 +31,7 @@ import {
   getDb,
   notDeleted,
   withTransaction,
+  unwrapDb,
 } from "~/server/repo/database-helpers";
 import {
   resolveLiveShortcode,
@@ -88,15 +105,87 @@ function runSummaryQuery(
   return where ? query : query.limit(20);
 }
 
-/** A run that targets `entityId` through a `RunTarget` row. */
-const runTargets = (db: Database, entityId: EntityId<"purchase" | "product">) =>
-  exists(
-    getDb(db)
-      .select({ id: runTarget.id })
-      .from(runTarget)
-      .where(
-        and(eq(runTarget.runId, runTable.id), eq(runTarget.entityId, entityId)),
+export type RunTargetOutcome = Pick<
+  typeof runOperation.$inferSelect,
+  "id" | "runId" | "operationId"
+> &
+  RunTargetOutcomeReceipt["target"];
+
+/** Immutable migrated outcomes retain no-op attribution after targets retire. */
+export async function listRunTargetOutcomes(
+  db: Database | DrizzleClient | DrizzleTransaction,
+  runIds: readonly RunId[],
+  subject?: EntityRef,
+): Promise<RunTargetOutcome[]> {
+  if (!runIds.length) return [];
+  const client = "select" in db ? db : unwrapDb(db);
+  const receipts = await client
+    .select({
+      id: runOperation.id,
+      runId: runOperation.runId,
+      operationId: runOperation.operationId,
+      result: runOperation.result,
+    })
+    .from(runOperation)
+    .where(
+      and(
+        inArray(runOperation.runId, [...runIds]),
+        eq(runOperation.kind, "target_outcome"),
+        eq(runOperation.state, "completed"),
+        subject
+          ? sql`${runOperation.result}->${"target"}->>'entityKind' = ${subject.entity} AND ${runOperation.result}->${"target"}->>'entityId' = ${subject.id}`
+          : undefined,
       ),
+    )
+    .orderBy(asc(runOperation.startedAt), asc(runOperation.id));
+  return receipts.map(({ result, ...receipt }) => ({
+    ...receipt,
+    ...runTargetOutcomeReceipt.parse(result).target,
+  }));
+}
+
+const runSubjectHistory = (
+  db: Database,
+  subject: EntityRef<"purchase" | "product">,
+) =>
+  or(
+    exists(
+      getDb(db)
+        .select({ id: auditLog.id })
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.runId, runTable.id),
+            eq(auditLog.entityKind, subject.entity),
+            eq(auditLog.entityId, subject.id),
+          ),
+        ),
+    ),
+    exists(
+      getDb(db)
+        .select({ id: runFinding.id })
+        .from(runFinding)
+        .where(
+          and(
+            eq(runFinding.runId, runTable.id),
+            eq(runFinding.entityKind, subject.entity),
+            eq(runFinding.entityId, subject.id),
+          ),
+        ),
+    ),
+    exists(
+      getDb(db)
+        .select({ id: runOperation.id })
+        .from(runOperation)
+        .where(
+          and(
+            eq(runOperation.runId, runTable.id),
+            eq(runOperation.kind, "target_outcome"),
+            eq(runOperation.state, "completed"),
+            sql`${runOperation.result}->${"target"}->>'entityKind' = ${subject.entity} AND ${runOperation.result}->${"target"}->>'entityId' = ${subject.id}`,
+          ),
+        ),
+    ),
   );
 
 /** List write provenance and targeted no-op validation runs for a Purchase. */
@@ -109,21 +198,7 @@ export function listRuns(
     db,
     ledgerPartyId,
     purchaseId
-      ? or(
-          exists(
-            getDb(db)
-              .select({ id: auditLog.id })
-              .from(auditLog)
-              .where(
-                and(
-                  eq(auditLog.runId, runTable.id),
-                  eq(auditLog.entityKind, "purchase"),
-                  eq(auditLog.entityId, purchaseId),
-                ),
-              ),
-          ),
-          runTargets(db, purchaseId),
-        )
+      ? runSubjectHistory(db, { entity: "purchase", id: purchaseId })
       : undefined,
   );
 }
@@ -137,7 +212,9 @@ export function listProductRuns(
   return runSummaryQuery(
     db,
     ledgerPartyId,
-    productId ? runTargets(db, productId) : undefined,
+    productId
+      ? runSubjectHistory(db, { entity: "product", id: productId })
+      : undefined,
   );
 }
 
@@ -161,18 +238,20 @@ export async function reportRunTargetDeviceWork(
   return withTransaction(db, async (tx) => {
     const [target] = await tx
       .select({
-        id: runTarget.id,
-        deviceWorkState: runTarget.deviceWorkState,
-        deviceWorkAttempts: runTarget.deviceWorkAttempts,
+        id: photoRunImage.id,
+        deviceWorkState: photoRunImage.deviceWorkState,
+        deviceWorkAttempts: photoRunImage.deviceWorkAttempts,
       })
-      .from(runTarget)
-      .where(and(eq(runTarget.runId, runId), eq(runTarget.entityId, imageId)))
+      .from(photoRunImage)
+      .where(
+        and(eq(photoRunImage.runId, runId), eq(photoRunImage.imageId, imageId)),
+      )
       .for("update");
     if (!target)
       throw new Error("This run has no photo target for that image.");
     if (target.deviceWorkState === input.state) return { recorded: true };
     await tx
-      .update(runTarget)
+      .update(photoRunImage)
       .set({
         deviceWorkState: input.state,
         deviceWorkError:
@@ -184,7 +263,7 @@ export async function reportRunTargetDeviceWork(
         deviceWorkUpdatedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(runTarget.id, target.id));
+      .where(eq(photoRunImage.id, target.id));
     return { recorded: true };
   });
 }

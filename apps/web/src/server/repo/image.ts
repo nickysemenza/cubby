@@ -30,8 +30,8 @@ import {
   IMAGE_METADATA_REVISION,
 } from "@cubby/schemas/image";
 import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
+import { photoRunImageState } from "@cubby/schemas/photo-import-run";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
-import { runTargetState } from "@cubby/schemas/purchase-import";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 import {
   and,
@@ -78,8 +78,9 @@ import {
   image,
   imageSighting,
   importPreparedOrder,
+  sourceOrderObservation,
   run as runTable,
-  runTarget,
+  photoRunImage,
   ledgerParty,
   location,
   meal,
@@ -1096,10 +1097,24 @@ const imageReferenceCondition = (
     "ImageDerivative.imageId": sql`FALSE`,
     "ImageDescriptionCorrection.imageId": sql`FALSE`,
     // A run worklist row records history, never ownership of the image.
-    "RunTarget.entityId": sql`FALSE`,
+    "PhotoRunImage.imageId": sql`FALSE`,
     // A sighting is reported evidence, not user ownership — same reasoning
     // as the processing children above.
     "ImageSighting.imageId": sql`FALSE`,
+    "SourceOrderObservation.primaryDocumentImageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(sourceOrderObservation)
+        .where(
+          eq(sourceOrderObservation.primaryDocumentImageId, outerImage.id),
+        ),
+    ),
+    "SourceOrderObservation.screenshotImageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(sourceOrderObservation)
+        .where(eq(sourceOrderObservation.screenshotImageId, outerImage.id)),
+    ),
     "ImportPreparedOrder.primaryDocumentImageId": exists(
       dbc
         .select({ one: sql`1` })
@@ -1180,12 +1195,12 @@ export const buildImageWhere = async (
       ? exists(
           getDb(db)
             .select({ one: sql`1` })
-            .from(runTarget)
+            .from(photoRunImage)
             .where(
               and(
-                eq(runTarget.entityId, image.id),
-                eqAnyRequested(runTarget.runId, runIds),
-                eqAny(runTarget.state, filters.targetState),
+                eq(photoRunImage.imageId, image.id),
+                eqAnyRequested(photoRunImage.runId, runIds),
+                eqAny(photoRunImage.state, filters.targetState),
               ),
             ),
         )
@@ -1209,7 +1224,7 @@ export const buildImageWhere = async (
 /**
  * Each image's current import-run target row, batched by the public `IMG-`
  * shortcode (matching every other batched loader `imageList`/`getImageById`
- * call). `RunTarget_run_entity_key` keeps a live target unique per (run,
+ * call). `PhotoRunImage_run_image_work_key` keeps a live target unique per (run,
  * image), but a row's own history is never deleted, so this takes the newest
  * by `createdAt` when more than one run has ever targeted the same image.
  */
@@ -1222,22 +1237,22 @@ const loadImportTargets = async (
   const rows = await getDb(db)
     .select({
       imageShortcode: image.shortcode,
-      state: runTarget.state,
-      position: runTarget.position,
+      state: photoRunImage.state,
+      position: photoRunImage.position,
       runShortcode: runTable.shortcode,
-      createdAt: runTarget.createdAt,
+      createdAt: photoRunImage.createdAt,
     })
-    .from(runTarget)
-    .innerJoin(runTable, eq(runTable.id, runTarget.runId))
-    .innerJoin(image, eq(image.id, runTarget.entityId))
+    .from(photoRunImage)
+    .innerJoin(runTable, eq(runTable.id, photoRunImage.runId))
+    .innerJoin(image, eq(image.id, photoRunImage.imageId))
     .where(inArray(image.shortcode, shortcodes))
-    .orderBy(desc(runTarget.createdAt));
+    .orderBy(desc(photoRunImage.createdAt));
   const byImage = new Map<string, ImportTargetSummary>();
   for (const row of rows) {
     if (byImage.has(row.imageShortcode)) continue;
     byImage.set(row.imageShortcode, {
       runId: parseShortcodeFor("run", row.runShortcode),
-      state: runTargetState.parse(row.state),
+      state: photoRunImageState.parse(row.state),
       position: row.position,
     });
   }
@@ -1265,9 +1280,9 @@ export const imageList = async (
       ? undefined
       : [
           sql`(
-            SELECT "position" FROM "RunTarget"
-            WHERE "RunTarget"."entityId" = ${image.id}
-              AND "RunTarget"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
+            SELECT "position" FROM "PhotoRunImage"
+            WHERE "PhotoRunImage"."imageId" = ${image.id}
+              AND "PhotoRunImage"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
           ) asc nulls last`,
           asc(image.createdAt),
         ];
@@ -1593,7 +1608,19 @@ export const cullPendingImages = async (
  *   null it so the parent row survives, just without a cover.
  */
 export const IMAGE_HARD_DELETE = {
-  "RunTarget.entityId": {
+  "SourceOrderObservation.primaryDocumentImageId": {
+    code: "clearFk",
+    effect: "detach",
+    description:
+      "Explicit Image deletion clears optional media only; extraction, bindings, checksum and captured fingerprint remain immutable.",
+  },
+  "SourceOrderObservation.screenshotImageId": {
+    code: "clearFk",
+    effect: "detach",
+    description:
+      "Explicit Image deletion clears optional media only; extraction, bindings, checksum and captured fingerprint remain immutable.",
+  },
+  "PhotoRunImage.imageId": {
     code: "deleteRow",
     effect: "hard-delete",
     description:
@@ -1661,7 +1688,7 @@ type ImageEdgeOperation = {
 
 /** Edges that record processing of an image, never who owns it. */
 const PROCESSING_EDGES: ReadonlySet<string> = new Set([
-  "RunTarget.entityId",
+  "PhotoRunImage.imageId",
   "ImageProcessingJob.imageId",
   "ImageDerivative.imageId",
   "ImageDescriptionCorrection.imageId",
@@ -1734,7 +1761,7 @@ const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
           .update(table)
           .set({ [property]: null })
           .where(and(inArray(column, imageIds), edgeScopeWhere(edge)));
-      if (table === runTarget) await dropFromProposedGroups(tx, imageIds);
+      if (table === photoRunImage) await dropFromProposedGroups(tx, imageIds);
     },
     findReferenced: async (dbc, imageIds) => {
       const rows = await dbc

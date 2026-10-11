@@ -2,6 +2,9 @@
 
 ## Production changes
 
+For staged expand/contract commands and exact `--through` boundaries, follow the
+[production migration runbook](../runbooks/production-migrations.md).
+
 Serialize production schema changes: one owner verifies the migration and no
 application overlaps another session. Inspect constraints/data, run relevant checks,
 and transform existing rows in the same migration that changes their shape;
@@ -23,6 +26,11 @@ its foreign keys, so a new write path that hard-deletes the referenced row
 fails until the drop. Either drop the legacy FKs in the expand step or run the
 drop right after the deploy (the ADR 0006 image joins blocked image deletes
 this way).
+For an explicitly authorized breaking downtime cutover, all writers may instead
+be quiesced before a single expansion/transform/drop migration. Keep the old
+deployment offline until the matching code deploys; verify household preservation
+and the catalog before reopening traffic. The migration remains immutable after
+merge.
 
 Traps, all seen for real:
 

@@ -19,6 +19,7 @@ import {
   proposePhotoGroupsInput,
   proposePhotoGroupsOutput,
   photoProductCandidatesResponse,
+  photoAcceptedSourceLine,
   photoRunReviewResponse,
   reviewPhotoGroupsAction,
   reviewPhotoGroupsOutput,
@@ -318,23 +319,11 @@ export const photoImportContract = defineContract("photoImport", {
           purchaseId: z.string().nullable(),
           purchaseLabel: z.string().nullable(),
           expectedQuantityDelta: z.number().nullable(),
+          acceptedSourceLines: z.array(photoAcceptedSourceLine),
         }),
       ),
     }),
     cache: { tags: [["run"]] },
-  }),
-  linkExpense: mutation({
-    mcp: { omit: "human_approval" },
-    input: z.object({
-      runId: runShortcode,
-      groupKey: z.string().min(1).max(200),
-      expenseId: expenseShortcode,
-    }),
-    output: z.object({
-      expenseId: expenseShortcode,
-      productId: productShortcode,
-    }),
-    invalidates: ["runOnly"],
   }),
   chooseExisting: mutation({
     mcp: { omit: "human_approval" },

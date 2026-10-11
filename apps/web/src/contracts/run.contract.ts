@@ -20,12 +20,12 @@ import {
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
 import { runHistoryOut, runOut } from "@cubby/schemas/run";
+import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { runRestartInput } from "@cubby/schemas/run-fields";
 import {
   runControlAction,
   runPurpose,
   runStatus,
-  runTargetEntityKind,
 } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
@@ -151,7 +151,7 @@ const runDetail = z
     targets: z.array(
       z.object({
         id: z.string().min(1),
-        targetType: runTargetEntityKind,
+        targetType: runTargetOutcomeReceipt.shape.target.shape.entityKind,
         targetShortcode: z.string().min(1).nullable(),
         targetName: z.string().nullable(),
         sourceId: z.string().nullable(),

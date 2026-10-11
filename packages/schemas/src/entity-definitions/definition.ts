@@ -2143,7 +2143,7 @@ const buildMetadataSchemas = () => {
       kind: z.enum(["text", "identifier", "timestamp", "json"]),
       notNull: z.literal(true).optional(),
       defaultValue: nonEmptyString().optional(),
-      /** An entity key, or `user` for the Better-Auth user table. */
+      /** An entity key, declared child-table export, or `user`. */
       reference: nonEmptyString().optional(),
       /** The TypeScript type the column is narrowed to (`$type<T>()`). */
       type: sourceRefMetadataSchema.optional(),

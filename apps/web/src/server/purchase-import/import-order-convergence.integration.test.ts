@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { ActorContext } from "@cubby/schemas/context";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import {
   completeDescribeImageJobs,
   convergenceNames,
@@ -54,6 +54,10 @@ import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { resolveRunFinding } from "./findings";
 import { listVendorOrderMail } from "./gmail/review";
 import { startImportRunFixture } from "./import-run.fixtures";
+import {
+  prepareSourceOrderReconciliation,
+  commitAcceptedSourceOrderReconciliation,
+} from "./reconciliation";
 import {
   finalizePhotoRun,
   loadRunDetail,
@@ -137,6 +141,7 @@ async function createConvergenceHarness(
   const cardId = await resolveOrThrow(db, "financialAccount", card.id);
   let bookedPurchaseCode: string | undefined;
   let retailerDone = false;
+  let reconciliationFindingId: string | undefined;
   let productCode: string | undefined;
 
   /** Mirrors the product page's category PATCH, which goes through the kernel. */
@@ -186,37 +191,33 @@ async function createConvergenceHarness(
       targetPurchaseId: bookedPurchaseCode,
       resolveProduct: readProduct,
     });
-    expect(committed.items[0]?.outcome).toMatch(/created|updated|replayed/);
     if (bookedPurchaseCode) {
-      // The Run page's "Apply fix": the reviewed replacement of the booked
-      // aggregate line, submitted with the fingerprint the page displayed.
+      // A later itemization is observed until its money and identity are reviewed.
+      expect(committed.items[0]?.outcome).toBe("conflict");
       const detail = await loadRunDetail(db, run.publicId);
-      const replacements = detail.findings.filter(
+      const findings = detail.findings.filter(
         (finding) =>
           finding.status === "open" &&
-          finding.proposedFix?.kind === "replace_aggregate_line" &&
-          finding.proposedFix.reviewSnapshot,
+          finding.proposedFix?.kind === "reconcile_source_order",
       );
-      expect(replacements).toHaveLength(1);
-      const [finding] = replacements;
-      const fix = finding?.proposedFix;
-      if (fix?.kind !== "replace_aggregate_line" || !fix.reviewSnapshot)
-        throw new Error("Expected a reviewed aggregate replacement");
-      expect(fix.reviewSnapshot.amount).toBe(42.5);
-      const resolved = await resolveRunFinding(
-        db,
-        {
-          id: finding!.id,
-          action: "apply",
-          reviewedFingerprint: fix.reviewSnapshot.fingerprint,
-        },
-        actor,
-      );
-      expect(resolved.status).toBe("applied");
-      const after = await loadRunDetail(db, run.publicId);
-      expect(after.findings.find((row) => row.id === finding!.id)?.status).toBe(
-        "applied",
-      );
+      expect(findings).toHaveLength(1);
+      reconciliationFindingId = findings[0]!.id;
+      const current = await database
+        .select()
+        .from(schema.expense)
+        .where(
+          and(
+            eq(
+              schema.expense.purchaseId,
+              await resolveOrThrow(db, "purchase", bookedPurchaseCode),
+            ),
+            isNull(schema.expense.deletedAt),
+          ),
+        );
+      expect(current).toHaveLength(1);
+      expect(current[0]).toMatchObject({ cost: 42.5, productId: null });
+    } else {
+      expect(committed.items[0]?.outcome).toMatch(/created|updated|replayed/);
     }
     retailerDone = true;
     await readProduct();
@@ -366,6 +367,62 @@ async function createConvergenceHarness(
   }
 
   async function settle() {
+    await readProduct();
+    if (!productCode) throw new Error("Reviewed photo Product missing");
+    const stockBefore = await database.select().from(schema.inventoryEntry);
+    const paymentsBefore = await database
+      .select()
+      .from(schema.purchasePaymentEvidence);
+    const allocationsBefore = await database
+      .select()
+      .from(schema.financialTransactionAllocation);
+    if (reconciliationFindingId) {
+      const expenses = await database
+        .select()
+        .from(schema.expense)
+        .where(
+          and(
+            eq(
+              schema.expense.purchaseId,
+              await resolveOrThrow(db, "purchase", bookedPurchaseCode!),
+            ),
+            isNull(schema.expense.deletedAt),
+          ),
+        );
+      const review = await prepareSourceOrderReconciliation(
+        db,
+        {
+          id: reconciliationFindingId,
+          resolution: {
+            kind: "replace_lines",
+            expenseIds: expenses.map((row) =>
+              parseShortcodeFor("expense", row.shortcode),
+            ),
+            lines: [
+              {
+                lineIndex: 0,
+                expenseId: parseShortcodeFor("expense", expenses[0]!.shortcode),
+                productId: parseShortcodeFor("product", productCode),
+              },
+            ],
+          },
+        },
+        actor,
+      );
+      expect(review.spend).toEqual({ before: 42.5, after: 42.5, delta: 0 });
+      const input = {
+        id: reconciliationFindingId,
+        action: "apply" as const,
+        reviewedFingerprint: review.reviewedFingerprint,
+      };
+      expect(await resolveRunFinding(db, input, actor)).toMatchObject({
+        status: "applied",
+      });
+      expect(await resolveRunFinding(db, input, actor)).toMatchObject({
+        status: "applied",
+      });
+    }
+
     const [purchase] = await database
       .select()
       .from(schema.purchase)
@@ -377,6 +434,62 @@ async function createConvergenceHarness(
         ),
       );
     if (!purchase) throw new Error("Imported settlement evidence missing");
+    const [accepted] = await database
+      .select()
+      .from(schema.importSourceOrder)
+      .where(eq(schema.importSourceOrder.purchaseId, purchase.id));
+    const [line] = await database
+      .select()
+      .from(schema.expense)
+      .where(
+        and(
+          eq(schema.expense.purchaseId, purchase.id),
+          isNull(schema.expense.deletedAt),
+        ),
+      );
+    if (!accepted || !line)
+      throw new Error("Accepted retailer evidence missing");
+    const review = await prepareSourceOrderReconciliation(
+      db,
+      {
+        sourceOrderId: accepted.id,
+        resolution: {
+          kind: "attach_only",
+          lines: [
+            {
+              lineIndex: 0,
+              expenseId: parseShortcodeFor("expense", line.shortcode),
+              productId: parseShortcodeFor("product", productCode),
+            },
+          ],
+        },
+      },
+      actor,
+    );
+    if (!("sourceOrderId" in review))
+      throw new Error("Expected accepted-source review");
+    const receipt = await commitAcceptedSourceOrderReconciliation(
+      db,
+      { sourceOrderId: accepted.id, review },
+      actor,
+    );
+    expect(
+      await commitAcceptedSourceOrderReconciliation(
+        db,
+        { sourceOrderId: accepted.id, review },
+        actor,
+      ),
+    ).toMatchObject({ purchaseId: receipt.purchaseId, alreadyApplied: true });
+    expect(await database.select().from(schema.inventoryEntry)).toEqual(
+      stockBefore,
+    );
+    expect(
+      await database.select().from(schema.purchasePaymentEvidence),
+    ).toEqual(paymentsBefore);
+    expect(
+      await database.select().from(schema.financialTransactionAllocation),
+    ).toEqual(allocationsBefore);
+
     if (!researchMail) throw new Error("Retained mail research missing");
     await researchMail(purchase.shortcode);
     // Exact-order mail links itself to the Purchase without a member click,

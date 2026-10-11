@@ -33,6 +33,7 @@ import {
   inventoryEntry,
   location,
   meal,
+  email as emailTable,
   plant,
   planting,
   product,
@@ -280,6 +281,11 @@ export async function lookupShortcodes(
  * `shortcode-resolver-labels.unit.test.ts` for the parity check this backs.
  */
 export const LABEL_COLUMN_OVERRIDES = {
+  email: {
+    column: emailTable.subject,
+    reason:
+      "displayName falls back from unavailable historical subject/sender to the shortcode; subject is the best-effort stored label",
+  },
   gardenEntry: {
     column: gardenEntry.kind,
     reason:

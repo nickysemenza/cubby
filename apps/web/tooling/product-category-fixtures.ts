@@ -118,6 +118,7 @@ const productRowDefaults = {
   classificationEvidence: "",
   price: 4.5,
   usdaUnavailable: null,
+  labelReviewedRevision: null,
   acquisitionOrigin: "unknown" as const,
   stockTracked: null,
   kind: null,

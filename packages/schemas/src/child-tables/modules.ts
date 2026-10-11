@@ -1,3 +1,6 @@
+import { emailObservationChildren } from "./email-observations.js";
+import { emailAccuracyChildren } from "./email-accuracy.js";
+import { importObservationChildren } from "./import-observations.js";
 import { imageProcessingChildren } from "./image-processing.js";
 import { AUDIT_CHANNELS } from "../context.js";
 import { defineChildTable } from "../entity-definitions/child-definition.js";
@@ -10,6 +13,9 @@ import { defineChildTable } from "../entity-definitions/child-definition.js";
 export const ENTITY_SOURCE_QUOTE_MAX = 2000;
 
 export const modulesChildren = [
+  ...importObservationChildren,
+  ...emailObservationChildren,
+  ...emailAccuracyChildren,
   ...imageProcessingChildren,
   /**
    * Where a fact about any entity was seen (GLOSSARY "Source"), written in the
@@ -205,103 +211,7 @@ export const modulesChildren = [
       },
     ],
   }),
-  defineChildTable({
-    name: "MailboxMessage",
-    exportName: "mailboxMessage",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      {
-        key: "ledgerPartyId",
-        kind: "uuid",
-        notNull: true,
-        type: "LedgerPartyId",
-        reference: { table: "ledgerParty", column: "id" },
-      },
-      { key: "provider", kind: "text", notNull: true, default: "gmail" },
-      { key: "mailboxId", kind: "text", notNull: true },
-      { key: "messageId", kind: "text", notNull: true },
-      { key: "checksum", kind: "text", notNull: true },
-      {
-        key: "classification",
-        kind: "text",
-        notNull: true,
-        type: "MailboxClassification",
-      },
-      { key: "classificationVersion", kind: "text", notNull: true },
-      {
-        key: "classificationStage",
-        kind: "text",
-        type: "MailboxClassificationStage",
-      },
-      { key: "classificationReason", kind: "text" },
-      {
-        key: "status",
-        kind: "text",
-        notNull: true,
-        type: "MailboxMessageStatus",
-      },
-      {
-        key: "orderMailId",
-        kind: "uuid",
-        reference: { table: "orderMail", column: "id" },
-      },
-      { key: "runId", kind: "uuid", reference: { table: "run", column: "id" } },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-        onUpdateNow: true,
-      },
-    ],
-    types: [
-      { module: "@cubby/schemas/identifiers", exports: ["LedgerPartyId"] },
-      {
-        module: "@cubby/schemas/mailbox-research",
-        exports: [
-          "MailboxClassification",
-          "MailboxClassificationStage",
-          "MailboxMessageStatus",
-        ],
-      },
-    ],
-    indexes: [
-      {
-        name: "MailboxMessage_mailbox_message_key",
-        unique: true,
-        on: ["ledgerPartyId", "provider", "mailboxId", "messageId"],
-      },
-      {
-        name: "MailboxMessage_pending_idx",
-        on: ["ledgerPartyId", "mailboxId", "status"],
-      },
-    ],
-    checks: [
-      {
-        name: "MailboxMessage_classification_check",
-        sql: "{classification} IN ('related', 'unrelated', 'uncertain')",
-      },
-      {
-        name: "MailboxMessage_classification_stage_check",
-        sql: "{classificationStage} IS NULL OR {classificationStage} IN ('rule', 'jev', 'model', 'resolution')",
-      },
-      {
-        name: "MailboxMessage_status_check",
-        sql: "{status} IN ('pending', 'researching', 'completed', 'blocked', 'deleted', 'excluded')",
-      },
-    ],
-  }),
+  // Temporary content/source carrier; Email owns identity and headers after backfill.
   defineChildTable({
     name: "OrderMail",
     exportName: "orderMail",
@@ -325,13 +235,6 @@ export const modulesChildren = [
         type: "VendorId",
         reference: { table: "vendor", column: "id" },
       },
-      { key: "mailboxId", kind: "text", notNull: true },
-      { key: "messageId", kind: "text", notNull: true },
-      { key: "threadId", kind: "text" },
-      { key: "historyId", kind: "text" },
-      { key: "sender", kind: "text", notNull: true },
-      { key: "subject", kind: "text", notNull: true },
-      { key: "receivedAt", kind: "timestamp" },
       { key: "rawChecksum", kind: "text", notNull: true },
       { key: "classifiedChecksum", kind: "text" },
       {
@@ -367,17 +270,7 @@ export const modulesChildren = [
         exports: ["RetainedMailContent"],
       },
     ],
-    indexes: [
-      {
-        name: "OrderMail_mailbox_message_key",
-        unique: true,
-        on: ["ledgerPartyId", "mailboxId", "messageId"],
-      },
-      {
-        name: "OrderMail_party_received_idx",
-        on: ["ledgerPartyId", { column: "receivedAt", desc: true }],
-      },
-    ],
+    indexes: [],
   }),
   defineChildTable({
     name: "OrderMailEvent",
@@ -512,8 +405,15 @@ export const modulesChildren = [
       { key: "filename", kind: "text", notNull: true },
       { key: "mimeType", kind: "text", notNull: true },
       { key: "checksum", kind: "text", notNull: true },
-      // Object-storage key (`order-mail-attachment/<id>`) of the pending bytes.
+      // Stored verbatim; new uploads use a distinct key for each attempt.
       { key: "pendingObjectKey", kind: "text" },
+      {
+        key: "pendingDeleteKeys",
+        kind: "text",
+        array: true,
+        notNull: true,
+        default: { sql: "'{}'::text[]" },
+      },
       {
         key: "imageId",
         kind: "uuid",

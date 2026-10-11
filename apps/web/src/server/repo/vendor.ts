@@ -98,6 +98,12 @@ import { assertReviewedSpendingClassification } from "./spending-classification-
 import { loadVendorCategoryEvidence } from "./vendor-suggestion-context";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
+  "SourceOrderObservation.vendorId": {
+    code: "preserve-source-observation",
+    effect: "preserve",
+    description:
+      "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+  },
   "FinancialAccount.providerVendorId": {
     code: "block-stored-value-accounts",
     effect: "block",
@@ -151,6 +157,12 @@ export const VENDOR_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
 export const VENDOR_MERGE_EDGE_POLICY = {
+  "SourceOrderObservation.vendorId": {
+    code: "preserve-source-observation",
+    effect: "preserve",
+    description:
+      "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+  },
   "FinancialAccount.providerVendorId": {
     code: "block-stored-value-accounts",
     effect: "block",

@@ -15,7 +15,7 @@ const queuedEventCandidate = z.union([
 ]);
 
 /**
- * Accept historical queue bodies while using the producer's event contract.
+ * Versionless queue bodies retain the producer's explicit dispatch generation.
  * Bodies queued before `coordinatorModel` left the event still carry it; the
  * strict event object strips it.
  */

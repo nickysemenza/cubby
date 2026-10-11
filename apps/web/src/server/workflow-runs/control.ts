@@ -83,7 +83,10 @@ export async function controlWorkflowRun(
     )
     .returning({ id: runTable.id });
   if (!cancelled) throw new Error("The Run finished before it was cancelled");
-  await recordRunProgress(db, row.id, "cancelled", "Cancelled by a member");
+  await recordRunProgress(db, row.id, "cancelled", "Cancelled by a member", {
+    attempt: row.attempt,
+    sequence: Number.MAX_SAFE_INTEGER,
+  });
   if (row.attempt > 0)
     await launcher.terminate(
       purpose,

@@ -141,12 +141,12 @@ const coupledJourneys: Journey[] = [
       ...mailImportFollowUps(LIVE_IMPORT.mail),
       {
         label: "the Purchase belongs to the member's mail-only account",
-        sql: `SELECT a."browserSyncEnabled" AS synced, a.status
+        sql: `SELECT a.status
                 FROM "Purchase" p JOIN "Vendor" v ON v.id = p."vendorId"
                 JOIN "VendorAccount" a ON a.id = p."vendorAccountId"
                WHERE v.shortcode = $1 AND p."deletedAt" IS NULL`,
         params: only("vendor"),
-        rows: () => [{ synced: false, status: "disabled" }],
+        rows: () => [{ status: "disabled" }],
       },
     ],
   },
@@ -165,7 +165,7 @@ const coupledJourneys: Journey[] = [
           // `lastError` puts a failing description's cause in the assertion.
           sql: `SELECT j.state, j."lastError", count(*)::int AS photos
                   FROM "ImageProcessingJob" j
-                  JOIN "RunTarget" t ON t."entityId" = j."imageId"
+                  JOIN "PhotoRunImage" t ON t."imageId" = j."imageId"
                   JOIN "Run" r ON r.id = t."runId"
                  WHERE r.shortcode = $1 AND j.kind = 'describe_image'
                  GROUP BY j.state, j."lastError"`,
@@ -192,7 +192,7 @@ const coupledJourneys: Journey[] = [
       {
         label: "every photo is settled on a committed item",
         sql: `SELECT t.state, count(*)::int AS photos
-                FROM "RunTarget" t JOIN "Run" r ON r.id = t."runId"
+                FROM "PhotoRunImage" t JOIN "Run" r ON r.id = t."runId"
                WHERE r.shortcode = $1 GROUP BY t.state`,
         params: only("run"),
         rows: () => [{ state: "completed", photos: LIVE_IMPORT.photos.length }],
@@ -206,9 +206,9 @@ const coupledJourneys: Journey[] = [
                 FROM "PhotoGroupProposal" g
                 JOIN "Run" r ON r.id = g."runId"
                 JOIN "Product" p ON p.id = g."productId" AND p."deletedAt" IS NULL
-                JOIN "RunTarget" t ON t."runId" = r.id
+                JOIN "PhotoRunImage" t ON t."runId" = r.id
                 JOIN "EntityAttachment" a
-                  ON a."imageId" = t."entityId" AND a."entityId" = p.id
+                  ON a."imageId" = t."imageId" AND a."entityId" = p.id
                  AND a."entityKind" = 'product' AND a."deletedAt" IS NULL
                WHERE r.shortcode = $1 AND g.state = 'committed'`,
         params: only("run"),
@@ -224,6 +224,43 @@ const coupledJourneys: Journey[] = [
 ];
 
 export const journeys: Journey[] = [
+  {
+    id: "email-navigation",
+    title: "browse classified Email metadata without admitting an import",
+    webOnly: true,
+    viewport: { width: 390, height: 844 },
+    start: "email",
+    steps: [
+      {
+        goal: "Inspect this Email's sender, subject and relevance. Open the Emails list through the app navigation, find Synthetic Email navigation receipt, and reopen its detail. Leave the Email unchanged and do not start an import.",
+        read: {
+          instruction: "Read this Email's subject and sender from its detail.",
+          schema: z.object({ subject: z.string(), sender: z.string() }),
+          expected: () => ({
+            subject: "Synthetic Email navigation receipt",
+            sender: "receipts@example.test",
+          }),
+        },
+      },
+    ],
+    visible: () => ["Synthetic Email navigation receipt"],
+    db: [
+      {
+        label: "Email browsing preserves classification and admission state",
+        sql: `SELECT classification, status, "executionPolicy", "runId"::text AS "runId", "orderMailId"::text AS "orderMailId" FROM "Email" WHERE shortcode = $1 AND "deletedAt" IS NULL`,
+        params: only("email"),
+        rows: () => [
+          {
+            classification: "related",
+            status: "completed",
+            executionPolicy: "classification_only",
+            runId: null,
+            orderMailId: null,
+          },
+        ],
+      },
+    ],
+  },
   {
     id: "product-rename",
     title: "product rename persists after reopening",

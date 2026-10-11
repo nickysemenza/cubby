@@ -34,18 +34,20 @@ export async function seedVendorMailReviewPrerequisite(
   const bodyText =
     "Synthetic Outfitters. Order SYN-ORDER-1001. Printed total 48 USD.";
   const checksum = await sha256Hex(bodyText);
+  const metadata = {
+    mailboxId: `synthetic-review-mailbox-${member.id}`,
+    messageId: `synthetic-message-${crypto.randomUUID()}`,
+    threadId: `synthetic-thread-${crypto.randomUUID()}`,
+    sender: "Synthetic Outfitters <orders@example.test>",
+    subject: "Synthetic order receipt",
+    receivedAt: new Date("2026-09-10T15:00:00.000Z"),
+  };
   const [mail] = await getDb(db)
     .insert(schema.orderMail)
     .values({
       ledgerPartyId: member.id,
-      mailboxId: `synthetic-review-mailbox-${member.id}`,
       content: { bodyText, bodyHtml: null, snippet: null },
       vendorId: vendor.id,
-      messageId: `synthetic-message-${crypto.randomUUID()}`,
-      threadId: `synthetic-thread-${crypto.randomUUID()}`,
-      sender: "Synthetic Outfitters <orders@example.test>",
-      subject: "Synthetic order receipt",
-      receivedAt: new Date("2026-09-10T15:00:00.000Z"),
       rawChecksum: checksum,
     })
     .returning();
@@ -60,7 +62,16 @@ export async function seedVendorMailReviewPrerequisite(
       currency: "USD",
       sourceKey: `classified:${checksum}:0`,
     });
-  return { vendor, purchase, mail };
+  await insertWithShortcode(db, "email", {
+    ledgerPartyId: member.id,
+    ...metadata,
+    orderMailId: mail.id,
+    checksum,
+    classification: "uncertain",
+    classificationVersion: "synthetic-review/v1",
+    status: "blocked",
+  });
+  return { vendor, purchase, mail: { ...mail, ...metadata } };
 }
 
 /** Saved originals with an actual body checksum and shared mailbox ledger. */
@@ -83,28 +94,29 @@ export async function seedUnimportedOrderMail(
     const orderId = `SYN-CONFIRM-${index}`;
     const bodyText = `${name}. Order ${orderId}. ${itemTitle}, SKU HERB-1, qty 1, $5.00. Ordered 2026-09-10. Grand total $5.00 USD.`;
     const checksum = await sha256Hex(bodyText);
+    const metadata = {
+      mailboxId: `synthetic-mailbox-${member.id}`,
+      messageId: `synthetic-confirmation-${crypto.randomUUID()}`,
+      sender: "orders@example.test",
+      subject:
+        index === 1
+          ? "Synthetic itemized confirmation"
+          : `Synthetic itemized confirmation ${index}`,
+      receivedAt: new Date("2026-09-10T15:00:00Z"),
+    };
     const [mail] = await getDb(db)
       .insert(schema.orderMail)
       .values({
         ledgerPartyId: member.id,
         vendorId: vendor.id,
-        mailboxId: `synthetic-mailbox-${member.id}`,
-        messageId: `synthetic-confirmation-${crypto.randomUUID()}`,
-        sender: "orders@example.test",
-        subject:
-          index === 1
-            ? "Synthetic itemized confirmation"
-            : `Synthetic itemized confirmation ${index}`,
-        receivedAt: new Date("2026-09-10T15:00:00Z"),
         rawChecksum: checksum,
         content: { snippet: null, bodyHtml: null, bodyText },
       })
       .returning();
     if (!mail) throw new Error("Synthetic confirmation was not saved");
-    await getDb(db).insert(schema.mailboxMessage).values({
+    await insertWithShortcode(db, "email", {
       ledgerPartyId: member.id,
-      mailboxId: mail.mailboxId,
-      messageId: mail.messageId,
+      ...metadata,
       checksum,
       classification: "related",
       classificationVersion: "synthetic-positive-source-v1",

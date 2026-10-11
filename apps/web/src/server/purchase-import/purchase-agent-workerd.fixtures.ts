@@ -18,7 +18,6 @@ import {
   runFinding,
   run as runTable,
   runOperation,
-  runProgress,
   session,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -142,16 +141,16 @@ export async function workerdDiagnostic(
         })
         .from(runOperation)
         .where(eq(runOperation.runId, id)),
-      // The review reason lives on the finding and the last progress report,
-      // not on the run row.
+      // Findings retain the review reason beside the Run-owned display history.
       getDb(db)
         .select({ kind: runFinding.kind, summary: runFinding.summary })
         .from(runFinding)
         .where(eq(runFinding.runId, id)),
       getDb(db)
-        .select({ phase: runProgress.phase, detail: runProgress.detail })
-        .from(runProgress)
-        .where(eq(runProgress.runId, id)),
+        .select({ history: runTable.progressHistory })
+        .from(runTable)
+        .where(eq(runTable.id, id))
+        .then((rows) => rows[0]?.history ?? []),
       getDb(db)
         .select({ state: photoGroupProposal.state })
         .from(photoGroupProposal)

@@ -1,3 +1,4 @@
+import type { ChildTableDeclaration } from "../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import { z } from "zod";
 
 import type { EntityDeclarationMetadata } from "../../../packages/schemas/src/entity-definitions/definition.ts";
@@ -270,11 +271,20 @@ export const compileEntityTable = (
   };
 };
 
-/** A table's every FK must target an entity with a table (or `user`). */
-export const validateEntityTables = (entities: readonly CompiledEntity[]) => {
+/** Every entity FK targets declared entity or child storage (or `user`). */
+export const validateEntityTables = (
+  entities: readonly CompiledEntity[],
+  moduleChildren: readonly ChildTableDeclaration[] = [],
+) => {
   const tables = new Set(
     entities.flatMap((entity) => (entity.table === null ? [] : [entity.key])),
   );
+  for (const child of [
+    ...entities.flatMap((entity) => entity.children),
+    ...moduleChildren,
+  ]) {
+    tables.add(child.exportName);
+  }
   for (const entity of entities) {
     if (entity.table === null) continue;
     const references = [

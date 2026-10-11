@@ -18,6 +18,7 @@ import { CarrotIcon } from "@phosphor-icons/react/dist/csr/Carrot";
 import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
 import { CreditCardIcon } from "@phosphor-icons/react/dist/csr/CreditCard";
 import { DeviceMobileIcon } from "@phosphor-icons/react/dist/csr/DeviceMobile";
+import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
 import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
 import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
@@ -185,6 +186,7 @@ const PHOSPHOR_ICONS = {
   Carrot: CarrotIcon,
   ChefHat: ChefHatIcon,
   CreditCard: CreditCardIcon,
+  Envelope: EnvelopeIcon,
   Hammer: HammerIcon,
   Heart: HeartIcon,
   Image: ImageIcon,
@@ -399,6 +401,10 @@ const entityDefinitions = withEntityNames({
   },
   vendorAccount: {
     ...generatedBrowserRoutes.vendorAccount,
+    color: INK.slate,
+  },
+  email: {
+    ...generatedBrowserRoutes.email,
     color: INK.slate,
   },
   run: {

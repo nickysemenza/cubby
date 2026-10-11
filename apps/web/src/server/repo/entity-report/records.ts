@@ -15,7 +15,7 @@ import {
   recipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { runPurpose } from "@cubby/schemas/run-fields";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { computeParseDrift, driftAxes } from "~/lib/parse-drift";
 import type { Database } from "~/server/db";
@@ -26,9 +26,12 @@ import {
   ingredient,
   product,
   recipe,
-  runTarget,
 } from "~/server/db/schema";
-import { listRuns, listProductRuns } from "~/server/purchase-import/run-target";
+import {
+  listRuns,
+  listProductRuns,
+  listRunTargetOutcomes,
+} from "~/server/purchase-import/run-target";
 import {
   aiDescriptionItems,
   cookbookItems,
@@ -306,26 +309,13 @@ export const recordRunsReport =
             parseEntityId("product", entityId),
           )
         : await listRuns(db, party.id, parseEntityId("purchase", entityId));
-    const targets = runs.length
-      ? await getDb(db)
-          .select({
-            runId: runTarget.runId,
-            state: runTarget.state,
-            outcome: runTarget.outcome,
-            warning: runTarget.warning,
-            completedAt: runTarget.completedAt,
-          })
-          .from(runTarget)
-          .where(
-            and(
-              eq(runTarget.entityId, entityId),
-              inArray(
-                runTarget.runId,
-                runs.map((item) => item.id),
-              ),
-            ),
-          )
-      : [];
+    const targets = await listRunTargetOutcomes(
+      db,
+      runs.map((item) => item.id),
+      kind === "product"
+        ? { entity: kind, id: parseEntityId("product", entityId) }
+        : { entity: kind, id: parseEntityId("purchase", entityId) },
+    );
     return records(
       runHistoryItems(
         runs.map((run) => ({
@@ -339,9 +329,7 @@ export const recordRunsReport =
           (target) => target.runId === runs[index]?.id,
         );
         const completed = scoped
-          .flatMap((target) =>
-            target.completedAt ? [target.completedAt.toISOString()] : [],
-          )
+          .flatMap((target) => (target.completedAt ? [target.completedAt] : []))
           .sort()
           .at(-1);
         return {

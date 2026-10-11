@@ -127,6 +127,22 @@ location, an unresolved `conflict`). Then check
 `dataGap: product_unpurchased` — a photo-created Product left there is a
 handoff to purchase-import, not a task this run repeats.
 
+Finish label transcription through the Product's derived Research queue gap
+`product_label_review`, including for reused Products with existing notes.
+Read `labelEvidenceRevision` from the Product, inspect its live label photos,
+and establish the exact variant. Keep size/color in the title and printed tag
+text in notes; record the text verbatim in `sources` with `selectedVariant` when
+known. Ask the member through Claude/Codex when the photos leave a material
+detail uncertain. In the same `entity.update`, write the reviewed facts and
+`labelReviewedRevision` equal to the revision you read. A stale revision refuses
+the patch, so reread and review the changed evidence. Completion is the cleared
+gap; new label membership or content reopens it and invalidates relevant old
+identity exceptions. An interrupted import leaves this work discoverable in
+Research independently of the Run's status.
+If the current label evidence is unavailable or illegible after searching, record
+an evidence-bound `unavailable` or `insufficient_detail` exception for
+`product_label_review`. New label evidence reopens that exception.
+
 Do only the requested import: never infer prices, receipts, purchases,
 vendors, or purchase relationships from a photo. A later receipt is handled
 by `purchase-import`, which matches this same Product (see `dataGap:
@@ -143,3 +159,14 @@ Purchase-to-Product relationship; the statement can settle that Purchase but
 cannot identify the garment. Propose uncertain Product matches for human
 review, with label, color, size, and source-image provenance visible. Never
 attach a charge to a Product directly.
+
+Candidate purchase lines and eligible unlinked Expenses expose
+`acceptedSourceLines` selectors containing `sourceOrderId` and `lineIndex`.
+Use only a known selector owned by the authenticated member; an empty array
+means the historical accepted extraction is unknown and cannot authorize a
+link. Prepare the shared source-order reconciliation with that `sourceOrderId`
+and an `attach_only` resolution naming the existing Expense and approved
+Product. Review the resulting ledger preview, then commit the accepted-source
+review. This changes the existing line's Product attribution without creating
+an Expense or receiving Inventory, and replay preserves that result. Follow
+the [purchase-import skill](../purchase-import/SKILL.md) for the review workflow.

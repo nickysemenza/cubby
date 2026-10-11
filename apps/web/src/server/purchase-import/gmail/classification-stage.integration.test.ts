@@ -2,10 +2,11 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { mailboxMessage } from "~/server/db/schema";
+import { email as emailTable } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { syntheticMailImportRun } from "./execution.fixtures";
 import { ingestGmailMessages } from "./ingest";
 import type { GmailProvider } from "./types";
 
@@ -70,16 +71,22 @@ describe("Gmail classification stage and reason", () => {
       messageIds: [messageId],
       triage,
       relevance,
+      runId: relevance
+        ? await syntheticMailImportRun(ctx.db, ctx.actor, {
+            ledgerPartyId: party.id,
+            mailboxId: "synthetic-mailbox",
+          })
+        : undefined,
       storage,
     });
     const [row] = await getDb(ctx.db)
       .select({
-        classification: mailboxMessage.classification,
-        stage: mailboxMessage.classificationStage,
-        reason: mailboxMessage.classificationReason,
+        classification: emailTable.classification,
+        stage: emailTable.classificationStage,
+        reason: emailTable.classificationReason,
       })
-      .from(mailboxMessage)
-      .where(eq(mailboxMessage.messageId, messageId));
+      .from(emailTable)
+      .where(eq(emailTable.messageId, messageId));
     return row;
   }
 

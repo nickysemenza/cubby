@@ -92,6 +92,6 @@ export const renderChildTables = (
       const relations = table.relations.length
         ? `\nexport const ${table.exportName}Relations = relations(${table.exportName}, ({ ${[...new Set(table.relations.map(({ kind }) => kind))].join(", ")} }) => ({${table.relations.map((relation) => `${JSON.stringify(relation.name)}:${relation.kind}(${relation.table}${relation.fields ? `,{fields:[${relation.fields.map((key) => `${table.exportName}.${key}`).join(",")}],references:[${relation.references!.map((key) => `${relation.table}.${key}`).join(",")}]${relation.relationName ? `,relationName:${JSON.stringify(relation.relationName)}` : ""}}` : relation.relationName ? `,{relationName:${JSON.stringify(relation.relationName)}}` : ""})`).join(",")}}));`
         : "";
-      return `export const ${table.exportName} = pgTable(${JSON.stringify(table.name)},{${columns.join(",")}},(table)=>[${constraints.join(",")}]);${relations}`;
+      return `export const ${table.exportName} = pgTable(${JSON.stringify(table.name)},{${columns.join(",")}},(${constraints.some((constraint) => /\btable\b/.test(constraint)) ? "table" : "_table"})=>[${constraints.join(",")}]);${relations}`;
     })
     .join("\n\n");

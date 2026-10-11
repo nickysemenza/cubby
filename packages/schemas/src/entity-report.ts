@@ -1,4 +1,6 @@
+import { createEmailAccuracyEvaluationInput } from "./email-accuracy.js";
 import { z } from "zod";
+import { emailImportInput } from "./email-actions.js";
 
 import {
   COLLECTION_ACTIONS,
@@ -30,6 +32,7 @@ import { purchaseShortcode } from "./identifier-fields";
  * values, bar/stack/line), `table`, `schedule` (dated spans) and `note`.
  */
 export const reportSlots = [
+  "email.review",
   "recipe.availability",
   "recipe.costing-coverage",
   "recipe.walkthrough",
@@ -223,6 +226,10 @@ const reportNote = z.object({
  * native; web acts on the tap as it always has. Null means one tap acts on both.
  */
 export const reportCommandRequest = z.discriminatedUnion("kind", [
+  emailImportInput.extend({ kind: z.literal("import-email") }),
+  createEmailAccuracyEvaluationInput.extend({
+    kind: z.literal("create-email-accuracy"),
+  }),
   orderMailDecisionInput.extend({
     kind: z.literal("decide-order-mail"),
     purchaseId: purchaseShortcode.nullable(),
@@ -454,8 +461,6 @@ const reportRecordRow = z.object({
   trailing: z.string().nullable(),
   /** A thumbnail the row leads with. */
   imageUrl: z.string().optional(),
-  /** Authenticated retained original, separate from the live source and preview. */
-  originalMediaUrl: z.string().optional(),
   /** Short chips worded by the server (a status, a failure code). */
   badges: z.array(z.string()).optional(),
   /** An ISO instant each client prints in its own locale and zone. */

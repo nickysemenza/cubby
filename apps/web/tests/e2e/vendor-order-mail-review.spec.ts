@@ -1,7 +1,3 @@
-import * as schema from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
-
-import { getFixtureDb } from "./fixtures-core";
 import { seedVendorMailReviewPrerequisite } from "./fixtures-mail";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
@@ -13,19 +9,6 @@ test("reviews a vendor email match through the generic report and shows the link
     page,
     `Synthetic Outfitters ${Date.now()}`,
   );
-  await getDb(getFixtureDb())
-    .insert(schema.mailboxMessage)
-    .values({
-      ledgerPartyId: seed.mail.ledgerPartyId,
-      mailboxId: seed.mail.mailboxId,
-      messageId: seed.mail.messageId,
-      orderMailId: seed.mail.id,
-      checksum: seed.mail.rawChecksum,
-      classification: "uncertain",
-      classificationVersion: "synthetic-review/v1",
-      status: "blocked",
-      updatedAt: new Date("2026-09-11T12:00:00Z"),
-    });
   await gotoAuthenticatedPage(
     page,
     `/vendors/${seed.vendor.shortcode}`,

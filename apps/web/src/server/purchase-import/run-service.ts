@@ -34,8 +34,8 @@ import {
   runShortcode,
   runPurpose,
   runTrigger,
-  runTargetState,
   runScope,
+  runTargetState,
 } from "@cubby/schemas/purchase-import";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { purchaseImportDebugEvent } from "@cubby/schemas/purchase-import-debug";
@@ -47,7 +47,11 @@ import {
   orderMailImportRunInput,
   orderMailImportRunOrders,
   type RunRestartInput,
+  runProgressEvent,
+  runProgressStamp,
+  runTargetEntityKind,
 } from "@cubby/schemas/run-fields";
+import { parseShortcodeFor } from "@cubby/shared";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
@@ -88,8 +92,7 @@ import {
   runControlEvent,
   runFinding,
   runOperation,
-  runProgress,
-  runTarget,
+  photoRunImage,
   user,
   vendor,
   vendorAccount,
@@ -111,6 +114,7 @@ import {
   readOperation,
   setOperationResult,
 } from "~/server/repo/run-operation";
+import { recordRunProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { publishImageProcessingWakeups } from "~/server/services/image-processing.service";
 import {
@@ -123,34 +127,145 @@ import { WORKFLOW_RUN_PURPOSES } from "~/server/workflow-runs/contract";
 
 import { loadPurchaseAuditBatch } from "./audit-batch";
 import { resolveRunFinding } from "./findings";
+import {
+  readMailRunSources,
+  transferMailRunSources,
+} from "./mail-run-membership";
+import { listRunTargetOutcomes } from "./run-target";
 
 /**
  * The target rows "Start new run with same inputs" copies, with the public
  * codes the run detail shows for them. One selection for both, so the inputs
  * a member reads are exactly the inputs a restart replays.
  */
+async function selectNonPhotoTargets(
+  client: DrizzleClient | DrizzleTransaction,
+  runId: RunId,
+) {
+  const mail = await readMailRunSources(client, runId);
+  const receipts = await listRunTargetOutcomes(client, [runId]);
+  if (mail.length)
+    return mail.map(({ email, orderMailId, checksum, position, owned }) => {
+      const outcome = receipts
+        .filter(
+          (item) =>
+            item.workKey === orderMailId &&
+            (item.targetFingerprint === checksum ||
+              // Migrated hashes include a retired research version. Their
+              // original Run/source identity binds them to this frozen roster.
+              (item.operationId.startsWith("migrated-target:") &&
+                item.entityKind === "run" &&
+                item.entityId === runId &&
+                item.sourceKind === "mail_message" &&
+                item.sourceExternalKey === orderMailId)),
+        )
+        .sort((a, b) =>
+          (b.completedAt ?? "").localeCompare(a.completedAt ?? ""),
+        )[0];
+      return {
+        id: email.id,
+        entityId: email.id,
+        entityKind: "email" as const,
+        workKey: orderMailId,
+        position,
+        vendorAccountId: null,
+        vendorAccountCode: null,
+        vendorAccountLabel: null,
+        sourceKind: "mail_message",
+        sourceExternalKey: orderMailId,
+        targetFingerprint: checksum,
+        entityCode: parseShortcodeFor("email", email.shortcode),
+        state:
+          outcome?.state ??
+          (email.status === "completed"
+            ? ("completed" as const)
+            : owned && email.status === "researching"
+              ? ("pending" as const)
+              : ("unresolved" as const)),
+        outcome:
+          outcome?.outcome ??
+          (email.status === "completed" ? ("verified" as const) : null),
+        warning: outcome?.warning ?? email.classificationReason,
+        diff: null,
+        completedAt: outcome?.completedAt
+          ? new Date(outcome.completedAt)
+          : email.status === "completed"
+            ? email.updatedAt
+            : null,
+      };
+    });
+  const identities = receipts.length
+    ? await client
+        .select({ id: entityIdentity.id, shortcode: entityIdentity.shortcode })
+        .from(entityIdentity)
+        .where(
+          inArray(
+            entityIdentity.id,
+            receipts.map((receipt) => receipt.entityId),
+          ),
+        )
+    : [];
+  const accountIds = receipts.flatMap((receipt) =>
+    receipt.vendorAccountId
+      ? [vendorAccountId.parse(receipt.vendorAccountId)]
+      : [],
+  );
+  const accounts = accountIds.length
+    ? await client
+        .select({
+          id: vendorAccount.id,
+          shortcode: vendorAccount.shortcode,
+          label: vendorAccount.label,
+        })
+        .from(vendorAccount)
+        .where(inArray(vendorAccount.id, accountIds))
+    : [];
+  return receipts.map((receipt) => ({
+    ...receipt,
+    position: receipt.position ?? null,
+    vendorAccountId: receipt.vendorAccountId ?? null,
+    vendorAccountCode:
+      accounts.find((account) => account.id === receipt.vendorAccountId)
+        ?.shortcode ?? null,
+    vendorAccountLabel:
+      accounts.find((account) => account.id === receipt.vendorAccountId)
+        ?.label ?? null,
+    sourceKind: receipt.sourceKind ?? null,
+    sourceExternalKey: receipt.sourceExternalKey ?? null,
+    entityCode:
+      identities.find((identity) => identity.id === receipt.entityId)
+        ?.shortcode ?? null,
+    completedAt: receipt.completedAt ? new Date(receipt.completedAt) : null,
+  }));
+}
 function selectRestartTargets(
+  client: DrizzleClient | DrizzleTransaction,
+  runId: RunId,
+) {
+  return selectNonPhotoTargets(client, runId);
+}
+
+function selectPhotoRestartTargets(
   client: DrizzleClient | DrizzleTransaction,
   runId: RunId,
 ) {
   return client
     .select({
-      entityId: runTarget.entityId,
-      entityKind: runTarget.entityKind,
-      workKey: runTarget.workKey,
-      position: runTarget.position,
-      vendorAccountId: runTarget.vendorAccountId,
-      sourceKind: runTarget.sourceKind,
-      sourceExternalKey: runTarget.sourceExternalKey,
-      targetFingerprint: runTarget.targetFingerprint,
-      entityCode: entityIdentity.shortcode,
-      vendorAccountCode: vendorAccount.shortcode,
+      entityId: photoRunImage.imageId,
+      entityKind: sql<"image">`${runTargetEntityKind.enum.image}`,
+      workKey: photoRunImage.workKey,
+      position: photoRunImage.position,
+      vendorAccountId: sql<null>`NULL`,
+      sourceKind: sql<null>`NULL`,
+      sourceExternalKey: sql<null>`NULL`,
+      targetFingerprint: photoRunImage.targetFingerprint,
+      entityCode: image.shortcode,
+      vendorAccountCode: sql<null>`NULL`,
     })
-    .from(runTarget)
-    .leftJoin(entityIdentity, eq(entityIdentity.id, runTarget.entityId))
-    .leftJoin(vendorAccount, eq(vendorAccount.id, runTarget.vendorAccountId))
-    .where(eq(runTarget.runId, runId))
-    .orderBy(asc(runTarget.position), asc(runTarget.createdAt));
+    .from(photoRunImage)
+    .innerJoin(image, eq(image.id, photoRunImage.imageId))
+    .where(eq(photoRunImage.runId, runId))
+    .orderBy(asc(photoRunImage.position), asc(photoRunImage.createdAt));
 }
 
 export type StartPhotoInventoryRunInput = {
@@ -258,7 +373,7 @@ export async function startPhotoInventoryCoordinator(
         eq(runTable.purpose, "photo_inventory"),
         eq(runTable.status, "running"),
         isNull(runTable.dispatchEventId),
-        sql`EXISTS (SELECT 1 FROM ${runTarget} WHERE ${runTarget.runId} = ${runTable.id} AND ${runTarget.entityKind} = 'image' AND ${runTarget.state} = 'pending')`,
+        sql`EXISTS (SELECT 1 FROM ${photoRunImage} WHERE ${photoRunImage.runId} = ${runTable.id} AND ${photoRunImage.state} = ${runTargetState.enum.pending})`,
       ),
     )
     .returning({ id: runTable.id, publicId: runTable.shortcode });
@@ -425,7 +540,7 @@ export async function loadRunScopeByShortcode(db: Database, publicId: string) {
 
 /**
  * Finalize a chunk of bulk-uploaded photos into a photo-inventory run: turn
- * each `stage`d image into an `RunTarget` and activate it, then queue
+ * each `stage`d image into a `PhotoRunImage` and activate it, then queue
  * describe/lift processing. Unlike the vendor-scoped run flows this is not
  * owner-fenced (`assertOwnedRun`) — any household member may finalize into a
  * shared photo-inventory run, so `actor` is accepted for parity with sibling
@@ -496,16 +611,15 @@ export async function finalizePhotoRun(
       });
 
       const inserted = await getDb(transactionDb)
-        .insert(runTarget)
+        .insert(photoRunImage)
         .values(
           lockedStaged.map((entry) => {
             const detail = detailByShortcode.get(entry.row.shortcode);
             return {
               runId: scope.public.runId,
-              entityKind: "image" as const,
-              entityId: imageId.parse(entry.row.id),
+              imageId: imageId.parse(entry.row.id),
               position: detail?.position ?? 0,
-              state: runTargetState.enum.pending,
+              state: "pending" as const,
               targetFingerprint: detail?.sha256 ?? entry.integrity.sha256,
             };
           }),
@@ -515,7 +629,7 @@ export async function finalizePhotoRun(
         // not a failure. The bare form matches every constraint on the
         // table, same as `persistLocalImageAnalysis`'s idempotent upsert.
         .onConflictDoNothing()
-        .returning({ entityId: runTarget.entityId });
+        .returning({ entityId: photoRunImage.imageId });
       const insertedIds = new Set(inserted.map((row) => row.entityId));
 
       await finalizeImportedImages(transactionDb, {
@@ -534,10 +648,10 @@ export async function finalizePhotoRun(
 
       return {
         finalizedIds: lockedStaged
-          .filter((entry) => insertedIds.has(entry.row.id))
+          .filter((entry) => insertedIds.has(imageId.parse(entry.row.id)))
           .map((entry) => entry.row.shortcode),
         alreadyFinalizedIds: lockedStaged
-          .filter((entry) => !insertedIds.has(entry.row.id))
+          .filter((entry) => !insertedIds.has(imageId.parse(entry.row.id)))
           .map((entry) => entry.row.shortcode),
       };
     });
@@ -569,19 +683,7 @@ export async function updateAgentProgress(
   rawInput: AgentProgressEvent,
 ) {
   const input = agentProgressEvent.parse(rawInput);
-  const [inserted] = await getDb(db)
-    .insert(runProgress)
-    .values({
-      runId: input.runId,
-      eventId: input.eventId,
-      phase: input.phase,
-      currentItem: input.currentItem,
-      awaitingApproval: input.awaitingApproval ?? false,
-      detail: input.detail,
-    })
-    .onConflictDoNothing()
-    .returning({ id: runProgress.id });
-  return { recorded: Boolean(inserted) };
+  return recordRunProgress(db, input);
 }
 
 export async function pauseRunForAuthorization(db: Database, runId: string) {
@@ -733,6 +835,8 @@ export async function reconcileSettledRun(
   input: {
     runId: string;
     operationId: string;
+    generation: string | null;
+    sequence?: number;
     detail?: string;
     /**
      * Every queue event id the reporting agent has received; absent for the
@@ -747,6 +851,14 @@ export async function reconcileSettledRun(
   },
 ) {
   const scope = await loadRunScope(db, input.runId);
+  const stamp = input.receivedEventIds
+    ? runProgressStamp.parse({
+        generation: input.generation,
+        sequence: input.sequence,
+      })
+    : null;
+  if (scope.public.dispatchEventId !== input.generation)
+    return { reconciled: false as const, status: scope.public.status };
   if (scope.public.status !== "running")
     return { reconciled: false as const, status: scope.public.status };
   if (
@@ -758,6 +870,7 @@ export async function reconcileSettledRun(
     const { failed } = await markRunFailed(db, {
       runId: input.runId,
       ...input.failure,
+      dispatchEventId: input.generation,
     });
     return failed
       ? { reconciled: true as const, status: "failed" as const }
@@ -769,11 +882,15 @@ export async function reconcileSettledRun(
   if (scope.public.purpose === "photo_inventory") {
     const awaitingPhotoReview = await withTransaction(db, async (tx) => {
       const [locked] = await tx
-        .select({ status: runTable.status })
+        .select({ run: runTable })
         .from(runTable)
         .where(eq(runTable.id, scope.public.runId))
         .for("update");
-      if (locked?.status !== "running") return false;
+      if (
+        locked?.run.status !== "running" ||
+        locked.run.dispatchEventId !== input.generation
+      )
+        return false;
       const [proposal] = await tx
         .select({ id: photoGroupProposal.id })
         .from(photoGroupProposal)
@@ -785,26 +902,38 @@ export async function reconcileSettledRun(
         )
         .limit(1);
       if (!proposal) return false;
-      const [progress] = await tx
-        .select({ awaitingApproval: runProgress.awaitingApproval })
-        .from(runProgress)
-        .where(eq(runProgress.runId, scope.public.runId))
-        .orderBy(desc(runProgress.createdAt), desc(runProgress.id))
-        .limit(1);
-      if (!progress?.awaitingApproval) {
-        // A saved proposal is durable human work even when the coordinator
-        // stops before reporting its final phase. Preserve pending targets.
-        await tx
-          .insert(runProgress)
-          .values({
-            runId: scope.public.runId,
-            eventId: `photo-review-handoff:${scope.public.runId}`,
+      if (!locked.run.liveProgress?.awaitingApproval && stamp) {
+        const eventId = `photo-review-handoff:${input.operationId}`;
+        const previous = locked.run.liveProgress;
+        const ids = locked.run.progressEventIds ?? [];
+        if (
+          !ids.includes(eventId) &&
+          (previous?.generation !== stamp.generation ||
+            previous.sequence < stamp.sequence)
+        ) {
+          const now = new Date();
+          const event = runProgressEvent.parse({
+            ...stamp,
+            eventId,
             phase: "awaiting_approval",
             currentItem: "Review proposed photo groups",
             awaitingApproval: true,
             detail: "Photo groups are ready for human review",
-          })
-          .onConflictDoNothing();
+            createdAt: now.toISOString(),
+          });
+          await tx
+            .update(runTable)
+            .set({
+              liveProgress: event,
+              progressHistory: [
+                ...(locked.run.progressHistory ?? []),
+                event,
+              ].slice(-100),
+              progressEventIds: [...ids, eventId],
+              heartbeatAt: now,
+            })
+            .where(eq(runTable.id, scope.public.runId));
+        }
       }
       return true;
     });
@@ -817,18 +946,27 @@ export async function reconcileSettledRun(
   if (scope.public.purpose === "mail_import") {
     const completed = await withTransaction(db, async (tx) => {
       const [locked] = await tx
-        .select({ status: runTable.status })
+        .select({
+          status: runTable.status,
+          generation: runTable.dispatchEventId,
+        })
         .from(runTable)
         .where(eq(runTable.id, scope.public.runId))
         .for("update");
-      if (locked?.status !== "running") return false;
-      const targets = await tx
-        .select({ state: runTarget.state })
-        .from(runTarget)
-        .where(eq(runTarget.runId, scope.public.runId));
       if (
-        targets.length === 0 ||
-        targets.some((target) => target.state !== "completed")
+        locked?.status !== "running" ||
+        locked.generation !== input.generation
+      )
+        return false;
+      const sources = await readMailRunSources(tx, scope.public.runId);
+      if (
+        !sources.length ||
+        sources.some(
+          (source) =>
+            !source.owned ||
+            !source.unchanged ||
+            source.email.status !== "completed",
+        )
       )
         return false;
       await tx
@@ -848,9 +986,14 @@ export async function reconcileSettledRun(
     runId: input.runId,
     operationId: input.operationId,
     kind: "other",
+    dispatchEventId: input.generation,
     summary: input.detail ?? "Coordinator ended without finishing the run",
   });
-  return { reconciled: true as const, status: "needs_review" as const };
+  const settledStatus = (await loadRunScope(db, input.runId)).public.status;
+  return {
+    reconciled: settledStatus === "needs_review",
+    status: settledStatus,
+  };
 }
 
 /**
@@ -862,7 +1005,7 @@ export async function reconcileSettledRun(
 export async function expireStaleRuns(db: Database, now = new Date()) {
   const cutoff = new Date(now.getTime() - STALE_RUN_MS);
   const stale = await getDb(db)
-    .select({ id: runTable.id })
+    .select({ id: runTable.id, generation: runTable.dispatchEventId })
     .from(runTable)
     .where(
       and(
@@ -879,7 +1022,7 @@ export async function expireStaleRuns(db: Database, now = new Date()) {
           isNotNull(runTable.coordinatorStartedAt),
         ),
         sql`NOT EXISTS (SELECT 1 FROM ${runOperation} WHERE ${runOperation.runId} = ${runTable.id} AND ${runOperation.startedAt} >= ${cutoff})`,
-        sql`NOT EXISTS (SELECT 1 FROM ${runProgress} WHERE ${runProgress.runId} = ${runTable.id} AND ${runProgress.createdAt} >= ${cutoff})`,
+        or(isNull(runTable.heartbeatAt), lt(runTable.heartbeatAt, cutoff)),
       ),
     );
   let expired = 0;
@@ -892,6 +1035,7 @@ export async function expireStaleRuns(db: Database, now = new Date()) {
       const outcome = await reconcileSettledRun(db, {
         runId: run.id,
         operationId: `stale-run:${now.toISOString()}`,
+        generation: run.generation,
         detail: "No coordinator activity for two hours",
       });
       if (outcome.reconciled) expired += 1;
@@ -929,12 +1073,11 @@ export async function claimPhotoInventoryWork(db: Database, runId: string) {
     .limit(1);
   const [pending] = await getDb(db)
     .select({ count: count() })
-    .from(runTarget)
+    .from(photoRunImage)
     .where(
       and(
-        eq(runTarget.runId, scope.public.runId),
-        eq(runTarget.entityKind, "image"),
-        eq(runTarget.state, "pending"),
+        eq(photoRunImage.runId, scope.public.runId),
+        eq(photoRunImage.state, "pending"),
       ),
     );
   return pending?.count
@@ -1112,6 +1255,7 @@ export async function stopRunForReview(
     operationId: string;
     kind: string;
     summary: string;
+    dispatchEventId?: string | null;
   },
 ) {
   const scope = await loadRunScope(db, input.runId);
@@ -1143,6 +1287,16 @@ export async function stopRunForReview(
     });
   const auditedAt = new Date();
   return withTransaction(db, async (tx) => {
+    const [current] = await tx
+      .select({ generation: runTable.dispatchEventId })
+      .from(runTable)
+      .where(eq(runTable.id, runId))
+      .for("no key update");
+    if (
+      input.dispatchEventId !== undefined &&
+      current?.generation !== input.dispatchEventId
+    )
+      return { findingId: null };
     const [finding] = await tx
       .insert(runFinding)
       .values({
@@ -1173,12 +1327,16 @@ export async function stopRunForReview(
           )
           .limit(1);
     await tx
-      .update(runTarget)
+      .update(photoRunImage)
       .set({ state: "unresolved", outcome: null, updatedAt: new Date() })
       .where(
         and(
-          eq(runTarget.runId, runId),
-          inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
+          eq(photoRunImage.runId, runId),
+          inArray(photoRunImage.state, [
+            "pending",
+            "prepared",
+            "needs_evidence",
+          ]),
         ),
       );
     await tx
@@ -1206,7 +1364,7 @@ export async function markRunFailed(
     runId: string;
     failureCode: "agent_failed" | "agent_aborted";
     detail?: string;
-    dispatchEventId?: string;
+    dispatchEventId?: string | null;
   },
 ) {
   const runId = runEntityId.parse(input.runId);
@@ -1222,9 +1380,11 @@ export async function markRunFailed(
       and(
         eq(runTable.id, runId),
         eq(runTable.status, "running"),
-        input.dispatchEventId
-          ? eq(runTable.dispatchEventId, input.dispatchEventId)
-          : undefined,
+        input.dispatchEventId === undefined
+          ? undefined
+          : input.dispatchEventId === null
+            ? isNull(runTable.dispatchEventId)
+            : eq(runTable.dispatchEventId, input.dispatchEventId),
       ),
     )
     .returning({ vendorAccountId: runTable.vendorAccountId });
@@ -1392,6 +1552,8 @@ export async function loadRunDetail(
         id: runTable.id,
         dispatchEventId: runTable.dispatchEventId,
         retiredAt: runTable.retiredAt,
+        purpose: runTable.purpose,
+        progressHistory: runTable.progressHistory,
         actorLedgerPartyShortcode: runTable.actorLedgerPartyShortcode,
         actorLedgerPartyName: runTable.actorLedgerPartyName,
         input: runTable.input,
@@ -1455,18 +1617,7 @@ export async function loadRunDetail(
       .where(eq(runApproval.runId, run.id))
       .orderBy(asc(runApproval.createdAt)),
     loadPreparedReviewRows(db, run.id),
-    database
-      .select({
-        eventId: runProgress.eventId,
-        phase: runProgress.phase,
-        currentItem: runProgress.currentItem,
-        awaitingApproval: runProgress.awaitingApproval,
-        detail: runProgress.detail,
-        createdAt: runProgress.createdAt,
-      })
-      .from(runProgress)
-      .where(eq(runProgress.runId, run.id))
-      .orderBy(asc(runProgress.createdAt), asc(runProgress.id)),
+    Promise.resolve(run.progressHistory ?? []),
     database
       .selectDistinct({
         shortcode: purchase.shortcode,
@@ -1508,28 +1659,29 @@ export async function loadRunDetail(
       .from(runControlEvent)
       .where(eq(runControlEvent.runId, run.id))
       .orderBy(asc(runControlEvent.createdAt)),
-    database
-      .select({
-        id: runTarget.id,
-        entityKind: runTarget.entityKind,
-        entityId: runTarget.entityId,
-        entityCode: entityIdentity.shortcode,
-        vendorAccountId: vendorAccount.shortcode,
-        vendorAccountLabel: vendorAccount.label,
-        sourceKind: runTarget.sourceKind,
-        sourceExternalKey: runTarget.sourceExternalKey,
-        state: runTarget.state,
-        targetFingerprint: runTarget.targetFingerprint,
-        outcome: runTarget.outcome,
-        warning: runTarget.warning,
-        diff: runTarget.diff,
-        completedAt: runTarget.completedAt,
-      })
-      .from(runTarget)
-      .leftJoin(entityIdentity, eq(entityIdentity.id, runTarget.entityId))
-      .leftJoin(vendorAccount, eq(vendorAccount.id, runTarget.vendorAccountId))
-      .where(eq(runTarget.runId, run.id))
-      .orderBy(asc(runTarget.createdAt)),
+    run.purpose === "photo_inventory"
+      ? database
+          .select({
+            id: photoRunImage.id,
+            entityKind: sql<"image">`${runTargetEntityKind.enum.image}`,
+            entityId: photoRunImage.imageId,
+            entityCode: image.shortcode,
+            vendorAccountId: sql<null>`NULL`,
+            vendorAccountLabel: sql<null>`NULL`,
+            sourceKind: sql<null>`NULL`,
+            sourceExternalKey: sql<null>`NULL`,
+            state: photoRunImage.state,
+            targetFingerprint: photoRunImage.targetFingerprint,
+            outcome: photoRunImage.outcome,
+            warning: photoRunImage.skipReason,
+            diff: photoRunImage.commitReceipt,
+            completedAt: photoRunImage.completedAt,
+          })
+          .from(photoRunImage)
+          .innerJoin(image, eq(image.id, photoRunImage.imageId))
+          .where(eq(photoRunImage.runId, run.id))
+          .orderBy(asc(photoRunImage.createdAt))
+      : selectNonPhotoTargets(database, run.id),
     database
       .select({
         durationMs: sql<number>`coalesce(sum(${aiUsage.durationMs}), 0)`,
@@ -1542,7 +1694,9 @@ export async function loadRunDetail(
           notDeleted(aiUsage),
         ),
       ),
-    selectRestartTargets(database, run.id),
+    run.purpose === "photo_inventory"
+      ? selectPhotoRestartTargets(database, run.id)
+      : selectRestartTargets(database, run.id),
   ]);
   const { lookupEntityLabels } =
     await import("~/server/repo/shortcode-resolver");
@@ -1563,8 +1717,12 @@ export async function loadRunDetail(
     ledgerParty: { id: event.ledgerPartyId, name: event.ledgerPartyName },
   });
   const browserProgress = progress.map((event) => ({
-    ...event,
-    createdAt: event.createdAt.toISOString(),
+    eventId: event.eventId,
+    phase: event.phase,
+    currentItem: event.currentItem,
+    awaitingApproval: event.awaitingApproval,
+    detail: event.detail,
+    createdAt: event.createdAt,
   }));
   return {
     publicId,
@@ -1632,7 +1790,10 @@ export async function loadRunDetail(
             vendorAccount: target.vendorAccountCode,
             sourceKind: target.sourceKind,
             sourceExternalKey: publicSourceKey(target),
-            targetFingerprint: target.targetFingerprint,
+            targetFingerprint:
+              target.sourceKind === "mail_message"
+                ? null
+                : target.targetFingerprint,
           })),
         }
       : null,
@@ -1660,7 +1821,8 @@ export async function loadRunDetail(
         : null,
       vendorAccountLabel: target.vendorAccountLabel,
       state: target.state,
-      fingerprint: target.targetFingerprint,
+      fingerprint:
+        target.sourceKind === "mail_message" ? null : target.targetFingerprint,
       outcome: target.outcome,
       warning: target.warning,
       diff: z
@@ -1781,16 +1943,20 @@ export function approvalWakeEvent(
   control: Awaited<ReturnType<typeof controlRun>>,
 ): Extract<PurchaseAgentEvent, { type: "retry" }> | null {
   if (!("wakeRunId" in control) || !control.wakeRunId) return null;
+  if (!control.wakeGeneration)
+    throw new Error("Approval wake has no admitted dispatch generation");
   if ("evidenceWakeId" in control)
     return {
       version: 1,
       runId: control.wakeRunId,
+      generation: control.wakeGeneration,
       eventId: `validation-original:${control.evidenceWakeId}`,
       type: "retry",
     };
   return {
     version: 1,
     runId: control.wakeRunId,
+    generation: control.wakeGeneration,
     eventId: `approval:${control.approvalId}:${control.decision}`,
     type: "retry",
   };
@@ -2047,7 +2213,9 @@ export async function controlRun(
         if (!agentImportRunPurpose.safeParse(locked.purpose).success)
           throw new Error("Only agent import runs can be started again");
         const sourceTargets = (
-          await selectRestartTargets(tx, scope.public.runId)
+          await (locked.purpose === "photo_inventory"
+            ? selectPhotoRestartTargets(tx, scope.public.runId)
+            : selectRestartTargets(tx, scope.public.runId))
         ).map((target) => ({
           entityId: target.entityId,
           entityKind: target.entityKind,
@@ -2092,16 +2260,21 @@ export async function controlRun(
             agentImportRunPurpose.parse(locked.purpose),
           ),
         });
-        if (sourceTargets.length)
-          await tx.insert(runTarget).values(
-            sourceTargets.map((target) => ({
-              ...target,
-              entityId:
-                target.entityKind === "run" ? successorId : target.entityId,
-              runId: successorId,
-              state: "pending" as const,
-            })),
-          );
+        if (locked.purpose === "photo_inventory") {
+          if (sourceTargets.length)
+            await tx.insert(photoRunImage).values(
+              sourceTargets.map((target) => ({
+                runId: successorId,
+                imageId: imageId.parse(target.entityId),
+                workKey: target.workKey,
+                position: target.position,
+                targetFingerprint: target.targetFingerprint,
+                state: "pending" as const,
+              })),
+            );
+        } else if (locked.purpose === "mail_import") {
+          await transferMailRunSources(tx, scope.public.runId, successorId);
+        }
         return {
           publicId: input.runPublicId,
           status: locked.status,
@@ -2187,32 +2360,57 @@ export async function controlRun(
         }
         const successorId = runEntityId.parse(crypto.randomUUID());
         const dispatchEventId = crypto.randomUUID();
-        const unresolvedTargets = await tx
-          .select({
-            entityId: runTarget.entityId,
-            entityKind: runTarget.entityKind,
-            workKey: runTarget.workKey,
-            position: runTarget.position,
-            vendorAccountId: runTarget.vendorAccountId,
-            sourceKind: runTarget.sourceKind,
-            sourceExternalKey: runTarget.sourceExternalKey,
-            targetFingerprint: runTarget.targetFingerprint,
-          })
-          .from(runTarget)
-          .where(
-            and(
-              eq(runTarget.runId, scope.public.runId),
-              inArray(runTarget.state, [
-                "pending",
-                "prepared",
-                "unresolved",
-                "needs_evidence",
-                "unavailable",
-              ]),
-            ),
-          );
+        const unresolvedTargets =
+          locked.purpose === "photo_inventory"
+            ? await tx
+                .select({
+                  entityId: photoRunImage.imageId,
+                  entityKind: sql<"image">`${runTargetEntityKind.enum.image}`,
+                  workKey: photoRunImage.workKey,
+                  position: photoRunImage.position,
+                  vendorAccountId: sql<null>`NULL`,
+                  sourceKind: sql<null>`NULL`,
+                  sourceExternalKey: sql<null>`NULL`,
+                  targetFingerprint: photoRunImage.targetFingerprint,
+                })
+                .from(photoRunImage)
+                .where(
+                  and(
+                    eq(photoRunImage.runId, scope.public.runId),
+                    inArray(photoRunImage.state, [
+                      "pending",
+                      "prepared",
+                      "unresolved",
+                      "needs_evidence",
+                      "unavailable",
+                    ]),
+                  ),
+                )
+            : (await selectRestartTargets(tx, scope.public.runId)).filter(
+                (target) =>
+                  [
+                    "pending",
+                    "prepared",
+                    "unresolved",
+                    "needs_evidence",
+                    "unavailable",
+                  ].includes(target.state),
+              );
         if (!unresolvedTargets.length)
           throw new Error("This Run has no unresolved targets to retry");
+        const successorInput =
+          locked.purpose === "mail_import"
+            ? {
+                ...mailResearchRunInput.parse(locked.input),
+                sources: mailResearchRunInput
+                  .parse(locked.input)
+                  .sources.filter((source) =>
+                    unresolvedTargets.some(
+                      (target) => target.workKey === source.orderMailId,
+                    ),
+                  ),
+              }
+            : locked.input;
         const successor = await insertWithShortcode(tx, "run", {
           id: successorId,
           ledgerPartyId: locked.ledgerPartyId,
@@ -2227,7 +2425,7 @@ export async function controlRun(
           predecessorRunId: scope.public.runId,
           purpose: locked.purpose,
           trigger: locked.trigger,
-          input: locked.input,
+          input: successorInput,
           dispatchEventId,
           coordinatorModel: coordinatorModelFor(locked.purpose),
           skillRevision: locked.skillRevision,
@@ -2238,15 +2436,23 @@ export async function controlRun(
             agentImportRunPurpose.parse(locked.purpose),
           ),
         });
-        if (unresolvedTargets) {
-          await tx.insert(runTarget).values(
+        if (locked.purpose === "photo_inventory") {
+          await tx.insert(photoRunImage).values(
             unresolvedTargets.map((target) => ({
               runId: successorId,
-              ...target,
-              entityId:
-                target.entityKind === "run" ? successorId : target.entityId,
+              imageId: imageId.parse(target.entityId),
+              workKey: target.workKey,
+              position: target.position,
+              targetFingerprint: target.targetFingerprint,
               state: "pending" as const,
             })),
+          );
+        } else if (locked.purpose === "mail_import") {
+          await transferMailRunSources(
+            tx,
+            scope.public.runId,
+            successorId,
+            unresolvedTargets.map((target) => target.workKey),
           );
         }
         if (successorVendorAccountId) {
@@ -2457,6 +2663,7 @@ export async function controlRun(
           approvalId,
           decision: "rejected" as const,
           wakeRunId: scope.public.runId,
+          wakeGeneration: locked.dispatchEventId,
         };
       }
       if (
@@ -2492,6 +2699,7 @@ export async function controlRun(
             approvalId,
             decision: "invalidated" as const,
             wakeRunId: scope.public.runId,
+            wakeGeneration: locked.dispatchEventId,
           };
         }
       }
@@ -2513,6 +2721,7 @@ export async function controlRun(
         approvalId,
         decision: "approved" as const,
         wakeRunId: scope.public.runId,
+        wakeGeneration: locked.dispatchEventId,
       };
     },
   );

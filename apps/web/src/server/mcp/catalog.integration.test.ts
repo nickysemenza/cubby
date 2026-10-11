@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { type JSONType, z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
-import { runTarget } from "~/server/db/schema";
+import { photoRunImage } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
@@ -407,11 +407,10 @@ describe("MCP catalog", () => {
       sha256: "a".repeat(64),
     });
     await getDb(ctx.db)
-      .insert(runTarget)
+      .insert(photoRunImage)
       .values({
         runId: run.id,
-        entityKind: "image",
-        entityId: parseImageId.parse(target.id),
+        imageId: parseImageId.parse(target.id),
         position: 0,
         state: "pending",
         targetFingerprint: "a".repeat(64),

@@ -90,6 +90,12 @@ contracts separately.
 | `pnpm wasm`                                                        | Rebuild the `@cubby/recipebridge` packages from Rust, uncached              |
 | `pnpm apple <cli\|mac\|ios\|sim\|gen\|test>`                       | Native app products                                                         |
 
+For a staged production rollout, add `--through=EXACT_JOURNAL_TAG` to
+`pnpm --filter @cubby/web db:migrate --target=production`; it applies the pending
+prefix through that tag inclusively. Follow the
+[production migration runbook](runbooks/production-migrations.md) to keep
+contract migrations behind deployment.
+
 Test suffixes: `*.unit.test.ts` (Vitest), `*.integration.test.ts` (PostgreSQL
 contracts, Vitest), `*.spec.ts` (Playwright). Which tier to use is set by the
 [validation policy](agents/validation.md) and [test tiers](agents/validation-tests.md).

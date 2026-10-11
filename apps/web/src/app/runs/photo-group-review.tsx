@@ -28,7 +28,10 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { PhotoGrid } from "~/features/photos/photo-grid";
 import { ProductVariantEvidence } from "~/features/products/product-variant-evidence";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import {
+  photoImport,
+  purchaseImport,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   RUN_TARGET_STATE_LABEL,
@@ -1620,10 +1623,21 @@ function ExpenseLinkReview({
       search,
     }),
   );
+  const [review, setReview] = useState<Awaited<
+    ReturnType<typeof purchaseImport.prepareReconciliation.call>
+  > | null>(null);
+  const preview = useMutation({
+    mutationFn: (
+      input: Parameters<typeof purchaseImport.prepareReconciliation.call>[0],
+    ) => purchaseImport.prepareReconciliation.call(input),
+    onSuccess: setReview,
+    onError: (error) => showErrorToast(error),
+  });
   const link = useMutation({
-    ...photoImport.linkExpense.mutationOptions(),
+    ...purchaseImport.commitAcceptedReconciliation.mutationOptions(),
     onSuccess: () => {
-      toast.success("Expense line linked to Product");
+      setReview(null);
+      toast.success("Existing Expense linked to Product");
       void invalidateOperationTags(queryClient, ripple.runOnly);
     },
     onError: (error) => showErrorToast(error),
@@ -1695,20 +1709,39 @@ function ExpenseLinkReview({
                   ) : null}
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={link.isPending}
-                onClick={() =>
-                  link.mutate({
-                    runId,
-                    groupKey: proposal.groupKey,
-                    expenseId: line.expenseId,
-                  })
-                }
-              >
-                Link this line
-              </Button>
+              {line.acceptedSourceLines.length ? (
+                line.acceptedSourceLines.map((source, index) => (
+                  <Button
+                    key={`${source.sourceOrderId}:${source.lineIndex}`}
+                    size="sm"
+                    variant="outline"
+                    disabled={preview.isPending || link.isPending}
+                    onClick={() =>
+                      preview.mutate({
+                        sourceOrderId: source.sourceOrderId,
+                        resolution: {
+                          kind: "attach_only",
+                          lines: [
+                            {
+                              lineIndex: source.lineIndex,
+                              expenseId: line.expenseId,
+                              productId: lines.data.productId,
+                            },
+                          ],
+                        },
+                      })
+                    }
+                  >
+                    {line.acceptedSourceLines.length > 1
+                      ? `Review source ${index + 1}`
+                      : "Review this link"}
+                  </Button>
+                ))
+              ) : (
+                <span className="text-muted-foreground">
+                  Accepted source evidence required
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -1717,6 +1750,51 @@ function ExpenseLinkReview({
           No eligible unlinked lines found. Search by a name or label phrase.
         </p>
       )}
+      {review && "sourceOrderId" in review ? (
+        <div
+          className="mt-3 space-y-2 border-t border-border pt-3"
+          aria-label="Reviewed Expense association"
+        >
+          <p>
+            Reviewed spending:{" "}
+            {review.spend.before === null
+              ? "unknown"
+              : formatCurrency(review.spend.before)}{" "}
+            →{" "}
+            {review.spend.after === null
+              ? "unknown"
+              : formatCurrency(review.spend.after)}
+            . No stock is received.
+          </p>
+          <ul>
+            {review.originalAttributions.map((attribution) => (
+              <li
+                key={`${attribution.role}:${attribution.partyId ?? "unattributed"}`}
+              >
+                {attribution.role}: {attribution.partyId ?? "Unattributed"} ·{" "}
+                {formatCurrency(attribution.amount)}
+              </li>
+            ))}
+          </ul>
+          <p>
+            {review.payments.length} payment evidence rows ·{" "}
+            {review.allocations.length} statement allocations preserved.
+          </p>
+          <Row>
+            <Button
+              disabled={link.isPending}
+              onClick={() =>
+                link.mutate({ sourceOrderId: review.sourceOrderId, review })
+              }
+            >
+              Confirm reviewed link
+            </Button>
+            <Button variant="outline" onClick={() => setReview(null)}>
+              Cancel
+            </Button>
+          </Row>
+        </div>
+      ) : null}
     </section>
   );
 }

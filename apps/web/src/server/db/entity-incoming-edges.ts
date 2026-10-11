@@ -60,35 +60,18 @@ function projectIncomingEdges<T extends Record<string, EntityEdge>>(
   ) as { [K in keyof T]: IncomingEdge };
 }
 
-export const INCOMING_EDGES = {
-  cookbook: projectIncomingEdges(ENTITY_EDGES.cookbook),
-  image: projectIncomingEdges(ENTITY_EDGES.image),
-  recipe: projectIncomingEdges(ENTITY_EDGES.recipe),
-  ingredient: projectIncomingEdges(ENTITY_EDGES.ingredient),
-  meal: projectIncomingEdges(ENTITY_EDGES.meal),
-  ledgerParty: projectIncomingEdges(ENTITY_EDGES.ledgerParty),
-  product: projectIncomingEdges(ENTITY_EDGES.product),
-  productCategory: projectIncomingEdges(ENTITY_EDGES.productCategory),
-  spendingCategory: projectIncomingEdges(ENTITY_EDGES.spendingCategory),
-  location: projectIncomingEdges(ENTITY_EDGES.location),
-  project: projectIncomingEdges(ENTITY_EDGES.project),
-  task: projectIncomingEdges(ENTITY_EDGES.task),
-  vendor: projectIncomingEdges(ENTITY_EDGES.vendor),
-  vendorAccount: projectIncomingEdges(ENTITY_EDGES.vendorAccount),
-  run: projectIncomingEdges(ENTITY_EDGES.run),
-  purchase: projectIncomingEdges(ENTITY_EDGES.purchase),
-  financialAccount: projectIncomingEdges(ENTITY_EDGES.financialAccount),
-  financialTransaction: projectIncomingEdges(ENTITY_EDGES.financialTransaction),
-  wish: projectIncomingEdges(ENTITY_EDGES.wish),
-  expense: projectIncomingEdges(ENTITY_EDGES.expense),
-  ledgerTransfer: projectIncomingEdges(ENTITY_EDGES.ledgerTransfer),
-  plant: projectIncomingEdges(ENTITY_EDGES.plant),
-  planting: projectIncomingEdges(ENTITY_EDGES.planting),
-  gardenEntry: projectIncomingEdges(ENTITY_EDGES.gardenEntry),
-  inventory: projectIncomingEdges(ENTITY_EDGES.inventory),
-  "usda-food": projectIncomingEdges(ENTITY_EDGES["usda-food"]),
-  device: projectIncomingEdges(ENTITY_EDGES.device),
-} satisfies Record<Entity, Record<string, IncomingEdge>>;
+// SAFETY: entries retain every entity and edge key; the mapped type restores
+// the keys erased by Object.fromEntries without a second entity roster.
+const INCOMING_EDGES = Object.fromEntries(
+  Object.entries(ENTITY_EDGES).map(([entity, edgeMap]) => [
+    entity,
+    projectIncomingEdges(edgeMap),
+  ]),
+) as {
+  [E in keyof typeof ENTITY_EDGES]: {
+    [K in keyof (typeof ENTITY_EDGES)[E]]: IncomingEdge;
+  };
+};
 
 /** The declared incoming-edge keys for entity `E` — e.g. `IncomingEdgeKey<"image">`. */
 export type IncomingEdgeKey<E extends Entity> =
@@ -102,7 +85,7 @@ export type IncomingEdgeKey<E extends Entity> =
  * (`PRODUCT_RETAINING_NOT_EXISTS`). Adding an edge above is a compile error in
  * every one of them until it's handled.
  */
-export type IncomingEdgeMap<E extends Entity, Value> = Record<
+type IncomingEdgeMap<E extends Entity, Value> = Record<
   IncomingEdgeKey<E>,
   Value
 >;
@@ -146,3 +129,5 @@ export const EDGE_KEY_TARGET_ENTITY: ReadonlyMap<string, ShortcodeEntity> =
 /** An edge's `scope` restriction as a WHERE term, when it has one. */
 export const edgeScopeWhere = (edge: { scope?: EdgeScope }): SQL | undefined =>
   edge.scope ? eq(edge.scope.column, edge.scope.value) : undefined;
+
+export { INCOMING_EDGES };

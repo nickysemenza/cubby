@@ -97,11 +97,6 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "Original order-line bindings follow the surviving Product while their retained extraction and checksum remain unchanged.",
   },
-  "RunTarget.entityId": {
-    code: "repoint-targeted-import-history",
-    effect: "repoint",
-    description: "Targeted enrichment history follows the surviving Product.",
-  },
   "EntityExternalId.entityId": {
     code: "repoint-or-discard-conflicting-slot",
     effect: "move-dedupe",

@@ -13,8 +13,9 @@ import { describe, expect, it } from "vitest";
 import {
   importSourceClaim,
   importSourceOrder,
-  mailboxMessage,
+  email as emailTable,
   orderMail,
+  orderMailAttachment,
   orderMailCandidateDecision,
   orderMailEvent,
   purchase as purchaseTable,
@@ -25,6 +26,7 @@ import { buildEntityReport } from "~/server/repo/entity-report";
 import { mergePurchases } from "~/server/repo/purchase";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { syntheticRetainedMail } from "./retained-mail.fixtures";
 import {
   decideOrderMailCandidate,
   listPurchaseOrderMail,
@@ -34,23 +36,210 @@ import {
 describe("Vendor order mail review", () => {
   const ctx = withTestDb();
 
+  it.each(["accepted_alias", "accepted_attachment"] as const)(
+    "shows owned content-cleared %s evidence in both Vendor and Purchase views",
+    async (sourceKind) => {
+      const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+        name: "Synthetic accepted evidence member",
+        kind: "member",
+        userId: ctx.actor.userId,
+      });
+      const vendor = await insertWithShortcode(ctx.db, "vendor", {
+        name: "Synthetic accepted evidence merchant",
+      });
+      const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+        label: "Synthetic accepted evidence account",
+        vendorId: vendor.id,
+        ledgerPartyId: party.id,
+      });
+      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        vendorAccountId: account.id,
+      });
+      const scope = await insertWithShortcode(ctx.db, "run", {
+        purpose: "mail_import",
+        trigger: "manual",
+        status: "running",
+        ledgerPartyId: party.id,
+        actorUserId: ctx.actor.userId,
+        actorName: party.name,
+        actorEmail: "accepted-review@example.test",
+        actorLedgerPartyShortcode: party.shortcode,
+        actorLedgerPartyName: party.name,
+        actorLedgerPartyKind: party.kind,
+      });
+      const original = await syntheticRetainedMail(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-accepted-review-mailbox",
+        messageId: "synthetic-accepted-review-message",
+        sender: null,
+        subject: null,
+        receivedAt: null,
+        vendorId: null,
+        rawChecksum: "e".repeat(64),
+        content: { snippet: null, bodyText: null, bodyHtml: null },
+      });
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({
+          classification: "unrelated",
+          status: "completed",
+          contentClearedAt: new Date("2026-10-01T12:00:00Z"),
+        })
+        .where(eq(emailTable.orderMailId, original.id));
+      const kind =
+        sourceKind === "accepted_attachment"
+          ? "mail_attachment"
+          : "mail_message";
+      const attachmentKey = "synthetic-accepted-attachment";
+      const externalKey = `gmail:${original.mailboxId}:${original.messageId}${
+        sourceKind === "accepted_attachment"
+          ? `:attachment:${attachmentKey}`
+          : ""
+      }`;
+      const checksum = "f".repeat(64);
+      if (sourceKind === "accepted_attachment")
+        await getDb(ctx.db).insert(orderMailAttachment).values({
+          orderMailId: original.id,
+          providerAttachmentId: attachmentKey,
+          filename: "synthetic-evidence.pdf",
+          mimeType: "application/pdf",
+          checksum,
+          pendingObjectKey: null,
+        });
+      const [root] = await getDb(ctx.db)
+        .insert(importSourceClaim)
+        .values({
+          ledgerPartyId: party.id,
+          kind,
+          externalKey,
+          checksum,
+          firstRunId: scope.id,
+          lastRunId: scope.id,
+        })
+        .returning();
+      if (!root) throw new Error("Synthetic accepted root claim missing");
+      const [acceptedClaim] =
+        sourceKind === "accepted_alias"
+          ? await getDb(ctx.db)
+              .insert(importSourceClaim)
+              .values({
+                ledgerPartyId: party.id,
+                kind,
+                externalKey: "synthetic:historical-accepted-alias",
+                canonicalClaimId: root.id,
+                checksum,
+                firstRunId: scope.id,
+                lastRunId: scope.id,
+              })
+              .returning()
+          : [root];
+      if (!acceptedClaim)
+        throw new Error("Synthetic accepted family claim missing");
+      const acceptedAt = new Date("2026-10-02T12:00:00Z");
+      await getDb(ctx.db).insert(importSourceOrder).values({
+        sourceClaimId: acceptedClaim.id,
+        orderKey: "synthetic-accepted-review-order",
+        purchaseId: purchase.id,
+        checksum,
+        outputFingerprint: "synthetic-accepted-review-fingerprint",
+        createdAt: acceptedAt,
+      });
+      const foreignParty = await insertWithShortcode(ctx.db, "ledgerParty", {
+        name: "Synthetic foreign evidence member",
+        kind: "member",
+      });
+      await syntheticRetainedMail(ctx.db, {
+        ...original,
+        id: undefined,
+        ledgerPartyId: foreignParty.id,
+      });
+      const [foreignClaim] = await getDb(ctx.db)
+        .insert(importSourceClaim)
+        .values({
+          ledgerPartyId: foreignParty.id,
+          kind: "mail_message",
+          externalKey: `gmail:${original.mailboxId}:${original.messageId}`,
+          checksum: "c".repeat(64),
+          firstRunId: scope.id,
+          lastRunId: scope.id,
+        })
+        .returning();
+      if (!foreignClaim)
+        throw new Error("Synthetic foreign source claim missing");
+      await getDb(ctx.db)
+        .insert(importSourceOrder)
+        .values({
+          sourceClaimId: foreignClaim.id,
+          orderKey: "synthetic-foreign-review-order",
+          purchaseId: purchase.id,
+          checksum: "c".repeat(64),
+          outputFingerprint: "synthetic-foreign-review-fingerprint",
+        });
+      const before = await reviewSourceState();
+      const vendorMail = await listVendorOrderMail(ctx.db, {
+        vendorId: vendor.shortcode,
+      });
+      const purchaseMail = await listPurchaseOrderMail(ctx.db, {
+        purchaseId: purchase.shortcode,
+      });
+      const expected = [
+        expect.objectContaining({
+          messageId: original.messageId,
+          ledgerPartyId: party.shortcode,
+          sender: null,
+          subject: null,
+          receivedAt: null,
+          associations: [
+            {
+              purchaseId: purchase.shortcode,
+              evidenceChecksum: checksum,
+              acceptedAt: acceptedAt.toISOString(),
+            },
+          ],
+          events: [],
+        }),
+      ];
+      expect(vendorMail.items).toEqual(expected);
+      expect(purchaseMail.items).toEqual(expected);
+      expect(
+        (
+          await listVendorOrderMail(ctx.db, {
+            vendorId: vendor.shortcode,
+            ledgerPartyId: foreignParty.shortcode,
+          })
+        ).items,
+      ).toEqual([]);
+      expect(await reviewSourceState()).toEqual(before);
+    },
+  );
+
+  async function reviewSourceState() {
+    return {
+      emails: await getDb(ctx.db).select().from(emailTable),
+      originals: await getDb(ctx.db).select().from(orderMail),
+      attachments: await getDb(ctx.db).select().from(orderMailAttachment),
+      claims: await getDb(ctx.db).select().from(importSourceClaim),
+      accepted: await getDb(ctx.db).select().from(importSourceOrder),
+    };
+  }
+
   it.each(["deleted", "excluded"] as const)(
-    "retains owned %s processing history after the original link is cleared",
+    "retains owned %s processing history and shell identity after content disposal",
     async (status) => {
       const f = await retainedReviewFixture();
       const updatedAt = new Date("2026-10-02T13:00:00Z");
-      await getDb(ctx.db).insert(mailboxMessage).values({
-        ledgerPartyId: f.source.ledgerPartyId,
-        mailboxId: f.source.mailboxId,
-        messageId: f.source.messageId,
-        orderMailId: null,
-        classification: "related",
-        classificationVersion: "synthetic-classifier/v1",
-        checksum: f.source.rawChecksum,
-        status,
-        runId: f.runId,
-        updatedAt,
-      });
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({
+          classification: "related",
+          classificationVersion: "synthetic-classifier/v1",
+          status,
+          runId: f.runId,
+          updatedAt,
+          contentClearedAt: updatedAt,
+        })
+        .where(eq(emailTable.orderMailId, f.source.id));
       const result = await listVendorOrderMail(ctx.db, {
         vendorId: f.vendor.shortcode,
       });
@@ -61,7 +250,10 @@ describe("Vendor order mail review", () => {
         status,
         updatedAt: updatedAt.toISOString(),
       });
-      expect(item?.researchRun).toBeNull();
+      expect(item?.researchRun).toMatchObject({
+        status: "needs_review",
+        sourceStatus: status,
+      });
     },
   );
 
@@ -71,32 +263,30 @@ describe("Vendor order mail review", () => {
     const f = await retainedReviewFixture();
     const updatedAt = new Date("2026-10-02T13:00:00Z");
     await getDb(ctx.db)
-      .insert(mailboxMessage)
-      .values([
-        {
-          ledgerPartyId: f.source.ledgerPartyId,
-          mailboxId: f.source.mailboxId,
-          messageId: f.source.messageId,
-          orderMailId: f.source.id,
-          checksum: f.source.rawChecksum,
-          classification: "uncertain",
-          classificationVersion: "synthetic-classifier/v1",
-          status: "blocked",
-          runId: f.runId,
-          updatedAt,
-        },
-        {
-          ledgerPartyId: f.source.ledgerPartyId,
-          mailboxId: "synthetic-other-mailbox",
-          messageId: f.source.messageId,
-          orderMailId: f.source.id,
-          checksum: f.source.rawChecksum,
-          classification: "related",
-          classificationVersion: "synthetic-wrong-ledger/v1",
-          status: "completed",
-          updatedAt: new Date("2026-10-03T13:00:00Z"),
-        },
-      ]);
+      .update(emailTable)
+      .set({
+        classification: "uncertain",
+        classificationVersion: "synthetic-classifier/v1",
+        status: "blocked",
+        runId: f.runId,
+        updatedAt,
+      })
+      .where(eq(emailTable.orderMailId, f.source.id));
+    const other = await syntheticRetainedMail(ctx.db, {
+      ...f.source,
+      id: undefined,
+      mailboxId: "synthetic-other-mailbox",
+      vendorId: null,
+    });
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({
+        classification: "related",
+        classificationVersion: "synthetic-wrong-ledger/v1",
+        status: "completed",
+        updatedAt: new Date("2026-10-03T13:00:00Z"),
+      })
+      .where(eq(emailTable.orderMailId, other.id));
     const decidedAt = new Date("2026-10-02T14:00:00Z");
     await getDb(ctx.db).insert(orderMailCandidateDecision).values({
       eventId: f.event.id,
@@ -177,8 +367,12 @@ describe("Vendor order mail review", () => {
     });
     await getDb(ctx.db)
       .update(orderMail)
-      .set({ vendorId: null, receivedAt: null })
+      .set({ vendorId: null })
       .where(eq(orderMail.id, f.source.id));
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ receivedAt: null })
+      .where(eq(emailTable.orderMailId, f.source.id));
     const [secondEvent] = await getDb(ctx.db)
       .insert(orderMailEvent)
       .values({
@@ -305,24 +499,21 @@ describe("Vendor order mail review", () => {
       actorLedgerPartyKind: party.kind,
     });
     const checksum = "e".repeat(64);
-    const [source] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: party.id,
-        mailboxId: "synthetic-retention-mailbox",
-        vendorId: vendor.id,
-        messageId: "synthetic-retention-message",
-        sender: "receipts@retention.example.test",
-        subject: "Synthetic retained receipt",
-        receivedAt: new Date("2026-10-01T12:00:00Z"),
-        rawChecksum: checksum,
-        content: {
-          bodyText: "Synthetic original retained receipt",
-          bodyHtml: null,
-          snippet: null,
-        },
-      })
-      .returning();
+    const source = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId: "synthetic-retention-mailbox",
+      vendorId: vendor.id,
+      messageId: "synthetic-retention-message",
+      sender: "receipts@retention.example.test",
+      subject: "Synthetic retained receipt",
+      receivedAt: new Date("2026-10-01T12:00:00Z"),
+      rawChecksum: checksum,
+      content: {
+        bodyText: "Synthetic original retained receipt",
+        bodyHtml: null,
+        snippet: null,
+      },
+    });
     if (!source) throw new Error("Synthetic retained source missing");
     const [event] = await getDb(ctx.db)
       .insert(orderMailEvent)
@@ -386,21 +577,18 @@ describe("Vendor order mail review", () => {
     const bodyText =
       "Order TS-SYN-1001. Example Trail Shop. Printed total 48 USD.";
     const checksum = await sha256Hex(bodyText);
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: party.id,
-        mailboxId: `synthetic-review-${party.id}`,
-        content: { bodyText, bodyHtml: null, snippet: null },
-        vendorId: vendor.id,
-        messageId: "review-mail-1",
-        threadId: "review-thread-1",
-        sender: "Example Trail Shop <orders@example.test>",
-        subject: "Order update",
-        receivedAt: new Date("2026-09-10T15:00:00.000Z"),
-        rawChecksum: checksum,
-      })
-      .returning({ id: orderMail.id });
+    const mail = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId: `synthetic-review-${party.id}`,
+      content: { bodyText, bodyHtml: null, snippet: null },
+      vendorId: vendor.id,
+      messageId: "review-mail-1",
+      threadId: "review-thread-1",
+      sender: "Example Trail Shop <orders@example.test>",
+      subject: "Order update",
+      receivedAt: new Date("2026-09-10T15:00:00.000Z"),
+      rawChecksum: checksum,
+    });
     if (!mail) throw new Error("test setup: mail missing");
     const [event] = await getDb(ctx.db)
       .insert(orderMailEvent)
@@ -467,7 +655,6 @@ describe("Vendor order mail review", () => {
     const [account] = await getDb(ctx.db)
       .select({
         id: vendorAccount.id,
-        browserSyncEnabled: vendorAccount.browserSyncEnabled,
       })
       .from(vendorAccount)
       .where(eq(vendorAccount.vendorId, vendor.id));
@@ -475,7 +662,7 @@ describe("Vendor order mail review", () => {
       .select({ vendorAccountId: purchaseTable.vendorAccountId })
       .from(purchaseTable)
       .where(eq(purchaseTable.id, purchase.id));
-    expect(account?.browserSyncEnabled).toBe(false);
+    expect(account).toBeDefined();
     expect(linkedPurchase?.vendorAccountId).toBeNull();
   });
 
@@ -501,20 +688,17 @@ describe("Vendor order mail review", () => {
     const bodyText =
       "Order WS-SYN-2001. Example Window Shop. Printed total 12 USD.";
     const checksum = await sha256Hex(bodyText);
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: party.id,
-        mailboxId: `synthetic-review-${party.id}`,
-        content: { bodyText, bodyHtml: null, snippet: null },
-        vendorId: vendor.id,
-        messageId: "review-window-mail",
-        sender: "Example Window Shop <orders@example.test>",
-        subject: "Order update",
-        receivedAt: new Date("2026-09-18T02:00:00.000Z"),
-        rawChecksum: checksum,
-      })
-      .returning({ id: orderMail.id });
+    const mail = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId: `synthetic-review-${party.id}`,
+      content: { bodyText, bodyHtml: null, snippet: null },
+      vendorId: vendor.id,
+      messageId: "review-window-mail",
+      sender: "Example Window Shop <orders@example.test>",
+      subject: "Order update",
+      receivedAt: new Date("2026-09-18T02:00:00.000Z"),
+      rawChecksum: checksum,
+    });
     if (!mail) throw new Error("test setup: mail missing");
     await getDb(ctx.db)
       .insert(orderMailEvent)
@@ -560,20 +744,17 @@ describe("Vendor order mail review", () => {
     const bodyText =
       "Order RACE-1. Example Race Shop. Synthetic original order update.";
     const checksum = await sha256Hex(bodyText);
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: party.id,
-        mailboxId: `synthetic-review-${party.id}`,
-        content: { bodyText, bodyHtml: null, snippet: null },
-        vendorId: vendor.id,
-        messageId: "race-mail-1",
-        sender: "orders@race.example.test",
-        subject: "Order update",
-        receivedAt: new Date("2026-09-10T15:00:00.000Z"),
-        rawChecksum: checksum,
-      })
-      .returning({ id: orderMail.id });
+    const mail = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId: `synthetic-review-${party.id}`,
+      content: { bodyText, bodyHtml: null, snippet: null },
+      vendorId: vendor.id,
+      messageId: "race-mail-1",
+      sender: "orders@race.example.test",
+      subject: "Order update",
+      receivedAt: new Date("2026-09-10T15:00:00.000Z"),
+      rawChecksum: checksum,
+    });
     const [event] = await getDb(ctx.db)
       .insert(orderMailEvent)
       .values({
@@ -665,20 +846,17 @@ describe("Vendor order mail review", () => {
     const bodyText =
       "Order TS-OLDER-1001. Example Trail Shop. Synthetic delivery update.";
     const checksum = await sha256Hex(bodyText);
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: party.id,
-        mailboxId: `synthetic-review-${party.id}`,
-        content: { bodyText, bodyHtml: null, snippet: null },
-        vendorId: vendor.id,
-        messageId: "older-order-mail",
-        sender: "orders@example.test",
-        subject: "Older order update",
-        receivedAt: new Date("2026-09-10T15:00:00.000Z"),
-        rawChecksum: checksum,
-      })
-      .returning({ id: orderMail.id });
+    const mail = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId: `synthetic-review-${party.id}`,
+      content: { bodyText, bodyHtml: null, snippet: null },
+      vendorId: vendor.id,
+      messageId: "older-order-mail",
+      sender: "orders@example.test",
+      subject: "Older order update",
+      receivedAt: new Date("2026-09-10T15:00:00.000Z"),
+      rawChecksum: checksum,
+    });
     if (!mail) throw new Error("test setup: mail missing");
     await getDb(ctx.db)
       .insert(orderMailEvent)
@@ -718,20 +896,17 @@ describe("Vendor order mail review", () => {
     const bodyText =
       "Order TS-MERGE-1001. Example Trail Shop. Synthetic original order update.";
     const checksum = await sha256Hex(bodyText);
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: party.id,
-        mailboxId: `synthetic-review-${party.id}`,
-        content: { bodyText, bodyHtml: null, snippet: null },
-        vendorId: vendor.id,
-        messageId: "merged-order-mail",
-        sender: "orders@example.test",
-        subject: "Merged order update",
-        receivedAt: new Date("2026-09-10T15:00:00.000Z"),
-        rawChecksum: checksum,
-      })
-      .returning({ id: orderMail.id });
+    const mail = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId: `synthetic-review-${party.id}`,
+      content: { bodyText, bodyHtml: null, snippet: null },
+      vendorId: vendor.id,
+      messageId: "merged-order-mail",
+      sender: "orders@example.test",
+      subject: "Merged order update",
+      receivedAt: new Date("2026-09-10T15:00:00.000Z"),
+      rawChecksum: checksum,
+    });
     if (!mail) throw new Error("test setup: mail missing");
     const [event] = await getDb(ctx.db)
       .insert(orderMailEvent)

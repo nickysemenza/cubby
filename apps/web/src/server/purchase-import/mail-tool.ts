@@ -1,10 +1,11 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * The public `mail` tool: read a member's retained Email and record what it
  * means for their Purchases. Pi's Mail import and a member's Claude/Codex
  * session call the same functions; Pi's calls are additionally bound to the
  * Emails its Mail import Run admitted.
  */
-import type { ActorContext } from "@cubby/schemas/context";
+import { emailClassificationObservationInput } from "@cubby/schemas/email-observations";
 import {
   parseEntityId,
   runEntityId,
@@ -15,6 +16,7 @@ import {
   mailReadInput,
   mailReadOut,
   mailSearchInput,
+  mailSearchOut,
   mailResolveInput,
   mailResolveOut,
   type MailEvent,
@@ -23,29 +25,37 @@ import {
   type MailResolveInput,
   type MailSearchInput,
 } from "@cubby/schemas/mailbox-research";
+import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
+  emailClassificationObservation,
   entityAttachment,
   ledgerParty,
-  mailboxMessage,
+  email as emailTable,
   orderMail,
   orderMailAttachment,
   orderMailCandidateDecision,
   orderMailEvent,
   purchase,
+  runOperation,
   run as runTable,
-  runTarget,
   vendorAccount,
 } from "~/server/db/schema";
 import {
   getDb,
+  withTransaction,
   notDeleted,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
+import {
+  readRetainedMail,
+  retainedMailJoin,
+  type RetainedMail,
+} from "~/server/repo/retained-mail";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
@@ -56,13 +66,16 @@ import {
 } from "./gmail/attachment-storage";
 import { ingestGmailMessages } from "./gmail/ingest";
 import { ensureMailVendorAccount } from "./gmail/mail-account";
+import { snapshotStoredEmailPrediction } from "./gmail/observations";
 import { clearUnrelatedOriginal } from "./gmail/persistence";
 import { gmailProviderForUser } from "./gmail/provider";
 import { GMAIL_PAGE_SIZE } from "./gmail/sync";
 import { GmailAuthorizationError } from "./gmail/tokens";
 import { GmailApiError } from "./gmail/types";
-
-type RetainedMail = typeof orderMail.$inferSelect;
+import {
+  assertMailRunMembership,
+  readMailRunSources,
+} from "./mail-run-membership";
 
 async function memberPartyIds(db: Database, userId: UserId) {
   const tx = getDb(db);
@@ -121,47 +134,36 @@ async function ownedMail(
   const parties = await memberPartyIds(db, actor.userId);
   if (parties.length === 0)
     throw new Error("Only a household member can read retained Email.");
-  const [mail] = await tx
-    .select()
-    .from(orderMail)
-    .where(
-      and(
-        inArray(orderMail.ledgerPartyId, parties),
-        eq(orderMail.mailboxId, ref.mailboxId),
-        eq(orderMail.messageId, ref.messageId),
-      ),
-    )
-    .for(lock)
-    .limit(1);
+  const [mail] = await readRetainedMail(
+    db,
+    {
+      ledgerPartyIds: parties,
+      mailboxId: ref.mailboxId,
+      messageId: ref.messageId,
+    },
+    lock,
+  );
   if (!mail)
     throw new Error(
       `No retained Email ${ref.messageId} in mailbox ${ref.mailboxId} belongs to this member.`,
     );
-  if (importRunId) {
-    const [target] = await tx
-      .select({ id: runTarget.id })
-      .from(runTarget)
-      .where(
-        and(eq(runTarget.runId, importRunId), eq(runTarget.workKey, mail.id)),
-      )
-      .limit(1);
-    if (!target)
-      throw new Error(
-        "This Mail import Run did not admit that Email; resolve only its own messages.",
-      );
-  }
+  if (importRunId) await assertMailRunMembership(tx, importRunId, mail.id);
+
   return { mail, importRunId };
 }
 
 async function mailboxRow(db: Database, mail: RetainedMail) {
   const [row] = await getDb(db)
     .select()
-    .from(mailboxMessage)
+    .from(emailTable)
     .where(
       and(
-        eq(mailboxMessage.ledgerPartyId, mail.ledgerPartyId),
-        eq(mailboxMessage.mailboxId, mail.mailboxId),
-        eq(mailboxMessage.messageId, mail.messageId),
+        eq(emailTable.ledgerPartyId, mail.ledgerPartyId),
+        eq(emailTable.provider, "gmail"),
+        eq(emailTable.orderMailId, mail.id),
+        notDeleted(emailTable),
+        eq(emailTable.mailboxId, mail.mailboxId),
+        eq(emailTable.messageId, mail.messageId),
       ),
     )
     .for("update")
@@ -175,6 +177,32 @@ export async function readMail(
   actor: ActorContext,
 ) {
   const input = mailReadInput.parse(rawInput);
+  if (!actor.runId) {
+    const parties = await memberPartyIds(db, actor.userId);
+    const [source] = await getDb(db)
+      .select({ email: emailTable, originalId: orderMail.id })
+      .from(emailTable)
+      .leftJoin(orderMail, retainedMailJoin)
+      .where(
+        and(
+          inArray(emailTable.ledgerPartyId, parties),
+          eq(emailTable.provider, "gmail"),
+          eq(emailTable.mailboxId, input.mailboxId),
+          eq(emailTable.messageId, input.messageId),
+          notDeleted(emailTable),
+        ),
+      )
+      .limit(1);
+    if (
+      source &&
+      (!source.originalId ||
+        source.email.classification === "unrelated" ||
+        source.email.contentClearedAt)
+    ) {
+      const { readEmailOriginalTransient } = await import("./gmail/real-time");
+      return readEmailOriginalTransient(db, input, actor);
+    }
+  }
   const { mail, attachments, importRunId } = await withTransactionDatabase(
     db,
     async (tdb) => {
@@ -402,7 +430,20 @@ export async function linkOrderMail(
   return chosen;
 }
 
-/** Settle the Email's MailboxMessage and, under Pi, its Mail import target. */
+function needsResolutionObservation(
+  email: typeof emailTable.$inferSelect,
+  classification: "unrelated" | undefined,
+  reason: string,
+) {
+  return (
+    classification !== undefined &&
+    (email.classification !== classification ||
+      email.classificationStage !== "resolution" ||
+      email.classificationReason !== reason)
+  );
+}
+
+/** Classification overrides preserve the prior prediction and append resolution history. */
 export async function settleMail(
   db: Database,
   input: {
@@ -414,54 +455,126 @@ export async function settleMail(
     detail: string;
   },
 ) {
-  const tx = getDb(db);
-  const settled: Partial<typeof mailboxMessage.$inferInsert> = {
-    status: input.status,
-    updatedAt: new Date(),
-  };
-  if (input.classification) {
-    settled.classification = input.classification;
-    settled.classificationStage = "resolution";
-    settled.classificationReason = input.detail;
-  }
-  await tx
-    .update(mailboxMessage)
-    .set(settled)
-    .where(
-      and(
-        eq(mailboxMessage.ledgerPartyId, input.mail.ledgerPartyId),
-        eq(mailboxMessage.mailboxId, input.mail.mailboxId),
-        eq(mailboxMessage.messageId, input.mail.messageId),
-      ),
+  return withTransaction(db, async (tx) => {
+    const identity = and(
+      eq(emailTable.ledgerPartyId, input.mail.ledgerPartyId),
+      eq(emailTable.mailboxId, input.mail.mailboxId),
+      eq(emailTable.messageId, input.mail.messageId),
+      notDeleted(emailTable),
+      input.importRunId ? eq(emailTable.runId, input.importRunId) : undefined,
     );
-  if (input.importRunId)
-    await tx
-      .update(runTarget)
-      .set({
-        state: input.status === "completed" ? "completed" : "unresolved",
-        // RunTarget.outcome is a closed set (RunTarget_outcome_check); a
-        // free-text disposition there failed every Pi resolve and commit.
-        // The gap or disposal reason lives in `warning`.
-        outcome:
-          input.classification ??
-          (input.status === "completed" ? "verified" : "ambiguous"),
-        warning:
-          input.status === "completed" && !input.classification
-            ? null
-            : input.detail,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(runTarget.runId, input.importRunId),
-          eq(runTarget.workKey, input.mail.id),
+    const [initialEmail] = await tx
+      .select()
+      .from(emailTable)
+      .where(identity)
+      .limit(1);
+    if (!initialEmail)
+      throw new Error("Email assignment changed before settlement.");
+    const [ownerRun] = initialEmail.runId
+      ? await tx
+          .select({ id: runTable.id, ledgerPartyId: runTable.ledgerPartyId })
+          .from(runTable)
+          .where(eq(runTable.id, initialEmail.runId))
+          .for("update")
+      : [];
+    const [originalEmail] = await tx
+      .select()
+      .from(emailTable)
+      .where(identity)
+      .for("update");
+    if (!originalEmail || originalEmail.runId !== initialEmail.runId)
+      throw new Error("Email assignment changed before settlement.");
+    const previous = input.classification
+      ? await snapshotStoredEmailPrediction(tx, originalEmail)
+      : null;
+    const settled: Partial<typeof emailTable.$inferInsert> = {
+      status: input.status,
+      updatedAt: new Date(),
+    };
+    if (input.classification) {
+      settled.classification = input.classification;
+      settled.classificationStage = "resolution";
+      settled.classificationReason = input.detail;
+    }
+    const settledEmails = await tx
+      .update(emailTable)
+      .set(settled)
+      .where(identity)
+      .returning({ id: emailTable.id });
+    if (
+      input.classification &&
+      needsResolutionObservation(
+        originalEmail,
+        input.classification,
+        input.detail,
+      )
+    ) {
+      await tx.insert(emailClassificationObservation).values({
+        ...emailClassificationObservationInput.parse({
+          emailId: originalEmail.id,
+          runId:
+            ownerRun?.ledgerPartyId === originalEmail.ledgerPartyId
+              ? ownerRun.id
+              : null,
+          checksum: originalEmail.checksum,
+          classification: input.classification,
+          stage: "resolution",
+          reason: input.detail,
+          classificationVersion: originalEmail.classificationVersion,
+        }),
+        createdAt: new Date(
+          Math.max(Date.now(), (previous?.createdAt.getTime() ?? 0) + 1),
         ),
+      });
+    }
+    if (input.importRunId) {
+      if (settledEmails.length !== 1)
+        throw new Error("Email assignment changed before settlement.");
+      const emailId = settledEmails[0]!.id;
+      const fingerprint = await sha256Hex(
+        JSON.stringify({
+          emailId,
+          checksum: input.mail.rawChecksum,
+          status: input.status,
+          classification: input.classification ?? null,
+          detail: input.detail,
+        }),
       );
+      const now = new Date();
+      await tx
+        .insert(runOperation)
+        .values({
+          runId: input.importRunId,
+          operationId: `mail-outcome:${emailId}:${fingerprint}`,
+          kind: "target_outcome",
+          state: "completed",
+          inputFingerprint: fingerprint,
+          startedAt: now,
+          completedAt: now,
+          result: runTargetOutcomeReceipt.parse({
+            target: {
+              entityKind: "email",
+              entityId: emailId,
+              workKey: input.mail.id,
+              state: input.status === "completed" ? "completed" : "unresolved",
+              outcome: input.status === "completed" ? "verified" : "ambiguous",
+              warning: input.status === "blocked" ? input.detail : null,
+              diff: null,
+              completedAt: now.toISOString(),
+              targetFingerprint: input.mail.rawChecksum,
+            },
+          }),
+        })
+        .onConflictDoNothing({
+          target: [runOperation.runId, runOperation.operationId],
+        });
+    }
+  });
 }
 
 /**
  * A repeated `unrelated` resolve whose original was already disposed of
- * replays from the MailboxMessage: the retained Email it names is gone.
+ * replays from the Email: the retained Email it names is gone.
  */
 async function disposedUnrelatedMail(
   db: Database,
@@ -471,22 +584,22 @@ async function disposedUnrelatedMail(
   await mailImportRun(db, actor.runId);
   const [message] = await getDb(db)
     .select({
-      ledgerPartyId: mailboxMessage.ledgerPartyId,
-      mailboxId: mailboxMessage.mailboxId,
-      messageId: mailboxMessage.messageId,
+      ledgerPartyId: emailTable.ledgerPartyId,
+      mailboxId: emailTable.mailboxId,
+      messageId: emailTable.messageId,
     })
-    .from(mailboxMessage)
+    .from(emailTable)
     .where(
       and(
         inArray(
-          mailboxMessage.ledgerPartyId,
+          emailTable.ledgerPartyId,
           await memberPartyIds(db, actor.userId),
         ),
-        eq(mailboxMessage.mailboxId, input.mailboxId),
-        eq(mailboxMessage.messageId, input.messageId),
-        eq(mailboxMessage.checksum, input.checksum),
-        eq(mailboxMessage.classification, "unrelated"),
-        isNull(mailboxMessage.orderMailId),
+        eq(emailTable.mailboxId, input.mailboxId),
+        eq(emailTable.messageId, input.messageId),
+        eq(emailTable.checksum, input.checksum),
+        eq(emailTable.classification, "unrelated"),
+        isNull(emailTable.orderMailId),
       ),
     )
     .limit(1);
@@ -609,13 +722,13 @@ export async function linkImportedMail(
       "The imported Email changed or was disposed of; read it again.",
     );
   await linkOrderMail(db, {
-    mail,
+    mail: { ...input.mail, ...mail },
     purchaseId: input.purchaseId,
     event: input.event,
     actorUserId: input.actorUserId,
   });
   await settleMail(db, {
-    mail,
+    mail: { ...input.mail, ...mail },
     importRunId: await mailImportRun(db, input.runId),
     status: "completed",
     detail: "imported",
@@ -636,23 +749,20 @@ export async function claimMailImportWork(db: Database, runId: string) {
     .limit(1);
   if (!current) throw new Error("Mail import Run was not found");
   if (current.status !== "running") return { kind: "none" as const };
-  const pending = await database
-    .select({
-      mailboxId: orderMail.mailboxId,
-      messageId: orderMail.messageId,
-      sender: orderMail.sender,
-      subject: orderMail.subject,
-      receivedAt: orderMail.receivedAt,
-    })
-    .from(runTarget)
-    .innerJoin(orderMail, eq(sql`${orderMail.id}::text`, runTarget.workKey))
-    .where(
-      and(
-        eq(runTarget.runId, id),
-        inArray(runTarget.state, ["pending", "prepared"]),
-      ),
+  const pending = (await readMailRunSources(database, id))
+    .filter(
+      (source) =>
+        source.owned &&
+        source.unchanged &&
+        source.email.status === "researching",
     )
-    .orderBy(asc(orderMail.receivedAt), asc(orderMail.id));
+    .map(({ email }) => ({
+      mailboxId: email.mailboxId,
+      messageId: email.messageId,
+      sender: email.sender,
+      subject: email.subject,
+      receivedAt: email.receivedAt,
+    }));
   const [next] = pending;
   if (!next) return { kind: "none" as const };
   return {
@@ -724,26 +834,28 @@ export async function searchMail(
     const retained = messageIds.length
       ? await database
           .select({
-            messageId: mailboxMessage.messageId,
-            classification: mailboxMessage.classification,
-            status: mailboxMessage.status,
-            threadId: orderMail.threadId,
-            sender: orderMail.sender,
-            subject: orderMail.subject,
-            receivedAt: orderMail.receivedAt,
+            messageId: emailTable.messageId,
+            classification: emailTable.classification,
+            status: emailTable.status,
+            threadId: emailTable.threadId,
+            sender: emailTable.sender,
+            subject: emailTable.subject,
+            receivedAt: emailTable.receivedAt,
           })
-          .from(mailboxMessage)
-          .innerJoin(orderMail, eq(orderMail.id, mailboxMessage.orderMailId))
+          .from(emailTable)
+          .innerJoin(orderMail, retainedMailJoin)
           .where(
             and(
-              eq(mailboxMessage.ledgerPartyId, party),
-              eq(mailboxMessage.mailboxId, mailboxId),
-              inArray(mailboxMessage.messageId, messageIds),
+              eq(emailTable.ledgerPartyId, party),
+              eq(emailTable.provider, "gmail"),
+              notDeleted(emailTable),
+              eq(emailTable.mailboxId, mailboxId),
+              inArray(emailTable.messageId, messageIds),
             ),
           )
       : [];
-    return {
-      status: "ok" as const,
+    return mailSearchOut.parse({
+      status: "ok",
       mailboxes: [mailboxId],
       messages: retained.map((row) => ({
         mailboxId,
@@ -751,7 +863,7 @@ export async function searchMail(
         receivedAt: row.receivedAt?.toISOString() ?? null,
       })),
       nextPageToken: listed.nextPageToken ?? null,
-    };
+    });
   } catch (error) {
     const reconnect =
       error instanceof GmailAuthorizationError ||

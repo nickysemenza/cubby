@@ -1,5 +1,4 @@
 export {
-  vendorAccountBrowser,
   vendorAccountCursor,
   vendorAccountStatus,
 } from "./vendor-account-fields";

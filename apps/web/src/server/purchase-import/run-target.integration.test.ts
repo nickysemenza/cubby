@@ -7,7 +7,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { aiUsage, auditLog, runTarget } from "~/server/db/schema";
+import { aiUsage, auditLog, photoRunImage } from "~/server/db/schema";
 import { runHandlers } from "~/server/operations/run.server";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -148,12 +148,11 @@ describe("import run summary pricing", () => {
   });
 });
 
-describe("run target entity reference", () => {
+describe("photo Run image reference", () => {
   const ctx = withTestDb();
 
-  // A target names one purchase, product or image; the kind CHECK is the only
-  // thing keeping a run worklist from pointing at any other entity.
-  it("refuses an entityKind outside purchase, product and image", async () => {
+  // Photo membership must reference an Image, even when another entity UUID exists.
+  it("refuses a non-Image UUID through the Image foreign key", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Run target kind test member",
       kind: "member",
@@ -168,11 +167,11 @@ describe("run target entity reference", () => {
     });
     await expect(
       getDb(ctx.db).execute(
-        sql`INSERT INTO "RunTarget" ("runId", "entityId", "entityKind", "targetFingerprint")
-            VALUES (${run.id}, ${recipe.id}, 'recipe', 'kind-test-fingerprint')`,
+        sql`INSERT INTO "PhotoRunImage" ("runId", "imageId", "targetFingerprint")
+            VALUES (${run.id}, ${recipe.id}, 'kind-test-fingerprint')`,
       ),
     ).rejects.toMatchObject({
-      cause: { constraint: "RunTarget_entityKind_check" },
+      cause: { code: "23503" },
     });
   });
 });
@@ -202,11 +201,10 @@ describe("run.reportDeviceWork", () => {
       status: "UPLOADED",
     });
     await getDb(ctx.db)
-      .insert(runTarget)
+      .insert(photoRunImage)
       .values({
         runId: runEntityId.parse(run.id),
-        entityKind: "image",
-        entityId: parseImageId.parse(image.id),
+        imageId: parseImageId.parse(image.id),
         targetFingerprint: "device-work-test-fingerprint",
       });
     return { runShortcode: runRow!.shortcode, imageShortcode: image.shortcode };
@@ -230,10 +228,10 @@ describe("run.reportDeviceWork", () => {
 
     const [row] = await getDb(ctx.db)
       .select({
-        deviceWorkState: runTarget.deviceWorkState,
-        deviceWorkAttempts: runTarget.deviceWorkAttempts,
+        deviceWorkState: photoRunImage.deviceWorkState,
+        deviceWorkAttempts: photoRunImage.deviceWorkAttempts,
       })
-      .from(runTarget);
+      .from(photoRunImage);
     // Repeating the same state must not double-count an attempt.
     expect(row?.deviceWorkState).toBe("running");
     expect(row?.deviceWorkAttempts).toBe(0);
@@ -296,11 +294,11 @@ describe("run.reportDeviceWork", () => {
     });
     const [row] = await getDb(ctx.db)
       .select({
-        deviceWorkState: runTarget.deviceWorkState,
-        deviceWorkAttempts: runTarget.deviceWorkAttempts,
-        deviceWorkError: runTarget.deviceWorkError,
+        deviceWorkState: photoRunImage.deviceWorkState,
+        deviceWorkAttempts: photoRunImage.deviceWorkAttempts,
+        deviceWorkError: photoRunImage.deviceWorkError,
       })
-      .from(runTarget);
+      .from(photoRunImage);
     expect(row?.deviceWorkState).toBe("failed");
     expect(row?.deviceWorkAttempts).toBe(1);
     expect(row?.deviceWorkError).toBe("device offline");

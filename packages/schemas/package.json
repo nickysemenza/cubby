@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./http-byte-transports": "./src/http-byte-transports.ts",
+    "./email-accuracy": "./src/email-accuracy.ts",
     "./purchase-import-debug": "./src/purchase-import-debug.ts",
     "./mailbox-research": "./src/mailbox-research.ts",
     "./activity": "./src/activity.ts",
@@ -136,6 +136,10 @@
     "./vendor-account-fields": "./src/vendor-account-fields.ts",
     "./run-fields": "./src/run-fields.ts",
     "./run": "./src/run.ts",
+    "./email": "./src/email.ts",
+    "./email-fields": "./src/email-fields.ts",
+    "./email-observations": "./src/email-observations.ts",
+    "./email-candidates": "./src/email-candidates.ts",
     "./import-run-agent": "./src/import-run-agent.ts",
     "./photo-import-run": "./src/photo-import-run.ts",
     "./product-variant-comparison": "./src/product-variant-comparison.ts",
@@ -171,7 +175,8 @@
     "./spending-classification-review": "./src/spending-classification-review.ts",
     "./purchase-evidence-policy": "./src/purchase-evidence-policy.ts",
     "./classification-field-policy": "./src/classification-field-policy.ts",
-    "./emoji": "./src/emoji.ts"
+    "./emoji": "./src/emoji.ts",
+    "./email-actions": "./src/email-actions.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/generator/ensure.ts && tsc --noEmit",

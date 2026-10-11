@@ -12,10 +12,15 @@ import {
   importRunAgentIdentity,
   importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
+import {
+  runProgressStamp,
+  type RunProgressStamp,
+} from "@cubby/schemas/run-fields";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
 import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import { createLogger } from "@cubby/worker-tracing";
+import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
@@ -29,6 +34,7 @@ import {
   ROOT_CONVERSATION_ID,
   type EntryRecord,
 } from "@earendil-works/pi-durable";
+import type { ToolExecutionApi } from "@earendil-works/pi-durable";
 import * as Sentry from "@sentry/cloudflare";
 import { Agent } from "agents";
 import {
@@ -88,6 +94,7 @@ const STATE_KEYS = {
   identity: "identity",
   latestSubmission: "latest_submission",
   receivedEvents: "received_events",
+  progressSequence: "progress_sequence",
 } as const;
 
 /**
@@ -123,6 +130,19 @@ export class PurchaseImportRunAgent
     (settled) => this.recordSettlement(settled),
     {
       latest: () => this.readState(STATE_KEYS.latestSubmission),
+      progressStamp: (operationId) => {
+        const stampKey = `settlement-progress-stamp:${operationId}`;
+        const persisted = this.readState(stampKey);
+        if (persisted) return runProgressStamp.parse(JSON.parse(persisted));
+        const generation = this.readState(
+          `submission-generation:${operationId}`,
+        );
+        if (!generation)
+          throw new Error("Settlement has no admitted progress generation");
+        const stamp = this.allocateProgressStamp(generation);
+        this.writeState(stampKey, JSON.stringify(stamp));
+        return stamp;
+      },
       receivedEventIds: () => this.receivedEventIds(),
     },
   );
@@ -176,6 +196,31 @@ export class PurchaseImportRunAgent
 
   private services(): RunServices {
     return this.agentEnv.services;
+  }
+
+  private allocateProgressStamp(generation: string): RunProgressStamp {
+    const sequence =
+      Number(this.readState(STATE_KEYS.progressSequence) ?? "0") + 1;
+    this.writeState(STATE_KEYS.progressSequence, String(sequence));
+    return runProgressStamp.parse({ generation, sequence });
+  }
+
+  private async toolProgressStamp(
+    api: ToolExecutionApi,
+    context: Context,
+  ): Promise<RunProgressStamp> {
+    const existing = await api.memo("progress-stamp", context);
+    if (existing) return runProgressStamp.parse(existing);
+    const task = await api.getTask(api.taskId, context);
+    const generation = task?.owner
+      ? this.readState(`request-generation:${task.owner}`)
+      : undefined;
+    if (!generation)
+      throw new Error("Progress tool has no originating request generation");
+    const stamp = this.allocateProgressStamp(generation);
+    return runProgressStamp.parse(
+      await api.memo("progress-stamp", stamp, context),
+    );
   }
 
   private report<TError>(error: TError): void {
@@ -239,12 +284,43 @@ export class PurchaseImportRunAgent
     this.registry.install(
       defineExtension({
         name: "cubby.run",
-        tools: runAgentTools(() => this.services()).filter((tool) =>
-          agentTools.has(tool.name),
-        ),
+        tools: runAgentTools(
+          () => this.services(),
+          (api, context) => this.toolProgressStamp(api, context),
+        ).filter((tool) => agentTools.has(tool.name)),
         hooks: [
           hook(GenerationTask, {
-            beforeRequest: () => {
+            beforeRequest: async (_request, api, requestContext) => {
+              const live = await api.snapshot(
+                LiveDoc,
+                api.conversationId,
+                requestContext,
+              );
+              const inputId = live?.run?.inputs.at(-1);
+              const submission = inputId
+                ? await (
+                    await this.harness.pi()
+                  ).submission(inputId, requestContext)
+                : undefined;
+              const input = submission
+                ? await submission.status(requestContext)
+                : undefined;
+              const generation = input?.requestId
+                ? this.readState(`submission-generation:${input.requestId}`)
+                : undefined;
+              if (!generation)
+                throw new Error(
+                  "Request has no originating submission generation",
+                );
+              const memo = await api.memo(
+                "progress-generation",
+                { generation },
+                requestContext,
+              );
+              this.writeState(
+                `request-generation:${api.taskId}`,
+                z.object({ generation: z.string() }).parse(memo).generation,
+              );
               this.requestStartedAt = Date.now();
               this.requestTransport = "unknown";
               this.requestGateway = undefined;
@@ -331,6 +407,10 @@ export class PurchaseImportRunAgent
     const eventId = signal.attributes?.eventId;
     if (!eventId || !this.receivedEventIds().includes(eventId)) {
       if (eventId) this.recordReceived(eventId);
+      this.writeState(
+        `submission-generation:${input.operationId}`,
+        input.generation,
+      );
       this.writeState(STATE_KEYS.latestSubmission, input.operationId);
     }
     const receipt = await this.harness.submit(renderSignal(signal), {

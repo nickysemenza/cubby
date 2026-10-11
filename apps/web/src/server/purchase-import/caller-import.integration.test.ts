@@ -16,7 +16,7 @@ import {
   importSourceClaim,
   importSourceOrder,
   inventoryEntry,
-  mailboxMessage,
+  email as emailTable,
   orderMail,
   orderMailAttachment,
   orderMailCandidateDecision,
@@ -202,9 +202,9 @@ describe("caller-driven purchase import", () => {
       },
     ]);
     const [message] = await getDb(ctx.db)
-      .select({ status: mailboxMessage.status })
-      .from(mailboxMessage)
-      .where(eq(mailboxMessage.messageId, mail.messageId));
+      .select({ status: emailTable.status })
+      .from(emailTable)
+      .where(eq(emailTable.messageId, mail.messageId));
     expect(message?.status).toBe("completed");
   });
 
@@ -213,9 +213,9 @@ describe("caller-driven purchase import", () => {
   it("replays a completed prepare after its Email stops being importable", async () => {
     const { mail, prepareInput, prepared } = await importConfirmation();
     await getDb(ctx.db)
-      .update(mailboxMessage)
+      .update(emailTable)
       .set({ status: "excluded" })
-      .where(eq(mailboxMessage.messageId, mail.messageId));
+      .where(eq(emailTable.messageId, mail.messageId));
 
     await expect(
       preparePurchaseImport(ctx.db, prepareInput, ctx.actor),
@@ -292,26 +292,32 @@ describe("caller-driven purchase import", () => {
       ctx.actor,
     );
     expect(resolved).toMatchObject({ status: "completed", purchaseId: null });
-    // No readable copy of unrelated mail survives the disposition.
-    expect(
-      await getDb(ctx.db)
-        .select({ id: orderMail.id })
-        .from(orderMail)
-        .where(eq(orderMail.id, newsletter.id)),
-    ).toEqual([]);
+    // Content disposal preserves the original's identity and checksum.
+    const [cleared] = await getDb(ctx.db)
+      .select()
+      .from(orderMail)
+      .where(eq(orderMail.id, newsletter.id));
+    expect(cleared).toMatchObject({
+      id: newsletter.id,
+      rawChecksum: newsletter.rawChecksum,
+      content: { snippet: null, bodyText: null, bodyHtml: null },
+    });
     const [message] = await getDb(ctx.db)
       .select({
-        classification: mailboxMessage.classification,
-        orderMailId: mailboxMessage.orderMailId,
+        classification: emailTable.classification,
+        orderMailId: emailTable.orderMailId,
       })
-      .from(mailboxMessage)
+      .from(emailTable)
       .where(
         and(
-          eq(mailboxMessage.mailboxId, mailboxId),
-          eq(mailboxMessage.messageId, newsletter.messageId),
+          eq(emailTable.mailboxId, mailboxId),
+          eq(emailTable.messageId, newsletter.messageId),
         ),
       );
-    expect(message).toEqual({ classification: "unrelated", orderMailId: null });
+    expect(message).toEqual({
+      classification: "unrelated",
+      orderMailId: newsletter.id,
+    });
   });
 });
 
@@ -1026,9 +1032,9 @@ describe("caller-driven purchase import writes", () => {
       },
     ]);
     const [message] = await getDb(ctx.db)
-      .select({ status: mailboxMessage.status })
-      .from(mailboxMessage)
-      .where(eq(mailboxMessage.messageId, mail.messageId));
+      .select({ status: emailTable.status })
+      .from(emailTable)
+      .where(eq(emailTable.messageId, mail.messageId));
     expect(message?.status).toBe("completed");
     // The import-source identity keeps the attachment's own checksum.
     expect(

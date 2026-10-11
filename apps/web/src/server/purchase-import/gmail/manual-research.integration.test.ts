@@ -5,12 +5,13 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { orderMail, orderMailEvent, ledgerParty } from "~/server/db/schema";
+import { orderMailEvent, ledgerParty } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import type { startMailImport } from "../mail-import-run";
 import { startOrderMailImport, startSelectedOrderMailImport } from "./import";
+import { syntheticRetainedMail } from "./retained-mail.fixtures";
 
 describe("member-owned Mail import launches", () => {
   const ctx = withTestDb();
@@ -21,19 +22,16 @@ describe("member-owned Mail import launches", () => {
       kind: "member",
       userId: owned ? ctx.actor.userId : null,
     });
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: party.id,
-        mailboxId: "google-subject",
-        messageId: crypto.randomUUID(),
-        rawChecksum: "original-source",
-        sender: "platform@example.test",
-        subject: "Shipment update",
-        receivedAt: new Date(),
-        content: { bodyText: null, bodyHtml: null, snippet: null },
-      })
-      .returning();
+    const mail = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId: "google-subject",
+      messageId: crypto.randomUUID(),
+      rawChecksum: "original-source",
+      sender: "platform@example.test",
+      subject: "Shipment update",
+      receivedAt: new Date(),
+      content: { bodyText: null, bodyHtml: null, snippet: null },
+    });
     if (!mail) throw new Error("Synthetic mail missing");
     const [event] = await getDb(ctx.db)
       .insert(orderMailEvent)
@@ -143,14 +141,11 @@ describe("member-owned Mail import launches", () => {
   });
   it("passes selected source context to one shared launcher instead of splitting semantic work", async () => {
     const a = await seed();
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ...a.mail,
-        id: crypto.randomUUID(),
-        messageId: "second-source",
-      })
-      .returning();
+    const mail = await syntheticRetainedMail(ctx.db, {
+      ...a.mail,
+      id: crypto.randomUUID(),
+      messageId: "second-source",
+    });
     if (!mail) throw new Error("Synthetic mail missing");
     const [event] = await getDb(ctx.db)
       .insert(orderMailEvent)

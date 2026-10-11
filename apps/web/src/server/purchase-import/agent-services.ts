@@ -100,6 +100,7 @@ export function runServicesFor(
         return {
           purpose: agentImportRunPurpose.parse(scope.public.purpose),
           agentId: scope.public.agentId,
+          generation: scope.public.dispatchEventId,
         };
       }),
 

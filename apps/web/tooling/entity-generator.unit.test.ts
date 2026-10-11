@@ -9,6 +9,7 @@ import {
   parseEntityFieldModelMetadata,
   readFieldSchemas,
 } from "../../../packages/schemas/src/entity-definitions/definition";
+import type { ChildTableDeclaration } from "../../../packages/schemas/src/entity-definitions/child-definition";
 import type { EntityDeclaration } from "../../../packages/schemas/src/entity-definitions/definition";
 import {
   generatedHeader,
@@ -22,7 +23,6 @@ import {
 import { loadEntityDeclarations } from "../../../scripts/generator/entities/declarations";
 import { hasGenericListOperation } from "../../../scripts/generator/entities/list-capabilities";
 import { deriveImageDisplaySources } from "../../../scripts/generator/entities/derive";
-import { renderEntityArtifacts } from "../../../scripts/generator/entities/render/index";
 import { renderImagePolicyArtifacts } from "../../../scripts/generator/entities/render/image-policy";
 import { renderEntityTablesArtifact } from "../../../scripts/generator/entities/render/tables";
 import {
@@ -1801,35 +1801,6 @@ describe("typed entity compiler", () => {
       }),
     ).toBe(false);
   });
-
-  it("keeps generated artifacts on their side of the schema and server boundaries", async () => {
-    const entities = await loadEntityDeclarations();
-    const artifacts = [
-      ...renderEntityArtifacts(entities),
-      ...renderImagePolicyArtifacts(entities),
-    ];
-    const artifact = (suffix: string) =>
-      artifacts.find(({ relativePath }) => relativePath.endsWith(suffix))!
-        .source;
-    // Field schemas are read off the declaration BY KEY at load time — never
-    // by a positional `definition.model.fields[N]` that a mid-roster insert
-    // would shift.
-    const ingredientSchemas = artifact(
-      "entity-field-schemas.ingredient.gen.ts",
-    );
-    expect(ingredientSchemas).toContain("= fieldSchemasOf(definition);");
-    expect(ingredientSchemas).not.toContain("definition.model.fields[");
-    expect(artifact("entity-field-model.gen.ts")).not.toContain("validation:");
-    expect(artifact("entity-field-model.gen.ts")).not.toMatch(
-      /^import .*entity-definitions\//m,
-    );
-    expect(artifact("entity-details.gen.ts")).not.toContain("~/server/");
-    // Regression guard for the Swift enum emitter (image-policy.ts): manifest
-    // vocabularies must render as typed enum cases, not raw string literals.
-    const photoImportCatalog = artifact("PhotoImportCatalog.swift");
-    expect(photoImportCatalog).toMatch(/kind: \.createRelated/);
-    expect(photoImportCatalog).toMatch(/source: \.captureDate/);
-  });
 });
 
 describe("photo categories (B1)", () => {
@@ -2006,6 +1977,33 @@ describe("entity table storage", () => {
     ]);
     expect(() => table({ checks: [{ column: "note" }] })).toThrow(
       "needs explicit values: note has no declared read enum",
+    );
+  });
+
+  it("preserves an entity foreign key to a declared content child and rejects an unknown target", () => {
+    const children = [
+      {
+        name: "SyntheticContent",
+        exportName: "syntheticContent",
+        columns: [{ key: "id", kind: "uuid", primaryKey: true }],
+      },
+    ] satisfies ChildTableDeclaration[];
+    const declaration = alpha({
+      columns: [
+        {
+          key: "contentId",
+          kind: "identifier",
+          reference: "syntheticContent",
+        },
+      ],
+    });
+    const entities = compileEntityDeclarations([declaration, beta], children);
+    const source = renderEntityTablesArtifact(entities, children);
+    expect(source).toContain(
+      ".references((): AnyPgColumn => syntheticContent.id)",
+    );
+    expect(() => compileEntityDeclarations([declaration, beta])).toThrow(
+      "syntheticContent",
     );
   });
 

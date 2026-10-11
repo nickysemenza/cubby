@@ -1,4 +1,4 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImportWriterInput } from "@cubby/schemas/purchase-import";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -9,12 +9,16 @@ import {
   importSourceClaim,
   importSourceOrder,
   purchasePaymentEvidence,
+  runFinding,
+  inventoryEntry,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { resolveRunFinding } from "./findings";
 import { preparePurchaseImport } from "./import-orders";
 import { startImportRunFixture } from "./import-run.fixtures";
+import { prepareSourceOrderReconciliation } from "./reconciliation";
 import {
   loadImportSourceFamilyOrders,
   readImportSourceClaimFamily,
@@ -213,7 +217,7 @@ describe("canonical source claim families", () => {
     );
   });
 
-  it("refreshes the actual historical owner's payment group while leaving sibling history intact", async () => {
+  it("reviews the actual historical owner's payment group while leaving aliases and sibling history intact", async () => {
     const f = await world();
     await f.canonicalize();
     const sibling = await f.db
@@ -246,7 +250,62 @@ describe("canonical source claim families", () => {
         },
       },
     };
-    await importVendorOrder(ctx.db, refreshed, ctx.actor.userId);
+    const beforePayments = await f.db.select().from(purchasePaymentEvidence);
+    const beforeClaims = await f.db.select().from(importSourceClaim);
+    const beforeOrders = await f.db.select().from(importSourceOrder);
+    const beforeExpenses = await f.db.select().from(expense);
+    const beforeStock = await f.db.select().from(inventoryEntry);
+    const observed = await importVendorOrder(
+      ctx.db,
+      refreshed,
+      ctx.actor.userId,
+    );
+    expect(observed.outcome).toBe("conflict");
+    expect(await f.db.select().from(purchasePaymentEvidence)).toEqual(
+      beforePayments,
+    );
+    expect(await f.db.select().from(importSourceOrder)).toEqual(beforeOrders);
+    const [finding] = await f.db
+      .select()
+      .from(runFinding)
+      .where(eq(runFinding.id, observed.findingIds[0]!));
+    if (!finding) throw new Error("Expected payment reconciliation finding");
+    const original = beforeExpenses.find(
+      (row) => row.purchaseId === f.importedFirst.purchaseId,
+    );
+    if (!original) throw new Error("Historical Expense missing");
+    const review = await prepareSourceOrderReconciliation(
+      ctx.db,
+      {
+        id: finding.id,
+        resolution: {
+          kind: "attach_only",
+          lines: [
+            {
+              lineIndex: 0,
+              expenseId: parseShortcodeFor("expense", original.shortcode),
+              productId: null,
+            },
+          ],
+        },
+      },
+      ctx.actor,
+    );
+    expect(review.spend).toEqual({ before: 20, after: 20, delta: 0 });
+    const input = {
+      id: finding.id,
+      action: "apply" as const,
+      reviewedFingerprint: review.reviewedFingerprint,
+    };
+    await resolveRunFinding(ctx.db, input, ctx.actor);
+    const acceptedPayments = await f.db.select().from(purchasePaymentEvidence);
+    await resolveRunFinding(ctx.db, input, ctx.actor);
+    expect(await f.db.select().from(purchasePaymentEvidence)).toEqual(
+      acceptedPayments,
+    );
+    expect(await f.db.select().from(expense)).toEqual(beforeExpenses);
+    expect(await f.db.select().from(inventoryEntry)).toEqual(beforeStock);
+    expect(await f.db.select().from(importSourceClaim)).toEqual(beforeClaims);
     const payments = await f.db
       .select()
       .from(purchasePaymentEvidence)
@@ -288,7 +347,13 @@ describe("canonical source claim families", () => {
       .select()
       .from(importSourceClaim)
       .where(eq(importSourceClaim.id, f.root.id));
-    expect(root?.checksum).toBe(refreshed.source.checksum);
+    expect(root).toEqual(beforeClaims.find((row) => row.id === f.root.id));
+    expect(
+      await f.db
+        .select()
+        .from(importSourceClaim)
+        .where(eq(importSourceClaim.id, f.firstAlias.id)),
+    ).toEqual(beforeClaims.filter((row) => row.id === f.firstAlias.id));
     const [first] = await f.db
       .select()
       .from(importSourceOrder)

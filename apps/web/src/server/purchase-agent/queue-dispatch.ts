@@ -16,6 +16,7 @@ export function dispatchInputForEvent(
   const { runId: _privateRunId, ...observableEvent } = event;
   return {
     identity: { runId: event.runId, purpose },
+    generation: event.generation,
     // Queue redelivery converges on exactly one submission.
     operationId: purchaseAgentEventIdempotencyKey(event),
     signal: {

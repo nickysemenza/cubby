@@ -54,15 +54,13 @@ import {
   importSourceOrder,
   inventoryEntry,
   mailboxCursor,
-  mailboxMessage,
+  email as emailTable,
   orderMail,
   photoGroupProposal,
   product,
   purchase,
   run as runTable,
   runOperation,
-  runProgress,
-  runTarget,
   session,
 } from "~/server/db/schema";
 import { approvePhotoGroupProposals } from "~/server/photo-import-run/proposals";
@@ -78,6 +76,7 @@ import { issueExecutionAuthorization } from "~/server/runs/execution-authorizati
 import { productionPhotoImportCommitPorts } from "~/server/services/photo-import-commit.service";
 
 import { startMailImport } from "./mail-import-run";
+import { retainedMailFixture } from "./order-import.fixtures";
 import {
   authorizePurchaseAgent,
   authorizeSyntheticBackfill,
@@ -88,6 +87,7 @@ import {
 } from "./purchase-agent-workerd.fixtures";
 import {
   controlRun,
+  loadRunDetail,
   finalizePhotoRun,
   startPhotoInventoryCoordinator,
   startPhotoInventoryRun,
@@ -347,6 +347,7 @@ describe("current purchase-agent system boundaries", () => {
       // The persisted run, not a stale queue hint, selects the agent workflow.
       purpose: "mail_import",
       eventId: started.eventId,
+      generation: started.eventId,
     });
     await waitFor(
       async () => {
@@ -357,24 +358,14 @@ describe("current purchase-agent system boundaries", () => {
             .where(eq(photoGroupProposal.runId, run.id))
             .limit(1),
           getDb(ctx.db)
-            .select({ phase: runProgress.phase })
-            .from(runProgress)
-            .where(
-              and(
-                eq(runProgress.runId, run.id),
-                eq(runProgress.phase, "awaiting_approval"),
-              ),
-            )
+            .select({ live: runTable.liveProgress })
+            .from(runTable)
+            .where(eq(runTable.id, run.id))
             .limit(1),
           getDb(ctx.db)
-            .select({ id: runProgress.id })
-            .from(runProgress)
-            .where(
-              and(
-                eq(runProgress.runId, run.id),
-                eq(runProgress.detail, "Coordinator started"),
-              ),
-            )
+            .select({ history: runTable.progressHistory })
+            .from(runTable)
+            .where(eq(runTable.id, run.id))
             .limit(1),
           getDb(ctx.db)
             .select({ id: aiUsage.id })
@@ -384,8 +375,11 @@ describe("current purchase-agent system boundaries", () => {
         ]);
         return (
           proposal[0]?.state === "proposed" &&
-          progress.length === 1 &&
-          startedProgress.length === 1 &&
+          progress[0]?.live?.phase === "awaiting_approval" &&
+          (startedProgress[0]?.history?.some(
+            (event) => event.detail === "Coordinator started",
+          ) ??
+            false) &&
           usage.length === 1
         );
       },
@@ -479,33 +473,19 @@ describe("current purchase-agent system boundaries", () => {
       body: string,
     ) => {
       const checksum = await sha256Hex(body);
-      const [mail] = await database
-        .insert(orderMail)
-        .values({
-          ledgerPartyId: party.id,
-          mailboxId,
-          messageId,
-          sender: "orders@service.example.test",
-          subject: "Synthetic service inquiry",
-          receivedAt: new Date(receivedAt),
-          rawChecksum: checksum,
-          content: { snippet: null, bodyText: body, bodyHtml: null },
-        })
-        .returning();
-      if (!mail) throw new Error("Synthetic partial source missing");
-      await database.insert(mailboxMessage).values({
+      const mail = await retainedMailFixture(ctx.db, {
         ledgerPartyId: party.id,
         mailboxId,
         messageId,
+        sender: "orders@service.example.test",
+        subject: "Synthetic service inquiry",
+        receivedAt: new Date(receivedAt),
         checksum,
-        classification: "related",
+        content: { snippet: null, bodyText: body, bodyHtml: null },
         classificationVersion: "synthetic-source-v1",
-        status: "pending",
-        orderMailId: mail.id,
       });
       return mail;
     };
-    // Distinct receipt times fix the order in which Pi claims the Emails.
     const supported = await retain(
       "synthetic-supported-service",
       "2026-09-20T12:00:00Z",
@@ -540,7 +520,11 @@ describe("current purchase-agent system boundaries", () => {
     scenarioRunId = parent.id;
     await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
 
-    const unresolvedSteps = (prefix: string, runId: string): ScriptStep[] => [
+    const unresolvedSteps = (
+      prefix: string,
+      runId: string,
+      finish = true,
+    ): ScriptStep[] => [
       call(`${prefix}-claim`, "claim_next_import_work"),
       { check: `${prefix}-claim`, includes: ambiguous.messageId },
       mcpRead(`${prefix}-read`, "imports_read", {
@@ -560,85 +544,105 @@ describe("current purchase-agent system boundaries", () => {
         },
       }),
       { check: `${prefix}-resolve`, includes: "unresolved" },
-      call(`${prefix}-done`, "claim_next_import_work"),
-      { check: `${prefix}-done`, includes: "none" },
+      ...(finish
+        ? [
+            call(`${prefix}-done`, "claim_next_import_work"),
+            { check: `${prefix}-done`, includes: "none" },
+          ]
+        : []),
     ];
     const externalKey = `gmail:${mailboxId}:${supported.messageId}`;
+    const supportedSteps: ScriptStep[] = [
+      call("supported-claim", "claim_next_import_work"),
+      { check: "supported-claim", includes: supported.messageId },
+      mcpRead("supported-read", "imports_read", {
+        action: "mail",
+        mailboxId,
+        messageId: supported.messageId,
+      }),
+      mcp("supported-prepare", "purchase_import", parent.id, {
+        action: "prepare",
+        orders: [
+          {
+            vendorId: vendor.shortcode,
+            stableOrderId: "service-1",
+            itemOperationId: "supported-prepare:service-1",
+            source: {
+              kind: "mail_message",
+              externalKey,
+              checksum: from("supported-read", "checksum"),
+            },
+            evidenceChecksum: from("supported-read", "checksum"),
+            extractionRevision: "synthetic@1",
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId: "SERVICE-1",
+                orderedAt: "2026-09-20T12:00:00.000Z",
+                merchant: vendor.name,
+                currency: "USD",
+                printedGrandTotal: 9,
+                lines: [
+                  {
+                    title: "Annual service",
+                    quantity: 1,
+                    amount: 9,
+                    lineKind: "principal",
+                  },
+                ],
+                payments: [],
+                allShipmentsDelivered: false,
+              },
+            },
+            lineIds: ["service-1:line-1"],
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          },
+        ],
+      }),
+      mcp("supported-commit", "purchase_import", parent.id, {
+        action: "commit",
+        prepareOperationId: "supported-prepare",
+        defaultTrade: "other",
+        resolutions: [
+          {
+            stableOrderId: "service-1",
+            stableLineId: "service-1:line-1",
+            resolution: { kind: "expense_only" },
+          },
+        ],
+      }),
+      { check: "supported-commit", includes: "created" },
+    ];
+    const firstSource = mailResearchRunInput.parse(parent.input).sources[0];
     scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        call("supported-claim", "claim_next_import_work"),
-        { check: "supported-claim", includes: supported.messageId },
-        mcpRead("supported-read", "imports_read", {
-          action: "mail",
-          mailboxId,
-          messageId: supported.messageId,
-        }),
-        mcp("supported-prepare", "purchase_import", parent.id, {
-          action: "prepare",
-          orders: [
-            {
-              vendorId: vendor.shortcode,
-              stableOrderId: "service-1",
-              itemOperationId: "supported-prepare:service-1",
-              source: {
-                kind: "mail_message",
-                externalKey,
-                checksum: from("supported-read", "checksum"),
-              },
-              evidenceChecksum: from("supported-read", "checksum"),
-              extractionRevision: "synthetic@1",
-              extraction: {
-                status: "ready",
-                candidate: {
-                  orderId: "SERVICE-1",
-                  orderedAt: "2026-09-20T12:00:00.000Z",
-                  merchant: vendor.name,
-                  currency: "USD",
-                  printedGrandTotal: 9,
-                  lines: [
-                    {
-                      title: "Annual service",
-                      quantity: 1,
-                      amount: 9,
-                      lineKind: "principal",
-                    },
-                  ],
-                  payments: [],
-                  allShipmentsDelivered: false,
-                },
-              },
-              lineIds: ["service-1:line-1"],
-              primaryDocumentImageId: null,
-              screenshotImageId: null,
-            },
-          ],
-        }),
-        mcp("supported-commit", "purchase_import", parent.id, {
-          action: "commit",
-          prepareOperationId: "supported-prepare",
-          defaultTrade: "other",
-          resolutions: [
-            {
-              stableOrderId: "service-1",
-              stableLineId: "service-1:line-1",
-              resolution: { kind: "expense_only" },
-            },
-          ],
-        }),
-        { check: "supported-commit", includes: "created" },
-        ...unresolvedSteps("partial", parent.id),
-      ],
+      steps:
+        firstSource?.orderMailId === supported.id
+          ? [...supportedSteps, ...unresolvedSteps("partial", parent.id)]
+          : [
+              ...unresolvedSteps("partial", parent.id, false),
+              ...supportedSteps,
+              call("partial-done", "claim_next_import_work"),
+              { check: "partial-done", includes: "none" },
+            ],
     });
     await scenario.dispatch(events[0]!);
     await waitForStatus(parent.id, "needs_review");
     expect(await scenario.violations()).toEqual([]);
 
-    const targetsOf = (runId: string) =>
-      database
-        .select()
-        .from(runTarget)
-        .where(eq(runTarget.runId, runEntityId.parse(runId)))
-        .orderBy(asc(runTarget.position), asc(runTarget.id));
+    const targetsOf = async (runId: string) => {
+      const detail = await loadRunDetail(
+        ctx.db,
+        (await runRow(runId)).shortcode,
+      );
+      const frozen = mailResearchRunInput.parse(
+        (await runRow(runId)).input,
+      ).sources;
+      return detail.targets.map((target, index) => ({
+        ...target,
+        workKey: frozen[index]!.orderMailId,
+      }));
+    };
     const settledTargets = await targetsOf(parent.id);
     expect(settledTargets).toHaveLength(2);
     expect(
@@ -655,13 +659,13 @@ describe("current purchase-agent system boundaries", () => {
     const mailboxRows = () =>
       database
         .select({
-          messageId: mailboxMessage.messageId,
-          status: mailboxMessage.status,
-          runId: mailboxMessage.runId,
+          messageId: emailTable.messageId,
+          status: emailTable.status,
+          runId: emailTable.runId,
         })
-        .from(mailboxMessage)
-        .where(eq(mailboxMessage.mailboxId, mailboxId))
-        .orderBy(asc(mailboxMessage.messageId));
+        .from(emailTable)
+        .where(eq(emailTable.mailboxId, mailboxId))
+        .orderBy(asc(emailTable.messageId));
     const ownership = [
       {
         messageId: ambiguous.messageId,
@@ -724,6 +728,7 @@ describe("current purchase-agent system boundaries", () => {
       type: "start_or_resume",
       runId: child.id,
       eventId: child.dispatchEventId,
+      generation: child.dispatchEventId,
       purpose: "mail_import",
     });
     await waitForStatus(child.id, "needs_review");
@@ -738,7 +743,12 @@ describe("current purchase-agent system boundaries", () => {
       originalAssociations,
     );
     expect(await database.select().from(inventoryEntry)).toEqual([]);
-    expect(await mailboxRows()).toEqual(ownership);
+    expect(await mailboxRows()).toEqual(
+      ownership.map((entry) => ({
+        ...entry,
+        runId: entry.messageId === ambiguous.messageId ? child.id : parent.id,
+      })),
+    );
 
     // Replays converge: a second retry returns the same successor, and
     // discovery re-admitting both Emails starts no new Run.
@@ -750,9 +760,14 @@ describe("current purchase-agent system boundaries", () => {
       throw new Error("Synthetic partial replay successor missing");
     expect(replay.successorRunId).toBe(child.id);
     const dispatched = events.length;
-    expect(await startMailImport(ctx.db, admission, queue)).toEqual([
-      { runId: parent.id, status: "needs_review" },
-    ]);
+    const readmitted = await startMailImport(ctx.db, admission, queue);
+    expect(readmitted).toHaveLength(2);
+    expect(readmitted).toEqual(
+      expect.arrayContaining([
+        { runId: parent.id, status: "needs_review" },
+        { runId: child.id, status: "needs_review" },
+      ]),
+    );
     expect(events).toHaveLength(dispatched);
     expect(
       await database
@@ -767,7 +782,7 @@ describe("current purchase-agent system boundaries", () => {
     ).toHaveLength(2);
   }, 60_000);
 
-  it("provider discovery: pages archived Gmail through Jev and real queues, keeps unrelated mail private, and Pi imports the order", async () => {
+  it("provider discovery: classifies archived Gmail without Pi, then imports only the explicitly selected Email", async () => {
     const database = getDb(ctx.db);
     const mailboxId = "synthetic-google-user";
     const sourceText =
@@ -1008,8 +1023,49 @@ describe("current purchase-agent system boundaries", () => {
           ),
         );
     await waitFor(
-      async () => (await mailRuns()).length > 0,
-      "Provider discovery did not admit a Mail import Run.",
+      async () => {
+        const rows = await database
+          .select()
+          .from(emailTable)
+          .where(eq(emailTable.mailboxId, mailboxId));
+        return (
+          rows.length === 2 &&
+          rows.every((email) => email.classification !== null)
+        );
+      },
+      "Classification-only discovery did not record both Emails.",
+      30_000,
+    );
+    expect(await mailRuns()).toEqual([]);
+    const [selectedEmail] = await database
+      .select()
+      .from(emailTable)
+      .where(
+        and(
+          eq(emailTable.mailboxId, mailboxId),
+          eq(emailTable.messageId, original.id),
+        ),
+      );
+    if (!selectedEmail) throw new Error("Synthetic selected Email missing");
+    const manualResponse = await fetch(
+      `${scenario.origin}/api/v1/purchaseImport/emailImport`,
+      {
+        method: "POST",
+        headers: {
+          cookie: `better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`,
+          origin: scenario.origin,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          id: selectedEmail.shortcode,
+          expectedChecksum: selectedEmail.checksum,
+        }),
+      },
+    );
+    expect(manualResponse.status).toBe(200);
+    await waitFor(
+      async () => (await mailRuns()).length === 1,
+      "Explicit Email import was not admitted.",
       30_000,
     );
     const [admitted] = await mailRuns();
@@ -1017,7 +1073,19 @@ describe("current purchase-agent system boundaries", () => {
     await waitForStatus(admitted!.id, "completed");
     expect(await scenario.violations()).toEqual([]);
     const importRun = await runRow(admitted!.id);
-    if (!importRun.parentRunId) throw new Error("Discovery parent missing.");
+    expect(importRun.parentRunId).toBeNull();
+    const [discoveryRow] = await database
+      .select()
+      .from(runTable)
+      .where(
+        and(
+          eq(runTable.purpose, "mail_discovery"),
+          eq(runTable.ledgerPartyId, party.id),
+        ),
+      )
+      .orderBy(asc(runTable.startedAt), asc(runTable.id))
+      .limit(1);
+    if (!discoveryRow) throw new Error("Synthetic discovery missing");
     await waitFor(
       async () => {
         const [cursor] = await database
@@ -1031,17 +1099,38 @@ describe("current purchase-agent system boundaries", () => {
           );
         return (
           cursor?.coverage?.broad.completed === true &&
-          (await runRow(importRun.parentRunId!)).status === "completed"
+          (await runRow(discoveryRow.id)).status === "completed"
         );
       },
       "Gmail Workflow did not checkpoint complete broad pagination.",
       30_000,
     );
-    const discovery = await runRow(importRun.parentRunId);
+    const discovery = await runRow(discoveryRow.id);
     expect(discovery.purpose).toBe("mail_discovery");
-    expect(
-      mailboxDiscoveryInput.parse(discovery.input).executionAuthorization,
-    ).toEqual(approval);
+    expect(mailboxDiscoveryInput.parse(discovery.input).executionPolicy).toBe(
+      "classification_only",
+    );
+    const discoveryAuthorization = mailboxDiscoveryInput.parse(
+      discovery.input,
+    ).executionAuthorization;
+    if (!discoveryAuthorization)
+      throw new Error("Synthetic discovery authorization missing");
+    const discoveryApproval = await runRow(discoveryAuthorization.runId);
+    const discoverySnapshot = executionAuthorizationInput.parse(
+      discoveryApproval.input,
+    );
+    expect(discoverySnapshot.owner).toEqual({
+      userId: ctx.actor.userId,
+      ledgerPartyId: party.id,
+    });
+    expect(discoverySnapshot.scope).toEqual({
+      kind: "backfill",
+      mailboxId,
+      discovery: "all_history",
+    });
+    expect(discoveryAuthorization.approvalFingerprint).toBe(
+      await sha256Hex(JSON.stringify(discoverySnapshot)),
+    );
     expect(
       mailResearchRunInput.parse(importRun.input).executionAuthorization,
     ).toEqual(approval);
@@ -1052,14 +1141,14 @@ describe("current purchase-agent system boundaries", () => {
     const retained = await database.select().from(orderMail);
     expect(retained).toHaveLength(1);
     expect(retained[0]).toMatchObject({
-      mailboxId,
-      messageId: original.id,
+      id: selectedEmail.orderMailId,
+      ledgerPartyId: party.id,
       content: { bodyText: sourceText },
     });
     const ledger = await database
       .select()
-      .from(mailboxMessage)
-      .where(eq(mailboxMessage.mailboxId, mailboxId));
+      .from(emailTable)
+      .where(eq(emailTable.mailboxId, mailboxId));
     expect(ledger).toHaveLength(2);
     expect(
       ledger.find((message) => message.messageId === unrelated.id),
@@ -1079,11 +1168,10 @@ describe("current purchase-agent system boundaries", () => {
       runId: importRun.id,
     });
     expect(
-      await database
-        .select({ workKey: runTarget.workKey, state: runTarget.state })
-        .from(runTarget)
-        .where(eq(runTarget.runId, importRun.id)),
-    ).toEqual([{ workKey: retained[0]!.id, state: "completed" }]);
+      ledger
+        .filter((email) => email.runId === importRun.id)
+        .map((email) => ({ workKey: email.orderMailId, status: email.status })),
+    ).toEqual([{ workKey: retained[0]!.id, status: "completed" }]);
 
     // Pi's commit wrote one Purchase, one Expense and its Product, and no stock.
     const purchases = await database.select().from(purchase);

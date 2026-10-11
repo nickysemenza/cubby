@@ -18,7 +18,7 @@ import { and, eq, inArray, max, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { ledgerParty, run, vendor, vendorAccount } from "~/server/db/schema";
+import { ledgerParty, run, vendorAccount } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   notDeleted,
@@ -61,12 +61,6 @@ const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
     code: "block-runs",
     effect: "block",
     description: "Import runs retain their vendor-account scope.",
-  },
-  "RunTarget.vendorAccountId": {
-    code: "block-targeted-runs",
-    effect: "block",
-    description:
-      "Targeted validation and enrichment retain the account selected for their evidence.",
   },
   "ImportSourceClaim.vendorAccountId": {
     code: "block-source-claims",
@@ -271,52 +265,16 @@ export async function createVendorAccount(
       label: data.label.trim(),
       ...refs,
       status: data.status,
-      browser: data.browser,
       inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
-      browserSyncEnabled: data.browserSyncEnabled,
     });
     await logAuditEntry(tx, actor, {
       entityKind: "vendorAccount",
       entityId: row.id,
       action: "create",
     });
-    if (data.status === "active" && data.browserSyncEnabled)
-      await classifyOnlineAccountVendor(tx, actor, refs.vendorId);
     return parseEntityId("vendorAccount", row.id);
   });
   return { output: await reader.getByID(db, id), entityId: id };
-}
-
-/**
- * A browser-synced (default-on) account for a vendor with browser domains is
- * the one deterministic signal of an online order trail. It fills only an
- * unset `orderEvidence`; an explicit choice is never overwritten. A mail-only
- * account (created disabled by mail processing) reaches it only once a member
- * turns browser sync on.
- */
-async function classifyOnlineAccountVendor(
-  tx: DrizzleTransaction,
-  actor: ActorContext,
-  vendorId: typeof vendor.$inferSelect.id,
-) {
-  const [row] = await tx
-    .select({
-      orderEvidence: vendor.orderEvidence,
-      browserDomains: vendor.browserDomains,
-    })
-    .from(vendor)
-    .where(and(eq(vendor.id, vendorId), notDeleted(vendor)))
-    .limit(1)
-    .for("update");
-  if (!row || row.orderEvidence !== null || row.browserDomains.length === 0)
-    return;
-  await patchEntityRows(
-    tx,
-    actor,
-    { entity: "vendor", table: vendor, fields: entityFieldModels.vendor.audit },
-    [vendorId],
-    { orderEvidence: "online_account" },
-  );
 }
 
 async function updateVendorAccount(
@@ -336,9 +294,7 @@ async function updateVendorAccount(
   const patch = {
     label: data.label?.trim(),
     status: data.status,
-    browser: data.browser,
     inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
-    browserSyncEnabled: data.browserSyncEnabled,
     ...refs,
   };
   await withTransaction(db, async (tx) => {
@@ -353,19 +309,6 @@ async function updateVendorAccount(
       [id],
       patch,
     );
-    // Same predicate as creation, on the resulting row: either field may
-    // arrive in a later update than the other.
-    const [row] = await tx
-      .select({
-        vendorId: vendorAccount.vendorId,
-        status: vendorAccount.status,
-        browserSyncEnabled: vendorAccount.browserSyncEnabled,
-      })
-      .from(vendorAccount)
-      .where(eq(vendorAccount.id, id))
-      .limit(1);
-    if (row?.status === "active" && row.browserSyncEnabled)
-      await classifyOnlineAccountVendor(tx, actor, row.vendorId);
   });
   return { output: await reader.getByID(db, id), entityId: id };
 }

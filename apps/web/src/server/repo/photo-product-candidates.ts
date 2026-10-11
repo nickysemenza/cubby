@@ -1,14 +1,18 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import {
   parseEntityId,
   parseShortcodeFor,
   type ProductId,
 } from "@cubby/schemas/identifiers";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
+import { ledgerPartyKind } from "@cubby/schemas/ledger-party-fields";
 import type {
   PhotoGroupProposal,
   PhotoProductCandidate,
   PhotoRunImage,
+  PhotoAcceptedSourceLine,
 } from "@cubby/schemas/photo-import-run";
+import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -17,7 +21,12 @@ import {
   expense,
   product,
   purchase,
+  importSourceOrder,
+  importSourceClaim,
+  sourceOrderObservation,
+  ledgerParty,
 } from "~/server/db/schema";
+import { sourceObservationIdentitySql } from "~/server/purchase-import/reconciliation-observations";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   compareProductTitles,
@@ -33,6 +42,97 @@ import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-led
 const CANDIDATE_POOL_LIMIT = 240;
 const SUGGESTION_LIMIT = 5;
 
+type AssociationExpense = Pick<
+  typeof expense.$inferSelect,
+  "id" | "purchaseId" | "name" | "cost" | "lineKind"
+>;
+
+/** Read selectors only; the shared prepare/commit path rechecks ownership and the ledger. */
+export async function loadPhotoAcceptedSourceLines(
+  db: Database,
+  lines: readonly AssociationExpense[],
+  actor: Pick<ActorContext, "userId">,
+): Promise<Map<AssociationExpense["id"], PhotoAcceptedSourceLine[]>> {
+  const result = new Map<AssociationExpense["id"], PhotoAcceptedSourceLine[]>();
+  const purchaseIds = [
+    ...new Set(
+      lines.flatMap((line) => (line.purchaseId ? [line.purchaseId] : [])),
+    ),
+  ];
+  if (!purchaseIds.length) return result;
+  const orders = await getDb(db)
+    .select({
+      id: importSourceOrder.id,
+      purchaseId: importSourceOrder.purchaseId,
+      extraction: sourceOrderObservation.extraction,
+    })
+    .from(importSourceOrder)
+    .innerJoin(
+      importSourceClaim,
+      eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
+    )
+    .innerJoin(
+      ledgerParty,
+      and(
+        eq(ledgerParty.id, importSourceClaim.ledgerPartyId),
+        eq(ledgerParty.userId, actor.userId),
+        eq(ledgerParty.kind, ledgerPartyKind.enum.member),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, importSourceOrder.purchaseId), notDeleted(purchase)),
+    )
+    .innerJoin(
+      sourceOrderObservation,
+      and(
+        eq(sourceOrderObservation.id, importSourceOrder.acceptedObservationId),
+        eq(
+          sourceOrderObservation.sourceClaimId,
+          importSourceOrder.sourceClaimId,
+        ),
+        eq(sourceOrderObservation.orderKey, importSourceOrder.orderKey),
+        sourceObservationIdentitySql(
+          "purchase",
+          sourceOrderObservation.purchaseId,
+          importSourceOrder.purchaseId,
+        ),
+        sourceObservationIdentitySql(
+          "vendor",
+          sourceOrderObservation.vendorId,
+          purchase.vendorId,
+        ),
+        eq(sourceOrderObservation.checksum, importSourceOrder.checksum),
+      ),
+    )
+    .where(inArray(importSourceOrder.purchaseId, purchaseIds))
+    .orderBy(importSourceOrder.id)
+    .limit(1000);
+  for (const order of orders) {
+    const parsed = importExtractionOutcome.safeParse(order.extraction);
+    if (!parsed.success || parsed.data.status !== "ready") continue;
+    for (const [
+      lineIndex,
+      sourceLine,
+    ] of parsed.data.candidate.lines.entries()) {
+      for (const line of lines) {
+        if (
+          line.purchaseId !== order.purchaseId ||
+          line.name !== sourceLine.title ||
+          line.cost !== sourceLine.amount ||
+          line.lineKind !== sourceLine.lineKind
+        )
+          continue;
+        const selectors = result.get(line.id) ?? [];
+        selectors.push({ sourceOrderId: order.id, lineIndex });
+        result.set(line.id, selectors);
+      }
+    }
+  }
+  return result;
+}
+
 // Product is the only table in the outer query. Qualify the correlation by
 // hand so an inner table cannot accidentally shadow its id.
 const HAS_OWN_PHOTO = sql.raw(`EXISTS (
@@ -44,7 +144,7 @@ const HAS_OWN_PHOTO = sql.raw(`EXISTS (
 const HAS_PHOTO_IMPORT = sql.raw(`EXISTS (
   SELECT 1 FROM "EntityAttachment" pc_ea
   JOIN "Image" pc_i ON pc_i."id" = pc_ea."imageId" AND pc_i."deletedAt" IS NULL
-  JOIN "RunTarget" pc_t ON pc_t."entityId" = pc_i."id"
+  JOIN "PhotoRunImage" pc_t ON pc_t."imageId" = pc_i."id"
   JOIN "Run" pc_r ON pc_r."id" = pc_t."runId"
   WHERE pc_ea."entityId" = "Product"."id"
     AND pc_ea."deletedAt" IS NULL AND pc_r."deletedAt" IS NULL
@@ -192,6 +292,7 @@ export async function photoProductCandidates(
   db: Database,
   proposal: PhotoGroupProposal,
   images: readonly PhotoRunImage[] = [],
+  actor: Pick<ActorContext, "userId">,
 ): Promise<PhotoProductCandidate[]> {
   const name =
     proposal.product.kind === "create"
@@ -213,12 +314,16 @@ export async function photoProductCandidates(
         ? [{ source: "label_ocr" as const, text: image.recognizedText }]
         : []),
     ]);
-  return findPhotoProductCandidates(db, {
-    name,
-    manufacturer,
-    excludeId: proposal.committedProduct?.id,
-    evidenceTexts,
-  });
+  return findPhotoProductCandidates(
+    db,
+    {
+      name,
+      manufacturer,
+      excludeId: proposal.committedProduct?.id,
+      evidenceTexts,
+    },
+    actor,
+  );
 }
 
 export async function findPhotoProductCandidates(
@@ -232,6 +337,7 @@ export async function findPhotoProductCandidates(
       text: string;
     }[];
   },
+  actor: Pick<ActorContext, "userId">,
 ): Promise<PhotoProductCandidate[]> {
   const { name, manufacturer } = input;
   const words = [...productIdentityWords(name)];
@@ -338,14 +444,17 @@ export async function findPhotoProductCandidates(
   const expenseRows = ids.length
     ? await getDb(db)
         .select({
+          id: expense.id,
           productId: expense.productId,
           expenseId: expense.shortcode,
-          purchaseId: purchase.shortcode,
+          purchaseId: expense.purchaseId,
+          purchaseCode: purchase.shortcode,
           purchaseLabel: purchase.displayLabel,
           name: expense.name,
           date: expense.date,
           cost: expense.cost,
           productQuantity: expense.productQuantity,
+          lineKind: expense.lineKind,
         })
         .from(expense)
         .leftJoin(
@@ -356,6 +465,11 @@ export async function findPhotoProductCandidates(
         .orderBy(desc(expense.date))
         .limit(500)
     : [];
+  const acceptedSourceLines = await loadPhotoAcceptedSourceLines(
+    db,
+    expenseRows,
+    actor,
+  );
   const expenseCounts = ids.length
     ? await getDb(db)
         .select({
@@ -420,9 +534,10 @@ export async function findPhotoProductCandidates(
       .filter((row) => row.productId === candidate.id)
       .map((row) => ({
         expenseId: parseShortcodeFor("expense", row.expenseId),
-        purchaseId: row.purchaseId
-          ? parseShortcodeFor("purchase", row.purchaseId)
+        purchaseId: row.purchaseCode
+          ? parseShortcodeFor("purchase", row.purchaseCode)
           : null,
+        acceptedSourceLines: acceptedSourceLines.get(row.id) ?? [],
         purchaseLabel: row.purchaseLabel,
         name: row.name,
         date: row.date,

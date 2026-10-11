@@ -176,6 +176,12 @@ import {
 } from "./purchase-evidence-policy";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
+  "SourceOrderObservation.purchaseId": {
+    code: "preserve-source-observation",
+    effect: "preserve",
+    description:
+      "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+  },
   "ImportPreparedOrder.targetPurchaseId": {
     code: "preserve-prepared-target",
     effect: "preserve",
@@ -187,12 +193,6 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     effect: "preserve",
     description:
       "A reviewed email decision retains the deleted Purchase tombstone.",
-  },
-  "RunTarget.entityId": {
-    code: "preserve-targeted-import-history",
-    effect: "preserve",
-    description:
-      "Targeted validation history keeps the deleted purchase tombstone.",
   },
   "ImportSourceOrder.purchaseId": {
     code: "clear-import-order",
@@ -233,6 +233,12 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
+  "SourceOrderObservation.purchaseId": {
+    code: "preserve-source-observation",
+    effect: "preserve",
+    description:
+      "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+  },
   "ImportPreparedOrder.targetPurchaseId": {
     code: "preserve-prepared-target",
     effect: "preserve",
@@ -244,11 +250,6 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description:
       "Reviewed mail decisions follow the survivor; an existing survivor decision wins a conflict.",
-  },
-  "RunTarget.entityId": {
-    code: "repoint-targeted-import-history",
-    effect: "repoint",
-    description: "Targeted validation history follows the surviving purchase.",
   },
   "ImportSourceOrder.purchaseId": {
     code: "repoint-import-claim",

@@ -26,6 +26,7 @@ export type CacheProfile =
  * ripples through; an empty list is a deliberate no-op.
  */
 export type RippleKey =
+  | "email"
   | "planting"
   | "gardenEntry"
   | "search"

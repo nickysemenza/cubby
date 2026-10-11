@@ -146,14 +146,6 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "CONSTRAINT_VIOLATION",
     label: "original order lines",
   },
-  "RunTarget.entityId": {
-    code: "block-targeted-import-history",
-    effect: "block",
-    description:
-      "A Product retained by targeted validation or enrichment history cannot be deleted.",
-    reason: "CONSTRAINT_VIOLATION",
-    label: "targeted import runs",
-  },
   "InventoryEntry.productId": {
     code: "block-live-inventory",
     effect: "block",

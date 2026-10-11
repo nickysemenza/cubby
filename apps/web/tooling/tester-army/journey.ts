@@ -293,7 +293,7 @@ const runEvidence = z.object({
 async function runDiagnosis(pool: Pool, runId: string) {
   const [progress, findings, failed] = await Promise.all([
     pool.query(
-      'SELECT phase, detail FROM "RunProgress" WHERE "runId" = $1 ORDER BY "createdAt" DESC LIMIT 3',
+      "SELECT event->>'phase' AS phase, event->>'detail' AS detail FROM \"Run\" r CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.\"progressHistory\", '[]'::jsonb)) WITH ORDINALITY entries(event, position) WHERE r.id = $1 ORDER BY position DESC LIMIT 3",
       [runId],
     ),
     pool.query(
@@ -339,8 +339,7 @@ export async function awaitRun(
           (
             await pool.query(
               `SELECT r.status, r."failureCode",
-                      COALESCE((SELECT p."awaitingApproval" FROM "RunProgress" p
-                                WHERE p."runId" = r.id ORDER BY p."createdAt" DESC LIMIT 1), false) AS "awaitingApproval"
+                      COALESCE((r."liveProgress"->>'awaitingApproval')::boolean, false) AS "awaitingApproval"
                  FROM "Run" r WHERE r.id = $1`,
               [runId],
             )

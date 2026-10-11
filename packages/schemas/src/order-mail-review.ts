@@ -6,10 +6,7 @@ import {
   runShortcode,
   vendorShortcode,
 } from "./identifier-fields.js";
-import {
-  mailboxClassification,
-  mailboxMessageStatus,
-} from "./mailbox-research.js";
+import { mailboxClassification, emailStatus } from "./mailbox-research.js";
 
 export const vendorOrderMailInput = z.object({
   vendorId: vendorShortcode,
@@ -42,15 +39,15 @@ export const orderMailCandidate = z.object({
 export const orderMailReviewItem = z.object({
   messageId: z.string(),
   threadId: z.string().nullable(),
-  sender: z.string(),
-  subject: z.string(),
+  sender: z.string().nullable(),
+  subject: z.string().nullable(),
   receivedAt: z.iso.datetime().nullable(),
   ledgerPartyId: ledgerPartyShortcode,
   processing: z
     .object({
       classification: mailboxClassification,
       version: z.string(),
-      status: mailboxMessageStatus,
+      status: emailStatus,
       updatedAt: z.iso.datetime(),
     })
     .nullable(),

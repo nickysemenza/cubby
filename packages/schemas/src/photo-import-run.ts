@@ -32,6 +32,29 @@ export const runTargetDeviceWorkState = z.enum([
 ]);
 export type RunTargetDeviceWorkState = z.infer<typeof runTargetDeviceWorkState>;
 
+export const photoRunImageState = z.enum([
+  "pending",
+  "prepared",
+  "completed",
+  "skipped",
+  "unresolved",
+  "needs_evidence",
+  "unavailable",
+]);
+export type PhotoRunImageState = z.infer<typeof photoRunImageState>;
+export const photoRunImageOutcome = z.enum(["attached", "skipped"]);
+export type PhotoRunImageOutcome = z.infer<typeof photoRunImageOutcome>;
+/** A committed group's receipt survives a failed operation-ledger completion. */
+export const photoRunImageCommitReceipt = z.object({
+  groupKey: z.string().min(1),
+  productId: productShortcode.optional(),
+  purpose: productImagePurpose.optional(),
+  inventoryId: inventoryShortcode.optional(),
+});
+export type PhotoRunImageCommitReceipt = z.infer<
+  typeof photoRunImageCommitReceipt
+>;
+
 const commitPhotoGroupImage = z.object({
   id: imageShortcode,
   purpose: productImagePurpose,
@@ -417,6 +440,12 @@ export const photoRunContextImage = photoRunImage
     cutoutUrl: z.string().nullable().optional(),
   });
 
+export const photoAcceptedSourceLine = z.object({
+  sourceOrderId: z.uuid(),
+  lineIndex: z.number().int().nonnegative(),
+});
+export type PhotoAcceptedSourceLine = z.infer<typeof photoAcceptedSourceLine>;
+
 export const photoProductCandidate = z.object({
   id: productShortcode,
   name: z.string(),
@@ -471,6 +500,7 @@ export const photoProductCandidate = z.object({
         cost: z.number().nullable(),
         productQuantity: z.number().nullable(),
         movement: z.enum(["acquired", "exited", "adjusted", "unknown"]),
+        acceptedSourceLines: z.array(photoAcceptedSourceLine).optional(),
       }),
     )
     .optional(),

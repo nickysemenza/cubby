@@ -1,8 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  parseShortcodeFor,
-  type ExpenseShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -12,12 +9,8 @@ import {
   product,
   purchase,
 } from "~/server/db/schema";
-import {
-  getDb,
-  notDeleted,
-  withTransactionDatabase,
-} from "~/server/repo/database-helpers";
-import { updateExpense } from "~/server/repo/expense/crud";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { loadPhotoAcceptedSourceLines } from "~/server/repo/photo-product-candidates";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 async function committedGroup(db: Database, runId: string, groupKey: string) {
@@ -50,6 +43,7 @@ async function committedGroup(db: Database, runId: string, groupKey: string) {
 export async function linkablePhotoGroupExpenses(
   db: Database,
   input: { runId: string; groupKey: string; search?: string },
+  actor: Pick<ActorContext, "userId">,
 ) {
   const group = await committedGroup(db, input.runId, input.groupKey);
   const query = input.search?.trim() || group.productName;
@@ -61,13 +55,16 @@ export async function linkablePhotoGroupExpenses(
   const patterns = words.length ? words : [query];
   const rows = await getDb(db)
     .select({
-      id: expense.shortcode,
+      id: expense.id,
+      code: expense.shortcode,
       name: expense.name,
       date: expense.date,
       cost: expense.cost,
       productQuantity: expense.productQuantity,
-      purchaseId: purchase.shortcode,
+      purchaseId: expense.purchaseId,
+      purchaseCode: purchase.shortcode,
       purchaseLabel: purchase.displayLabel,
+      lineKind: expense.lineKind,
     })
     .from(expense)
     .leftJoin(
@@ -89,17 +86,23 @@ export async function linkablePhotoGroupExpenses(
     )
     .orderBy(desc(expense.date), desc(expense.id))
     .limit(25);
+  const acceptedSourceLines = await loadPhotoAcceptedSourceLines(
+    db,
+    rows,
+    actor,
+  );
   return {
     productId: parseShortcodeFor("product", group.productCode),
     productName: group.productName,
     lines: rows.map((row) => ({
-      expenseId: parseShortcodeFor("expense", row.id),
+      expenseId: parseShortcodeFor("expense", row.code),
+      acceptedSourceLines: acceptedSourceLines.get(row.id) ?? [],
       name: row.name,
       date: row.date,
       cost: row.cost,
       productQuantity: row.productQuantity,
-      purchaseId: row.purchaseId
-        ? parseShortcodeFor("purchase", row.purchaseId)
+      purchaseId: row.purchaseCode
+        ? parseShortcodeFor("purchase", row.purchaseCode)
         : null,
       purchaseLabel: row.purchaseLabel,
       expectedQuantityDelta:
@@ -112,51 +115,4 @@ export async function linkablePhotoGroupExpenses(
               : row.productQuantity,
     })),
   };
-}
-
-/** Locks the exact line and group, then reuses the normal Expense write and audit path. */
-export async function linkPhotoGroupExpense(
-  db: Database,
-  input: { runId: string; groupKey: string; expenseId: string },
-  actor: ActorContext,
-) {
-  return withTransactionDatabase(db, async (txDb) => {
-    const group = await committedGroup(txDb, input.runId, input.groupKey);
-    const lineId = await resolveOrThrow(txDb, "expense", input.expenseId);
-    const [line] = await getDb(txDb)
-      .select({
-        id: expense.id,
-        productId: expense.productId,
-        lineKind: expense.lineKind,
-        lineBasis: expense.lineBasis,
-      })
-      .from(expense)
-      .where(and(eq(expense.id, lineId), notDeleted(expense)))
-      .for("update")
-      .limit(1);
-    if (
-      !line ||
-      line.productId ||
-      line.lineKind !== "principal" ||
-      line.lineBasis !== "item_line"
-    )
-      throw new Error(
-        "Expense line must be live, eligible, and still unlinked",
-      );
-    // SAFETY: the input contract parses an Expense shortcode before this action.
-    const expenseId = parseShortcodeFor(
-      "expense",
-      input.expenseId,
-    ) as ExpenseShortcode;
-    await updateExpense(
-      txDb,
-      expenseId,
-      { productId: parseShortcodeFor("product", group.productCode) },
-      actor,
-    );
-    return {
-      expenseId,
-      productId: parseShortcodeFor("product", group.productCode),
-    };
-  });
 }

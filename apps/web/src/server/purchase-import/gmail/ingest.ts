@@ -1,34 +1,61 @@
+import { emailCandidateSource } from "@cubby/schemas/email-candidates";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   MAILBOX_RESEARCH_VERSION,
   mailboxClassification,
+  mailboxClassificationStage,
   type MailboxClassification,
   type MailboxClassificationDecision,
 } from "@cubby/schemas/mailbox-research";
-import { sha256Hex } from "@cubby/shared/sha256";
+import { eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { email as emailTable, orderMailAttachment } from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
+import { runAfterCommit } from "~/server/repo/database-helpers/core";
+import { hasAcceptedEmailAssociation } from "~/server/repo/email";
 import { claimRunExecution } from "~/server/runs/execution-context";
 
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../mail-source-identity";
 import {
+  deferClassificationRefresh,
+  publishGmailEvidence,
+} from "./admitted-source";
+import {
   productionOrderMailAttachmentStorage,
   type OrderMailAttachmentStorage,
 } from "./attachment-storage";
+import {
+  extractEmailCandidatePreview,
+  type EmailCandidateChoice,
+} from "./candidate-extraction";
+import { originalChecksum } from "./checksum";
+import { gmailExecutionPolicy } from "./execution-policy";
 import { normalizeMessage } from "./normalize";
 import {
+  recordEmailClassificationObservation,
+  recordEmailCandidateObservation,
+  recordEmailRetrievalFailure,
+} from "./observations";
+import {
+  attachmentHasRetainedBytes,
   clearUnrelatedOriginal,
-  readMailboxMessage,
-  saveMailboxMessage,
+  readEmail,
+  saveEmail,
+  saveMailboxMetadata,
+  markEmailRemoved,
   storeOrderMailAttachment,
+  reserveGmailAttachmentUploads,
   upsertOrderMail,
 } from "./persistence";
 import { interpretMailRelevance, type MailRelevance } from "./relevance";
+import { GmailAuthorizationError } from "./tokens";
 import {
   gmailOriginalComplete,
   routeGmailMessage,
   type MailTriage,
 } from "./triage";
+import type { GmailClassificationCall } from "./triage-model";
 import {
   GmailApiError,
   type GmailProvider,
@@ -43,25 +70,20 @@ export type GmailIngestOutcome = {
   excluded: string[];
   unrelated: string[];
   blocked: string[];
+  candidatePreviews: NonNullable<
+    Awaited<ReturnType<typeof relatedEmailPreview>>
+  >[];
 };
 type IngestInput = Parameters<typeof ingestGmailMessages>[2];
 type MessageIdentity = Pick<IngestInput, "ledgerPartyId" | "mailboxId"> & {
   messageId: string;
 };
 
-const fetchMessage = async (
-  provider: GmailProvider,
-  messageId: string,
-): Promise<GmailMessage | null> => {
-  try {
-    return await provider.getMessage(messageId);
-  } catch (error) {
-    if (error instanceof GmailApiError && error.status === 404) return null;
-    throw error;
-  }
-};
-
-const routingPorts = (db: Database, input: IngestInput) =>
+const routingPorts = (
+  db: Database,
+  input: IngestInput,
+  onCall: (call: GmailClassificationCall) => void,
+) =>
   ({
     triage:
       input.triage ??
@@ -69,7 +91,7 @@ const routingPorts = (db: Database, input: IngestInput) =>
         if (!input.runId)
           throw new Error("Gmail triage requires its discovery or search Run");
         const { productionMailTriage } = await import("./triage-model");
-        return productionMailTriage(db, input.runId)(content);
+        return productionMailTriage(db, input.runId, onCall)(content);
       }),
     relevance:
       input.relevance ??
@@ -79,35 +101,18 @@ const routingPorts = (db: Database, input: IngestInput) =>
             "Gmail relevance interpretation requires its discovery or search Run",
           );
         const { productionMailRelevance } = await import("./triage-model");
-        return productionMailRelevance(db, input.runId)(request);
+        return productionMailRelevance(db, input.runId, onCall)(request);
       }),
   }) satisfies { triage: MailTriage; relevance: MailRelevance };
 
-const originalChecksum = (normalized: GmailNormalizedMessage) =>
-  sha256Hex(
-    JSON.stringify({
-      headers: normalized.mail.headers,
-      bodyText: normalized.mail.bodyText,
-      bodyHtml: normalized.mail.bodyHtml,
-      attachments: normalized.attachments.map(
-        ({ sourceKey, filename, mimeType, size }) => ({
-          sourceKey,
-          filename,
-          mimeType,
-          size,
-        }),
-      ),
-    }),
-  );
-
 const retainOriginal = async (
   db: Database,
-  provider: GmailProvider,
   identity: MessageIdentity,
   normalized: GmailNormalizedMessage,
   checksum: string,
   storage: OrderMailAttachmentStorage,
   transientAttachments: ReadonlyMap<string, string>,
+  uploadKeys: ReadonlyMap<string, string>,
 ) => {
   const orderMailId = await upsertOrderMail(
     db,
@@ -120,26 +125,21 @@ const retainOriginal = async (
       orderMailId,
       attachment,
       storage,
+      uploadKey: uploadKeys.get(attachment.sourceKey),
       fetchData: async () =>
         attachment.dataBase64Url ??
         transientAttachments.get(attachment.sourceKey) ??
-        (attachment.attachmentId
-          ? (
-              await provider.getAttachment(
-                identity.messageId,
-                attachment.attachmentId,
-              )
-            ).data
-          : undefined),
+        undefined,
     });
   return orderMailId;
 };
 
 const unchangedClassification = (
-  prior: Awaited<ReturnType<typeof readMailboxMessage>>,
+  prior: Awaited<ReturnType<typeof readEmail>>,
   checksum: string,
 ) =>
   prior?.checksum === checksum &&
+  prior.classification !== null &&
   prior.classificationVersion === MAILBOX_RESEARCH_VERSION &&
   prior.status !== "excluded" &&
   prior.status !== "deleted";
@@ -150,7 +150,6 @@ const retainResearchOriginal = (
   classification: MailboxClassification,
   normalized: GmailNormalizedMessage,
   transientAttachments: ReadonlyMap<string, string>,
-  callerJudges = false,
 ) =>
   classification === "related" ||
   (classification === "uncertain" &&
@@ -158,23 +157,24 @@ const retainResearchOriginal = (
       normalized.mail.bodyText?.trim() ||
       normalized.mail.bodyHtml?.trim() ||
       transientAttachments.size ||
-      // The caller reads an attachment-only candidate's retained bytes.
-      (callerJudges && normalized.attachments.length),
+      normalized.attachments.length,
     ));
 
 /**
  * The classification and why: an unchanged message keeps its recorded verdict;
- * otherwise rules and Jev decide, and the relevance model settles uncertainty.
+ * otherwise rules and Jev decide. Import-authorized work can settle uncertainty.
  */
 async function classifyMessage(
-  prior: Awaited<ReturnType<typeof readMailboxMessage>>,
+  prior: Awaited<ReturnType<typeof readEmail>>,
   route: () => Promise<MailboxClassificationDecision>,
   relevance: (() => ReturnType<typeof interpretMailRelevance>) | null,
 ): Promise<MailboxClassificationDecision> {
   const decision: MailboxClassificationDecision = prior
     ? {
         classification: mailboxClassification.parse(prior.classification),
-        stage: prior.classificationStage ?? "rule",
+        stage: mailboxClassificationStage.parse(
+          prior.classificationStage ?? "rule",
+        ),
         reason:
           prior.classificationReason ??
           "Unchanged since its last classification",
@@ -191,6 +191,174 @@ async function classifyMessage(
   };
 }
 
+function classificationCallFor(
+  stage: MailboxClassificationDecision["stage"],
+  triage: GmailClassificationCall | null,
+  relevance: GmailClassificationCall | null,
+) {
+  return stage === "jev" ? triage : stage === "model" ? relevance : null;
+}
+
+type PriorMessage = Awaited<ReturnType<typeof readEmail>>;
+async function observeClassification(
+  db: Database,
+  input: IngestInput,
+  identity: MessageIdentity,
+  prior: PriorMessage,
+  checksum: string,
+  decision: MailboxClassificationDecision,
+  unchanged: boolean,
+  call: GmailClassificationCall | null,
+) {
+  const acceptedConflict =
+    decision.classification === "unrelated" &&
+    (await hasAcceptedEmailAssociation(db, identity));
+  if (!prior || (unchanged && !acceptedConflict)) return;
+  await recordEmailClassificationObservation(db, {
+    emailId: prior.id,
+    runId: input.runId ?? null,
+    checksum,
+    classification: decision.classification,
+    stage: decision.stage,
+    reason: decision.reason,
+    classificationVersion: MAILBOX_RESEARCH_VERSION,
+    model: call?.model ?? null,
+    promptVersion: call?.promptVersion ?? null,
+    operation: call?.operation ?? null,
+    conflict: acceptedConflict ? { kind: "accepted_unrelated" } : null,
+  });
+}
+async function protectOriginalOutcome(
+  db: Database,
+  identity: MessageIdentity,
+  original: { orderMailId: string; checksum: string },
+  prior: PriorMessage,
+): Promise<
+  { kind: "skipped" | "blocked" } | { kind: "saved"; orderMailId: string }
+> {
+  const status =
+    prior?.status === "completed" || prior?.status === "blocked"
+      ? prior.status
+      : "pending";
+  await saveEmail(db, {
+    ...identity,
+    ...original,
+    classification: "related",
+    classificationStage: prior?.classificationStage
+      ? mailboxClassificationStage.parse(prior.classificationStage)
+      : undefined,
+    classificationReason:
+      prior?.classificationReason ??
+      "Accepted source association protects original content",
+    status,
+  });
+  if (status === "completed") return { kind: "skipped" };
+  if (status === "blocked") return { kind: "blocked" };
+  return { kind: "saved", orderMailId: original.orderMailId };
+}
+async function fetchObservedMessage(
+  db: Database,
+  provider: GmailProvider,
+  identity: MessageIdentity,
+  runId?: string,
+) {
+  try {
+    return {
+      message: await provider.getMessage(identity.messageId),
+      missing: null,
+    };
+  } catch (error) {
+    if (error instanceof GmailAuthorizationError) throw error;
+    // A first 404 must mint its diagnostic owner inside fenced publication.
+    // Creating it before the optimistic check would invalidate our own snapshot.
+    if (error instanceof GmailApiError && error.status === 404)
+      return { message: null, missing: error };
+    await recordEmailRetrievalFailure(db, {
+      ...identity,
+      runId,
+      httpStatus: error instanceof GmailApiError ? error.status : null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+async function stageGmailAttachments(
+  db: Database,
+  provider: GmailProvider,
+  identity: MessageIdentity,
+  normalized: GmailNormalizedMessage,
+  orderMailId: string | null,
+  transientAttachments: Map<string, string>,
+) {
+  for (const attachment of normalized.attachments) {
+    if (
+      orderMailId &&
+      (await attachmentHasRetainedBytes(db, {
+        orderMailId: orderMailId,
+        attachment,
+      }))
+    )
+      continue;
+    const inline =
+      attachment.dataBase64Url ??
+      transientAttachments.get(attachment.sourceKey);
+    const payload = inline
+      ? { data: inline, size: attachment.size }
+      : attachment.attachmentId
+        ? await provider.getAttachment(
+            identity.messageId,
+            attachment.attachmentId,
+          )
+        : {};
+    if (payload.data)
+      transientAttachments.set(attachment.sourceKey, payload.data);
+  }
+  return reserveGmailAttachmentUploads(db, {
+    orderMailId,
+    attachments: normalized.attachments,
+    payloads: transientAttachments,
+  });
+}
+
+type GmailAcquisitionOutcome =
+  | { kind: "saved"; orderMailId: string }
+  | { kind: "unrelated" | "blocked" | "skipped" };
+
+async function cleanNewGmailKeys(
+  createdKeys: Set<string>,
+  storage: OrderMailAttachmentStorage,
+  error: Error,
+): Promise<never> {
+  const cleanup = await Promise.allSettled(
+    [...createdKeys].map((key) => storage.delete(key)),
+  );
+  const failures = cleanup.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  );
+  if (failures.length)
+    throw new AggregateError(
+      [error, ...failures],
+      [error, ...failures]
+        .map((value) =>
+          value instanceof Error ? value.message : String(value),
+        )
+        .join("\n"),
+      { cause: error },
+    );
+  throw error;
+}
+
+function unchangedRetainedOutcome(
+  prior: PriorMessage,
+): GmailAcquisitionOutcome | null {
+  if (!prior?.orderMailId) return null;
+  if (prior.status === "completed") return { kind: "skipped" };
+  return prior.status === "researching"
+    ? { kind: "saved", orderMailId: prior.orderMailId }
+    : null;
+}
+
 async function acquireEligible(
   db: Database,
   provider: GmailProvider,
@@ -198,29 +366,48 @@ async function acquireEligible(
   message: GmailMessage,
   identity: MessageIdentity,
   storage: OrderMailAttachmentStorage,
-): Promise<
-  | { kind: "saved"; orderMailId: string }
-  | { kind: "unrelated" | "blocked" | "skipped" }
-> {
+  executionPolicy: Awaited<ReturnType<typeof gmailExecutionPolicy>>,
+  prior: PriorMessage,
+): Promise<GmailAcquisitionOutcome> {
   const normalized = normalizeMessage(identity.mailboxId, message);
   const checksum = await originalChecksum(normalized);
-  const prior = await readMailboxMessage(db, identity);
+  if (await deferClassificationRefresh(db, executionPolicy, prior))
+    return { kind: "skipped" };
   if (prior?.classificationVersion === HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION)
     return { kind: "blocked" };
   const unchanged = unchangedClassification(prior, checksum);
-
-  if (
-    unchanged &&
-    prior?.orderMailId &&
-    ["researching", "completed"].includes(prior.status)
-  )
-    return prior.status === "completed"
-      ? { kind: "skipped" }
-      : { kind: "saved", orderMailId: prior.orderMailId };
-  const ports = routingPorts(db, input);
+  const publication = {
+    ...identity,
+    runId: input.runId,
+    executionPolicy,
+    expected: prior,
+  };
+  const metadata = {
+    ledgerPartyId: input.ledgerPartyId,
+    mail: normalized.mail,
+    checksum,
+    executionPolicy,
+    memberSearch: input.callerJudges,
+  };
+  const replay = unchanged ? unchangedRetainedOutcome(prior) : null;
+  if (replay)
+    return (
+      (await publishGmailEvidence<GmailAcquisitionOutcome>(
+        db,
+        publication,
+        async (tx) => {
+          await saveMailboxMetadata(tx, metadata);
+          return replay;
+        },
+      )) ?? { kind: "skipped" }
+    );
+  let triageCall: GmailClassificationCall | null = null;
+  let relevanceCall: GmailClassificationCall | null = null;
+  const ports = routingPorts(db, input, (call) => {
+    if (call.operation === "mailbox-triage") triageCall = call;
+    else if (call.operation === "mailbox-relevance") relevanceCall = call;
+  });
   const transientAttachments = new Map<string, string>();
-  // A member's own search has no Run to bill: past Spam/Trash, every message
-  // is a candidate the caller settles through `mail.resolve`.
   const decision = await classifyMessage(
     unchanged ? prior : null,
     input.callerJudges
@@ -230,7 +417,7 @@ async function acquireEligible(
           reason: "Found by a member's search; the caller decides",
         })
       : () => routeGmailMessage(message, normalized, ports.triage),
-    input.callerJudges
+    input.callerJudges || executionPolicy === "classification_only"
       ? null
       : () =>
           interpretMailRelevance(
@@ -242,79 +429,194 @@ async function acquireEligible(
               transientAttachments.set(sourceKey, encoded),
           ),
   );
-  const { classification } = decision;
-  const recorded = {
-    classificationStage: decision.stage,
-    classificationReason: decision.reason,
-  };
   if (
-    !retainResearchOriginal(
-      classification,
-      normalized,
-      transientAttachments,
-      input.callerJudges,
-    )
-  ) {
-    const protectedOriginal = await clearUnrelatedOriginal(
+    await deferClassificationRefresh(
       db,
-      identity,
-      storage,
-    );
-    if (protectedOriginal) {
-      // A negative verdict cannot turn protection into permission to refresh
-      // the original bytes or its attachment owners through the positive path.
-      if (prior) {
-        if (prior.status === "completed") return { kind: "skipped" };
-        if (prior.status === "blocked") return { kind: "blocked" };
-      } else
-        await saveMailboxMessage(db, {
-          ...identity,
-          ...protectedOriginal,
-          classification: "related",
-          status: "pending",
-        });
-      return { kind: "saved", orderMailId: protectedOriginal.orderMailId };
-    }
-    const status = classification === "unrelated" ? "completed" : "blocked";
-    await saveMailboxMessage(db, {
-      ...identity,
-      ...recorded,
-      checksum,
-      classification,
-      status,
-    });
-    return { kind: classification === "unrelated" ? "unrelated" : "blocked" };
-  }
-  // Upload interruption remains pending, so replay finishes bytes before research dispatch.
-  await saveMailboxMessage(db, {
-    ...identity,
-    ...recorded,
-    checksum,
-    classification,
-    status: "pending",
-    orderMailId: prior?.orderMailId,
-  });
-  const orderMailId = await retainOriginal(
-    db,
-    provider,
-    identity,
+      executionPolicy,
+      await readEmail(db, identity),
+    )
+  )
+    return { kind: "skipped" };
+  const retain = retainResearchOriginal(
+    decision.classification,
     normalized,
-    checksum,
-    storage,
     transientAttachments,
   );
-  await saveMailboxMessage(db, {
-    ...identity,
-    ...recorded,
-    checksum,
-    classification,
-    status: "pending",
-    orderMailId,
-  });
-  return { kind: "saved", orderMailId };
+  let uploadKeys: ReadonlyMap<string, string> = new Map();
+  if (retain)
+    uploadKeys = await stageGmailAttachments(
+      db,
+      provider,
+      identity,
+      normalized,
+      prior?.orderMailId ?? null,
+      transientAttachments,
+    );
+  const createdKeys = new Set<string>();
+  let committed = false;
+  try {
+    return (
+      (await publishGmailEvidence<GmailAcquisitionOutcome>(
+        db,
+        publication,
+        async (tx, current) => {
+          await runAfterCommit(tx, async () => {
+            committed = true;
+          });
+          const known = current?.orderMailId
+            ? await getDb(tx)
+                .select({ key: orderMailAttachment.pendingObjectKey })
+                .from(orderMailAttachment)
+                .where(eq(orderMailAttachment.orderMailId, current.orderMailId))
+            : [];
+          const protectedKeys = new Set(
+            known.flatMap(({ key }) => (key ? [key] : [])),
+          );
+          const publicationStorage: OrderMailAttachmentStorage = {
+            ...storage,
+            put: async (key, bytes, contentType) => {
+              if (!protectedKeys.has(key)) createdKeys.add(key);
+              await storage.put(key, bytes, contentType);
+            },
+          };
+          await saveMailboxMetadata(tx, metadata);
+          await observeClassification(
+            tx,
+            input,
+            identity,
+            await readEmail(tx, identity),
+            checksum,
+            decision,
+            unchanged,
+            classificationCallFor(decision.stage, triageCall, relevanceCall),
+          );
+          const recorded = {
+            classificationStage: decision.stage,
+            classificationReason: decision.reason,
+          };
+          if (!retain) {
+            const protectedOriginal = await clearUnrelatedOriginal(
+              tx,
+              identity,
+              publicationStorage,
+            );
+            if (protectedOriginal)
+              return protectOriginalOutcome(
+                tx,
+                identity,
+                protectedOriginal,
+                current,
+              );
+            await saveEmail(tx, {
+              ...identity,
+              ...recorded,
+              checksum,
+              classification: decision.classification,
+              status:
+                decision.classification === "unrelated"
+                  ? "completed"
+                  : "blocked",
+            });
+            return {
+              kind:
+                decision.classification === "unrelated"
+                  ? "unrelated"
+                  : "blocked",
+            };
+          }
+          // Routing and retained bytes publish together; failed uploads leave the prior source intact.
+          await saveEmail(tx, {
+            ...identity,
+            ...recorded,
+            checksum,
+            classification: decision.classification,
+            status: "pending",
+            orderMailId: current?.orderMailId,
+          });
+          const orderMailId = await retainOriginal(
+            tx,
+            identity,
+            normalized,
+            checksum,
+            publicationStorage,
+            transientAttachments,
+            uploadKeys,
+          );
+          await saveEmail(tx, {
+            ...identity,
+            ...recorded,
+            checksum,
+            classification: decision.classification,
+            status: "pending",
+            orderMailId,
+          });
+          await getDb(tx)
+            .update(emailTable)
+            .set({ contentClearedAt: null })
+            .where(eq(emailTable.orderMailId, orderMailId));
+          return { kind: "saved", orderMailId };
+        },
+      )) ?? { kind: "skipped" }
+    );
+  } catch (error) {
+    if (committed) throw error;
+    return cleanNewGmailKeys(
+      createdKeys,
+      storage,
+      error instanceof Error
+        ? error
+        : new Error(String(error), { cause: error }),
+    );
+  }
+}
+
+async function relatedEmailPreview(
+  db: Database,
+  input: IngestInput,
+  messageId: string,
+  executionPolicy: Awaited<ReturnType<typeof gmailExecutionPolicy>>,
+) {
+  const email = await readEmail(db, { ...input, messageId });
+  if (
+    !email ||
+    email.classification !== "related" ||
+    !emailCandidateSource.shape.checksum.safeParse(email.checksum).success ||
+    (await deferClassificationRefresh(db, executionPolicy, email))
+  )
+    return null;
+  const preview = await extractEmailCandidatePreview(
+    db,
+    {
+      emailId: email.id,
+      ledgerPartyId: input.ledgerPartyId,
+      runId: input.runId,
+    },
+    { choose: input.candidateChoice },
+  );
+  const result = await publishGmailEvidence(
+    db,
+    {
+      ledgerPartyId: input.ledgerPartyId,
+      mailboxId: input.mailboxId,
+      messageId,
+      runId: input.runId,
+      executionPolicy,
+      expected: email,
+    },
+    async (tx) => {
+      await recordEmailCandidateObservation(tx, { emailId: email.id, preview });
+      return { emailId: email.id, preview };
+    },
+  );
+  if (result) await input.onCandidatePreview?.(result);
+  return result;
 }
 
 /** Sequential transient routing precedes all original-content and attachment writes. */
+async function reportAcquisitionProgress(input: IngestInput, handled: number) {
+  await input.onMessage?.(handled);
+}
+
 export async function ingestGmailMessages(
   db: Database,
   provider: GmailProvider,
@@ -324,6 +626,10 @@ export async function ingestGmailMessages(
     messageIds: readonly string[];
     triage?: MailTriage;
     relevance?: MailRelevance;
+    candidateChoice?: EmailCandidateChoice;
+    onCandidatePreview?: (
+      value: NonNullable<Awaited<ReturnType<typeof relatedEmailPreview>>>,
+    ) => Promise<void>;
     runId?: string;
     /** Rules only, no paid classification: the caller judges each message. */
     callerJudges?: boolean;
@@ -334,6 +640,9 @@ export async function ingestGmailMessages(
   if (!input.mailboxId.trim() || input.mailboxId === "me")
     throw new Error("A stable Google account id is required");
   const storage = input.storage ?? productionOrderMailAttachmentStorage;
+  const executionPolicy = input.callerJudges
+    ? "classification_only"
+    : await gmailExecutionPolicy(db, input.runId, input);
   const outcome: GmailIngestOutcome = {
     saved: [],
     orderMailIds: [],
@@ -341,6 +650,7 @@ export async function ingestGmailMessages(
     excluded: [],
     unrelated: [],
     blocked: [],
+    candidatePreviews: [],
   };
   let handled = 0;
   for (const messageId of new Set(input.messageIds)) {
@@ -349,7 +659,19 @@ export async function ingestGmailMessages(
       mailboxId: input.mailboxId,
       messageId,
     };
-    const message = await fetchMessage(provider, messageId);
+    const beforeFetch = await readEmail(db, identity);
+    if (await deferClassificationRefresh(db, executionPolicy, beforeFetch)) {
+      handled += 1;
+      await reportAcquisitionProgress(input, handled);
+      continue;
+    }
+    const fetched = await fetchObservedMessage(
+      db,
+      provider,
+      identity,
+      input.runId,
+    );
+    const message = fetched.message;
     if (message && message.id !== messageId)
       throw new Error("Gmail fetched a different message identity");
     const removed = !message
@@ -358,13 +680,37 @@ export async function ingestGmailMessages(
         ? "excluded"
         : null;
     if (removed) {
-      await saveMailboxMessage(db, {
-        ...identity,
-        checksum: removed,
-        classification: "uncertain",
-        status: removed,
-      });
-      outcome[removed].push(messageId);
+      const published = await publishGmailEvidence(
+        db,
+        {
+          ...identity,
+          runId: input.runId,
+          executionPolicy,
+          expected: beforeFetch,
+        },
+        async (tx) => {
+          if (fetched.missing)
+            await recordEmailRetrievalFailure(tx, {
+              ...identity,
+              runId: input.runId,
+              httpStatus: fetched.missing.status,
+              error: fetched.missing.message,
+            });
+          if (message) {
+            const normalized = normalizeMessage(input.mailboxId, message);
+            await saveMailboxMetadata(tx, {
+              ledgerPartyId: input.ledgerPartyId,
+              mail: normalized.mail,
+              checksum: await originalChecksum(normalized),
+              executionPolicy,
+              memberSearch: input.callerJudges,
+            });
+          }
+          await markEmailRemoved(tx, { ...identity, status: removed });
+          return true;
+        },
+      );
+      if (published) outcome[removed].push(messageId);
     } else if (message) {
       if (input.runId)
         await claimRunExecution(db, runEntityId.parse(input.runId), {
@@ -379,15 +725,32 @@ export async function ingestGmailMessages(
         message,
         identity,
         storage,
+        executionPolicy,
+        beforeFetch,
       );
       if (result.kind === "saved") {
-        outcome.saved.push(messageId);
-        outcome.orderMailIds.push(result.orderMailId);
+        const preview = await relatedEmailPreview(
+          db,
+          input,
+          messageId,
+          executionPolicy,
+        );
+        if (
+          !(await deferClassificationRefresh(
+            db,
+            executionPolicy,
+            await readEmail(db, identity),
+          ))
+        ) {
+          outcome.saved.push(messageId);
+          outcome.orderMailIds.push(result.orderMailId);
+          if (preview) outcome.candidatePreviews.push(preview);
+        }
       } else if (result.kind !== "skipped")
         outcome[result.kind].push(messageId);
     }
     handled += 1;
-    await input.onMessage?.(handled);
+    await reportAcquisitionProgress(input, handled);
   }
   return outcome;
 }

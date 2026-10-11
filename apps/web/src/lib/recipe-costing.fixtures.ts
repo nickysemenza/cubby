@@ -63,6 +63,8 @@ export const makeProduct = (
   classificationEvidence: "",
   itemImageCount: 0,
   labelImageCount: 0,
+  labelReviewedRevision: null,
+  labelEvidenceRevision: null,
   labelImages: [],
   model: null,
   notes: null,

@@ -1,15 +1,18 @@
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
   importPreparedLine,
   importPreparedOrder,
-  runTarget,
+  runOperation,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { deleteProducts } from "~/server/repo/product/crud";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { startImportRunFixture } from "./import-run.fixtures";
+import { writeOutcomeReceipts } from "./run-outcome.fixtures";
 import { loadRunDetail } from "./run-service";
 
 describe("immutable prepared purchase review", () => {
@@ -138,15 +141,18 @@ describe("immutable prepared purchase review", () => {
       name: "Fixture Nasturtium",
       manufacturer: "Fixture Seeds",
     });
-    await getDb(ctx.db)
-      .insert(runTarget)
-      .values({
+    await writeOutcomeReceipts(ctx.db, [
+      {
         runId: run.id,
         entityKind: "product",
         entityId: product.id,
         position: 0,
         targetFingerprint: "e".repeat(64),
-      });
+        state: "completed",
+        outcome: "verified",
+        completedAt: new Date("2026-09-01T18:00:00Z"),
+      },
+    ]);
 
     const detail = await loadRunDetail(ctx.db, run.publicId);
     expect(detail.targets).toEqual([
@@ -156,5 +162,20 @@ describe("immutable prepared purchase review", () => {
         targetName: "Fixture Nasturtium",
       }),
     ]);
+    const before = await getDb(ctx.db).query.runOperation.findFirst({
+      where: eq(runOperation.runId, run.id),
+    });
+    await deleteProducts(ctx.db, [product.id], ctx.actor);
+    const archived = await loadRunDetail(ctx.db, run.publicId);
+    expect(archived.targets[0]).toMatchObject({
+      targetShortcode: product.shortcode,
+      outcome: "verified",
+    });
+    expect(archived.targets[0]?.targetName).toContain("Fixture Nasturtium");
+    expect(
+      await getDb(ctx.db).query.runOperation.findFirst({
+        where: eq(runOperation.runId, run.id),
+      }),
+    ).toEqual(before);
   });
 });

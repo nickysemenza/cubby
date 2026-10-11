@@ -53,7 +53,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { attachableImageEntityId } from "@cubby/schemas/image";
 import { generateShortcode } from "@cubby/shared";
-import { getTableColumns, type SQL, sql } from "drizzle-orm";
+import { eq, getTableColumns, type SQL, sql } from "drizzle-orm";
 import {
   getTableConfig,
   type PgColumn,
@@ -71,6 +71,7 @@ import {
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
 import {
+  purchase,
   entityExternalId,
   entityLink,
   run as runTable,
@@ -82,18 +83,16 @@ import {
   imageDerivative,
   imageProcessingJob,
   ledgerSourceClaim,
-  mailboxMessage,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
-  orderMail,
   orderMailAttachment,
   orderMailCandidateDecision,
   orderMailEvent,
   photoGroupProposal,
   productMatchCandidate,
   runFinding,
-  runTarget,
+  photoRunImage,
   statementImport,
   statementRow,
 } from "~/server/db/schema";
@@ -113,6 +112,11 @@ import {
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
+import {
+  retainedMailFixture,
+  sourceOrderObservationFixture,
+} from "~/server/purchase-import/order-import.fixtures";
+import { writeOutcomeReceipts } from "~/server/purchase-import/run-outcome.fixtures";
 import {
   databaseForTransaction,
   getDb,
@@ -740,6 +744,10 @@ async function seedImportSourceClaim(
       actorUserId: actorContext.userId,
       actorName: "Delete policy",
       actorEmail: "delete-policy@example.test",
+      ledgerPartyId: await resolveOrThrow(db, "ledgerParty", partyCode),
+      actorLedgerPartyShortcode: partyCode,
+      actorLedgerPartyName: "Delete policy member",
+      actorLedgerPartyKind: "member",
       purpose: "file_import",
       trigger: "manual",
       status: "completed",
@@ -972,7 +980,7 @@ async function seedCookbookExpenseAttributionInventory(
     }).catch(() => undefined);
 }
 
-/** RunTarget and RunFinding: owned by the seeded import run. */
+/** Immutable outcomes preserve generic identity; only photo images are live membership. */
 async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
   const {
     ledgerPartyId,
@@ -982,28 +990,55 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
     purchaseId,
     deviceId,
   } = ids;
-  // Each canonical subject has a task so the matrix checks task history and
-  // hard-delete dependency order.
   for (const [entityKind, entityId] of [
     ["purchase", purchaseId],
     ["product", productId],
-    ["image", imageId],
   ] as const) {
     if (!entityId) continue;
-    await insertAndReturn(db, runTarget, {
-      runId,
-      entityKind,
-      entityId,
-      vendorAccountId:
-        entityKind === "purchase" ? (vendorAccountId ?? undefined) : undefined,
-      deviceWorkDeviceId:
-        entityKind === "purchase" ? (deviceId ?? undefined) : undefined,
-      targetFingerprint: `delete-policy-runtarget-${entityKind}`,
+    await writeOutcomeReceipts(db, [
+      {
+        runId,
+        entityKind,
+        entityId,
+        vendorAccountId: entityKind === "purchase" ? vendorAccountId : null,
+        targetFingerprint: `delete-policy-outcome-${entityKind}`,
+        state: "completed",
+        outcome: "verified",
+        completedAt: new Date("2026-09-01T18:00:00Z"),
+      },
+    ]);
+  }
+  if (imageId) {
+    const owner = await getDb(db).query.run.findFirst({
+      where: eq(runTable.id, runId),
+    });
+    if (!owner) throw new Error("Delete policy import Run missing");
+    const [photoRun] = await getDb(db)
+      .insert(runTable)
+      .values({
+        shortcode: generateShortcode("run"),
+        purpose: "photo_inventory",
+        trigger: "manual",
+        ledgerPartyId: owner.ledgerPartyId,
+        actorUserId: owner.actorUserId,
+        actorName: owner.actorName,
+        actorEmail: owner.actorEmail,
+        actorLedgerPartyShortcode: owner.actorLedgerPartyShortcode,
+        actorLedgerPartyName: owner.actorLedgerPartyName,
+        actorLedgerPartyKind: owner.actorLedgerPartyKind,
+      })
+      .returning();
+    if (!photoRun) throw new Error("Delete policy photo Run missing");
+    await insertAndReturn(db, photoRunImage, {
+      runId: photoRun.id,
+      imageId,
+      deviceWorkDeviceId: deviceId,
+      targetFingerprint: "delete-policy-photo-image",
     });
   }
 
   if (ledgerPartyId) {
-    await insertAndReturn(db, mailboxMessage, {
+    await insertWithShortcode(db, "email", {
       ledgerPartyId,
       mailboxId: "synthetic-delete-policy-mailbox",
       messageId: "synthetic-delete-policy-message",
@@ -1032,8 +1067,33 @@ async function seedRunEvidenceRows(
   ids: StagingIds,
   runId: RunId,
 ) {
-  const { imageId, productId, productCategoryId, locationId, ledgerPartyId } =
-    ids;
+  const {
+    imageId,
+    productId,
+    productCategoryId,
+    locationId,
+    ledgerPartyId,
+    purchaseId,
+  } = ids;
+  if (purchaseId) {
+    const imported = await getDb(db).query.purchase.findFirst({
+      where: eq(purchase.id, purchaseId),
+    });
+    const accepted = await getDb(db).query.importSourceOrder.findFirst({
+      where: eq(importSourceOrder.purchaseId, purchaseId),
+    });
+    if (!imported || !accepted)
+      throw new Error("Delete policy imported Purchase missing");
+    await sourceOrderObservationFixture(db, {
+      sourceClaimId: accepted.sourceClaimId,
+      orderKey: accepted.orderKey,
+      purchaseId,
+      vendorId: imported.vendorId,
+      runId,
+      primaryDocumentImageId: imageId,
+      screenshotImageId: imageId,
+    });
+  }
   if (imageId)
     await insertAndReturn(db, importPreparedOrder, {
       runId,
@@ -1082,14 +1142,14 @@ async function seedOrderMailAttachment(db: Database, ids: StagingIds) {
     kind: "guest",
   }).catch(() => undefined);
   if (!orderMailParty) return;
-  const mail = await insertAndReturn(db, orderMail, {
+  const mail = await retainedMailFixture(db, {
     ledgerPartyId: orderMailParty.id,
     mailboxId: "delete-policy-mailbox",
     messageId: "delete-policy-msg-1",
     sender: "vendor@example.test",
     subject: "Delete policy fixture",
     receivedAt: new Date(),
-    rawChecksum: "delete-policy-checksum",
+    checksum: "delete-policy-checksum",
   }).catch(() => undefined);
   if (!mail) return;
   if (ids.purchaseId) {
@@ -1141,7 +1201,7 @@ async function seedImageProcessingRows(db: Database, ids: StagingIds) {
  * (import/photo/statement/ledger-evidence rows), covering the remaining
  * incoming edges `UNCOVERED_EDGES` used to list: meal food entries and recipe
  * portions, the import-run staging tables (`ImportPreparedOrder`,
- * `RunTarget`, `RunFinding`, `PhotoGroupProposal`, `OrderMailAttachment`),
+ * `RunOperation`, `PhotoRunImage`, `RunFinding`, `PhotoGroupProposal`, `OrderMailAttachment`),
  * review/settlement metadata (`ProductMatchCandidate`, `LedgerSourceClaim`,
  * `StatementRow`), `Cookbook`, `ExpenseAttribution`, a second `InventoryEntry`,
  * and image processing rows (`ImageProcessingJob`, `ImageDerivative`). Each

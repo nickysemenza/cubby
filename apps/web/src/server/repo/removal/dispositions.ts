@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * The generic delete: an entity's declared `lifecycle.delete` policy, applied
  * to the database edge by edge from `INCOMING_EDGES`.
@@ -14,8 +15,6 @@
  * `beforeDelete`/`afterDelete` (effects that read or write outside the edge
  * set, such as re-deriving an image's capture after its sightings go).
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
 import {
   type OperationDisposition,
   type PublicImpactItem,
@@ -25,6 +24,7 @@ import {
   type AuditableEntity,
   auditableEntities,
 } from "@cubby/schemas/entity-manifest";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
@@ -32,7 +32,6 @@ import {
   type ImageShortcode,
   parseEntityRef,
 } from "@cubby/schemas/identifiers";
-import { runTargetEntityKind } from "@cubby/schemas/run-fields";
 import {
   and,
   getTableColumns,
@@ -50,7 +49,7 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
-import { entityAttachment, runTarget } from "~/server/db/schema";
+import { entityAttachment, photoRunImage } from "~/server/db/schema";
 import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted, withTransactionOn } from "~/server/repo/database-helpers";
@@ -58,7 +57,7 @@ import { parseLinkEdgeKey, repointLinkEnd } from "~/server/repo/entity-links";
 import { countByTarget, impact } from "~/server/repo/impact";
 import type { RemovableEntity } from "~/server/repo/removal/core";
 import { type ChildCascade, removeEntity } from "~/server/repo/removal/entity";
-import { mergeRunTargets } from "~/server/repo/run-target-merge";
+import { mergePhotoRunImages } from "~/server/repo/run-target-merge";
 import {
   lookupShortcodes,
   resolveAllOrThrow,
@@ -496,12 +495,11 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
         `${edge.key}: a ${edge.disposition.effect} merge edge needs an override`,
       );
     // Fold exact task slots before repointing their subject.
-    if (edge.table === runTarget) {
-      await mergeRunTargets(
+    if (edge.table === photoRunImage) {
+      await mergePhotoRunImages(
         tx,
-        runTargetEntityKind.parse(args.entity),
-        args.keepId,
-        args.loserIds,
+        parseEntityId("image", args.keepId),
+        args.loserIds.map((id) => parseEntityId("image", id)),
       );
       continue;
     }

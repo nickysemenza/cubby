@@ -13,7 +13,10 @@ import type {
   EntityTableIndex,
   EntityTableRelation,
 } from "../declarations.ts";
-import { TABLE_SQL_PLACEHOLDER } from "../table-storage.ts";
+import {
+  TABLE_SQL_PLACEHOLDER,
+  validateEntityTables,
+} from "../table-storage.ts";
 import {
   identifierTypeNames,
   renderStorageColumn,
@@ -109,7 +112,7 @@ const renderTable = (
         `check(${JSON.stringify(check.name)}, ${check.bare ? `sql.raw(${JSON.stringify(check.sql)})` : sqlTemplate(check.sql)})`,
     ),
   ];
-  return `export const ${table.exportName} = pgTable(${JSON.stringify(table.name)}, {${columns.join(",")}}, (table) => [${constraints.join(",")}]);`;
+  return `export const ${table.exportName} = pgTable(${JSON.stringify(table.name)}, {${columns.join(",")}}, (${constraints.some((constraint) => /\btable\b/.test(constraint)) ? "table" : "_table"}) => [${constraints.join(",")}]);`;
 };
 
 const renderRelations = (
@@ -149,6 +152,7 @@ export const renderEntityTablesArtifact = (
   entities: readonly CompiledEntity[],
   moduleChildren: readonly ChildTableDeclaration[] = [],
 ): string => {
+  validateEntityTables(entities, moduleChildren);
   const tabled = entities.filter(
     (entity): entity is TabledEntity => entity.table !== null,
   );
@@ -173,6 +177,8 @@ export const renderEntityTablesArtifact = (
       "entityIdentity",
     ]),
   );
+  for (const child of declaredChildren)
+    exports.set(child.exportName, child.exportName);
   const tableNames = new Set(tabled.map(({ table }) => table.name));
   for (const child of declaredChildren)
     if (tableNames.has(child.name))

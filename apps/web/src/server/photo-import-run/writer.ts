@@ -3,7 +3,7 @@
  *
  * Turns one caller-defined group of images into one Product (new or
  * existing), attaches the images with a `purpose`, optionally records one
- * inventory entry, and marks the run's `RunTarget` rows. See
+ * inventory entry, and marks the run's `PhotoRunImage` rows. See
  * `packages/schemas/src/photo-import-run.ts` for the wire contract and
  * `.claude/skills/photo-inventory-import/SKILL.md` for the workflow this serves.
  */
@@ -16,9 +16,9 @@ import {
   type LedgerPartyId,
   type ProductId,
 } from "@cubby/schemas/identifiers";
-import { productImagePurpose } from "@cubby/schemas/image";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import {
+  photoRunImageCommitReceipt,
   commitPhotoGroupInput,
   commitPhotoGroupOutput,
   type CommitPhotoGroupInput,
@@ -32,7 +32,7 @@ import type { Database } from "~/server/db";
 import {
   auditLog,
   run as runTable,
-  runTarget,
+  photoRunImage,
   inventoryEntry,
   product,
 } from "~/server/db/schema";
@@ -56,30 +56,18 @@ import { createProductWithSideEffects } from "~/server/services/product-orchestr
 import { createProductWriteActions } from "~/server/services/product.service";
 
 /**
- * Bookkeeping recorded on `RunTarget.diff` for an attached (or skipped)
+ * Bookkeeping recorded on `PhotoRunImage.commitReceipt` for an attached (or skipped)
  * target. `groupKey` is the replay key: a target is only a legitimate replay
- * of THIS call when its diff was written by the same group, not merely
+ * of THIS call when its commitReceipt was written by the same group, not merely
  * "already completed" (which could be a different, unrelated commit against
  * the same run).
  */
-const attachedTargetDiff = z
-  .object({
-    groupKey: z.string(),
-    productId: z.string(),
-    purpose: productImagePurpose,
-    inventoryId: z.string(),
-  })
-  .partial();
-
 type RunScope = Awaited<ReturnType<typeof loadRunScopeByShortcode>>;
 
-type LockedTarget = {
-  id: string;
-  imageId: string;
-  state: string;
-  outcome: string | null;
-  diff: unknown;
-};
+type LockedTarget = Pick<
+  typeof photoRunImage.$inferSelect,
+  "id" | "imageId" | "state" | "outcome" | "commitReceipt"
+>;
 
 type ResolvedAttach = {
   code: ImageShortcode;
@@ -90,14 +78,6 @@ type ResolvedSkip = {
   code: ImageShortcode;
   imageId: ImageId;
   reason: string;
-};
-
-/** The `diff` recorded on an attached target row — the write-side counterpart of `attachedTargetDiff`. */
-type AttachedDiff = {
-  groupKey: string;
-  productId: string;
-  purpose: "item" | "label";
-  inventoryId?: string;
 };
 
 /**
@@ -156,8 +136,11 @@ function isReplayMatch(
   groupKey: string,
 ): boolean {
   if (!target) return false;
-  const diff = attachedTargetDiff.safeParse(target.diff ?? {});
-  if (!diff.success || diff.data.groupKey !== groupKey) return false;
+  const commitReceipt = photoRunImageCommitReceipt.safeParse(
+    target.commitReceipt ?? {},
+  );
+  if (!commitReceipt.success || commitReceipt.data.groupKey !== groupKey)
+    return false;
   return isSkip
     ? target.state === "skipped"
     : target.state === "completed" && target.outcome === "attached";
@@ -196,7 +179,7 @@ type LockedTargets = {
 };
 
 /**
- * Lock this group's `RunTarget` rows and classify the group as either a
+ * Lock this group's `PhotoRunImage` rows and classify the group as either a
  * full replay of a prior commit under the same `groupKey`, or fresh review work
  * (targets `pending`, or `unresolved` on a run stopped for review). Any other
  * mix — partial completion, or a target already completed under a DIFFERENT
@@ -214,17 +197,17 @@ async function lockTargets(
   const imageIds = [...attaches, ...skips].map((entry) => entry.imageId);
   const lockedTargets: LockedTarget[] = await getDb(txDb)
     .select({
-      id: runTarget.id,
-      imageId: runTarget.entityId,
-      state: runTarget.state,
-      outcome: runTarget.outcome,
-      diff: runTarget.diff,
+      id: photoRunImage.id,
+      imageId: photoRunImage.imageId,
+      state: photoRunImage.state,
+      outcome: photoRunImage.outcome,
+      commitReceipt: photoRunImage.commitReceipt,
     })
-    .from(runTarget)
+    .from(photoRunImage)
     .where(
       and(
-        eq(runTarget.runId, scope.public.runId),
-        inArray(runTarget.entityId, imageIds),
+        eq(photoRunImage.runId, scope.public.runId),
+        inArray(photoRunImage.imageId, imageIds),
       ),
     )
     .for("update");
@@ -270,12 +253,12 @@ function buildReplayOutput(
   let productShortcodeStr: string | undefined;
   let inventoryShortcodeStr: string | undefined;
   for (const entry of [...attaches, ...skips]) {
-    const diff = attachedTargetDiff.safeParse(
-      targetByImageId.get(entry.imageId)?.diff ?? {},
+    const commitReceipt = photoRunImageCommitReceipt.safeParse(
+      targetByImageId.get(entry.imageId)?.commitReceipt ?? {},
     );
-    if (diff.success) {
-      productShortcodeStr ??= diff.data.productId;
-      inventoryShortcodeStr ??= diff.data.inventoryId;
+    if (commitReceipt.success) {
+      productShortcodeStr ??= commitReceipt.data.productId;
+      inventoryShortcodeStr ??= commitReceipt.data.inventoryId;
     }
   }
   return commitPhotoGroupOutput.parse({
@@ -452,7 +435,7 @@ async function attachImages(
   }
 }
 
-/** Mark each target row completed (attach) or skipped; the RunTarget row is the record. */
+/** Mark each target row completed (attach) or skipped; the PhotoRunImage row is the record. */
 async function markTargets(
   txDb: Database,
   groupKey: string,
@@ -471,40 +454,38 @@ async function markTargets(
     if (!productShortcodeStr) {
       throw new Error("An attached image needs a resolved Product");
     }
-    const diff: AttachedDiff = {
+    const commitReceipt = photoRunImageCommitReceipt.parse({
       groupKey,
       productId: productShortcodeStr,
       purpose: entry.purpose,
-    };
-    if (inventoryShortcodeStr) {
-      diff.inventoryId = inventoryShortcodeStr;
-    }
+      inventoryId: inventoryShortcodeStr,
+    });
     await getDb(txDb)
-      .update(runTarget)
+      .update(photoRunImage)
       .set({
         state: "completed",
         outcome: "attached",
-        diff,
-        warning: null,
+        commitReceipt,
+        skipReason: null,
         completedAt: now,
         updatedAt: now,
       })
-      .where(eq(runTarget.id, target.id));
+      .where(eq(photoRunImage.id, target.id));
     images.push({ id: entry.code, state: "completed" });
   }
   for (const entry of skips) {
     const target = targetByImageId.get(entry.imageId)!;
     await getDb(txDb)
-      .update(runTarget)
+      .update(photoRunImage)
       .set({
         state: "skipped",
         outcome: "skipped",
-        warning: entry.reason,
-        diff: { groupKey },
+        skipReason: entry.reason,
+        commitReceipt: { groupKey },
         completedAt: now,
         updatedAt: now,
       })
-      .where(eq(runTarget.id, target.id));
+      .where(eq(photoRunImage.id, target.id));
     images.push({ id: entry.code, state: "skipped" });
   }
   return images;
@@ -520,11 +501,11 @@ async function completeRunIfDone(
 ): Promise<boolean> {
   const [pendingRow] = await getDb(txDb)
     .select({ pending: count() })
-    .from(runTarget)
+    .from(photoRunImage)
     .where(
       and(
-        eq(runTarget.runId, scope.public.runId),
-        inArray(runTarget.state, ["pending", "unresolved"]),
+        eq(photoRunImage.runId, scope.public.runId),
+        inArray(photoRunImage.state, ["pending", "unresolved"]),
       ),
     );
   const runCompletes = (pendingRow?.pending ?? 0) === 0;
@@ -603,12 +584,12 @@ async function doCommit(
   // write failed. Targets carrying this groupKey prove the earlier commit
   // landed; running fresh work under the same key would duplicate it.
   const [alreadyCommitted] = await getDb(txDb)
-    .select({ id: runTarget.id })
-    .from(runTarget)
+    .select({ id: photoRunImage.id })
+    .from(photoRunImage)
     .where(
       and(
-        eq(runTarget.runId, scope.public.runId),
-        sql`${runTarget.diff}->>'groupKey' = ${input.groupKey}`,
+        eq(photoRunImage.runId, scope.public.runId),
+        sql`${photoRunImage.commitReceipt}->>'groupKey' = ${input.groupKey}`,
       ),
     )
     .limit(1);

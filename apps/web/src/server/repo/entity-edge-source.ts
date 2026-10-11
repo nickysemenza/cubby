@@ -257,7 +257,7 @@ const branchSql = (spec: EntityEdgeSpec, filter: EdgeFilter): SQL => {
 /**
  * The live edge source: both endpoints must be live identities. The target's
  * kind must match the arm's, because a polymorphic column such as
- * `RunTarget.entityId` feeds one arm per target kind from the same rows. `specs` and
+ * `RunFinding.entityId` feeds one arm per target kind from the same rows. `specs` and
  * `filter` narrow the arms; with neither, this is the whole graph.
  */
 const entityEdgeSourceSql = (

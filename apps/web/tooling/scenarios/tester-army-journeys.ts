@@ -1,8 +1,11 @@
 import { testUserId } from "@cubby/schemas/testing";
 import type { Pool } from "pg";
+import { eq } from "drizzle-orm";
 
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
+import { ledgerParty } from "~/server/db/schema";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { seedBaseWorld } from "../factories/base-world";
 import { createEntity } from "../factories/create";
@@ -38,6 +41,30 @@ export async function seedJourneyWorld(
     });
 
   const seed: JourneySeed = {};
+
+  const [emailOwner] = await db
+    .clientForRepository()
+    .select({ id: ledgerParty.id })
+    .from(ledgerParty)
+    .where(eq(ledgerParty.userId, testUserId(userId)))
+    .limit(1);
+  if (!emailOwner) throw new Error("Synthetic Email member is missing");
+  const reviewEmail = await insertWithShortcode(db, "email", {
+    ledgerPartyId: emailOwner.id,
+    mailboxId: "synthetic-review-mailbox",
+    messageId: "synthetic-navigation-receipt",
+    sender: "receipts@example.test",
+    subject: "Synthetic Email navigation receipt",
+    receivedAt: new Date("2026-05-15T12:00:00Z"),
+    checksum: "a".repeat(64),
+    classification: "related",
+    classificationStage: "rule",
+    classificationReason: "Synthetic purchase confirmation",
+    classificationVersion: "synthetic-navigation-v1",
+    executionPolicy: "classification_only",
+    status: "completed",
+  });
+  seed["email-navigation"] = { email: reviewEmail.shortcode };
 
   const rename = await product(JOURNEY_NAMES.productName);
   seed["product-rename"] = { product: rename.id };
@@ -309,8 +336,13 @@ export async function seedJourneyWorld(
     [consolePurchase.id],
   );
   await pool.query(
-    `INSERT INTO "RunProgress" ("runId", "eventId", phase, "currentItem", detail)
-     VALUES ($1, 'synthetic-progress-1', 'Reading synthetic orders', 'Synthetic order 7', 'Synthetic progress detail')`,
+    `UPDATE "Run" SET "liveProgress" = jsonb_build_object(
+       'eventId', 'synthetic-progress-1', 'generation', 'legacy', 'sequence', 1,
+       'phase', 'Reading synthetic orders', 'currentItem', 'Synthetic order 7',
+       'detail', 'Synthetic progress detail', 'awaitingApproval', false,
+       'createdAt', '2026-06-06T12:00:00.000Z'),
+       "progressEventIds" = '["synthetic-progress-1"]'::jsonb,
+       "heartbeatAt" = '2026-06-06T12:00:00Z' WHERE id = $1`,
     [runUuid],
   );
   await pool.query(
@@ -322,6 +354,10 @@ export async function seedJourneyWorld(
     runUuid,
     "running",
   ]);
+  await pool.query(
+    'UPDATE "Run" SET "progressHistory" = jsonb_build_array("liveProgress") WHERE id = $1',
+    [runUuid],
+  );
   seed["run-console"] = { run: consoleRun.publicId };
 
   return seed;

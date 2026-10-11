@@ -15,6 +15,7 @@ import {
   cookbookExtractionReport,
   cookbookImportProgressReport,
 } from "./cookbook";
+import { emailReviewReport } from "./email";
 import { expenseSettlementReport } from "./expense-settlement";
 import { locationContentsValuationReport } from "./location";
 import {
@@ -81,6 +82,7 @@ const recipeBuilder =
   };
 
 const BUILDERS = {
+  "email.review": emailReviewReport,
   "project.budget": projectBudgetReport,
   "project.contribution": projectContributionReport,
   "project.analytics": projectAnalyticsReport,

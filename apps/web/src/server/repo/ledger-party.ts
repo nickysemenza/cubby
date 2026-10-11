@@ -91,7 +91,7 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Mailbox cursors retain their member scope.",
   },
-  "MailboxMessage.ledgerPartyId": {
+  "Email.ledgerPartyId": {
     code: "block-mailbox-messages",
     effect: "block",
     description:
@@ -195,7 +195,7 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     effect: "block",
     description: "Mailbox identity prevents member merges.",
   },
-  "MailboxMessage.ledgerPartyId": {
+  "Email.ledgerPartyId": {
     code: "block-mailbox-messages",
     effect: "block",
     description:

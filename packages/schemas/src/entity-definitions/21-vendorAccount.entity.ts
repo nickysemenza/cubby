@@ -6,7 +6,6 @@ import {
   vendorShortcode,
 } from "../identifier-fields.js";
 import {
-  vendorAccountBrowser,
   vendorAccountCursor,
   vendorAccountStatus,
 } from "../vendor-account-fields.js";
@@ -35,7 +34,7 @@ export default defineEntity({
     },
     titleField: "label",
     domain: "finance",
-    description: "A member's vendor orders and optional browser connection.",
+    description: "A member's vendor orders and email evidence.",
     emptyState: {
       title: "No vendor accounts yet",
       description: "Connect a member to a vendor's orders and mail.",
@@ -100,25 +99,12 @@ export default defineEntity({
         },
       },
       {
-        key: "browserSyncEnabled",
-        kind: "boolean",
-        control: { kind: "checkbox" },
-        display: { list: true, detail: true },
-        validation: {
-          read: z.boolean(),
-          create: z.boolean().default(true),
-          update: z.boolean().optional(),
-        },
-      },
-      {
         key: "status",
         kind: "enum",
         control: {
           kind: "select",
           options: [
             { value: "active", label: "Active" },
-            { value: "paused_auth", label: "Sign-in needed" },
-            { value: "paused_offline", label: "Mac offline" },
             { value: "disabled", label: "Disabled" },
           ],
         },
@@ -127,23 +113,6 @@ export default defineEntity({
           read: vendorAccountStatus,
           create: vendorAccountStatus.default("active"),
           update: vendorAccountStatus.optional(),
-        },
-      },
-      {
-        key: "browser",
-        kind: "enum",
-        control: {
-          kind: "select",
-          options: [
-            { value: "chrome", label: "Chrome" },
-            { value: "safari", label: "Safari" },
-          ],
-        },
-        display: { list: true, detail: true },
-        validation: {
-          read: vendorAccountBrowser,
-          create: vendorAccountBrowser.default("chrome"),
-          update: vendorAccountBrowser.optional(),
         },
       },
       {
@@ -236,16 +205,10 @@ export default defineEntity({
         key: "inventoryOwnerDefaultEnabled",
         defaultValue: false,
       },
-      { key: "browserSyncEnabled", defaultValue: true },
       {
         key: "status",
         defaultValue: "active",
         specialized: "enum:status",
-      },
-      {
-        key: "browser",
-        defaultValue: "chrome",
-        specialized: "enum:browser",
       },
       {
         key: "cursor",
@@ -262,18 +225,14 @@ export default defineEntity({
       "vendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
-      "browserSyncEnabled",
       "status",
-      "browser",
     ],
     update: [
       "label",
       "vendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
-      "browserSyncEnabled",
       "status",
-      "browser",
     ],
     bulk: [],
     audit: [
@@ -281,24 +240,20 @@ export default defineEntity({
       "vendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
-      "browserSyncEnabled",
       "status",
-      "browser",
     ],
     sort: {
       fields: ["label", "status", "lastRunAt", "updatedAt"],
     },
     intents: {
       fields: {
-        capture: ["label", "vendorId", "ledgerPartyId", "browser"],
+        capture: ["label", "vendorId", "ledgerPartyId"],
         full: [
           "label",
           "vendorId",
           "ledgerPartyId",
           "inventoryOwnerDefaultEnabled",
-          "browserSyncEnabled",
           "status",
-          "browser",
         ],
         identity: ["label", "vendorId", "ledgerPartyId"],
       },
@@ -311,9 +266,7 @@ export default defineEntity({
       "vendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
-      "browserSyncEnabled",
       "status",
-      "browser",
       "cursor",
       "lastRunAt",
       "lastSuccessAt",
@@ -346,7 +299,7 @@ export default defineEntity({
         where: "{deletedAt} IS NULL",
       },
     ],
-    checks: [{ column: "status" }, { column: "browser" }],
+    checks: [{ column: "status" }],
   },
   filters: {
     audit: true,
@@ -390,8 +343,6 @@ export default defineEntity({
         stored: true,
         options: [
           { value: "active", label: "Active" },
-          { value: "paused_auth", label: "Sign-in needed" },
-          { value: "paused_offline", label: "Mac offline" },
           { value: "disabled", label: "Disabled" },
         ],
       },

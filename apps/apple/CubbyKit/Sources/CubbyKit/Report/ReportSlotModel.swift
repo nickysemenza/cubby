@@ -28,12 +28,23 @@ public protocol ReportServing: Sendable {
     /// `run.commitPrepared`: approve and import one prepared batch.
     func commitPrepared(_ input: RunCommitPreparedInput) async throws
     func decideMail(_ input: OrderMailDecisionInput) async throws
+    func createEmailAccuracy(_ input: CreateEmailAccuracyEvaluationInput) async throws
+        -> CreateEmailAccuracyEvaluationOut
+    func importEmail(_ input: EmailImportInput) async throws -> EmailImportOut
     func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut
 }
 
 /// Commands a read-only fake need not implement; `CubbyClient` always does.
 extension ReportServing {
     public func decideMail(_ input: OrderMailDecisionInput) async throws {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func createEmailAccuracy(_ input: CreateEmailAccuracyEvaluationInput) async throws
+        -> CreateEmailAccuracyEvaluationOut
+    {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func importEmail(_ input: EmailImportInput) async throws -> EmailImportOut {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
     public func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut {
@@ -74,6 +85,16 @@ extension CubbyClient: ReportServing {
         try await decideOrderMail(
             eventID: input.eventId, purchaseID: input.purchaseId,
             link: input.decision == .linked, evidenceChecksum: input.evidenceChecksum)
+    }
+    public func createEmailAccuracy(_ input: CreateEmailAccuracyEvaluationInput) async throws
+        -> CreateEmailAccuracyEvaluationOut
+    {
+        try await perform {
+            try await api.purchaseImport_emailAccuracyCreate(body: .json(input)).ok.body.json
+        }
+    }
+    public func importEmail(_ input: EmailImportInput) async throws -> EmailImportOut {
+        try await perform { try await api.purchaseImport_emailImport(body: .json(input)).ok.body.json }
     }
     public func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut {
         try await perform { try await api.vendor_importOrderMail(body: .json(input)).ok.body.json }
@@ -426,6 +447,14 @@ public final class ReportSlotModel {
                     decision: decision.decision == .linked ? .linked : .dismissed,
                     evidenceChecksum: decision.evidenceChecksum))
             return .done("Updated the email relationship")
+        case .createEmailAccuracy(let review):
+            let result = try await service.createEmailAccuracy(.init(sampleSize: review.sampleSize))
+            return .done("Independent review sample: \(result.sampleSize) Emails")
+        case .importEmail(let original):
+            let result = try await service.importEmail(
+                .init(id: original.id, expectedChecksum: original.expectedChecksum))
+            if result.runIds.count == 1, let runID = result.runIds.first { return .openedRun(runID) }
+            return .done("Import Runs: " + result.runIds.joined(separator: ", "))
         case .researchOrderMail(let original):
             let result = try await service.researchMail(
                 .init(

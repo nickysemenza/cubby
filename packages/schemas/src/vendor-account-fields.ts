@@ -7,11 +7,4 @@ export const vendorAccountCursor = z.object({
   earliestAvailableOrderAt: z.iso.datetime().nullable(),
 });
 
-export const vendorAccountStatus = z.enum([
-  "active",
-  "paused_auth",
-  "paused_offline",
-  "disabled",
-]);
-
-export const vendorAccountBrowser = z.enum(["chrome", "safari"]);
+export const vendorAccountStatus = z.enum(["active", "disabled"]);

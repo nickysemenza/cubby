@@ -1,14 +1,20 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { LocalPhotoAnalysis } from "~/contracts/photo-import.contract";
+import { photoRunImage } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { AppError } from "~/server/errors/app-error";
 import {
   readImageAnalysis,
   recordImageAnalysis,
 } from "~/server/operations/image-analysis.server";
+import { getDb } from "~/server/repo/database-helpers";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { ensureRun } from "~/server/runs/ensure-run";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 const makeAnalysis = (sha256: string): LocalPhotoAnalysis => ({
@@ -115,5 +121,49 @@ describe("image photo-analysis backfill", () => {
     await expect(
       readImageAnalysis(context(), fixture.shortcode),
     ).resolves.toBeNull();
+  });
+
+  it("marks retained photo membership complete without a mutable RunTarget", async () => {
+    const sha256 = "f".repeat(64);
+    const fixture = await createImageFixture(
+      ctx.db,
+      "synthetic-photo-membership",
+      { status: "UPLOADED", sha256 },
+    );
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic photo member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "photo_inventory",
+      trigger: "manual",
+    });
+    await getDb(ctx.db)
+      .insert(photoRunImage)
+      .values({
+        runId,
+        imageId: parseEntityId("image", fixture.id),
+        workKey: fixture.id,
+        targetFingerprint: sha256,
+        deviceWorkState: "running",
+      });
+    await recordImageAnalysis(
+      context(),
+      fixture.shortcode,
+      makeAnalysis(sha256),
+    );
+    const read = () =>
+      getDb(ctx.db).query.photoRunImage.findFirst({
+        where: eq(photoRunImage.imageId, parseEntityId("image", fixture.id)),
+      });
+    expect(await read()).toMatchObject({ deviceWorkState: "completed" });
+    const completed = await read();
+    await recordImageAnalysis(
+      context(),
+      fixture.shortcode,
+      makeAnalysis(sha256),
+    );
+    expect(await read()).toEqual(completed);
   });
 });

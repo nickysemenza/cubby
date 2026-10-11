@@ -456,6 +456,7 @@ describe("coordinator host retirement", () => {
         type: "start_or_resume",
         runId,
         eventId: "synthetic-retired-reconnect",
+        generation: "synthetic-retired-reconnect",
       },
     });
     const admission = z
