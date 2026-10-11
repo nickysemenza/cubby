@@ -105,16 +105,16 @@ describe("DetailSections ledger", () => {
     });
     expect(await screen.findByText("Story content")).toBeVisible();
     expect(screen.queryByText("Complete source history")).not.toBeVisible();
-    fireEvent.click(screen.getByRole("tab", { name: "Work", exact: true }));
+    fireEvent.click(screen.getByRole("tab", { name: "Work" }));
     fireEvent.change(
       await screen.findByRole("textbox", { name: "Review note" }),
       {
         target: { value: "Keep this draft" },
       },
     );
-    fireEvent.click(screen.getByRole("tab", { name: "Evidence", exact: true }));
+    fireEvent.click(screen.getByRole("tab", { name: "Evidence" }));
     expect(await screen.findByText("Complete source history")).toBeVisible();
-    fireEvent.click(screen.getByRole("tab", { name: "Work", exact: true }));
+    fireEvent.click(screen.getByRole("tab", { name: "Work" }));
     expect(
       await screen.findByRole("textbox", { name: "Review note" }),
     ).toHaveValue("Keep this draft");

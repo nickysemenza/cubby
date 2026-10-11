@@ -143,8 +143,7 @@ describe("GenericEntityDetail", () => {
   it.each(cases)(
     "$entity renders the declared $section.kind section $section.id",
     async ({ entity, section }) => {
-      if (!section.overview)
-        await harness.router.navigate({ to: "/", hash: section.id });
+      await harness.router.navigate({ to: "/", hash: section.id });
       const { container } = render(
         <GenericEntityDetail
           entity={entity}
@@ -165,7 +164,8 @@ describe("GenericEntityDetail", () => {
   // AI runs had no page before Run moved onto the generic detail: the
   // purchase-import page scoped to a member party. Their page must show what
   // they did (AI usage, changes) and none of the import workflow.
-  it("gives an AI run its usage and changes but no import workflow", () => {
+  it("gives an AI run its usage and changes but no import workflow", async () => {
+    await harness.router.navigate({ to: "/", hash: "evidence" });
     render(
       <GenericEntityDetail
         entity="run"
@@ -333,6 +333,7 @@ describe("GenericEntityDetail", () => {
   });
 
   it("relation section header carries the loaded count and actions", async () => {
+    await harness.router.navigate({ to: "/", hash: "work" });
     const rows = [
       mock(inventoryListItem, { seed: 1 }),
       mock(inventoryListItem, { seed: 2 }),
