@@ -182,6 +182,7 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
   );
   await page.getByRole("link", { name: `${name} mixed`, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/products/${mixed.id}`));
+  await page.getByRole("tab", { name: "Work", exact: true }).click();
   const purchases = page.locator("#purchases");
   await expect(purchases.getByRole("heading", { level: 2 })).toHaveText(
     /Purchases\s*1/,

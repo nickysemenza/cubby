@@ -629,9 +629,11 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
     .click();
   await expect(page.getByText(/OCR: SKU FW-7744/)).toBeVisible();
   const comparison = page.getByRole("region", { name: "Product comparison" });
-  await expect(
-    comparison.getByText("Exact label identifier: FW-7744"),
-  ).toBeVisible();
+  const exactIdentifier = comparison.getByText(
+    "Exact label identifier: FW-7744",
+  );
+  await exactIdentifier.scrollIntoViewIfNeeded();
+  await expect(exactIdentifier).toBeVisible();
   const wrongRow = comparison
     .getByRole("article")
     .filter({ hasText: "ForgeWear work boots tan size 9" });
