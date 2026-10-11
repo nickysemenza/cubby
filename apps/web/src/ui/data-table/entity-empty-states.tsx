@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import {
   type EntityPresentation,
@@ -7,7 +8,7 @@ import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 
 import { createActionFor } from "~/entity/actions/action-items";
-import { EntityIcon, entities } from "~/entity/entities";
+import { EntityIcon, entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { IconPattern } from "~/ui/common/icon-pattern";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -133,5 +134,39 @@ export function isNarrowed<TData extends RowData>(
   return (
     hasActiveFilters(table.state.columnFilters) ||
     (table.options.meta?.urlScopeCount ?? 0) > 0
+  );
+}
+
+/** One recovery contract for table, phone, and shelf presentations. */
+export function TableEmptyState<TData extends RowData>({
+  entity,
+  table,
+  additionalFilterActive = false,
+  onClearAdditionalFilters,
+}: {
+  entity?: Entity;
+  table: Table<TData>;
+  additionalFilterActive?: boolean;
+  onClearAdditionalFilters?: () => void;
+}) {
+  const isFiltered = isNarrowed(table) || additionalFilterActive;
+  const onClearFilters =
+    hasActiveFilters(table.state.columnFilters) || additionalFilterActive
+      ? () => {
+          table.resetColumnFilters();
+          onClearAdditionalFilters?.();
+        }
+      : undefined;
+  return entity && isBrowserRoutedEntity(entity) ? (
+    <EntityEmptyState
+      entity={entity}
+      isFiltered={isFiltered}
+      onClearFilters={onClearFilters}
+    />
+  ) : (
+    <FilteredEmptyState
+      isFiltered={isFiltered}
+      onClearFilters={onClearFilters}
+    />
   );
 }

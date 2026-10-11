@@ -164,3 +164,31 @@ test("complete-list cookbooks keep local search across card and list presentatio
     page.getByRole("link", { name: `${name} Roasting`, exact: true }),
   ).toBeVisible();
 });
+
+test("filtered empty lists recover in cards and phone rows", async ({
+  page,
+}) => {
+  const name = `Empty recovery ${Date.now()}`;
+  await seedProductPrerequisite(page, { name });
+  await gotoAuthenticatedPage(
+    page,
+    `/products?name=${encodeURIComponent(`${name} missing`)}&view=shelf`,
+  );
+  await page
+    .getByRole("button", { name: "Clear filters", exact: true })
+    .click();
+  await expect(
+    page.getByTestId("entity-card-grid").getByText(name, { exact: true }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 402, height: 874 });
+  await gotoAuthenticatedPage(
+    page,
+    `/products?name=${encodeURIComponent(`${name} missing`)}`,
+  );
+  await page
+    .getByRole("button", { name: "Clear filters", exact: true })
+    .click();
+  await expect(
+    page.getByRole("listitem").filter({ hasText: name }),
+  ).toBeVisible();
+});

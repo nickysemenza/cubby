@@ -296,7 +296,7 @@ function SectionCard({
       >
         {/* Phone header actions are 44px targets, so the row centres there;
             desktop's 28px ghosts sit flush with the title's first line. */}
-        <div className="flex items-start justify-between gap-3 max-md:items-center">
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 max-md:items-center">
           <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold tracking-tight">
             {section.collapsed ? (
               <button
@@ -318,7 +318,7 @@ function SectionCard({
             )}
           </h2>
           {section.headerAction && (!section.collapsed || open) ? (
-            <div className="shrink-0">{section.headerAction}</div>
+            <div className="max-w-full min-w-0">{section.headerAction}</div>
           ) : null}
         </div>
         {open ? (
@@ -339,7 +339,7 @@ function SectionCard({
 
 function SectionPlane({ children }: { children: ReactNode }) {
   return (
-    <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card max-md:rounded-none max-md:border-x-0">
+    <div className="divide-y divide-border rounded-md border border-border bg-card max-md:rounded-none max-md:border-x-0">
       {children}
     </div>
   );
@@ -633,7 +633,7 @@ function renderResponsiveLayout({
         className={cn(
           "grid items-start gap-4 md:gap-2",
           primary.length > 0 && hasSupportingRail
-            ? "md:grid-cols-[minmax(0,3fr)_minmax(17rem,2fr)] lg:grid-cols-[minmax(0,1fr)_20rem]"
+            ? "@min-[50rem]/detail-body:grid-cols-[minmax(0,1fr)_20rem]"
             : "grid-cols-1",
         )}
       >
@@ -651,7 +651,10 @@ function renderResponsiveLayout({
             className="min-w-0 space-y-4 md:space-y-2"
           >
             {pendingVisual ? (
-              <div data-testid="detail-rail-media" className="hidden md:block">
+              <div
+                data-testid="detail-rail-media"
+                className="hidden max-w-80 md:block"
+              >
                 {pendingVisual}
               </div>
             ) : null}
@@ -672,7 +675,11 @@ function renderResponsiveLayout({
     }
   }
   flushRun();
-  return <div className="space-y-4 md:space-y-2">{blocks}</div>;
+  return (
+    <div className="@container/detail-body space-y-4 md:space-y-2">
+      {blocks}
+    </div>
+  );
 }
 
 interface DetailSectionsProps {

@@ -53,6 +53,7 @@ import {
 } from "~/ui/data-table/columnHelpers";
 import { DataTablePagination } from "~/ui/data-table/data-table-pagination";
 import { DataTableToolbar } from "~/ui/data-table/data-table-toolbar";
+import { TableEmptyState } from "~/ui/data-table/entity-empty-states";
 import { ListWorkbench } from "~/ui/data-table/ListWorkbench";
 import {
   createCubbyColumnCollection,
@@ -517,6 +518,12 @@ function ServerListBody({
             >
               <div className="min-w-0">
                 <EntityShelf
+                  emptyState={
+                    <TableEmptyState
+                      entity={entity}
+                      table={list.workbench.table}
+                    />
+                  }
                   entity={entity}
                   // `data` is the canonical flat server projection before
                   // tree nesting and synthetic grouping rows reach the table.
@@ -675,19 +682,20 @@ function ClientListBody({
   const client = parts.client;
   if (!client)
     throw new Error(`${entity} list override declares no client rows`);
-  const { workbench, inspection } = useClientEntityList<BaseListRow>({
-    entity,
-    data: client.data,
-    isLoading: client.isLoading,
-    error: client.error,
-    refetch: client.refetch,
-    isRefreshing: client.isRefreshing,
-    matchesSearch: client.matchesSearch,
-    columns,
-    preview: DEFAULT_PREVIEW,
-    ...parts.list,
-    initialColumnVisibility,
-  });
+  const { workbench, inspection, emptyState } =
+    useClientEntityList<BaseListRow>({
+      entity,
+      data: client.data,
+      isLoading: client.isLoading,
+      error: client.error,
+      refetch: client.refetch,
+      isRefreshing: client.isRefreshing,
+      matchesSearch: client.matchesSearch,
+      columns,
+      preview: DEFAULT_PREVIEW,
+      ...parts.list,
+      initialColumnVisibility,
+    });
   usePageCount(
     client.isLoading
       ? undefined
@@ -715,6 +723,7 @@ function ClientListBody({
       {view === "table" ? (
         <ListWorkbench
           model={workbench}
+          emptyState={emptyState}
           ariaLabel={`${entities[entity].pluralLabel} table`}
           onRowClick={onRowClick}
           onRowHover={onRowHover}
@@ -740,6 +749,7 @@ function ClientListBody({
           >
             <div className="min-w-0">
               <EntityShelf
+                emptyState={emptyState}
                 entity={entity}
                 items={workbench.table
                   .getRowModel()

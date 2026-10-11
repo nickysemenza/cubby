@@ -457,21 +457,24 @@ function DetailPlate({
         )
       )}
 
-      <Card className="border-x-0 md:border-x" data-testid="detail-spec-plate">
-        <CardContent className="px-2 py-1 sm:px-4">
+      <Card
+        className="border-x-0 py-2 md:border-x"
+        data-testid="detail-spec-plate"
+      >
+        <CardContent className="px-2 py-0 sm:px-4">
           <div
-            className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-1" /* tight */
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1" /* tight */
           >
-            <div className="col-span-2 min-w-0 sm:col-span-1">
+            <div className="col-span-2 min-w-0">
               <DetailBreadcrumb
                 entity={entity}
                 heroNo={heroNo}
                 wayfinding={wayfinding}
               />
-              <h1 className="font-display text-xl leading-6 font-semibold tracking-tight break-words sm:text-3xl sm:leading-9">
-                {name}
-              </h1>
             </div>
+            <h1 className="col-span-2 min-w-0 font-display text-xl leading-6 font-semibold tracking-tight break-words sm:col-span-1 sm:text-2xl sm:leading-8">
+              {name}
+            </h1>
             <DetailPlateActions actions={heroActions} />
             <div className="col-span-2 flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground">
               {heroNo && (
@@ -490,17 +493,14 @@ function DetailPlate({
           {heroStats && heroStats.length > 0 && (
             // Compact record stats — hairline separators, plain-language
             // labels, and tabular numerals.
-            <div className="mt-4 flex border-t border-border pt-2">
-              {heroStats.map((stat, i) => (
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
+              {heroStats.map((stat) => (
                 <div
                   key={stat.label}
-                  className={cn(
-                    "min-w-0 flex-1",
-                    i > 0 && "border-l border-border pl-4",
-                  )}
+                  className="flex min-w-0 items-baseline gap-1.5"
                 >
-                  <Eyebrow as="div">{stat.label}</Eyebrow>
-                  <div className="truncate font-mono text-base font-semibold tabular-nums">
+                  <span className="text-muted-foreground">{stat.label}</span>
+                  <div className="min-w-0 font-semibold tabular-nums">
                     {stat.value}
                   </div>
                 </div>

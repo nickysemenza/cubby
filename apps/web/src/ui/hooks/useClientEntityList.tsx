@@ -1,10 +1,11 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 
 import {
   bulkActionPreview,
   type BulkActionsConfig,
 } from "../data-table/bulk-actions.types";
+import { TableEmptyState } from "../data-table/entity-empty-states";
 import type { ListWorkbenchModel } from "../data-table/ListWorkbench";
 import { reconcileRowSelection } from "../data-table/row-selection";
 import type { CubbyRow as Row } from "../data-table/table-features";
@@ -105,6 +106,7 @@ interface UseClientEntityListOptions<
 /** Client rows produce the same rendering module as server-backed lists. */
 interface UseClientEntityListReturn<TData extends BaseListRow> {
   workbench: ListWorkbenchModel<TData>;
+  emptyState: ReactNode;
   requestDelete: UseEntityListReturn<TData>["requestDelete"];
   inspection: UseEntityListReturn<TData>["inspection"];
 }
@@ -292,6 +294,16 @@ export function useClientEntityList<TData extends BaseListRow>({
   ) : null;
 
   return {
+    emptyState: (
+      <TableEmptyState
+        entity={entity}
+        table={table}
+        additionalFilterActive={Boolean(
+          matchesSearch && primarySearchQuery?.trim(),
+        )}
+        onClearAdditionalFilters={() => tableState.setColumnFilters([])}
+      />
+    ),
     workbench: {
       entity,
       table,

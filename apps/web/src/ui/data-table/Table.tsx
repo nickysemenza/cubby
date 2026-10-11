@@ -46,12 +46,7 @@ import { columnWidthValue } from "./column-layout";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { DesktopDataRow as DataRow } from "./DesktopDataRow";
-import {
-  EntityEmptyState,
-  FilteredEmptyState,
-  hasActiveFilters,
-  isNarrowed,
-} from "./entity-empty-states";
+import { TableEmptyState } from "./entity-empty-states";
 import { MobileListScreen } from "./MobileListScreen";
 import {
   createRowActivityStore,
@@ -271,23 +266,7 @@ function TableStatus<TItem extends RowData>({
   if (rows.length) return null;
   if (emptyState) return emptyState;
 
-  const state = table.state;
-  const isFiltered = isNarrowed(table);
-  const onClearFilters = hasActiveFilters(state.columnFilters)
-    ? () => table.resetColumnFilters()
-    : undefined;
-  return entity && isBrowserRoutedEntity(entity) ? (
-    <EntityEmptyState
-      entity={entity}
-      isFiltered={isFiltered}
-      onClearFilters={onClearFilters}
-    />
-  ) : (
-    <FilteredEmptyState
-      isFiltered={isFiltered}
-      onClearFilters={onClearFilters}
-    />
-  );
+  return <TableEmptyState entity={entity} table={table} />;
 }
 
 function DesktopTableToolbar<TItem extends RowData>({
@@ -815,7 +794,7 @@ function DesktopTableView<TItem extends RowData>({
             ref={tableContainerRef}
             data-scroll-restoration-id={scrollRestorationId}
             aria-label={`${ariaLabel} keyboard navigation`}
-            className="min-h-0 flex-1 overflow-auto bg-card outline-none data-[cell-dragging]:select-none"
+            className="min-h-0 flex-1 overflow-auto bg-card outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-[cell-dragging]:select-none"
             {...cellSelectionContainerProps}
           >
             <Table

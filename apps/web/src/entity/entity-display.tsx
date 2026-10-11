@@ -1021,6 +1021,7 @@ export function EntityBasicInfo<TRecord extends object>({
         return [
           {
             label: field.label,
+            fullWidth: isProseField(field.key, field.control),
             ...rendered,
             value: decoratedValue,
             caption: resolution ? (
