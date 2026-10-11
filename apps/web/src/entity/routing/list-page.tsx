@@ -7,6 +7,7 @@ import {
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { GridFourIcon } from "@phosphor-icons/react/dist/csr/GridFour";
 import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
@@ -33,7 +34,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
-import { ViewSwitcher } from "~/ui/primitives/view-switcher";
 
 /**
  * The list page bodies every entity list route shares, as factories.
@@ -87,7 +87,7 @@ const VIEW_ICONS = {
   timeline: CalendarCheckIcon,
 } satisfies Record<"table" | "shelf" | "timeline", Icon>;
 
-/** The segmented view control, rendered only when the manifest declares more than one view. */
+/** One view menu, with choices derived from the manifest at every width. */
 function ListViewSwitcher({ entity }: { entity: BrowserRoutedEntity }) {
   const { search, navigate } = useListSearch();
   const { density, setDensity } = useEntityListCardDensity();
@@ -126,45 +126,39 @@ function ListViewSwitcher({ entity }: { entity: BrowserRoutedEntity }) {
     setDensity("cards");
     navigate({ view: next === defaultView ? undefined : next });
   };
+  const SelectedIcon = selectedOption?.icon;
   return (
-    <>
-      <div className="md:hidden">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="outline"
-                size="sm"
-                aria-label={`${entities[entity].pluralLabel} view: ${selectedOption?.label ?? selected}`}
-              />
-            }
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`${entities[entity].pluralLabel} view: ${selectedOption?.label ?? selected}`}
+          />
+        }
+      >
+        {SelectedIcon && <SelectedIcon className="size-3.5" />}
+        {selectedOption?.label ?? selected}
+        <CaretDownIcon className="size-3.5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {options.map((option) => (
+          <DropdownMenuItem
+            key={option.value}
+            aria-label={`${option.label} view`}
+            aria-current={option.value === selected ? "true" : undefined}
+            onClick={() => onValueChange(option.value)}
           >
-            View: {selectedOption?.label ?? selected}
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {options.map((option) => (
-              <DropdownMenuItem
-                key={option.value}
-                aria-current={option.value === selected ? "true" : undefined}
-                onClick={() => onValueChange(option.value)}
-              >
-                {option.value === selected && <CheckIcon aria-hidden />}
-                {option.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      <ViewSwitcher
-        ariaLabel={`${entities[entity].pluralLabel} view`}
-        className="hidden md:flex"
-        options={options}
-        value={selected}
-        // Merge, don't replace: filter params survive a renderer switch and
-        // stay shareable in the URL; the default view is the bare URL.
-        onValueChange={onValueChange}
-      />
-    </>
+            {option.icon && <option.icon className="size-3.5" />}
+            {option.label}
+            {option.value === selected && (
+              <CheckIcon className="ml-auto size-3.5" />
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -232,7 +226,7 @@ interface ListChromeOptions {
   decoration?: "accent" | "none";
   actions?: () => ReactNode;
   /**
-   * A `ViewSwitcher` or similar, rendered in the workbench header's first
+   * A `ViewSwitcher` or similar, rendered in the workbench query
    * tier. A thunk for the same reason as `actions`: it closes over that
    * route's own `Route.useSearch()`/`useNavigate()`, so it has to be called
    * during this shell's render rather than built at module load.

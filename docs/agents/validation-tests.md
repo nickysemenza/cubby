@@ -413,6 +413,15 @@ control and include unrelated records with a small page size when testing a
 filtered record; an ignored filter can pass against a small local corpus and
 hide the target behind pagination in CI.
 
+When changing shared list view controls, update interaction tests for every
+consumer, including USDA lists. Preserve their query and destination regressions
+when replacing the control's selectors.
+
+Lazy quality-explanation journeys wait for the row's loaded assessment before
+opening it; initial trigger visibility can precede deferred enrichment. When
+hovering consecutive timestamp cells, assert the open tooltip so the previous
+tooltip's closing animation cannot create a duplicate text match.
+
 ## Preview tests (real-browser layout invariants)
 
 The `preview` Vitest project (`**/*.preview.test.tsx`, `pnpm --dir apps/web

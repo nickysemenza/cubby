@@ -287,7 +287,10 @@ function FilterChip({
           {summary}
         </span>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72">
+      <PopoverContent
+        align="start"
+        className="max-h-(--available-height) w-72 overflow-y-auto"
+      >
         <PopoverTitle className="font-heading font-bold">
           Filter by {label}
         </PopoverTitle>
@@ -321,7 +324,7 @@ function FilterSearchField({
     <div
       className={cn(
         "relative flex items-center",
-        dense ? "h-7 w-[220px] shrink-0" : "h-9 flex-1",
+        dense ? "h-8 min-w-40 flex-1 md:max-w-sm" : "h-9 flex-1",
       )}
     >
       <MagnifyingGlassIcon
@@ -335,7 +338,7 @@ function FilterSearchField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={label}
         aria-label={label}
-        className={dense ? "h-7 pr-6 pl-7 text-xs" : "h-9 pr-3 pl-8"}
+        className={dense ? "h-8 pr-6 pl-7 text-xs" : "h-9 pr-3 pl-8"}
       />
       {value && onClear && (
         <button
@@ -428,11 +431,14 @@ export function FilterBar({
   className,
   searchKey,
   searchPlaceholder,
+  collapsed = false,
 }: {
   filters: Filter[];
   fields: FilterBarField[];
   onChange: (filters: Filter[]) => void;
   className?: string;
+  /** Page workbenches show active chips and disclose inactive fields. */
+  collapsed?: boolean;
   /** The declared broad search field rendered as an input instead of a chip. */
   searchKey?: string;
   searchPlaceholder?: string;
@@ -454,8 +460,12 @@ export function FilterBar({
       if (filter && isFieldActive(filter)) field.onActivate?.(filter.values);
     }
   }, [fields, filtersByField]);
-  const visibleChipFields = chipFields.slice(0, CHIP_CAP);
-  const overflowChipFields = chipFields.slice(CHIP_CAP);
+  const visibleChipFields = collapsed
+    ? chipFields.filter((field) => isFieldActive(filtersByField.get(field.key)))
+    : chipFields.slice(0, CHIP_CAP);
+  const overflowChipFields = collapsed
+    ? chipFields
+    : chipFields.slice(CHIP_CAP);
 
   return (
     <div
@@ -481,7 +491,7 @@ export function FilterBar({
           key={field.key}
           field={field}
           filter={filtersByField.get(field.key)}
-          open={editingKey === field.key}
+          open={editingKey === field.key && !moreOpen}
           onOpenChange={(open) => setEditingKey(open ? field.key : null)}
           setValues={(values) => {
             setValues(field, values);
@@ -515,14 +525,22 @@ export function FilterBar({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-7 shrink-0"
+                    className="h-8 shrink-0"
+                    aria-label={collapsed ? "Filters" : "More"}
                   />
                 }
               >
-                <CaretDownIcon className="size-3.5" />
-                More
+                {collapsed ? (
+                  <FunnelIcon className="size-3.5" />
+                ) : (
+                  <CaretDownIcon className="size-3.5" />
+                )}
+                {collapsed ? "Filters" : "More"}
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-72">
+              <PopoverContent
+                align="start"
+                className="max-h-(--available-height) w-72 overflow-y-auto"
+              >
                 {editingOverflow ? (
                   <>
                     <PopoverTitle className="font-heading font-bold">
@@ -541,7 +559,7 @@ export function FilterBar({
                 ) : (
                   <>
                     <PopoverTitle className="font-heading font-bold">
-                      More filters
+                      {collapsed ? "Filters" : "More filters"}
                     </PopoverTitle>
                     <div className="flex flex-col gap-px">
                       {overflowChipFields.map((field) => {

@@ -121,13 +121,17 @@ describe("USDAFoodList", () => {
       },
     });
     expect(grid.querySelector('a[href="/usda/12345"]')).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Compact view" }));
+    fireEvent.click(screen.getByRole("button", { name: /USDA Foods view:/ }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Compact view" }),
+    );
     await waitFor(() => expect(grid).toHaveAttribute("data-compact", "true"));
     expect(harness.router.state.location.search).toMatchObject({
       view: "shelf",
       description: "Example",
     });
-    fireEvent.click(screen.getByRole("button", { name: "List view" }));
+    fireEvent.click(screen.getByRole("button", { name: /USDA Foods view:/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "List view" }));
     expect(
       await screen.findByRole("table", { name: "USDA Foods Table" }),
     ).toBeVisible();

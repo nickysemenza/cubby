@@ -450,13 +450,19 @@ function ServerListBody({
   const body = (
     <>
       {parts.above?.(list)}
-      <ListTotalSummary
-        totals={entitySummary[entity].list.totals}
-        sums={list.sums}
-        state={list.summaryState}
-        onRetry={list.retrySummary}
-      />
-      {sweepAction}
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-2 py-1 text-xs md:px-4">
+        <ListTotalSummary
+          totals={entitySummary[entity].list.totals}
+          sums={list.sums}
+          state={list.summaryState}
+          onRetry={list.retrySummary}
+        />
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          {sweepAction}
+          <div data-workbench-status className="min-w-0" />
+          {contextualStatus}
+        </div>
+      </div>
       {list.enrichmentFailures?.map(({ pageIndex, group, state }) => (
         <div key={`${pageIndex}:${group}`} className="min-w-0 text-sm">
           <p role="alert" className="text-destructive">
@@ -496,7 +502,7 @@ function ServerListBody({
             desktopInspector={dockedInspector}
             inspectorToggle={inspectorToggle}
             {...workbenchProps}
-            contextualStatus={contextualStatus}
+            contextualStatus={null}
           />
         )}
         {renderedView === "shelf" && (
@@ -719,7 +725,11 @@ function ClientListBody({
         />
       ) : (
         <Stack gap="sm">
-          <DataTableToolbar table={workbench.table} entity={entity} />
+          <DataTableToolbar
+            table={workbench.table}
+            entity={entity}
+            portalWorkbenchUtilities
+          />
           {inspectorToggle}
           <div
             className={

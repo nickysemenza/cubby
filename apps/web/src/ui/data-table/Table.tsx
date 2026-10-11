@@ -978,6 +978,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   });
   const pageIdentity = usePageIdentity();
   const workbenchTarget = usePageWorkbenchTarget();
+  const statusTarget = usePageWorkbenchTarget("status", !embedded);
   const {
     colSpan,
     columnsKey,
@@ -1203,6 +1204,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
 
   return (
     <RecordSuggestionsProvider
+      statusTarget={statusTarget}
       entity={entity}
       records={
         isLoading || isTransitioning ? [] : rows.map((row) => row.original)

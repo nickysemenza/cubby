@@ -1,3 +1,4 @@
+import { chooseListView } from "./e2e-helpers";
 import {
   seedPlantPrerequisite,
   seedProductCategoryPrerequisite,
@@ -70,7 +71,7 @@ test("card density adapts to the work surface and stays temporary through filter
     page,
     `/products?name=${encodeURIComponent(name)}`,
   );
-  await page.getByRole("button", { name: "Cards view", exact: true }).click();
+  await chooseListView(page, "Cards");
   const grid = page.getByTestId("entity-card-grid");
   await expect(grid).toHaveAttribute("data-compact", "false");
   await expect(grid.locator(":scope > *")).toHaveCount(12);
@@ -80,7 +81,7 @@ test("card density adapts to the work surface and stays temporary through filter
     .evaluate((el) => el.getBoundingClientRect().width);
   await page.screenshot({ path: testInfo.outputPath("desktop-cards.png") });
 
-  await page.getByRole("button", { name: "Compact view", exact: true }).click();
+  await chooseListView(page, "Compact");
   await expect(grid).toHaveAttribute("data-compact", "true");
   const compactWidth = await grid
     .locator(":scope > *")
@@ -140,7 +141,7 @@ test("complete-list cookbooks keep local search across card and list presentatio
   );
   const grid = page.getByTestId("entity-card-grid");
   await expect(grid.locator(":scope > *")).toHaveCount(2);
-  await page.getByRole("button", { name: "Compact view", exact: true }).click();
+  await chooseListView(page, "Compact");
   await page
     .getByRole("textbox", {
       name: "Search cookbooks or shortcode",
@@ -152,7 +153,7 @@ test("complete-list cookbooks keep local search across card and list presentatio
   await expect(
     grid.getByRole("link", { name: `${name} Roasting`, exact: true }),
   ).toHaveAttribute("href", `/cookbooks/${first.id}`);
-  await page.getByRole("button", { name: "List view", exact: true }).click();
+  await chooseListView(page, "List");
   await expect(
     page.getByRole("table", { name: "Cookbooks table" }),
   ).toBeVisible();

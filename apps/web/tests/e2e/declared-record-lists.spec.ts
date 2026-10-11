@@ -1,3 +1,4 @@
+import { chooseListView } from "./e2e-helpers";
 import { formatCalendarDay } from "~/lib/date-format";
 import { householdLocalDate, householdDaysFromNow } from "~/lib/household-date";
 import {
@@ -201,10 +202,10 @@ test("declared record lists retain identities, relationships and amounts on desk
     page,
     `/locations?name=${encodeURIComponent(`${name} shelf`)}`,
   );
-  await page.getByRole("button", { name: "List view", exact: true }).click();
+  await chooseListView(page, "List");
   await expect(
-    page.getByRole("button", { name: "List view", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    page.getByRole("button", { name: "Locations view: List", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("columnheader").filter({
       has: page.getByRole("button", {
