@@ -65,7 +65,7 @@ Web receiving opens Location and taps its uniquely named option through the SDK 
 The web fixture waits for `[data-hydrating]` controls to clear after opening or
 reloading a page. Jev cannot choose a server-rendered Edit button while the app
 intentionally disables it until React attaches its handlers. This wait observes
-the application readiness contract; it does not add a fixed delay.
+the application readiness contract; it does not add a fixed delay. After database readiness and a reload, wait for the relevant live action to render before giving Jev its goal; cleared hydration markers do not establish data-dependent action readiness.
 
 Tester Army and its decision/mobile SDKs run unpatched. Goals use the existing
 searchable web picker inputs. The native external-ID journey splits source,
@@ -74,7 +74,7 @@ button, then taps the known Save control as a supported hybrid step. External-ID
 the measured Form viewport; product rename covers editor navigation. The generic native editors
 expose that shared Done action and render structured fields as separate Form
 rows for keyboard avoidance. Token-entry fields derive stable identifiers from the entity and field keys so the native driver can rebind them after keyboard movement. Source-alias row creation uses its known Add control before field entry. Rename finishes field entry before an exact SDK Done tap. The Split sheet reuses the shared keyboard Done accessory; split entry dismisses it between every name and cost input before checking conservation. Source-alias, transaction source-ref and sale entry dismiss the keyboard between fields; the floating Done accessory can otherwise cover the next input. Keep unsupported interaction handling in the
-journeys or product UI rather than patching the E2E SDK. Goals end at observable
+journeys or product UI rather than patching the E2E SDK. Let English goals complete an action once; do not follow an approval goal with another SDK click on the same disappearing action. Persisted outcome checks verify completion. Goals end at observable
 states, with exact database read-back establishing persistence. HTTP and network
 inference failures fail once at Cubby's gateway boundary; aborts stay aborts.
 Native keyboard Done uses the SDK’s exact button tap; editor Save and hero-action confirmations use `tapTestId` rather than model completion. Native identifier taps also require `role=button`, because iOS 26 can expose both a wrapper and its child with the same identifier: both compound

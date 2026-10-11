@@ -197,6 +197,9 @@ const coupledJourneys: Journey[] = [
           ],
           timeoutMs: 240_000,
         },
+        check: { visible: () => ["Start grouping"] },
+      },
+      {
         goal: "Press Start grouping once. Finish when Start grouping disappears and the Progress section says the agent is preparing item groups.",
         check: {
           db: [
@@ -215,10 +218,7 @@ const coupledJourneys: Journey[] = [
         check: { visible: () => ["Approved"] },
       },
       {
-        web: "Check the remaining Review item's checkbox for batch approval. Finish with Approve 1 selected item enabled.",
-        tapControl: {
-          web: { role: "button", name: "Approve 1 selected item" },
-        },
+        web: "Select the remaining item and approve it using batch approval.",
       },
     ],
     awaitRun: photoRun("completed"),
