@@ -20,8 +20,8 @@ with `-- --harness standard|coupled`. `-- --wrong`
 fail at the read-back. Every passing read-back also asserts that the same query
 does not satisfy a corrupted expectation, and `pnpm test:e2e:agent:selfcheck`
 proves the comparison bites without any model call. Journeys are paced
-(`TESTER_ARMY_PACE_MS`, default 20 s) because the inference gateway rate-limits
-bursts of journeys.
+(`TESTER_ARMY_PACE_MS`, default 5 s) because the inference gateway rate-limits
+bursts of journeys. Twenty journeys add 100 seconds of pacing, rather than the previous 400 seconds.
 
 Catalog: product rename; receive a purchase into stock; the add-to-inventory,
 record-sale, set-status, mark-purchased and delete-with-impact-preview hero
@@ -37,8 +37,14 @@ showing a live enrichment run's work label, target summary, latest step,
 named targets and changed count, on desktop and at a phone width; and an
 enrichment run's page counting Products (never orders) and naming its
 targets. The Run console debug log is not cursor-paged in
-the app (it caps at 2,000 events), so paging is not asserted. Four coupled
+the app (it caps at 2,000 events), so paging is not asserted. Coupled
 import journeys follow (see below).
+
+Split compound edits into observable phases, and do not require dismissing a keyboard that may already be gone. Hybrid steps tap known native control IDs or exact accessible web controls (buttons or comboboxes) when model targeting or completion is ambiguous. Field entry stays agent-driven, and the UI and database assertions still establish the result. Native confirmations use the keyboard Done button, actual editor Save or `heroAction.submit` control for that surface.
+
+Delete-preview journeys seed an incoming child task and assert its declared cascade before confirming. An outgoing project name can remain visible behind the web dialog and does not prove the impact preview rendered. The database checks establish that preview writes nothing, confirmation deletes both tasks, and the project survives.
+
+The native unknown-cost split leaves both inputs untouched and checks the disabled submit control, visible refusal, and persisted null cost. Its accessibility snapshot exposes the `0.00` placeholder as a value; that text does not establish that a cost was entered.
 
 A goal names both the requested action and its visible end state. Jev must
 recognize when the action has finished; exact UI and SQL checks still decide
@@ -62,19 +68,21 @@ the application readiness contract; it does not add a fixed delay.
 Tester Army and its decision/mobile SDKs run unpatched. Goals use the existing
 searchable web picker inputs. The native external-ID journey splits source,
 and identifier into separate goals that explicitly use the app's Done
-button, then taps the known Save control as a supported hybrid step. Its fixture establishes a reachable structured-entry row, centered in
+button, then taps the known Save control as a supported hybrid step. External-ID and source-ref fixtures establish a reachable structured-entry row, centered in
 the measured Form viewport; product rename covers editor navigation. The generic native editors
 expose that shared Done action and render structured fields as separate Form
 rows for keyboard avoidance. Keep unsupported interaction handling in the
 journeys or product UI rather than patching the E2E SDK. Goals end at observable
 states, with exact database read-back establishing persistence. HTTP and network
 inference failures fail once at Cubby's gateway boundary; aborts stay aborts.
-The iOS Save step uses `tapTestId` rather than model completion: both compound
+Native keyboard Done uses the SDK’s exact button tap; editor Save and hero-action confirmations use `tapTestId` rather than model completion: both compound
 and simple Save goals returned inconclusive after successfully saving. The
 following visible-value check and exact SQL assertions verify the saved external
 ID, source and kind. Jev still enters the fields and drives product rename.
 
 ## Failure modes and acceptance
+
+Freeze all source files until every concurrent SDK run has exited, including formatters, imports, and cases that already failed. Startup is not an edit boundary. The SDK can re-import a test module between cases while retaining its dependency exports; changing a fixture import during a run caused a worker crash before the next case. Collect repairs while tests run, then edit after all runs exit, rebuild the fingerprinted input, and run only the affected cases. Evidence from an edited running tree is exploratory, not exact-revision acceptance.
 
 Before implementing the runner, the relevant failure modes are: invalid or
 missing inference credentials; unsupported image/tool calls; editing the wrong
@@ -177,7 +185,7 @@ because they were built from a different commit.
 
 The shared Node setup restores the portable WASM package from the exact Rust
 source key used by Linux jobs, avoiding a second macOS compilation.
-The two macOS journey lanes disable pnpm store caching: measured installs took
+The macOS journey jobs disable pnpm store caching: measured installs took
 47–76 seconds without it, while packing a store miss added 4m20s after tests
 completed. A warm restore plus install took 91 seconds. Regular jobs retain
 their existing pnpm cache; the WASM and Apple build caches remain enabled.
@@ -196,7 +204,7 @@ An unchanged toolchain, generated inputs, Swift and resource files, FFI bytes,
 dependency pins, and complete app-bundle checksum allow compilation to be skipped.
 Otherwise they run the normal incremental build and certify its result. The
 required Apple gate always compiles and supplies the same certificate. The optional
-GitHub native lanes start simulator boot after dependency installation, overlapping
+GitHub native jobs start simulator boot after dependency installation, overlapping
 startup with Apple tool setup and cache restores. Booting during extraction and
 generation increased observed dependency setup from 42 seconds to 84–386 seconds;
 these runs were not a controlled comparison. The harness still waits for boot
@@ -204,7 +212,7 @@ readiness before installing the app. Local runs start boot after compilation.
 App replacement
 uses `simctl` directly, before preparing the driver, so installation does not
 start XCTest or inherit the SDK's short command timeout.
-Both lanes also cache agent-device's compiled Apple test runner, keyed by its
+Native jobs also cache agent-device's compiled Apple test runner, keyed by its
 package and Xcode toolchain. The SDK verifies source, SDK, and build settings
 before reuse. Only its derived build directory is cached. Device leases,
 per-session launch files, test results, logs, and lock files are excluded so
@@ -225,7 +233,7 @@ trial in parallel with required checks. Same-repository code PRs run all
 standard web journeys. Native, shared package, backend/API/contract, tooling,
 workflow and root configuration changes also run iOS; import/vendor/run changes
 and shared/backend changes also run the coupled import journeys. Prose-only PRs
-and fork PRs do not automatically call paid models. Changed-file routing lives
+and fork PRs do not automatically call paid models. The complete native catalog runs in two parallel SDK shards (`--shard 1/2` and `2/2`), with separate recording caches, reports and reporter keys. The partition preserves all native cases; it lowers work per job while using more concurrent macOS runners. Changed-file routing lives
 in `scripts/tester-army-ci.ts`; renamed files include their old paths.
 The routing step selects every lane for PR, manual and scheduled events; each
 job only checks its selected output, without repeating event/label logic.
@@ -240,8 +248,8 @@ This removes a direct merge wait, but runner contention can still affect other
 checks. Successful hosted timings, costs and reliability must be measured in
 this trial before promoting any journey to a required check. Current lane
 ceilings are 25 minutes for web, 30 for imports and 40 for iOS, including setup;
-these are limits, not measured completion times. The standard catalog's 20-second
-pacing alone adds about 6 minutes 40 seconds per 20-journey engine.
+these are limits, not measured completion times. The standard catalog's five-second
+pacing adds 1 minute 40 seconds across 20 journeys, or 50 seconds per native shard.
 
 PR runs enable verified action replay, with separate lane/OS/lockfile caches.
 Each completed run saves a unique recording snapshot even after a journey
@@ -282,14 +290,11 @@ the synthetic sources: the harness's two model peers are
 Worker's extraction, audit, and image description call real models through
 the same `cubby` gateway and token. The forwarding peers preserve application
 feature/operation metadata and bypass gateway caching. `tooling/scenarios/tester-army-coupled.ts`
-seeds the sources:
+seeds the sources. Mail fixtures reuse `authorizeSyntheticBackfill` for the same actor, member and mailbox before importing; the agent OAuth grant alone does not authorize paid model calls. A dated order assertion requires that date printed in the source body; receipt metadata alone does not establish the order date:
 
 - `import-order-mail`: a saved itemized confirmation (an HTML product link on
-  the Vendor's site) and its shipping notice; the member imports the order from
-  the vendor page. Without a click, both emails link to the Purchase as
-  `cubby-system` decisions, the Purchase is dated by placement and belongs to
-  the member's mail-only account, and the new Product keeps the email's
-  product link.
+  the Vendor's site) and its shipping notice; the member imports from
+  the saved confirmation Email and opens its Run. Only the selected confirmation links to the Purchase, attributed to its Run actor with the retained source checksum. The unselected shipping Email must not start a paid Run. The Purchase keeps the printed order date and belongs to the member's mail-only account; the new Product keeps the email's product link. This follows the explicit per-Email admission contract in ADR 0011.
 - `import-photo-inventory`: two synthetic photos uploaded over the native HTTP
   API (create run, stage, PUT, finalize). The journey waits for their cloud
   descriptions, starts grouping, waits for the agent's proposals, and
@@ -305,7 +310,9 @@ bytes. The seed unpauses image processing, which a fresh database starts paused.
 A step can wait for background rows (`ready`) or a live run state
 (`awaitRun`: `awaiting_approval` or `completed`) before acting. A run that
 settles anywhere else fails at once with its last progress and failed
-operations. Final assertions read the imported Purchase, its expense total,
+operations. The order journey imports from its seeded Email and opens the resulting Run link. The photo journey checks that Start grouping dispatches its Run before waiting for proposals; an undispatched Run must not claim grouping is underway.
+
+Final assertions read the imported Purchase, its expense total,
 the imported order candidate, or the committed photo groups.
 
 The coordinator runs on the model production sends unless

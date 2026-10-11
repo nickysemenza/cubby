@@ -257,6 +257,9 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
 
 ### Traps that cost real time (fixed; do not rediscover)
 
+- Multiple Buttons within one `List` row use `.buttonStyle(.borderless)` so each receives
+  only its own tap. Automatic row button styling can dispatch adjacent actions together;
+  the report's Attach products control must open the product sheet alone.
 - macOS sandbox entitlements on the iOS target make `simctl launch` hang on a black screen with
   no error and no process — targets keep per-platform entitlements files.
 - `build-rust.sh --targets sim` writes a ONE-slice xcframework; a macOS build or CLI link then

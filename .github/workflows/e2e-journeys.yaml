@@ -259,7 +259,7 @@ jobs:
             apps/web/.e2e/runs/web/**/results/*/attempt-*/video/*.mp4
 
   tester-army-ios:
-    name: Tester Army ios (informational)
+    name: Tester Army ios ${{ matrix.shard }}/2 (informational)
     if: needs.route.outputs.ios == 'true'
     needs: route
     permissions:
@@ -267,6 +267,10 @@ jobs:
       actions: read
       pull-requests: write
     runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     timeout-minutes: 40
     env:
       TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN }}
@@ -277,6 +281,8 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
       TESTER_ARMY_REPLAY: ${{ github.event_name == 'pull_request' && '1' || '0' }}
       CUBBY_SIM_DB_EXTERNAL: "1"
+      TESTER_ARMY_SHARD: ${{ matrix.shard }}/2
+      TESTER_ARMY_LANE: ios-${{ matrix.shard }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -290,9 +296,9 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: apps/web/.e2e/cache
-          key: tester-army-replay-v1-ios-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: tester-army-replay-v1-ios-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            tester-army-replay-v1-ios-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            tester-army-replay-v1-ios-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - run: pnpm test:e2e:agent:preflight
       - uses: ./.github/actions/setup-apple-ffi
         with:
@@ -335,12 +341,12 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: apps/web/.e2e/cache
-          key: tester-army-replay-v1-ios-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: tester-army-replay-v1-ios-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Save synthetic iOS run bundle
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: tester-army-ios-run
+          name: tester-army-ios-${{ matrix.shard }}-run
           retention-days: 7
           if-no-files-found: warn
           path: |
@@ -353,7 +359,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: tester-army-ios-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          name: tester-army-ios-${{ matrix.shard }}-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           retention-days: 7
           if-no-files-found: warn
           include-hidden-files: true

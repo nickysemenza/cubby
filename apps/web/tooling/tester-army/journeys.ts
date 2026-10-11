@@ -1,7 +1,13 @@
 import { z } from "zod";
 
 import { JOURNEY_NAMES, LIVE_IMPORT } from "./names";
-import type { DbCheck, Journey, JourneyIds, RunWait } from "./journey";
+import type {
+  DbCheck,
+  Journey,
+  JourneyIds,
+  JourneyStep,
+  RunWait,
+} from "./journey";
 
 /**
  * Every journey, described once. The agent follows the goals on whichever
@@ -48,34 +54,46 @@ const importedOrder = (orderId: string, cents: number): DbCheck => ({
   rows: () => [{ orderId, cents }],
 });
 
-/**
- * What a committed mail import does without a click: both of the order's
- * emails (confirmation and shipping notice) link to its Purchase as
- * `cubby-system` decisions, the Purchase is dated by the confirmation's
- * placement (no printed date, 08:00 Pacific on the 10th), and the new Product
- * keeps the product link the email showed.
- */
+/** Explicit Email import links only the selected source, attributed to its Run actor. */
 const mailImportFollowUps = (
   source: (typeof LIVE_IMPORT)["mail"],
 ): DbCheck[] => [
   {
-    label: "both order emails link themselves to the Purchase",
-    sql: `SELECT e.event, d."decidedByUserId" AS "decidedBy", p."orderId"
+    label:
+      "only the selected confirmation links, with the admitted actor and source checksum",
+    sql: `SELECT e.event, d."decidedByUserId" = r."actorUserId" AS "actorMatches",
+                 d."evidenceChecksum" = m."rawChecksum" AS "sourceMatches", p."orderId"
             FROM "OrderMailEvent" e
             JOIN "OrderMail" m ON m.id = e."orderMailId"
             JOIN "Vendor" v ON v.id = m."vendorId"
             JOIN "OrderMailCandidateDecision" d ON d."eventId" = e.id AND d.decision = 'linked'
             JOIN "Purchase" p ON p.id = d."purchaseId"
+            LEFT JOIN "Email" email ON email."orderMailId" = m.id
+            LEFT JOIN "Run" r ON r.id = email."runId"
            WHERE v.shortcode = $1
            ORDER BY e.event`,
     params: only("vendor"),
     rows: () => [
-      { event: "placed", decidedBy: "cubby-system", orderId: source.orderId },
-      { event: "shipped", decidedBy: "cubby-system", orderId: source.orderId },
+      {
+        event: "confirmation",
+        actorMatches: true,
+        sourceMatches: true,
+        orderId: source.orderId,
+      },
     ],
   },
   {
-    label: "the Purchase is dated by the confirmation's household-local day",
+    label: "the unselected shipping Email is not admitted to a paid Run",
+    sql: `SELECT count(*)::int AS count FROM "Email" email
+            JOIN "OrderMail" m ON m.id = email."orderMailId"
+            JOIN "Vendor" v ON v.id = m."vendorId"
+            JOIN "OrderMailEvent" e ON e."orderMailId" = m.id AND e.event = 'shipped'
+           WHERE v.shortcode = $1 AND email."runId" IS NOT NULL`,
+    params: only("vendor"),
+    rows: () => [{ count: 0 }],
+  },
+  {
+    label: "the Purchase keeps the order date printed in the confirmation",
     sql: `SELECT p.date::text AS date FROM "Purchase" p JOIN "Vendor" v ON v.id = p."vendorId"
            WHERE v.shortcode = $1 AND p."deletedAt" IS NULL`,
     params: only("vendor"),
@@ -97,10 +115,10 @@ const mailImportFollowUps = (
 const LIVE_RUN_MS = 480_000;
 
 const vendorRun = (until: RunWait["until"]): RunWait => ({
-  sql: `SELECT r.id FROM "Run" r JOIN "Vendor" v ON v.id = r."vendorId"
-         WHERE v.shortcode = $1 AND r.purpose = 'mail_import'
+  sql: `SELECT r.id FROM "Run" r JOIN "Email" e ON e."runId" = r.id
+         WHERE e.shortcode = $1 AND r.purpose = 'mail_import'
          ORDER BY r."startedAt" DESC LIMIT 1`,
-  params: only("vendor"),
+  params: only("email"),
   until,
   timeoutMs: LIVE_RUN_MS,
 });
@@ -125,11 +143,11 @@ const coupledJourneys: Journey[] = [
     coupled: true,
     timeoutMs: 600_000,
     context:
-      "A vendor page lists saved order confirmation emails; each importable order has an Import order button, which starts an agent run and then shows a View import link to that run's page.",
-    start: "vendor",
+      "A saved Email has an Import this Email action. Starting the import shows a Run link that opens the live import.",
+    start: "email",
     steps: [
       {
-        goal: `Import the saved order confirmation for order ${LIVE_IMPORT.mail.orderId}, then open the import it starts.`,
+        goal: "Select Import this Email, then open the Run link shown for the started import. Finish on the Run detail page with Live agent visible.",
         // The run page streams the coordinator's live conversation.
         check: { visible: () => ["Live agent"] },
       },
@@ -179,11 +197,25 @@ const coupledJourneys: Journey[] = [
           ],
           timeoutMs: 240_000,
         },
-        goal: "Select Start grouping, then finish once the page says the agent is preparing item groups.",
+        goal: "Press Start grouping once. Finish when Start grouping disappears and the Progress section says the agent is preparing item groups.",
+        check: {
+          db: [
+            {
+              label: "grouping was dispatched before waiting for proposals",
+              sql: `SELECT ("dispatchEventId" IS NOT NULL) AS started FROM "Run" WHERE shortcode = $1`,
+              params: only("run"),
+              rows: () => [{ started: true }],
+            },
+          ],
+        },
       },
       {
         awaitRun: photoRun("awaiting_approval"),
         goal: "Approve every proposed item group on this page, one group at a time, until none is left to approve.",
+        web: [
+          "Approve the currently selected item group. Finish with that item marked Approved.",
+          "Select the other item marked Review in Photo item groups, then approve that item. Finish with Review complete and 2 of 2 photos settled.",
+        ],
       },
     ],
     awaitRun: photoRun("completed"),
@@ -268,6 +300,11 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: `Edit this product, change its Name to "${JOURNEY_NAMES.productUpdatedName}", and save. Wait for the product detail to show the new name before you finish.`,
+        ios: [
+          "Open Edit Product. Leave the editor open.",
+          `Change Name to "${JOURNEY_NAMES.productUpdatedName}" and dismiss the keyboard with Done. Leave the editor open with the new Name.`,
+        ],
+        tapTestId: { ios: "editor.product.save" },
       },
       {
         goal: "Reopen this product's editor to inspect the saved Name. Leave the editor open and do not change any field.",
@@ -298,7 +335,21 @@ export const journeys: Journey[] = [
     start: "expense",
     steps: [
       {
+        tapControl: {
+          web: { role: "button", name: "Receive into inventory..." },
+        },
+      },
+      {
         goal: `Receive this expense into Inventory: pick the location "${JOURNEY_NAMES.receiveShelf}", set the quantity to add to 3, and confirm Receive.`,
+        ios: [
+          "Open Receive into Inventory. Leave the receiving sheet open.",
+          `Select Location "${JOURNEY_NAMES.receiveShelf}" and enter Quantity 3. Leave the receiving sheet open with that Location and Quantity.`,
+        ],
+        tapTestId: { ios: "receive.confirm" },
+        web: [
+          `In the open Receive dialog, select Location "${JOURNEY_NAMES.receiveShelf}" and enter Amount Value 3. Finish with the receiving dialog still open and those values entered.`,
+        ],
+        tapControl: { web: { role: "button", name: "Add to inventory" } },
       },
     ],
     visible: () => [],
@@ -326,6 +377,8 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: `Use the "Add to inventory" action on this product: search the location field for "${JOURNEY_NAMES.inventoryShelf}" and select the matching location, set the amount to 4, and submit. Finish when the product Stocked at section shows an inventory entry at "${JOURNEY_NAMES.inventoryShelf}" with amount 4.`,
+        ios: `Open More and select Add to inventory. Select Location "${JOURNEY_NAMES.inventoryShelf}" and set Amount to 4. Leave the action sheet open with the selected Location and Amount 4.`,
+        tapTestId: { ios: "heroAction.submit" },
       },
     ],
     visible: () => [],
@@ -349,6 +402,46 @@ export const journeys: Journey[] = [
         // A sale has no project or purchase to inherit a trade from, and the server requires one
         // on a principal line, so the goal names it rather than leaving the agent to improvise.
         goal: 'Use the Record sale action on this product: name it "Synthetic chair sale", enter a cost of -12.50, set Trade to "Appliances & Furniture", and save the new expense.',
+        ios: [
+          "Open More and select Record sale. Finish on the Record Sale or Disposal editor.",
+          'Set Name to "Synthetic chair sale" and Cost to -12.50. Leave the expense editor open with those values.',
+        ],
+        tapControl: {
+          ios: { role: "button", name: "Done" },
+          web: { role: "combobox", name: "Trade" },
+        },
+        web: [
+          'Open Record sale and enter Name "Synthetic chair sale" and Cost -12.50. Leave the dialog open.',
+        ],
+      },
+      {
+        ios: [
+          "Scroll down in the expense form until the Trade selector is visible. Leave the expense editor open.",
+        ],
+        web: [
+          'Choose "Appliances & Furniture" from the open trade options. Finish with the dialog open and Trade showing Appliances & Furniture.',
+          "Set Date to October 10, 2026. Finish with that Date entered and the dialog still open.",
+        ],
+        tapControl: {
+          web: { role: "button", name: "Create" },
+          ios: { role: "button", name: "Trade, None" },
+        },
+      },
+      // Each SDK gesture stays within a visible row; five short strokes reveal the lower choices.
+      ...Array.from({ length: 5 }, (): JourneyStep => ({
+        tapControl: {
+          ios: {
+            role: "button",
+            name: "Flooring",
+            swipe: { direction: "down", momentum: "fast" },
+          },
+        },
+      })),
+      {
+        ios: [
+          'Select "Appliances & Furniture" from the open Trade menu. Leave the expense editor open with that Trade selected.',
+        ],
+        tapTestId: { ios: "editor.expense.save" },
       },
     ],
     visible: () => [],
@@ -378,6 +471,8 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: 'Use the Set status action to set this project to "In progress".',
+        ios: "Open More, choose Set status and select In progress. Leave the action sheet open with In progress selected.",
+        tapTestId: { ios: "heroAction.submit" },
       },
     ],
     visible: () => [],
@@ -412,19 +507,36 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: "Open the Delete action for this task and stop at the impact preview. Do not confirm yet.",
+        ios: "Open More and select Delete. Stop on the action sheet showing the impact preview. Leave the sheet open without confirming.",
         check: {
-          visible: () => ["Synthetic Delete Project"],
+          visible: () => [
+            "sub-tasks",
+            "live subtasks are soft-deleted alongside it",
+          ],
           db: [
             {
               label: "preview writes nothing",
-              sql: `SELECT ("deletedAt" IS NOT NULL) AS deleted FROM "Task" WHERE shortcode = $1`,
-              params: only("task"),
-              rows: () => [{ deleted: false }],
+              sql: `SELECT count(*)::int AS live FROM "Task" WHERE shortcode IN ($1, $2) AND "deletedAt" IS NULL`,
+              params: (ids) => [ids.get("task"), ids.get("child")],
+              rows: () => [{ live: 2 }],
             },
           ],
         },
       },
-      { goal: "Now confirm the deletion." },
+      {
+        goal: "Now confirm the deletion.",
+        ios: [],
+        tapTestId: { ios: "heroAction.submit" },
+      },
+      {
+        tapControl: {
+          ios: {
+            role: "button",
+            name: "Delete",
+            within: { role: "group", name: "Delete Synthetic doomed task?" },
+          },
+        },
+      },
     ],
     visible: () => [],
     db: [
@@ -433,6 +545,13 @@ export const journeys: Journey[] = [
         sql: `SELECT ("deletedAt" IS NOT NULL) AS deleted FROM "Task" WHERE shortcode = $1`,
         params: only("task"),
         rows: () => [{ deleted: true }],
+      },
+      {
+        label: "declared child cascade preserves the project",
+        sql: `SELECT (t."deletedAt" IS NOT NULL) AS "childDeleted", (p."deletedAt" IS NULL) AS "projectPreserved"
+              FROM "Task" t CROSS JOIN "Project" p WHERE t.shortcode = $1 AND p.shortcode = $2`,
+        params: (ids) => [ids.get("child"), ids.get("project")],
+        rows: () => [{ childDeleted: true, projectPreserved: true }],
       },
     ],
   },
@@ -443,6 +562,15 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: 'Edit this product, add the tag "synthetic-new-tag" to its Tags while keeping the existing tags, and save.',
+        ios: [
+          "Open Edit Product. Leave the editor open.",
+          'Type "synthetic-new-tag" into Add tag and press Return to add it. Leave the editor open with the new tag and existing tags.',
+        ],
+        tapTestId: { ios: "editor.product.save" },
+        web: [
+          'Open Edit Product. In the Tags section, type "synthetic-new-tag" into the textbox with placeholder "e.g. grinder-4.5in, M18" and press Enter. Leave Collections unchanged. Finish with synthetic-new-tag and synthetic-old-tag chips in Tags and the editor still open.',
+          "Save changes. Finish with the editor closed.",
+        ],
       },
     ],
     visible: () => ["synthetic-new-tag"],
@@ -470,6 +598,11 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: 'Edit this account, add a source alias with Source "synthetic-bank" and Alias "SYN CHK 1234", leave the external ID empty, and save.',
+        ios: [
+          "Open Edit Account. Leave the editor open.",
+          'Add a source alias with Source "synthetic-bank" and Alias "SYN CHK 1234", leaving External id blank. Leave the editor open with that alias.',
+        ],
+        tapTestId: { ios: "editor.financialAccount.save" },
       },
     ],
     visible: () => ["SYN CHK 1234"],
@@ -499,6 +632,12 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: 'Edit this expense and change the description of its source claim to "Synthetic claim evidence revised", then save.',
+        ios: [
+          "Open Edit Expense. Leave the editor open.",
+          "Scroll down in the expense form until the Source claims section and its Description field are visible. Leave the editor open.",
+          'Change the source claim Description to "Synthetic claim evidence revised", leave the editor open with the revised Description.',
+        ],
+        tapTestId: { ios: "editor.expense.save" },
       },
     ],
     visible: () => [],
@@ -527,6 +666,15 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: "Edit this product's label nutrition: change the Calories amount from 120 to 150, keep everything else, and save.",
+        ios: [
+          "Open Edit Product. Leave the editor open.",
+          "Change Calories from 120 to 150. Leave the editor open with Calories 150.",
+        ],
+        tapTestId: { ios: "editor.product.save" },
+        web: [
+          "Open Edit Product, open Nutrition and set Calories (kcal) to 150. Finish with the editor open and that field showing 150.",
+          "Save changes. Finish when the editor closes and Edit Product is visible again.",
+        ],
       },
     ],
     visible: () => [],
@@ -581,6 +729,13 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: 'Edit this transaction and add a source ref with Source "synthetic-bank" and External ID "SYN-REF-1", then save.',
+        ios: [
+          'Enter Source "synthetic-bank" and External id "SYN-REF-1". Leave the editor open with both values entered.',
+        ],
+        tapTestId: { ios: "editor.financialTransaction.save" },
+      },
+      {
+        ios: 'Scroll down on the transaction detail until source ref "SYN-REF-1" is visible. Leave the detail open.',
       },
     ],
     visible: () => ["SYN-REF-1"],
@@ -606,9 +761,16 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: "Read the run's live progress, then dismiss the finding that says it is a synthetic finding to resolve.",
+        ios: [
+          "Scroll down to the run progress. Finish with Reading synthetic orders and Synthetic order 7 visible.",
+        ],
         check: {
           visible: () => ["Reading synthetic orders", "Synthetic order 7"],
         },
+      },
+      {
+        ios: "Scroll down until Prepared orders is visible below Findings and Synthetic finding to resolve. Leave the finding open.",
+        tapControl: { ios: { role: "button", name: "Dismiss" } },
       },
     ],
     visible: () => [],
@@ -648,15 +810,35 @@ export const journeys: Journey[] = [
     start: "expense",
     steps: [
       {
+        ios: "Scroll down through this expense detail until its report's Split button is visible. Leave the detail page open with Split visible.",
+        tapTestId: { ios: "section.splitExpense" },
+        tapControl: { web: { role: "button", name: "Split..." } },
+      },
+      {
         goal: 'Split this expense into two parts: "Synthetic part one" costing 6.00 and "Synthetic part two" costing 4.00, then confirm. If the app does not allow it because the parts do not add up to the original cost, stop there.',
+        web: [
+          'In the open Split dialog, set Part 1 name to "Synthetic part one" and Part 1 cost to 6.00. Leave the dialog open.',
+          'Set Part 2 name to "Synthetic part two" and Part 2 cost to 4.00. Finish with those values in the fields and the dialog still open.',
+        ],
+        ios: [
+          'In the open Split sheet, set the Part 1 name to "Synthetic part one" and Part 1 cost to 6.00. Leave the sheet open with those values.',
+          'Scroll to Part 2 and set its name to "Synthetic part two" and Part 2 cost to 4.00. Leave the sheet open with those values.',
+          "Scroll to the split totals and warning. Finish with the warning that the parts must add up to the original cost exactly visible.",
+        ],
         check: {
           visible: () => ["add up to the original cost exactly"],
+          disabledButtons: { web: ["Split into 2"], ios: ["Split into 2"] },
           db: [purchaseParts(1, 1001)],
         },
       },
       {
         goal: "Fix the split so the two parts add up exactly: part two costs 4.01. Confirm the split.",
+        web: "Set Part 2 cost to 4.01. Finish with that value entered and the Split dialog still open.",
+        ios: "Set Part 2 cost to 4.01. Leave the Split sheet open with that value entered.",
+        tapTestId: { ios: "split.save" },
+        tapControl: { web: { role: "button", name: "Split into 2" } },
       },
+      { tapControl: { ios: { role: "button", name: "Split" } } },
     ],
     visible: () => [],
     db: [
@@ -683,10 +865,28 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: "Try to split this expense into two parts without entering any costs, and confirm the split. Stop when the app refuses.",
+        web: [],
+        ios: "Scroll down through this expense detail until its report's Split button is visible. Leave the detail page open with Split visible.",
+        tapTestId: { ios: "section.splitExpense" },
+        tapControl: { web: { role: "button", name: "Split..." } },
+        check: {
+          disabledButtons: { web: ["Split into 2"], ios: ["Split into 2"] },
+        },
+      },
+      {
+        ios: "Do not edit either cost field. Scroll down in the open Split sheet until the warning that the original has no cost recorded and to enter a cost is visible. Finish on that warning with the Split sheet still open.",
       },
     ],
     visible: () => ["enter a cost"],
-    db: [purchaseParts(1, 0)],
+    db: [
+      purchaseParts(1, 0),
+      {
+        label: "refusal preserves the original unknown cost",
+        sql: `SELECT cost FROM "Expense" WHERE shortcode = $1 AND "deletedAt" IS NULL`,
+        params: only("expense"),
+        rows: () => [{ cost: null }],
+      },
+    ],
   },
   {
     id: "finance-attach-expenses",
@@ -695,10 +895,31 @@ export const journeys: Journey[] = [
     start: "purchase",
     steps: [
       {
+        ios: "Scroll down through this purchase detail until Attach existing expenses is visible in its report. Leave that button visible on the detail page.",
+        tapTestId: { ios: "section.linkExpenses" },
+        tapControl: {
+          web: { role: "button", name: "Attach existing expenses" },
+        },
+      },
+      {
         goal: 'Attach existing expenses to this purchase: select "Synthetic movable expense", wait for the Attach button to become enabled, and press it once. The app then warns that the expense moves off another purchase; stop there and do not press the confirming button.',
+        web: [
+          "In the open Attach expenses dialog, select the checkbox for Synthetic movable expense. Finish with that row selected and the dialog still open.",
+        ],
+        ios: "In the open Attach expenses sheet, select only Synthetic movable expense. Finish with that row selected and Attach 1 available.",
+        tapTestId: { ios: "attach.expenses.save" },
+        tapControl: { web: { role: "button", name: "Attach 1" } },
         check: { db: [expensePurchase("otherPurchase")] },
       },
-      { goal: "Confirm the move: press the confirming Attach button." },
+      {
+        goal: "Confirm the move: press the confirming Attach button.",
+        web: [],
+        ios: [],
+        tapControl: {
+          web: { role: "button", name: "Confirm: attach 1" },
+          ios: { role: "button", name: "Attach" },
+        },
+      },
     ],
     visible: () => [],
     db: [expensePurchase("purchase")],
@@ -709,7 +930,21 @@ export const journeys: Journey[] = [
     start: "purchase",
     steps: [
       {
+        ios: "Scroll down through this purchase detail until Attach products is visible in its report. Leave that button visible on the detail page.",
+        tapTestId: { ios: "section.linkProducts" },
+        tapControl: { web: { role: "button", name: "Attach products" } },
+      },
+      {
         goal: 'Attach products to this purchase: choose "Synthetic Attachable Sieve" and attach it.',
+        web: [
+          "In the open Attach products dialog, select only the checkbox for Synthetic Attachable Sieve. Finish with exactly 1 selected, Attach 1 available, and the dialog still open.",
+        ],
+        ios: "In the open Attach products sheet, select only Synthetic Attachable Sieve. Finish with that row selected and Attach 1 available.",
+        tapTestId: { ios: "attach.products.save" },
+        tapControl: { web: { role: "button", name: "Attach 1" } },
+      },
+      {
+        ios: "Scroll down past Financial settlement to the Products section on this purchase detail. Expand Products if collapsed. Finish with Synthetic Attachable Sieve visible in Products and the detail still open.",
       },
     ],
     visible: () => ["Synthetic Attachable Sieve"],
@@ -733,12 +968,27 @@ export const journeys: Journey[] = [
       {
         goal: `Open the task board grouped by project. Confirm the lanes include "Inbox" and "${JOURNEY_NAMES.boardProjectA}".`,
         web: `This is the task board with lanes grouped by project. Confirm the lanes include "Inbox" and "${JOURNEY_NAMES.boardProjectA}".`,
+        ios: [
+          "Open the Library tab, then Browse catalog. Finish on the Browse catalog list.",
+          "Scroll down through the Browse catalog and open Tasks. Finish with Synthetic inbox card and List controls visible.",
+        ],
+        tapControl: { ios: { role: "button", name: "List controls" } },
+      },
+      {
+        tapControl: { ios: { role: "button", name: "View" } },
+      },
+      {
+        tapControl: { ios: { role: "button", name: "Board" } },
         check: {
           visible: () => ["Inbox", JOURNEY_NAMES.boardProjectA],
         },
       },
       {
         goal: `Move the card "Synthetic inbox card" from Inbox into the "${JOURNEY_NAMES.boardProjectA}" lane.`,
+        ios: `Open the Move menu beside "Synthetic inbox card". Finish with the "Lane: ${JOURNEY_NAMES.boardProjectA}" option visible and the menu still open.`,
+        tapControl: {
+          ios: { role: "button", name: `Lane: ${JOURNEY_NAMES.boardProjectA}` },
+        },
       },
     ],
     visible: () => [],

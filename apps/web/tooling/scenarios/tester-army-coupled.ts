@@ -9,8 +9,15 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { Pool } from "pg";
 import { z } from "zod";
 
-import { ledgerParty, orderMailEvent } from "~/server/db/schema";
-import { authorizePurchaseAgent } from "~/server/purchase-import/purchase-agent-workerd.fixtures";
+import {
+  email as emailTable,
+  ledgerParty,
+  orderMailEvent,
+} from "~/server/db/schema";
+import {
+  authorizePurchaseAgent,
+  authorizeSyntheticBackfill,
+} from "~/server/purchase-import/purchase-agent-workerd.fixtures";
 import type {
   PhotoImportFinalizeInput,
   PhotoImportStageInput,
@@ -22,9 +29,11 @@ import { inspectImageFile } from "~/server/services/image-integrity";
 
 import { seedBaseWorld } from "../factories/base-world";
 import { LIVE_IMPORT } from "../tester-army/names";
-import { buildScenarioDatabase } from "./context";
+import { buildKernelContext, buildScenarioDatabase } from "./context";
 import { seedSimulatorPhotoActor } from "./simulator";
 import type { JourneySeed } from "./tester-army-journeys";
+
+const COUPLED_MAILBOX_ID = "synthetic-coupled-mailbox";
 
 /** What the coupled harness offers the seed beyond the database. */
 type CoupledServices = {
@@ -60,10 +69,15 @@ export async function seedCoupledJourneys(
   if (!member) throw new Error("Synthetic member party was not seeded");
   // MCP delegation and photo grouping both require the member's agent grant.
   await authorizePurchaseAgent(db, userId);
+  await authorizeSyntheticBackfill(
+    { db, actor: buildKernelContext(db, testUserId(userId)).actorContext },
+    parseEntityId("ledgerParty", member.id),
+    COUPLED_MAILBOX_ID,
+  );
 
   const seed: JourneySeed = {};
 
-  // A saved, itemized confirmation the member imports from the vendor page,
+  // A saved, itemized confirmation the member imports from its Email,
   // plus its later shipping notice.
   seed["import-order-mail"] = await seedSavedConfirmation(
     db,
@@ -199,7 +213,7 @@ async function seedSavedConfirmation(
   ) => {
     const saved = await retainedMailFixture(db, {
       ledgerPartyId: party,
-      mailboxId: "synthetic-coupled-mailbox",
+      mailboxId: COUPLED_MAILBOX_ID,
       vendorId: vendor.id,
       messageId: `synthetic-live-${event}-${crypto.randomUUID()}`,
       sender: `orders@${source.host}`,
@@ -220,14 +234,21 @@ async function seedSavedConfirmation(
         currency: "USD",
         sourceKey: `synthetic:${saved.id}`,
       });
+    return saved;
   };
-  await save("placed", "2026-09-10T15:00:00Z", {
-    bodyHtml: `<p>Order ${source.orderId}</p><table><tr><td><a href="${source.productUrl}">${source.item}</a></td><td>SKU HERB-1</td><td>1</td><td>$5.00</td></tr></table><p>Grand total $5.00 USD</p>`,
-    bodyText: `Order ${source.orderId}. ${source.item} (${source.productUrl}), SKU HERB-1, qty 1, $5.00. Grand total $5.00 USD.`,
+  const confirmation = await save("placed", "2026-09-10T15:00:00Z", {
+    bodyHtml: `<p>Order ${source.orderId}</p><p>Order date: September 10, 2026</p><table><tr><td><a href="${source.productUrl}">${source.item}</a></td><td>SKU HERB-1</td><td>1</td><td>$5.00</td></tr></table><p>Grand total $5.00 USD</p>`,
+    bodyText: `Order ${source.orderId}. Order date: September 10, 2026. ${source.item} (${source.productUrl}), SKU HERB-1, qty 1, $5.00. Grand total $5.00 USD.`,
   });
   await save("shipped", "2026-09-11T15:00:00Z", {
     bodyHtml: null,
     bodyText: `Your order ${source.orderId} has shipped.`,
   });
-  return { vendor: vendor.shortcode };
+  const [email] = await getDb(db)
+    .select({ shortcode: emailTable.shortcode })
+    .from(emailTable)
+    .where(eq(emailTable.orderMailId, confirmation.id))
+    .limit(1);
+  if (!email) throw new Error("Synthetic confirmation Email was not seeded");
+  return { vendor: vendor.shortcode, email: email.shortcode };
 }

@@ -1,4 +1,4 @@
-import type { AgentParams } from "e2e";
+import type { AgentParams, Screen } from "e2e";
 import {
   assertDatabase,
   assertScreenRead,
@@ -8,9 +8,21 @@ import {
   stepGoals,
   type Engine,
   type Journey,
+  type JourneyControl,
   type Json,
   type ScreenRead,
 } from "./journey";
+
+export function runJourneyControl(
+  screen: Screen,
+  { role, name, swipe, within }: JourneyControl,
+): Promise<void> {
+  const scope = within
+    ? screen.getByRole(within.role, { name: within.name, exact: true })
+    : screen;
+  const control = scope.getByRole(role, { name, exact: true });
+  return swipe ? control.swipe(swipe) : control.tap();
+}
 
 type Fixtures = {
   /** Opens a web path or an iOS deep link (or just launches the app when undefined). */
@@ -31,6 +43,8 @@ type Fixtures = {
   /** Reloads the current page so it shows what a live run wrote meanwhile. */
   reload: () => Promise<void>;
   tapTestId?: (id: string) => Promise<void>;
+  tapControl?: (control: JourneyControl) => Promise<void>;
+  expectButtonDisabled?: (name: string) => Promise<void>;
   /** Exact-text assertions supplied by the engine's own `expect`/`screen`. */
   expectText: (text: string, visible: boolean) => Promise<void>;
 };
@@ -58,6 +72,28 @@ async function runStepActions(
       throw new Error(`${engine} does not support explicit control taps`);
     await fixtures.tapTestId(control);
   }
+  const accessibleControl = step.tapControl?.[engine];
+  if (accessibleControl) {
+    if (!fixtures.tapControl)
+      throw new Error(`${engine} does not support explicit control taps`);
+    await fixtures.tapControl(accessibleControl);
+  }
+}
+
+async function expectStepCheck(
+  fixtures: Fixtures,
+  journey: Journey,
+  step: Journey["steps"][number],
+  engine: Engine,
+  ids: ReturnType<typeof loadJourneyIds>,
+) {
+  await expectTexts(fixtures, step.check?.visible?.(ids) ?? [], true);
+  for (const button of step.check?.disabledButtons?.[engine] ?? []) {
+    if (!fixtures.expectButtonDisabled)
+      throw new Error("Engine does not support disabled button assertions");
+    await fixtures.expectButtonDisabled(button);
+  }
+  if (step.check?.db) await assertDatabase(journey, step.check.db, ids, false);
 }
 
 async function runJourneyBody(
@@ -76,9 +112,7 @@ async function runJourneyBody(
     if (step.awaitRun) await awaitRun(journey, step.awaitRun, ids);
     if (step.ready || step.awaitRun) await fixtures.reload();
     await runStepActions(step, engine, fixtures, params);
-    await expectTexts(fixtures, step.check?.visible?.(ids) ?? [], true);
-    if (step.check?.db)
-      await assertDatabase(journey, step.check.db, ids, false);
+    await expectStepCheck(fixtures, journey, step, engine, ids);
     if (step.read)
       assertScreenRead(
         journey,
@@ -109,7 +143,7 @@ export async function runJourney(
     await runJourneyBody(journey, engine, fixtures);
   } finally {
     // The inference gateway rate-limits bursts (seen on a 16-journey run); pace journeys instead of retrying them.
-    const ms = Number(process.env.TESTER_ARMY_PACE_MS ?? 20_000);
+    const ms = Number(process.env.TESTER_ARMY_PACE_MS ?? 5_000);
     if (ms > 0) await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

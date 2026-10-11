@@ -1708,6 +1708,9 @@ async function runTesterArmyNativeJourney(deviceID: string): Promise<void> {
       "--output",
       output,
       ...(process.env.TESTER_ARMY_DEBUG === "1" ? ["--debug"] : []),
+      ...(process.env.TESTER_ARMY_SHARD
+        ? ["--shard", process.env.TESTER_ARMY_SHARD]
+        : []),
     ],
     repoRoot,
     undefined,

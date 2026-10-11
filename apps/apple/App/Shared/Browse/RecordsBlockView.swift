@@ -475,6 +475,7 @@ struct RecordsBlockView: View {
         ForEach(records.verbs.filter { Self.handledVerbs.contains($0.verb) }) { verb in
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 verbButton(verb)
+                    .buttonStyle(.borderless)
                 if let reason = verb.disabledReason {
                     Text(reason).font(.caption).foregroundStyle(.secondary)
                 }
