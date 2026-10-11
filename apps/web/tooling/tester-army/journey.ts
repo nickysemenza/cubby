@@ -19,7 +19,9 @@ export type JourneyControl = {
   /** Picker options include generated codes and ancestry after their name. */
   exact?: boolean;
   swipe?: SwipeOptions;
-  within?: { role: Role; name: string };
+  /** A correction can revisit an input above a form footer. */
+  scrollDirection?: "up" | "down";
+  within?: { role: Role; name: string } | { testId: string };
 };
 
 /** A journey's seeded codes; reading one that was not seeded is a journey bug, so it throws. */

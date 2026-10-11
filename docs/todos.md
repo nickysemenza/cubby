@@ -129,6 +129,12 @@ See also the image operational passes at the end of this file.
 
 ### Reconcile charges and refunds
 
+- 🧱 **Record points and miles redemptions.** An award ticket's fare is a $0
+  principal Expense; only its taxes and fees are money. Record the loyalty
+  program, points spent, and an optional cents-per-point value on the Expense,
+  outside `cost`, so a trip Project can show cash plus points without breaking
+  `SUM(Expense.cost)`. Decide whether a per-program balance is in scope.
+
 ### Review and apply corrections
 
 ## Import pipeline architecture
@@ -201,6 +207,11 @@ historical Runs stay readable through generic reports.
   historical backfill, $10/month continuous) with durable known-price admission
   before every paid transmission; prefer subscription inference. Populated
   fields and terminal Runs do not establish verification.
+
+- 🟢 **Cover the `replace_aggregate_line` fix path.** No integration test
+  applies an audit-proposed aggregate replacement; the first exact-identity
+  guard broke its `distinctFrom` carry unnoticed. Add a commit → finding →
+  approve case whose line carries a Distinct-from decision.
 
 - ⏳ **Measure paid fallback recovery.** A bounded live attempt saw the exact
   quota refusal inside an HTTP 200 stream; the shared router now qualifies it

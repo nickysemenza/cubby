@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   entityExternalId,
+  entitySource,
   externalSource,
   auditLog,
   expense,
@@ -1408,6 +1409,273 @@ describe("member prepare and commit identity fences", () => {
       .set({ deletedAt: new Date() })
       .where(eq(vendorTable.id, vendor.id));
     await expect(preparation.commit()).rejects.toThrow(/deleted or merged/);
+    await expectNothingWritten();
+  });
+
+  async function existingProduct(input: {
+    name: string;
+    manufacturer: string;
+    aliases?: string[];
+  }) {
+    const created = await createProductFixture(
+      ctx.db,
+      makeProductInput(input),
+      ctx.actor,
+    );
+    const [row] = await getDb(ctx.db)
+      .select({ id: product.id, shortcode: product.shortcode })
+      .from(product)
+      .where(eq(product.id, created.entityId));
+    if (!row) throw new Error("Product fixture was not created");
+    return row;
+  }
+
+  const productOrder = (
+    vendorId: MemberImportOrder["vendorId"],
+    line: { title: string; sku?: string },
+    resolution: NonNullable<MemberImportOrder["resolutions"]>[number],
+  ): MemberImportOrder => ({
+    stableOrderId: "new-product",
+    vendorId,
+    source,
+    extraction: {
+      status: "ready",
+      candidate: {
+        ...candidate("SYNTHETIC-NEW", 24),
+        lines: [{ ...line, amount: 24, quantity: 1, lineKind: "principal" }],
+      },
+    },
+    resolutions: [resolution],
+  });
+
+  const liveProductIds = async () =>
+    (await getDb(ctx.db).select({ id: product.id }).from(product))
+      .map(({ id }) => id)
+      .sort();
+
+  it.each([
+    { matched: "name", title: "  synthetic COPPER instrument " },
+    { matched: "alias", title: "Synthetic brass gauge" },
+  ])(
+    "refuses an explicit new Product that would fork an exact $matched identity",
+    async ({ title }) => {
+      const { vendor } = await scope();
+      const existing = await existingProduct({
+        name: "Synthetic copper instrument",
+        manufacturer: "Synthetic works",
+        aliases: ["Synthetic brass gauge"],
+      });
+      const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
+        key: "exact-name-fork",
+        defaultTrade: "other",
+        orders: [productOrder(vendor.shortcode, { title }, { kind: "new" })],
+      });
+      expect(
+        preparation.prepared.orders[0]?.lines[0]?.candidates[0],
+      ).toMatchObject({ productId: existing.shortcode, exactNameMatch: true });
+      await expect(preparation.commit()).rejects.toThrow(
+        new RegExp(existing.shortcode),
+      );
+      await expectNothingWritten();
+      expect(await liveProductIds()).toEqual([existing.id]);
+    },
+  );
+
+  async function identifierOwner() {
+    const { vendor } = await scope();
+    const owner = await existingProduct({
+      name: "Synthetic steel fitting",
+      manufacturer: "Synthetic works",
+    });
+    await withTransaction(ctx.db, async (tx) => {
+      await tx.insert(externalSource).values({
+        slug: "synthetic-merchant",
+        label: "Synthetic merchant catalog",
+        vendorId: vendor.id,
+      });
+      await tx.insert(entityExternalId).values({
+        entityId: owner.id,
+        entityKind: "product" as const,
+        source: "synthetic-merchant",
+        kind: "retailer_sku",
+        externalId: "SYN-1001",
+        isPrimary: true,
+      });
+    });
+    return { vendor, owner };
+  }
+
+  it("refuses an explicit new Product whose line identifier another Product owns, even when marked distinct", async () => {
+    const { vendor, owner } = await identifierOwner();
+    const line = { title: "Synthetic fitting, relisted", sku: "SYN-1001" };
+    const resolutions: Array<
+      [string, NonNullable<MemberImportOrder["resolutions"]>[number]]
+    > = [
+      ["identifier-fork", { kind: "new" }],
+      [
+        "identifier-fork-distinct",
+        {
+          kind: "new" as const,
+          distinctFrom: [
+            {
+              productId: parseShortcodeFor("product", owner.shortcode),
+              url: "https://example.com/listing/fitting",
+              quote: "Relisted under a new title.",
+            },
+          ],
+        },
+      ],
+    ];
+    for (const [key, resolution] of resolutions) {
+      const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
+        key,
+        defaultTrade: "other",
+        orders: [productOrder(vendor.shortcode, line, resolution)],
+      });
+      await expect(preparation.commit()).rejects.toThrow(
+        new RegExp(`${owner.shortcode}.*SYN-1001|SYN-1001.*${owner.shortcode}`),
+      );
+      await expectNothingWritten();
+      expect(await liveProductIds()).toEqual([owner.id]);
+    }
+  });
+
+  it("refuses an explicit new Product whose SKU is a barcode another Product owns", async () => {
+    const { vendor } = await scope();
+    const owner = await existingProduct({
+      name: "Synthetic labeled fitting",
+      manufacturer: "Synthetic works",
+    });
+    await withTransaction(ctx.db, async (tx) => {
+      await ensureExternalSources(tx, ["gtin"]);
+      await tx.insert(entityExternalId).values({
+        entityId: owner.id,
+        entityKind: "product" as const,
+        source: "gtin",
+        kind: "gtin_14",
+        externalId: "00012345678905",
+        isPrimary: true,
+      });
+    });
+    const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
+      key: "barcode-fork",
+      defaultTrade: "other",
+      orders: [
+        productOrder(
+          vendor.shortcode,
+          { title: "Fitting from a receipt", sku: "012345678905" },
+          { kind: "new" },
+        ),
+      ],
+    });
+    expect(
+      preparation.prepared.orders[0]?.lines[0]?.candidates[0],
+    ).toMatchObject({ productId: owner.shortcode, exactIdentifierMatch: true });
+    await expect(preparation.commit()).rejects.toThrow(
+      new RegExp(owner.shortcode),
+    );
+    await expectNothingWritten();
+  });
+
+  it("creates one Product for two new lines with the same title in one order", async () => {
+    const { vendor } = await scope();
+    const order = productOrder(
+      vendor.shortcode,
+      { title: "Synthetic hose clamp" },
+      { kind: "new" },
+    );
+    const lines = order.extraction.candidate!.lines;
+    const { committed } = await memberImport(ctx.db, ctx.actor, {
+      key: "same-title",
+      defaultTrade: "other",
+      orders: [
+        {
+          ...order,
+          extraction: {
+            status: "ready",
+            candidate: {
+              ...order.extraction.candidate!,
+              printedGrandTotal: 48,
+              lines: [...lines, ...lines],
+            },
+          },
+          resolutions: [{ kind: "new" }, { kind: "new" }],
+        },
+      ],
+    });
+    expect(committed.items[0]?.purchaseId).toBeTruthy();
+    expect(await liveProductIds()).toHaveLength(1);
+  });
+
+  it("creates a Product beside an exact name match only with a sourced distinct-from decision", async () => {
+    const { vendor } = await scope();
+    const existing = await existingProduct({
+      name: "Synthetic copper instrument",
+      manufacturer: "Synthetic works",
+    });
+    const quote = "Sold as a two-pack; the single unit is a separate listing.";
+    const { committed } = await memberImport(ctx.db, ctx.actor, {
+      key: "distinct-from",
+      defaultTrade: "other",
+      orders: [
+        productOrder(
+          vendor.shortcode,
+          { title: "Synthetic Copper Instrument" },
+          {
+            kind: "new",
+            distinctFrom: [
+              {
+                productId: parseShortcodeFor("product", existing.shortcode),
+                url: "https://example.com/listing/two-pack",
+                quote,
+              },
+            ],
+          },
+        ),
+      ],
+    });
+    expect(committed.items[0]?.purchaseId).toBeTruthy();
+    const created = (await liveProductIds()).filter((id) => id !== existing.id);
+    expect(created).toHaveLength(1);
+    const sources = await getDb(ctx.db)
+      .select({ url: entitySource.url, quote: entitySource.quote })
+      .from(entitySource)
+      .where(eq(entitySource.entityId, created[0]!));
+    expect(sources).toContainEqual({
+      url: "https://example.com/listing/two-pack",
+      quote,
+    });
+  });
+
+  it("refuses a distinct Product that would reuse the identical name instead of failing on the name index", async () => {
+    const { vendor } = await scope();
+    const existing = await existingProduct({
+      name: "Synthetic copper instrument",
+      manufacturer: "",
+    });
+    const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
+      key: "identical-name",
+      defaultTrade: "other",
+      orders: [
+        productOrder(
+          vendor.shortcode,
+          { title: "Synthetic copper instrument" },
+          {
+            kind: "new",
+            distinctFrom: [
+              {
+                productId: parseShortcodeFor("product", existing.shortcode),
+                url: "https://example.com/listing/variant",
+                quote: "A different variant sold under the same title.",
+              },
+            ],
+          },
+        ),
+      ],
+    });
+    await expect(preparation.commit()).rejects.toThrow(
+      new RegExp(`identical name.*${existing.shortcode}`),
+    );
     await expectNothingWritten();
   });
 });

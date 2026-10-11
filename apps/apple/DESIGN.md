@@ -8,7 +8,7 @@ Warm canvas and surface colors make records readable in light mode; their genera
 
 Use the system serif design for a record's human title or a major dashboard heading. Use standard SwiftUI text styles for body, controls, lists, forms, and settings so Dynamic Type works. Identifiers use mono; measurements and money use monospaced digits. Real entity images may lead a detail view. If an entity has no image, title and declared data lead it without an empty media box.
 
-Use native `List`, `Form`, `Section`, `LabeledContent`, toolbars, sheets, menus, and split views. The warm canvas belongs to content, not a recreation of system bars or Liquid Glass. Resting panels use tonal separation and a hairline; overlays may use native elevation. Controls keep native hit behavior, and phone targets stay at least 44 points.
+Use native `List`, `Form`, `Section`, `LabeledContent`, toolbars, sheets, menus, and split views. The warm canvas belongs to content, not a recreation of system bars or Liquid Glass. Resting panels use tonal separation and a hairline; overlays may use native elevation. Controls keep native hit behavior, and phone targets stay at least 44 points. Structured amounts use separate native Form rows for Amount, Upper amount and Unit, with distinct labels and native bordered field targets; do not compress multiple editable inputs and Remove into one row. Task-board Move actions name their task for accessibility.
 
 ## Navigation and generic records
 

@@ -25,7 +25,9 @@ ties. Project and Spending Category reports group those same joint allocations;
 filtering never changes the full Purchase weights. Unknown shares remain in the
 report, and the allocated total equals `SUM(Expense.cost)`. Refund-only baskets
 use absolute principal weights; unidentified refund adjustments on a positive
-basket remain unknown unless explicitly classified.
+basket remain unknown unless explicitly classified. A basket whose principals
+are all priced at $0 (an award ticket) splits adjustments evenly across them;
+one unpriced principal leaves the shares unknown.
 
 Category completeness is independent of pricing and Project completeness. A
 known category on an unpriced Expense is still classified. An automatic

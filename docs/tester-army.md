@@ -65,7 +65,7 @@ Web receiving opens Location and taps its uniquely named option through the SDK 
 The web fixture waits for `[data-hydrating]` controls to clear after opening or
 reloading a page. Jev cannot choose a server-rendered Edit button while the app
 intentionally disables it until React attaches its handlers. This wait observes
-the application readiness contract; it does not add a fixed delay.
+the application readiness contract; it does not add a fixed delay. After database readiness and a reload, wait for the relevant live action to render before giving Jev its goal; cleared hydration markers do not establish data-dependent action readiness.
 
 Tester Army and its decision/mobile SDKs run unpatched. Goals use the existing
 searchable web picker inputs. The native external-ID journey splits source,
@@ -74,15 +74,17 @@ button, then taps the known Save control as a supported hybrid step. External-ID
 the measured Form viewport; product rename covers editor navigation. The generic native editors
 expose that shared Done action and render structured fields as separate Form
 rows for keyboard avoidance. Token-entry fields derive stable identifiers from the entity and field keys so the native driver can rebind them after keyboard movement. Source-alias row creation uses its known Add control before field entry. Rename finishes field entry before an exact SDK Done tap. The Split sheet reuses the shared keyboard Done accessory; split entry dismisses it between every name and cost input before checking conservation. Source-alias, transaction source-ref and sale entry dismiss the keyboard between fields; the floating Done accessory can otherwise cover the next input. Keep unsupported interaction handling in the
-journeys or product UI rather than patching the E2E SDK. Goals end at observable
+journeys or product UI rather than patching the E2E SDK. Let English goals complete an action once; do not follow an approval goal with another SDK click on the same disappearing action. Persisted outcome checks verify completion. Goals end at observable
 states, with exact database read-back establishing persistence. HTTP and network
 inference failures fail once at Cubby's gateway boundary; aborts stay aborts.
 Native keyboard Done uses the SDK’s exact button tap; editor Save and hero-action confirmations use `tapTestId` rather than model completion. Native identifier taps also require `role=button`, because iOS 26 can expose both a wrapper and its child with the same identifier: both compound
 and simple Save goals returned inconclusive after successfully saving. The
 following visible-value check and exact SQL assertions verify the saved external
-ID, source and kind. Jev still enters the fields and drives product rename. Board movement asks Jev only to open Move and leave its menu open; the existing exact lane tap commits the change before SQL read-back.
+ID, source and kind. Jev still enters the fields and drives product rename. Board navigation uses Jev; task-specific Move and lane choices use SDK taps before SQL read-back.
 
-Native deep links discard an already-visible stale system confirmation before dispatching a new URL, then wait for either the exact target or the Open in Cubby confirmation before accepting once. A one-shot prompt check can miss a delayed confirmation and leak its URL into the next case. The exact fixture code must be visible before setup or agent actions; hosted sign-in can outlast the initial launch. Expense split and purchase-product attachment first reveal their lazy Settlement or Reconciliation report, wait for its action to attach, then center that control. Use the actual heading role: Settlement is plain section text; Reconciliation is a field-explanation button. A hydration check requires attachment before scrolling for visibility, since the action may start below the viewport. Claim and nutrition setup establish focus on their known inputs before typing; claim entry swipes through the measured label gutter to clear the floating keyboard Done button, since a gesture inside the text field selects text. Unbounded downward model scrolling skipped the Purchase report and kept scrolling at the bottom, so cents conservation and unknown-cost refusal begin with its Split control reachable. Generic native money inputs expose their field label and stable identifier instead of just a numeric placeholder; sale setup reveals and focuses Cost before agent entry. Native nutrition targets the Kcal input, and recipe entry leaves Save to the known editor control. The final Split tap is scoped to its confirmation group because the underlying detail action remains in the native accessibility tree.
+Native journeys wait for authenticated Library readiness before dispatching deep links, discard stale system confirmations, then wait for the exact target or the new Open in Cubby prompt before accepting once. Verify the seeded fixture code before setup. Lazy report actions must attach before scrolling for visibility; use their actual heading roles. Setup reveals the relevant editor region; Jev chooses the recipe amount input from its English goal. Known-input focus is only setup where keyboard avoidance requires it. Do not gate a journey on incidental focus state: persisted-value assertions establish whether entry worked. SDK Done waits until the keyboard control disappears before revealing the next input; source-claim setup clears the floating accessory through the measured label gutter so the gesture does not select text.
+
+Reveal controls within their actual Form, detail or catalog container using slow scrolling and bounded measured centering; offscreen AX nodes can report a tap without changing state. Scroll back up for input corrections, and reveal footer warnings without requiring them to reach the viewport center. Browse catalog Tasks navigation is scoped to its list; global Find searches records. Split confirmation taps stay scoped to their group when the underlying detail action remains accessible. The native SDK transition budget is two seconds because AX bounds can arrive before scrolling pixels settle. Keep one activation and the existing visible-state and SQL outcome checks.
 
 ## Failure modes and acceptance
 
@@ -197,17 +199,13 @@ Apple FFI uses the same target-specific action as required Apple CI. On a
 GitHub output-cache miss, jobs with installed workspace dependencies use the
 existing Nx artifact cache before compiling. Archive jobs without those
 dependencies retain their direct build path.
-The native journey lanes restore both the SPM package cache and the same
-Xcode-versioned DerivedData cache as the regular Apple build gate. Do not disable
-SPM restoration while restoring DerivedData: its saved workspace metadata can
-refer to binary artifacts such as Sentry's XCFramework that are absent from
-DerivedData itself. Hosted builds use the shared SPM clone directory,
-content-based source mtimes, native arm64 slice, and batch compilation. They
-resolve package dependencies before validating a certificate for the cached app.
-An unchanged toolchain, generated inputs, Swift and resource files, FFI bytes,
-dependency pins, and complete app-bundle checksum allow compilation to be skipped.
-Otherwise they run the normal incremental build and certify its result. The
-required Apple gate always compiles and supplies the same certificate. The optional
+On an Nx simulator-app cache miss, Tester Army iOS jobs restore both the SPM
+package cache and the Xcode-versioned DerivedData cache used by the Apple gate.
+Keep both together: DerivedData workspace metadata can refer to binary artifacts
+such as Sentry's XCFramework that live in the SPM cache. The harness generates
+the project and invokes the Nx simulator-build target before installation;
+unchanged inputs reuse its app output, while changed inputs compile normally.
+The required Apple gate uses the same cached target. The optional
 GitHub native jobs start simulator boot after dependency installation, overlapping
 startup with Apple tool setup and cache restores. Booting during extraction and
 generation increased observed dependency setup from 42 seconds to 84–386 seconds;
@@ -231,11 +229,17 @@ original error without starting XCTest again for a UI snapshot. Failures after
 successful preparation still capture the UI tree.
 A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.
+Tester Army iOS jobs first reuse the existing Nx simulator-build cache probe. A cached
+app skips the large Swift package-clone and DerivedData restores; a miss keeps
+the shared compilation setup. FFI verification, project generation and the
+device runner remain necessary even with a cached app.
 
 The **E2E journeys** workflow (`e2e-journeys.yaml`) runs an informational
 trial in parallel with required checks. Same-repository code PRs run all
-standard web journeys. Native, shared package, backend/API/contract, tooling,
-workflow and root configuration changes also run iOS; import/vendor/run changes
+standard web journeys. The full iOS catalog runs only when explicitly selected
+with the `tester-army:ios` label, manual dispatch, or the weekly schedule;
+native/shared/backend changes retain their required Apple checks without
+automatically starting paid native journeys. Import/vendor/run changes
 and shared/backend changes also run the coupled import journeys. Prose-only PRs
 and fork PRs do not automatically call paid models. The complete native catalog runs in two parallel SDK shards (`--shard 1/2` and `2/2`), with separate recording caches, reports and reporter keys. The partition preserves all native cases; it lowers work per job while using more concurrent macOS runners. Changed-file routing lives
 in `scripts/tester-army-ci.ts`; renamed files include their old paths.

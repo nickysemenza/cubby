@@ -73,10 +73,7 @@ if (process.argv[2] === "route") {
       (label: { name: string }) => label.name,
     );
     selected.web = code.length > 0 || labels.includes("tester-army");
-    selected.ios =
-      shared ||
-      code.some((file) => file.startsWith("apps/apple/")) ||
-      labels.includes("tester-army:ios");
+    selected.ios = labels.includes("tester-army:ios");
     selected.imports =
       shared ||
       code.some((file) =>

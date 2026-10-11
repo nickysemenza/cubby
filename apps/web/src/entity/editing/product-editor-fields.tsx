@@ -14,7 +14,7 @@ import { redundantTokens } from "@cubby/shared/redundant-tokens";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import {
   type FieldValues,
   type UseFormReturn,
@@ -72,6 +72,8 @@ export function ProductTagsField({
   form,
   field,
 }: SpecializedIntentRendererProps) {
+  const tagsId = useId();
+  const collectionsId = useId();
   const [manufacturer, aliases, categoryId] = useWatch({
     control: form.control,
     name: ["manufacturer", "aliases", "categoryId"],
@@ -106,8 +108,9 @@ export function ProductTagsField({
     });
   return (
     <Stack gap="sm">
-      <FormFieldGroup label="Tags">
+      <FormFieldGroup label="Tags" htmlFor={tagsId}>
         <ChipsInput
+          id={tagsId}
           value={tags}
           onChange={(next) => write(next, collections)}
           placeholder="e.g. grinder-4.5in, M18"
@@ -130,8 +133,9 @@ export function ProductTagsField({
           }}
         />
       </FormFieldGroup>
-      <FormFieldGroup label="Collections">
+      <FormFieldGroup label="Collections" htmlFor={collectionsId}>
         <ChipsInput
+          id={collectionsId}
           value={collections}
           onChange={(next) => write(tags, next)}
           placeholder="e.g. painting"

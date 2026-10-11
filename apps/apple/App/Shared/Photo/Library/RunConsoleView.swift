@@ -92,6 +92,7 @@ struct RunConsoleView: View {
                 LoadingIndicator(label: "Loading run")
             }
         }
+        .accessibilityIdentifier("run.console")
         .navigationTitle(descriptor.singular)
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

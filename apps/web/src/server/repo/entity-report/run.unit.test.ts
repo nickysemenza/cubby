@@ -561,6 +561,7 @@ describe("prepared orders", () => {
     manufacturer: "Fixture maker",
     model: null,
     exactIdentifierMatch,
+    exactNameMatch: false,
   });
   const line = (
     stableLineId: string,

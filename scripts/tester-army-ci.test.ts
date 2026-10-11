@@ -62,7 +62,7 @@ test("workflow routing covers PR changes and labels, skips forks/prose, and sele
     copyFileSync("scripts/tester-army-ci.ts", path.join(root, "ci.ts"));
     writeFileSync(path.join(root, "package.json"), '{"type":"module"}');
     const all = await run();
-    assert.match(all, /web=true\nios=true\nimports=true\nsimulator=false/);
+    assert.match(all, /web=true\nios=false\nimports=true\nsimulator=false/);
     assert.match(all, /web-matrix=.*"lane":"web".*"lane":"import"/);
     files = [
       { filename: "apps/web/src/routes/_authenticated/runs.jobs.$id.tsx" },
@@ -74,7 +74,7 @@ test("workflow routing covers PR changes and labels, skips forks/prose, and sele
         previous_filename: "apps/web/src/contracts/purchase-import.contract.ts",
       },
     ];
-    assert.match(await run(), /ios=true\nimports=true/);
+    assert.match(await run(), /ios=false\nimports=true/);
     files = [{ filename: "docs/testing.md" }];
     assert.match(await run(), /web=false\nios=false\nimports=false/);
     event.pull_request.labels = [{ name: "tester-army:ios" }];

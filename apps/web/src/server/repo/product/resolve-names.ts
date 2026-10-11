@@ -8,11 +8,11 @@ import type {
 } from "@cubby/schemas/product";
 import { and, inArray } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getDb, notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
 import { getProductPickerItemsByIds } from "./crud";
 import {
@@ -156,4 +156,29 @@ export const findProductNameCandidates = async (db: Database, name: string) => {
     const row = byId.get(id);
     return row ? [row] : [];
   });
+};
+
+/**
+ * Live Products whose name or an alias equals `name` apart from letter case and
+ * surrounding spaces (GLOSSARY "Exact identity match"), oldest first.
+ */
+export const findExactProductNameMatches = async (
+  db: Database | DrizzleTransaction,
+  name: string,
+) => {
+  const [resolved] = await resolveNames(db, "product", [{ name }], {
+    create: false,
+  });
+  if (!resolved?.row) return [];
+  const ids = [resolved.row.id, ...resolved.candidates.map(({ id }) => id)];
+  const rows = await unwrapDb(db)
+    .select({
+      id: product.id,
+      shortcode: product.shortcode,
+      name: product.name,
+      manufacturer: product.manufacturer,
+    })
+    .from(product)
+    .where(and(notDeleted(product), inArray(product.id, ids)));
+  return ids.flatMap((id) => rows.filter((row) => row.id === id));
 };

@@ -612,7 +612,10 @@ function productChoice(id: string, prepared: PreparedLine): ReportChoice {
         id: candidate.productId,
         name: candidate.name,
         label: `Use ${candidate.name}`,
-        badges: candidate.exactIdentifierMatch ? ["Exact identifier"] : [],
+        badges: [
+          ...(candidate.exactIdentifierMatch ? ["Exact identifier"] : []),
+          ...(candidate.exactNameMatch ? ["Exact name"] : []),
+        ],
       };
       if (subtitle) suggestion.subtitle = subtitle;
       return suggestion;

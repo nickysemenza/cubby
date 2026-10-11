@@ -169,6 +169,7 @@ export const ChipsInput: FC<ChipsInputProps> = ({
               {renderChip ? renderChip(tag) : <span>{tag}</span>}
               <button
                 type="button"
+                aria-label={`Remove ${tag}`}
                 onClick={() => removeTag(tag)}
                 className="ml-1 rounded hover:bg-muted"
               >
@@ -196,6 +197,7 @@ export const ChipsInput: FC<ChipsInputProps> = ({
           />
           <Button
             type="button"
+            aria-label="Add value"
             variant="outline"
             size="icon"
             onClick={() => inputValue.trim() && addTag(inputValue)}

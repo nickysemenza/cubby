@@ -101,11 +101,16 @@ export const expenseJointAllocationSql = (
   ), principal_weight AS (
     SELECT f."purchaseId", f."expenseId" AS "principalExpenseId",
       f."projectId", f."spendingCategoryId",
-      CASE WHEN d.has_positive THEN 'positive' ELSE 'refund' END::text AS basis,
-      abs(f.cost_cents)::bigint AS weight
+      CASE WHEN d.has_negative AND NOT d.has_positive THEN 'refund' ELSE 'positive' END::text AS basis,
+      greatest(abs(f.cost_cents), 1)::bigint AS weight
     FROM principal_fact f JOIN purchase_direction d USING ("purchaseId")
     WHERE (d.has_positive AND f.cost_cents > 0)
       OR (NOT d.has_positive AND d.has_negative AND f.cost_cents < 0)
+      -- Every principal priced at $0 (an award ticket, a free item that still
+      -- shipped): the known zero weights split adjustments evenly. Any unpriced
+      -- principal keeps the unknown default instead of inventing a denominator.
+      OR (NOT d.has_positive AND NOT d.has_negative
+        AND NOT coalesce(d.has_unpriced_principal, false) AND f.cost_cents = 0)
   ), fallback_weight AS (
     SELECT p."id" AS "purchaseId", NULL::uuid AS "principalExpenseId",
       default_project."id" AS "projectId", NULL::uuid AS "spendingCategoryId",
