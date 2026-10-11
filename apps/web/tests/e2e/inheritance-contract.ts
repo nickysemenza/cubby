@@ -64,7 +64,7 @@ export function inheritanceContract() {
       explanation.getByText("Stored override", { exact: true }),
     ).toHaveCount(0);
     await expectViewportBounded(page);
-    await gotoAuthenticatedPage(page, `/purchases/${fixture.purchase.id}`);
+    await gotoAuthenticatedPage(page, `/purchases/${fixture.purchase.id}#work`);
     const projectCell = page
       .locator('[data-cell-col="projectId"]')
       .filter({ has: page.getByText("purchase default", { exact: true }) })

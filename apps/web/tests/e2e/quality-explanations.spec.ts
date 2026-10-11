@@ -130,7 +130,7 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   await expect(page).toHaveURL(/sort=.*dataQuality/);
   await expect(table.locator("tbody tr").first()).toContainText(lowerScoreName);
 
-  await gotoAuthenticatedPage(page, `/plants/${plant.id}`);
+  await gotoAuthenticatedPage(page, `/plants/${plant.id}#work`);
   const related = page.locator("#products");
   await expect(related.getByText("Quality", { exact: true })).toBeVisible();
   await expect(
