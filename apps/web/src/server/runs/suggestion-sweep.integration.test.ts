@@ -1640,12 +1640,13 @@ describe("persisted Suggestion sweeps", () => {
     };
     await startSuggestionSweep(ctx.db, input, ports);
     const [first] = await listPendingSuggestions(ctx.db, { minConfidence: 0 });
-    expect(first).toBeDefined();
+    // The review queue names the record by its public shortcode.
+    expect(first?.recordId).toBe(product.id);
     await startSuggestionSweep(ctx.db, input, ports);
     const saved = await getDb(ctx.db)
       .select({ id: suggestionTable.id, status: suggestionTable.status })
       .from(suggestionTable)
-      .where(eq(suggestionTable.recordId, first!.recordId));
+      .where(eq(suggestionTable.field, "categoryId"));
     // The read has no order; identify the earlier suggestion by id.
     expect(saved).toHaveLength(2);
     expect(saved.find(({ id }) => id === first!.id)?.status).toBe("superseded");

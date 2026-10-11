@@ -201,8 +201,8 @@ historical Runs stay readable through generic reports.
   runner with per-Email progress instead.
 
 - 🤔 **Settle a member search's abandoned matches.** A member's `mail.search`
-  runs only the free rule stage, so every non-Spam/Trash match is retained as
-  `uncertain` until the session settles it with `mail.resolve`. A session that
+  runs only the free rule stage, so every new non-Spam/Trash match is retained
+  as `uncertain` (an already-decided Email keeps its Relevance) until the session settles it with `mail.resolve`. A session that
   ends early leaves those copies retained. Either expire unsettled member
   matches or let members retain one Email by Gmail id instead of searching.
 
@@ -665,8 +665,7 @@ consume the declarations.
   `pnpm generate` requires it to be named here
   ([MCP exposure](agents/mcp.md#exposure)). Decide per group whether and how
   to expose it, then drop the group when it ships:
-  - Order mail: `vendor.orderMail`, `vendor.importOrderMail`,
-    `vendor.importSelectedOrderMail`.
+  - Order mail: `vendor.importOrderMail`, `vendor.importSelectedOrderMail`.
   - Inventory receiving: `inventory.receiveExpense`,
     `inventory.receivingContext`, `problems.resolveArrivedFindings`.
   - Discarding units: `inventory.bulkDiscard`, `product.discard`.

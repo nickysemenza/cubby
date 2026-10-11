@@ -22,7 +22,12 @@ type Capability =
   /** Review-queue metadata only: never changes household records. */
   | "match_proposal"
   /** Member Run lifecycle controls; no purpose may start or retry another Run. */
-  | "start_run";
+  | "start_run"
+  /**
+   * A member's own review, approval or paid grant; no Run purpose holds it,
+   * so only a member session acting on the member's instruction calls these.
+   */
+  | "member_decision";
 
 const capabilityMatrix = {
   mail_import: new Set([
@@ -78,6 +83,14 @@ const actionCapability = {
   "entity.resolve": "generic_mutation",
   "entity.move_inventory": "generic_mutation",
   "entity.repoint_project_uses": "generic_mutation",
+  "entity.reconcile_inventory": "member_decision",
+  "entity.resolve_scan_strays": "member_decision",
+  "entity.confirm_inventory_owner": "member_decision",
+  "entity.approve_detected_item": "member_decision",
+  "entity.accept_suggestion": "member_decision",
+  "entity.accept_suggestions": "member_decision",
+  "entity.reject_suggestion": "member_decision",
+  "entity.record_suggestion_miss": "member_decision",
   "statement_rows.record": "generic_mutation",
   "statement_rows.update": "generic_mutation",
   "statement_rows.delete": "generic_mutation",
@@ -90,6 +103,7 @@ const actionCapability = {
   "mail.rerun_preview": "start_run",
   "purchase_import.commit_accepted_reconciliation": "generic_mutation",
   "mail.resolve": "commit_purchase_import",
+  "mail.decide_order_mail": "member_decision",
   "purchase_import.prepare": "prepare",
   "purchase_import.prepare_reconciliation": "prepare",
   "purchase_import.commit": "commit_purchase_import",
@@ -97,12 +111,27 @@ const actionCapability = {
   "purchase_import.reclassify": "generic_mutation",
   "expenses.link_to_purchase": "generic_mutation",
   "expenses.split": "generic_mutation",
+  "expenses.confirm_beneficiary": "member_decision",
   "product_enrichment.verify_images": "generic_mutation",
   "product_enrichment.propose_match": "match_proposal",
+  "product_enrichment.merge_match": "member_decision",
+  "product_enrichment.dismiss_match": "member_decision",
+  "product_enrichment.dismiss_duplicate": "member_decision",
+  "product_enrichment.dismiss_related": "member_decision",
+  "product_enrichment.dismiss_tag": "member_decision",
   "upc.find_or_create": "generic_mutation",
   "photo_run.propose_groups": "photo_commit",
   "photo_run.commit_group": "photo_commit",
+  "photo_run.approve_groups": "member_decision",
+  "photo_run.save_groups": "member_decision",
+  "photo_run.choose_existing": "member_decision",
+  "photo_run.update_draft": "member_decision",
+  "photo_run.discard_group": "member_decision",
   "run.lifecycle": "start_run",
+  "run.approve_execution": "member_decision",
+  "run.discover_mail": "member_decision",
+  "run.commit_prepared": "member_decision",
+  "run.resolve_finding": "member_decision",
   "meal_recipe.add": "generic_mutation",
   "meal_recipe.update": "generic_mutation",
   "meal_recipe.remove": "generic_mutation",
@@ -118,6 +147,7 @@ const actionCapability = {
   "data_exception.set": "generic_mutation",
   "data_exception.clear": "generic_mutation",
   "spending_classification_write.apply": "generic_mutation",
+  "spending_classification_write.apply_category_suggestion": "member_decision",
 } as const satisfies Record<CubbyMcpMutationAction, Capability>;
 
 const isMutationAction = (action: string): action is CubbyMcpMutationAction =>

@@ -252,7 +252,6 @@ const runControlOutput = z.object({
 export const runContract = defineContract("run", {
   executionMailboxes: query({
     native: "Select a connected owned mailbox for an execution approval",
-    mcp: { omit: "human_approval" },
     input: z.strictObject({}),
     output: z.object({
       mailboxes: z.array(
@@ -264,7 +263,6 @@ export const runContract = defineContract("run", {
   approveExecution: mutation({
     native:
       "Approve exact mailbox discovery scope, limits, metered budget and expiry",
-    mcp: { omit: "human_approval" },
     input: executionAuthorizationApprovalInput,
     output: executionAuthorizationRef,
     invalidates: ["runOnly"],
@@ -272,7 +270,6 @@ export const runContract = defineContract("run", {
   discoverMail: mutation({
     native:
       "Start discovery for one owned mailbox under its current execution approvals",
-    mcp: { omit: "human_approval" },
     input: executionAuthorizationRequestedScope.pick({ mailboxId: true }),
     output: mailboxDiscoveryStartOutput,
     invalidates: ["runOnly"],
@@ -346,7 +343,6 @@ export const runContract = defineContract("run", {
     cache: { tags: [["run"]] },
   }),
   commitPrepared: mutation({
-    mcp: { omit: "human_approval" },
     native:
       "Approve a prepared import batch after the per-line Product and trade decisions",
     input: commitPurchaseImportInput.omit({ _runExecution: true }).extend({
@@ -358,7 +354,11 @@ export const runContract = defineContract("run", {
     invalidates: ["runOnly", "purchase", "product"],
   }),
   control: mutation({
-    mcp: { omit: "human_approval" },
+    mcp: {
+      omit: "agent_twin",
+      twin: "run.lifecycle",
+      note: "MCP reserves `action`, so agents name it controlAction",
+    },
     native: "Approve, reject, stop or retry a Run from its detail sections",
     input: runControlInput,
     output: runControlOutput,
@@ -366,10 +366,8 @@ export const runContract = defineContract("run", {
   }),
   lifecycle: mutation({
     input: runControlInput
-      .omit({ action: true, operationId: true, approvalId: true })
-      .extend({
-        controlAction: runControlAction.extract(["cancel", "retry", "restart"]),
-      }),
+      .omit({ action: true })
+      .extend({ controlAction: runControlAction }),
     output: runControlOutput.extend({
       run: runDetail.pick({
         publicId: true,

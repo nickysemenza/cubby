@@ -397,6 +397,126 @@ describe("public mail tool", () => {
       ).toEqual([{ classification: "unrelated", orderMailId: first.id }]);
       expect(await cursors()).toEqual([]);
     });
+
+    // Regression: a member's search re-saved every match as `uncertain`,
+    // downgrading an Email whose Relevance was already decided under an older
+    // classification version.
+    it("keeps an existing Relevance decision, its stage and retained content, retaining only new matches as uncertain", async () => {
+      const f = await fixture();
+      const related = await retainedMailFixture(ctx.db, {
+        ledgerPartyId: f.party.id,
+        messageId: "synthetic-first",
+        checksum: await sha256Hex("synthetic-first-earlier-capture"),
+        bodyText: "Synthetic earlier capture",
+      });
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({ classificationStage: "jev", status: "completed" })
+        .where(eq(emailTable.messageId, "synthetic-first"));
+      await insertWithShortcode(ctx.db, "email", {
+        ledgerPartyId: f.party.id,
+        mailboxId,
+        messageId: "synthetic-negative",
+        checksum: await sha256Hex("synthetic-negative-earlier-capture"),
+        classification: "unrelated",
+        classificationStage: "resolution",
+        classificationReason: "Member resolution",
+        classificationVersion: "synthetic-v1",
+        status: "completed",
+      });
+      // An expired, disposed search match is not a decision: refinding it
+      // retains its content again.
+      const cleared = await retainedMailFixture(ctx.db, {
+        ledgerPartyId: f.party.id,
+        messageId: "synthetic-cleared",
+        checksum: await sha256Hex("synthetic-cleared-earlier-capture"),
+        content: { snippet: null, bodyText: null, bodyHtml: null },
+      });
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({
+          classification: "uncertain",
+          classificationStage: "rule",
+          searchOrigin: "member_search",
+          searchExpiresAt: new Date("2026-01-01T00:00:00Z"),
+          contentClearedAt: new Date("2026-01-01T00:00:00Z"),
+        })
+        .where(eq(emailTable.messageId, "synthetic-cleared"));
+      f.list.mockResolvedValueOnce({
+        messages: [
+          { id: "synthetic-first" },
+          { id: "synthetic-negative" },
+          { id: "synthetic-second" },
+          { id: "synthetic-cleared" },
+        ],
+      });
+      await searchMail(ctx.db, f.input, ctx.actor);
+      const ledger = await getDb(ctx.db)
+        .select({
+          messageId: emailTable.messageId,
+          classification: emailTable.classification,
+          classificationStage: emailTable.classificationStage,
+          status: emailTable.status,
+          orderMailId: emailTable.orderMailId,
+          searchExpiresAt: emailTable.searchExpiresAt,
+        })
+        .from(emailTable)
+        .where(eq(emailTable.ledgerPartyId, f.party.id));
+      expect(ledger).toEqual(
+        expect.arrayContaining([
+          {
+            messageId: "synthetic-first",
+            classification: "related",
+            classificationStage: "jev",
+            status: "completed",
+            orderMailId: related.id,
+            searchExpiresAt: null,
+          },
+          {
+            messageId: "synthetic-negative",
+            classification: "unrelated",
+            classificationStage: "resolution",
+            status: "completed",
+            orderMailId: null,
+            searchExpiresAt: null,
+          },
+          expect.objectContaining({
+            messageId: "synthetic-second",
+            classification: "uncertain",
+            classificationStage: "rule",
+            searchExpiresAt: expect.any(Date),
+          }),
+        ]),
+      );
+      const [kept] = await readRetainedMail(ctx.db, {
+        ledgerPartyIds: [f.party.id],
+        orderMailIds: [related.id],
+      });
+      expect(kept).toMatchObject({
+        rawChecksum: related.rawChecksum,
+        content: { bodyText: "Synthetic earlier capture" },
+      });
+      const [refound] = await getDb(ctx.db)
+        .select({
+          classification: emailTable.classification,
+          contentClearedAt: emailTable.contentClearedAt,
+          searchExpiresAt: emailTable.searchExpiresAt,
+          orderMailId: emailTable.orderMailId,
+        })
+        .from(emailTable)
+        .where(eq(emailTable.messageId, "synthetic-cleared"));
+      expect(refound).toMatchObject({
+        classification: "uncertain",
+        contentClearedAt: null,
+        orderMailId: cleared.id,
+      });
+      expect(refound?.searchExpiresAt?.getTime()).toBeGreaterThan(Date.now());
+      const [retained] = await readRetainedMail(ctx.db, {
+        ledgerPartyIds: [f.party.id],
+        orderMailIds: [cleared.id],
+      });
+      expect(retained?.content.bodyText).toContain("synthetic copper kettle");
+    });
   });
 
   describe("read attachment originals", () => {

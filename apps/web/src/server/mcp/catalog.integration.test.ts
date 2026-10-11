@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { type JSONType, z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
-import { photoRunImage } from "~/server/db/schema";
+import { photoRunImage, suggestion } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
@@ -19,6 +19,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
+import { ensureRun } from "~/server/runs/ensure-run";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
@@ -111,7 +112,7 @@ describe("MCP catalog", () => {
       statement_rows: write({ destructive: true }),
       purchase_import: write(),
       expenses: write(),
-      product_enrichment: write(),
+      product_enrichment: write({ destructive: true }),
       upc: write(),
       photo_run: write(),
       run: write({ destructive: true, openWorld: true }),
@@ -519,5 +520,47 @@ describe("MCP catalog", () => {
       "photo_context",
       "photo_proposals",
     ]);
+  });
+
+  // Regression: the unfiltered queue returned each suggestion's stored record
+  // uuid instead of the record's shortcode.
+  it("names suggestion queue records by shortcode", async () => {
+    const kernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const call = (args: ToolArguments) =>
+      callMcpTool(
+        createMcpServer(),
+        "entity_read",
+        args,
+        kernelRequestContext(kernel),
+        { entityKernel: kernel },
+      );
+    const product = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic suggestion product",
+      manufacturer: "Synthetic maker",
+    });
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    await getDb(ctx.db).insert(suggestion).values({
+      runId,
+      entity: "product",
+      recordId: product.id,
+      field: "model",
+      currentValue: null,
+      suggestedValue: "Synthetic model",
+      confidence: 0.9,
+      model: "typesafe/jev",
+      kind: "addition",
+      status: "pending",
+    });
+    const queue = await call({ action: "suggestion_queue", entity: "product" });
+    expect(queue.isError).not.toBe(true);
+    expect(queue.structuredContent).toMatchObject({
+      items: [{ entity: "product", recordId: product.shortcode }],
+    });
   });
 });

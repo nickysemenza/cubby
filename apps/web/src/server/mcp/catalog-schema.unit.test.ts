@@ -518,6 +518,31 @@ describe("MCP catalog schemas", () => {
       "imports_read.attachmentId",
       "mail.mailboxId",
       "mail.messageId",
+      "run.mailboxId",
+      "run.scope.mailboxId",
+      // Field suggestions and order-Email events have no shortcode; their row
+      // id is the review handle. `entityId` beside an `entity` kind is that
+      // kind's shortcode, resolved by the handler.
+      "entity.id",
+      "entity.entityId",
+      // suggest_fields' entityId and suggestion_queue's recordIds are
+      // shortcodes of the kind `entity` names, so no single prefix pattern
+      // fits. suggestion_queue's runId is the internal Run id its rows echo
+      // (not a RUN- code).
+      "entity_read.entityId",
+      "entity_read.recordIds",
+      "entity_read.runId",
+      "spending_classification_write.entityId",
+      "mail.eventId",
+      // run.lifecycle settles a Run's pending operation or approval by its
+      // handle; commit_prepared carries the same opaque import keys as
+      // purchase_import.commit; resolve_finding takes the finding row id.
+      "run.operationId",
+      "run.approvalId",
+      "run.prepareOperationId",
+      "run.resolutions[].stableOrderId",
+      "run.resolutions[].stableLineId",
+      "run.id",
       "entity_read.filters.mailboxId",
       // Reconciliation is addressed by its finding or accepted source order,
       // and accuracy review by its evaluation and frozen prediction: none of

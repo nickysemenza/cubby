@@ -86,8 +86,8 @@ shape `photo_run.commit_group` takes, minus `runId`, plus optional `evidence`
 Products or Inventory yet: the user reviews and edits groups on the run page,
 then approves one or a selected batch. Approval runs `photo_run.commit_group` for
 each selected group with its reviewed payload. Call
-`photo_run.commit_group` directly only when the user explicitly asks to skip
-review.
+`photo_run.commit_group` directly, or approve with `photo_run.approve_groups`,
+only when the user explicitly asks to skip or finish review.
 
 Each group: `product` is `{ kind: "existing", existingId }` or
 `{ kind: "create", create: {...} }`; `images` lists every attached image with

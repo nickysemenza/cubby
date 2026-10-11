@@ -3,6 +3,7 @@ import { z } from "zod";
 import { fieldResolutionsSchema } from "./field-resolution";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { shortcodeEntities } from "./entity-manifest";
+import { anyShortcodeSchema } from "./identifier-fields";
 import { moneyNullable } from "./money";
 import {
   runShortcode,
@@ -486,11 +487,18 @@ export const suggestionReviewListInput = z.object({
   recordIds: z.array(z.string().min(1)).max(250).optional(),
   fields: z.array(z.string()).max(100).optional(),
 });
+const [firstShortcodeEntity, ...otherShortcodeEntities] = shortcodeEntities;
+if (!firstShortcodeEntity) throw new Error("No entity has a shortcode");
+/** A stored suggestion names its record by that kind's public shortcode. */
+const suggestionRecordId = anyShortcodeSchema([
+  firstShortcodeEntity,
+  ...otherShortcodeEntities,
+]);
 export const suggestionReviewRowSchema = z.object({
   id: z.string().uuid(),
   runId: z.string().uuid(),
   entity: z.enum(shortcodeEntities),
-  recordId: z.string().min(1),
+  recordId: suggestionRecordId,
   field: z.string(),
   currentValue: z.json().nullable(),
   suggestedValue: z.json(),

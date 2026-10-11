@@ -89,10 +89,6 @@ export const inventoryContract = defineContract("inventory", {
     invalidates: ["inventory"],
   }),
   reconcileSession: mutation({
-    mcp: {
-      omit: "human_approval",
-      note: "A person attests a physical shelf audit",
-    },
     native: "Audit reconcile",
     input: reconcileSessionPayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
@@ -106,10 +102,6 @@ export const inventoryContract = defineContract("inventory", {
     invalidates: ["inventory"],
   }),
   resolveScanStrays: mutation({
-    mcp: {
-      omit: "human_approval",
-      note: "A person resolves strays found while scanning",
-    },
     native: "Strays sheet",
     input: resolveScanStraysInput,
     output: resolveScanStraysOut,
@@ -152,7 +144,6 @@ export const inventoryContract = defineContract("inventory", {
     invalidates: ["inventory"],
   }),
   confirmOwnership: mutation({
-    mcp: { omit: "human_approval" },
     native: "Confirm inherited inventory owner",
     input: confirmInventoryOwnershipInput,
     output: inventoryOwnershipMutationOut,

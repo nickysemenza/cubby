@@ -55,7 +55,6 @@ export const expenseContract = defineContract("expense", {
     output: schemas.expenseChargeContextOut,
   }),
   inventoryOwnershipContext: query({
-    mcp: { omit: "client_view" },
     input: expenseInventoryOwnershipContextInput,
     output: expenseInventoryOwnershipContextOut,
   }),
@@ -66,10 +65,6 @@ export const expenseContract = defineContract("expense", {
     output: vendorAttributionDefaultsOut,
   }),
   confirmInventoryBeneficiary: mutation({
-    mcp: {
-      omit: "human_approval",
-      note: "A person confirms the inherited beneficiary",
-    },
     input: confirmInventoryExpenseBeneficiaryInput,
     output: confirmInventoryExpenseBeneficiaryOut,
     invalidates: ["expense"],
