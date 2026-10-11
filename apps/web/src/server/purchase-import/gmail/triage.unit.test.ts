@@ -84,6 +84,7 @@ describe("transient Gmail triage", () => {
   it.each([
     '<script type="application/ld+json">{"@type":"Order","orderNumber":"synthetic-order"}</script>',
     '<a href="https://shop.example/orders/synthetic-order">View details</a>',
+    '<div itemscope itemtype="http://schema.org/Order"><meta itemprop="orderNumber" content="synthetic-order"></div>',
   ])(
     "preserves HTML evidence omitted from readable text: %s",
     async (evidence) => {

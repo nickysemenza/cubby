@@ -29,7 +29,8 @@ have no dollar ceiling, while execution/retry bounds and cost accounting remain.
 Jev receives bounded sender/domain and subject hints, readable HTML text or plain
 text, body head/end excerpts and attachment descriptors. The serialized view stays
 within its context budget and marks omitted evidence explicitly. An unrelated
-verdict from a partial view becomes uncertain; retained originals and checksums
+verdict from a partial view becomes uncertain. Readable HTML is always a partial
+view because markup and visual evidence are omitted; retained originals and checksums
 remain complete. Sender domains never establish Purchase or Vendor associations.
 Pi/Luna/Sol authorization remains separate. Classification and import are
 separate operations, allowing members to assess Relevance before import.

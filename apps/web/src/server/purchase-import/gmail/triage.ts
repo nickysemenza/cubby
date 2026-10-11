@@ -64,13 +64,8 @@ function readableBody(normalized: GmailNormalizedMessage) {
       : null;
   return {
     body: normalized.mail.bodyText || html?.text || "",
-    complete:
-      !html ||
-      (utf8Bytes(bodyHtml ?? "") < 200 * 1024 &&
-        html.links.length === 0 &&
-        html.json_ld.length === 0 &&
-        html.json_ld_omitted === 0 &&
-        !/<img\b/iu.test(bodyHtml ?? "")),
+    // Readable HTML omits markup, metadata and image evidence, even when short.
+    complete: html === null,
   };
 }
 
