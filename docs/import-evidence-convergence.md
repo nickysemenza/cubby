@@ -44,7 +44,9 @@ incomplete; a dry run records no membership. Historical migration seeds only
 known first-ingesting memberships; other exports require original-source replay.
 Original first ownership remains membership proof through the deployment
 window. Drift excludes row pairs known to coexist in any export, even when
-another export first retained one. Legacy identities cannot establish distinct
+another export first retained one. Retired import bookkeeping retains that
+coexistence evidence; live coverage still excludes deleted statement rows.
+Legacy identities cannot establish distinct
 physical occurrences by themselves.
 
 Provider account masks retain all supplied digits, including non-card masks
