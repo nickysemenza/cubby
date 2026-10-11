@@ -1,5 +1,5 @@
 import { plainDate } from "@cubby/schemas/base-entity";
-import { buildActorContext } from "@cubby/schemas/context";
+import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import {
   expenseLineKindValues,
   type ExpenseLineKind,
@@ -26,7 +26,6 @@ import { householdLocalDate } from "~/lib/household-date";
 import {
   PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
   PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
-  PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
   PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
   PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,
 } from "~/server/ai/features";
@@ -47,6 +46,7 @@ import {
   runFinding,
   vendorAccount,
 } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import { assertRunCapabilityById } from "~/server/purchase-import/capabilities";
 import { classificationAllowsField } from "~/server/repo/classification-field-policy";
 import {
@@ -55,6 +55,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { recordEntitySources } from "~/server/repo/entity-source";
 import {
   effectiveExpenseTradeSql,
   validateExpenseInheritance,
@@ -66,7 +67,7 @@ import {
   externalIdKey,
   findProductsByExternalIds,
 } from "~/server/repo/product/find-by-external-ids";
-import { findProductNameCandidates } from "~/server/repo/product/resolve-names";
+import { findExactProductNameMatches } from "~/server/repo/product/resolve-names";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -353,6 +354,8 @@ export type LineIdentityDecision = {
   lineKind: ExpenseLineKind;
   kitKind: "kit_with_components" | "single" | "n_pack";
   reversalKind: "return" | "concession" | "cancellation" | "replacement" | null;
+  /** Exact name matches a sourced Distinct-from decision cleared for creation. */
+  distinctFrom?: ExplicitDistinctFrom[];
 };
 
 const lineDecisionSubject = (line: ExtractedPurchaseLine) =>
@@ -414,167 +417,11 @@ export async function chooseLineStage(
   });
 }
 
-// The staged decision pipeline intentionally keeps all five model decisions and
-// deterministic short-circuits in one ordered pass over each source line.
-// eslint-disable-next-line complexity
-async function decideLineIdentities(
-  db: Database,
-  input: ImportWriterInput,
-): Promise<LineIdentityDecision[]> {
-  const decisions: LineIdentityDecision[] = [];
-  const decisionsByExternalIdentity = new Map<string, LineIdentityDecision>();
-  const candidate = input.extraction.candidate;
-  if (!candidate) return [];
-  const vendorId = parseEntityId("vendor", input.vendorId);
-  const sources = await Promise.all(
-    candidate.lines.map((line) =>
-      lineIdentifiers(line).length
-        ? resolveProductIdentifierSource(db, { url: line.productUrl, vendorId })
-        : Promise.resolve(""),
-    ),
-  );
-  const exactRequests = candidate.lines.map((line, index) => [
-    ...lineIdentifiers(line).map((identifier) => ({
-      ...identifier,
-      source: sources[index]!,
-    })),
-    ...manufacturerPartRequests(line),
-  ]);
-  const exactHits = await findProductsByExternalIds(db, exactRequests.flat());
-  for (const [index, line] of candidate.lines.entries()) {
-    const role = await chooseLineStage(db, input.runId, index, line, "role");
-    const selectedRole = expenseLineKindValues[role.selectedIndex ?? -1];
-    const lineKind =
-      selectedRole && role.probability >= 0.85 ? selectedRole : line.lineKind;
-    const kit = await chooseLineStage(db, input.runId, index, line, "kit");
-    const kitKind =
-      (["kit_with_components", "single", "n_pack"] as const)[
-        kit.selectedIndex ?? 1
-      ] ?? "single";
-    const promotion = await chooseLineStage(
-      db,
-      input.runId,
-      index,
-      line,
-      "promotion",
-    );
-    const promote =
-      promotion.selectedIndex === 0 && promotion.probability >= 0.6;
-    const reversal =
-      line.amount < 0
-        ? await chooseLineStage(db, input.runId, index, line, "reversal")
-        : null;
-    const reversalKind = reversal
-      ? ((["return", "concession", "cancellation", "replacement"] as const)[
-          reversal.selectedIndex ?? 1
-        ] ?? "concession")
-      : null;
-    const baseDecision = { lineKind, kitKind, reversalKind };
-    if (!classificationAllowsField("expense", { lineKind }, "productId")) {
-      decisions.push({
-        productId: null,
-        promote: false,
-        variantDoubt: false,
-        probability: 1,
-        unresolvedReason: null,
-        ...baseDecision,
-      });
-      continue;
-    }
-    const identity = lineExternalIdentity(line, sources[index]!);
-    const decidedEarlier = identity
-      ? decisionsByExternalIdentity.get(identity)
-      : null;
-    if (decidedEarlier) {
-      decisions.push(decidedEarlier);
-      continue;
-    }
-    const matches = new Map(
-      (exactRequests[index] ?? [])
-        .flatMap((identifier) => exactHits.get(externalIdKey(identifier)) ?? [])
-        .map((hit) => [hit.id, hit]),
-    );
-    if (matches.size > 0) {
-      const match = [...matches.values()][0]!;
-      const ambiguous = matches.size > 1;
-      const decision = {
-        productId: ambiguous ? null : match.id,
-        promote: !ambiguous,
-        variantDoubt: ambiguous,
-        probability: ambiguous ? 0 : 1,
-        unresolvedReason: ambiguous
-          ? "Exact identifiers refer to different Products; choose the intended Product."
-          : null,
-        ...baseDecision,
-      };
-      decisions.push(decision);
-      if (identity) decisionsByExternalIdentity.set(identity, decision);
-      continue;
-    }
-    const candidates = await findProductNameCandidates(db, line.title);
-    if (candidates.length === 0) {
-      const decision = {
-        productId: null,
-        promote,
-        variantDoubt: false,
-        probability: 1,
-        unresolvedReason: null,
-        ...baseDecision,
-      };
-      decisions.push(decision);
-      if (identity) decisionsByExternalIdentity.set(identity, decision);
-      continue;
-    }
-    const choice = await runJevChoice({
-      feature: PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
-      subject: JSON.stringify({
-        title: line.title,
-        sku: line.sku ?? null,
-        seller: line.seller ?? null,
-        productUrl: line.productUrl ?? null,
-      }),
-      rules: PRODUCT_IDENTITY_RULES,
-      choices: candidates.map(
-        (candidate) =>
-          `${candidate.name} | manufacturer=${candidate.manufacturer || "unknown"} | model=${candidate.model ?? "unknown"}`,
-      ),
-      usage: {
-        db,
-        operation: `purchaseImport.productIdentity.${index}`,
-        runId: runEntityId.parse(input.runId),
-      },
-    });
-    const selected =
-      choice.selectedIndex === null ? null : candidates[choice.selectedIndex];
-    if (selected && choice.probability >= 0.85) {
-      const decision = {
-        productId: selected.id,
-        promote: true,
-        variantDoubt: false,
-        probability: choice.probability,
-        unresolvedReason: null,
-        ...baseDecision,
-      };
-      decisions.push(decision);
-      if (identity) decisionsByExternalIdentity.set(identity, decision);
-    } else {
-      const decision = {
-        productId: null,
-        promote,
-        variantDoubt: choice.probability >= 0.6,
-        probability: choice.probability,
-        unresolvedReason: null,
-        ...baseDecision,
-      };
-      decisions.push(decision);
-      if (identity) decisionsByExternalIdentity.set(identity, decision);
-    }
-  }
-  return decisions;
-}
-
 type ExplicitProductResolution = NonNullable<
   ImportWriterInput["productResolutions"]
+>[number];
+type ExplicitDistinctFrom = NonNullable<
+  Extract<ExplicitProductResolution, { kind: "new" }>["distinctFrom"]
 >[number];
 
 /**
@@ -634,6 +481,8 @@ export async function explicitLineDecisions(
       lineKind: line.lineKind,
       kitKind: "single",
       reversalKind,
+      distinctFrom:
+        resolution.kind === "new" ? resolution.distinctFrom : undefined,
     });
   }
   return decisions;
@@ -650,6 +499,46 @@ export function receiptProductQuantity(
   return decision.reversalKind === "concession" ? 0 : null;
 }
 
+/**
+ * A created Product must not fork an Exact identity match (GLOSSARY). An
+ * identifier another Product owns always refuses; an exact name or alias match
+ * refuses unless a Distinct-from decision names it. A distinct Product still
+ * cannot take the identical name, which the (name, manufacturer) index holds.
+ */
+async function assertNoExactIdentity(
+  tx: DrizzleTransaction,
+  line: ExtractedPurchaseLine,
+  source: string,
+  distinctFrom: readonly ExplicitDistinctFrom[],
+) {
+  const requests = [
+    ...lineIdentifiers(line).map((identifier) => ({ ...identifier, source })),
+    ...manufacturerPartRequests(line),
+  ];
+  const owners = await findProductsByExternalIds(tx, requests);
+  for (const request of requests) {
+    const [owner] = owners.get(externalIdKey(request)) ?? [];
+    if (owner)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Line "${line.title}" carries ${request.kind} ${request.externalId}, which ${owner.shortcode} already owns; resolve the line to ${owner.shortcode} or merge instead of creating another Product.`,
+      );
+  }
+  const cleared = new Set(distinctFrom.map(({ productId }) => productId));
+  for (const match of await findExactProductNameMatches(tx, line.title)) {
+    if (!cleared.has(match.id))
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Line "${line.title}" exactly matches ${match.shortcode} ("${match.name}"); resolve the line to ${match.shortcode}, or mark it distinctFrom ${match.shortcode} with a Source showing the difference.`,
+      );
+    if (match.name === line.title && match.manufacturer === "")
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `A distinct Product cannot take the identical name of ${match.shortcode} ("${match.name}"); give ${match.shortcode} its manufacturer or a distinguishing name first.`,
+      );
+  }
+}
+
 export async function resolveLineProduct(
   tx: DrizzleTransaction,
   line: ExtractedPurchaseLine,
@@ -657,6 +546,7 @@ export async function resolveLineProduct(
   vendorId: string,
   productsByExternalIdentity: Map<string, string>,
   onCreated?: (productId: ProductId) => void,
+  recorder?: ActorContext,
 ) {
   // A line decided to carry no Product (expense-only, or coarse-only) keeps
   // none, even when an earlier line with the same SKU resolved one.
@@ -685,11 +575,24 @@ export async function resolveLineProduct(
     return productId;
   }
   if (decision.lineKind !== "principal" || !decision.promote) return null;
+  await assertNoExactIdentity(tx, line, source, decision.distinctFrom ?? []);
   const created = await insertWithShortcode(tx, "product", {
     name: line.title,
     manufacturer: "",
   });
   onCreated?.(created.id);
+  if (decision.distinctFrom?.length) {
+    if (!recorder)
+      throw new Error(
+        "A Distinct-from decision needs an actor to record its Source.",
+      );
+    await recordEntitySources(tx, {
+      entityKind: "product",
+      entityId: created.id,
+      sources: decision.distinctFrom.map(({ url, quote }) => ({ url, quote })),
+      recorder,
+    });
+  }
   await learnLineIdentifiers(tx, created.id, line, source);
   if (externalIdentity)
     productsByExternalIdentity.set(externalIdentity, created.id);
@@ -1060,18 +963,23 @@ export async function importVendorOrder(
     "missing_date",
     "missing_total",
   ].includes(semanticPlan.writeBlockReason ?? "");
-  const explicitResolutions = input.productResolutions;
+  const explicitResolutions = input.productResolutions ?? [];
+  const importActor = buildActorContext(
+    userIdSchema.parse(actorUserId),
+    "mcp",
+    {
+      runId: runEntityId.parse(input.runId),
+    },
+  );
   const identityDecisions =
     skipsLineWrites && !identityOnly
       ? []
-      : explicitResolutions
-        ? await explicitLineDecisions(
-            input.extraction.candidate?.lines ?? [],
-            explicitResolutions,
-            (index, line) =>
-              chooseLineStage(db, input.runId, index, line, "reversal"),
-          )
-        : await decideLineIdentities(db, input);
+      : await explicitLineDecisions(
+          input.extraction.candidate?.lines ?? [],
+          explicitResolutions,
+          (index, line) =>
+            chooseLineStage(db, input.runId, index, line, "reversal"),
+        );
   // The callback is the transaction's explicit policy matrix; splitting it
   // would hide the all-or-nothing write boundary.
   // eslint-disable-next-line complexity
@@ -1334,7 +1242,7 @@ export async function importVendorOrder(
         retainedPayments.length > 0 &&
         JSON.stringify(priorPaymentFacts) !==
           JSON.stringify(sourceFinancialFacts(candidate).payments);
-      const changedBinding = explicitResolutions?.some(
+      const changedBinding = explicitResolutions.some(
         (resolution) =>
           resolution.kind === "existing" &&
           current.some(
@@ -1447,12 +1355,11 @@ export async function importVendorOrder(
       fields: string[];
     }> = [];
 
-    const knownProducts =
-      explicitResolutions?.flatMap((resolution) =>
-        resolution.kind === "existing"
-          ? [parseEntityId("product", resolution.productId)]
-          : [],
-      ) ?? [];
+    const knownProducts = explicitResolutions.flatMap((resolution) =>
+      resolution.kind === "existing"
+        ? [parseEntityId("product", resolution.productId)]
+        : [],
+    );
     const unlinked = knownProducts.length
       ? await tx
           .select({ id: expense.id })
@@ -1517,6 +1424,7 @@ export async function importVendorOrder(
               mutationKind: "create",
               fields: ["name", "externalIds"],
             }),
+          importActor,
         );
         if (productId) productLines.push({ lineIndex, productId });
         if (identity.unresolvedReason)
@@ -1599,7 +1507,7 @@ export async function importVendorOrder(
       if (decision.kind === "conflict") {
         // A fresh accepted original can support existing Product lines without
         // repeating financial lines or changing the first source snapshot.
-        for (const resolution of explicitResolutions ?? []) {
+        for (const resolution of explicitResolutions) {
           if (
             resolution.kind === "existing" &&
             candidate.lines[resolution.lineIndex]?.lineKind === "principal" &&
@@ -1671,6 +1579,7 @@ export async function importVendorOrder(
                 mutationKind: "create",
                 fields: ["name", "externalIds"],
               }),
+            importActor,
           );
           const quantity = receiptProductQuantity(productId, line, identity);
           if (productId) productLines.push({ lineIndex, productId });

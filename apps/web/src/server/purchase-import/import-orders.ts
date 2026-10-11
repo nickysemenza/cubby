@@ -56,7 +56,10 @@ import {
   type ProductHit,
   type ExternalIdPair,
 } from "~/server/repo/product/find-by-external-ids";
-import { findProductNameCandidates } from "~/server/repo/product/resolve-names";
+import {
+  findExactProductNameMatches,
+  findProductNameCandidates,
+} from "~/server/repo/product/resolve-names";
 import {
   retainedMailJoin,
   retainedMailProjection,
@@ -306,6 +309,9 @@ async function productCandidates(
   ];
   const fuzzy = await findProductNameCandidates(db, line.title);
   const exactProductIds = new Set(exact.map(({ id }) => id));
+  const exactNameIds = new Set(
+    (await findExactProductNameMatches(db, line.title)).map(({ id }) => id),
+  );
   const modelTokens = modelStyleTokens(line.title).map((token) =>
     token.toLowerCase(),
   );
@@ -334,18 +340,23 @@ async function productCandidates(
       sharesModelWithinManufacturer(line.title, hit),
   );
   const modelRankedIds = new Set(modelRanked.map(({ id }) => id));
+  // Exact names rank right after exact identifiers: commit refuses a new
+  // Product beside either without a Distinct-from decision.
+  const fuzzyRest = fuzzy.filter(
+    ({ id }) => !exactProductIds.has(id) && !modelRankedIds.has(id),
+  );
   return [
     ...exact,
+    ...fuzzyRest.filter(({ id }) => exactNameIds.has(id)),
     ...modelRanked,
-    ...fuzzy.filter(
-      ({ id }) => !exactProductIds.has(id) && !modelRankedIds.has(id),
-    ),
+    ...fuzzyRest.filter(({ id }) => !exactNameIds.has(id)),
   ]
     .slice(0, 20)
     .map(({ id, shortcode, ...candidate }) => ({
       productId: shortcode,
       ...candidate,
       exactIdentifierMatch: exactProductIds.has(id),
+      exactNameMatch: exactNameIds.has(id),
       matchReason: modelRankedIds.has(id)
         ? MODEL_STYLE_MATCH_REASON
         : undefined,
@@ -922,9 +933,20 @@ export async function commitPurchaseImport(
                   ),
                 });
               } else if (resolution.kind === "new") {
+                const distinctFrom = [];
+                for (const distinct of resolution.distinctFrom ?? [])
+                  distinctFrom.push({
+                    ...distinct,
+                    productId: await resolveOrThrow(
+                      transactionDb,
+                      "product",
+                      distinct.productId,
+                    ),
+                  });
                 productResolutions.push({
                   kind: "new" as const,
                   lineIndex: line.position,
+                  distinctFrom,
                 });
               } else if (resolution.kind === "expense_only") {
                 productResolutions.push({
