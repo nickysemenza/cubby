@@ -1139,7 +1139,11 @@ function ResolvedFieldSuggestion({
             context={context}
             record={row.record}
             field={field}
-            suggestion={{ ...suggestion, probability: suggestion.probability }}
+            suggestion={{
+              ...suggestion,
+              value: suggestion.value,
+              probability: suggestion.probability,
+            }}
             currentValue={current.value}
             questionKey={questionKey}
             pending={row.pending}
@@ -1315,7 +1319,7 @@ function LiveSuggestionCell({
       kind={currentValue?.trim() ? "correction" : "addition"}
       value={suggestion.value}
       confidence={suggestion.probability}
-      label={suggestion.detail ?? suggestion.label}
+      label={suggestion.detail ?? suggestion.label ?? undefined}
       reasoning={suggestion.reasoning}
       alternatives={suggestion.alternatives}
       inline={inline}
@@ -1452,9 +1456,17 @@ function GhostSuggestionCell({
       {inline ? (
         <Pill
           mode="suggestion"
-          render={<button aria-label={suggestionAcceptLabel(valueText.text)} />}
-          type="button"
-          disabled={busy}
+          render={
+            <button
+              type="button"
+              disabled={busy}
+              aria-label={suggestionAcceptLabel(valueText.text)}
+              onClick={(event) => {
+                event.stopPropagation();
+                void run(accept);
+              }}
+            />
+          }
           aria-busy={busy}
           title={[
             reasoning,
@@ -1464,10 +1476,6 @@ function GhostSuggestionCell({
             .join("\n")}
           className="max-w-full min-w-0 cursor-pointer gap-1 overflow-hidden hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait max-md:min-h-11"
           aria-label={suggestionAcceptLabel(valueText.text)}
-          onClick={(event) => {
-            event.stopPropagation();
-            void run(accept);
-          }}
         >
           {ghost}
         </Pill>

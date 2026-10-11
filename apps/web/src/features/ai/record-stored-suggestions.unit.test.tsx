@@ -3,7 +3,10 @@ import {
   suggestionReviewListInput,
   suggestionReviewListOut,
 } from "@cubby/schemas/ai";
-import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import {
+  productCategorySummary,
+  type ProductCategorySummary,
+} from "@cubby/schemas/product-category-fields";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   fireEvent,
@@ -562,12 +565,12 @@ describe("stored suggestions in generic list cells", () => {
         }),
       ],
       undefined,
-      {
+      productCategorySummary.parse({
         id: "CAT-AAAA",
         name: "Tools",
         feature: "tools",
         path: [{ id: "CAT-AAAA", name: "Tools" }],
-      },
+      }),
     );
     expect(await screen.findByText("Current category")).toBeInTheDocument();
     expect(await screen.findByText("Food")).toBeInTheDocument();

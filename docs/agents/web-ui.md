@@ -76,6 +76,8 @@ renderer, never `info.getValue()` — TanStack Table freezes accessor results in
 `row._valuesCache` and rebuilds rows only on data changes. Every entity
 hovercard renders through one `ManifestCard`; an image appears only when the
 entity's `toXCard` spec pushes a `{kind: "thumb"}` block.
+Base UI `useRender` wrappers retain their default tag's prop types; put
+button-only props on the button supplied through `render`.
 
 For component-level exceptions and examples, load the relevant heading in [the
 preserved web UI reference](web-ui-reference.md).
