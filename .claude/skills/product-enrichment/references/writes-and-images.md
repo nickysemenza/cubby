@@ -17,10 +17,9 @@ matching vendor identity, or a purchase-created Product covering the same
 item, means this Product should converge with the other side rather than be
 enriched as if it stood alone. Confirm through `dataGap:
 product_unpurchased`/`entity_read.resolve` or the server's automatic detector,
-then call `product_enrichment.propose_match` with evidence (matched identifier,
-description, source page) for human review — see [product
-identity](product-identity.md) for the exact-id-vs-descriptive rule.
-Enrichment itself never merges without that human confirmation.
+then follow [product identity](product-identity.md): merge a source-proven
+obvious duplicate when its evidence and impact checks pass; propose ambiguous
+pairs with `product_enrichment.propose_match` for human review.
 
 Record why: every fact you write carries a Source (`fieldPath`, `url`, the
 relevant `quote`, `observedAt`, `selectedVariant`), and an attached catalog image
