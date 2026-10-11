@@ -239,8 +239,12 @@ means `pnpm generate` (or `build-rust.sh`) has not run in this checkout.
   `pnpm verify:local(:full)` runs `apple:check` locally when a full native
   diagnostic is needed. GitHub Actions runs the native checks on every PR and
   `main` push, replaying a cached pass for unchanged content (including one from
-  a local `pnpm apple check`). `Apple checks` requires both parallel macOS jobs:
+  a local `pnpm apple check`). The Linux validation job probes each Apple lane
+  before queuing macOS; misses or probe failures fall back to native jobs.
+  `Apple checks` requires each lane's native success or verified cached pass:
   host Swift tests with the OpenAPI warning gate, and iOS app formatting/build.
+  Nightly runs force both native lanes. Keep copied Markdown fixtures/resources
+  in `appleGate`; only named prose-only docs are excluded.
   See [CI](../../docs/ci.md).
 - **Visual and interaction checks:** the Xcode MCP renders `#Preview`s headlessly and drives a
   simulator (tap, swipe, type, capture) — setup, loops, and failure fixes in

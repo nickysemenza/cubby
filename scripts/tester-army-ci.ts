@@ -4,10 +4,12 @@ import { appendFileSync, readFileSync } from "node:fs";
 
 const env = process.env;
 const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH!, "utf8"));
-async function github(route: string) {
+async function github(route: string, body?: string) {
   const response = await fetch(
     `${env.GITHUB_API_URL ?? "https://api.github.com"}/repos/${env.GITHUB_REPOSITORY}/${route}`,
     {
+      method: body === undefined ? "GET" : "POST",
+      body,
       headers: {
         Authorization: `Bearer ${env.GITHUB_TOKEN}`,
         "Content-Type": "application/json",
@@ -16,15 +18,67 @@ async function github(route: string) {
     },
   );
   if (!response.ok) throw new Error(`GitHub ${route}: ${response.status}`);
-  return response.json();
+  return response.status === 204 ? undefined : response.json();
 }
 
-if (process.argv[2] === "route") {
+if (process.argv[2] === "dispatch") {
+  const run = event.workflow_run;
+  if (
+    run &&
+    (run.event !== "pull_request" ||
+      run.conclusion !== "success" ||
+      run.head_repository?.full_name !== env.GITHUB_REPOSITORY)
+  )
+    process.exit(0);
+  const candidates = run
+    ? await github(
+        `pulls?state=open&head=${encodeURIComponent(`${event.repository.owner.login}:${run.head_branch}`)}&per_page=100`,
+      )
+    : [await github(`pulls/${event.pull_request.number}`)];
+  const pull = candidates.find(
+    (candidate: { head: { sha: string } }) =>
+      !run || candidate.head.sha === run.head_sha,
+  );
+  if (
+    !pull ||
+    pull.state !== "open" ||
+    pull.head.repo.full_name !== env.GITHUB_REPOSITORY
+  )
+    process.exit(0);
+  if (!run) {
+    const runs = await github(
+      `actions/workflows/ci.yaml/runs?event=pull_request&head_sha=${pull.head.sha}&per_page=1`,
+    );
+    if (
+      runs.workflow_runs[0]?.status !== "completed" ||
+      runs.workflow_runs[0]?.conclusion !== "success"
+    )
+      process.exit(0);
+  }
+  await github(
+    "actions/workflows/e2e-journeys.yaml/dispatches",
+    JSON.stringify({
+      ref: event.repository.default_branch,
+      inputs: {
+        journey: "tester-army-pr",
+        "pull-request": String(pull.number),
+        revision: pull.head.sha,
+      },
+    }),
+  );
+} else if (process.argv[2] === "route") {
   const selected = { web: false, ios: false, imports: false, simulator: false };
   const journey = env.TESTER_ARMY_JOURNEY;
+  const automatic =
+    env.GITHUB_EVENT_NAME === "workflow_dispatch" &&
+    journey === "tester-army-pr";
+  const pull =
+    automatic && env.TESTER_ARMY_PULL_REQUEST
+      ? await github(`pulls/${env.TESTER_ARMY_PULL_REQUEST}`)
+      : undefined;
   if (env.GITHUB_EVENT_NAME === "schedule") {
     selected.web = selected.ios = selected.imports = true;
-  } else if (env.GITHUB_EVENT_NAME === "workflow_dispatch") {
+  } else if (env.GITHUB_EVENT_NAME === "workflow_dispatch" && !automatic) {
     selected.web = [
       "tester-army-web",
       "tester-army-both",
@@ -40,12 +94,14 @@ if (process.argv[2] === "route") {
     );
     selected.simulator = journey?.startsWith("simulator-") ?? false;
   } else if (
-    event.pull_request?.head.repo.full_name === env.GITHUB_REPOSITORY
+    pull?.state === "open" &&
+    pull.head.sha === env.TESTER_ARMY_REVISION &&
+    pull.head.repo.full_name === env.GITHUB_REPOSITORY
   ) {
     const files: string[] = [];
     for (let page = 1; ; page++) {
       const batch = await github(
-        `pulls/${event.number}/files?per_page=100&page=${page}`,
+        `pulls/${pull.number}/files?per_page=100&page=${page}`,
       );
       assert(Array.isArray(batch), "Invalid GitHub changed-file list");
       for (const file of batch) {
@@ -69,9 +125,7 @@ if (process.argv[2] === "route") {
         file,
       ),
     );
-    const labels = event.pull_request.labels.map(
-      (label: { name: string }) => label.name,
-    );
+    const labels = pull.labels.map((label: { name: string }) => label.name);
     selected.web = code.length > 0 || labels.includes("tester-army");
     selected.ios = labels.includes("tester-army:ios");
     selected.imports =
@@ -84,11 +138,28 @@ if (process.argv[2] === "route") {
       labels.includes("tester-army:import");
     selected.simulator = labels.includes("simulator-e2e");
   }
+  appendFileSync(
+    env.GITHUB_OUTPUT!,
+    `ref=${pull?.head.sha ?? env.GITHUB_SHA}\n`,
+  );
+  appendFileSync(
+    env.GITHUB_OUTPUT!,
+    `pull-request=${pull ? JSON.stringify({ number: pull.number, head: { sha: pull.head.sha } }) : ""}\n`,
+  );
   for (const [lane, run] of Object.entries(selected))
     appendFileSync(env.GITHUB_OUTPUT!, `${lane}=${run}\n`);
   const include = [
     ...(selected.web
-      ? [{ lane: "web", harness: "standard", timeout: 25 }]
+      ? [
+          {
+            lane: "web",
+            harness: "standard",
+            timeout: automatic ? 10 : 25,
+            journeys: automatic
+              ? "product-rename,receive-purchase,field-product-tags"
+              : "",
+          },
+        ]
       : []),
     ...(selected.imports
       ? [{ lane: "import", harness: "coupled", timeout: 30 }]
@@ -98,4 +169,4 @@ if (process.argv[2] === "route") {
     env.GITHUB_OUTPUT!,
     `web-matrix=${JSON.stringify({ include })}\n`,
   );
-} else throw new Error("Usage: tester-army-ci.ts route");
+} else throw new Error("Usage: tester-army-ci.ts route|dispatch");

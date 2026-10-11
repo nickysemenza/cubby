@@ -235,8 +235,13 @@ the shared compilation setup. FFI verification, project generation and the
 device runner remain necessary even with a cached app.
 
 The **E2E journeys** workflow (`e2e-journeys.yaml`) runs an informational
-trial in parallel with required checks. Same-repository code PRs run all
-standard web journeys. The full iOS catalog runs only when explicitly selected
+trial after successful required CI completes. `tester-army-pr.yaml` validates
+that the same-repository PR is still open at the tested head, then dispatches
+`e2e-journeys.yaml` with its number and exact revision. Routing checks that
+state again before checkout. Automatic web coverage selects `product-rename`,
+`receive-purchase`, and `field-product-tags`; their persisted-state checks remain
+unchanged. The GitHub reporter receives the PR number and head in the runner's
+event payload and continues to post its normal comment and job summary. The full iOS catalog runs only when explicitly selected
 with the `tester-army:ios` label, manual dispatch, or the weekly schedule;
 native/shared/backend changes retain their required Apple checks without
 automatically starting paid native journeys. Import/vendor/run changes
@@ -246,16 +251,22 @@ in `scripts/tester-army-ci.ts`; renamed files include their old paths.
 The routing step selects every lane for PR, manual and scheduled events; each
 job only checks its selected output, without repeating event/label logic.
 Standard and coupled web harnesses share one matrix job and setup; only the
-harness, lane key and timeout differ.
+harness, lane key, selected journeys and timeout differ.
 Labels `tester-army`, `tester-army:ios` and `tester-army:import` force their lane
-on the PR source revision and subsequent pushes. Label events retain affected
-automatic coverage rather than canceling it without replacement.
+on the PR source revision and subsequent pushes. A label applied after CI
+passes dispatches immediately; one applied while CI is pending is picked up
+when that revision finishes. Manual and weekly runs keep their full catalogs.
 
-No Tester Army lane is required for merge; results can arrive after merge.
-This removes a direct merge wait, but runner contention can still affect other
-checks. Successful hosted timings, costs and reliability must be measured in
+No Tester Army lane is required for merge. PR updates, closure and merge cancel
+unfinished automatic journeys through their PR-specific concurrency group.
+Closed or superseded revisions do not launch new journeys. Completed reports
+and uploaded artifacts remain available. Manual dispatch, weekly runs, required
+CI and deployment use independent groups. Background coverage starts after CI
+so it does not compete with that revision's merge checks; it can still contend
+with other active PRs. Successful hosted timings, costs and reliability must be measured in
 this trial before promoting any journey to a required check. Current lane
-ceilings are 25 minutes for web, 30 for imports and 40 for iOS, including setup;
+ceilings are 10 minutes for automatic web smoke, 25 for full web, 30 for imports
+and 40 for iOS, including setup;
 these are limits, not measured completion times. The standard catalog's five-second
 pacing adds 1 minute 40 seconds across 20 native journeys, or 50 seconds per native shard; web adds its Email metadata journey for 21 cases.
 
@@ -263,8 +274,9 @@ PR runs enable verified action replay, with separate lane/OS/lockfile caches.
 Each completed run saves a unique recording snapshot even after a journey
 failure, preserving newly verified actions and invalidations. Replay verifies
 the current end state and hands off to live inference when needed; it does not
-reuse a previous test verdict. GitHub scopes PR caches mainly to updates of that
-PR. Scheduled runs disable action replay and do not seed the PR cache.
+reuse a previous test verdict. Automatic dispatch runs from the default branch
+and shares its recording cache across PRs; every replay still verifies the
+current end state. Scheduled runs disable action replay and do not seed it.
 
 Every Monday at 09:17 UTC the full web/iOS/import matrix runs on `main` without
 action replay. Manual dispatch accepts `tester-army-web`, `tester-army-ios`,

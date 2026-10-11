@@ -67,6 +67,9 @@ jobs:
 
   validation:
     name: Validation
+    outputs:
+      apple-host: ${{ steps.apple-host.outcome }}
+      apple-simulator: ${{ steps.apple-simulator.outcome }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -77,6 +80,22 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
+      # Reuse this Linux workspace before queuing a macOS runner. A probe miss
+      # fails before native work and cannot publish a passing Nx cache entry.
+      - name: Probe Apple host pass
+        id: apple-host
+        if: github.event_name != 'schedule'
+        continue-on-error: true
+        env:
+          CUBBY_NX_CACHE_PROBE: "1"
+        run: pnpm exec nx run apple:host-tests --outputStyle=stream
+      - name: Probe Apple simulator pass
+        id: apple-simulator
+        if: github.event_name != 'schedule'
+        continue-on-error: true
+        env:
+          CUBBY_NX_CACHE_PROBE: "1"
+        run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       - run: pnpm check:all
       # Both read the live registry or advisory database, so neither caches.
       - run: pnpm dedupe:check
@@ -326,13 +345,13 @@ jobs:
           test "$POSTGRES_RESULT" = success
           test "$E2E_RESULT" = success
 
-  # The two halves of `apple:check` run on parallel macOS runners. A PR first
-  # asks Nx only for a cached pass of the same input hash (from CI or a
-  # developer's Mac): CUBBY_NX_CACHE_PROBE makes a miss fail before any build,
-  # and Nx never caches that failure. Only a miss pays for the native setup.
-  # `main` skips the cache and always rebuilds as the backstop.
+  # Each Apple lane queues macOS only when Linux did not verify its cached
+  # pass. A failed validation setup falls through to macOS, which retains its
+  # own probe. The nightly backstop bypasses both probes and rebuilds.
   test-apple-host:
     name: Apple host tests
+    needs: validation
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || needs.validation.outputs.apple-host != 'success') }}
     runs-on: macos-26
     timeout-minutes: 40
     env:
@@ -390,6 +409,8 @@ jobs:
 
   test-apple-simulator:
     name: Apple simulator build
+    needs: validation
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || needs.validation.outputs.apple-simulator != 'success') }}
     runs-on: macos-26
     timeout-minutes: 40
     steps:
@@ -435,21 +456,24 @@ jobs:
           cache-hit: ${{ steps.apple-tools.outputs.spm-clones-cache-hit }}
           matched-key: ${{ steps.apple-tools.outputs.spm-clones-cache-matched-key }}
 
-  # Keep the required context stable and fail if either Apple job fails, is
-  # canceled, or is unexpectedly skipped.
+  # A skipped macOS lane counts only when Linux verified that lane's cached
+  # pass; missing probe outputs and unexpected skips fail the required check.
   test-apple:
     name: Apple checks
-    needs: [test-apple-host, test-apple-simulator]
+    needs: [validation, test-apple-host, test-apple-simulator]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
-      - name: Require both Apple jobs
+      - name: Require both Apple lanes
         env:
           HOST_RESULT: ${{ needs.test-apple-host.result }}
           SIMULATOR_RESULT: ${{ needs.test-apple-simulator.result }}
+          HOST_PROBE: ${{ needs.validation.outputs.apple-host }}
+          SIMULATOR_PROBE: ${{ needs.validation.outputs.apple-simulator }}
         run: |
-          if [[ "$HOST_RESULT" != success || "$SIMULATOR_RESULT" != success ]]; then
-            echo "::error::Apple host tests: $HOST_RESULT; Apple simulator build: $SIMULATOR_RESULT"
+          passed() { [[ "$1" == success || ( "$1" == skipped && "$2" == success ) ]]; }
+          if ! passed "$HOST_RESULT" "$HOST_PROBE" || ! passed "$SIMULATOR_RESULT" "$SIMULATOR_PROBE"; then
+            echo "::error::Apple host tests: $HOST_RESULT (probe $HOST_PROBE); Apple simulator build: $SIMULATOR_RESULT (probe $SIMULATOR_PROBE)"
             exit 1
           fi
