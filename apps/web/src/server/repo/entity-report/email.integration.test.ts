@@ -1,3 +1,4 @@
+import { entityReportOut } from "@cubby/schemas/entity-report";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -294,6 +295,8 @@ describe("Email review report", () => {
       null,
       ctx.actor,
     );
+    // Every command, including input templates, must survive the wire schema.
+    expect(() => entityReportOut.parse({ blocks })).not.toThrow();
     const commandsOf = (report: typeof blocks) =>
       report.flatMap((block) =>
         block.kind === "records"

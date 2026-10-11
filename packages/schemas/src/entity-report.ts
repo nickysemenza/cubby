@@ -236,6 +236,9 @@ export const reportCommandRequest = z.discriminatedUnion("kind", [
   rerunEmailPreviewInput.extend({ kind: z.literal("rerun-email-preview") }),
   correctEmailRelevanceInput.extend({
     kind: z.literal("correct-email-relevance"),
+    // The template carries no reason; the member types it in the command's
+    // `text` input, and the operation refuses a blank one.
+    reason: z.string(),
   }),
   createEmailAccuracyEvaluationInput.extend({
     kind: z.literal("create-email-accuracy"),
