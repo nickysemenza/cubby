@@ -67,34 +67,11 @@ describe("vendor repository — findOrCreateVendor", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("finds a Vendor by its name or an alias apart from letter case", async () => {
-    const store = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic Hardware",
-      aliases: ["The Synthetic Hardware Store"],
-    });
-    expect(await findOrCreateVendor(ctx.db, "synthetic hardware")).toBe(
-      store.id,
-    );
-    expect(
-      await findOrCreateVendor(ctx.db, " THE SYNTHETIC HARDWARE STORE "),
-    ).toBe(store.id);
-    expect(await getDb(ctx.db).select().from(vendor)).toHaveLength(1);
-  });
-
-  it("refuses a name that is an alias of two Vendors, naming both", async () => {
-    const vendors = [];
-    for (const name of ["Synthetic Hardware East", "Synthetic Hardware West"])
-      vendors.push(
-        await insertWithShortcode(ctx.db, "vendor", {
-          name,
-          aliases: ["Synthetic Hardware"],
-        }),
-      );
-    await expect(
-      findOrCreateVendor(ctx.db, "Synthetic Hardware"),
-    ).rejects.toThrow(
-      new RegExp(vendors.map(({ shortcode }) => shortcode).join(".*")),
-    );
+  it("keeps resolving the exact spelling of a legacy case-variant pair", async () => {
+    const upper = await insertWithShortcode(ctx.db, "vendor", { name: "3M" });
+    const lower = await insertWithShortcode(ctx.db, "vendor", { name: "3m" });
+    expect(await findOrCreateVendor(ctx.db, "3M")).toBe(upper.id);
+    expect(await findOrCreateVendor(ctx.db, "3m")).toBe(lower.id);
   });
 });
 

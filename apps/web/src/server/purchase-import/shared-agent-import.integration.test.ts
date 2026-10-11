@@ -1524,6 +1524,30 @@ describe("member prepare and commit identity fences", () => {
     expect(rows.find(({ id }) => id === vendor.id)?.aliases).toEqual([]);
   });
 
+  it("refuses to learn a merchant name another Vendor already answers to", async () => {
+    const { party, vendor } = await senderVendor();
+    const other = await insertWithShortcode(ctx.db, "vendor", {
+      name: storeName,
+    });
+    const mail = await orderMail(party.id, "orders@hardware.example");
+    await expect(
+      prepareMemberImport(ctx.db, ctx.actor, {
+        key: "sender-name-conflict",
+        orders: [
+          {
+            stableOrderId: "sender-name-conflict",
+            vendor: { name: storeName },
+            source: mailSource(mail),
+            extraction: { status: "ready", candidate: candidate("ORDER-ONE") },
+          },
+        ],
+      }),
+    ).rejects.toThrow(new RegExp(other.shortcode));
+    expect(
+      (await vendorRows()).find(({ id }) => id === vendor.id)?.aliases,
+    ).toEqual([]);
+  });
+
   it("refuses a merchant name that is an alias of two Vendors", async () => {
     await scope();
     for (const name of ["Synthetic Hardware East", "Synthetic Hardware West"])

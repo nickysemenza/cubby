@@ -110,7 +110,9 @@ same outcome without prescribing an agent runtime.
    exact name or alias ignoring case; only an unmatched name creates a Vendor,
    and a name two Vendors share is refused. A similar name or shared domain
    never matches: merge real duplicates, which keeps the merged names as
-   aliases.
+   aliases. Sender proof refuses a merchant name another Vendor already answers
+   to; pass that order's `vendorId`. `entity.resolve {entity:"vendor", names}`
+   shows a name's Vendor without creating one.
 2. Collect one preparation payload per order: stable source identity, header, printed
    grand total and currency, item and adjustment lines, shipment state,
    transaction evidence, and finalized document image shortcodes.

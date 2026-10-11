@@ -714,13 +714,14 @@ export const findOrCreateVendor = async (
     create: false,
   });
   if (resolved?.row) {
+    const matches = [resolved.row, ...resolved.candidates];
+    // A legacy pair differing only in case keeps resolving the exact spelling.
+    const exactCase = matches.filter((match) => match.name === trimmed);
+    if (exactCase.length === 1) return exactCase[0]!.id;
     if (resolved.candidates.length > 0)
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        `Vendor name "${trimmed}" matches ${[
-          resolved.row,
-          ...resolved.candidates,
-        ]
+        `Vendor name "${trimmed}" matches ${matches
           .map(({ shortcode }) => shortcode)
           .join(", ")}; name the intended Vendor by id or merge them.`,
       );
@@ -752,7 +753,7 @@ const senderAddress = (sender: string | null): string | null => {
  */
 export const resolveImportVendor = async (
   db: Database | DrizzleTransaction,
-  input: { name: string; sender: string | null },
+  input: { name: string; sender: string | null; evidence: string | null },
   actor: ActorContext,
 ): Promise<VendorId> => {
   const name = input.name.trim();
@@ -773,29 +774,41 @@ export const resolveImportVendor = async (
   const known = [owner.name, ...owner.aliases].map((value) =>
     value.toLowerCase(),
   );
-  if (!known.includes(name.toLowerCase())) {
-    const aliases = [...owner.aliases, name];
-    await unwrapDb(db)
-      .update(vendor)
-      .set({ aliases })
-      .where(eq(vendor.id, owner.id));
-    await logAuditEntry(db, actor, {
-      entityKind: "vendor",
-      entityId: owner.id,
-      action: "update",
-      changes: { aliases: { from: owner.aliases, to: aliases } },
-    });
-    await recordEntitySources(db, {
-      entityKind: "vendor",
-      entityId: owner.id,
-      sources: [
-        {
-          quote: `Order Email from ${address} names the merchant "${name}".`,
-        },
-      ],
-      recorder: actor,
-    });
-  }
+  if (known.includes(name.toLowerCase())) return owner.id;
+  // Sender proof never takes a name another Vendor already answers to: that
+  // alias would make the name ambiguous (or misroute it) for every later lookup.
+  const [named] = await resolveNames(db, "vendor", [{ name }], {
+    create: false,
+  });
+  const others = named?.row ? [named.row, ...named.candidates] : [];
+  if (others.length > 0)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `The order Email from ${address} proves Vendor "${owner.name}", but the merchant name "${name}" belongs to ${others
+        .map(({ shortcode }) => shortcode)
+        .join(", ")}; name the order's vendorId explicitly.`,
+    );
+  const aliases = [...owner.aliases, name];
+  await unwrapDb(db)
+    .update(vendor)
+    .set({ aliases })
+    .where(eq(vendor.id, owner.id));
+  await logAuditEntry(db, actor, {
+    entityKind: "vendor",
+    entityId: owner.id,
+    action: "update",
+    changes: { aliases: { from: owner.aliases, to: aliases } },
+  });
+  await recordEntitySources(db, {
+    entityKind: "vendor",
+    entityId: owner.id,
+    sources: [
+      {
+        quote: `Order Email ${input.evidence ?? "(unknown message)"} from ${address} names the merchant "${name}".`,
+      },
+    ],
+    recorder: actor,
+  });
   return owner.id;
 };
 
@@ -1107,6 +1120,7 @@ export const mergeVendors = async (
       await tx.update(vendor).set(carriedColumns).where(eq(vendor.id, keepId));
     }
     // The losers' names stay Vendor aliases so imports keep finding the keeper.
+    let aliasChange: { from: string[]; to: string[] } | undefined;
     const named = await tx
       .select({ id: vendor.id, name: vendor.name, aliases: vendor.aliases })
       .from(vendor)
@@ -1125,8 +1139,10 @@ export const mergeVendors = async (
         seen.add(key);
         return true;
       });
-      if (aliases.length !== keeperNamed.aliases.length)
+      if (aliases.length !== keeperNamed.aliases.length) {
         await tx.update(vendor).set({ aliases }).where(eq(vendor.id, keepId));
+        aliasChange = { from: keeperNamed.aliases, to: aliases };
+      }
     }
 
     const loserLogos: string[] = [];
@@ -1174,10 +1190,12 @@ export const mergeVendors = async (
       mergedFrom: { from: null; to: VendorId[] };
       carriedOver?: { from: null; to: VendorMergePlan["carried"] };
       foldedCharges?: { from: null; to: PurchaseId[] };
+      aliases?: { from: string[]; to: string[] };
     };
     const survivorChanges: VendorMergeSurvivorChanges = {
       mergedFrom: { from: null, to: losers },
     };
+    if (aliasChange) survivorChanges.aliases = aliasChange;
     if (Object.keys(plan.carried).length > 0) {
       survivorChanges.carriedOver = { from: null, to: plan.carried };
     }

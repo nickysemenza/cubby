@@ -189,7 +189,11 @@ async function preparedOrderVendor(
     : order.vendor
       ? await resolveImportVendor(
           db,
-          { name: order.vendor.name, sender: mail?.sender ?? null },
+          {
+            name: order.vendor.name,
+            sender: mail?.sender ?? null,
+            evidence: mail ? order.source.externalKey : null,
+          },
           actor,
         )
       : scope.vendorId;
