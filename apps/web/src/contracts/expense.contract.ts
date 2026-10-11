@@ -66,10 +66,6 @@ export const expenseContract = defineContract("expense", {
     output: vendorAttributionDefaultsOut,
   }),
   confirmInventoryBeneficiary: mutation({
-    mcp: {
-      omit: "human_approval",
-      note: "A person confirms the inherited beneficiary",
-    },
     input: confirmInventoryExpenseBeneficiaryInput,
     output: confirmInventoryExpenseBeneficiaryOut,
     invalidates: ["expense"],

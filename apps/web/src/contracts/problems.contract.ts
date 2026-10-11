@@ -108,7 +108,6 @@ export const problemsContract = defineContract("problems", {
     invalidates: ["ingredientCleanup"],
   }),
   resolveRunFinding: mutation({
-    mcp: { omit: "human_approval" },
     native: "Review and apply import corrections",
     input: resolveRunFindingInput,
     output: resolveRunFindingOut,

@@ -44,8 +44,6 @@ export const mcpOmission = z.discriminatedUnion("omit", [
       "client_view",
       /** A person-triggered Cubby model call; an agent makes that judgment itself. */
       "model_assist",
-      /** A person reviews or decides; agents only propose. */
-      "human_approval",
       /** Byte or URL plumbing behind an upload. */
       "upload_transport",
       /** Apple app, companion, or in-browser driver protocol. */

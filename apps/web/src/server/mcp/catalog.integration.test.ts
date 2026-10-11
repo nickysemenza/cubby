@@ -111,7 +111,7 @@ describe("MCP catalog", () => {
       statement_rows: write({ destructive: true }),
       purchase_import: write(),
       expenses: write(),
-      product_enrichment: write(),
+      product_enrichment: write({ destructive: true }),
       upc: write(),
       photo_run: write(),
       run: write({ destructive: true, openWorld: true }),

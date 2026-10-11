@@ -27,9 +27,12 @@ Its evidence and impact checks allow routine cleanup without another
 confirmation; ambiguous identity, attribution or money still needs review.
 
 Use `imports_read.run_status` to inspect an existing Run before controlling it.
-`run.lifecycle` supports `controlAction: cancel`, `retry` or `restart` through
-the shared member-owned controls. It does not approve findings, authorize paid
-inference or verify unfinished targets. Respect an explicit member pause: do
+`run.lifecycle` takes every Run `controlAction` (cancel, retry, restart,
+approve, reject …) through the shared member-owned controls. Paid grants and
+review decisions (`run.approve_execution`, `run.discover_mail`,
+`run.commit_prepared`, `run.resolve_finding`, approve/reject) are callable, but
+only on the member's explicit instruction for that specific budget or scope;
+never infer one. Respect an explicit member pause: do
 not retry or restart until imports are resumed. Follow the returned successor;
 the preceding attempt remains immutable.
 

@@ -51,10 +51,6 @@ export const vendorContract = defineContract("vendor", {
     invalidates: ["vendor"],
   }),
   decideOrderMail: mutation({
-    mcp: {
-      omit: "human_approval",
-      note: "A person confirms or dismisses an order email's Purchase match",
-    },
     native: "Confirm or dismiss an order email Purchase match in Apple apps",
     input: orderMailDecisionInput,
     output: orderMailDecisionOut,

@@ -1,3 +1,4 @@
+import { suggestionReviewBatchOut } from "@cubby/schemas/ai";
 import { inventoryMcpBulkMoveOut } from "@cubby/schemas/inventory";
 import {
   mcpUsdaFoodListItemOut,
@@ -19,6 +20,7 @@ import {
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
+import { aiContract } from "~/contracts/ai.contract";
 import { auditLogContract } from "~/contracts/audit-log.contract";
 import { cookbookContract } from "~/contracts/cookbook.contract";
 import { dataQualityContract } from "~/contracts/data-quality.contract";
@@ -199,6 +201,48 @@ export const MCP_TOOLS = defineMcpTools({
       repoint_project_uses: mcpAction({
         op: projectContract.ops.repointUses,
         description: `Move a Product's recorded project uses onto another Product, in one transaction — how to retire or split a Product that entity.delete refuses because it has project-use history: repoint the history onto the component or replacement that should carry it, then delete. Do NOT do this as entity.unlink plus entity.link — an unlink whose link is missed discards the project's tool history with nothing to flag it. Omit projectIds to move every live use. Projects that already record the destination keep their existing row and are reported as alreadyPresent, not as an error. The destination must be a live Product in a category that allows project resources (${projectResourceFeatureLabels}).`,
+      }),
+      reconcile_inventory: mcpAction({
+        op: inventoryContract.ops.reconcileSession,
+        project: (output) => respondList(output.items, slimInventory),
+        output: inventoryMcpBulkMoveOut,
+        description:
+          "Commit a physical shelf audit of one location: the expected entry ids, the snapshot read before counting, and a resolution per entry. Only when the member counted that shelf.",
+      }),
+      resolve_scan_strays: mcpAction({
+        op: inventoryContract.ops.resolveScanStrays,
+        description:
+          "Move inventory entries a scan found out of place into targetLocationId (whole entries unless quantity is given).",
+      }),
+      confirm_inventory_owner: mcpAction({
+        op: inventoryContract.ops.confirmOwnership,
+        description:
+          "Confirm an inventory entry's inherited owner using the evidenceFingerprint its ownership context returned; quantity confirms part of the entry.",
+      }),
+      approve_detected_item: mcpAction({
+        op: aiContract.ops.approveDetectedInventoryItem,
+        description:
+          "Stock one item detected in a location photo, reusing productId or creating its Product.",
+      }),
+      accept_suggestion: mcpAction({
+        op: aiContract.ops.acceptSuggestion,
+        description: "Apply one pending field suggestion by id.",
+      }),
+      accept_suggestions: mcpAction({
+        op: aiContract.ops.acceptSuggestions,
+        project: (results) => ({ results }),
+        output: z.object({ results: suggestionReviewBatchOut }),
+        description: "Apply several pending field suggestions by id.",
+      }),
+      reject_suggestion: mcpAction({
+        op: aiContract.ops.rejectSuggestion,
+        description:
+          "Reject one pending field suggestion, optionally recording correctValue.",
+      }),
+      record_suggestion_miss: mcpAction({
+        op: aiContract.ops.recordFieldSuggestionMiss,
+        description:
+          "Record that a field suggestion missed the value a person chose, for suggestion quality.",
       }),
     },
   },
@@ -441,6 +485,11 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Apply the exact reviewed request and fingerprint atomically. Refuses when policy or historical facts changed since preview. Mapping changes stay live historically; explicit Expense assignments win and null resets to inheritance. Never creates financial bookings or changes Expense amounts.",
       }),
+      apply_category_suggestion: mcpAction({
+        op: aiContract.ops.applyFinanceCategorySuggestion,
+        description:
+          "Apply one reviewed finance category suggestion with its fingerprint; refuses when the target changed since review.",
+      }),
     },
   },
 
@@ -511,6 +560,11 @@ export const MCP_TOOLS = defineMcpTools({
         op: purchaseImportContract.ops.emailAccuracyReport,
         description:
           "Weighted pipeline and known Jev/Clef-only confusion matrices, conditional precision/recall, sampling probabilities and excluded/unknown denominators for an independently graded frozen Email sample.",
+      }),
+      execution_mailboxes: mcpAction({
+        op: runContract.ops.executionMailboxes,
+        description:
+          "The member's connected Gmail mailboxes that run.approve_execution and run.discover_mail can name.",
       }),
 
       mail: mcpAction({
@@ -610,6 +664,11 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           'Data-quality problems and optional coverage backlogs across products, inventory, locations, recipes, and vendors, plus household-tracker items needing attention (overdue tasks, stalled/blocked projects, past-due planned expenses, missing budgets, unclassified expenses). countsOnly=true is the cheap triage; type="duplicateInventory" finds unique Products stored in more than one location; type="purchasesNotReconciling" holds only the unexplained Purchase differences.',
       }),
+      product_matches: mcpAction({
+        op: recommendationsContract.ops.productMatches,
+        description:
+          "The product match review queue: proposed and detected same-item Product pairs, optionally for one productId or candidateId. Settle with product_enrichment.merge_match or dismiss_match.",
+      }),
     },
   },
 
@@ -681,6 +740,11 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Record what one retained Email means, using the checksum imports_read.mail returned: `linked` (a lifecycle event — shipped, delivered, cancelled, refunded … — of an existing Purchase; writes no Expenses), `unresolved` (an order whose Purchase cannot be established yet, with the gap), or `unrelated` (not a purchase; Cubby clears its unaccepted content while retaining Email metadata and provenance). An order Email you import with purchase_import.commit is linked automatically. Idempotent.",
       }),
+      decide_order_mail: mcpAction({
+        op: vendorContract.ops.decideOrderMail,
+        description:
+          "Confirm (`linked`) or dismiss an order Email event's suggested Purchase match, with the event's evidenceChecksum.",
+      }),
     },
   },
 
@@ -723,7 +787,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   expenses: {
     description:
-      "Re-attribute existing Expense money within purchases. Neither action creates money or moves it to another vendor.",
+      "Re-attribute existing Expense money within purchases. No action creates money or moves it to another vendor.",
     actions: {
       link_to_purchase: mcpAction({
         op: purchaseContract.ops.link,
@@ -735,6 +799,11 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Split ONE Expense into 2–100 Expenses on the SAME purchase — how an aggregate record (a combo kit or multi-item receipt entered as one Expense) gets a real per-product cost basis; a product whose only Expense is inside an aggregate has NO cost basis until it is split out. Each part gets its own name/cost/costType/trade/projectId/productId/productQuantity; productQuantity is SIGNED, and zero only on a negative-cost part. Omitted notes inherit the original's; explicit null clears them for that part. URL, date and future state are preserved. Give each part its own real name — never the old `(combo, saw portion)` naming convention. " +
           "When the original has a recorded cost, the parts must sum to it exactly or the split is refused without replacing the original; record a purchase-level discount or refund as its own Expense instead. The response confirms `originalCost`, `partsSum`, and a zero `delta` (null for an unpriced original). The original is soft-deleted and every part lands on its `purchaseId`; with no `statedTotal`, one is seeded from the original's cost. Refuses when the Expense has no purchase — entity.update(expense) with a `vendor` (and `orderId` if known) first.",
+      }),
+      confirm_beneficiary: mcpAction({
+        op: expenseContract.ops.confirmInventoryBeneficiary,
+        description:
+          "Confirm an Expense's beneficiary inherited from an inventory entry, using the evidenceFingerprint its ownership context returned.",
       }),
     },
   },
@@ -763,6 +832,31 @@ export const MCP_TOOLS = defineMcpTools({
         op: recommendationsContract.ops.proposeProductMatch,
         description:
           'Propose that two Products are the same real item, for a person to review and merge in the product match queue. Use it when you hold evidence the automatic detector cannot see — typically a photo-created Product (e.g. "Gray crew t-shirt — M", stocked, never bought) and a purchase-created Product for the same item, confirmed against the vendor\'s product page. Never merges anything: it records the pair with your evidence, ranked above detector suggestions. Re-proposing the same pair (either order) replaces the evidence; a pair the person dismissed stays dismissed and comes back with state "dismissed".',
+      }),
+      merge_match: mcpAction({
+        op: recommendationsContract.ops.mergeProductMatch,
+        destructive: true,
+        description:
+          "Merge a queued match: mergeId folds into keepId, whose covers then lead with its own photos. Only for a pair the member agreed is one item.",
+      }),
+      dismiss_match: mcpAction({
+        op: recommendationsContract.ops.dismissProductMatch,
+        description:
+          "Dismiss a queued match pair; it stays dismissed when proposed again.",
+      }),
+      dismiss_duplicate: mcpAction({
+        op: recommendationsContract.ops.dismissDuplicateProduct,
+        description:
+          "Dismiss the duplicate-Product recommendation for sourceId.",
+      }),
+      dismiss_related: mcpAction({
+        op: recommendationsContract.ops.dismissProduct,
+        description:
+          "Dismiss targetId as a related-Product recommendation for sourceId.",
+      }),
+      dismiss_tag: mcpAction({
+        op: recommendationsContract.ops.dismissTagPropagation,
+        description: "Dismiss one proposed tag for sourceId.",
       }),
     },
   },
@@ -804,12 +898,34 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           'The bounded writer approval runs. Prefer photo_run.propose_groups and let the user approve on the run page; call this only when the user explicitly asks to skip review. Turns one group of already-staged images into one Product (an existing Product by id, or a genuinely new one) with each image attached under an `item` or `label` purpose, and optionally one Inventory entry. Idempotent per (runId, groupKey): the exact same call replays the prior result; a changed payload under the same groupKey is refused unless the earlier attempt failed. When a `create` name or alias exactly (case-insensitively) matches a live Product, nothing is written and the call returns `outcome: "conflict"` with the colliding Product ids — never a speculative new Product. Every listed image must be a `pending` target of the run and appear in exactly one of `images` (attach) or `skip` (with a reason); a skip-only group touches no Product. Marks the run `completed` once no `pending` target remains.',
       }),
+      approve_groups: mcpAction({
+        op: photoImportContract.ops.approveGroups,
+        description:
+          "Approve proposed groups (all when groupKeys is omitted), committing each as commit_group would; expectedRevisions refuses groups changed since review. Only on the member's instruction.",
+      }),
+      save_groups: mcpAction({
+        op: photoImportContract.ops.saveGroups,
+        description: "Save the run page's reviewed group edits in one call.",
+      }),
+      choose_existing: mcpAction({
+        op: photoImportContract.ops.chooseExisting,
+        description: "Point one proposed group at an existing productId.",
+      }),
+      update_draft: mcpAction({
+        op: photoImportContract.ops.updateDraft,
+        description:
+          "Correct one proposed group's new-Product identity before approval.",
+      }),
+      discard_group: mcpAction({
+        op: photoImportContract.ops.discardGroup,
+        description: "Discard one proposed group.",
+      }),
     },
   },
 
   run: {
     description:
-      "Control an existing Run (Mail import, photo inventory, or a member's import). Runs are started by Mail discovery, photo uploads, and purchase_import.prepare; read one with imports_read.run_status.",
+      "Control Runs (Mail import, photo inventory, or a member's import); read one with imports_read.run_status. approve_execution, discover_mail, commit_prepared, resolve_finding and approve/reject spend money or settle evidence: call them only on the member's explicit instruction for that specific budget or scope.",
     actions: {
       lifecycle: mcpAction({
         op: runContract.ops.lifecycle,
@@ -817,7 +933,28 @@ export const MCP_TOOLS = defineMcpTools({
         openWorld: true,
         strict: true,
         description:
-          "Control an owned Run with controlAction cancel, retry or restart. Cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor. These controls do not approve or reject findings, grant paid budgets, or verify unfinished targets. Unsupported lifecycle states refuse without changing the Run.",
+          "Control an owned Run with controlAction: cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor; approve/reject (with approvalId) settle a pending approval; pause, resume, escalate_sol, retry_dispatch, abort, upload_evidence and no_evidence_available follow the Run page. Unsupported states refuse without changing the Run.",
+      }),
+      approve_execution: mcpAction({
+        op: runContract.ops.approveExecution,
+        description:
+          "Grant paid Mail import execution for one owned mailbox (imports_read.execution_mailboxes): exact scope, limits, metered budget and expiry. Returns the authorization Run.",
+      }),
+      discover_mail: mcpAction({
+        op: runContract.ops.discoverMail,
+        openWorld: true,
+        description:
+          "Start Mail discovery for one owned mailbox under its current execution approvals; replays an active launch.",
+      }),
+      commit_prepared: mcpAction({
+        op: runContract.ops.commitPrepared,
+        description:
+          "Commit a Run's prepared import batch with its per-line Product and trade decisions, as purchase_import.commit does.",
+      }),
+      resolve_finding: mcpAction({
+        op: problemsContract.ops.resolveRunFinding,
+        description:
+          "Apply or dismiss one Run finding by id; apply requires its reviewedFingerprint when it carries one.",
       }),
     },
   },

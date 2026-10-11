@@ -24,13 +24,20 @@ failed items after a fresh read.
 
 ## Runs and Burn-down
 
-Runs are started by Mail discovery, photo uploads and a member's own
-`purchase_import.prepare`; nothing on MCP starts research
+Runs are started by Mail discovery (scheduled, or `run.discover_mail` on the
+member's instruction), photo uploads and a member's own
+`purchase_import.prepare`; nothing else on MCP starts research
 ([ADR 0010](../adr/0010-mail-import-unattended-burn-down-interactive.md)).
-`imports_read.run_status` reads one Run; `run.lifecycle` cancels, retries or
-restarts it. No run purpose holds the `start_run` capability
+`imports_read.run_status` reads one Run; `run.lifecycle` runs every Run control
+(cancel, retry, restart, approve, reject and the rest). Review and paid-grant
+decisions are reachable on MCP too
+(`run.approve_execution`, `run.discover_mail`, `run.commit_prepared`,
+`run.resolve_finding`, `photo_run.approve_groups`,
+`product_enrichment.merge_match`, suggestion review). An agent calls one only
+on the member's explicit instruction for that specific budget or scope. No run
+purpose holds the `start_run` or `member_decision` capability
 (`server/purchase-import/capabilities.ts`), so a coordinator never starts
-another run.
+another run or makes a member's decision.
 
 Burn-down works the Research queue (`research-queue` saved views) with the
 caller's own browser. Record where each fact was seen with `sources` on
@@ -99,9 +106,10 @@ reason on the member itself — there is no contract-level default — and add a
   work, with a `note` on how. It records an omission, not proven parity.
 - `deferred_capability` is real agent work not yet exposed: `todo` names the
   [todos](../todos.md) entry, which must list the operation id.
-- `client_view`, `model_assist`, `human_approval`, `upload_transport`,
-  `device_protocol`, `auth_connection`, and `operator_maintenance` are the
-  closed reasons agents do without it.
+- `client_view`, `model_assist`, `upload_transport`, `device_protocol`,
+  `auth_connection`, and `operator_maintenance` are the closed reasons agents
+  do without it. A person's review or approval is not one: expose it and gate
+  it with the `member_decision` capability.
 
 Exposing an operation means adding its action and deleting its `mcp`
 declaration (and its todo line when deferred). A member input publishes as an

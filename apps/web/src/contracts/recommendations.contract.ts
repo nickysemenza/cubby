@@ -78,28 +78,21 @@ export const recommendationsContract = defineContract("recommendations", {
     output: tagPropagationRecommendationOut,
   }),
   dismissDuplicateProduct: mutation({
-    mcp: { omit: "human_approval" },
     input: dismissDuplicateProductRecommendationInput,
     output: recommendationOkSchema,
     invalidates: ["recommendations"],
   }),
   dismissTagPropagation: mutation({
-    mcp: { omit: "human_approval" },
     input: dismissTagPropagationInput,
     output: recommendationOkSchema,
     invalidates: ["recommendations"],
   }),
   dismissProduct: mutation({
-    mcp: { omit: "human_approval" },
     input: dismissProductRecommendationInput,
     output: recommendationOkSchema,
     invalidates: ["recommendations"],
   }),
   productMatches: query({
-    mcp: {
-      omit: "human_approval",
-      note: "The review queue for matches agents propose through product_enrichment.propose_match",
-    },
     input: productMatchQueueInput,
     output: productMatchQueueOut,
     cache: { tags: [["recommendations", "productMatches"], ["product"]] },
@@ -110,13 +103,11 @@ export const recommendationsContract = defineContract("recommendations", {
     invalidates: ["recommendations"],
   }),
   dismissProductMatch: mutation({
-    mcp: { omit: "human_approval" },
     input: dismissProductMatchInput,
     output: recommendationOkSchema,
     invalidates: ["recommendations"],
   }),
   mergeProductMatch: mutation({
-    mcp: { omit: "human_approval" },
     input: mergeProductMatchInput,
     output: recommendationOkSchema,
     invalidates: ["productMerge"],

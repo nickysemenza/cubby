@@ -1,13 +1,15 @@
+import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { runShortcode, userId } from "@cubby/schemas/identifiers";
+import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { z } from "zod";
+import { type JSONType, z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
-import { user } from "~/server/db/auth.schema";
+import { account, user } from "~/server/db/auth.schema";
 import { run as runTable } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { createMcpServer } from "~/server/mcp/server";
@@ -17,6 +19,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import type { WorkflowRunParams } from "~/server/workflow-runs/contract";
 
 import { callMcpTool } from "./mcp-test-utils";
 
@@ -131,16 +134,8 @@ describe("Run lifecycle through MCP", () => {
     expect(nextRow?.predecessorRunId).toBe(previous?.id);
   });
 
-  it("refuses approval and foreign ownership before changing a Run", async () => {
+  it("refuses foreign ownership before changing a Run", async () => {
     const original = await prepare();
-    for (const action of ["approve", "reject"]) {
-      expect((await call(original.shortcode, action)).isError).toBe(true);
-    }
-    expect(
-      await getDb(ctx.db).query.run.findFirst({
-        where: eq(runTable.id, original.id),
-      }),
-    ).toMatchObject({ status: "running" });
     const foreignUserId = userId.parse(crypto.randomUUID());
     await getDb(ctx.db).insert(user).values({
       id: foreignUserId,
@@ -162,5 +157,133 @@ describe("Run lifecycle through MCP", () => {
         where: eq(runTable.id, original.id),
       }),
     ).toMatchObject({ status: "running" });
+  });
+});
+
+// Failure modes: paid execution approval or discovery is unreachable through
+// MCP; an MCP caller without a member link, or naming a mailbox it does not
+// own, writes a grant or launches discovery.
+describe("Mail execution approval and discovery through MCP", () => {
+  const ctx = withTestDb("mcp");
+  const mailboxId = "synthetic-mcp-approval-mailbox";
+  const launched: WorkflowRunParams[] = [];
+
+  beforeEach(() => {
+    launched.length = 0;
+    setCfEnv(
+      fromPartial<Env>({
+        MAIL_DISCOVERY: {
+          create: async (options: {
+            id?: string;
+            params?: WorkflowRunParams;
+          }) => {
+            if (!options?.id || !options.params)
+              throw new Error("Synthetic Workflow launch needs id and params");
+            launched.push(options.params);
+            return fromPartial<
+              Awaited<ReturnType<Env["MAIL_DISCOVERY"]["create"]>>
+            >({ id: options.id });
+          },
+        },
+      }),
+    );
+  });
+  afterEach(() => setCfEnv(undefined));
+
+  const call = (tool: string, input: Record<string, JSONType>) => {
+    const request = requireActor(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+    return callMcpTool(createMcpServer(), tool, input, request, {
+      entityKernel: entityKernelContextSchema.parse(request),
+    });
+  };
+  const connect = (accountId: string) =>
+    getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+  const approval = (mailbox = mailboxId) => ({
+    action: "approve_execution",
+    scope: {
+      kind: "pilot",
+      mailboxId: mailbox,
+      discovery: "targeted",
+      candidateLimit: 60,
+      productLimit: 10,
+    },
+    meteredBudget: { period: "lifetime", limitMicroUSD: 10_000_000 },
+    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+  });
+
+  it("issues an execution authorization and starts discovery for an owned mailbox", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic MCP approval member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    await connect(mailboxId);
+    await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic MCP discovery vendor",
+    });
+    expect(
+      (await call("imports_read", { action: "execution_mailboxes" }))
+        .structuredContent,
+    ).toEqual({ mailboxes: [{ mailboxId }] });
+    const approved = await call("run", approval());
+    expect(approved.isError).not.toBe(true);
+    const [root] = await getDb(ctx.db).select().from(runTable);
+    expect(executionAuthorizationInput.parse(root?.input)).toMatchObject({
+      owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
+      scope: { kind: "pilot", mailboxId },
+    });
+    expect(approved.structuredContent).toMatchObject({ runId: root?.id });
+
+    const discovered = await call("run", {
+      action: "discover_mail",
+      mailboxId,
+    });
+    expect(discovered.isError).not.toBe(true);
+    expect(discovered.structuredContent).toEqual({ started: 1, running: 0 });
+    expect(launched).toHaveLength(1);
+    const [discovery] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.purpose, "mail_discovery"));
+    expect(mailboxDiscoveryInput.parse(discovery?.input)).toMatchObject({
+      mailboxId,
+      executionAuthorization: approved.structuredContent,
+    });
+  });
+
+  it("refuses a caller without a member link and a mailbox the member does not own", async () => {
+    await connect(mailboxId);
+    expect((await call("run", approval())).isError).toBe(true);
+    expect(
+      (await call("run", { action: "discover_mail", mailboxId })).isError,
+    ).toBe(true);
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic MCP approval member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    expect(
+      (await call("run", approval("synthetic-unowned-mailbox"))).isError,
+    ).toBe(true);
+    expect(
+      (
+        await call("run", {
+          action: "discover_mail",
+          mailboxId: "synthetic-unowned-mailbox",
+        })
+      ).isError,
+    ).toBe(true);
+    expect(await getDb(ctx.db).select().from(runTable)).toEqual([]);
+    expect(launched).toEqual([]);
   });
 });

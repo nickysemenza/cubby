@@ -326,7 +326,6 @@ export const photoImportContract = defineContract("photoImport", {
     cache: { tags: [["run"]] },
   }),
   chooseExisting: mutation({
-    mcp: { omit: "human_approval" },
     native: "Select an existing Product for a proposed photo group",
     input: z.object({
       runId: runShortcode,
@@ -336,7 +335,6 @@ export const photoImportContract = defineContract("photoImport", {
     output: reviewPhotoGroupsOutput,
   }),
   updateDraft: mutation({
-    mcp: { omit: "human_approval" },
     native: "Correct proposed product identity before approving photos",
     input: z.object({
       runId: runShortcode,
@@ -350,7 +348,6 @@ export const photoImportContract = defineContract("photoImport", {
     output: reviewPhotoGroupsOutput,
   }),
   approveGroups: mutation({
-    mcp: { omit: "human_approval" },
     native: "Approve reviewed photo groups in Apple apps",
     input: z.object({
       runId: runShortcode,
@@ -370,7 +367,6 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   discardGroup: mutation({
-    mcp: { omit: "human_approval" },
     native: "Discard a proposed photo group in Apple apps",
     input: z.object({
       runId: runShortcode,
@@ -380,7 +376,6 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   saveGroups: mutation({
-    mcp: { omit: "human_approval" },
     input: saveGroupsAction
       .omit({ action: true })
       .extend({ runId: runShortcode }),

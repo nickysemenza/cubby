@@ -70,6 +70,15 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "imports_read.items[].predictionId",
   "mail.evaluationId",
   "mail.predictionId",
+  // Field suggestions, order-Email events and Run findings have no shortcode;
+  // each echoes the row handle its review action took.
+  "entity.id",
+  "entity.results[].id",
+  "mail.eventId",
+  "run.id",
+  // run.approve_execution returns the authorization Run's internal id beside
+  // its approvalFingerprint: the exact reference discovery records.
+  "run.runId",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];

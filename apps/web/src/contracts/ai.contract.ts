@@ -90,7 +90,6 @@ export const aiContract = defineContract("ai", {
     native: "Detect items in a just-added location photo",
   }),
   approveDetectedInventoryItem: mutation({
-    mcp: { omit: "human_approval" },
     input: approveDetectedInventoryItemInput,
     output: approveDetectedInventoryItemOut,
     invalidates: ["inventory"],
@@ -127,10 +126,6 @@ export const aiContract = defineContract("ai", {
   // `entity-list.contract.ts`'s `list`) — `.queryOptions()` still works.
   // AI and externally hydrated food reads own authoritative database helpers.
   applyFinanceCategorySuggestion: mutation({
-    mcp: {
-      omit: "human_approval",
-      note: "Applies suggestions a person reviewed; agents classify through spending_classification_write",
-    },
     input: financeCategoryApplyInput,
     output: financeCategoryApplyOut,
     invalidates: [
@@ -168,25 +163,21 @@ export const aiContract = defineContract("ai", {
     cache: { profile: "stable" },
   }),
   acceptSuggestion: mutation({
-    mcp: { omit: "human_approval" },
     input: suggestionReviewActionInput,
     output: suggestionReviewActionOut,
     invalidates: ["product", "expense", "purchase", "vendor"],
   }),
   acceptSuggestions: mutation({
-    mcp: { omit: "human_approval" },
     input: suggestionReviewBatchInput,
     output: suggestionReviewBatchOut,
     invalidates: ["product", "expense", "purchase", "vendor"],
   }),
   rejectSuggestion: mutation({
-    mcp: { omit: "human_approval" },
     input: suggestionReviewRejectInput,
     output: suggestionReviewActionOut,
     invalidates: ["product", "expense", "purchase", "vendor"],
   }),
   recordFieldSuggestionMiss: mutation({
-    mcp: { omit: "human_approval" },
     input: fieldSuggestionMissInput,
     output: fieldSuggestionMissOut,
     invalidates: [],
