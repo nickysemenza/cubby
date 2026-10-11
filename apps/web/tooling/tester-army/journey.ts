@@ -14,7 +14,7 @@ import { parseShortcode } from "@cubby/shared";
 export type Engine = "web" | "ios";
 
 export type JourneyControl = {
-  role: Extract<Role, "button" | "combobox">;
+  role: Extract<Role, "button" | "combobox" | "textbox">;
   name: string;
   swipe?: SwipeOptions;
   within?: { role: Role; name: string };

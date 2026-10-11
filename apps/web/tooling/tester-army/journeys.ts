@@ -305,8 +305,11 @@ export const journeys: Journey[] = [
         goal: `Edit this product, change its Name to "${JOURNEY_NAMES.productUpdatedName}", and save. Wait for the product detail to show the new name before you finish.`,
         ios: [
           "Open Edit Product. Leave the editor open.",
-          `Change Name to "${JOURNEY_NAMES.productUpdatedName}" and dismiss the keyboard with Done. Leave the editor open with the new Name.`,
+          `Change Name to "${JOURNEY_NAMES.productUpdatedName}". Leave the editor open with the new Name.`,
         ],
+        tapControl: { ios: { role: "button", name: "Done" } },
+      },
+      {
         tapTestId: { ios: "editor.product.save" },
       },
       {
@@ -340,12 +343,12 @@ export const journeys: Journey[] = [
       {
         tapControl: {
           web: { role: "button", name: "Receive into inventory..." },
+          ios: { role: "button", name: "Receive into Inventory" },
         },
       },
       {
         goal: `Receive this expense into Inventory: pick the location "${JOURNEY_NAMES.receiveShelf}", set the quantity to add to 3, and confirm Receive.`,
         ios: [
-          "Open Receive into Inventory. Leave the receiving sheet open.",
           `Select Location "${JOURNEY_NAMES.receiveShelf}" and enter Quantity 3. Leave the receiving sheet open with that Location and Quantity.`,
         ],
         tapTestId: { ios: "receive.confirm" },
@@ -417,6 +420,7 @@ export const journeys: Journey[] = [
           'Open Record sale and enter Name "Synthetic chair sale" and Cost -12.50. Leave the dialog open.',
         ],
       },
+      { tapControl: { ios: { role: "textbox", name: "Cost" } } },
       {
         ios: [
           "Set Cost to -12.50. Leave the expense editor open with that Cost.",
@@ -743,9 +747,14 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: 'Edit this transaction and add a source ref with Source "synthetic-bank" and External ID "SYN-REF-1", then save.',
-        ios: [
-          'Enter Source "synthetic-bank" and External id "SYN-REF-1". Leave the editor open with both values entered.',
-        ],
+        ios: 'Enter Source "synthetic-bank". Leave the editor open with that Source.',
+        tapControl: { ios: { role: "button", name: "Done" } },
+      },
+      {
+        ios: 'Enter External id "SYN-REF-1". Leave the editor open with that External id.',
+        tapControl: { ios: { role: "button", name: "Done" } },
+      },
+      {
         tapTestId: { ios: "editor.financialTransaction.save" },
       },
       {
@@ -836,11 +845,23 @@ export const journeys: Journey[] = [
           'In the open Split dialog, set Part 1 name to "Synthetic part one" and Part 1 cost to 6.00. Leave the dialog open.',
           'Set Part 2 name to "Synthetic part two" and Part 2 cost to 4.00. Finish with those values in the fields and the dialog still open.',
         ],
-        ios: [
-          'In the open Split sheet, set the Part 1 name to "Synthetic part one" and Part 1 cost to 6.00. Leave the sheet open with those values.',
-          'Scroll to Part 2 and set its name to "Synthetic part two" and Part 2 cost to 4.00. Leave the sheet open with those values.',
-          "Scroll to the split totals and warning. Finish with the warning that the parts must add up to the original cost exactly visible.",
-        ],
+        ios: 'Set Part 1 name to "Synthetic part one". Leave the Split sheet open with that Name.',
+        tapControl: { ios: { role: "button", name: "Done" } },
+      },
+      {
+        ios: "Set Part 1 cost to 6.00. Leave the Split sheet open with that Cost.",
+        tapControl: { ios: { role: "button", name: "Done" } },
+      },
+      {
+        ios: 'Scroll to Part 2 and set its name to "Synthetic part two". Leave the Split sheet open with that Name.',
+        tapControl: { ios: { role: "button", name: "Done" } },
+      },
+      {
+        ios: "Set Part 2 cost to 4.00. Leave the Split sheet open with that Cost.",
+        tapControl: { ios: { role: "button", name: "Done" } },
+      },
+      {
+        ios: "Scroll to the split totals and warning. Finish with the warning that the parts must add up to the original cost exactly visible.",
         check: {
           visible: () => ["add up to the original cost exactly"],
           disabledButtons: { web: ["Split into 2"], ios: ["Split into 2"] },
@@ -851,6 +872,9 @@ export const journeys: Journey[] = [
         goal: "Fix the split so the two parts add up exactly: part two costs 4.01. Confirm the split.",
         web: "Set Part 2 cost to 4.01. Finish with that value entered and the Split dialog still open.",
         ios: "Set Part 2 cost to 4.01. Leave the Split sheet open with that value entered.",
+        tapControl: { ios: { role: "button", name: "Done" } },
+      },
+      {
         tapTestId: { ios: "split.save" },
         tapControl: { web: { role: "button", name: "Split into 2" } },
       },

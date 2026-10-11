@@ -34,6 +34,8 @@ export default {
       : {
           name: "ios",
           engine: mobile({
+            // Touch-overlay export can exceed hosted cleanup time; raw failure video remains.
+            videoTouches: false,
             platform: "ios",
             device: z.string().min(1).parse(process.env.TESTER_ARMY_DEVICE_ID),
             session: z.string().min(1).parse(process.env.TESTER_ARMY_SESSION),

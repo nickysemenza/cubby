@@ -210,6 +210,8 @@ struct EntityFieldControl: View {
                 format: .usd
             )
             .multilineTextAlignment(.trailing)
+            .accessibilityLabel(label)
+            .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key)")
         }
     }
 

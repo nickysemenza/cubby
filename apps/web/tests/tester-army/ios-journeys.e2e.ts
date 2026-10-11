@@ -148,23 +148,29 @@ for (const journey of selectedJourneys(journeys, "ios"))
             await clearKeyboardAccessory(screen, field, editor);
         }
         const report = journey.id.startsWith("finance-split-")
-          ? { control: "section.splitExpense", detail: "detail.expense" }
+          ? {
+              control: "section.splitExpense",
+              detail: "detail.expense",
+              heading: screen.getByText("Settlement", { exact: true }),
+            }
           : journey.id === "finance-attach-products"
-            ? { control: "section.linkProducts", detail: "detail.purchase" }
+            ? {
+                control: "section.linkProducts",
+                detail: "detail.purchase",
+                heading: screen.getByRole("button", {
+                  name: "Reconciliation: Reconciliation",
+                  exact: true,
+                }),
+              }
             : undefined;
         if (report) {
-          if (journey.id === "finance-attach-products") {
-            // The lazy report must appear before its actions enter the AX tree.
-            const heading = screen.getByRole("button", {
-              name: "Reconciliation: Reconciliation",
-              exact: true,
-            });
-            await screen.scrollUntilVisible(heading, { direction: "down" });
-            await centerInEditor(screen, heading, report.detail);
-            await expect(
-              device.locator("id=section.linkProducts role=button"),
-            ).toBeAttached();
-          }
+          // The lazy report must appear before its actions enter the AX tree.
+          const heading = report.heading;
+          await screen.scrollUntilVisible(heading, { direction: "down" });
+          await centerInEditor(screen, heading, report.detail);
+          await expect(
+            device.locator(`id=${report.control} role=button`),
+          ).toBeAttached();
           const control = device.locator(`id=${report.control} role=button`);
           await screen.scrollUntilVisible(control, { direction: "down" });
           await centerInEditor(screen, control, report.detail);

@@ -54,6 +54,7 @@ struct SplitExpenseSheet: View {
                 }
             }
             .formStyle(.grouped)
+            .keyboardDismissBar()
             .navigationTitle(session.start?.title ?? "Split")
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
