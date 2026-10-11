@@ -80,8 +80,6 @@ jobs:
         with:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
-        with:
-          restore-spm-clones: "false"
       - uses: ./.github/actions/setup-apple-build-cache
         id: derived-data
       - uses: ./.github/actions/setup-apple-test-runner-cache
@@ -300,8 +298,6 @@ jobs:
         with:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
-        with:
-          restore-spm-clones: "false"
       - uses: ./.github/actions/setup-apple-build-cache
         id: derived-data
       - uses: ./.github/actions/setup-apple-test-runner-cache
