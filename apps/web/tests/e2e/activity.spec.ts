@@ -174,7 +174,16 @@ test("Mail import exposes its persisted counts in the shared Run detail", async 
   await expect(
     page.getByRole("heading", { name: "Counts", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Orders seen", { exact: true })).toBeVisible();
+  const counts = page.locator("#import-stats");
+  await expect(
+    counts.getByText("Targets", { exact: true }).locator(".."),
+  ).toHaveText("Targets1");
+  await expect(
+    counts.getByText("Verified", { exact: true }).locator(".."),
+  ).toHaveText("Verified1");
+  await expect(
+    page.locator("#import-targets").getByRole("link", { name: /^EML-/ }),
+  ).toHaveCount(1);
   await expect(
     page.getByRole("heading", { name: "Purchases changed", exact: true }),
   ).toBeVisible();

@@ -159,7 +159,12 @@ export async function handleBackgroundTask(
     case "maintenance.recover": {
       const { recoverMissedWork } =
         await import("~/server/services/catch-up.service");
-      await recoverMissedWork(db);
+      await recoverMissedWork(
+        db,
+        task.coordinatorRetireBefore === undefined
+          ? undefined
+          : new Date(task.coordinatorRetireBefore),
+      );
       return "succeeded";
     }
     case "maintenance.purchase-discovery": {

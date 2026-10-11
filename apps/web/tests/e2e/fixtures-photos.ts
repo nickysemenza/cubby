@@ -502,6 +502,20 @@ export async function seedRunHistoryDefaults(page: Page, name: string) {
 export async function seedMailImportReportRun(page: Page, name: string) {
   const db = getFixtureDb();
   const member = await ensureMemberParty(page, name);
+  const checksum = createHash("sha256").update(name).digest("hex");
+  const [original] = await getDb(db)
+    .insert(schema.orderMail)
+    .values({ ledgerPartyId: member.id, rawChecksum: checksum })
+    .returning({ id: schema.orderMail.id });
+  if (!original) throw new Error("Synthetic retained Email was not created");
+  await insertWithShortcode(db, "email", {
+    ledgerPartyId: member.id,
+    mailboxId: "synthetic-report-mailbox",
+    messageId: original.id,
+    checksum,
+    status: "completed",
+    orderMailId: original.id,
+  });
   const [run] = await getDb(db)
     .insert(schema.run)
     .values({
@@ -517,6 +531,10 @@ export async function seedMailImportReportRun(page: Page, name: string) {
       status: "completed",
       startedAt: new Date(),
       endedAt: new Date(),
+      input: {
+        kind: "mail_research",
+        sources: [{ orderMailId: original.id, checksum }],
+      },
       ordersSeen: 3,
       imported: 1,
       updated: 1,
