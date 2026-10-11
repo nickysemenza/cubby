@@ -196,8 +196,8 @@ historical Runs stay readable through generic reports.
   the reported duplicate Product creation, known-vendor and unmatched-transaction
   backfills, full Gmail history excluding Spam/Trash, separately verified
   continuous new-mail processing, and persisted Purchases, Products, related
-  Emails, financial events, Sources and images, plus Spending and installed
-  clients. Paid Gateway fallback stays within the existing caps ($10 pilot, $10
+  Emails, financial events, Sources and images, plus Spending. Installed-client
+  acceptance is excluded at the member's request. Paid Gateway fallback stays within the existing caps ($10 pilot, $10
   historical backfill, $10/month continuous) with durable known-price admission
   before every paid transmission; prefer subscription inference. Populated
   fields and terminal Runs do not establish verification.
@@ -574,6 +574,13 @@ in entity lists without a separate page
   classification preview hand-writes. Generated SQL must match hand-tuned
   performance; #1712's preview equivalence and scale tests are the guard.
   Decide the declaration shape first.
+- 🤔 **Re-evaluate categories and Jev-backed dropdown options.** Review the
+  category hierarchies and declared classification choices against actual usage
+  and per-field decision misses. Identify overlapping, ambiguous, stale or
+  missing options; check that meanings and suggestion rules distinguish them.
+  Carry existing assignments through any consolidation, update the declarations
+  and generated consumers together, and compare decision quality before and
+  after the change rather than adding more options by default.
 - 🟢 **Burn down raw enum literals in SQL.** `cubby/no-raw-enum-literal-in-sql`
   holds a shrink-only per-file baseline
   (`tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json`). Replace
