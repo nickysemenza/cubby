@@ -54,8 +54,8 @@ export const reclassifyEmailsInput = z
  * `replaced` changed the Email's Relevance; `confirmed` kept it and refreshed
  * the deciding stage. The rest only record history: `awaiting_acceptance`
  * would drop retained content or an import, `resolution_kept` honors a
- * member's resolution, `frozen` is an admitted import source, and `removed`
- * is deleted or in Spam/Trash at Gmail.
+ * member's resolution, `frozen` is an admitted or unresolved historical
+ * import source, and `removed` is deleted or in Spam/Trash at Gmail.
  */
 export const emailReclassifyOutcome = z.enum([
   "replaced",

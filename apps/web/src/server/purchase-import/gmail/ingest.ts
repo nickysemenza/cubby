@@ -1,3 +1,4 @@
+import type { EmailReclassifyOutcome } from "@cubby/schemas/email-actions";
 import { emailCandidateSource } from "@cubby/schemas/email-candidates";
 import type { EmailClassificationConflict } from "@cubby/schemas/email-observations";
 import { runEntityId } from "@cubby/schemas/identifiers";
@@ -278,7 +279,10 @@ async function observeClassification(
   });
 }
 
-type ReclassifyKeptReason = "awaiting_acceptance" | "resolution_kept";
+type ReclassifyKeptReason = Extract<
+  EmailReclassifyOutcome,
+  "awaiting_acceptance" | "resolution_kept"
+>;
 /**
  * Reclassify replaces Relevance only when the member keeps what they have: a
  * resolution stands, and a rerun that would drop retained content or an

@@ -25,6 +25,7 @@ import { listEmailsRead } from "~/server/repo/email";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
 
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../mail-source-identity";
 import { productionOrderMailAttachmentStorage } from "./attachment-storage";
 import { originalChecksum } from "./checksum";
 import { normalizeMessage } from "./normalize";
@@ -380,6 +381,28 @@ describe("member Reclassify", () => {
       id: email.shortcode,
       reviewedClassification: "related",
       reviewConflict: true,
+    });
+  });
+
+  it("reports an unresolved historical source identity as frozen without reading Gmail", async () => {
+    const f = await fixture();
+    const email = await f.seed("synthetic-historical", "Synthetic body.", {
+      classificationVersion: HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+    });
+    const result = await reclassifyEmails(
+      ctx.db,
+      { ids: [email.shortcode] },
+      ctx.actor,
+      { triage: f.triage, relevance: f.relevance },
+    );
+    expect(result.results[0]).toMatchObject({
+      outcome: "frozen",
+      classification: null,
+    });
+    expect(f.getMessage).not.toHaveBeenCalled();
+    expect(await f.current(email.id)).toMatchObject({
+      classification: "uncertain",
+      classificationStage: "rule",
     });
   });
 

@@ -27,6 +27,7 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { ensureRun } from "~/server/runs/ensure-run";
 import { latestExecutionAuthorization } from "~/server/runs/execution-context";
 
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../mail-source-identity";
 import {
   deferClassificationRefresh,
   publishGmailEvidence,
@@ -200,8 +201,11 @@ export async function reclassifyEmails(
         error: null,
       };
       try {
+        // Ingest blocks both before classifying; neither changes Relevance.
         if (
-          await deferClassificationRefresh(db, "classification_only", email)
+          email.classificationVersion ===
+            HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION ||
+          (await deferClassificationRefresh(db, "classification_only", email))
         ) {
           results.push({ ...result, outcome: "frozen" });
           continue;
