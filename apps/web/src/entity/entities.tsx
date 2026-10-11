@@ -261,8 +261,6 @@ const entityDefinitions = withEntityNames({
     },
     // Note: ingredient uses UnitMappingsTable (different from UnitMappingDisplay),
     // so unit-mappings is handled as a custom section
-    // Ingredient supplies its domain columns explicitly; the shared list hook
-    // still appends the default-hidden Created/Updated audit pair.
     list: {
       hasUnitMappings: true,
     },
