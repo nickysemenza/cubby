@@ -516,6 +516,7 @@ export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
   record: TRecord,
   fieldKey: string,
   value: z.infer<ReturnType<typeof z.json>>,
+  label?: string,
 ): ReactNode {
   const field = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === fieldKey,
@@ -531,10 +532,12 @@ export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
         variant="byId"
         entityKind={entityKind}
         entityId={referenceId.data}
+        name={label}
         compact
       />
     );
   }
+  if (label) return <span className="min-w-0 truncate">{label}</span>;
   const readKey = field.readKey ?? field.key;
   return renderCompactFieldValue(
     entity,

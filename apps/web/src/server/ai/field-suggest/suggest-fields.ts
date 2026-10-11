@@ -410,6 +410,7 @@ async function resolveReferenceTarget(
   subject: string,
   resolvedBasis: ResolvedBasis,
   rawBasis: RawBasis,
+  currentValue: string | null,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
   decisionModel?: SupportedDecisionModel,
@@ -458,18 +459,44 @@ async function resolveReferenceTarget(
   const confidence = placement
     ? decisionConfidence(placement.probability)
     : outcome.confidence;
+  const ancestorIds =
+    spec.parentIdOf && currentValue !== null
+      ? currentAncestorIds(candidates, currentValue, spec.idOf, spec.parentIdOf)
+      : new Set<string>();
+  const suppressed = ancestorIds.has(spec.idOf(selected));
   // A rolled-up pick keeps Jev's more specific guess as the first runner-up,
-  // so the picker still offers it.
+  // so the picker still offers it. Ancestors of the current value are not
+  // useful offers, whether selected directly, rolled up to, or ranked as an
+  // alternative.
   const alternatives = mapAlternatives(
     placement
       ? outcome.distribution
-          .filter((entry) => entry.candidate !== selected)
+          .filter(
+            (entry) =>
+              entry.candidate !== selected &&
+              !ancestorIds.has(spec.idOf(entry.candidate)),
+          )
           .slice(0, 3)
-      : outcome.alternatives,
+      : outcome.alternatives.filter(
+          (entry) => !ancestorIds.has(spec.idOf(entry.candidate)),
+        ),
     spec.idOf,
     spec.labelOf,
     spec.detailOf,
   );
+  if (suppressed) {
+    return {
+      suggestion: null,
+      rawValue: null,
+      outcome: {
+        kind: "evaluated",
+        answer: "pick",
+        confidence,
+        probability,
+        alternatives,
+      },
+    };
+  }
   const reasoning = placement
     ? `Most specific pick was ${spec.labelOf(outcome.selected)} (${Math.round((outcome.probability ?? 0) * 100)}%); the ${spec.labelOf(selected)} branch as a whole is ${Math.round(placement.probability * 100)}%.`
     : outcome.reasoning;
@@ -495,6 +522,27 @@ async function resolveReferenceTarget(
       alternatives,
     },
   };
+}
+
+/** IDs of the current reference's strict ancestors in this suggestion roster. */
+function currentAncestorIds<C>(
+  candidates: readonly C[],
+  currentValue: string,
+  idOf: (candidate: C) => string,
+  parentIdOf: (candidate: C) => string | null,
+): Set<string> {
+  const byId = new Map<string, C>(
+    candidates.map((candidate) => [idOf(candidate), candidate] as const),
+  );
+  const ancestors = new Set<string>();
+  let id: string | null = currentValue;
+  for (let step = 0; id !== null && step < 16; step++) {
+    const current = byId.get(id);
+    if (!current) break;
+    id = parentIdOf(current);
+    if (id !== null) ancestors.add(id);
+  }
+  return ancestors;
 }
 
 async function resolveTextTarget(
@@ -566,6 +614,7 @@ async function resolveSpec(
   spec: FieldSuggestSpec,
   resolvedBasis: ResolvedBasis,
   rawBasis: RawBasis,
+  currentValue: string | null,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
   linkedSubject?: string,
@@ -596,6 +645,7 @@ async function resolveSpec(
       ),
     resolvedBasis,
     rawBasis,
+    currentValue,
     usage,
     jev,
     decisionModel,
@@ -609,6 +659,7 @@ async function resolveOneTarget(
   subject: string,
   resolvedBasis: ResolvedBasis,
   rawBasis: RawBasis,
+  currentValue: string | null,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
   decisionModel?: SupportedDecisionModel,
@@ -636,6 +687,7 @@ async function resolveOneTarget(
       subject,
       resolvedBasis,
       rawBasis,
+      currentValue,
       usage,
       jev,
       decisionModel,
@@ -1056,6 +1108,10 @@ export async function suggestFields(
         spec,
         resolvedBasis,
         rawBasis,
+        normalizeBasisValue(
+          input.basis[target],
+          basisValueLimitFor(input.entity, target),
+        ),
         usage,
         ports?.jev,
         linkedContext?.subject,

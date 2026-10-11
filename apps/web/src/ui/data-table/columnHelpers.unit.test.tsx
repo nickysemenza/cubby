@@ -766,7 +766,6 @@ describe("boolean tones come from the roster, not the factory", () => {
 
     renderColumn<ProvisionalRow, string | null>(column, { provisional: true });
     const pill = screen.getByText("Provisional").parentElement;
-    expect(pill).toHaveClass("rounded-full");
     expect(pill).toHaveStyle("--enum-pill-color: var(--warning)");
   });
 });

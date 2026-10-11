@@ -6,6 +6,7 @@ import {
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
 import { cn } from "~/lib/utils";
+import { Pill } from "~/ui/primitives/pill";
 
 type EnumPillStyle = CSSProperties & {
   "--enum-pill-color": string;
@@ -44,9 +45,9 @@ export function EnumPill({
   };
 
   const pill = (
-    <span
+    <Pill
       className={cn(
-        "inline-flex h-5 max-w-full min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full border px-1.5 py-0.5 text-2xs font-medium leading-none",
+        "max-w-full min-w-0 gap-1.5 overflow-hidden whitespace-nowrap leading-none",
         className,
       )}
       style={style}
@@ -57,7 +58,7 @@ export function EnumPill({
         </span>
       ) : null}
       <span className="min-w-0 truncate">{children}</span>
-    </span>
+    </Pill>
   );
   if (!description) return pill;
   return (

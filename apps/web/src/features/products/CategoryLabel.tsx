@@ -21,7 +21,7 @@ export function CategoryLabel({ category }: CategoryLabelProps) {
     <Link
       to="/product-categories/$shortcode"
       params={{ shortcode: category.id }}
-      className="group inline-flex max-w-full min-w-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group inline-flex max-w-full min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring"
       // A clickable row must not also open its own record.
       onClick={(event) => event.stopPropagation()}
     >

@@ -66,6 +66,8 @@ shell; detail bodies use `DetailSections`.
 Column factories reuse module-level render components for selection controls:
 `flexRender` treats callbacks as React component types, so refreshing column
 metadata must not remount a focused row or header checkbox.
+Standard editable cell renderers also retain their identity when filter rosters
+or related-column metadata refresh; open drafts and focus survive those reads.
 
 Component traps that typecheck cannot catch: `DropdownMenuLabel` crashes at
 runtime unless wrapped in `DropdownMenuGroup` (Base UI, not Radix). A column
