@@ -21,6 +21,7 @@ const fetchedVendor = vendorOut.parse({
   ...vendor,
   orderUrlTemplate: null,
   orderEvidence: null,
+  aliases: [],
   orderEmailSenders: [],
   browserDomains: [],
   agentHints: {

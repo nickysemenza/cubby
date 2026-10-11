@@ -52,6 +52,11 @@ the preceding attempt remains immutable.
    an incomplete identified Purchase while itemization stays unknown. What an
    Email cannot establish (a logged-in order page, the exact variant, an
    image) waits in the Research queue for a member's Claude or Codex session.
+   That session opens the Vendor's `orderUrlTemplate` page for the order id
+   in the member's signed-in browser before deciding whether an order was
+   cancelled, returned, partly shipped or a specific variant, and before
+   asking the member: the order page is the authoritative record, and an
+   email's later silence is not.
 2. For a statement CSV, use `/statement-rows/import` or parse the export in the
    MCP client. Known provider columns (Monarch, Mint, Copilot, Apple Card) use
    deterministic adapters; other CSVs need a reviewed column, account, source,
@@ -104,8 +109,15 @@ same outcome without prescribing an agent runtime.
 
 ## Vendor export
 
-1. Resolve the Vendor (`vendorId`, or `vendor.name` to reuse or create an
-   exact-name Vendor).
+1. Resolve the Vendor (`vendorId`, or `vendor.name`). A name resolves by
+   Sender proof first (a mail source from an exact sender address one Vendor
+   records, which also saves the name as a Vendor alias), then by the Vendor's
+   exact name or alias ignoring case; only an unmatched name creates a Vendor,
+   and a name two Vendors share is refused. A similar name or shared domain
+   never matches: merge real duplicates, which keeps the merged names as
+   aliases. Sender proof refuses a merchant name another Vendor already answers
+   to; pass that order's `vendorId`. `entity.resolve {entity:"vendor", names}`
+   shows a name's Vendor without creating one.
 2. Collect one preparation payload per order: stable source identity, header, printed
    grand total and currency, item and adjustment lines, shipment state,
    transaction evidence, and finalized document image shortcodes.

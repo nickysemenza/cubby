@@ -422,8 +422,8 @@ type VendorPickerInput = {
 /**
  * One vendor row, two identities. `itemId: "shortcode"` is for persisted
  * vendor relations (purchase writes keep `VendorShortcode`); `itemId: "name"`
- * is for the expense vendor field, which resolves server-side by exact,
- * case-sensitive name match through `findOrCreateVendor` (see the doc on
+ * is for the expense vendor field, which resolves server-side by name or
+ * Vendor alias through `findOrCreateVendor` (see the doc on
  * `WithVendorSearch` in `with-vendor-search.tsx`) and so must key its
  * combobox item on the name, not the id.
  */

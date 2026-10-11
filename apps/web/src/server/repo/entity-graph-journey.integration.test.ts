@@ -86,6 +86,7 @@ describe("entity graph cross-entity journey", () => {
       {
         defaultSpendingCategoryId: null,
         spendingProfile: "unspecified",
+        aliases: [],
         name: "Journey vendor",
         website: null,
         orderUrlTemplate: null,
