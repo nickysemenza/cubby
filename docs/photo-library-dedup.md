@@ -133,7 +133,12 @@ member's own library is also reported to the server as an `ImageSighting`
 asset) carrying the asset's capture date and offset, location, camera, media
 subtypes and match evidence, written through the native `image.recordSightings`
 operation (idempotent on the asset key) by `LibraryMetadataSync` in bounded
-batches, only while the install participates in automatic work. The server
+batches, only while the install participates in automatic work. Sends are
+serialized in pages of at most 50 sightings. After acknowledgment, each sent
+marker is checkpointed in its own local SQLite write before the next page starts.
+Keep these writes independent: if a later marker fails, earlier markers must
+survive so a newly available cloud mapping cannot resend an accepted sighting
+with a different asset key. The server
 derives the image's capture fields and capturer from its sightings — see
 [ADR 0005](adr/0005-image-capture-provenance-from-sightings.md).
 

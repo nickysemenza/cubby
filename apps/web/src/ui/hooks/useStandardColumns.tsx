@@ -418,9 +418,8 @@ export function useStandardColumns<TData extends BaseListRow>({
           add(withManifestFilter(standardDefinitions.mappings, mappingsColId));
         }
 
-        // Every Cubby entity read shape carries both timestamps. Keep the audit
-        // pair together at the end; list hooks make both default-hidden while the
-        // View menu lets users opt them in.
+        // Top-level lists reveal the audit pair by default; embedded lists keep
+        // it available through the column visibility controls.
         add(standardDefinitions.createdAt);
         add(standardDefinitions.updatedAt);
 
