@@ -413,9 +413,6 @@ export function createTimestampColumn<T extends BaseRow>(
     header: TIMESTAMP_HEADERS[id],
     meta: attachCubbyColumnMeta({
       entityColumnRole: "fact",
-      // Relative timestamps are short ("5 months ago"); without a cap the
-      // fixed-layout table hands this column an equal share of leftover width.
-      className: "w-32",
       mobile: { slot: "hidden" },
       // Copy-only: the display is relative ("5 months ago") but the copy
       // payload is the ISO date-time, which pastes usefully into a spreadsheet.
@@ -1809,7 +1806,7 @@ export function createPlainDateColumn<
   return createEditableAccessorColumn(columnHelper, valueFor, {
     id: String(accessor),
     header: options?.header,
-    className: options?.className ?? "w-28",
+    className: options?.className,
     mobile: options?.mobile,
     filterConfig: options?.filterConfig,
     cellData,

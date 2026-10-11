@@ -437,7 +437,7 @@ export function tagsCellData<TData>(
 export function timestampCellData<TData>(
   getValue: (row: TData) => string | Date | null | undefined,
 ): ColumnCellData<TData> {
-  return textCellData<TData>("text", (row) => {
+  return textCellData<TData>("timestamp", (row) => {
     const v = getValue(row);
     if (!v) return null;
     return v instanceof Date ? v.toISOString() : v;

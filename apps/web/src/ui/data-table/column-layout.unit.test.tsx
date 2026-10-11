@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
-import { dateCellData } from "./cell-data";
+import { dateCellData, selectCellData, timestampCellData } from "./cell-data";
 import {
   type CubbyDefaultTableLayout,
   isTableLayoutCustomized,
@@ -63,16 +63,26 @@ describe("desktop surplus allocation", () => {
     meta: { entityColumnRole: "action" },
   });
 
-  // Regression: all slack went to one column past its maxSize, so a
-  // three-column list painted a 1200px name beside crammed facts.
+  // Regressions: all slack went to one column past its maxSize, so a
+  // three-column list painted a 1200px name beside crammed facts; even
+  // spreading then widened every text column while the title stayed clipped.
   it.each([
     {
-      case: "splits slack across flexible columns by configured width",
+      case: "fills the identity to maxSize before other flexible columns",
       columns: [name, parent, cost, actions],
       available: 900,
       userSized: [],
-      // 324px slack in a 256:176 ratio → +192 / +132.
-      widths: { name: 448, parent: 308, cost: 104, actions: 40 },
+      // 324px slack: name takes its 256px of room, parent the last 68px.
+      widths: { name: 512, parent: 244, cost: 104, actions: 40 },
+      spacer: 0,
+    },
+    {
+      case: "splits slack across the identity's peers by configured width",
+      columns: [name, parent, column("notes", 88, { maxSize: 1000 })],
+      available: 1080,
+      userSized: ["name"],
+      // 560px slack in a 176:88 ratio; parent caps at 352, notes takes the rest.
+      widths: { name: 256, parent: 352, notes: 472 },
       spacer: 0,
     },
     {
@@ -123,20 +133,40 @@ describe("column sizing defaults", () => {
   // value ("$2.ⓘ99"); an undeclared column sizes by what it holds instead of
   // TanStack's blind 150px.
   it.each<{ meta: CubbyColumnMeta; size: number }>([
-    { meta: {}, size: 176 },
-    { meta: { numeric: true }, size: 104 },
-    { meta: { cellData: dateCellData(() => null) }, size: 120 },
+    { meta: {}, size: 160 },
+    { meta: { numeric: true }, size: 88 },
+    { meta: { cellData: dateCellData(() => null) }, size: 232 },
+    { meta: { cellData: timestampCellData(() => null) }, size: 64 },
     {
       meta: {
         numeric: true,
         explanation: { entity: "product", field: "price", label: "Price" },
       },
-      size: 104 + 22,
+      size: 88 + 22,
     },
     { meta: { className: "w-20", suggest: true }, size: 80 + 22 },
   ])("sizes column $# to $size", ({ meta, size }) => {
     const columns = createCubbyColumnCollection<Row>((add) => {
       add(helper.accessor("cost", { header: "Cost", meta }));
+    });
+    const { result } = renderHook(() => useTableColumnLayout({ columns }));
+    expect(result.current.columns[0]).toMatchObject({ size });
+  });
+
+  // A narrow kind default must not truncate a short header ("Storage
+  // status" beside its pill); a long header truncates past a fixed cap.
+  it.each([
+    { header: "Kind", size: 104 },
+    { header: "Storage status", size: 14 * 6.5 + 32 },
+    { header: "A very long header that would otherwise dominate", size: 160 },
+  ])("fits the $header header", ({ header, size }) => {
+    const columns = createCubbyColumnCollection<Row>((add) => {
+      add(
+        helper.accessor("cost", {
+          header,
+          meta: { cellData: selectCellData(() => null, []) },
+        }),
+      );
     });
     const { result } = renderHook(() => useTableColumnLayout({ columns }));
     expect(result.current.columns[0]).toMatchObject({ size });

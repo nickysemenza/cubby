@@ -155,7 +155,9 @@ function widthClassName(
   width: DisplayField["display"]["width"],
   kind?: DisplayField["kind"],
 ): string | undefined {
-  if (kind === "date") return "w-64";
+  // A date column ignores its bucket: the shared date width keeps
+  // `formatDateSpan`'s relative context unclipped.
+  if (kind === "date") return undefined;
   switch (width) {
     case "xs":
       return "w-20";
@@ -1376,6 +1378,30 @@ function cellDataForField<TRecord extends object>(
     case "arrayCount":
     case "count":
     case null:
+      // Read-only pills, instants, dates, and Yes/No keep their own kind so
+      // layout sizes them like their editable twins instead of as free text.
+      if (field.kind === "enum" && field.display.format === null)
+        return selectCellData<TRecord>(
+          (record) => {
+            const value = readScalarField(entity, record, field);
+            return value.kind === "enum" ? value.raw : null;
+          },
+          enumFieldOptions(entity, field),
+        );
+      if (field.kind === "timestamp" && field.display.format === null)
+        return timestampCellData<TRecord>((record) => {
+          const value = readScalarField(entity, record, field);
+          return value.kind === "timestamp" ? value.raw : null;
+        });
+      if (field.kind === "date" && field.display.format === null)
+        return dateCellData<TRecord>((record) =>
+          copyScalarField(entity, record, field),
+        );
+      if (field.kind === "boolean")
+        return booleanCellData<TRecord>((record) => {
+          const value = readScalarField(entity, record, field);
+          return value.kind === "boolean" ? value.raw : null;
+        });
       return field.kind === "number"
         ? numberCellData<TRecord>("number", (record) => {
             const value = readScalarField(entity, record, field);
