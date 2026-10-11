@@ -36,6 +36,11 @@ identity aliases remain recognized. A date/amount/status change is a reviewed
 candidate attachment, not an automatic merge. Ambiguous same-amount transactions
 remain separate candidates. Source rows and their original dates stay intact.
 
+Provider account masks retain all supplied digits, including non-card masks
+longer than four digits. An account name already containing that mask does not
+receive a second suffix. These descriptors participate in statement identity;
+normalization must not truncate them into a different account reference.
+
 Retailer preparation can explicitly target an orderless Purchase. Receipt
 itemization proposes a replacement finding with original lines, proposed
 identities, and exact beneficiary/funder amounts. Approval binds the full
