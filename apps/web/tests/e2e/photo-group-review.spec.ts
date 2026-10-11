@@ -82,16 +82,13 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     page.getByRole("heading", { name: "Photo review" }),
   );
 
-  await expect(
-    page.getByText("Waiting for an agent to propose groups."),
-  ).toBeVisible();
   const actions = page.getByRole("group", {
     name: "Entity actions",
     exact: true,
   });
   await expect(
     actions.getByRole("button", { name: "Start grouping" }),
-  ).toBeVisible();
+  ).toBeEnabled();
   await page.getByRole("tab", { name: "Relations", exact: true }).click();
   await expect(
     actions.getByRole("button", { name: "Start grouping" }),

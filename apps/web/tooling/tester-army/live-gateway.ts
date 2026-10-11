@@ -31,6 +31,7 @@ type Env = {
   ACCOUNT_ID: string;
   GATEWAY_TOKEN: string;
   GATEWAY_ENVIRONMENT: AiGatewayEnvironment;
+  PRICING_CATALOG?: string;
   RESPONSES_MODEL?: string;
   RESPONSES_EFFORT?: string;
 };
@@ -108,7 +109,12 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     // Pricing reads keep their official origin and never count as inference.
-    if (isModelPricingRead(request)) return fetch(request);
+    if (isModelPricingRead(request))
+      return env.PRICING_CATALOG
+        ? new Response(env.PRICING_CATALOG, {
+            headers: { "content-type": "application/json" },
+          })
+        : fetch(request);
     if (url.pathname === "/usage") return Response.json(usage);
     if (url.pathname === "/reset") {
       usage = {};

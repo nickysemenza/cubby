@@ -2,7 +2,10 @@ import { test } from "@e2e-dev/web";
 import { expect } from "e2e";
 
 import { selectedJourneys } from "../../tooling/tester-army/journey";
-import { runJourney } from "../../tooling/tester-army/journey-run";
+import {
+  runJourney,
+  runJourneyControl,
+} from "../../tooling/tester-army/journey-run";
 import { journeys } from "../../tooling/tester-army/journeys";
 import { readBrowserCookies } from "../../tooling/tester-army/scenario";
 
@@ -18,6 +21,11 @@ for (const journey of selectedJourneys(journeys, "web"))
         expect(browser.locator("[data-hydrating]")).toHaveCount(0);
       await runJourney(journey, "web", {
         agent,
+        tapControl: (control) => runJourneyControl(screen, control),
+        expectButtonDisabled: (name) =>
+          expect(
+            screen.getByRole("button", { name, exact: true }),
+          ).toBeDisabled(),
         expectText: async (text, visible) => {
           const target = screen.getByText(text, { exact: false }).first();
           if (visible) await expect(target).toBeVisible();
@@ -33,5 +41,10 @@ for (const journey of selectedJourneys(journeys, "web"))
         },
         setViewport: (size) => browser.setViewport(size),
       });
+      if (
+        process.env.GITHUB_ACTIONS === "true" &&
+        process.env.TESTER_ARMY_CI_EVIDENCE === "1"
+      )
+        await app.screenshot("verified-outcome");
     },
   );

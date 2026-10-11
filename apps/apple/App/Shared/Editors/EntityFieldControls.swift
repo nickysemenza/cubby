@@ -210,6 +210,8 @@ struct EntityFieldControl: View {
                 format: .usd
             )
             .multilineTextAlignment(.trailing)
+            .accessibilityLabel(label)
+            .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key)")
         }
     }
 
@@ -331,6 +333,7 @@ struct EntityFieldControl: View {
     private var tokenControl: some View {
         tokenEditor(
             title: label, singular: field.label.lowercased(),
+            entryID: "editor.\(model.descriptor.key.rawValue).\(key).add",
             tokens: value.arrayValue?.compactMap(\.stringValue) ?? [],
             draft: $newToken, normalize: { $0.trimmingCharacters(in: .whitespaces) }
         ) { model.draft[key] = .array($0.map(JSONValue.string)) }
@@ -343,11 +346,15 @@ struct EntityFieldControl: View {
         let split = CollectionTag.split(value.arrayValue?.compactMap(\.stringValue) ?? [])
         return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
             tokenEditor(
-                title: "Tags", singular: "tag", tokens: split.tags, draft: $newToken,
+                title: "Tags", singular: "tag",
+                entryID: "editor.\(model.descriptor.key.rawValue).\(key).add",
+                tokens: split.tags, draft: $newToken,
                 normalize: { $0.trimmingCharacters(in: .whitespaces) }
             ) { writeProductTags(tags: $0, collections: split.collections) }
             tokenEditor(
-                title: "Collections", singular: "collection", tokens: split.collections,
+                title: "Collections", singular: "collection",
+                entryID: "editor.\(model.descriptor.key.rawValue).\(key).collection.add",
+                tokens: split.collections,
                 draft: $newCollection, normalize: CollectionTag.normalizedSlug
             ) { writeProductTags(tags: split.tags, collections: $0) }
         }
@@ -361,8 +368,9 @@ struct EntityFieldControl: View {
     /// A list of removable tokens with an entry field. `normalize` shapes a typed entry; an empty
     /// or repeated one is ignored.
     private func tokenEditor(
-        title: String, singular: String, tokens: [String], draft: Binding<String>,
-        normalize: @escaping (String) -> String, commit: @escaping ([String]) -> Void
+        title: String, singular: String, entryID: String,
+        tokens: [String], draft: Binding<String>, normalize: @escaping (String) -> String,
+        commit: @escaping ([String]) -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             Text(title).font(.fieldGuideLabel).foregroundStyle(.secondary)
@@ -381,6 +389,7 @@ struct EntityFieldControl: View {
                 .frame(minHeight: FieldGuideTokens.touchTarget)
             }
             TextField("Add \(singular)", text: draft)
+                .accessibilityIdentifier(entryID)
                 .onSubmit {
                     let entry = normalize(draft.wrappedValue)
                     guard !entry.isEmpty, !tokens.contains(entry) else { return }

@@ -304,6 +304,9 @@ describe("PhotoImportRunView", () => {
       screen.getByRole("button", { name: "Start grouping" }),
     ).toBeDisabled();
     expect(
+      screen.queryByText(/The agent is preparing item groups/),
+    ).not.toBeInTheDocument();
+    expect(
       operations.filter((name) => name === "photoImport.startGrouping"),
     ).toHaveLength(0);
   });

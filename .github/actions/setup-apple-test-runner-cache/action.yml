@@ -52,7 +52,7 @@ runs:
       id: runner
       with:
         path: ${{ steps.paths.outputs.paths }}
-        key: agent-device-apple-runner-v5-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolchain-hash }}-${{ steps.host-version.outputs.hash }}-${{ hashFiles('.github/actions/setup-apple-test-runner-cache/action.yml', '.github/actions/save-apple-test-runner-cache/action.yml', 'node_modules/agent-device/package.json', 'patches/agent-device@0.21.20.patch') }}
+        key: agent-device-apple-runner-v5-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolchain-hash }}-${{ steps.host-version.outputs.hash }}-${{ hashFiles('.github/actions/setup-apple-test-runner-cache/action.yml', '.github/actions/save-apple-test-runner-cache/action.yml', 'node_modules/agent-device/package.json', 'patches/agent-device@*.patch') }}
     # v4 has a different path version. Reuse only its certified products on a
     # v5 miss; publish v5 only after a snapshot helper has completed building.
     - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6

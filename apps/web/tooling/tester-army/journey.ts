@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
-import { unique } from "e2e";
+import { unique, type Role, type SwipeOptions } from "e2e";
 import { Pool } from "pg";
 import { z } from "zod";
 import { pollUntil } from "@cubby/shared/retry";
@@ -12,6 +12,15 @@ import { parseShortcode } from "@cubby/shared";
  * read-backs (never the agent's own verdict) decide correctness.
  */
 export type Engine = "web" | "ios";
+
+export type JourneyControl = {
+  role: Extract<Role, "button" | "combobox" | "textbox" | "option">;
+  name: string;
+  /** Picker options include generated codes and ancestry after their name. */
+  exact?: boolean;
+  swipe?: SwipeOptions;
+  within?: { role: Role; name: string };
+};
 
 /** A journey's seeded codes; reading one that was not seeded is a journey bug, so it throws. */
 export class JourneyIds {
@@ -61,6 +70,8 @@ export type RunWait = {
 export type StepCheck = {
   /** Exact text that must be on screen as soon as this step ends. */
   visible?: (ids: JourneyIds) => string[];
+  /** Confirms that a refused UI operation cannot be submitted. */
+  disabledButtons?: Partial<Record<Engine, string[]>>;
   /** Read-backs that must hold as soon as this step ends (for example "no write yet"). */
   db?: DbCheck[];
 };
@@ -81,7 +92,7 @@ export type JourneyStep = {
   ready?: DbCheck;
   /** Holds the step until a live run is ready for it (for example, proposals to review). */
   awaitRun?: RunWait;
-  goal: string;
+  goal?: string;
   check?: StepCheck;
   /** Read back from the screen once the step ends. */
   read?: ScreenRead;
@@ -90,6 +101,8 @@ export type JourneyStep = {
   ios?: string | string[];
   /** A supported hybrid step uses a known control instead of model completion. */
   tapTestId?: Partial<Record<Engine, string>>;
+  /** Taps an exact accessible control, or swipes within it, after the engine's goals. */
+  tapControl?: Partial<Record<Engine, JourneyControl>>;
 };
 
 export type Journey = {
@@ -140,7 +153,7 @@ export function replayParams(ids: JourneyIds) {
 }
 
 export function stepGoals(step: JourneyStep, engine: Engine) {
-  const goals = step[engine] ?? step.goal;
+  const goals = step[engine] ?? step.goal ?? [];
   return Array.isArray(goals) ? goals : [goals];
 }
 

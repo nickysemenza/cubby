@@ -173,17 +173,23 @@ const proposalName = (proposal: PhotoGroupProposal): string =>
     ? proposal.product.create.name
     : (proposal.product.existing?.name ?? "Deleted product — pick another");
 
-const emptyReviewCopy = (runStatus: string) =>
-  runStatus === "needs_review"
-    ? {
-        title: "The agent stopped before proposing groups.",
-        detail: "Use a photo’s menu below to start a group for review.",
-      }
-    : {
-        title: "Waiting for an agent to propose groups.",
-        detail:
-          "The agent is preparing item groups. They will appear here for review before products are created.",
-      };
+const emptyReviewCopy = (runStatus: string, hasAgent: boolean) => {
+  if (runStatus === "needs_review")
+    return {
+      title: "The agent stopped before proposing groups.",
+      detail: "Use a photo’s menu below to start a group for review.",
+    };
+  if (!hasAgent)
+    return {
+      title: "Grouping has not started.",
+      detail: "Select Start grouping once photo descriptions are ready.",
+    };
+  return {
+    title: "Waiting for an agent to propose groups.",
+    detail:
+      "The agent is preparing item groups. They will appear here for review before products are created.",
+  };
+};
 
 /** A run photo as a `PhotoGrid` tile; a photo deleted since has no tile. */
 const photoTile = (image: PhotoRunImage | undefined) =>
@@ -1911,7 +1917,7 @@ export function PhotoGroupReview({
   if (!query.data) return null;
 
   const { review, images } = query.data;
-  const emptyCopy = emptyReviewCopy(review.runStatus);
+  const emptyCopy = emptyReviewCopy(review.runStatus, hasAgent);
   const imagesById = new Map(images.map((image) => [image.id, image]));
   const proposed = review.proposals.filter(
     (proposal) => proposal.state === "proposed",

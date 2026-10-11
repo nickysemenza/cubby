@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { eq } from "drizzle-orm";
 
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { purchaseValidationResearchRunInput } from "@cubby/schemas/run-fields";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 import { ledgerParty } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -125,7 +126,16 @@ export async function seedJourneyWorld(
     projectId: deleteProject.id,
     trade: "other",
   });
-  seed["hero-delete-task"] = { task: deleteTask.id };
+  const deleteChild = await createEntity(c, "task", {
+    name: "Synthetic dependent checklist item",
+    parentTaskId: deleteTask.id,
+    trade: "other",
+  });
+  seed["hero-delete-task"] = {
+    task: deleteTask.id,
+    child: deleteChild.id,
+    project: deleteProject.id,
+  };
 
   // Tags and collections: a collection assignment lives in `tags` as collection:<slug>.
   const tagged = await createEntity(c, "product", {
@@ -316,7 +326,7 @@ export async function seedJourneyWorld(
   );
   const memberId = member.rows[0]?.id;
   if (!memberId) throw new Error("Synthetic member party is missing");
-  // A live photo Run is the generic vehicle for the console's progress and finding.
+  // Photo runs render grouping review; validation runs render progress and findings.
   const consoleRun = await startPhotoInventoryRun(db, {
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
     actorUserId: testUserId(userId),
@@ -334,6 +344,25 @@ export async function seedJourneyWorld(
   const purchaseRow = await pool.query<{ id: string }>(
     'SELECT id FROM "Purchase" WHERE shortcode = $1',
     [consolePurchase.id],
+  );
+  await pool.query(
+    `UPDATE "Run" SET purpose = 'purchase_validation', input = $2::jsonb WHERE id = $1`,
+    [
+      runUuid,
+      JSON.stringify(
+        purchaseValidationResearchRunInput.parse({
+          kind: "purchase_validation_research",
+          instructionRevision: 1,
+          purchases: [
+            {
+              purchaseId: purchaseRow.rows[0]?.id,
+              contextFingerprint: "b".repeat(64),
+              selectedSource: null,
+            },
+          ],
+        }),
+      ),
+    ],
   );
   await pool.query(
     `UPDATE "Run" SET "liveProgress" = jsonb_build_object(
