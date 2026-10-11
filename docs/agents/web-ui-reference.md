@@ -133,6 +133,7 @@ Three layers — pick by what the surface is, never hand-roll table styling:
 - **Select and Image are structural leading columns.** When present, layout normalization keeps them visible, start-pinned, and first/second; their definitions disable pinning, hiding, cell selection, and reorder handles. Actions is the structural trailing column: end-pinned and kept last after any column the user pins to the end, never moved, hidden, or re-pinned.
 
 - **Generic entity list pages show Created then Updated by default**, after domain and related columns and before Actions, for both server-backed and client-backed lists. The shared timestamp cells show compact relative times with exact household-local timestamps on hover. These are ordinary data columns: users can hide, move, pin, and resize them during the session. Embedded relationship tables retain their default-hidden audit columns; phone rows retain their existing semantic projection.
+- Custom list projections must return both audit timestamps. Tree adapters preserve them on each top-level row shape; heterogeneous child rows use the timestamps of their own entity, such as candidate Products beneath a Wish.
 - Keep the trailing gutter cell at `w-0`; declared numeric widths own the rendered geometry and overflow scrolls horizontally when the table is wider than its container.
 
 ## Entity names are always readable and always clickable

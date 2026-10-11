@@ -5,6 +5,7 @@ import {
   seedVendorDisplayPrerequisite,
 } from "./fixtures-catalog";
 import { seedCookbookSourcePrerequisite } from "./fixtures-recipes";
+import { createEntityFixture } from "./fixtures-core";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -21,6 +22,17 @@ function headerIds(page: Page) {
     .evaluateAll((cells) =>
       cells.map((cell) => cell.getAttribute("data-column-id") ?? ""),
     );
+}
+
+async function expectAuditTimestamps(page: Page, row: Locator) {
+  for (const id of ["createdAt", "updatedAt"]) {
+    const timestamp = row.locator(`[data-cell-col="${id}"]`);
+    await expect(timestamp).toHaveText(/^(now|\d+(m|h|d|w|mo|y))$/);
+    await timestamp.getByRole("button").hover();
+    await expect(
+      page.getByText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
+    ).toBeVisible();
+  }
 }
 
 /** `ids` with `id` moved so it lands directly after `anchor`. */
@@ -99,14 +111,10 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
   expect(defaults.slice(0, 2)).toEqual(["select", "image"]);
   expect(defaults.at(-1)).toBe("actions");
   expect(defaults.slice(-3)).toEqual(["createdAt", "updatedAt", "actions"]);
-  for (const id of ["createdAt", "updatedAt"]) {
-    const timestamp = page.locator(`[data-cell-col="${id}"]`).first();
-    await expect(timestamp).toHaveText(/^(now|\d+(m|h|d|w|mo|y))$/);
-    await timestamp.getByRole("button").hover();
-    await expect(
-      page.getByText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
-    ).toBeVisible();
-  }
+  await expectAuditTimestamps(
+    page,
+    page.getByRole("row").filter({ hasText: name }).first(),
+  );
   for (const id of [
     "dataQuality",
     "spendingProfile",
@@ -346,6 +354,10 @@ test("audit columns are visible on Inventory and client-backed Cookbook lists", 
     "updatedAt",
     "actions",
   ]);
+  await expectAuditTimestamps(
+    page,
+    page.getByRole("row").filter({ hasText: name }).first(),
+  );
 
   const cookbookName = `${prefix} cookbook`;
   await seedCookbookSourcePrerequisite(page, cookbookName);
@@ -359,4 +371,40 @@ test("audit columns are visible on Inventory and client-backed Cookbook lists", 
     "updatedAt",
     "actions",
   ]);
+  await expectAuditTimestamps(
+    page,
+    page.getByRole("row").filter({ hasText: cookbookName }).first(),
+  );
+});
+
+test("Wish tree rows retain audit timestamps for wishes and candidate products", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const name = `Timestamp wish ${Date.now()}`;
+  const { products } = await seedInventoryPrerequisites(page, {
+    locationName: `${name} shelf`,
+    products: [{ name: `${name} candidate`, quantity: 1, unit: "each" }],
+  });
+  await createEntityFixture(page, "wish", {
+    name,
+    candidateProductIds: [products[0]!.id],
+  });
+  const wishRow = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("link", { name, exact: true }) });
+  await gotoAuthenticatedPage(
+    page,
+    `/wishes?searchQuery=${encodeURIComponent(name)}`,
+    wishRow,
+  );
+  await expectAuditTimestamps(page, wishRow);
+  await wishRow.getByRole("button", { name: "Expand", exact: true }).click();
+  await expectAuditTimestamps(
+    page,
+    page
+      .getByRole("row")
+      .filter({ hasText: `${name} candidate` })
+      .last(),
+  );
 });
