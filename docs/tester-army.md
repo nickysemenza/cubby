@@ -315,6 +315,8 @@ A step can wait for background rows (`ready`) or a live run state
 settles anywhere else fails at once with its last progress and failed
 operations. The order journey imports from its seeded Email and opens the resulting Run link. The photo journey checks that Start grouping dispatches its Run before waiting for proposals; an undispatched Run must not claim grouping is underway. Before dispatch, browser E2E checks the enabled Start grouping action.
 
+Coupled journey failures print the browser harness's sanitized Worker logs before cleanup. Inspect those logs for the underlying authorization or pricing error when the coordinator reports `model_error`; the SDK screenshot and run status alone can omit that exception.
+
 Final assertions read the imported Purchase, its expense total,
 the imported order candidate, or the committed photo groups.
 

@@ -213,6 +213,10 @@ async function runCoupled() {
         }),
     });
   } catch (error) {
+    console.error(
+      "[tester-army] Coupled Worker logs:",
+      JSON.stringify(runtime.getLogs(), null, 2),
+    );
     failures.push(error);
   } finally {
     // Request counts per Gateway route, for the run bundle; never content.
