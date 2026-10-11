@@ -214,6 +214,16 @@ struct ReportCommandFormSheet: View {
                             }
                         }
                         .accessibilityIdentifier("report.input.\(field.key)")
+                    case .text:
+                        TextField(
+                            field.label,
+                            text: Binding(
+                                get: { draft.form.text(field.key) ?? "" },
+                                set: { draft.form.setText(field.key, $0) }),
+                            axis: .vertical
+                        )
+                        .lineLimit(2...6)
+                        .accessibilityIdentifier("report.input.\(field.key)")
                     }
                 }
                 if !draft.form.isComplete {

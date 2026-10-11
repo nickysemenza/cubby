@@ -366,6 +366,12 @@ export const nativeCoverage = {
       "run.history",
       "task.agenda",
     ]),
+    // Member-wide accuracy measurement is a desk workflow: sampling and blind
+    // grading run through the MCP `mail` tool and a Gmail-connected session.
+    ...unsupported(
+      ["email.accuracy"],
+      "Email accuracy review runs on the web or through the MCP mail tool.",
+    ),
   },
 } as const satisfies {
   control: Record<ControlRendererId, NativeCoverageEntry>;
@@ -689,7 +695,7 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   detail: 0,
   heroAction: 0,
   detailSlot: 2,
-  listSlot: 0,
+  listSlot: 1,
   sectionAction: 0,
   structuredField: 0,
 } as const satisfies Record<NativeCoverageKind, number>;

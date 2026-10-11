@@ -18,6 +18,8 @@ public struct ReportCommandForm: Equatable, Sendable {
             /// One record of `entity`, picked by the person (searched on the client).
             case record(entity: String)
             case choice([Option])
+            /// Free text the person writes; blank counts as missing.
+            case text
         }
 
         public var id: String { key }
@@ -50,6 +52,9 @@ public struct ReportCommandForm: Equatable, Sendable {
                         key: choice.key, label: choice.label,
                         kind: .choice(choice.options.map { Option(value: $0.value, label: $0.label) })))
                 if let initial = choice.initial { seeded.setChoice(choice.key, initial) }
+            case .text(let text):
+                fields.append(Field(key: text.key, label: text.label, kind: .text))
+                if let initial = text.initial { seeded.setText(text.key, initial) }
             }
         }
         self = ReportCommandForm(fields: fields, seeding: seeded)
@@ -64,7 +69,7 @@ public struct ReportCommandForm: Equatable, Sendable {
     }
 
     public func number(_ key: String) -> Double? { numbers[key] }
-    /// The picked record's id, or the chosen option's value.
+    /// The picked record's id, the chosen option's value, or the written text.
     public func text(_ key: String) -> String? { texts[key] }
     /// What to show for a picked record.
     public func title(_ key: String) -> String? { titles[key] }
@@ -90,6 +95,8 @@ public struct ReportCommandForm: Equatable, Sendable {
 
     public mutating func setChoice(_ key: String, _ value: String?) { texts[key] = value }
 
+    public mutating func setText(_ key: String, _ value: String) { texts[key] = value }
+
     /// The inputs still lacking a usable answer, by label.
     public var missing: [String] {
         fields.compactMap { field in
@@ -98,6 +105,12 @@ public struct ReportCommandForm: Equatable, Sendable {
                 if let value = numbers[field.key], value.isFinite, value >= min { return nil }
             case .record, .choice:
                 if let value = texts[field.key], !value.isEmpty { return nil }
+            case .text:
+                if let value = texts[field.key],
+                    !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                {
+                    return nil
+                }
             }
             return field.label
         }

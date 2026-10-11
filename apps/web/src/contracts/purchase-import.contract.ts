@@ -13,7 +13,12 @@ import {
   emailImportOut,
   correctEmailRelevanceInput,
   correctEmailRelevanceOut,
+  reclassifyEmailsInput,
+  reclassifyEmailsOut,
+  rerunEmailPreviewInput,
+  rerunEmailPreviewOut,
 } from "@cubby/schemas/email-actions";
+import { entityReportOut } from "@cubby/schemas/entity-report";
 import {
   mailReadInput,
   mailReadOut,
@@ -36,6 +41,7 @@ import {
   prepareSourceOrderReconciliationInput,
   prepareSourceOrderReconciliationOut,
 } from "@cubby/schemas/purchase-import";
+import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
@@ -86,6 +92,29 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     output: emailImportOut,
     native: "Explicit selected Email import",
     invalidates: ["email", "runOnly"],
+  }),
+  emailReclassify: mutation({
+    input: reclassifyEmailsInput,
+    output: reclassifyEmailsOut,
+    native: "Reclassify selected Emails from their originals",
+    invalidates: ["email", "runOnly"],
+  }),
+  emailPreviewRerun: mutation({
+    input: rerunEmailPreviewInput,
+    output: rerunEmailPreviewOut,
+    native: "Rerun one Email's extraction preview",
+    invalidates: ["email", "runOnly"],
+  }),
+  /** Member-wide accuracy as report blocks: the Emails list's Accuracy view. */
+  emailAccuracyView: query({
+    input: z.object({}).strict(),
+    output: entityReportOut,
+    readPolicy: "strong",
+    mcp: {
+      omit: "agent_twin",
+      twin: "purchaseImport.emailAccuracyReport",
+      note: "Agents read the structured report; this composes it as display blocks.",
+    },
   }),
   prepareReconciliation: mutation({
     input: prepareSourceOrderReconciliationInput,

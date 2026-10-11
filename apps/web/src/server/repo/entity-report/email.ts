@@ -3,12 +3,25 @@ import type {
   EmailAccuracyReport,
   EmailAccuracyBinaryMetrics,
 } from "@cubby/schemas/email-accuracy";
-import type { ReportBlock } from "@cubby/schemas/entity-report";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { mailResearchRunInput } from "@cubby/schemas/run-fields";
+import type {
+  ReportBlock,
+  ReportCommand,
+  ReportRecordRow,
+} from "@cubby/schemas/entity-report";
+import {
+  parseShortcodeFor,
+  runEntityId,
+  type ShortcodeFor,
+} from "@cubby/schemas/identifiers";
+import {
+  MAILBOX_CLASSIFICATION_LABEL,
+  mailboxClassification,
+} from "@cubby/schemas/mailbox-research";
+import { mailResearchRunInput, runWorkLabel } from "@cubby/schemas/run-fields";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { groupBy } from "es-toolkit";
 
-import { formatPercent } from "~/lib/number-format";
+import { formatPercent, formatSmallCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import {
   aiUsage,
@@ -341,6 +354,463 @@ function emailAccuracyReviewBlocks(report: EmailAccuracyReport): ReportBlock[] {
   ];
 }
 
+type Observation = typeof emailClassificationObservation.$inferSelect;
+type PipelineState = "Ran" | "Skipped" | "Not reached" | "Failed";
+const stateTone = {
+  Ran: "positive",
+  Skipped: "muted",
+  "Not reached": "muted",
+  Failed: "destructive",
+} as const;
+const automatedStages = ["rule", "jev", "model"] as const;
+const stageStep = {
+  rule: "Rule",
+  jev: "Jev",
+  model: "Relevance model",
+} as const satisfies Record<(typeof automatedStages)[number], string>;
+
+const conflictText = (conflict: Observation["conflict"]) =>
+  conflict?.kind === "member_review"
+    ? `Disagrees with member: ${conflict.memberClassification}`
+    : conflict?.kind === "accepted_unrelated"
+      ? "Unrelated despite an accepted Purchase"
+      : "";
+
+function pipelineRow(
+  step: string,
+  state: PipelineState,
+  input: {
+    lines?: (string | null | undefined)[];
+    at?: Date | null;
+    conflict?: Observation["conflict"];
+    entity?: string;
+    id?: string;
+    commands?: ReportCommand[];
+  } = {},
+): ReportRecordRow {
+  const conflict = conflictText(input.conflict ?? null);
+  const statuses: NonNullable<ReportRecordRow["statuses"]> = [
+    { label: state, tone: stateTone[state] },
+  ];
+  if (conflict) statuses.push({ label: conflict, tone: "warning" });
+  const row: ReportRecordRow = {
+    entity: input.entity ?? null,
+    id: input.id ?? null,
+    title: step,
+    subtitle:
+      input.lines?.filter((line): line is string => Boolean(line)).join("\n") ||
+      null,
+    trailing: null,
+    statuses,
+  };
+  if (input.at) row.at = input.at.toISOString();
+  if (input.commands?.length) row.commands = input.commands;
+  return row;
+}
+
+/** Each automated stage: its own result, or why it did not decide this original. */
+function stageRow(
+  stage: (typeof automatedStages)[number],
+  email: typeof emailTable.$inferSelect,
+  latest: Observation | undefined,
+  decidedBy: (typeof automatedStages)[number] | null,
+): ReportRecordRow {
+  const step = stageStep[stage];
+  if (latest)
+    return pipelineRow(step, "Ran", {
+      lines: [
+        `${MAILBOX_CLASSIFICATION_LABEL[latest.classification]}${latest.model ? ` · ${latest.model}` : ""}`,
+        latest.reason,
+      ],
+      at: latest.createdAt,
+      conflict: latest.conflict,
+    });
+  const order = automatedStages.indexOf(stage);
+  if (decidedBy && automatedStages.indexOf(decidedBy) > order)
+    return pipelineRow(step, "Ran", {
+      lines: ["Left Relevance uncertain; not recorded separately"],
+    });
+  if (decidedBy && email.classification !== "uncertain")
+    return pipelineRow(step, "Skipped", {
+      lines: [`${stageStep[decidedBy]} decided first`],
+    });
+  return pipelineRow(step, "Not reached", {
+    lines:
+      stage === "model" && email.classification === "uncertain"
+        ? [
+            "Classification-only discovery skips the relevance model; Reclassify runs it.",
+          ]
+        : [],
+  });
+}
+
+const knownCost = (calls: (typeof aiUsage.$inferSelect)[]) =>
+  calls.every(
+    (call) =>
+      ["chatgpt", "cache"].includes(call.transport) ||
+      (call.transport !== "unknown" && call.estimatedCost !== null),
+  )
+    ? calls.reduce(
+        (sum, call) =>
+          sum +
+          (["chatgpt", "cache"].includes(call.transport)
+            ? 0
+            : (call.estimatedCost ?? 0)),
+        0,
+      )
+    : null;
+
+type EmailRow = typeof emailTable.$inferSelect;
+type EmailShortcode = ShortcodeFor<"email">;
+type ReportClient = ReturnType<typeof getDb>;
+
+/** A recent per-Email estimate, and the actual Run that admitted this exact source. */
+async function loadImportCosts(client: ReportClient, email: EmailRow) {
+  const recent = await client
+    .select({ id: run.id, status: run.status, input: run.input })
+    .from(run)
+    .where(
+      and(
+        eq(run.ledgerPartyId, email.ledgerPartyId),
+        eq(run.purpose, "mail_import"),
+        notDeleted(run),
+      ),
+    )
+    .orderBy(desc(run.endedAt))
+    .limit(50);
+  const usageFor = (ids: readonly (typeof run.$inferSelect.id)[]) =>
+    ids.length
+      ? client
+          .select()
+          .from(aiUsage)
+          .where(and(inArray(aiUsage.runId, [...ids]), notDeleted(aiUsage)))
+      : Promise.resolve([]);
+  const calls = await usageFor(recent.map((item) => item.id));
+  const comparable = recent.flatMap((item) => {
+    const input = mailResearchRunInput.safeParse(item.input);
+    const usage = calls.filter((call) => call.runId === item.id);
+    const cost = knownCost(usage);
+    if (item.status !== "completed" || !input.success || !usage.length)
+      return [];
+    return cost === null ? [] : [cost / input.data.sources.length];
+  });
+  // Actual billing follows the exact frozen source, independently of the
+  // bounded recent sample used to estimate a future import.
+  if (!email.orderMailId) return { comparable, importRun: null, usage: [] };
+  const sources = JSON.stringify({
+    kind: "mail_research",
+    sources: [{ orderMailId: email.orderMailId, checksum: email.checksum }],
+  });
+  const actualRuns = await client
+    .select()
+    .from(run)
+    .where(
+      and(
+        eq(run.ledgerPartyId, email.ledgerPartyId),
+        eq(run.purpose, "mail_import"),
+        notDeleted(run),
+        sql`${run.input} @> ${sources}::jsonb`,
+      ),
+    )
+    .orderBy(desc(run.endedAt), desc(run.id));
+  const importRun =
+    actualRuns.find((item) =>
+      mailResearchRunInput
+        .safeParse(item.input)
+        .data?.sources.some(
+          (source) =>
+            source.orderMailId === email.orderMailId &&
+            source.checksum === email.checksum,
+        ),
+    ) ?? null;
+  return {
+    comparable,
+    importRun,
+    usage: importRun ? await usageFor([importRun.id]) : [],
+  };
+}
+
+function retrievedRow(
+  email: EmailRow,
+  retained: boolean,
+  latestFailure: typeof emailRetrievalFailure.$inferSelect | undefined,
+  latestPrediction: Observation | undefined,
+) {
+  if (
+    latestFailure &&
+    (!latestPrediction || latestFailure.createdAt > latestPrediction.createdAt)
+  )
+    return pipelineRow("Retrieved", "Failed", {
+      lines: [
+        `${latestFailure.httpStatus ?? "Provider error"}: ${latestFailure.error}`,
+      ],
+      at: latestFailure.createdAt,
+    });
+  const content = retained
+    ? "Original content retained"
+    : email.contentClearedAt
+      ? "Content cleared; metadata and checksum kept. Reclassify refetches it from Gmail."
+      : "Metadata only; Reclassify refetches the original from Gmail.";
+  return pipelineRow("Retrieved", "Ran", {
+    lines: [content, `Mailbox ${email.mailboxId}`],
+    at: email.contentClearedAt ?? email.createdAt,
+  });
+}
+
+const correctRelevanceCommand = (
+  email: EmailRow,
+  shortcode: EmailShortcode,
+): ReportCommand => ({
+  id: `correct:${shortcode}:${email.checksum}`,
+  label: "Correct relevance",
+  prominent: false,
+  confirm:
+    "Record your Relevance for this Email? Cubby retrieves its original from Gmail and keeps your decision over later reruns.",
+  inputs: [
+    {
+      kind: "choice",
+      key: "classification",
+      label: "Relevance",
+      options: [
+        { value: "related", label: MAILBOX_CLASSIFICATION_LABEL.related },
+        { value: "uncertain", label: MAILBOX_CLASSIFICATION_LABEL.uncertain },
+      ],
+      initial: "related",
+    },
+    { kind: "text", key: "reason", label: "Reason", initial: null },
+  ],
+  request: {
+    kind: "correct-email-relevance",
+    id: shortcode,
+    expectedChecksum: email.checksum,
+    reviewedChecksum: email.checksum,
+    classification: "related",
+    reason: "",
+  },
+});
+
+function memberRow(
+  email: EmailRow,
+  review: { label: typeof emailClassificationLabel.$inferSelect } | undefined,
+  correct: ReportCommand,
+) {
+  if (email.classificationStage === "resolution")
+    return pipelineRow("Member review", "Ran", {
+      lines: [
+        `Resolved ${MAILBOX_CLASSIFICATION_LABEL[mailboxClassification.parse(email.classification)]}`,
+        email.classificationReason,
+      ],
+      commands: [correct],
+    });
+  if (review)
+    return pipelineRow("Member review", "Ran", {
+      lines: [
+        `Reviewed ${MAILBOX_CLASSIFICATION_LABEL[review.label.classification]}`,
+        review.label.reason,
+      ],
+      at: review.label.createdAt,
+      commands: [correct],
+    });
+  return pipelineRow("Member review", "Not reached", {
+    lines: ["No member review of this original."],
+    commands: [correct],
+  });
+}
+
+function previewRow(
+  email: EmailRow,
+  shortcode: EmailShortcode,
+  preview: typeof emailCandidateObservation.$inferSelect | undefined,
+  current: boolean,
+) {
+  const related = email.classification === "related";
+  const commands: ReportCommand[] =
+    related && current
+      ? [
+          {
+            id: `preview:${shortcode}:${email.checksum}`,
+            label: "Rerun extraction preview",
+            prominent: false,
+            confirm: "Rerun the cheap extraction preview for this Email?",
+            request: {
+              kind: "rerun-email-preview",
+              id: shortcode,
+              expectedChecksum: email.checksum,
+            },
+          },
+        ]
+      : [];
+  if (preview) {
+    const result =
+      preview.preview.status === "selected"
+        ? `${preview.preview.candidate.extraction.status} candidate`
+        : preview.preview.reason;
+    return pipelineRow("Extraction preview", "Ran", {
+      lines: [`${result} · ${preview.preview.model ?? "No model call"}`],
+      at: preview.createdAt,
+      commands,
+    });
+  }
+  return related
+    ? pipelineRow("Extraction preview", "Not reached", { commands })
+    : pipelineRow("Extraction preview", "Skipped", {
+        lines: ["Only a related Email is previewed."],
+      });
+}
+
+function importRow(
+  email: EmailRow,
+  shortcode: EmailShortcode,
+  costs: Awaited<ReturnType<typeof loadImportCosts>>,
+  canImport: boolean,
+) {
+  const { importRun, usage } = costs;
+  if (importRun) {
+    // One line per model and route: a Run total, including retries and failed
+    // calls, never attributed wholly to this Email; unknown routes stay unknown.
+    const usageLines = Object.values(
+      groupBy(usage, (call) => JSON.stringify([call.model, call.transport])),
+    ).map((group) => {
+      const cost = knownCost(group);
+      const failed = group.filter((call) => call.status === "failed").length;
+      return [
+        group[0]!.model,
+        group[0]!.transport,
+        `${group.length} call(s)${failed ? `, ${failed} failed` : ""}`,
+        cost === null ? "Unknown" : formatSmallCurrency(cost),
+      ].join(" · ");
+    });
+    const sources =
+      mailResearchRunInput.safeParse(importRun.input).data?.sources.length ?? 1;
+    return pipelineRow(
+      "Import Run",
+      ["failed", "dispatch_failed"].includes(importRun.status)
+        ? "Failed"
+        : "Ran",
+      {
+        entity: "run",
+        id: importRun.shortcode,
+        lines: [
+          `${importRun.shortcode} · ${importRun.status} · ${sources} Email(s) in Run`,
+          ...usageLines,
+        ],
+        at: importRun.endedAt ?? importRun.startedAt,
+      },
+    );
+  }
+  if (email.classification !== "related")
+    return pipelineRow("Import Run", "Skipped", {
+      lines: ["Only a related Email is imported."],
+    });
+  if (!canImport)
+    return pipelineRow("Import Run", "Not reached", {
+      lines: [
+        "Import needs related, retained, current content and an unclaimed Email.",
+      ],
+    });
+  return pipelineRow("Import Run", "Not reached", {
+    lines: ["Import runs only when you authorize this Email."],
+    commands: [
+      {
+        id: `import:${shortcode}:${email.checksum}`,
+        label: "Import this Email",
+        prominent: true,
+        confirm:
+          "Authorize paid Pi import for this Email? Automatic discovery remains classification-only.",
+        request: {
+          kind: "import-email",
+          id: shortcode,
+          expectedChecksum: email.checksum,
+        },
+      },
+    ],
+  });
+}
+
+function purchaseRow(
+  email: EmailRow,
+  purchases: Awaited<ReturnType<typeof readEmailAssociations>>["purchases"],
+) {
+  const [first] = purchases;
+  if (!first)
+    return pipelineRow(
+      "Linked Purchase",
+      email.classification === "related" ? "Not reached" : "Skipped",
+    );
+  return pipelineRow("Linked Purchase", "Ran", {
+    entity: "purchase",
+    id: first.shortcode,
+    lines: purchases.map(
+      (item) => `${item.shortcode}${item.orderId ? ` · ${item.orderId}` : ""}`,
+    ),
+  });
+}
+
+function estimateBlocks(comparable: readonly number[]): ReportBlock[] {
+  return [
+    {
+      kind: "stats",
+      title: "Import cost estimate",
+      figures: [
+        {
+          id: "pi-cost-low",
+          label: "Per Email, low",
+          value: comparable.length ? Math.min(...comparable) : null,
+          format: "money",
+        },
+        {
+          id: "pi-cost-high",
+          label: "Per Email, high",
+          value: comparable.length ? Math.max(...comparable) : null,
+          format: "money",
+        },
+        {
+          label: "Comparable settled Runs",
+          value: comparable.length,
+          format: "count",
+        },
+      ],
+    },
+    {
+      kind: "note",
+      text: comparable.length
+        ? "From recent owned mail-import Runs with known billing routes; failed calls included, ChatGPT plan and cache calls count as zero. An estimate, not a cap."
+        : "No comparable settled Run has a complete known billing route. Cost is unknown; an absent estimate never means free.",
+    },
+  ];
+}
+
+/** The Runs that touched this Email, for the pipeline footer. */
+async function runMembership(
+  client: ReportClient,
+  email: EmailRow,
+  runIds: readonly (string | null)[],
+) {
+  const ids = [
+    ...new Set(
+      [email.runId, ...runIds].flatMap((value) =>
+        value === null ? [] : [runEntityId.parse(value)],
+      ),
+    ),
+  ];
+  if (!ids.length) return undefined;
+  const runs = await client
+    .select({
+      id: run.id,
+      code: run.shortcode,
+      purpose: run.purpose,
+      input: run.input,
+    })
+    .from(run)
+    .where(inArray(run.id, ids));
+  return `Runs: ${runs
+    .map(
+      (item) =>
+        `${item.code} (${runWorkLabel(item)}${item.id === email.runId ? ", processing" : ""})`,
+    )
+    .join(", ")}`;
+}
+
 export async function emailReviewReport(
   db: Database,
   code: string,
@@ -369,221 +839,245 @@ export async function emailReviewReport(
     .limit(1);
   if (!selected) throw new Error("Email was not found for this member.");
   const { email } = selected;
-  const recent = await client
-    .select({
-      id: run.id,
-      code: run.shortcode,
-      status: run.status,
-      input: run.input,
-    })
-    .from(run)
-    .where(
-      and(
-        eq(run.ledgerPartyId, email.ledgerPartyId),
-        eq(run.purpose, "mail_import"),
-        notDeleted(run),
-      ),
-    )
-    .orderBy(desc(run.endedAt))
-    .limit(50);
-  const calls = recent.length
-    ? await client
-        .select()
-        .from(aiUsage)
-        .where(
-          and(
-            inArray(
-              aiUsage.runId,
-              recent.map((item) => item.id),
-            ),
-            notDeleted(aiUsage),
-          ),
-        )
-    : [];
-  const comparable = recent.flatMap((item) => {
-    const input = mailResearchRunInput.safeParse(item.input);
-    const usage = calls.filter((call) => call.runId === item.id);
-    if (
-      item.status !== "completed" ||
-      !input.success ||
-      !usage.length ||
-      usage.some(
-        (call) =>
-          !["chatgpt", "cache"].includes(call.transport) &&
-          (call.transport === "unknown" || call.estimatedCost === null),
+  const shortcode = parseShortcodeFor("email", email.shortcode);
+  const costs = await loadImportCosts(client, email);
+  const [predictions, candidates, failures, reviews] = await Promise.all([
+    client
+      .select()
+      .from(emailClassificationObservation)
+      .where(eq(emailClassificationObservation.emailId, id))
+      .orderBy(
+        desc(emailClassificationObservation.createdAt),
+        desc(emailClassificationObservation.id),
       )
-    )
-      return [];
-    const cost = usage.reduce(
-      (total, call) =>
-        total +
-        (["chatgpt", "cache"].includes(call.transport)
-          ? 0
-          : (call.estimatedCost ?? 0)),
-      0,
-    );
-    return [cost / input.data.sources.length];
-  });
-  // Actual billing follows the exact frozen source, independently of the
-  // bounded recent sample used to estimate a future import.
-  const actualSources = email.orderMailId
-    ? JSON.stringify({
-        kind: "mail_research",
-        sources: [{ orderMailId: email.orderMailId, checksum: email.checksum }],
+      .limit(20),
+    client
+      .select()
+      .from(emailCandidateObservation)
+      .where(eq(emailCandidateObservation.emailId, id))
+      .orderBy(desc(emailCandidateObservation.createdAt))
+      .limit(5),
+    client
+      .select()
+      .from(emailRetrievalFailure)
+      .where(eq(emailRetrievalFailure.emailId, id))
+      .orderBy(desc(emailRetrievalFailure.createdAt))
+      .limit(5),
+    client
+      .select({
+        label: emailClassificationLabel,
+        prediction: emailClassificationObservation,
       })
-    : null;
-  const actualRuns = actualSources
-    ? await client
-        .select({
-          id: run.id,
-          code: run.shortcode,
-          status: run.status,
-          input: run.input,
-        })
-        .from(run)
-        .where(
-          and(
-            eq(run.ledgerPartyId, email.ledgerPartyId),
-            eq(run.purpose, "mail_import"),
-            notDeleted(run),
-            sql`${run.input} @> ${actualSources}::jsonb`,
-          ),
-        )
-        .orderBy(desc(run.endedAt), desc(run.id))
-    : [];
-  const actualCalls = actualRuns.length
-    ? await client
-        .select()
-        .from(aiUsage)
-        .where(
-          and(
-            inArray(
-              aiUsage.runId,
-              actualRuns.map((item) => item.id),
-            ),
-            notDeleted(aiUsage),
-          ),
-        )
-    : [];
-  const actualUsage = actualRuns.flatMap((item) => {
-    const input = mailResearchRunInput.safeParse(item.input);
-    if (
-      !input.success ||
-      !input.data.sources.some(
-        (source) =>
-          source.orderMailId === email.orderMailId &&
-          source.checksum === email.checksum,
+      .from(emailClassificationLabel)
+      .innerJoin(
+        emailClassificationObservation,
+        eq(
+          emailClassificationObservation.id,
+          emailClassificationLabel.predictionId,
+        ),
       )
-    )
-      return [];
-    const usage = actualCalls.filter((call) => call.runId === item.id);
-    const groups = new Map<string, typeof usage>();
-    for (const call of usage) {
-      const key = JSON.stringify([call.model, call.transport]);
-      const group = groups.get(key) ?? [];
-      group.push(call);
-      groups.set(key, group);
-    }
-    return [...groups.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, group]) => {
-        const first = group[0]!;
-        const known = group.every(
-          (call) =>
-            ["chatgpt", "cache"].includes(call.transport) ||
-            (call.transport !== "unknown" && call.estimatedCost !== null),
-        );
-        const cost = known
-          ? String(
-              group.reduce(
-                (sum, call) =>
-                  sum +
-                  (["chatgpt", "cache"].includes(call.transport)
-                    ? 0
-                    : (call.estimatedCost ?? 0)),
-                0,
-              ),
-            )
-          : "Unknown";
-        return {
-          id: `${item.id}:${key}`,
-          cells: [
-            item.code,
-            item.status,
-            String(input.data.sources.length),
-            first.model,
-            first.transport,
-            String(group.length),
-            String(group.filter((call) => call.status === "failed").length),
-            cost,
-          ],
-        };
-      });
-  });
-  const [predictions, candidates, failures, reviews, evaluations] =
-    await Promise.all([
-      client
-        .select()
-        .from(emailClassificationObservation)
-        .where(eq(emailClassificationObservation.emailId, id))
-        .orderBy(desc(emailClassificationObservation.createdAt))
-        .limit(20),
-      client
-        .select()
-        .from(emailCandidateObservation)
-        .where(eq(emailCandidateObservation.emailId, id))
-        .orderBy(desc(emailCandidateObservation.createdAt))
-        .limit(5),
-      client
-        .select()
-        .from(emailRetrievalFailure)
-        .where(eq(emailRetrievalFailure.emailId, id))
-        .orderBy(desc(emailRetrievalFailure.createdAt))
-        .limit(5),
-      client
-        .select({
-          label: emailClassificationLabel,
-          prediction: emailClassificationObservation,
-        })
-        .from(emailClassificationLabel)
-        .innerJoin(
-          emailClassificationObservation,
-          eq(
-            emailClassificationObservation.id,
-            emailClassificationLabel.predictionId,
-          ),
-        )
-        .where(
-          and(
-            eq(emailClassificationObservation.emailId, id),
-            eq(emailClassificationLabel.actorUserId, actor.userId),
-          ),
-        )
-        .orderBy(
-          desc(emailClassificationLabel.createdAt),
-          desc(emailClassificationLabel.id),
-        )
-        .limit(20),
-      client
-        .select({ id: emailAccuracyEvaluation.id })
-        .from(emailAccuracyEvaluation)
-        .where(eq(emailAccuracyEvaluation.ownerUserId, actor.userId))
-        .orderBy(
-          desc(emailAccuracyEvaluation.createdAt),
-          desc(emailAccuracyEvaluation.id),
-        )
-        .limit(1),
-    ]);
+      .where(
+        and(
+          eq(emailClassificationObservation.emailId, id),
+          eq(emailClassificationLabel.actorUserId, actor.userId),
+        ),
+      )
+      .orderBy(
+        desc(emailClassificationLabel.createdAt),
+        desc(emailClassificationLabel.id),
+      )
+      .limit(20),
+  ]);
+  const retained = await hasRetainedEmailImportContent(
+    client,
+    email.orderMailId,
+    selected.content,
+  );
+  const current = retained && selected.rawChecksum === email.checksum;
   const canImport =
     email.classification === "related" &&
-    (await hasRetainedEmailImportContent(
-      client,
-      email.orderMailId,
-      selected.content,
-    )) &&
-    selected.rawChecksum === email.checksum &&
+    current &&
     !["deleted", "excluded", "researching"].includes(email.status);
-  const latestEvaluation = evaluations[0];
+  const associations = await readEmailAssociations(db, code, actor);
+  // Per-stage results for the current original, newest first.
+  const currentPredictions = predictions.filter(
+    (item) => item.checksum === email.checksum,
+  );
+  const decidedBy =
+    automatedStages.find((stage) => stage === email.classificationStage) ??
+    null;
+  const latestAutomated = currentPredictions.find(
+    (item) => item.stage !== "resolution",
+  );
+  const footer = await runMembership(client, email, [
+    ...predictions.map((item) => item.runId),
+    ...candidates.map((item) => item.runId),
+  ]);
+  const awaitingAcceptance =
+    email.classificationStage !== "resolution" &&
+    latestAutomated !== undefined &&
+    latestAutomated.classification !== email.classification;
+  return [
+    {
+      kind: "records",
+      title: "Email pipeline",
+      rows: [
+        retrievedRow(email, retained, failures[0], predictions[0]),
+        ...automatedStages.map((stage) =>
+          stageRow(
+            stage,
+            email,
+            currentPredictions.find((item) => item.stage === stage),
+            decidedBy,
+          ),
+        ),
+        memberRow(
+          email,
+          reviews.find(
+            ({ prediction }) => prediction.checksum === email.checksum,
+          ),
+          correctRelevanceCommand(email, shortcode),
+        ),
+        previewRow(
+          email,
+          shortcode,
+          candidates.find((item) => item.preview.checksum === email.checksum),
+          current,
+        ),
+        importRow(email, shortcode, costs, canImport),
+        purchaseRow(email, associations.purchases),
+      ],
+      empty: "No pipeline steps.",
+      footer,
+      commands: [
+        {
+          id: `reclassify:${shortcode}`,
+          label: "Reclassify",
+          prominent: true,
+          confirm:
+            "Rerun rule, Jev and the relevance model from this Email's Gmail original? The result is recorded; it replaces Relevance only when nothing retained is dropped.",
+          request: { kind: "reclassify-email", ids: [shortcode] },
+        },
+      ],
+    },
+    ...(awaitingAcceptance
+      ? [
+          {
+            kind: "note" as const,
+            tone: "warning" as const,
+            text: `The latest ${latestAutomated.stage ?? "automated"} result is ${latestAutomated.classification}; Relevance stays ${email.classification} until you accept it. Resolve the Email unrelated to accept, or correct its relevance.`,
+          },
+        ]
+      : []),
+    ...(email.classification === "related"
+      ? estimateBlocks(costs.comparable)
+      : []),
+    {
+      kind: "note",
+      text: "Member-wide accuracy and review conflicts by stage and model are in the Emails list's Accuracy view.",
+    },
+    ...emailAssociationBlocks(associations),
+    {
+      kind: "table",
+      title: "Classification history",
+      columns: ["Relevance", "Stage", "Model", "Reason", "Conflict"],
+      rows: predictions.map((item) => ({
+        id: item.id,
+        cells: [
+          item.classification,
+          item.stage ?? "Unknown",
+          item.model ?? "Unknown",
+          item.reason ?? "Unknown",
+          conflictText(item.conflict),
+        ],
+      })),
+      empty: "No historical prediction is inferred from a retained Email.",
+    },
+    {
+      kind: "table",
+      title: "Member reviews",
+      columns: ["Reviewed", "Predicted", "Evidence", "Reason"],
+      rows: reviews.map(({ label, prediction }) => ({
+        id: label.id,
+        cells: [
+          label.classification,
+          prediction.classification,
+          prediction.checksum === email.checksum ? "Current" : "Stale",
+          label.reason,
+        ],
+      })),
+      empty: "No member review label is recorded for this Email.",
+    },
+    {
+      kind: "table",
+      title: "Extraction previews",
+      columns: ["Result", "Model", "Evidence", "Decision"],
+      rows: candidates.map((item) => ({
+        id: item.id,
+        cells: [
+          item.preview.status,
+          item.preview.model ?? "No model call",
+          item.preview.checksum === email.checksum ? "Current" : "Stale",
+          item.preview.status === "selected"
+            ? `${item.preview.candidate.extraction.status} candidate; review before import`
+            : item.preview.reason,
+        ],
+      })),
+      empty: "No extraction preview has been recorded.",
+    },
+  ];
+}
+
+/** Member-wide accuracy and review conflicts: the Emails list's Accuracy view. */
+export async function emailAccuracyViewReport(
+  db: Database,
+  actor: ActorContext,
+): Promise<{ blocks: ReportBlock[] }> {
+  const client = getDb(db);
+  const [[latestEvaluation], conflicts] = await Promise.all([
+    client
+      .select({ id: emailAccuracyEvaluation.id })
+      .from(emailAccuracyEvaluation)
+      .where(eq(emailAccuracyEvaluation.ownerUserId, actor.userId))
+      .orderBy(
+        desc(emailAccuracyEvaluation.createdAt),
+        desc(emailAccuracyEvaluation.id),
+      )
+      .limit(1),
+    client
+      .select({
+        stage: emailClassificationObservation.stage,
+        model: emailClassificationObservation.model,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(emailClassificationObservation)
+      .innerJoin(
+        emailTable,
+        eq(emailTable.id, emailClassificationObservation.emailId),
+      )
+      .innerJoin(
+        ledgerParty,
+        and(
+          eq(ledgerParty.id, emailTable.ledgerPartyId),
+          eq(ledgerParty.userId, actor.userId),
+          notDeleted(ledgerParty),
+        ),
+      )
+      .where(
+        and(
+          notDeleted(emailTable),
+          sql`${emailClassificationObservation.conflict}->>${"kind"} = ${"member_review"}`,
+        ),
+      )
+      .groupBy(
+        emailClassificationObservation.stage,
+        emailClassificationObservation.model,
+      )
+      .orderBy(
+        emailClassificationObservation.stage,
+        emailClassificationObservation.model,
+      ),
+  ]);
   const accuracyBlocks: ReportBlock[] = latestEvaluation
     ? emailAccuracyReviewBlocks(
         await getEmailAccuracyReport(
@@ -598,170 +1092,40 @@ export async function emailReviewReport(
           text: "Email accuracy has not yet been reviewed. Start a member-wide sample of the latest owned predictions, including unrelated messages.",
         },
       ];
-  const associations = await readEmailAssociations(db, code, actor);
-  return [
-    ...emailAssociationBlocks(associations),
-    ...accuracyBlocks,
-    {
-      kind: "records",
-      title: "Review Email accuracy",
-      rows: [],
-      empty:
-        "Review through mail.accuracy_sample and imports_read.email_accuracy_blind, then mail.accuracy_grade. A member's Claude or Codex session can read originals with Gmail; grade the frozen checksum before opening prediction metadata. Grades never change import routing.",
-      commands: [
-        {
-          id: "create-email-accuracy",
-          prominent: true,
-          confirm: null,
-          label: "Start a 200-Email accuracy sample",
-          request: { kind: "create-email-accuracy", sampleSize: 200 },
-        },
-      ],
-    },
-    {
-      kind: "table",
-      title: "Independent relevance reviews",
-      columns: [
-        "Reviewed relevance",
-        "Predicted relevance",
-        "Prediction checksum",
-        "Current checksum",
-        "Evidence status",
-        "Reviewed at",
-        "Reason",
-      ],
-      rows: reviews.map(({ label, prediction }) => ({
-        id: label.id,
-        cells: [
-          label.classification,
-          prediction.classification,
-          prediction.checksum ?? "Unknown",
-          email.checksum,
-          prediction.checksum !== null && prediction.checksum === email.checksum
-            ? "Current"
-            : "Stale",
-          label.createdAt.toISOString(),
-          label.reason,
+  return {
+    blocks: [
+      {
+        kind: "records",
+        title: "Review Email accuracy",
+        rows: [],
+        empty:
+          "Review through mail.accuracy_sample and imports_read.email_accuracy_blind, then mail.accuracy_grade. A member's Claude or Codex session can read originals with Gmail; grade the frozen checksum before opening prediction metadata. Grades never change import routing.",
+        commands: [
+          {
+            id: "create-email-accuracy",
+            prominent: true,
+            confirm: null,
+            label: "Start a 200-Email accuracy sample",
+            request: { kind: "create-email-accuracy", sampleSize: 200 },
+          },
         ],
-      })),
-      empty: "No independent reviewed label is recorded for this Email.",
-    },
-    {
-      kind: "note",
-      text: "Independent reviews describe the original prediction checksum. Stale reviews remain history and do not label current content. Neither these reads nor reviewed labels change the Email's effective import classification.",
-    },
-    {
-      kind: "note",
-      text: "Automatic discovery is classification-only. Import runs only when you authorize this Email. A historical cost range is an estimate, not a price cap; model route and work required can change it.",
-    },
-    {
-      kind: "stats",
-      figures: [
-        {
-          id: "pi-cost-low",
-          label: "Estimated marginal cost, low",
-          value: comparable.length ? Math.min(...comparable) : null,
-          format: "money",
-        },
-        {
-          id: "pi-cost-high",
-          label: "Estimated marginal cost, high",
-          value: comparable.length ? Math.max(...comparable) : null,
-          format: "money",
-        },
-        {
-          label: "Comparable settled Runs",
-          value: comparable.length,
-          format: "count",
-        },
-      ],
-    },
-    {
-      kind: "note",
-      text: comparable.length
-        ? `Range per Email from ${comparable.length} recent owned mail-import Runs with known billing routes. ChatGPT plan and cache calls count as zero marginal dollars; gateway/direct costs use recorded estimates. Failed calls are included. Unpriced Runs are excluded.`
-        : "No comparable settled Run has a complete known billing route. Cost is unknown; an absent estimate never means free.",
-    },
-    {
-      kind: "records",
-      rows: [],
-      empty: canImport
-        ? "This retained original can be imported individually."
-        : "Import needs related, retained, current content and an unclaimed Email. Resolve relevance or retrieve its original first.",
-      commands: canImport
-        ? [
-            {
-              id: `import:${code}:${email.checksum}`,
-              label: "Import this Email",
-              prominent: true,
-              confirm:
-                "Authorize paid Pi import for this Email? Automatic discovery remains classification-only.",
-              request: {
-                kind: "import-email",
-                id: parseShortcodeFor("email", email.shortcode),
-                expectedChecksum: email.checksum,
-              },
-            },
-          ]
-        : [],
-    },
-    {
-      kind: "table",
-      title: "Actual import Run usage",
-      columns: [
-        "Run",
-        "Status",
-        "Emails in Run",
-        "Model",
-        "Route",
-        "Calls",
-        "Failed calls",
-        "Marginal dollars",
-      ],
-      rows: actualUsage,
-      empty:
-        "No calls are recorded for a Run that admitted this exact Email checksum.",
-    },
-    {
-      kind: "note",
-      text: "Actual usage is the total for each frozen-source Run, including retries and failed calls. A Run with multiple Emails does not attribute its entire cost to this Email. Unknown routes or prices remain unknown.",
-    },
-    {
-      kind: "table",
-      title: "Classification history",
-      columns: ["Relevance", "Stage", "Model", "Reason", "Conflict"],
-      rows: predictions.map((item) => ({
-        id: item.id,
-        cells: [
-          item.classification,
-          item.stage ?? "Unknown",
-          item.model ?? "Historical model unknown",
-          item.reason ?? "Unknown",
-          item.conflict?.kind ?? "",
-        ],
-      })),
-      empty: "No historical prediction is inferred from a retained Email.",
-    },
-    {
-      kind: "table",
-      title: "Cheap extraction previews",
-      columns: ["Result", "Model", "Evidence checksum", "Decision"],
-      rows: candidates.map((item) => ({
-        id: item.id,
-        cells: [
-          item.preview.status,
-          item.preview.model ?? "No model call",
-          item.preview.checksum,
-          item.preview.status === "selected"
-            ? `${item.preview.candidate.extraction.status} candidate; review before import`
-            : item.preview.reason,
-        ],
-      })),
-      empty: "No complete evidence-bound order candidate has been recorded.",
-    },
-    ...failures.map((item): ReportBlock => ({
-      kind: "note",
-      text: `${item.httpStatus ?? "Provider error"}: ${item.error}`,
-    })),
-  ];
+      },
+      {
+        kind: "table",
+        title: "Review conflicts by stage and model",
+        columns: ["Stage", "Model", "Conflicting results"],
+        rows: conflicts.map((item) => ({
+          id: JSON.stringify([item.stage, item.model]),
+          cells: [
+            item.stage ?? "Unknown",
+            item.model ?? "Unknown",
+            String(item.count),
+          ],
+        })),
+        empty:
+          "No recorded rule, Jev or model result disagrees with a member's review.",
+      },
+      ...accuracyBlocks,
+    ],
+  };
 }

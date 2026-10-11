@@ -294,19 +294,21 @@ describe("Email review report", () => {
       null,
       ctx.actor,
     );
-    expect(blocks).toContainEqual(
-      expect.objectContaining({
-        kind: "records",
-        commands: [
-          expect.objectContaining({
-            request: {
-              kind: "import-email",
-              id: email.shortcode,
-              expectedChecksum: "a".repeat(64),
-            },
-          }),
-        ],
-      }),
+    const commandsOf = (report: typeof blocks) =>
+      report.flatMap((block) =>
+        block.kind === "records"
+          ? [
+              ...(block.commands ?? []),
+              ...block.rows.flatMap((row) => row.commands ?? []),
+            ]
+          : [],
+      );
+    expect(commandsOf(blocks).map((command) => command.request)).toContainEqual(
+      {
+        kind: "import-email",
+        id: email.shortcode,
+        expectedChecksum: "a".repeat(64),
+      },
     );
     expect(blocks).toContainEqual(
       expect.objectContaining({
@@ -326,17 +328,16 @@ describe("Email review report", () => {
       null,
       ctx.actor,
     );
-    const unavailableCommands = unavailable.flatMap((block) =>
-      block.kind === "records" ? (block.commands ?? []) : [],
-    );
+    const unavailableCommands = commandsOf(unavailable);
     expect(
       unavailableCommands.some(
         (command) => command.request.kind === "import-email",
       ),
     ).toBe(false);
+    // Reclassify refetches the original, so it stays offered without content.
     expect(
       unavailableCommands.some(
-        (command) => command.request.kind === "create-email-accuracy",
+        (command) => command.request.kind === "reclassify-email",
       ),
     ).toBe(true);
   });
@@ -489,33 +490,24 @@ describe("Email review report", () => {
       null,
       ctx.actor,
     );
-    const usage = blocks.find(
-      (block) =>
-        block.kind === "table" && block.title === "Actual import Run usage",
+    const pipeline = blocks.find(
+      (block) => block.kind === "records" && block.title === "Email pipeline",
     );
-    expect(usage).toMatchObject({
-      kind: "table",
-      rows: [
-        {
-          cells: expect.arrayContaining([selectedRun.publicId, "chatgpt", "0"]),
-        },
-        {
-          cells: expect.arrayContaining([
-            selectedRun.publicId,
-            "gateway",
-            "0.25",
-            "1",
-          ]),
-        },
-        {
-          cells: expect.arrayContaining([
-            selectedRun.publicId,
-            "unknown",
-            "Unknown",
-          ]),
-        },
-      ],
+    if (pipeline?.kind !== "records") throw new Error("Email pipeline missing");
+    const importRow = pipeline.rows.find((row) => row.title === "Import Run");
+    expect(importRow).toMatchObject({
+      entity: "run",
+      id: selectedRun.publicId,
     });
+    const usage = importRow?.subtitle?.split("\n") ?? [];
+    expect(usage).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/ · chatgpt · .* · \$0\.00$/u),
+        expect.stringMatching(/ · gateway · .*1 failed · \$0\.25$/u),
+        expect.stringMatching(/ · unknown · .* · Unknown$/u),
+      ]),
+    );
+    expect(usage.join("\n")).not.toContain("synthetic-unrelated");
     expect(blocks).toContainEqual(
       expect.objectContaining({
         kind: "stats",

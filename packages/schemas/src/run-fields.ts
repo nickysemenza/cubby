@@ -14,6 +14,7 @@ import { plainDate } from "./base-entity.js";
 import { financialTransactionNonZeroAmount } from "./financial-transaction-fields.js";
 import { vendorAccountCursor } from "./vendor-account-fields.js";
 import {
+  EMAIL_RECLASSIFY_LIMIT,
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
 } from "./mailbox-research.js";
@@ -310,8 +311,21 @@ export const suggestionSweepRunProgress = z.object({
 export type SuggestionSweepRunProgress = z.infer<
   typeof suggestionSweepRunProgress
 >;
+/** A member's Reclassify or extraction-preview rerun of selected Emails in one mailbox. */
+export const mailReclassifyRunInput = z.strictObject({
+  kind: z.literal("mail_reclassify"),
+  mode: z.enum(["relevance", "preview"]),
+  executionAuthorization: executionAuthorizationRef.optional(),
+  mailboxId: z.string().min(1),
+  emails: z
+    .array(z.strictObject({ emailId: z.uuid(), checksum: z.string() }))
+    .min(1)
+    .max(EMAIL_RECLASSIFY_LIMIT),
+});
+export type MailReclassifyRunInput = z.infer<typeof mailReclassifyRunInput>;
 export type RunInput =
   | ExecutionAuthorizationInput
+  | MailReclassifyRunInput
   | ResearchObjectivesRunInput
   | MailResearchRunInput
   | ProductResearchRunInput
@@ -338,6 +352,11 @@ export function runWorkLabel(run: {
 }): string {
   const purpose = runPurpose.safeParse(run.purpose);
   if (!purpose.success) return run.purpose;
+  if (
+    purpose.data === "background" &&
+    mailReclassifyRunInput.safeParse(run.input).success
+  )
+    return "Email reclassification";
   if (purpose.data !== "account_sync") return RUN_PURPOSE_LABEL[purpose.data];
   const kind = z.object({ kind: z.string() }).safeParse(run.input);
   switch (kind.success ? kind.data.kind : null) {

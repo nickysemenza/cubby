@@ -15,6 +15,7 @@ import { match } from "ts-pattern";
 import { z } from "zod";
 
 import { runHref } from "~/app/purchases/purchase-import-links";
+import { reclassifySummary } from "~/entity/actions/email-entity-actions";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   meal,
@@ -52,6 +53,21 @@ export function useReportCommands() {
     mutationFn: purchaseImport.emailImport.mutationOptions,
     error: "Could not import this Email",
     success: ({ runIds }) => `Import Runs: ${runIds.join(", ")}`,
+  });
+  const emailReclassify = useActionMutation({
+    mutationFn: purchaseImport.emailReclassify.mutationOptions,
+    error: "Could not reclassify this Email",
+    success: reclassifySummary,
+  });
+  const emailPreview = useActionMutation({
+    mutationFn: purchaseImport.emailPreviewRerun.mutationOptions,
+    error: "Could not rerun the extraction preview",
+    success: ({ runId, status }) => `Extraction preview: ${status} (${runId})`,
+  });
+  const relevance = useActionMutation({
+    mutationFn: purchaseImport.correctEmailRelevance.mutationOptions,
+    error: "Could not correct the Relevance",
+    success: "Relevance corrected",
   });
   const mailResearch = useActionMutation({
     mutationFn: vendor.importOrderMail.mutationOptions,
@@ -115,25 +131,40 @@ export function useReportCommands() {
     error: "Could not import the prepared orders",
   });
   return {
-    runsFor: (request: ReportCommandRequest): readonly string[] => {
-      if (
-        request.kind === "research-order-mail" &&
-        mailResearch.variables?.eventId === request.eventId &&
-        mailResearch.variables.evidenceChecksum === request.evidenceChecksum
-      )
-        return mailResearch.data?.runIds ?? [];
-      if (
-        request.kind === "import-email" &&
-        emailImport.variables?.id === request.id &&
-        emailImport.variables.expectedChecksum === request.expectedChecksum
-      )
-        return emailImport.data?.runIds ?? [];
-      return [];
-    },
+    runsFor: (request: ReportCommandRequest): readonly string[] =>
+      match(request)
+        .with({ kind: "research-order-mail" }, (r) =>
+          mailResearch.variables?.eventId === r.eventId &&
+          mailResearch.variables.evidenceChecksum === r.evidenceChecksum
+            ? (mailResearch.data?.runIds ?? [])
+            : [],
+        )
+        .with({ kind: "import-email" }, (r) =>
+          emailImport.variables?.id === r.id &&
+          emailImport.variables.expectedChecksum === r.expectedChecksum
+            ? (emailImport.data?.runIds ?? [])
+            : [],
+        )
+        .with({ kind: "reclassify-email" }, (r) =>
+          emailReclassify.variables?.ids.join() === r.ids.join()
+            ? (emailReclassify.data?.runIds ?? [])
+            : [],
+        )
+        .with({ kind: "rerun-email-preview" }, (r) =>
+          emailPreview.data &&
+          emailPreview.variables?.id === r.id &&
+          emailPreview.variables.expectedChecksum === r.expectedChecksum
+            ? [emailPreview.data.runId]
+            : [],
+        )
+        .otherwise(() => []),
     pending:
       mailDecision.isPending ||
       mailResearch.isPending ||
       emailImport.isPending ||
+      emailReclassify.isPending ||
+      emailPreview.isPending ||
+      relevance.isPending ||
       emailAccuracy.isPending ||
       control.isPending ||
       finding.isPending ||
@@ -165,6 +196,24 @@ export function useReportCommands() {
           emailImport.mutate({
             id: r.id,
             expectedChecksum: r.expectedChecksum,
+          }),
+        )
+        .with({ kind: "reclassify-email" }, (r) =>
+          emailReclassify.mutate({ ids: r.ids }),
+        )
+        .with({ kind: "rerun-email-preview" }, (r) =>
+          emailPreview.mutate({
+            id: r.id,
+            expectedChecksum: r.expectedChecksum,
+          }),
+        )
+        .with({ kind: "correct-email-relevance" }, (r) =>
+          relevance.mutate({
+            id: r.id,
+            expectedChecksum: r.expectedChecksum,
+            reviewedChecksum: r.reviewedChecksum,
+            classification: r.classification,
+            reason: r.reason,
           }),
         )
         .with({ kind: "decide-order-mail" }, (r) => {
@@ -415,7 +464,14 @@ function CommandOperand({
   return (
     <label className="flex flex-col gap-1 text-xs">
       <span>{input.label}</span>
-      {input.kind === "number" ? (
+      {input.kind === "text" ? (
+        <Input
+          aria-label={input.label}
+          value={value ?? ""}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value || undefined)}
+        />
+      ) : input.kind === "number" ? (
         <Input
           type="number"
           aria-label={input.label}

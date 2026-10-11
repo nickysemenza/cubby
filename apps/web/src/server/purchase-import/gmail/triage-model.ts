@@ -13,7 +13,7 @@ import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { paidResearchPreflight } from "~/server/runs/execution-transport";
 
-import { gmailExecutionPolicy } from "./execution-policy";
+import { gmailRelevanceAllowed } from "./execution-policy";
 import type { MailRelevance } from "./relevance";
 import type { MailTriage } from "./triage";
 
@@ -72,7 +72,7 @@ export const productionMailTriage =
 export const productionMailRelevance =
   (db: Database, runId: string, onCall?: OnClassificationCall): MailRelevance =>
   async (request) => {
-    if ((await gmailExecutionPolicy(db, runId)) !== "import")
+    if (!(await gmailRelevanceAllowed(db, runId)))
       throw new Error(
         "Classification-only Gmail Runs cannot use the relevance model.",
       );

@@ -27,6 +27,11 @@ pending: nothing here starts Product research.
    mail keeps only its provider identity. Coverage is checkpointed with a
    compare-and-swap in the same transaction as the page's events
    (`gmail/persistence.ts`).
+   A member's **Reclassify** (`gmail/reclassify.ts`, MCP `mail.reclassify`)
+   reruns these stages, including the relevance model, for up to 200 selected
+   Emails through the same ingest path in its `reclassify` mode: the result is
+   history, it replaces Relevance only without dropping retained content or an
+   import, and it never overrides a member resolution (ADR 0011).
 2. **Admission** (`mail-import-run.ts`) freezes up to 50 Emails' checksums into
    one `mail_import` Run with a RunTarget per Email, assigns ownership through
    `Email.runId`, and dispatches `start_or_resume` to

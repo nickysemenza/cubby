@@ -190,6 +190,11 @@ historical Runs stay readable through generic reports.
   caps. It cannot reach logged-in order pages; those stay Burn-down work.
   Compare filled-at-import quality against Burn-down cost before adopting.
 
+- 🤔 **Tune Jev/Luna prompts from review conflicts.** The Emails Accuracy view
+  counts rule, Jev and model results that disagree with a member's review, by
+  stage and model. Use those conflicts to revise the triage and relevance
+  prompts, and measure with an accuracy sample before and after each change.
+
 - 🤔 **Settle a member search's abandoned matches.** A member's `mail.search`
   runs only the free rule stage, so every non-Spam/Trash match is retained as
   `uncertain` until the session settles it with `mail.resolve`. A session that

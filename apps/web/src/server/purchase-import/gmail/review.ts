@@ -45,7 +45,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { emailAcceptedEvidenceSql } from "~/server/repo/email";
+import { emailAcceptedEvidenceSql } from "~/server/repo/email-sql";
 import {
   retainedMailJoin,
   retainedMailProjection,

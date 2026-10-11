@@ -31,6 +31,12 @@ public protocol ReportServing: Sendable {
     func createEmailAccuracy(_ input: CreateEmailAccuracyEvaluationInput) async throws
         -> CreateEmailAccuracyEvaluationOut
     func importEmail(_ input: EmailImportInput) async throws -> EmailImportOut
+    /// `purchaseImport.emailReclassify`: classify the selected Emails again from their originals.
+    func reclassifyEmails(_ input: ReclassifyEmailsInput) async throws -> ReclassifyEmailsOut
+    /// `purchaseImport.emailPreviewRerun`: run one Email's extraction preview again.
+    func rerunEmailPreview(_ input: EmailImportInput) async throws -> RerunEmailPreviewOut
+    func correctEmailRelevance(_ input: CorrectEmailRelevanceInput) async throws
+        -> CorrectEmailRelevanceOut
     func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut
 }
 
@@ -45,6 +51,17 @@ extension ReportServing {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
     public func importEmail(_ input: EmailImportInput) async throws -> EmailImportOut {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func reclassifyEmails(_ input: ReclassifyEmailsInput) async throws -> ReclassifyEmailsOut {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func rerunEmailPreview(_ input: EmailImportInput) async throws -> RerunEmailPreviewOut {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func correctEmailRelevance(_ input: CorrectEmailRelevanceInput) async throws
+        -> CorrectEmailRelevanceOut
+    {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
     public func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut {
@@ -95,6 +112,23 @@ extension CubbyClient: ReportServing {
     }
     public func importEmail(_ input: EmailImportInput) async throws -> EmailImportOut {
         try await perform { try await api.purchaseImport_emailImport(body: .json(input)).ok.body.json }
+    }
+    public func reclassifyEmails(_ input: ReclassifyEmailsInput) async throws -> ReclassifyEmailsOut {
+        try await perform {
+            try await api.purchaseImport_emailReclassify(body: .json(input)).ok.body.json
+        }
+    }
+    public func rerunEmailPreview(_ input: EmailImportInput) async throws -> RerunEmailPreviewOut {
+        try await perform {
+            try await api.purchaseImport_emailPreviewRerun(body: .json(input)).ok.body.json
+        }
+    }
+    public func correctEmailRelevance(_ input: CorrectEmailRelevanceInput) async throws
+        -> CorrectEmailRelevanceOut
+    {
+        try await perform {
+            try await api.purchaseImport_correctEmailRelevance(body: .json(input)).ok.body.json
+        }
     }
     public func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut {
         try await perform { try await api.vendor_importOrderMail(body: .json(input)).ok.body.json }
@@ -432,6 +466,31 @@ public final class ReportSlotModel {
         }
     }
 
+    /// One answer from a server-declared choice, as the request's enum; a value outside it is an
+    /// incomplete answer rather than a crash.
+    private static func option<T: RawRepresentable<String>>(_ raw: String) throws -> T {
+        guard let value = T(rawValue: raw) else { throw ReportActionError.incompleteAnswers }
+        return value
+    }
+
+    /// Each outcome with its count in the server's order, then any raw per-Email error.
+    static func reclassifySummary(_ result: ReclassifyEmailsOut) -> String {
+        var order: [String] = []
+        var counts: [String: Int] = [:]
+        for item in result.results {
+            let outcome = item.outcome.rawValue
+            if counts[outcome] == nil { order.append(outcome) }
+            counts[outcome, default: 0] += 1
+        }
+        let outcomes =
+            result.results.count == 1 ? order : order.map { "\(counts[$0, default: 0]) \($0)" }
+        var text = "Reclassified: " + (outcomes.isEmpty ? "nothing" : outcomes.joined(separator: ", "))
+        let errors = result.results.compactMap { item in item.error.map { "\(item.id): \($0)" } }
+        if !errors.isEmpty { text += ". " + errors.joined(separator: "; ") }
+        if !result.runIds.isEmpty { text += ". Runs: " + result.runIds.joined(separator: ", ") }
+        return text
+    }
+
     static func perform(
         _ request: ReportCommandRequest, form: ReportCommandForm?, service: any ReportServing,
         progress: @MainActor (String) -> Void = { _ in }
@@ -455,6 +514,28 @@ public final class ReportSlotModel {
                 .init(id: original.id, expectedChecksum: original.expectedChecksum))
             if result.runIds.count == 1, let runID = result.runIds.first { return .openedRun(runID) }
             return .done("Import Runs: " + result.runIds.joined(separator: ", "))
+        case .reclassifyEmail(let selection):
+            let result = try await service.reclassifyEmails(.init(ids: selection.ids))
+            if result.runIds.count == 1, let runID = result.runIds.first { return .openedRun(runID) }
+            return .done(Self.reclassifySummary(result))
+        case .rerunEmailPreview(let preview):
+            let result = try await service.rerunEmailPreview(
+                .init(id: preview.id, expectedChecksum: preview.expectedChecksum))
+            if result.status == .selected { return .openedRun(result.runId) }
+            return .done(
+                "Extraction preview: \(result.status.rawValue)"
+                    + (result.reason.map { " (\($0))" } ?? ""))
+        case .correctEmailRelevance(let correction):
+            let reason = (form?.text("reason") ?? correction.reason)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let classification = form?.text("classification") ?? correction.classification.rawValue
+            guard !reason.isEmpty else { throw ReportActionError.incompleteAnswers }
+            let result = try await service.correctEmailRelevance(
+                .init(
+                    id: correction.id, expectedChecksum: correction.expectedChecksum,
+                    reviewedChecksum: correction.reviewedChecksum,
+                    classification: try Self.option(classification), reason: reason))
+            return .done("Relevance corrected: \(result.classification.rawValue)")
         case .researchOrderMail(let original):
             let result = try await service.researchMail(
                 .init(

@@ -22,7 +22,10 @@ import {
   gradeEmailAccuracyItem,
   listBlindEmailAccuracyItems,
 } from "~/server/repo/email-accuracy";
-import { emailReviewReport } from "~/server/repo/entity-report/email";
+import {
+  emailAccuracyViewReport,
+  emailReviewReport,
+} from "~/server/repo/entity-report/email";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
@@ -468,12 +471,19 @@ describe("Email generic persisted reads", () => {
       (item) => item.headers?.subject === "Synthetic false positives",
     );
     if (!selected?.emailId) throw new Error("Synthetic selected Email missing");
-    const blocks = await emailReviewReport(
+    // Member-wide accuracy lives in the list's Accuracy view, not each Email.
+    const { blocks } = await emailAccuracyViewReport(ctx.db, ctx.actor);
+    const detail = await emailReviewReport(
       ctx.db,
       selected.emailId,
       null,
       ctx.actor,
     );
+    expect(
+      detail.flatMap((block) =>
+        block.kind === "stats" ? block.figures.map((figure) => figure.id) : [],
+      ),
+    ).not.toContainEqual(expect.stringMatching(/^email-accuracy-/u));
     const figures = new Map(
       blocks
         .flatMap((block) => (block.kind === "stats" ? block.figures : []))
@@ -530,10 +540,8 @@ describe("Email generic persisted reads", () => {
         )
         .map((command) => command.request),
     ).toContainEqual({ kind: "create-email-accuracy", sampleSize: 200 });
-    const reviews = blocks.find(
-      (block) =>
-        block.kind === "table" &&
-        block.title === "Independent relevance reviews",
+    const reviews = detail.find(
+      (block) => block.kind === "table" && block.title === "Member reviews",
     );
     if (reviews?.kind !== "table")
       throw new Error("Independent reviews missing");
@@ -560,15 +568,11 @@ describe("Email generic persisted reads", () => {
       ctx.actor,
     );
     const stale = changed.find(
-      (block) =>
-        block.kind === "table" &&
-        block.title === "Independent relevance reviews",
+      (block) => block.kind === "table" && block.title === "Member reviews",
     );
     if (stale?.kind !== "table")
       throw new Error("Stale review history missing");
-    expect(stale.rows[0]?.cells).toEqual(
-      expect.arrayContaining(["Stale", "a".repeat(64), "b".repeat(64)]),
-    );
+    expect(stale.rows[0]?.cells).toContain("Stale");
     const [after] = await getDb(ctx.db)
       .select()
       .from(emailTable)

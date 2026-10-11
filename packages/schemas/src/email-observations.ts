@@ -12,9 +12,16 @@ export type EmailClassificationOperation = z.infer<
   typeof emailClassificationOperation
 >;
 
-export const emailClassificationConflict = z
-  .object({ kind: z.literal("accepted_unrelated") })
-  .strict();
+/** A prediction that disagrees with protected evidence: an accepted Purchase or the member's own review. */
+export const emailClassificationConflict = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("accepted_unrelated") }).strict(),
+  z
+    .object({
+      kind: z.literal("member_review"),
+      memberClassification: mailboxClassification,
+    })
+    .strict(),
+]);
 export type EmailClassificationConflict = z.infer<
   typeof emailClassificationConflict
 >;

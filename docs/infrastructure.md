@@ -115,6 +115,10 @@ The Run row is the record; an instance is one attempt at it, named
   evidence-backed writer. Durable page replay reuses admitted work, and the
   mailbox cursor moves only after retention and admission finish. See
   `gmail/discovery.ts`, `gmail/sync.ts`, and `gmail/ingest.ts`.
+- A member's Email Reclassify or extraction-preview rerun opens a `background`
+  Run (`mail_reclassify` input) per mailbox and binds that mailbox's latest
+  backfill approval, else its continuous one; without either, paid Jev calls
+  refuse with the raw authorization error. It never admits import.
 - A completed scheduled pass that saved no message and recorded no history
   event is `routine`; the Runs list hides routine Runs by default.
 

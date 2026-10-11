@@ -6,11 +6,14 @@ import {
   shortcodeSchema,
 } from "../identifier-fields.js";
 import {
+  MAILBOX_CLASSIFICATION_LABEL,
+  MAILBOX_CLASSIFICATION_STAGE_LABEL,
   mailboxClassification,
   mailboxClassificationStage,
   emailStatus,
 } from "../mailbox-research.js";
 import { defineEntity } from "./definition.js";
+import { labelField } from "./label-field";
 
 const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
   read,
@@ -19,14 +22,12 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
 });
 const relevanceOptions = mailboxClassification.options.map((value) => ({
   value,
-  label: value[0]!.toUpperCase() + value.slice(1),
+  label: MAILBOX_CLASSIFICATION_LABEL[value],
 }));
-const stageOptions = [
-  { value: "rule", label: "Rule" },
-  { value: "jev", label: "Jev" },
-  { value: "model", label: "Model" },
-  { value: "resolution", label: "Member resolution" },
-];
+const stageOptions = mailboxClassificationStage.options.map((value) => ({
+  value,
+  label: MAILBOX_CLASSIFICATION_STAGE_LABEL[value],
+}));
 const statusOptions = emailStatus.options.map((value) => ({
   value,
   label: value[0]!.toUpperCase() + value.slice(1),
@@ -55,7 +56,41 @@ export default defineEntity({
         { kind: "slot", id: "review", title: "Review and import" },
       ],
     },
-    list: { read: { media: ["displayImages"] } },
+    list: {
+      read: { media: ["displayImages"], quality: ["dataQuality"] },
+      views: ["table", { kind: "slot", id: "accuracy", label: "Accuracy" }],
+      savedViews: [
+        {
+          id: "pipeline-worklist",
+          label: "Needs attention",
+          description:
+            "Emails whose Relevance, review, original, preview or import is incomplete, weakest first",
+          filters: [
+            {
+              id: "dataGaps",
+              value: [
+                "email_relevance_undecided",
+                "email_relevance_unreviewed",
+                "email_original_missing",
+                "email_preview_missing",
+                "email_not_imported",
+              ],
+            },
+          ],
+          sort: [{ id: "dataQuality", desc: false }],
+          layout: { columnVisibility: { dataGaps: true } },
+        },
+        {
+          id: "review-conflicts",
+          label: "Review conflicts",
+          description:
+            "Emails whose latest rule, Jev or model result disagrees with the member's review",
+          filters: [{ id: "reviewConflict", value: "true" }],
+          sort: [{ id: "receivedAt", desc: true }],
+          layout: { columnVisibility: { classificationReason: true } },
+        },
+      ],
+    },
   },
   model: {
     fields: [
@@ -80,7 +115,7 @@ export default defineEntity({
         key: "subject",
         kind: "text",
         nullable: true,
-        display: { list: true, detail: true },
+        display: { list: true, listHidden: true, detail: true },
         validation: readOnly(z.string().nullable()),
       },
       {
@@ -97,16 +132,18 @@ export default defineEntity({
         nullable: true,
         labelOverride: "Relevance",
         control: { kind: "select", options: relevanceOptions },
-        display: { list: true, detail: true },
+        // The list cell names the deciding stage, e.g. "Uncertain · Rule".
+        display: { list: true, detail: true, labelPath: "relevanceLabel" },
         validation: readOnly(mailboxClassification.nullable()),
       },
+      labelField("relevanceLabel", "Relevance and its deciding stage"),
       {
         key: "classificationStage",
         kind: "enum",
         nullable: true,
         labelOverride: "Relevance stage",
         control: { kind: "select", options: stageOptions },
-        display: { list: true, detail: true },
+        display: { list: true, listHidden: true, detail: true },
         validation: readOnly(mailboxClassificationStage.nullable()),
       },
       {
@@ -114,7 +151,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         labelOverride: "Relevance reason",
-        display: { list: true, detail: true },
+        display: { list: true, listHidden: true, detail: true },
         validation: readOnly(z.string().nullable()),
       },
       {
@@ -129,6 +166,21 @@ export default defineEntity({
           sources: [{ label: "Independent review of this Email checksum" }],
         },
         validation: readOnly(mailboxClassification.nullable()),
+      },
+      {
+        key: "reviewConflict",
+        kind: "boolean",
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              label:
+                "Latest rule, Jev or model result disagrees with the member's resolution or review",
+            },
+          ],
+        },
+        display: { list: true, listHidden: true, detail: true },
+        validation: readOnly(z.boolean()),
       },
       {
         key: "reviewedClassificationReason",
@@ -153,7 +205,7 @@ export default defineEntity({
         key: "mailboxId",
         kind: "text",
         labelOverride: "Mailbox",
-        display: { list: true, detail: true },
+        display: { list: true, listHidden: true, detail: true },
         validation: readOnly(z.string()),
       },
       {
@@ -277,10 +329,12 @@ export default defineEntity({
       "subject",
       "receivedAt",
       "classification",
+      "relevanceLabel",
       "classificationStage",
       "classificationReason",
       "reviewedClassification",
       "reviewedClassificationReason",
+      "reviewConflict",
       "status",
       "mailboxId",
       "ledgerPartyId",
@@ -475,6 +529,16 @@ export default defineEntity({
           { value: "false", label: "Unlinked" },
         ],
       },
+      {
+        columnId: "reviewConflict",
+        kind: "boolean",
+        placeholder: "Stage disagrees with review",
+        deriveSchema: true,
+        options: [
+          { value: "true", label: "Stage disagrees with review" },
+          { value: "false", label: "No review conflict" },
+        ],
+      },
     ],
   },
   relations: [
@@ -512,6 +576,48 @@ export default defineEntity({
     bulkUpdate: null,
     merge: false,
     lifecycle: "readOnly",
+    // Relevance-conditional Email pipeline gaps; an unrelated Email can only
+    // lack a member review.
+    dataQuality: {
+      checks: [
+        {
+          id: "email_relevance_undecided",
+          facet: "content",
+          weight: 3,
+          label: "Relevance",
+          message: "Relevance is uncertain.",
+        },
+        {
+          id: "email_relevance_unreviewed",
+          facet: "provenance",
+          weight: 1,
+          label: "Member review",
+          message:
+            "A rule, Jev or the relevance model decided; no member review.",
+        },
+        {
+          id: "email_original_missing",
+          facet: "integrity",
+          weight: 2,
+          label: "Original",
+          message: "The original content is not retained.",
+        },
+        {
+          id: "email_preview_missing",
+          facet: "content",
+          weight: 1,
+          label: "Extraction preview",
+          message: "No extraction preview for the current original.",
+        },
+        {
+          id: "email_not_imported",
+          facet: "linkage",
+          weight: 3,
+          label: "Import",
+          message: "No associated Purchase or completed import Run.",
+        },
+      ],
+    },
   },
   extensions: {
     ports: {

@@ -61,8 +61,11 @@ matching frozen source identity and checksum, independently of the recent sample
 used for estimates. Preserve the ordinary import authorization,
 identity and replay checks. The automatic backfill gate stays closed.
 
-Accuracy review lives in authenticated Email views and is accessible through
-MCP, rather than requiring a separate private report file. Preserve original
+Accuracy review lives in the Emails list's Accuracy view and is accessible
+through MCP, rather than requiring a separate private report file. Each Email's
+detail shows only its own Email pipeline (retrieval, rule, Jev, relevance model,
+member review, extraction preview, import Run and linked Purchase, each ran,
+skipped, not reached or failed) and links to that view. Preserve original
 predictions separately from independently reviewed labels. A sampled review
 freezes the latest non-resolution prediction per owned Email, stratifies by
 stage/classification/actual model including unrelated messages, and stores
@@ -110,6 +113,22 @@ attachment or association is explicit reconciliation.
 An accepted Purchase association is relevance evidence; an automatic unrelated
 prediction becomes a reconciliation conflict rather than silently clearing
 linked content.
+
+A member may Reclassify up to 200 owned Emails at once. One Run per mailbox
+(a `background` Run with a `mail_reclassify` input, bound to that mailbox's
+backfill or continuous execution approval) reruns rule, Jev and the relevance
+model even under classification-only policy, refetching each original from
+Gmail. The rerun is always recorded as a prediction, but it never becomes the
+Email's processing Run and never admits import. It replaces Relevance only when
+no retained content or import would be dropped; otherwise the Email keeps its
+Relevance until the member accepts the rerun (resolving it unrelated). A
+member resolution is never overridden. A rule, Jev or model prediction that
+disagrees with the member's resolution or latest review of the same checksum
+records a `member_review` conflict; one shared predicate drives the list's
+review-conflict filter and saved view, and the Accuracy view counts conflicts
+by stage and model. Email quality scores these pipeline gaps per Relevance:
+undecided, unreviewed, missing original, missing preview and not imported; an
+unrelated Email can only lack review.
 One association resolver serves hydration, linked filters, counts and related
 records. It distinguishes accepted import associations, active lifecycle links,
 dismissed candidates and mailbox-scoped thread context.
