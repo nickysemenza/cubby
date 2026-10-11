@@ -84,6 +84,15 @@ const toneForState = (state: string): Tone | undefined => {
   return undefined;
 };
 
+/**
+ * A progress phase with a known tone is the row's state, so a failed phase reads as one and its
+ * detail wraps in full instead of clipping (a ledger clips only quiet rows).
+ */
+const phaseBadges = (phase: string) => {
+  const tone = toneForState(phase);
+  return tone ? [{ label: phaseLabel(phase), tone }] : [];
+};
+
 const line = (text: string, tone?: Tone): Line =>
   tone ? { text, tone } : { text };
 
@@ -298,6 +307,7 @@ function importProgress(run: RunDetail): ReportBlock[] {
           row(progress.eventId, {
             title: `${progress.phase}${progress.currentItem ? ` · ${progress.currentItem}` : ""}${progress.detail ? ` · ${progress.detail}` : ""}`,
             at: progress.createdAt,
+            badges: phaseBadges(progress.phase),
           }),
         ),
         { title: "Run progress history", presentation: "ledger" },
@@ -951,6 +961,7 @@ export function liveProgressBlocks(
           title: phaseLabel(event.phase),
           body: event.detail ?? undefined,
           at: event.createdAt,
+          badges: phaseBadges(event.phase),
         }),
       ),
       {

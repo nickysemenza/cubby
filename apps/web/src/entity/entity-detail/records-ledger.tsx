@@ -44,13 +44,14 @@ const isLedger = (block: {
  * commands sit in its header (unless the detail bar already carries them).
  */
 export function ledgerLayout(
-  block: Parameters<typeof isLedger>[0],
+  block: Parameters<typeof isLedger>[0] & { title?: string | undefined },
   commandsInDetailBar: boolean,
 ) {
   const ledger = isLedger(block);
   return {
     ledger,
-    day: ledger ? ledgerDay(block.rows) : null,
+    // The shared day prints in the heading, so a block without one keeps dates on its rows.
+    day: ledger && block.title ? ledgerDay(block.rows) : null,
     headerCommands: ledger && !commandsInDetailBar,
   };
 }
@@ -83,9 +84,10 @@ function StateDot({ status }: { status: ReportRecordRow["statuses"] }) {
 
 /** Failures and warnings wrap in full: a raw diagnostic is never clipped behind a tooltip. */
 const isLoud = (row: ReportRecordRow) =>
-  [row.statuses?.[0]?.tone, ...(row.lines ?? []).map((line) => line.tone)].some(
-    (tone) => tone === "destructive" || tone === "warning",
-  );
+  [
+    ...(row.statuses ?? []).map((status) => status.tone),
+    ...(row.lines ?? []).map((line) => line.tone),
+  ].some((tone) => tone === "destructive" || tone === "warning");
 
 /** The subtitle's first line is the result; its other lines and the toned lines are evidence. */
 const textParts = (row: ReportRecordRow) => {
