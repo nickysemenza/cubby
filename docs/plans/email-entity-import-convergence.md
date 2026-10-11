@@ -16,25 +16,16 @@ Burn-down and acceptance remain in progress.
 - Reconcile the evidence-backed financial and findings worklist through public
   writers, preserving signed refunds, claims, party cents and stock. A healthy
   detector count does not establish source acceptance of an older audit.
-- Finish independent acceptance of the approved Product scope, including
-  exact variants, retained Sources, image provenance and unresolved naming.
-- Deliver the reviewed image-provenance, bounded HTML evidence, historical
-  prepared-candidate reader and provider account-mask corrections; distinguish
-  parent-branch merges from verified production deployment. Bounded HTML evidence
-  is tracked in [PR #1891](https://github.com/nickysemenza/cubby/pull/1891).
-  Multipart triage retains distinct readable HTML alongside plain text and
-  bounded links, image descriptions and structured data. A plain fallback never
-  establishes that omitted HTML evidence is unrelated; the original stays intact.
-- Correct statement-import coverage across overlapping exports and preserve
-  original occurrence evidence. An incomplete first-owning-batch count does
-  not prove source rows are missing; do not lower declared counts or replay
-  new identities to silence the detector.
-  Reviewed repeated-mask legacy membership uses
-  `reviewedLegacyAccountDescriptor` on a positionless statement row. The writer
-  accepts only one additional identical complete trailing mask, requires the
-  retained legacy identity, and refuses a competing canonical identity. It adds
-  export membership without changing provider columns or settlement references;
-  it never equates accounts or converts legacy evidence into physical occurrences.
+- Finish the remaining packaging-brand evidence gaps in the approved Product
+  scope. Retailer identity does not prove packet manufacturer; retain uncertain
+  facts explicitly rather than treating complete declared fields as acceptance.
+- Reconcile open findings from authentic retained sources. A legacy finding
+  without its original message roster cannot be dismissed from sender identity
+  or today's Expenses. Receiving remains a member decision.
+- Measure rule-driven abstention separately from model uncertainty, including
+  oversized and multipart evidence. Independent grades and exact message
+  availability are required before making accuracy claims; tuning confidence
+  alone cannot repair an incomplete decision view.
 - Verify actual continuous new-mail processing, ownership, classification-only
   routing, retained history and bounded budget accounting. Model estimates are
   distinct from provider billing and independently measured accuracy.
@@ -44,6 +35,29 @@ Burn-down and acceptance remain in progress.
 The current member-directed closeout excludes CI and installed-client
 acceptance. This scope does not declare those checks passed or replace the
 repository's general validation policy.
+
+## Verified delivery
+
+- [PR #1888](https://github.com/nickysemenza/cubby/pull/1888) delivered the
+  image-provenance writer and its merged supporting corrections: bounded HTML
+  evidence, historical prepared-candidate reads, complete provider account masks
+  and the MCP member-action alias. Public writer/readback checks establish
+  persistence; retained image bytes and associations survive provenance updates.
+- [PR #1899](https://github.com/nickysemenza/cubby/pull/1899) retains distinct
+  readable HTML beside plain text, with bounded links, image descriptions and
+  structured data. Incomplete negative verdicts abstain; originals remain intact.
+  Its validation fixes passed the full local `pnpm check:all` command.
+- [PR #1898](https://github.com/nickysemenza/cubby/pull/1898) added export
+  membership, and [PR #1900](https://github.com/nickysemenza/cubby/pull/1900)
+  added reviewed repeated-mask legacy membership. Both are deployed and public
+  replay/readback has verified coverage without new StatementRows or changes to
+  money, stock, claims, identifiers, allocations or provider evidence.
+  `reviewedLegacyAccountDescriptor` requires a positionless retained identity,
+  one extra identical complete trailing mask, and no competing stored or incoming
+  canonical row. This never equates accounts or promotes unknown occurrences.
+- The source-specific acceptance worklist remains private. Detector counts and
+  completion of a terminal Run do not establish acceptance of historical source
+  bindings, classification accuracy, continuous processing or a paid restart.
 
 The behavior decisions live in [ADR 0011](../adr/0011-email-as-a-first-class-entity.md)
 and [ADR 0012](../adr/0012-import-convergence-through-burn-down.md).

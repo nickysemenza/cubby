@@ -26,8 +26,9 @@ Classification-only backfill uses rules followed by Jev/Clef, with no Luna
 relevance escalation or admission to Pi. It keeps related/uncertain content and
 only the Email row for unrelated mail. Jev/Clef classification and extraction
 have no dollar ceiling, while execution/retry bounds and cost accounting remain.
-Jev receives bounded sender/domain and subject hints, readable HTML text or plain
-text, body head/end excerpts and attachment descriptors. HTML-only input also keeps
+Jev receives bounded sender/domain and subject hints, plain text alongside
+distinct readable HTML text, body head/end excerpts and attachment descriptors.
+Whenever HTML is present, the input also keeps
 bounded link labels and destinations, image URLs and alternative text, and raw
 JSON-LD excerpts from the existing page condenser. These remain untrusted evidence;
 clipped structured data is an excerpt, not a parsed order. The serialized view stays
