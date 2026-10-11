@@ -1,11 +1,9 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type {
   ReportBlock,
   ReportRecordRow,
 } from "@cubby/schemas/entity-report";
 import { type ReactNode, Suspense, useState } from "react";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { FilterRefLink } from "~/entity/components/ref-link/leaf";
 import { entities } from "~/entity/entities";
 import { formatInstant } from "~/lib/date-format";
@@ -25,6 +23,14 @@ import {
   DetailAction,
   type ReportDetailActionPlacement,
 } from "./detail-action-bar";
+import { ledgerLayout, RecordLedger } from "./records-ledger";
+import {
+  routedEntity,
+  rowKeys,
+  RowTitle,
+  STATUS_VARIANT,
+  TONE_TEXT,
+} from "./records-row-parts";
 import {
   type ChoiceAnswerState,
   ChoiceControl,
@@ -40,25 +46,6 @@ import { sectionActionsFor } from "./section-actions";
 
 export type RecordsBlock = Extract<ReportBlock, { kind: "records" }>;
 type Action = NonNullable<ReportRecordRow["actions"]>[number];
-
-/** A row's declared entity, when the browser has a detail route for it. */
-const routedEntity = (entity: string | null): BrowserRoutedEntity | null => {
-  if (entity === null || !Object.hasOwn(entities, entity)) return null;
-  // SAFETY: `entities` is keyed by exactly the browser-routed entities.
-  return entity as BrowserRoutedEntity;
-};
-
-/** Stable keys for rows that may repeat (a recipe appears once per section it uses). */
-const rowKeys = (rows: readonly ReportRecordRow[]) => {
-  const seen = new Map<string, number>();
-  return rows.map((row) => {
-    if (row.key !== undefined && row.commands !== undefined) return row.key;
-    const base = `${row.entity ?? ""}:${row.id ?? ""}:${row.title}`;
-    const occurrence = seen.get(base) ?? 0;
-    seen.set(base, occurrence + 1);
-    return `${base}#${occurrence}`;
-  });
-};
 
 /**
  * One declared verb. The action registry is erased to `never` because each verb reads its own
@@ -83,39 +70,6 @@ export function ReportVerb({
     </Suspense>
   );
 }
-
-function RowTitle({ row }: { row: ReportRecordRow }) {
-  const entity = routedEntity(row.entity);
-  if (entity !== null && row.id !== null)
-    return (
-      <EntityRefLink
-        variant="chip"
-        entity={entity}
-        id={row.id}
-        name={row.title}
-        displayImage={null}
-      />
-    );
-  if (row.title === "") return null;
-  return (
-    <span className="font-medium whitespace-pre-line">
-      <ShortcodeProse>{row.title}</ShortcodeProse>
-    </span>
-  );
-}
-
-const TONE_TEXT = {
-  positive: "text-positive",
-  warning: "text-warning-ink",
-  destructive: "text-destructive",
-  muted: "text-muted-foreground",
-} as const;
-const STATUS_VARIANT = {
-  positive: "positive",
-  warning: "warning",
-  destructive: "destructive",
-  muted: "outline",
-} as const;
 
 /** The toned chips, lines, raw block and commands a row carries beyond its title and subtitle. */
 function RowExtras({
@@ -414,6 +368,83 @@ function RecordFilmstrip({
   );
 }
 
+/** The block's rows in its presentation, or its empty copy. */
+function RecordsRows({
+  block,
+  ledger,
+  day,
+  commands,
+  choices,
+  choicesLocked,
+  record,
+  detailRows,
+}: {
+  block: RecordsBlock;
+  ledger: boolean;
+  day: string | null;
+  commands: ReportCommands;
+  choices: ChoiceAnswerState | null;
+  choicesLocked: boolean;
+  record: object | undefined;
+  detailRows: readonly string[] | undefined;
+}) {
+  if (block.presentation === "filmstrip")
+    return <RecordFilmstrip block={block} commands={commands} />;
+  if (block.rows.length === 0)
+    return block.empty ? <Description>{block.empty}</Description> : null;
+  if (ledger)
+    return <RecordLedger rows={block.rows} day={day} commands={commands} />;
+  const keys = rowKeys(block.rows);
+  return (
+    <ul className="w-full divide-y divide-border">
+      {block.rows.map((row, index) => (
+        <RecordRow
+          key={keys[index]}
+          commands={commands}
+          choices={choices}
+          choicesLocked={choicesLocked}
+          row={row}
+          inDetailBar={
+            row.key !== undefined && (detailRows?.includes(row.key) ?? false)
+          }
+          record={record}
+          large={block.thumbnail === "large"}
+        />
+      ))}
+    </ul>
+  );
+}
+
+/** The block's eyebrow; a ledger also carries its shared day and the block's commands. */
+function RecordsHeader({
+  title: declared,
+  hasRows,
+  day,
+  commands,
+}: {
+  title: string | undefined;
+  /** An empty block shows only its empty copy, untitled. */
+  hasRows: boolean;
+  day: string | null;
+  commands: ReactNode[] | null;
+}) {
+  const title = hasRows ? declared : undefined;
+  if (commands === null) return title ? <Eyebrow>{title}</Eyebrow> : null;
+  return (
+    <Row gap="sm" wrap align="center">
+      {title ? (
+        <Eyebrow className="my-0">
+          {title}
+          {day ? ` · ${day}` : ""}
+        </Eyebrow>
+      ) : null}
+      <Row gap="sm" wrap className="ml-auto">
+        {commands}
+      </Row>
+    </Row>
+  );
+}
+
 /**
  * The `records` report block: the server's rows, each opening the record it names, with the
  * row verbs the server offered. `record` is the loaded detail record those verbs act on; the
@@ -438,7 +469,6 @@ export function RecordsBlockView({
   const choices = useChoiceAnswers();
   const { form } = block;
   const choicesLocked = commands.pending || commands.committed;
-  const keys = rowKeys(block.rows);
   const verbs = block.verbs ?? [];
   const available =
     entity === undefined || record === undefined
@@ -446,40 +476,36 @@ export function RecordsBlockView({
       : sectionActionsFor(entity);
   // SAFETY: the verb registry is keyed by this entity, so it takes this entity's record.
   const erasedRecord = record as never;
+  const { ledger, day, headerCommands } = ledgerLayout(
+    block,
+    detailActions?.commands ?? false,
+  );
+  const blockCommands = (block.commands ?? []).map((command) => (
+    <CommandButton key={command.id} command={command} commands={commands} />
+  ));
   return (
     <Stack as="section" aria-label={block.title} gap="sm" className="w-full">
-      {block.title && block.rows.length > 0 ? (
-        <Eyebrow>{block.title}</Eyebrow>
-      ) : null}
-      {list ??
-        (block.presentation === "filmstrip" ? (
-          <RecordFilmstrip block={block} commands={commands} />
-        ) : block.rows.length === 0 ? (
-          block.empty ? (
-            <Description>{block.empty}</Description>
-          ) : null
-        ) : (
-          <ul className="w-full divide-y divide-border">
-            {block.rows.map((row, index) => (
-              <RecordRow
-                key={keys[index]}
-                commands={commands}
-                choices={form ? choices : null}
-                choicesLocked={choicesLocked}
-                row={row}
-                inDetailBar={
-                  row.key !== undefined &&
-                  (detailActions?.rows?.includes(row.key) ?? false)
-                }
-                record={record}
-                large={block.thumbnail === "large"}
-              />
-            ))}
-          </ul>
-        ))}
+      <RecordsHeader
+        title={block.title}
+        hasRows={block.rows.length > 0}
+        day={day}
+        commands={headerCommands ? blockCommands : null}
+      />
+      {list ?? (
+        <RecordsRows
+          block={block}
+          ledger={ledger}
+          day={day}
+          commands={commands}
+          choices={form ? choices : null}
+          choicesLocked={choicesLocked}
+          record={record}
+          detailRows={detailActions?.rows}
+        />
+      )}
       {block.footer && list === undefined ? (
         <p className="border-t border-border pt-2 text-sm text-muted-foreground">
-          {block.footer}
+          <ShortcodeProse>{block.footer}</ShortcodeProse>
         </p>
       ) : null}
       {form ? (
@@ -500,19 +526,15 @@ export function RecordsBlockView({
           }
         />
       ) : null}
-      <RowActionPlacement inDetailBar={detailActions?.commands ?? false}>
-        {(block.commands ?? []).length > 0 ? (
-          <Row wrap gap="sm">
-            {(block.commands ?? []).map((command) => (
-              <CommandButton
-                key={command.id}
-                command={command}
-                commands={commands}
-              />
-            ))}
-          </Row>
-        ) : null}
-      </RowActionPlacement>
+      {headerCommands ? null : (
+        <RowActionPlacement inDetailBar={detailActions?.commands ?? false}>
+          {blockCommands.length > 0 ? (
+            <Row wrap gap="sm">
+              {blockCommands}
+            </Row>
+          ) : null}
+        </RowActionPlacement>
+      )}
       {verbs.length > 0 ? (
         <Row gap="sm" wrap align="center" aria-live="polite">
           {verbs.map((verb) => {

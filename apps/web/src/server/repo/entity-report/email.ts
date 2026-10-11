@@ -45,6 +45,10 @@ import type { ReportViewer } from "./records";
 
 type StatsBlock = Extract<ReportBlock, { kind: "stats" }>;
 
+/**
+ * One count per association, then a ledger for each non-empty one; an empty association is only
+ * its zero. Thread context and dismissed candidates never associate a Purchase.
+ */
 function emailAssociationBlocks(
   associations: Awaited<ReturnType<typeof readEmailAssociations>>,
 ): ReportBlock[] {
@@ -57,70 +61,82 @@ function emailAssociationBlocks(
       trailing: null,
     }));
   const emails = (rows: typeof associations.samePurchaseEmails) =>
-    rows.map((row) => ({
+    rows.map((row): ReportRecordRow => ({
       entity: "email",
       id: row.shortcode,
       title: row.subject ?? "Email",
       subtitle: row.sender,
-      trailing: row.receivedAt?.toISOString() ?? null,
+      trailing: null,
+      at: row.receivedAt?.toISOString(),
     }));
-  return [
-    {
-      kind: "records",
-      title: "Accepted Purchases",
-      rows: purchases(associations.purchases),
-      empty: "No accepted source or linked lifecycle Purchase association.",
-    },
-    {
-      kind: "records",
-      title: "Purchase Expenses",
-      rows: associations.expenses.map((row) => ({
+  const sets: [label: string, title: string, rows: ReportRecordRow[]][] = [
+    [
+      "Accepted Purchases",
+      "Accepted Purchases",
+      purchases(associations.purchases),
+    ],
+    [
+      "Expenses",
+      "Purchase Expenses",
+      associations.expenses.map((row) => ({
         entity: "expense",
         id: row.shortcode,
         title: row.name,
         subtitle: null,
         trailing: null,
       })),
-      empty: "No live Expenses on associated Purchases.",
-    },
-    {
-      kind: "records",
-      title: "Purchase Products",
-      rows: associations.products.map((row) => ({
+    ],
+    [
+      "Products",
+      "Purchase Products",
+      associations.products.map((row) => ({
         entity: "product",
         id: row.shortcode,
         title: row.name,
         subtitle: null,
         trailing: null,
       })),
-      empty: "No live Products on associated Purchase Expenses.",
-    },
-    {
-      kind: "records",
-      title: "Emails for the same Purchases",
-      rows: emails(associations.samePurchaseEmails),
-      empty: "No other owned Emails associated with these Purchases.",
-    },
-    {
-      kind: "records",
-      title: "Gmail thread context",
-      rows: emails(associations.threadEmails).map((row) => ({
+    ],
+    [
+      "Same-Purchase Emails",
+      "Emails for the same Purchases",
+      emails(associations.samePurchaseEmails),
+    ],
+    [
+      "Gmail thread",
+      "Gmail thread context",
+      emails(associations.threadEmails).map((row) => ({
         ...row,
         statuses: [{ label: "Thread context only", tone: "muted" }],
       })),
-      empty:
-        "No other owned Emails in this mailbox and thread. Thread context does not associate a Purchase.",
-    },
-    {
-      kind: "records",
-      title: "Dismissed Purchase candidates",
-      rows: purchases(associations.dismissedCandidates).map((row) => ({
+    ],
+    [
+      "Dismissed candidates",
+      "Dismissed Purchase candidates",
+      purchases(associations.dismissedCandidates).map((row) => ({
         ...row,
         statuses: [{ label: "Dismissed candidate", tone: "muted" }],
       })),
-      empty:
-        "No dismissed lifecycle Purchase candidates. Dismissal does not associate a Purchase.",
+    ],
+  ];
+  return [
+    {
+      kind: "stats",
+      title: "Associations",
+      figures: sets.map(([label, , rows]) => ({
+        label,
+        value: rows.length,
+        format: "count",
+        tone: rows.length ? undefined : ("muted" as const),
+      })),
     },
+    ...sets.map(([, title, rows]): ReportBlock => ({
+      kind: "records",
+      presentation: "ledger",
+      title,
+      rows,
+      empty: "",
+    })),
   ];
 }
 
@@ -397,9 +413,11 @@ function pipelineRow(
     entity: input.entity ?? null,
     id: input.id ?? null,
     title: step,
+    // A stage that did not run says so first: its state is the row's result.
     subtitle:
-      input.lines?.filter((line): line is string => Boolean(line)).join("\n") ||
-      null,
+      [...(state === "Ran" ? [] : [state]), ...(input.lines ?? [])]
+        .filter((line): line is string => Boolean(line))
+        .join("\n") || null,
     trailing: null,
     statuses,
   };
@@ -629,7 +647,7 @@ function previewRow(
       ? [
           {
             id: `preview:${shortcode}:${email.checksum}`,
-            label: "Rerun extraction preview",
+            label: "Rerun preview",
             prominent: false,
             confirm: "Rerun the cheap extraction preview for this Email?",
             request: {
@@ -665,6 +683,8 @@ function importRow(
   canImport: boolean,
 ) {
   const { importRun, usage } = costs;
+  const estimate =
+    email.classification === "related" ? [estimateLine(costs.comparable)] : [];
   if (importRun) {
     // One line per model and route: a Run total, including retries and failed
     // calls, never attributed wholly to this Email; unknown routes stay unknown.
@@ -693,6 +713,7 @@ function importRow(
         lines: [
           `${importRun.shortcode} · ${importRun.status} · ${sources} Email(s) in Run`,
           ...usageLines,
+          ...estimate,
         ],
         at: importRun.endedAt ?? importRun.startedAt,
       },
@@ -706,10 +727,11 @@ function importRow(
     return pipelineRow("Import Run", "Not reached", {
       lines: [
         "Import needs related, retained, current content and an unclaimed Email.",
+        ...estimate,
       ],
     });
   return pipelineRow("Import Run", "Not reached", {
-    lines: ["Import runs only when you authorize this Email."],
+    lines: ["Import runs only when you authorize this Email.", ...estimate],
     commands: [
       {
         id: `import:${shortcode}:${email.checksum}`,
@@ -746,38 +768,14 @@ function purchaseRow(
   });
 }
 
-function estimateBlocks(comparable: readonly number[]): ReportBlock[] {
-  return [
-    {
-      kind: "stats",
-      title: "Import cost estimate",
-      figures: [
-        {
-          id: "pi-cost-low",
-          label: "Per Email, low",
-          value: comparable.length ? Math.min(...comparable) : null,
-          format: "money",
-        },
-        {
-          id: "pi-cost-high",
-          label: "Per Email, high",
-          value: comparable.length ? Math.max(...comparable) : null,
-          format: "money",
-        },
-        {
-          label: "Comparable settled Runs",
-          value: comparable.length,
-          format: "count",
-        },
-      ],
-    },
-    {
-      kind: "note",
-      text: comparable.length
-        ? "From recent owned mail-import Runs with known billing routes; failed calls included, ChatGPT plan and cache calls count as zero. An estimate, not a cap."
-        : "No comparable settled Run has a complete known billing route. Cost is unknown; an absent estimate never means free.",
-    },
-  ];
+/** A future import's per-Email cost from recent settled Runs; an absent estimate never means free. */
+function estimateLine(comparable: readonly number[]) {
+  if (!comparable.length)
+    return "Cost unknown: no comparable settled Run has a complete known billing route. An absent estimate never means free.";
+  const [low, high] = [Math.min(...comparable), Math.max(...comparable)].map(
+    formatSmallCurrency,
+  );
+  return `Est. ${low === high ? low : `${low}–${high}`} per Email from ${comparable.length} comparable settled Run(s); failed calls included, ChatGPT plan and cache calls count as zero. An estimate, not a cap.`;
 }
 
 /** The Runs that touched this Email, for the pipeline footer. */
@@ -921,6 +919,7 @@ export async function emailReviewReport(
     {
       kind: "records",
       title: "Email pipeline",
+      presentation: "ledger",
       rows: [
         retrievedRow(email, retained, failures[0], predictions[0]),
         ...automatedStages.map((stage) =>
@@ -968,9 +967,6 @@ export async function emailReviewReport(
             text: `The latest ${latestAutomated.stage ?? "automated"} result is ${latestAutomated.classification}; Relevance stays ${email.classification} until you accept it. Resolve the Email unrelated to accept, or correct its relevance.`,
           },
         ]
-      : []),
-    ...(email.classification === "related"
-      ? estimateBlocks(costs.comparable)
       : []),
     {
       kind: "note",

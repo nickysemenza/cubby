@@ -526,7 +526,12 @@ export type ReportRecordRow = z.infer<typeof reportRecordRow>;
  * plan in `nativeCollectionActionPlans`.
  */
 const reportRecords = z.object({
-  presentation: z.literal("filmstrip").optional(),
+  /**
+   * `filmstrip` pages through photo captures. `ledger` lays read-mostly stage and log rows out as
+   * one aligned line each (state, title, text, time, commands) for a client wide enough to align
+   * them; a row's first status tone is its state and its first subtitle line its result.
+   */
+  presentation: z.enum(["filmstrip", "ledger"]).optional(),
   kind: z.literal("records"),
   title: z.string().optional(),
   rows: z.array(reportRecordRow),

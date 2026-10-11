@@ -109,12 +109,17 @@ const row = (id: string, fields: RowFields = {}): Row => ({
 /** `empty` is the copy for no rows; an empty string hides the block. */
 const records = (
   rows: Row[],
-  fields: { title?: string; empty?: string } = {},
+  fields: {
+    title?: string;
+    empty?: string;
+    presentation?: Block<"records">["presentation"];
+  } = {},
 ): Block<"records"> => ({
   kind: "records",
   title: fields.title,
   rows,
   empty: fields.empty ?? "",
+  presentation: fields.presentation,
 });
 
 const counts = (
@@ -283,7 +288,7 @@ function importProgress(run: RunDetail): ReportBlock[] {
             at: event.createdAt,
           }),
         ),
-        { title: "Control history" },
+        { title: "Control history", presentation: "ledger" },
       ),
     );
   if (run.progress.length)
@@ -295,7 +300,7 @@ function importProgress(run: RunDetail): ReportBlock[] {
             at: progress.createdAt,
           }),
         ),
-        { title: "Run progress history" },
+        { title: "Run progress history", presentation: "ledger" },
       ),
     );
   return blocks;
@@ -551,7 +556,10 @@ const importTimeline = (run: RunDetail): ReportBlock[] => [
         ],
       }),
     ),
-    { empty: "No durable operations have been recorded for this run." },
+    {
+      empty: "No durable operations have been recorded for this run.",
+      presentation: "ledger",
+    },
   ),
 ];
 
@@ -949,6 +957,7 @@ export function liveProgressBlocks(
         empty: active
           ? "Waiting for the first progress update…"
           : "No progress updates were recorded for this Run.",
+        presentation: "ledger",
       },
     ),
   ];
@@ -1030,7 +1039,10 @@ export function aiUsageBlocks(usage: AiRunUsage): ReportBlock[] {
           ],
         }),
       ),
-      { empty: "No AI calls were recorded for this run." },
+      {
+        empty: "No AI calls were recorded for this run.",
+        presentation: "ledger",
+      },
     ),
   ];
 }

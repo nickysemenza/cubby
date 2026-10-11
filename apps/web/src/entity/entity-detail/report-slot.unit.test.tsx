@@ -2,7 +2,7 @@ import type {
   EntityReportOut,
   ReportCommand,
 } from "@cubby/schemas/entity-report";
-import { runShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor, runShortcode } from "@cubby/schemas/identifiers";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -13,6 +13,7 @@ import { DetailActionProvider } from "./detail-action-bar";
 import { EntityReportSlot, ReportDetailActions } from "./report-slot";
 
 const RUN_ID = runShortcode.parse("RUN-4K7M");
+const EMAIL_ID = parseShortcodeFor("email", "EML-4K7M");
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let restoreDispatch: () => void;
@@ -232,6 +233,80 @@ describe("EntityReportSlot records", () => {
         },
       }),
     );
+  });
+
+  // A ledger row's state stays readable without color, a failure keeps its raw diagnostic in
+  // full, and a command that needs input opens only for the row it belongs to.
+  it("lays a ledger block out with readable states and on-demand command input", async () => {
+    answer = () => ({
+      live: false,
+      status: "completed",
+      blocks: [
+        {
+          kind: "records",
+          presentation: "ledger",
+          title: "Email pipeline",
+          empty: "",
+          rows: [
+            {
+              ...row("retrieved", "Retrieved"),
+              subtitle: "Failed\n503: upstream returned Service Unavailable",
+              statuses: [{ label: "Failed", tone: "destructive" }],
+            },
+            {
+              ...row("review", "Member review", [
+                {
+                  id: "correct",
+                  label: "Correct relevance",
+                  prominent: false,
+                  confirm: null,
+                  inputs: [
+                    {
+                      kind: "choice",
+                      key: "classification",
+                      label: "Relevance",
+                      options: [
+                        { value: "related", label: "Related" },
+                        { value: "uncertain", label: "Uncertain" },
+                      ],
+                      initial: "related",
+                    },
+                    {
+                      kind: "text",
+                      key: "reason",
+                      label: "Reason",
+                      initial: null,
+                    },
+                  ],
+                  request: {
+                    kind: "correct-email-relevance",
+                    id: EMAIL_ID,
+                    expectedChecksum: "a".repeat(64),
+                    reviewedChecksum: "a".repeat(64),
+                    classification: "related",
+                    reason: "",
+                  },
+                },
+              ]),
+              statuses: [{ label: "Not reached", tone: "muted" }],
+            },
+          ],
+        },
+      ],
+    });
+    render(<EntityReportSlot slot="email.review" id={EMAIL_ID} />, {
+      wrapper: harness.wrapper,
+    });
+    expect(
+      await screen.findByText("503: upstream returned Service Unavailable"),
+    ).toBeVisible();
+    expect(screen.getByText("Not reached")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Reason" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Correct relevance…" }));
+    expect(screen.getByRole("textbox", { name: "Reason" })).toBeVisible();
+    expect(screen.getByRole("group", { name: "Relevance" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("textbox", { name: "Reason" })).toBeNull();
   });
 
   it("reads every run slot on the page from one batched request", async () => {
