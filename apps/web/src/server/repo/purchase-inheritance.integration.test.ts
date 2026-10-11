@@ -324,6 +324,27 @@ describe("purchase inheritance lifecycle", () => {
         purchaseId: source.shortcode,
       }),
     ).toMatchObject({ projectId: { mode: "allocated", value: null } });
+    // A tax line follows its items for trade and cost type too, so neither
+    // is offered as a per-line suggestion; a typed trade stays explicit.
+    expect(
+      await resolveDraftExpenseFields(ctx.db, {
+        name: "Sales tax",
+        lineKind: "tax",
+        purchaseId: source.shortcode,
+        costType: "services",
+      }),
+    ).toMatchObject({
+      trade: { mode: "allocated" },
+      costType: { mode: "allocated", storedValue: "services" },
+    });
+    expect(
+      await resolveDraftExpenseFields(ctx.db, {
+        name: "Delivery",
+        lineKind: "shipping",
+        purchaseId: source.shortcode,
+        trade: "logistics",
+      }),
+    ).toMatchObject({ trade: { mode: "explicit", value: "logistics" } });
 
     await updateExpense(ctx.db, expenseCode, { trade: null }, ctx.actor);
     expect(await getExpenseByShortcode(ctx.db, expenseCode)).toMatchObject({

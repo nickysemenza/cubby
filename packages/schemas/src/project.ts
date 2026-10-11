@@ -641,13 +641,6 @@ export const expenseAnalyticsSummary = z.object({
 });
 export type ExpenseAnalyticsSummary = z.infer<typeof expenseAnalyticsSummary>;
 
-export const expenseAdjustmentsAggregate = z.object({
-  ...expenseAggregateFields,
-});
-export type ExpenseAdjustmentsAggregate = z.infer<
-  typeof expenseAdjustmentsAggregate
->;
-
 export const expenseCostTypeAggregate = z.object({
   costType: costTypeSchema,
   ...expenseAggregateFields,
@@ -712,7 +705,6 @@ export type ExpenseVendorAggregate = z.infer<typeof expenseVendorAggregate>;
 
 export const expenseAnalyticsOut = z.object({
   summary: expenseAnalyticsSummary,
-  adjustments: expenseAdjustmentsAggregate,
   byCostType: z.array(expenseCostTypeAggregate),
   byTrade: z.array(expenseTradeAggregate),
   tradeCostMatrix: z.array(expenseTradeCostAggregate),
@@ -838,7 +830,7 @@ export const expenseAnalyzeReadyOut = z.object({
   reconciliation: z.object({
     tail: expenseAnalyzeValuePair,
     causes: z.object({
-      adjustments: expenseAnalyzeValuePair,
+      unallocated: expenseAnalyzeValuePair,
       unattributedProject: expenseAnalyzeValuePair,
       unattributedVendor: expenseAnalyzeValuePair,
     }),
@@ -1774,7 +1766,6 @@ export const projectPortfolioAnalyticsOut = z.object({
     z.object({ month: z.string(), planned: money, actual: money }),
   ),
   tradeActivity: z.array(expenseTradeAggregate),
-  adjustments: expenseAdjustmentsAggregate,
   taskHeatmap: z.array(
     z.object({
       projectId: projectShortcode,

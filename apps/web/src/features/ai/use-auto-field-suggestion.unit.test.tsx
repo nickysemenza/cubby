@@ -271,7 +271,7 @@ describe("useAutoFieldSuggestion", () => {
     expect(calls.at(-1)?.basis.projectId).toBe("PRJ-NEW");
   });
 
-  it("removes allocated expense project targets when line kind changes", async () => {
+  it("removes allocated expense share targets when line kind changes", async () => {
     render(
       <Harness
         entity="expense"
@@ -284,15 +284,25 @@ describe("useAutoFieldSuggestion", () => {
       { wrapper: harness.wrapper },
     );
 
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "pipe fittings" },
+    });
+    await waitFor(() =>
+      expect(calls.flatMap((call) => call.targets)).toContain("trade"),
+    );
+    const before = calls.length;
+
+    // A tax line follows its items for Project and trade alike.
     fireEvent.change(screen.getByLabelText("lineKind"), {
       target: { value: "tax" },
     });
     fireEvent.change(screen.getByLabelText("name"), {
       target: { value: "sales tax" },
     });
-    await waitFor(() => expect(calls.length).toBeGreaterThan(0));
-    expect(calls.flatMap((call) => call.targets)).not.toContain("projectId");
-    expect(calls.flatMap((call) => call.targets)).toContain("trade");
+    await sleep(FIELD_SUGGEST_DEBOUNCE_MS * 3);
+    const after = calls.slice(before).flatMap((call) => call.targets);
+    expect(after).not.toContain("projectId");
+    expect(after).not.toContain("trade");
   });
 
   it("keeps reset null deliberate and makes the next picker change explicit", async () => {

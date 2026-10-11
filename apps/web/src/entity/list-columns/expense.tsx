@@ -98,11 +98,6 @@ function ExpenseLedgerSummary({ filters }: { filters: ExpenseFilters }) {
           ? undefined
           : analyticsQuery.data?.summary
       }
-      adjustmentsNet={
-        analyticsQuery.isPlaceholderData
-          ? undefined
-          : analyticsQuery.data?.adjustments.net
-      }
       className="mb-4"
     />
   );

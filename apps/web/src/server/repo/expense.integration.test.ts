@@ -40,7 +40,7 @@ import {
   updateExpense,
 } from "~/server/repo/expense/crud";
 import { updateExpensesInBulk } from "~/server/repo/expense/crud";
-import { expenseList } from "~/server/repo/expense/lookup";
+import { expenseList, expenseListRead } from "~/server/repo/expense/lookup";
 import { createProduct } from "~/server/repo/product/crud";
 import { getPurchaseExpenses, purchaseList } from "~/server/repo/purchase";
 import {
@@ -785,6 +785,113 @@ describe("expense repository — bulk trade / cost-type writes", () => {
 describe("expense repository — expenseAnalytics", () => {
   const ctx = withTestDb();
 
+  // An award ticket's fees showed no trade while its fare read "travel".
+  it("resolves and filters an adjustment's trade and cost type through its principals", async () => {
+    const purchaseIdentity = {
+      vendor: "Synthetic airline",
+      orderId: "SYNTHETIC-AWARD-1",
+    };
+    await createRepoEntity(ctx, "expense", {
+      ...purchaseIdentity,
+      date: "2026-06-12",
+      name: "synthetic award fare",
+      trade: "travel",
+      costType: "services",
+      cost: 0,
+    });
+    const { output: tax } = await createRepoEntity(ctx, "expense", {
+      ...purchaseIdentity,
+      date: "2026-06-12",
+      name: "synthetic award departure tax",
+      lineKind: "tax",
+      trade: null,
+      costType: "materials",
+      cost: 14,
+    });
+    const read = await getExpenseByShortcode(ctx.db, tax.id);
+    expect(read?.fieldResolutions?.trade).toMatchObject({
+      mode: "allocated",
+      value: "travel",
+    });
+    // Editors seed from storedValue: the tax keeps its own stored cost type.
+    expect(read?.fieldResolutions?.costType).toMatchObject({
+      mode: "allocated",
+      value: "services",
+      storedValue: "materials",
+    });
+    const names = async (filters: Parameters<typeof expenseList>[1]) =>
+      (
+        await expenseList(
+          ctx.db,
+          { search: "synthetic award", ...filters },
+          [],
+          { pageIndex: 0, pageSize: 50 },
+        )
+      ).data
+        .map((row) => row.name)
+        .sort();
+    expect(await names({ trade: "travel" })).toEqual([
+      "synthetic award departure tax",
+      "synthetic award fare",
+    ]);
+    // A list patch of only the derived group resolves like a full read.
+    const derived = await expenseListRead(
+      ctx.db,
+      { search: "synthetic award departure" },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+      { kind: "enrichment", groups: ["derived"] },
+    );
+    expect(derived.data[0]?.fieldResolutions).toMatchObject({
+      trade: { mode: "allocated", value: "travel" },
+      costType: { mode: "allocated", value: "services" },
+    });
+    // The tax's stored "materials" no longer classifies it; its share does.
+    expect(await names({ costType: "materials" })).toEqual([]);
+    expect(await names({ costType: "services" })).toHaveLength(2);
+  });
+
+  it("counts a split adjustment once in a trade grid's totals", async () => {
+    const purchaseIdentity = {
+      vendor: "Synthetic hardware store",
+      orderId: "SYNTHETIC-SPLIT-1",
+    };
+    for (const [name, trade] of [
+      ["synthetic split wire", "electrical"],
+      ["synthetic split pipe", "plumbing"],
+    ] as const)
+      await createRepoEntity(ctx, "expense", {
+        ...purchaseIdentity,
+        date: "2026-06-14",
+        name,
+        trade,
+        costType: "materials",
+        cost: 10,
+      });
+    await createRepoEntity(ctx, "expense", {
+      ...purchaseIdentity,
+      date: "2026-06-14",
+      name: "synthetic split tax",
+      lineKind: "tax",
+      trade: null,
+      costType: "services",
+      cost: 2,
+    });
+    const analysis = await expenseAnalyzeWorkflow(ctx.db, {
+      filters: { search: "synthetic split" },
+      rowDimension: "trade",
+      comparison: "none",
+    });
+    expect(analysis).toMatchObject({
+      status: "ready",
+      totals: {
+        scope: { current: { net: 22, count: 3 } },
+        grid: { current: { net: 22, count: 3 } },
+      },
+      reconciliation: { tail: { current: { net: 0, count: 0 } } },
+    });
+  });
+
   it("uses attributed adjustment shares throughout project-filtered analytics", async () => {
     const { output: projectA } = await createRepoEntity(ctx, "project", {
       name: "scoped analytics project a",
@@ -830,7 +937,9 @@ describe("expense repository — expenseAnalytics", () => {
     };
     const result = await expenseAnalytics(ctx.db, filters);
     expect(result.summary).toMatchObject({ net: 66, count: 2 });
-    expect(result.adjustments).toMatchObject({ net: 6, count: 1 });
+    // The scoped tax share follows its principal into a trade, so the trade
+    // breakdown accounts for the whole scoped total.
+    expect(result.byTrade.reduce((sum, row) => sum + row.net, 0)).toBe(66);
     expect(result.monthly).toEqual([
       expect.objectContaining({ month: "2026-06", net: 66, count: 2 }),
     ]);
@@ -903,8 +1012,9 @@ describe("expense repository — expenseAnalytics", () => {
       date: "2026-02-01",
       future: false,
     });
+    // No trade of its own: the tax follows p1/p2 (plumbing materials).
     const { output: p5 } = await createRepoEntity(ctx, "expense", {
-      trade: "other",
+      trade: null,
       costType: "services",
       lineKind: "tax",
       name: "analytics p5 tax",
@@ -942,26 +1052,18 @@ describe("expense repository — expenseAnalytics", () => {
       plannedCount: 1, // p2
       unpricedCount: 0,
     });
-    expect(result.adjustments).toEqual({
-      actual: 23,
-      committed: 0,
-      credits: 5,
-      net: 18,
-      count: 2,
-    });
-
-    // Dimensional analytics classify principal purchases only. The adjustment
-    // rows deliberately carry different historical costType/trade values to
-    // prove those values do not leak into the category matrices.
+    // Adjustments follow their principals' trade and cost type: the $23 tax
+    // (no trade of its own, stored as services) lands in plumbing materials,
+    // while the discount's typed "other" trade keeps it, at its own "tools".
     expect(result.byCostType).toEqual(
       expect.arrayContaining([
         {
           costType: "materials",
-          actual: 100,
+          actual: 123,
           committed: 50,
           credits: 20,
-          net: 130,
-          count: 3,
+          net: 153,
+          count: 4,
         },
         {
           costType: "services",
@@ -971,19 +1073,35 @@ describe("expense repository — expenseAnalytics", () => {
           net: 30,
           count: 1,
         },
+        {
+          costType: "tools",
+          actual: 0,
+          committed: 0,
+          credits: 5,
+          net: -5,
+          count: 1,
+        },
       ]),
     );
-    expect(result.byCostType).toHaveLength(2);
+    expect(result.byCostType).toHaveLength(3);
 
     expect(result.byTrade).toEqual(
       expect.arrayContaining([
         {
           trade: "plumbing",
-          actual: 100,
+          actual: 123,
           committed: 50,
           credits: 0,
-          net: 150,
-          count: 2,
+          net: 173,
+          count: 3,
+        },
+        {
+          trade: "other",
+          actual: 0,
+          committed: 0,
+          credits: 5,
+          net: -5,
+          count: 1,
         },
         {
           trade: "electrical",
@@ -995,19 +1113,28 @@ describe("expense repository — expenseAnalytics", () => {
         },
       ]),
     );
-    expect(result.byTrade).toHaveLength(2);
+    expect(result.byTrade).toHaveLength(3);
 
-    expect(result.tradeCostMatrix).toHaveLength(3);
+    expect(result.tradeCostMatrix).toHaveLength(4);
     expect(result.tradeCostMatrix).toEqual(
       expect.arrayContaining([
         {
           trade: "plumbing",
           costType: "materials",
-          actual: 100,
+          actual: 123,
           committed: 50,
           credits: 0,
-          net: 150,
-          count: 2,
+          net: 173,
+          count: 3,
+        },
+        {
+          trade: "other",
+          costType: "tools",
+          actual: 0,
+          committed: 0,
+          credits: 5,
+          net: -5,
+          count: 1,
         },
         {
           trade: "electrical",

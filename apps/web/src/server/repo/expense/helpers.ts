@@ -357,12 +357,54 @@ const expenseProjectFieldResolution = (
   };
 };
 
+/**
+ * An adjustment without its own trade follows its principals' shares, like
+ * spending category: one shared value reads as that value, several as none.
+ * A typed trade on the adjustment keeps it (and its cost type) explicit.
+ */
+const allocatedShareResolution = <K extends "trades" | "costTypes">(
+  row: ExpenseRow,
+  key: K,
+): NonNullable<ExpenseOut["fieldResolutions"]>[string] | null => {
+  if (row.lineKind === "principal" || row.trade !== null) return null;
+  const allocations = row.spendingCategoryAllocations;
+  if (!allocations?.length) return null;
+  const values = [...new Set(allocations.flatMap((a) => a[key]))];
+  return {
+    mode: "allocated",
+    // Every Expense keeps a stored cost type; editors seed from it.
+    storedValue: key === "costTypes" ? row.costType : null,
+    value: values.length === 1 ? values[0]! : null,
+    fallbackValue: null,
+    source: expenseSpendingCategoryAllocationSource(values.length === 1),
+    sourceEntity: null,
+    matchesFallback: true,
+    canReset: false,
+  };
+};
+
+const expenseCostTypeFieldResolution = (
+  row: ExpenseRow,
+): NonNullable<ExpenseOut["fieldResolutions"]>[string] =>
+  allocatedShareResolution(row, "costTypes") ?? {
+    mode: "explicit",
+    storedValue: row.costType,
+    value: row.costType,
+    fallbackValue: null,
+    source: "expense",
+    sourceEntity: null,
+    matchesFallback: false,
+    canReset: false,
+  };
+
 const expenseTradeFieldResolution = (
   row: ExpenseRow,
   purchaseRow: ExpenseRow["purchase"],
   effectiveProjectShortcode: string | null,
   effectiveTrade: ExpenseOut["trade"],
 ): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
+  const allocated = allocatedShareResolution(row, "trades");
+  if (allocated) return allocated;
   const source =
     row.tradeResolutionSource ??
     (row.trade !== null
@@ -542,6 +584,7 @@ export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
               effectiveProjectShortcode,
               effectiveTrade,
             ),
+            costType: expenseCostTypeFieldResolution(row),
           },
     projectAllocations: expenseProjectAllocations(row),
     spendingCategoryAllocations: row.spendingCategoryAllocations?.map(

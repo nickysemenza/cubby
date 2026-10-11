@@ -1,3 +1,4 @@
+import type { CostType } from "@cubby/schemas/expense-fields";
 /**
  * Expense analytics — server-side chart aggregates for the household
  * Expenses tracker (see packages/schemas/src/project.ts's
@@ -28,7 +29,7 @@ import type {
   ExpenseMonthlySummaryOut,
   Trade,
 } from "@cubby/schemas/project";
-import { and, eq, isNotNull, ne, type SQL, sql } from "drizzle-orm";
+import { and, eq, isNotNull, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
@@ -37,6 +38,7 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   EXPENSE_MONTH_BUCKET as MONTH_BUCKET,
   expenseAggregateFields,
+  expenseShareAggregateFields,
 } from "~/server/repo/expense-aggregate-sql";
 
 import {
@@ -127,14 +129,26 @@ export async function expenseAnalytics(
     projectScope,
   });
   const aggregate = expenseAggregateFields(analyticsCost(projectScope));
-  const principalWhereClause = and(
-    whereClause,
-    eq(expense.lineKind, "principal"),
-  );
-  const adjustmentsWhereClause = and(
-    whereClause,
-    ne(expense.lineKind, "principal"),
-  );
+  // Trade and cost type are per share: each adjustment follows its principals,
+  // and a share that follows none reports under the null (unassigned) trade.
+  const shareTrade = sql<Trade | null>`allocation.trade`;
+  const shareCostType = sql<CostType>`allocation."costType"`;
+  const shares = <K extends Record<string, SQL>>(keys: K) =>
+    getDb(db)
+      .select({ ...keys, ...expenseShareAggregateFields() })
+      .from(expense)
+      .innerJoin(
+        sql`(${expenseJointAllocationSql()}) allocation`,
+        sql`allocation."expenseId" = ${expense.id}`,
+      )
+      .where(
+        and(
+          whereClause,
+          projectScope
+            ? expenseAllocationScopeConditionSql("allocation", projectScope)
+            : undefined,
+        ),
+      );
   // $0 events and unknown-cost historical acquisitions can have an unknown
   // date — exclude null-date rows from the month-bucketed breakdowns only
   // (can't bucket what has no date); summary/byCostType/byTrade/byProject still
@@ -143,7 +157,6 @@ export async function expenseAnalytics(
 
   const [
     summaryRows,
-    adjustmentRows,
     byCostType,
     byTrade,
     tradeCostMatrix,
@@ -155,29 +168,12 @@ export async function expenseAnalytics(
       .select(summaryFields(analyticsCost(projectScope)))
       .from(expense)
       .where(whereClause),
-    getDb(db)
-      .select({ ...aggregate })
-      .from(expense)
-      .where(adjustmentsWhereClause),
-    getDb(db)
-      .select({ costType: expense.costType, ...aggregate })
-      .from(expense)
-      .where(principalWhereClause)
-      .groupBy(expense.costType),
-    getDb(db)
-      .select({ trade: effectiveTrade, ...aggregate })
-      .from(expense)
-      .where(principalWhereClause)
-      .groupBy(effectiveTrade),
-    getDb(db)
-      .select({
-        trade: effectiveTrade,
-        costType: expense.costType,
-        ...aggregate,
-      })
-      .from(expense)
-      .where(principalWhereClause)
-      .groupBy(effectiveTrade, expense.costType),
+    shares({ costType: shareCostType }).groupBy(shareCostType),
+    shares({ trade: shareTrade }).groupBy(shareTrade),
+    shares({ trade: shareTrade, costType: shareCostType }).groupBy(
+      shareTrade,
+      shareCostType,
+    ),
     getDb(db)
       .select({ month: MONTH_BUCKET, ...aggregate })
       .from(expense)
@@ -274,14 +270,9 @@ export async function expenseAnalytics(
 
   return {
     summary,
-    adjustments: adjustmentRows[0]!,
     byCostType,
-    byTrade: byTrade.filter(
-      (row): row is typeof row & { trade: Trade } => row.trade !== null,
-    ),
-    tradeCostMatrix: tradeCostMatrix.filter(
-      (row): row is typeof row & { trade: Trade } => row.trade !== null,
-    ),
+    byTrade,
+    tradeCostMatrix,
     monthly,
     cumulative,
     byProject: byProjectResult.rows.map(({ projectShortcode, ...row }) => ({

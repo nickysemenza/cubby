@@ -16,5 +16,5 @@ it("identifies project allocations separately from displayed ledger costs", () =
 
 it("shows unavailable analytics instead of fabricated zero totals", () => {
   render(<ExpenseSummaryStrip />);
-  expect(screen.getAllByText("Unavailable")).toHaveLength(6);
+  expect(screen.getAllByText("Unavailable")).toHaveLength(5);
 });

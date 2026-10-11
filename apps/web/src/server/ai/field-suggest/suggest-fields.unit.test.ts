@@ -1015,6 +1015,37 @@ describe("suggestFields", () => {
     expect(jev.mock.calls[0]?.[0].state).toContain("Kitchen Remodel");
   });
 
+  it("never suggests a value that follows a purchase's items, even when provided", async () => {
+    const jev = jevPortPicking("electrical:");
+    const followsItems = {
+      mode: "allocated" as const,
+      storedValue: null,
+      value: "electrical",
+      fallbackValue: null,
+      source: "Principal line allocation",
+      sourceEntity: null,
+      matchesFallback: true,
+      canReset: false,
+    };
+    const result = await suggestFields(
+      fakeDb,
+      fixtureRunId,
+      {
+        basisMode: "provided",
+        entity: "expense",
+        targets: ["trade"],
+        basis: { name: "sales tax", lineKind: "tax", trade: null },
+      },
+      { jev, resolveInheritance: async () => ({ trade: followsItems }) },
+    );
+    expect(result.eligibleTargets).toEqual([]);
+    expect(result.outcomes?.trade).toEqual({
+      kind: "skipped",
+      reason: "resolved",
+    });
+    expect(jev).not.toHaveBeenCalled();
+  });
+
   it("allows provided alternatives for explicit None without using a sibling proposal as evidence", async () => {
     const jev = jevPortPicking("Kitchen Remodel", "electrical:");
     const fieldResolutions = {

@@ -49,7 +49,6 @@ import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 
 import {
   effectiveExpenseProjectSql,
-  effectiveExpenseTradeSql,
   expenseInheritanceReadExtras,
 } from "../expense-inheritance";
 import {
@@ -61,8 +60,6 @@ import {
 import { loadExpenseSpendingAllocations } from "../expense-spending-allocation";
 import { completeListReader } from "../list-read-adapters";
 import { dbExpenseToAPI } from "./helpers";
-
-const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
 
 /** Lift a Purchase predicate into the Expense selection. Deleted purchases must
  * not let expenses match their former vendor or other charge attributes. */
@@ -79,11 +76,6 @@ export const chargeCondition = (
   inner === undefined
     ? undefined
     : inArray(expense.purchaseId, chargeIdsWhere(db, inner));
-
-const tradeCondition = (trades: ExpenseFilters["trade"]): SQL | undefined => {
-  const values = trades === undefined ? [] : [trades].flat();
-  return values.length === 0 ? undefined : inArray(effectiveTrade, values);
-};
 
 /**
  * "Has / has no order id", resolved through the charge.
@@ -142,11 +134,17 @@ export const resolveExpenseProjectAllocationScope = async (
     "spendingCategory",
     categoryCodes,
   );
+  // Trade and cost type follow the same per-share split as category: an
+  // adjustment matches through the shares it allocates to its principals.
+  const trades = filters.trade ? [filters.trade].flat() : [];
+  const costTypes = filters.costType ? [filters.costType].flat() : [];
   if (
     projectIds.length === 0 &&
     !filters.projectPresenceFilter &&
     categoryCodes.length === 0 &&
-    !filters.spendingCategoryPresenceFilter
+    !filters.spendingCategoryPresenceFilter &&
+    trades.length === 0 &&
+    costTypes.length === 0
   )
     return undefined;
   return {
@@ -156,6 +154,8 @@ export const resolveExpenseProjectAllocationScope = async (
       ? categoryIds.map((id) => parseEntityId("spendingCategory", id))
       : undefined,
     categoryPresence: filters.spendingCategoryPresenceFilter,
+    trades: trades.length ? trades : undefined,
+    costTypes: costTypes.length ? costTypes : undefined,
   };
 };
 
@@ -320,14 +320,14 @@ export const buildExpenseWhereClause = async (
   // `filters.search` over notes — most rows have no notes, which would
   // silently zero out expense search.
   //
-  // `lineKind`, `lineBasis`, `costType` (multiselect) and `future` (boolean)
-  // are also declared stored filters — applied by `expenseScaffold.where`
-  // before the conditions below. `trade` is stripped from `storedFilters`
-  // (below) and applied instead by `tradeCondition`, an uncorrelated
-  // sub-select — see its doc above.
+  // `lineKind`, `lineBasis` and `future` are declared stored filters, applied
+  // by `expenseScaffold.where` before the conditions below. `trade`,
+  // `costType` and spending category are stripped from `storedFilters` and
+  // applied per allocation share by `projectFilterCondition`.
   const storedFilters = {
     ...filters,
     trade: undefined,
+    costType: undefined,
     spendingCategoryId: undefined,
     spendingCategoryPresenceFilter: undefined,
   };
@@ -400,7 +400,6 @@ export const buildExpenseWhereClause = async (
       expense.productQuantity,
       filters.productQuantityPresenceFilter,
     ),
-    tradeCondition(filters.trade),
     // `orderId` presence can't be a column-null check any more: it's a column
     // on the CHARGE, and a row with a charge that has no order id is a
     // different state from a row with no charge at all. Both read as "no order
@@ -548,7 +547,8 @@ const hydrateExpenseRows = async (
         rows.map((row) => row.id),
       ),
     ),
-    loadListGroup(projection, "relations", () =>
+    // Derived trade/cost-type resolutions read the same allocation shares.
+    loadListGroup(projection, ["relations", "derived"], () =>
       loadExpenseSpendingAllocations(
         db,
         rows.map((row) => row.id),

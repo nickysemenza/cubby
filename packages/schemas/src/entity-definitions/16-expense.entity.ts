@@ -545,6 +545,22 @@ Rules:
           detail: true,
           mobile: { slot: "meta", priority: 20 },
         },
+        explanation: {
+          ruleId: "expense.effective-cost-type",
+          description:
+            "An item line's cost type is its own. A tax, shipping, or fee line follows the items it was charged on, unless it names its own trade.",
+          projections: {
+            list: "fieldResolutions.costType.value",
+            detail: "fieldResolutions.costType.value",
+            summary: "fieldResolutions.costType.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.costType.storedValue",
+              label: "Stored value",
+            },
+          ],
+        },
         validation: {
           read: costTypeSchema,
           create: costTypeSchema,
@@ -576,7 +592,7 @@ Rules:
         explanation: {
           ruleId: "expense.effective-trade",
           description:
-            "An expense trade override wins; otherwise the expense uses its purchase default trade, then its effective project's default trade.",
+            "An expense trade override wins. Otherwise an item line uses its purchase default trade, then its effective project's default trade, and a tax, shipping, or fee line follows the items it was charged on.",
           projections: {
             list: "fieldResolutions.trade.value",
             detail: "fieldResolutions.trade.value",

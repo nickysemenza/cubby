@@ -21,8 +21,12 @@ explicit save; API audit provenance alone cannot establish statement origin.
 
 Shared tax, shipping, tips, fees, and ordinary discounts are allocated once to
 principal Expense lines in whole cents. The principal Expense ID breaks rounding
-ties. Project and Spending Category reports group those same joint allocations;
-filtering never changes the full Purchase weights. Unknown shares remain in the
+ties. Project, Spending Category, trade, and cost type reports group those same
+joint allocations: each share carries its principal's trade and cost type,
+unless the adjustment names its own trade, which claims the whole charge at the
+adjustment's own cost type. A share with no principal reports under no trade
+and the adjustment's own cost type. Filtering never changes the full Purchase
+weights. Unknown shares remain in the
 report, and the allocated total equals `SUM(Expense.cost)`. Refund-only baskets
 use absolute principal weights; unidentified refund adjustments on a positive
 basket remain unknown unless explicitly classified. A basket whose principals

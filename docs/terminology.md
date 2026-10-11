@@ -238,7 +238,8 @@ inheriting record. Scalar edits retain explicit-write meaning.
   Project trade: own default → nearest ancestor default.
 - Task trade: own choice → parent task trade when effective projects match →
   effective project default. Principal expense trade: own choice → purchase trade
-  default → effective project default. An unresolved required trade blocks writes;
+  default → effective project default. Adjustment expense trade: own choice →
+  its principals' trades through the joint allocation. An unresolved required trade blocks writes;
   Other is available only as a deliberate classification.
 
 Equal-to-fallback overrides can be reset when the field declares that policy.
@@ -320,11 +321,14 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
   recorded", since `purchase.vendorId` is NOT NULL.
   - `lineKind` is `principal | tax | shipping | discount | fee | tip |
     other_adjustment`. Every kind participates in total, monthly, project,
-    Purchase-reconciliation, and vendor spend. Cost-type, trade, tool, and
-    affinity analytics use only `principal` and expose the signed adjustment
-    remainder separately.
-  - Non-principal rows cannot link `productId` or `productQuantity`. Historical
-    `costType`, trade, and project values remain valid allocation context.
+    Purchase-reconciliation, and vendor spend. Cost-type and trade analytics
+    read the joint allocation, so an adjustment's money follows the trade and
+    cost type of the principals it was charged on (see
+    [spending classification](spending-classification.md)). Tool and affinity
+    analytics use only `principal`.
+  - Non-principal rows cannot link `productId` or `productQuantity`. A trade
+    typed onto one claims the whole adjustment at its own `costType`;
+    otherwise its stored `costType` applies only to shares with no principal.
   - `productQuantity` is **signed**, and may be **fractional** — the unit is the
     shelf's unit, so half a conduit coil binned is `-0.5`. Money direction wins,
     and the quantity's own sign is consulted only when there is no money:

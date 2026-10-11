@@ -46,10 +46,7 @@ export function ProjectPortfolioAnalyticsView({
         title="Spend by Trade"
         description="Actual + committed spend per trade"
       >
-        <TradeActivity
-          data={data.tradeActivity}
-          adjustments={data.adjustments.net}
-        />
+        <TradeActivity data={data.tradeActivity} />
       </Section>
 
       <Section

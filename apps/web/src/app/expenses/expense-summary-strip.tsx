@@ -12,14 +12,12 @@ interface ExpenseSummary {
 
 export function ExpenseSummaryStrip({
   summary,
-  adjustmentsNet,
   basis = "ledger",
   loading = false,
   className,
 }: {
   summary?: ExpenseSummary;
   basis?: "ledger" | "allocation";
-  adjustmentsNet?: number;
   loading?: boolean;
   className?: string;
 }) {
@@ -32,7 +30,6 @@ export function ExpenseSummaryStrip({
     [label("Committed"), money(summary?.committed)],
     [label("Credits"), money(summary?.credits)],
     [label("Net"), money(summary?.net)],
-    ["Purchase adjustments", money(adjustmentsNet)],
     ["Count", summary?.count ?? "Unavailable"],
   ] as const;
 

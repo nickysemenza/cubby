@@ -31,10 +31,8 @@ type Datum = {
  */
 export function TradeActivity({
   data: rows,
-  adjustments,
 }: {
   data: ProjectPortfolioAnalyticsOut["tradeActivity"];
-  adjustments: number;
 }) {
   const data = useMemo(
     () =>
@@ -48,17 +46,21 @@ export function TradeActivity({
         .sort((a, b) => a.actual + a.committed - (b.actual + b.committed)),
     [rows],
   );
+  // Bars stack spend; credits (refunds, discounts) would only read as more
+  // spend there, so they are disclosed rather than charted.
+  const credits = rows.reduce((total, row) => total + row.credits, 0);
+  const creditsNote =
+    credits > 0 ? (
+      <p className="mt-2 text-center text-xs text-muted-foreground">
+        Bars exclude {formatCurrency(credits, 0)} in credits.
+      </p>
+    ) : null;
 
   if (data.length === 0) {
     return (
       <div>
-        <ChartEmpty icon={HammerIcon} title="No principal trade spend yet." />
-        {adjustments !== 0 ? (
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            Total spend is {formatCurrency(adjustments, 0)} in purchase
-            adjustments, with no principal trade bars.
-          </p>
-        ) : null}
+        <ChartEmpty icon={HammerIcon} title="No trade spend yet." />
+        {creditsNote}
       </div>
     );
   }
@@ -113,12 +115,7 @@ export function TradeActivity({
         )}
         theme={nivoChartTheme}
       />
-      {adjustments !== 0 ? (
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          Total spend also includes {formatCurrency(adjustments, 0)} in purchase
-          adjustments not assigned to a trade.
-        </p>
-      ) : null}
+      {creditsNote}
     </div>
   );
 }

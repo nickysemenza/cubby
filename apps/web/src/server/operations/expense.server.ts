@@ -27,7 +27,6 @@ import {
 } from "~/server/repo/expense/analytics";
 import {
   buildExpenseAnalysisGrid,
-  expenseAnalysisWhere,
   includeSelectedExpenseFacetZeroOptions,
   isExpenseScalarFacet,
   loadExpenseAnalysisCauses,
@@ -170,7 +169,7 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
     current: ({ context }, { input, currentWhere, projectScope }) =>
       loadExpenseAnalysisPeriod(
         context,
-        expenseAnalysisWhere(currentWhere, input),
+        currentWhere,
         currentWhere,
         input.rowDimension,
         input.columnDimension,
@@ -183,7 +182,7 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
       comparison
         ? loadExpenseAnalysisPeriod(
             context,
-            expenseAnalysisWhere(previousWhere, input),
+            previousWhere,
             previousWhere,
             input.rowDimension,
             input.columnDimension,
@@ -279,6 +278,7 @@ const expenseFacetItemDefinition = workflow<Database, ExpenseFacetItemInput>(
             context,
             input.where,
             input.input.id,
+            input.allocationScope,
           );
         })
         .output(({ input, options }) => ({ id: input.input.id, options })),
