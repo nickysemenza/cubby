@@ -24,6 +24,7 @@ import {
   financialAccount,
   financialTransaction,
   statementImport,
+  statementImportRow,
   statementRow,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -54,6 +55,7 @@ import { logAuditEntry } from "./audit-log";
 import { lockFinancialEvidenceKeys } from "./financial-evidence";
 import { previewFinancialStatementImport } from "./financial-statement-preview";
 import { resolveOrThrow } from "./shortcode-resolver";
+import { statementImportMembers } from "./statement-import-membership";
 
 /**
  * Every live settlement reference with its transaction's shortcode — the
@@ -187,19 +189,21 @@ const toOut = (row: StatementRowRow): StatementRowOut =>
       : null,
   });
 
+const observedInImport = (fingerprint: string) => sql`EXISTS (
+  SELECT 1 FROM ${statementImportMembers} member
+  JOIN "StatementImport" si ON si.id = member."importId"
+  WHERE member."statementRowId" = "StatementRow".id
+    AND si.fingerprint = ${fingerprint}
+    AND si.source = "StatementRow".source AND si."deletedAt" IS NULL
+)`;
+
 const buildConditions = (filters: StatementRowFilters): SQL[] => {
   const conditions: SQL[] = [notDeleted(statementRow)];
   if (filters.source) conditions.push(eq(statementRow.source, filters.source));
   // Addressed by the export's client-supplied fingerprint, never its uuid: a
   // uuid must not reach a URL or an MCP payload.
   if (filters.importFingerprint)
-    conditions.push(
-      sql`${statementRow.batchId} = (
-        SELECT si.id FROM "StatementImport" si
-        WHERE si.fingerprint = ${filters.importFingerprint}
-          AND si.source = "StatementRow"."source" AND si."deletedAt" IS NULL
-      )`,
-    );
+    conditions.push(observedInImport(filters.importFingerprint));
   // Filtered by the account's public shortcode, resolved inline. An unknown
   // code yields NULL and therefore matches nothing, rather than widening to an
   // unfiltered query.
@@ -348,11 +352,12 @@ const storedRowCount = async (
   tx: DrizzleTransaction,
   batchId: string,
 ): Promise<number> => {
-  const [row] = await unwrapDb(tx)
-    .select({ count: sql<number>`count(*)::int` })
-    .from(statementRow)
-    .where(and(eq(statementRow.batchId, batchId), notDeleted(statementRow)));
-  return Number(row?.count ?? 0);
+  const result = await unwrapDb(tx).execute<{ count: number }>(sql`
+    SELECT count(*)::int AS count FROM ${statementImportMembers} member
+    JOIN "StatementRow" sr ON sr.id = member."statementRowId" AND sr."deletedAt" IS NULL
+    WHERE member."importId" = ${batchId}
+  `);
+  return Number(result.rows[0]?.count ?? 0);
 };
 
 function assertImmutableStatementOccurrence(
@@ -482,6 +487,7 @@ export async function recordStatementRows(
     const distinctIds = [...idCounts.keys()];
     const stored = await unwrapDb(tx)
       .select({
+        id: statementRow.id,
         externalId: statementRow.externalId,
         batchId: statementRow.batchId,
         accountDescriptor: statementRow.accountDescriptor,
@@ -506,8 +512,17 @@ export async function recordStatementRows(
       const incoming = rows.find((row) => row.externalId === saved.externalId);
       if (incoming) assertImmutableStatementOccurrence(saved, incoming);
     }
-    const alreadyInThisBatch = stored.filter(
-      (row) => row.batchId === existingBatch?.id,
+    const existingMembership = existingBatch
+      ? (
+          await unwrapDb(tx).execute<{ rowId: string }>(sql`
+          SELECT "statementRowId" AS "rowId" FROM ${statementImportMembers} member
+          WHERE member."importId" = ${existingBatch.id}
+        `)
+        ).rows
+      : [];
+    const memberIds = new Set(existingMembership.map((row) => row.rowId));
+    const alreadyInThisBatch = stored.filter((row) =>
+      memberIds.has(row.id),
     ).length;
     const alreadyInAnotherBatch = stored.length - alreadyInThisBatch;
     const novel = distinctIds.length - stored.length;
@@ -554,7 +569,6 @@ export async function recordStatementRows(
         "Failed to create statement import batch.",
       );
 
-    const before = await storedRowCount(tx, batchId);
     const inserted = await unwrapDb(tx)
       .insert(statementRow)
       .values(rows.map((row) => ({ ...row, batchId })))
@@ -567,6 +581,29 @@ export async function recordStatementRows(
       })
       .returning({ id: statementRow.id });
 
+    // Re-read after conflict handling: another export may have retained the row.
+    const retained = await unwrapDb(tx)
+      .select({ id: statementRow.id })
+      .from(statementRow)
+      .where(
+        and(
+          eq(statementRow.source, source),
+          inArray(statementRow.externalId, distinctIds),
+          notDeleted(statementRow),
+        ),
+      );
+    await unwrapDb(tx)
+      .insert(statementImportRow)
+      .values(
+        retained.map((row) => ({ importId: batchId, statementRowId: row.id })),
+      )
+      .onConflictDoNothing({
+        target: [
+          statementImportRow.importId,
+          statementImportRow.statementRowId,
+        ],
+      });
+
     return {
       batchId,
       batchCreated: !existingBatch,
@@ -577,7 +614,7 @@ export async function recordStatementRows(
       alreadyInAnotherBatch,
       indistinguishableDuplicates,
       rowsOmitted,
-      rowCountStored: before + inserted.length,
+      rowCountStored: await storedRowCount(tx, batchId),
       signWarning,
     };
   });
@@ -619,20 +656,17 @@ export async function findStatementRowDrift(
   if (input.dateTo)
     conditions.push(sql`${statementRow.statementDate} <= ${input.dateTo}`);
   if (input.importFingerprint)
-    conditions.push(
-      sql`${statementRow.batchId} = (
-        SELECT si.id FROM "StatementImport" si
-        WHERE si.fingerprint = ${input.importFingerprint}
-          AND si.source = "StatementRow"."source" AND si."deletedAt" IS NULL
-      )`,
-    );
+    conditions.push(observedInImport(input.importFingerprint));
   const where = and(...conditions)!;
-  // A single export speaks one descriptor vocabulary, so two of its own rows
-  // differing only in description are two real charges. Gated in the HAVING
-  // rather than filtered after, so `limit` counts findings and not noise.
+  // Coexisting rows are distinct purchases even when another export owned one first.
+  const unsharedPair = sql`NOT EXISTS (
+    SELECT 1 FROM ${statementImportMembers} left_member
+    JOIN ${statementImportMembers} right_member ON right_member."importId" = left_member."importId"
+    WHERE left_member."statementRowId" = a.id AND right_member."statementRowId" = b.id
+  )`;
   const sameBatchGate = input.includeSameBatch
     ? sql``
-    : sql`AND count(DISTINCT "batchId") > 1`;
+    : sql`HAVING bool_or(${unsharedPair})`;
 
   // One extra group so `truncated` reports the cut rather than implying the
   // sweep came back clean.
@@ -651,19 +685,20 @@ export async function findStatementRowDrift(
     importFingerprint: string;
     createdAt: StatementRowSqlValue;
   }>(sql`
-    WITH drifted AS (
-      SELECT "source", "accountDescriptor", "statementDate", "providerAmount",
-             min("createdAt") AS "firstSeen",
-             count(DISTINCT "batchId") > 1 AS "crossBatch"
-      FROM "StatementRow"
-      WHERE ${where}
-      GROUP BY "source", "accountDescriptor", "statementDate", "providerAmount"
-      -- No count(DISTINCT "externalId") gate: the partial unique on
-      -- (source, externalId) already makes two live rows two identities.
-      HAVING count(*) > 1 ${sameBatchGate}
-      -- Cross-batch first: those are the drift, and a bounded sweep must not
-      -- spend its limit on coincidences.
-      ORDER BY count(DISTINCT "batchId") > 1 DESC, "firstSeen" DESC
+    WITH eligible AS (
+      SELECT id, source, "accountDescriptor", "statementDate", "providerAmount", "createdAt"
+      FROM "StatementRow" WHERE ${where}
+    ), drifted AS (
+      SELECT a.source, a."accountDescriptor", a."statementDate", a."providerAmount",
+             min(least(a."createdAt", b."createdAt")) AS "firstSeen",
+             bool_or(${unsharedPair}) AS "crossBatch"
+      FROM eligible a
+      JOIN eligible b ON a.id < b.id
+        AND a.source = b.source AND a."accountDescriptor" = b."accountDescriptor"
+        AND a."statementDate" = b."statementDate" AND a."providerAmount" = b."providerAmount"
+      GROUP BY a.source, a."accountDescriptor", a."statementDate", a."providerAmount"
+      ${sameBatchGate}
+      ORDER BY "crossBatch" DESC, "firstSeen" DESC
       LIMIT ${probe}
     )
     SELECT "StatementRow"."source",
@@ -882,8 +917,9 @@ export async function listStatementImports(db: Database, source?: string) {
       createdAt: statementImport.createdAt,
       updatedAt: statementImport.updatedAt,
       rowCountStored: sql<number>`(
-        SELECT count(*)::int FROM "StatementRow" sr
-        WHERE sr."batchId" = "StatementImport"."id" AND sr."deletedAt" IS NULL
+        SELECT count(*)::int FROM ${statementImportMembers} member
+        JOIN "StatementRow" sr ON sr.id = member."statementRowId" AND sr."deletedAt" IS NULL
+        WHERE member."importId" = "StatementImport"."id"
       )`,
     })
     .from(statementImport)
