@@ -313,7 +313,7 @@ bytes. The seed unpauses image processing, which a fresh database starts paused.
 A step can wait for background rows (`ready`) or a live run state
 (`awaitRun`: `awaiting_approval` or `completed`) before acting. A run that
 settles anywhere else fails at once with its last progress and failed
-operations. The order journey imports from its seeded Email and opens the resulting Run link. The photo journey checks that Start grouping dispatches its Run before waiting for proposals; an undispatched Run must not claim grouping is underway.
+operations. The order journey imports from its seeded Email and opens the resulting Run link. The photo journey checks that Start grouping dispatches its Run before waiting for proposals; an undispatched Run must not claim grouping is underway. Before dispatch, browser E2E checks the enabled Start grouping action.
 
 Final assertions read the imported Purchase, its expense total,
 the imported order candidate, or the committed photo groups.
