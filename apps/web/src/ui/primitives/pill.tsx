@@ -19,8 +19,6 @@ const pillVariants = cva(
   },
 );
 
-export type PillMode = NonNullable<VariantProps<typeof pillVariants>["mode"]>;
-
 /** Shared compact chip geometry for saved values and pending suggestions. */
 function Pill({
   className,
