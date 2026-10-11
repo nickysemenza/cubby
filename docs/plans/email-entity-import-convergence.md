@@ -1,15 +1,49 @@
 # Email entity and import convergence
 
-Status: Implementation in progress; member confirmed shared understanding and
-authorized implementation through deployment and the accuracy-report stop point.
-No production action has run for this plan.
+Status: Core implementation and subsequent fixes shipped through merged PRs
+[#1866](https://github.com/nickysemenza/cubby/pull/1866),
+[#1867](https://github.com/nickysemenza/cubby/pull/1867),
+[#1868](https://github.com/nickysemenza/cubby/pull/1868),
+[#1869](https://github.com/nickysemenza/cubby/pull/1869) and
+[#1870](https://github.com/nickysemenza/cubby/pull/1870).
+The replacement Email, classification-observation and source-order-observation
+tables are live; retired Run target/fact/candidate tables are absent. Do not
+replay the completed cutover or reconstruct unknown historical associations.
+Burn-down and acceptance remain in progress.
+
+## Current acceptance work
+
+- Reconcile the evidence-backed financial and findings worklist through public
+  writers, preserving signed refunds, claims, party cents and stock. A healthy
+  detector count does not establish source acceptance of an older audit.
+- Finish independent acceptance of the approved Product scope, including
+  exact variants, retained Sources, image provenance and unresolved naming.
+- Deliver the reviewed image-provenance, bounded HTML evidence, historical
+  prepared-candidate reader and provider account-mask corrections; distinguish
+  parent-branch merges from verified production deployment.
+- Correct statement-import coverage across overlapping exports and preserve
+  original occurrence evidence. An incomplete first-owning-batch count does
+  not prove source rows are missing; do not lower declared counts or replay
+  new identities to silence the detector.
+- Verify actual continuous new-mail processing, ownership, classification-only
+  routing, retained history and bounded budget accounting. Model estimates are
+  distinct from provider billing and independently measured accuracy.
+- Present historical restart readiness before requesting a new applicable
+  authorization. Historical coverage and Pi import remain separate gates.
+
+The current member-directed closeout excludes CI and installed-client
+acceptance. This scope does not declare those checks passed or replace the
+repository's general validation policy.
 
 The behavior decisions live in [ADR 0011](../adr/0011-email-as-a-first-class-entity.md)
 and [ADR 0012](../adr/0012-import-convergence-through-burn-down.md).
 The README's final diagram depicts the target. This file owns execution order,
 regression boundaries and delivery evidence; retire it when the work is complete.
 
-## Ownership and sequence
+## Original ownership and implementation sequence
+
+The sequence below records the implementation brief; current work follows the
+acceptance list above rather than restarting these completed stages.
 
 Root keeps the current main session and owns architecture, schema/binding spine,
 migrations, generation, integration, broad validation and production actions.
@@ -159,14 +193,17 @@ Update the owning validation docs: client verification is automated only, with
 Apple host tests, simulator build, TestFlight build and server version-gate tests;
 manual device verification is never a requirement.
 
-Root runs `pnpm check:all`, `pnpm test:unit` and full `pnpm test:postgres` before
-each push, plus required affected acceptance checks. Read failure summaries
-instead of rerunning an unchanged failing tier. Open one ready PR and immediately
-link it to T3. Obtain independent Sol/high review and Astra/high code plus
-production-migration review; Fable/high only resolves a material disagreement.
-Watch through T3, verify all required checks on the exact final head, then merge.
+Follow [agent validation](../agents/validation.md) for focused behavioral checks
+and delivery, and [model routing](../agents/model-routing.md) for independent
+review. Reuse unchanged successful checks and read failure summaries rather
+than rerunning a tier. Link every worked PR to T3; report unrun checks and
+distinguish merge state from production readback.
 
-## Production order and stop conditions
+## Historical cutover order and stop conditions
+
+This section records the completed cutover sequence. It is not authorization
+to repeat production migrations, recovery or historical discovery. Remaining
+work follows the current acceptance scope above and current member gates.
 
 Root is the exclusive migration owner. The member authorizes a breaking cutover
 but explicitly requests leaving production services running. Do not toggle
