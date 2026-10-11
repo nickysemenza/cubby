@@ -202,6 +202,11 @@ historical Runs stay readable through generic reports.
   before every paid transmission; prefer subscription inference. Populated
   fields and terminal Runs do not establish verification.
 
+- 🟢 **Cover the `replace_aggregate_line` fix path.** No integration test
+  applies an audit-proposed aggregate replacement; the first exact-identity
+  guard broke its `distinctFrom` carry unnoticed. Add a commit → finding →
+  approve case whose line carries a Distinct-from decision.
+
 - ⏳ **Measure paid fallback recovery.** A bounded live attempt saw the exact
   quota refusal inside an HTTP 200 stream; the shared router now qualifies it
   before admission, but live paid recovery after that refusal is unproven.
