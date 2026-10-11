@@ -427,7 +427,9 @@ so a workspace fragment cannot falsely satisfy a restart navigation check. Photo
 respond to their own width so the workspace rail cannot collapse identity
 evidence into a zero-width column. Apple
 retains its native detail renderer; the Run evidence pilot renders only the
-shared Evidence group in its isolated hosted surface.
+shared Evidence group in its isolated hosted surface. Durable transcript and
+structured logs are available for every Run purpose; purchase-import predicates
+apply only to its workflow reports, not to shared evidence.
 Workspace choices are presentation-only literal unions, separate from persisted
 SQL enum vocabulary; adding a view must not expand the database enum lint vocabulary.
 

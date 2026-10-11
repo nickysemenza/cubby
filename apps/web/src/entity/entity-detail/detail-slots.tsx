@@ -303,8 +303,8 @@ export const detailSlots = {
         })),
       isImportRun,
     ),
-    "import-timeline": runReportSlot("import-timeline", isImportRun),
-    "import-debug-log": runReportSlot("import-debug-log", isImportRun),
+    "import-timeline": runReportSlot("import-timeline"),
+    "import-debug-log": runReportSlot("import-debug-log"),
     "photo-batch": slot(
       () =>
         import("~/app/purchases/purchase-import-run-detail").then((m) => ({

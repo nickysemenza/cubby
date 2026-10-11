@@ -45,6 +45,13 @@ photo group and its Product, and exactly the selected location and two plantings
 ends it) for manual driving. Scroll to a target by counting from `scroll bottom`, not with
 `--until` on a lazily loaded detail page.
 
+`pnpm test:e2e:sim -- --qa --journey qa-run-evidence` checks the sole hosted
+Run evidence sheet against the synthetic approval Run: enter from the native
+Runs catalog, load its durable operation, dismiss, reopen and load it again.
+The return check uses the native evidence button, since Run has no edit action.
+This journey does not establish Retry, logout, host switching, auth/update gates,
+or record handoff and refresh acceptance.
+
 `pnpm test:e2e:sim -- --qa --journey qa-entity-table --video` checks the generic
 Product List/Table switch, sortable headers, column visibility, and record
 navigation against the same synthetic QA world. The focused sort-model tests
