@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -79,6 +79,80 @@ function renderDetail({
 }
 
 describe("DetailSections ledger", () => {
+  it("returns to Overview when the last Work section becomes empty", async () => {
+    function WorkResult() {
+      const [empty, setEmpty] = useState(false);
+      useSectionVisible(!empty);
+      return <button onClick={() => setEmpty(true)}>Resolve empty work</button>;
+    }
+    renderDetail({
+      detailSections: [
+        ...sections,
+        {
+          id: "work-result",
+          title: "Work result",
+          icon: CircleIcon,
+          placement: "full",
+          workspace: "work",
+          content: <WorkResult />,
+        },
+      ],
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Work" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Resolve empty work" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("tab", { name: "Work" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(await screen.findByText("Story content")).toBeVisible();
+  });
+  // A long evidence report must not dominate initial reading; opening its
+  // workspace and then returning must keep an in-progress input draft.
+  it("separates work and evidence while retaining a workspace draft", async () => {
+    renderDetail({
+      detailSections: [
+        ...sections,
+        {
+          id: "source-events",
+          title: "Source events",
+          icon: CircleIcon,
+          placement: "full",
+          workspace: "evidence",
+          content: <p>Complete source history</p>,
+        },
+        {
+          id: "review",
+          title: "Review",
+          icon: CircleIcon,
+          placement: "full",
+          workspace: "work",
+          content: <input aria-label="Review note" defaultValue="" />,
+        },
+      ],
+    });
+    expect(await screen.findByText("Story content")).toBeVisible();
+    expect(screen.queryByText("Complete source history")).not.toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Work" }));
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Review note" }),
+      {
+        target: { value: "Keep this draft" },
+      },
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Evidence" }));
+    expect(await screen.findByText("Complete source history")).toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Work" }));
+    expect(
+      await screen.findByRole("textbox", { name: "Review note" }),
+    ).toHaveValue("Keep this draft");
+  });
   it("keeps supporting details out of Overview and preserves their hash targets", async () => {
     renderDetail({
       detailSections: [
@@ -98,7 +172,7 @@ describe("DetailSections ledger", () => {
     fireEvent.click(screen.getByRole("button", { name: "More details" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Similar products" }));
     expect(await screen.findByText("Similarity evidence")).toBeVisible();
-    expect(screen.queryByText("Story content")).not.toBeInTheDocument();
+    expect(screen.getByText("Story content")).not.toBeVisible();
     expect(harness.router.state.location.hash).toBe("fits-with");
     fireEvent.click(screen.getByRole("tab", { name: "Overview" }));
     expect(await screen.findByText("Story content")).toBeVisible();
@@ -180,7 +254,7 @@ describe("DetailSections ledger", () => {
     );
     fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
     expect(screen.getByText("Full relationships")).toBeVisible();
-    expect(screen.queryByTestId("rail-photo")).toBeNull();
+    expect(screen.getByTestId("rail-photo")).not.toBeVisible();
   });
 
   it("lets a page-owned relationship section replace the generic explorer", async () => {

@@ -42,7 +42,7 @@ test("product category and identifiers stay readable in cards and a plant's rela
   await expect(card.getByText(categoryName)).toBeVisible();
   await expect(card.locator("pre")).toHaveCount(0);
 
-  await gotoAuthenticatedPage(page, `/plants/${plant.id}`);
+  await gotoAuthenticatedPage(page, `/plants/${plant.id}#work`);
   const row = page
     .locator("#products")
     .getByRole("link", { name: productName, exact: true })

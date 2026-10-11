@@ -184,6 +184,7 @@ final class AppModel {
     /// request-timing strip reflects requests made through any of them (the base client and, after
     /// a base-URL change, its replacement).
     let requestTrace = RequestTrace()
+    let nativeRunEvidence = NativeRunEvidenceContext()
     var lastError: String?
     /// Bumped by every write the app makes to an entity; a list or detail showing one of
     /// `entityMutationKeys` refreshes on the next revision (`.task(id:)` on the views).
@@ -197,6 +198,7 @@ final class AppModel {
     var baseURL: URL {
         didSet {
             guard baseURL != oldValue else { return }
+            nativeRunEvidence.reset()
             Self.persistBaseURL(baseURL)
             Diagnostics.setBaseURL(baseURL)
             rebindClients()
@@ -408,6 +410,7 @@ final class AppModel {
     }
 
     func signOut() async {
+        nativeRunEvidence.reset()
         stopAutomaticPhotoMatching()
         UserDefaults.standard.set(false, forKey: Self.photoMatchingPendingKey)
         #if os(iOS)

@@ -126,7 +126,7 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
   });
   await linkProducts(page, purchase.id, [mixed.id, linked.id]);
 
-  await gotoAuthenticatedPage(page, `/purchases/${purchase.id}`);
+  await gotoAuthenticatedPage(page, `/purchases/${purchase.id}#work`);
   const products = page.locator("#products");
   await expect(products.getByRole("heading", { level: 2 })).toHaveText(
     /Products\s*5/,
@@ -182,6 +182,7 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
   );
   await page.getByRole("link", { name: `${name} mixed`, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/products/${mixed.id}`));
+  await page.getByRole("tab", { name: "Work", exact: true }).click();
   const purchases = page.locator("#purchases");
   await expect(purchases.getByRole("heading", { level: 2 })).toHaveText(
     /Purchases\s*1/,
@@ -217,7 +218,7 @@ test("phone relationship rows keep planned and explicit link evidence separate",
     future: true,
   });
   await linkProducts(page, purchase.id, [product.id]);
-  await gotoAuthenticatedPage(page, `/purchases/${purchase.id}`);
+  await gotoAuthenticatedPage(page, `/purchases/${purchase.id}#work`);
   const products = page.locator("#products");
   await expect(products.getByText("Linked", { exact: true })).toBeVisible();
   await expect(products.getByText("Planned", { exact: true })).toBeVisible();

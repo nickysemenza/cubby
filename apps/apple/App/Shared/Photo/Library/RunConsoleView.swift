@@ -92,8 +92,11 @@ struct RunConsoleView: View {
                 LoadingIndicator(label: "Loading run")
             }
         }
+        .fieldGuideDetailDensity()
+        .fieldGuideScreen()
         .accessibilityIdentifier("run.console")
         .navigationTitle(descriptor.singular)
+        .toolbar { ToolbarItem { RunEvidenceLink(runID: runID) } }
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif

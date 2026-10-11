@@ -454,7 +454,7 @@ for (const statementFirst of [true, false]) {
           [productUrl]: `<title>${names.productName}</title><main>${names.productName} SKU ${sku} ASIN ${asin} USD 42.50</main>`,
         },
       });
-      await gotoAuthenticatedPage(page, `/runs/${run.publicId}`);
+      await gotoAuthenticatedPage(page, `/runs/${run.publicId}#work`);
       const approve = page.getByRole("button", {
         name: "Approve and import",
         exact: true,
@@ -544,6 +544,7 @@ for (const statementFirst of [true, false]) {
       .and(page.locator(`a[href="${originalMailUrl}"]`));
     await expect(originalMail).toBeVisible();
     await expect(originalMail).toHaveAttribute("href", originalMailUrl);
+    await page.getByRole("tab", { name: "Work", exact: true }).click();
     await expect(
       page.getByRole("link", { name: names.productName, exact: true }).first(),
     ).toBeVisible();

@@ -36,7 +36,7 @@ test("approves two selected photo groups with one reviewed batch action", async 
   );
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
   const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
@@ -78,7 +78,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
 
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
 
@@ -93,7 +93,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     actions.getByRole("button", { name: "Start grouping" }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Overview", exact: true }).click();
+  await page.getByRole("tab", { name: "Work", exact: true }).click();
   if (recordingVideo) await page.waitForTimeout(1_500);
   const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
     data: { runId: seed.runId, groups: seed.groups },
@@ -211,7 +211,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await page
     .getByRole("button", { name: "Start new run with same inputs" })
     .click();
-  await expect(page).not.toHaveURL(new RegExp(`/runs/${seed.runId}$`));
+  await expect(page).not.toHaveURL(new RegExp(`/runs/${seed.runId}(?:#|$)`));
   const restartedId = new URL(page.url()).pathname.split("/").at(-1);
   expect(restartedId).toBeTruthy();
   const restarted = await page.request.get(
@@ -249,7 +249,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   };
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
   const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
@@ -408,7 +408,7 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
   ];
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
   const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
@@ -537,7 +537,7 @@ test("distinguishes blocking description failure from optional cutout failure", 
   );
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
   const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
@@ -615,7 +615,7 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
   ];
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
   const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
@@ -629,9 +629,11 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
     .click();
   await expect(page.getByText(/OCR: SKU FW-7744/)).toBeVisible();
   const comparison = page.getByRole("region", { name: "Product comparison" });
-  await expect(
-    comparison.getByText("Exact label identifier: FW-7744"),
-  ).toBeVisible();
+  const exactIdentifier = comparison.getByText(
+    "Exact label identifier: FW-7744",
+  );
+  await exactIdentifier.scrollIntoViewIfNeeded();
+  await expect(exactIdentifier).toBeVisible();
   const wrongRow = comparison
     .getByRole("article")
     .filter({ hasText: "ForgeWear work boots tan size 9" });

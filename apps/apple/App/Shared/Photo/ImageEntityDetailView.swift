@@ -59,6 +59,7 @@ struct ImageEntityDetailView: View {
                 LoadingIndicator(label: "Loading image")
             }
         }
+        .fieldGuideDetailDensity()
         .navigationTitle(detail?.filename ?? "Image")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

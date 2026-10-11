@@ -190,7 +190,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
         [productUrl]: `<main>${orderNames.productName} SKU ${sku} USD42.50</main>`,
       },
     });
-    await gotoAuthenticatedPage(page, `/runs/${run.publicId}`);
+    await gotoAuthenticatedPage(page, `/runs/${run.publicId}#work`);
     const approve = page.getByRole("button", {
       name: "Approve and import",
       exact: true,

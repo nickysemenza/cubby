@@ -92,6 +92,16 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `AppModel.handle`, which reports once). Sentry is an app-target dependency only — CubbyKit
   never imports it.
 
+## Hosted pilot boundary
+
+Only Run evidence (transcript, logs, AI usage) is hosted in `RunEvidenceView`.
+Keep every native entity detail renderer and coverage test. Run overview, actions,
+photo review, and routing remain native. The additive pilot does not bump native
+compatibility. Its browser-session POST is the explicit exception to generated
+entity operation routes; never send the bearer to WebKit or ambient cookies to
+bootstrap. Use a fresh nonpersistent store, exact-origin main-frame bridge checks,
+and captured credential revisions across every await. See [DESIGN.md](DESIGN.md#run-evidence-pilot).
+
 ## Language and style
 
 - Swift 6 strict concurrency (`swiftLanguageModes: [.v6]`). No unchecked `Sendable` escapes without

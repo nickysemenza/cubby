@@ -64,11 +64,11 @@ const formatValue = (value: number, format: "money" | "count" | "text") =>
 
 function Stats({ block }: { block: Extract<ReportBlock, { kind: "stats" }> }) {
   return (
-    <Row wrap gap="md" className="justify-between">
+    <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
       {block.figures.map((figure) => (
-        <Stack key={figure.label} gap="tight">
-          <span className="my-0 eyebrow">{figure.label}</span>
-          <span
+        <div key={figure.label} className="flex items-baseline gap-2">
+          <dt className="text-xs text-muted-foreground">{figure.label}</dt>
+          <dd
             className={cn(
               "font-mono text-sm tabular-nums",
               figure.tone && TONE_TEXT[figure.tone],
@@ -79,10 +79,10 @@ function Stats({ block }: { block: Extract<ReportBlock, { kind: "stats" }> }) {
               : figure.value == null
                 ? "—"
                 : formatValue(figure.value, figure.format)}
-          </span>
-        </Stack>
+          </dd>
+        </div>
       ))}
-    </Row>
+    </dl>
   );
 }
 

@@ -11,6 +11,12 @@ this requirement. For `.tsx` changes, choose browser E2E when it observes
 the behavior; use the UI or preview tier for distinct rendering or layout
 failures. Keep pure logic imported by node tests in alias-free `.ts` files.
 
+Detail renderer tests select a section's hash before asserting its accessible
+content; Overview does not expose Work or Evidence sections. After changing
+test queries, use the web `typecheck` command: `typecheck:app` excludes tests.
+Testing Library role queries use exact string names by default; Playwright's
+`exact` option is not a Testing Library option.
+
 `pnpm test` runs fast unit, UI, contract, and auxiliary tests; `pnpm
 test:postgres` runs the `integration` and `integration-workerd` contract
 projects; `pnpm test:e2e` runs PostgreSQL-backed

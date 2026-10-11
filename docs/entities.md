@@ -412,10 +412,31 @@ operation does not declare. A server `*Preview` query supplies any
 delete), so web and native show the same verdict. A list/multi-select verb
 (`bulkEdit`) is `ownedElsewhere`, not a plan.
 
+A section or slot can declare `workspace: "overview" | "work" | "evidence"`
+for the browser Work surface. Relations default to Work and timelines to
+Evidence; other sections default to Overview. The browser groups share a
+compact adaptive index and preserve draft state when switching views. Hidden
+workspace bodies mount after hydration: streaming their shared report queries
+alongside the initial workspace can leave its lazy sections pending until a tab
+is clicked. The persisted-counts Run E2E guards initial loading without that
+interaction. Workspace selection starts
+in Overview on the server and initial client render, then follows the fragment
+after commit because HTTP does not carry URL fragments. Browser journeys select
+Work before using relation actions and wait for record navigation by pathname,
+so a workspace fragment cannot falsely satisfy a restart navigation check. Photo comparison grids
+respond to their own width so the workspace rail cannot collapse identity
+evidence into a zero-width column. Apple
+retains its native detail renderer; the Run evidence pilot renders only the
+shared Evidence group in its isolated hosted surface.
+Workspace choices are presentation-only literal unions, separate from persisted
+SQL enum vocabulary; adding a view must not expand the database enum lint vocabulary.
+
 `detail.overviewSections` optionally selects which section IDs appear in the
 Overview. Other sections remain available through their existing section links;
 the compiler emits independent `overview` metadata for web and Swift. Omission
-preserves the default of including every section.
+preserves the compiler default of including every section. Browser workspace
+grouping takes precedence: Work and Evidence sections remain reachable in their
+group rather than appearing in Overview.
 
 Relation tables are opt-out. Every `many` relation on a generic detail page
 renders a table: a declared `relation` section, or one the compiler derives

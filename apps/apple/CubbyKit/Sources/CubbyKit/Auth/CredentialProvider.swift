@@ -22,6 +22,12 @@ public actor CredentialProvider {
         currentState()?.credential
     }
 
+    /// Detects account changes even when sign-in reuses the same bearer token.
+    public func authenticationRevision() -> Int {
+        _ = currentState()
+        return revision
+    }
+
     /// The session token the hand-built socket and browser-bridge requests carry; an API key
     /// cannot open them.
     func bearerToken() throws -> String {
