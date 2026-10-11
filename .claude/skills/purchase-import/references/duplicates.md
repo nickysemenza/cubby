@@ -28,15 +28,23 @@ refusals rather than changing identifiers to force a merge.
 
 ## Expenses
 
-Expense has no merge operation. Retire only the redundant booking with
-`entity.delete expense` once original evidence proves that the same money is
-fully represented by the survivor's line or itemized lines. A legacy lump and
+Expense has no merge operation. Direct `entity.delete expense` cleanup is
+limited to redundant Expenses with no ledger source claims and no other
+source-owned references requiring transfer. Read the full record and incoming
+delete connections first, and establish from original evidence that the same
+money is fully represented by the survivor's line or itemized lines. A legacy lump and
 an imported itemization qualify only when their common source is established,
 the full signed sum agrees, and attribution is settled. Preserve project,
 party cents, source evidence and any real payment or quantity history through
-the supported writers before retiring the duplicate. Source-backed financial
-changes use reviewed reconciliation when the writer requires it; a refusal
-is not permission to strip a source claim or bypass the guard.
+the supported writers before retiring the duplicate.
+
+For a claimed or otherwise source-owned Expense, use an atomic reviewed
+reconciliation or transfer that preserves the claim and survivor linkage in
+the same transaction. `entity.delete expense` retires its ledger source claims;
+deleting first and reattaching later leaves an interruption window. If no
+supported writer can preserve the required evidence atomically, leave the
+duplicate open and report the missing operation. Never clear a claim, delete
+and recreate it in separate requests, or bypass a refusal to force cleanup.
 
 Afterward, read back every affected record. Verify the intended duplicate is
 retired or redirects to its survivor, retained sources and links survive,
