@@ -33,6 +33,7 @@ const baseRun: RunDetail = {
   skipped: 1,
   failureCode: null,
   notes: null,
+  retirementReason: null,
   parentRunId: null,
   cause: null,
   attempt: null,
