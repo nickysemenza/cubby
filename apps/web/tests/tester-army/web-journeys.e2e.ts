@@ -33,5 +33,10 @@ for (const journey of selectedJourneys(journeys, "web"))
         },
         setViewport: (size) => browser.setViewport(size),
       });
+      if (
+        process.env.GITHUB_ACTIONS === "true" &&
+        process.env.TESTER_ARMY_CI_EVIDENCE === "1"
+      )
+        await app.screenshot("verified-outcome");
     },
   );

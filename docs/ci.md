@@ -10,10 +10,13 @@ deploys every production Worker, including after a documentation-only change;
 deployment never waits for post-merge CI.
 
 `ci.yaml` holds only those checks, so every job in a PR's run graph gates it.
-The long native and Tester Army journeys live in `e2e-journeys.yaml`: manual
-dispatch with a `journey` input, a PR label (`simulator-e2e`, `tester-army`,
-`tester-army:ios`, `tester-army:import`) that runs it on that PR, and the
-weekly Tester Army import run.
+Tester Army background coverage lives in `e2e-journeys.yaml`: standard web on
+same-repository code PRs, iOS for native/shared/backend changes, and coupled
+imports for affected import/shared/backend changes. All remain informational,
+with verified action replay and synthetic evidence plus updated PR comments.
+The weekly matrix disables action replay. Manual dispatch and PR labels can
+select additional journeys; deterministic simulator journeys stay optional.
+See [Tester Army](tester-army.md) for routing, replay, evidence and timing limits.
 
 ## Cache keys and the remote cache
 

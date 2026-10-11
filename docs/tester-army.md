@@ -1,6 +1,6 @@
 # Tester Army trial
 
-The manual web and iOS lanes run one shared catalog of synthetic journeys.
+The background web and iOS lanes run one shared catalog of synthetic journeys.
 Agent steps navigate and edit; exact UI text and database read-backs decide
 correctness. Existing deterministic suites remain the merge gate.
 
@@ -213,20 +213,43 @@ successful preparation still capture the UI tree.
 A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.
 
-Dispatch the **E2E journeys** workflow (`e2e-journeys.yaml`) with `journey` set
-to `tester-army-web`, `tester-army-ios`, `tester-army-both`, or
-`tester-army-import`. The web lane runs `--harness standard`; the import lane
-runs `--harness coupled`, and also runs weekly on `main` (Mondays 09:17 UTC).
-On a PR, add the `tester-army` (web), `tester-army:ios` or `tester-army:import`
-label instead: the lane runs on the PR head as an informational check and
-again on each push while the label stays.
-These optional jobs do not run on PRs and do not replace the required checks.
+The **E2E journeys** workflow (`e2e-journeys.yaml`) runs an informational
+trial in parallel with required checks. Same-repository code PRs run all
+standard web journeys. Native, shared package, backend/API/contract, tooling,
+workflow and root configuration changes also run iOS; import/vendor/run changes
+and shared/backend changes also run the coupled import journeys. Prose-only PRs
+and fork PRs do not automatically call paid models. Changed-file routing lives
+in `scripts/lib/tester-army-routing.ts`; renamed files include their old paths.
+Labels `tester-army`, `tester-army:ios` and `tester-army:import` force their lane
+on the PR source revision and subsequent pushes. Label events retain affected
+automatic coverage rather than canceling it without replacement.
+
+No Tester Army lane is required for merge; results can arrive after merge.
+This removes a direct merge wait, but runner contention can still affect other
+checks. Successful hosted timings, costs and reliability must be measured in
+this trial before promoting any journey to a required check. Current lane
+ceilings are 25 minutes for web, 30 for imports and 40 for iOS, including setup;
+these are limits, not measured completion times. The standard catalog's 20-second
+pacing alone adds about 6 minutes 40 seconds per 20-journey engine.
+
+PR runs enable verified action replay, with separate lane/OS/lockfile caches.
+Each completed run saves a unique recording snapshot even after a journey
+failure, preserving newly verified actions and invalidations. Replay verifies
+the current end state and hands off to live inference when needed; it does not
+reuse a previous test verdict. GitHub scopes PR caches mainly to updates of that
+PR. Scheduled runs disable action replay and do not seed the PR cache.
+
+Every Monday at 09:17 UTC the full web/iOS/import matrix runs on `main` without
+action replay. Manual dispatch accepts `tester-army-web`, `tester-army-ios`,
+`tester-army-both`, `tester-army-import` or `tester-army-all`. The deterministic
+simulator journeys remain manual or label-triggered. Existing required checks
+remain the merge gate.
 Run each engine three times for the live acceptance sample.
 
 Append `-- --wrong` to either journey command to deliberately expect wrong
 database values; it must fail the exact assertion. For a local replay comparison,
 run the same command twice with `-- --replay`. This enables Tester Army's local
-read-write cache (`apps/web/.e2e/cache/`); normal runs disable it. Compare the
+read-write cache (`apps/web/.e2e/cache/`); local runs without this flag disable it. PR CI enables it automatically. Compare the
 resulting summaries for model calls, tokens, timings, replay hits and handoffs.
 Each run seeds fresh records, so every step passes the journey's seeded
 shortcodes as `unique()` params (`replayParams`): the SDK otherwise reads
@@ -341,7 +364,8 @@ replay command, status and phases. Dirty-source runs are not replayable evidence
 `apps/web/.e2e/runs/<lane>/<run>/` retains local SDK reports, screenshots,
 traces and logs for diagnosis. The SDK requires its output inside the web
 project; the harness copies only a validated summary to the run bundle.
-CI uploads only the sanitized bundle files, with seven-day retention. The
+CI uploads the summary/provenance bundle and the allowlisted synthetic
+evidence described below, with seven-day retention. The
 summary includes only fixed synthetic case names and numeric usage/replay
 metrics; credentials and fixture identifiers are excluded. Estimated cost may
 be absent when the SDK does not report it. Telemetry is disabled.
@@ -350,10 +374,36 @@ Deterministic native replays print validated step counters, command names, and
 elapsed milliseconds for timeout diagnosis. Selector values and session paths
 are excluded from those progress messages.
 Hosted native bundles also include `native-driver-diagnostics.json`: fixed SDK
-startup phase names, cache outcomes, and numeric timings from this run. SDK
-traces remain local to the runner; their arguments, responses, identifiers,
-paths, and raw error text are excluded from the uploaded summary.
+startup phase names, cache outcomes, and numeric timings from this run. Full SDK debug transcripts remain local to the runner. The uploaded numeric
+summary excludes arguments, responses, identifiers, paths and raw error text;
+allowlisted semantic failure traces are separate evidence.
 
 This trial establishes only the synthetic journeys above on Chromium and an
 iOS simulator. It does not establish broader agent reliability or physical
 device behavior.
+
+### Background CI evidence and PR summaries
+
+Synthetic CI enables `TESTER_ARMY_CI_EVIDENCE=1`: each completed journey saves a
+`verified-outcome` screenshot; failed attempts retain screenshots, semantic
+failure traces and failure video. The reporter copies only PNG/video and the
+SDK's `trace.md`/`screen-at-failure.txt`, scrubs credentials from text, rejects
+symlinks and excludes sessions, downloads and full debug transcripts. Native
+video depends on the SDK/device support. These files and a fixed case/attempt
+status projection are uploaded separately under `artifacts/tester-army-evidence/`
+with seven-day retention; the existing sealed run bundle remains the provenance
+record. Use only the disposable synthetic harness for this export.
+
+Each lane updates one bot-owned PR comment and the job summary with its source
+revision, result, journey counts, scenario duration (setup excluded), calls,
+tokens, available estimated cost, replay counts and a link to run artifacts.
+Arbitrary model/case/error text stays out of comments. Missing results are
+incomplete; failed setup remains failed even without installed dependencies.
+Superseded source revisions cannot replace the current PR comment. Manual and
+scheduled runs publish job summaries without PR comments.
+
+Retain a small set of semantic UI journeys over shared primitives and important
+workflows, backed by persisted-state read-backs. Do not grow copy-only or
+per-entity UI assertions. Before deleting an existing deterministic test,
+preserve its named regression in a stronger retained check and record the
+replacement; this trial does not delete existing regression coverage.
