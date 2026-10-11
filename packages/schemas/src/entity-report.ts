@@ -4,7 +4,6 @@ import {
   correctEmailRelevanceInput,
   emailImportInput,
   reclassifyEmailsInput,
-  rerunEmailPreviewInput,
 } from "./email-actions.js";
 
 import {
@@ -233,7 +232,8 @@ const reportNote = z.object({
 export const reportCommandRequest = z.discriminatedUnion("kind", [
   emailImportInput.extend({ kind: z.literal("import-email") }),
   reclassifyEmailsInput.extend({ kind: z.literal("reclassify-email") }),
-  rerunEmailPreviewInput.extend({ kind: z.literal("rerun-email-preview") }),
+  // A preview rerun names the same exact Email and checksum as an import.
+  emailImportInput.extend({ kind: z.literal("rerun-email-preview") }),
   correctEmailRelevanceInput.extend({
     kind: z.literal("correct-email-relevance"),
     // The template carries no reason; the member types it in the command's

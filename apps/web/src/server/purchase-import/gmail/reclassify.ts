@@ -1,13 +1,13 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
+  emailImportInput,
   reclassifyEmailsInput,
   reclassifyEmailsOut,
-  rerunEmailPreviewInput,
   rerunEmailPreviewOut,
+  type EmailImportInput,
   type EmailReclassifyOutcome,
   type ReclassifyEmailsInput,
   type ReclassifyEmailsOut,
-  type RerunEmailPreviewInput,
   type RerunEmailPreviewOut,
 } from "@cubby/schemas/email-actions";
 import {
@@ -354,11 +354,11 @@ export async function reclassifyEmails(
 /** Rerun the cheap extraction preview for one related, retained Email. */
 export async function rerunEmailPreview(
   db: Database,
-  rawInput: RerunEmailPreviewInput,
+  rawInput: EmailImportInput,
   actor: ActorContext,
   ports: { choose?: EmailCandidateChoice } = {},
 ): Promise<RerunEmailPreviewOut> {
-  const input = rerunEmailPreviewInput.parse(rawInput);
+  const input = emailImportInput.parse(rawInput);
   const [email] = await ownedEmails(db, [input.id], actor);
   if (!email || email.checksum !== input.expectedChecksum)
     throw new Error("Email evidence changed; refresh before rerunning.");

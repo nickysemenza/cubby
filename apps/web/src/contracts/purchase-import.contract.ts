@@ -15,7 +15,6 @@ import {
   correctEmailRelevanceOut,
   reclassifyEmailsInput,
   reclassifyEmailsOut,
-  rerunEmailPreviewInput,
   rerunEmailPreviewOut,
 } from "@cubby/schemas/email-actions";
 import { entityReportOut } from "@cubby/schemas/entity-report";
@@ -100,7 +99,7 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     invalidates: ["email", "runOnly"],
   }),
   emailPreviewRerun: mutation({
-    input: rerunEmailPreviewInput,
+    input: emailImportInput,
     output: rerunEmailPreviewOut,
     native: "Rerun one Email's extraction preview",
     invalidates: ["email", "runOnly"],

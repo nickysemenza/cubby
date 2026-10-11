@@ -92,7 +92,6 @@ export const reclassifyEmailsOut = z
 export type ReclassifyEmailsInput = z.infer<typeof reclassifyEmailsInput>;
 export type ReclassifyEmailsOut = z.infer<typeof reclassifyEmailsOut>;
 
-export const rerunEmailPreviewInput = emailImportInput;
 export const rerunEmailPreviewOut = z
   .object({
     runId: runShortcode,
@@ -100,5 +99,4 @@ export const rerunEmailPreviewOut = z
     reason: z.string().nullable(),
   })
   .strict();
-export type RerunEmailPreviewInput = z.infer<typeof rerunEmailPreviewInput>;
 export type RerunEmailPreviewOut = z.infer<typeof rerunEmailPreviewOut>;
