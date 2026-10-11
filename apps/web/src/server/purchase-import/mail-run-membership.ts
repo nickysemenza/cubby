@@ -11,10 +11,19 @@ export async function readMailRunSources(
   runId: RunId,
 ) {
   const [owner] = await client
-    .select({ input: run.input, purpose: run.purpose })
+    .select({
+      input: run.input,
+      purpose: run.purpose,
+      retirementReason: run.retirementReason,
+    })
     .from(run)
     .where(eq(run.id, runId));
   if (owner?.purpose !== "mail_import") return [];
+  // Unrelated-source retirement erased the roster (`input` is NULL) along
+  // with the Email it named; such a Run admits no sources. A live Run with a
+  // missing roster still fails the parse below.
+  if (owner.retirementReason === "unrelated_source" && owner.input === null)
+    return [];
   const frozen = mailResearchRunInput.parse(owner.input).sources;
   const messages = await client
     .select()

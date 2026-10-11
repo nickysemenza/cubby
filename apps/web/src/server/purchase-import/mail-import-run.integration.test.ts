@@ -1,5 +1,5 @@
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, runShortcode } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -14,6 +14,9 @@ import {
   run,
   runOperation,
 } from "~/server/db/schema";
+import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { callMcpTool, kernelRequestContext } from "~/server/mcp/mcp-test-utils";
+import { createMcpServer } from "~/server/mcp/server";
 import {
   databaseForTransaction,
   getDb,
@@ -23,7 +26,9 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
 import { executionAuthorizationFromInput } from "~/server/runs/execution-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
+import { startAgentRunFixture } from "./import-run.fixtures";
 import { startMailImport } from "./mail-import-run";
 import { transferMailRunSources } from "./mail-run-membership";
 import { settleMail } from "./mail-tool";
@@ -632,5 +637,60 @@ describe("mail research admission", () => {
       1,
     );
     expect(await frozenSources(started.runId)).toHaveLength(2);
+  });
+});
+
+// Unrelated-source retirement erased a mail Run's input and progress columns
+// to SQL NULL; run_status must still read that Run.
+describe("retired mail import status", () => {
+  const ctx = withTestDb();
+
+  it("reads a Run whose unrelated-source retirement erased its input and progress", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Retired mail member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const parent = await startAgentRunFixture(ctx.db, {
+      ledgerPartyId: party.id,
+    });
+    const child = await startAgentRunFixture(ctx.db, {
+      ledgerPartyId: party.id,
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        parentRunId: parseEntityId("run", parent.id),
+        status: "needs_review",
+        endedAt: new Date("2026-09-02T18:00:00Z"),
+        imported: 4,
+        retiredAt: new Date("2026-09-02T18:00:00Z"),
+        retirementReason: "unrelated_source",
+        input: null,
+        progress: null,
+        notes: null,
+        agentSessionId: null,
+      })
+      .where(eq(run.id, parseEntityId("run", child.id)));
+    const entityKernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const response = await callMcpTool(
+      createMcpServer(),
+      "imports_read",
+      { action: "run_status", runId: runShortcode.parse(child.publicId) },
+      kernelRequestContext(entityKernel),
+      { entityKernel },
+    );
+
+    expect(response.isError ? response.content : null).toBeNull();
+    expect(response.structuredContent).toMatchObject({
+      runId: child.publicId,
+      purpose: "mail_import",
+      status: "needs_review",
+      retirementReason: "unrelated_source",
+      imported: 4,
+      targets: [],
+    });
   });
 });

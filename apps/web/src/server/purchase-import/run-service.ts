@@ -49,6 +49,7 @@ import {
   type RunRestartInput,
   runProgressEvent,
   runProgressStamp,
+  runRetirementReason,
   runTargetEntityKind,
 } from "@cubby/schemas/run-fields";
 import { parseShortcodeFor } from "@cubby/shared";
@@ -1551,7 +1552,7 @@ export async function loadRunDetail(
       .select({
         id: runTable.id,
         dispatchEventId: runTable.dispatchEventId,
-        retiredAt: runTable.retiredAt,
+        retirementReason: runTable.retirementReason,
         purpose: runTable.purpose,
         progressHistory: runTable.progressHistory,
         actorLedgerPartyShortcode: runTable.actorLedgerPartyShortcode,
@@ -1752,6 +1753,9 @@ export async function loadRunDetail(
     skipped: header.skipped,
     failureCode: header.failureCode,
     notes: header.notes,
+    retirementReason: runRetirementReason
+      .nullable()
+      .parse(run.retirementReason),
     dispatch: {
       eventId: run.dispatchEventId,
       state: header.coordinatorStartedAt
