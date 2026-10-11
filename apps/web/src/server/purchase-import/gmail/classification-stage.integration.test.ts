@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { email as emailTable } from "~/server/db/schema";
+import { email as emailTable, orderMail, run } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -119,19 +119,55 @@ describe("Gmail classification stage and reason", () => {
     });
   });
 
-  it("sends an oversized message straight to the relevance model without asking Jev", async () => {
-    const triage = vi.fn(async () => "related" as const);
+  it("preserves authorized relevance fallback after uncertain bounded triage", async () => {
+    const triage = vi.fn(async () => "uncertain" as const);
     const row = await classify(
       "rule-oversized",
       message("x".repeat(13_000)),
       triage,
       async () => ({ classification: "unrelated" }),
     );
-    expect(triage).not.toHaveBeenCalled();
+    expect(triage).toHaveBeenCalledOnce();
     expect(row).toEqual({
       classification: "unrelated",
       stage: "model",
       reason: "The relevance model classified the message unrelated",
     });
   });
+
+  it.each(["related", "unrelated"] as const)(
+    "retains the full oversized original after a partial %s verdict without admitting import",
+    async (verdict) => {
+      const body =
+        "Your order shipped. " +
+        "x".repeat(40_000) +
+        " Receipt details at the end.";
+      const triage = vi.fn(async (_content: string) => verdict);
+      expect(
+        await classify(`partial-${verdict}`, message(body), triage),
+      ).toMatchObject({
+        classification: verdict === "related" ? "related" : "uncertain",
+        stage: verdict === "related" ? "jev" : "rule",
+      });
+      expect(triage).toHaveBeenCalledOnce();
+      expect(
+        Buffer.byteLength(triage.mock.calls[0]?.[0] ?? ""),
+      ).toBeLessThanOrEqual(12_000);
+      const [retained] = await getDb(ctx.db)
+        .select({ content: orderMail.content, runId: emailTable.runId })
+        .from(emailTable)
+        .innerJoin(orderMail, eq(orderMail.id, emailTable.orderMailId))
+        .where(eq(emailTable.messageId, `partial-${verdict}`));
+      expect(retained).toMatchObject({
+        content: { bodyText: body },
+        runId: null,
+      });
+      expect(
+        await getDb(ctx.db)
+          .select({ id: run.id })
+          .from(run)
+          .where(eq(run.purpose, "mail_import")),
+      ).toEqual([]);
+    },
+  );
 });

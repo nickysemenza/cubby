@@ -151,8 +151,19 @@ describe("read-only Gmail candidate production wiring", () => {
   });
   it("keeps unrelated structured email headers without parsing, model calls, candidate history or retained body", async () => {
     const input = await setup();
+    const completeProvider: GmailProvider = {
+      ...gmail,
+      getMessage: async (id) => ({
+        id,
+        payload: {
+          mimeType: "text/plain",
+          headers: [{ name: "Subject", value: "Synthetic receipt" }],
+          body: { data: Buffer.from(html).toString("base64url") },
+        },
+      }),
+    };
     let calls = 0;
-    const result = await ingestGmailMessages(ctx.db, gmail, {
+    const result = await ingestGmailMessages(ctx.db, completeProvider, {
       ...input,
       triage: async () => "unrelated",
       candidateChoice: async () => {

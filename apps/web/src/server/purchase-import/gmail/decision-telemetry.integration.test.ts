@@ -153,7 +153,7 @@ describe("persisted production Gmail decision telemetry", () => {
       },
     ]);
   });
-  it("keeps rule/context and no-Run caller judgment telemetry unknown without model calls", async () => {
+  it("keeps incomplete-original rules and no-Run caller judgment telemetry unknown without model calls", async () => {
     const f = await fixture();
     const runner = vi.spyOn(choices, "runJevChoice");
     const relevance = vi.spyOn(structured, "runStructuredFeature");
@@ -163,13 +163,13 @@ describe("persisted production Gmail decision telemetry", () => {
         id,
         payload: {
           mimeType: "text/plain",
-          body: { data: Buffer.from("x".repeat(13000)).toString("base64url") },
+          body: { data: Buffer.from("x").toString("base64url"), size: 2 },
         },
       }),
     };
     await ingestGmailMessages(ctx.db, provider, {
       ...f.input,
-      messageIds: ["context-rule"],
+      messageIds: ["incomplete-original-rule"],
     });
     await ingestGmailMessages(ctx.db, f.provider, {
       ...f.input,
