@@ -105,6 +105,9 @@ the shortcode union; use `parseShortcode` when its entity discriminator is
 needed for narrowing. Use `shortcodeSchema(entity)` or `parseShortcodeFor`
 when an ingress field must require a particular entity rather than accept any
 valid prefix. Entity-specific schemas remain the declaration shape.
+Prefix inference applies the union fallback to each input member before
+combining results, so whitespace-wrapped members cannot borrow another
+member's entity brand.
 
 Drizzle raw-`sql` traps: an interpolated column renders **unqualified** on a
 single-table select, so a correlated subquery over the same table silently

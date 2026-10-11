@@ -57,6 +57,15 @@ describe("shortcode", () => {
       expect(() => shortcode(invalid)).toThrow(/Invalid shortcode/);
     }
   });
+
+  it("keeps normalized union members from borrowing another entity's brand", () => {
+    for (const input of ["RUN-4K7M", " EML-4K7M "] as const) {
+      const parsed = shortcode(input);
+      expectTypeOf(parsed).toEqualTypeOf<AnyShortcode>();
+      expectTypeOf(parsed).not.toMatchTypeOf<RunShortcode>();
+      expect(parsed).toBe(input.trim());
+    }
+  });
 });
 
 describe("prefix registry", () => {

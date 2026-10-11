@@ -127,6 +127,14 @@ type ShortcodeFromPrefix<S extends string> = S extends unknown
         }[keyof typeof LEGACY_SHORTCODE_PREFIX]
   : never;
 
+// Fall back per input member so a normalized member cannot disappear from a
+// literal union and leave the result branded as a different entity.
+type ShortcodeFromInput<S extends string> = S extends unknown
+  ? [ShortcodeFromPrefix<S>] extends [never]
+    ? AnyShortcode
+    : ShortcodeFromPrefix<S>
+  : never;
+
 /**
  * Validate a code without repeating its entity. Canonical and legacy literals
  * infer their brand from the generated prefix registry, ignoring case. A runtime
@@ -135,9 +143,7 @@ type ShortcodeFromPrefix<S extends string> = S extends unknown
  */
 export function shortcode<const S extends string>(
   code: S,
-): [ShortcodeFromPrefix<S>] extends [never]
-  ? AnyShortcode
-  : ShortcodeFromPrefix<S>;
+): ShortcodeFromInput<S>;
 export function shortcode(code: string): AnyShortcode {
   const parsed = parseShortcode(code);
   if (!parsed) throw new Error(`Invalid shortcode: ${code}`);
