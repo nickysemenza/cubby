@@ -440,7 +440,9 @@ const firstItem = (input: ActionValue) =>
   commandItems.safeParse(input).data?.commands[0];
 
 /** The tool reserves `action`; a member's discriminator uses `operationAction`. */
-function publishMemberAction(input: z.ZodType): z.ZodType {
+function publishMemberAction<T extends z.core.$ZodType>(
+  input: T,
+): T | z.ZodType {
   if (input instanceof z.ZodObject && "action" in input.shape) {
     if ("operationAction" in input.shape)
       throw new Error(
