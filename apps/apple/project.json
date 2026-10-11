@@ -13,6 +13,9 @@
     // covers CI's toolchain (docs/adr/0009-content-hash-merge-gate.md).
     "appleGate": [
       "{projectRoot}/**/*",
+      // Prose-only docs; copied Markdown fixtures and future resources stay keyed.
+      "!{projectRoot}/{AGENTS,DESIGN,ITERATION,README}.md",
+      "!{projectRoot}/CubbyKit/Sources/CubbyAPI/README.md",
       "{workspaceRoot}/cubby-ffi/**/*",
       "{workspaceRoot}/recipebridge/**/*",
       "{workspaceRoot}/Cargo.{toml,lock}",

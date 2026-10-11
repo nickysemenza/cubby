@@ -9,12 +9,15 @@ gate ([ADR 0009](adr/0009-content-hash-merge-gate.md),
 deploys every production Worker, including after a documentation-only change;
 deployment never waits for post-merge CI.
 
-`ci.yaml` holds only those checks, so every job in a PR's run graph gates it.
-Tester Army background coverage lives in `e2e-journeys.yaml`: standard web on
-same-repository code PRs, opt-in iOS with the `tester-army:ios` label, and coupled
+`ci.yaml` holds the required checks and an optional purchase-import browser lane. The six required status contexts below own the merge gate.
+Tester Army background coverage lives in `e2e-journeys.yaml`: three web smoke
+journeys after successful same-repository PR CI, opt-in iOS with the
+`tester-army:ios` label, and coupled
 imports for affected import/shared/backend changes. All remain informational,
 with verified action replay, SDK evidence uploads and the built-in GitHub
-reporter. One routing step selects the jobs; job conditions only read its outputs.
+reporter. `tester-army-pr.yaml` dispatches the exact still-open PR head after CI
+completes and its six required jobs pass; an optional purchase-import failure does not suppress dispatch. Updates and closure cancel its automatic runs, independently of CI,
+deployment and manual/weekly coverage. One routing step selects the jobs.
 The weekly matrix disables action replay. Manual dispatch and PR labels can
 select additional journeys; deterministic simulator journeys stay optional.
 See [Tester Army](tester-army.md) for routing, replay, evidence and timing limits.
@@ -41,11 +44,16 @@ switch, and the variables that select or reorder tests (`webGate` in
 `apps/web/project.json`); the Rust targets add `rustc -V`, because
 `rust-toolchain.toml` names a floating channel. The Apple targets key on what
 the Apple build reads instead of the whole tree (`appleGate` in
-`apps/apple/project.json`): `apps/apple`, the Rust FFI crates, the check
+`apps/apple/project.json`): `apps/apple` minus its explicitly listed prose docs
+(copied Markdown fixtures remain included), the Rust FFI crates, the check
 scripts and CI configuration, the shared golden vectors, and the generated
 Swift, but no toolchain version, so a Mac pass on a newer Xcode than the
 runner's counts for CI; `pnpm apple check` regenerates before hashing,
-so a web-only change replays the Apple lanes. Workflows that only deploy,
+so a web-only change replays the Apple lanes. Linux validation probes both Apple
+passes using its existing dependency installation before scheduling macOS. A
+miss or unavailable probe runs the corresponding native job; a skipped native
+job satisfies the Apple aggregate only with its successful probe. Nightly runs
+force both native jobs. Workflows that only deploy,
 publish or review (`deploy.yaml`, `apple-testflight.yaml`, the Claude
 workflows) are outside every key. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
 the whole workflow, so every lane, nested Nx calls included, runs uncached on

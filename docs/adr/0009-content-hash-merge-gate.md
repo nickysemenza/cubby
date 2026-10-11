@@ -31,8 +31,15 @@ is roughly ten times the allowance.
   credentials and use only their runner's local cache. A
   result produced locally for the same input hash satisfies the merge gate
   exactly as a CI result does.
-- The Apple lane runs locally through the same Nx target. On a PR cache miss,
-  CI falls back to the hosted macOS run.
+- The Apple lane runs locally through the same Nx target. The existing Linux
+  validation job probes each Apple target after dependency setup. A verified
+  cache hit skips that target's macOS job entirely; a miss or failed probe
+  falls back to hosted macOS, which probes again before native setup. The
+  required Apple aggregate accepts native success or a skipped native job
+  backed by its own verified Linux probe hit.
+- Apple inputs exclude the named root documentation and the explicitly excluded
+  CubbyAPI README. Markdown copied as a test fixture or build resource remains
+  keyed; add new consumed documentation to the inputs when changing the build.
 - Keys leave out platform, Node and Xcode versions, locale, and CI's own
   environment, so a Mac result counts for CI's Linux and macOS lanes. A nightly run executes every lane
   uncached on CI as the backstop for platform-only failures; `main` pushes

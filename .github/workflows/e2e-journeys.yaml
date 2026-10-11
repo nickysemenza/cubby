@@ -1,10 +1,10 @@
 name: E2E journeys
 
 # Informational background journeys; required merge checks remain in ci.yaml.
-# PR updates supersede old runs; merging does not cancel the final revision.
+# PR updates and closure cancel background runs; CI completion dispatches them.
 on:
   pull_request:
-    types: [opened, reopened, labeled, synchronize]
+    types: [opened, reopened, synchronize, closed]
   schedule:
     # Weekly full matrix, with action replay disabled.
     - cron: "17 9 * * 1"
@@ -16,15 +16,22 @@ on:
         options:
           - simulator-search
           - simulator-inputs
+          - tester-army-pr
           - tester-army-web
           - tester-army-ios
           - tester-army-both
           - tester-army-import
           - tester-army-all
         default: simulator-search
+      pull-request:
+        description: PR number for automatic coverage (set by CI dispatcher)
+        type: string
+      revision:
+        description: Exact PR head for automatic coverage
+        type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.journey || 'automatic' }}
+  group: tester-army-${{ inputs.pull-request || github.event.pull_request.number || github.ref }}-${{ inputs.pull-request && 'automatic' || inputs.journey || 'automatic' }}
   cancel-in-progress: true
 
 permissions:
@@ -40,7 +47,7 @@ env:
 jobs:
   route:
     name: Select background journeys
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -49,6 +56,8 @@ jobs:
       imports: ${{ steps.route.outputs.imports }}
       simulator: ${{ steps.route.outputs.simulator }}
       web-matrix: ${{ steps.route.outputs.web-matrix }}
+      ref: ${{ steps.route.outputs.ref }}
+      pull-request: ${{ steps.route.outputs.pull-request }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -60,6 +69,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           TESTER_ARMY_JOURNEY: ${{ inputs.journey }}
+          TESTER_ARMY_PULL_REQUEST: ${{ inputs.pull-request }}
+          TESTER_ARMY_REVISION: ${{ inputs.revision }}
         run: node scripts/tester-army-ci.ts route
 
   simulator-e2e:
@@ -71,7 +82,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ needs.route.outputs.ref }}
+      - name: Set PR context for the GitHub reporter
+        if: needs.route.outputs.pull-request != ''
+        env:
+          TESTER_ARMY_PULL_REQUEST: ${{ needs.route.outputs.pull-request }}
+        run: node -e 'const fs = require("node:fs"); const path = process.env.GITHUB_EVENT_PATH; const event = JSON.parse(fs.readFileSync(path)); event.pull_request = JSON.parse(process.env.TESTER_ARMY_PULL_REQUEST); fs.writeFileSync(path, JSON.stringify(event));'
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
@@ -174,10 +190,11 @@ jobs:
       TESTER_ARMY_AGENT_MODEL: ${{ vars.TESTER_ARMY_AGENT_MODEL }}
       TESTER_ARMY_AGENT_EFFORT: ${{ vars.TESTER_ARMY_AGENT_EFFORT }}
       TESTER_ARMY_LANE: ${{ matrix.lane }}
+      TESTER_ARMY_JOURNEYS: ${{ matrix.journeys }}
       E2E_TELEMETRY_DISABLED: "1"
       TESTER_ARMY_CI_EVIDENCE: "1"
       GITHUB_TOKEN: ${{ github.token }}
-      TESTER_ARMY_REPLAY: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+      TESTER_ARMY_REPLAY: ${{ inputs.pull-request != '' && '1' || '0' }}
     services:
       postgres:
         image: mirror.gcr.io/pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
@@ -208,12 +225,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ needs.route.outputs.ref }}
+      - name: Set PR context for the GitHub reporter
+        if: needs.route.outputs.pull-request != ''
+        env:
+          TESTER_ARMY_PULL_REQUEST: ${{ needs.route.outputs.pull-request }}
+        run: node -e 'const fs = require("node:fs"); const path = process.env.GITHUB_EVENT_PATH; const event = JSON.parse(fs.readFileSync(path)); event.pull_request = JSON.parse(process.env.TESTER_ARMY_PULL_REQUEST); fs.writeFileSync(path, JSON.stringify(event));'
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
       - name: Restore verified action recordings
-        if: github.event_name == 'pull_request'
+        if: inputs.pull-request != ''
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: apps/web/.e2e/cache
@@ -223,7 +245,7 @@ jobs:
       - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
       - run: pnpm test:e2e:agent:web -- --harness ${{ matrix.harness }}
       - name: Save verified action recordings
-        if: always() && !cancelled() && github.event_name == 'pull_request'
+        if: always() && !cancelled() && inputs.pull-request != ''
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: apps/web/.e2e/cache
@@ -245,7 +267,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: tester-army-${{ matrix.lane }}-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          name: tester-army-${{ matrix.lane }}-evidence-${{ needs.route.outputs.ref }}
           retention-days: 7
           if-no-files-found: warn
           include-hidden-files: true
@@ -279,20 +301,25 @@ jobs:
       E2E_TELEMETRY_DISABLED: "1"
       TESTER_ARMY_CI_EVIDENCE: "1"
       GITHUB_TOKEN: ${{ github.token }}
-      TESTER_ARMY_REPLAY: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+      TESTER_ARMY_REPLAY: ${{ inputs.pull-request != '' && '1' || '0' }}
       CUBBY_SIM_DB_EXTERNAL: "1"
       TESTER_ARMY_SHARD: ${{ matrix.shard }}/2
       TESTER_ARMY_LANE: ios-${{ matrix.shard }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ needs.route.outputs.ref }}
+      - name: Set PR context for the GitHub reporter
+        if: needs.route.outputs.pull-request != ''
+        env:
+          TESTER_ARMY_PULL_REQUEST: ${{ needs.route.outputs.pull-request }}
+        run: node -e 'const fs = require("node:fs"); const path = process.env.GITHUB_EVENT_PATH; const event = JSON.parse(fs.readFileSync(path)); event.pull_request = JSON.parse(process.env.TESTER_ARMY_PULL_REQUEST); fs.writeFileSync(path, JSON.stringify(event));'
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
           pnpm-store-cache: "false"
       - name: Restore verified action recordings
-        if: github.event_name == 'pull_request'
+        if: inputs.pull-request != ''
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: apps/web/.e2e/cache
@@ -351,7 +378,7 @@ jobs:
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
           matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
       - name: Save verified action recordings
-        if: always() && !cancelled() && github.event_name == 'pull_request'
+        if: always() && !cancelled() && inputs.pull-request != ''
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: apps/web/.e2e/cache
@@ -373,7 +400,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: tester-army-ios-${{ matrix.shard }}-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          name: tester-army-ios-${{ matrix.shard }}-evidence-${{ needs.route.outputs.ref }}
           retention-days: 7
           if-no-files-found: warn
           include-hidden-files: true
