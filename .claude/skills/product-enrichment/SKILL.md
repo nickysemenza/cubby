@@ -93,8 +93,8 @@ write, collision, batch, kit, replacement, or verification.
 Before enriching, check whether this Product has a merge candidate on the
 other side (a photo Product for a purchase-created one, or vice versa) per
 [product identity](references/product-identity.md)'s either-side-first
-contract; propose it with `product_enrichment.propose_match` rather than enriching two
-records that should converge into one.
+contract. Apply its obvious-duplicate merge rule or propose the unresolved pair
+with `product_enrichment.propose_match` before enriching both records.
 
 Set `kind` (`consumable` or `durable`) only when the published product or the
 order context makes it clear; never guess, and leave it unset when uncertain. It
@@ -106,8 +106,8 @@ preserve unrelated IDs; a full `externalIds` array is a deliberate complete
 replacement. Check `imports_read.external_id_collisions` before each new ID. Only an
 exact-variant part number goes in as `manufacturer_part` (source = manufacturer
 slug); a family/style number stays in `model`.
-A collision needs manual resolution, normally a proven merge, never a silent
-reassignment.
+A collision needs the identity reference's proven merge or human review,
+never a silent identifier reassignment.
 
 Research individually, then batch settled writes: collision checks up to 100,
 metadata/identifier/image writes up to 50, image verification up to 20. Each

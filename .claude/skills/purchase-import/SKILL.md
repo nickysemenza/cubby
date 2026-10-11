@@ -21,6 +21,11 @@ ownership checks, retained-Email checksums, replay, money conservation and
 safe writes. Source-backed orders pass through `purchase_import` rather than
 generic entity mutation.
 
+In a member's interactive Burn-down, resolve obvious duplicate Purchases and
+booked Expenses under [duplicate bookkeeping](references/duplicates.md).
+Its evidence and impact checks allow routine cleanup without another
+confirmation; ambiguous identity, attribution or money still needs review.
+
 Use `imports_read.run_status` to inspect an existing Run before controlling it.
 `run.lifecycle` supports `controlAction: cancel`, `retry` or `restart` through
 the shared member-owned controls. It does not approve findings, authorize paid
@@ -258,8 +263,11 @@ warnings; additional research does not rewrite the frozen evaluation.
 Pi's Mail import mounts only Email reads, `mail.*`, `purchase_import` and read
 tools; any other write needs a member's approval. A member's Claude or Codex
 session writes with the member's authority and records Sources on what it
-changes. Financial corrections use explicit review. Receiving remains a human
-decision and inventory never changes merely because an order arrived.
+changes. Source-proven interactive duplicate cleanup follows
+[duplicate bookkeeping](references/duplicates.md) without another confirmation.
+Other financial corrections require the member's unresolved decisions and the
+writer's explicit reconciliation review. Receiving remains a human decision
+and inventory never changes merely because an order arrived.
 
 ## Completion report
 

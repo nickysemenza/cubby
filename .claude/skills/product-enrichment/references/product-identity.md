@@ -98,12 +98,30 @@ sides. Agents call `product_enrichment.propose_match` themselves when they hold 
 the detector lacks — a vendor product page confirmed to match the photo, a
 label transcription, an exact identifier the detector hasn't indexed.
 
-**Merge.** A merge is always an explicit human decision. An agent that finds
-a same-item pair a matching pass missed records it with
-`product_enrichment.propose_match`; it never merges on its own evidence. Once
-a human confirms the pair, resolve it with `entity.merge product`, which pauses
-for exact typed approval in an agent run:
-the vendor/purchase Product is always `keepId` — it carries the stronger
+**Merge.** In a member's interactive enrichment session, merge an obvious
+duplicate with `entity.merge product` without another confirmation when all
+of these checks pass:
+
+- Original evidence proves the same exact variant: a shared variant identifier,
+  or an original order line explicitly bridges the two identifiers (for example,
+  Store SKU and Internet number). Size, color, pack count and recorded identity
+  facts agree. Names or model confidence alone are insufficient.
+- Fresh full reads and `entity_read.connections` with `operation: "merge"`
+  show that the merge preserves distinct expenses, provenance and relationships.
+  At most one record has inventory; two stocked records require review to
+  distinguish separate copies from duplicate receiving.
+- The keeper is unambiguous and no member decision about identity, ownership,
+  quantity or money remains. Record the evidence and verify the survivor,
+  identifiers, links, images and unchanged spend/stock after the merge.
+
+Otherwise record the candidate with `product_enrichment.propose_match` and ask
+for the unresolved decision. Descriptive-only matches still require human
+confirmation. Agent Runs retain their exact typed approval requirement; this
+interactive rule does not bypass a server refusal or authorize unattended merges.
+For Purchase and Expense duplicates, follow the separate
+[duplicate bookkeeping rules](../../purchase-import/references/duplicates.md).
+
+Prefer the vendor/purchase Product as `keepId` when it carries stronger
 identity evidence (a paid, itemized order) plus whatever the photo
 contributed. The photo Product's descriptive name folds into `aliases`, and
 its images merge into the kept Product's gallery. Merge fills only the
