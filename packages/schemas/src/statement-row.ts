@@ -217,6 +217,13 @@ export type StatementImportInput = z.infer<typeof statementImportInput>;
  * with the one `sourceRefs` matching depends on.
  */
 export const statementRowInput = z.strictObject({
+  reviewedLegacyAccountDescriptor: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Reviewed membership-only repair: the retained legacy account descriptor repeats the same complete trailing mask once. Requires an existing v1 row; never creates a row, changes provider evidence, or resolves an account. Cannot accompany rowPosition.",
+    ),
   rowPosition: z.number().int().positive().optional(),
   providerTransactionId: z.string().min(1).nullable().optional(),
   accountDescriptor: z.string().min(1),
