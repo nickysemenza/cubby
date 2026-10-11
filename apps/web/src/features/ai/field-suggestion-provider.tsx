@@ -94,15 +94,19 @@ function resolutionModeField(entity: ShortcodeEntity, field: string) {
   return null;
 }
 
-function isAllocatedExpenseProject(
+/** An adjustment line follows its principals for Project, and for trade and
+ * cost type unless it names its own trade: there is nothing to suggest. */
+function isAllocatedExpenseShare(
   entity: ShortcodeEntity,
   field: string,
   basis: FieldSuggestionSource["basis"],
 ) {
+  if (entity !== "expense" || resolveExpenseLineKind(basis) === "principal")
+    return false;
+  if (field === "projectId") return true;
   return (
-    entity === "expense" &&
-    field === "projectId" &&
-    resolveExpenseLineKind(basis) !== "principal"
+    (field === "trade" || field === "costType") &&
+    basisValueOf(basis.trade) === null
   );
 }
 
@@ -381,7 +385,7 @@ export function FieldSuggestionProvider({
         )
       )
         return;
-      if (isAllocatedExpenseProject(entity, target.key, basis)) {
+      if (isAllocatedExpenseShare(entity, target.key, basis)) {
         return;
       }
       const value = basisValueOf(targetValues[index]);

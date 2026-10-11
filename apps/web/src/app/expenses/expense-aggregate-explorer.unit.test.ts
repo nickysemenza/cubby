@@ -47,7 +47,7 @@ const ready = {
       previous: null,
     },
     causes: {
-      adjustments: {
+      unallocated: {
         current: { actual: 10, committed: 0, credits: 0, net: 10, count: 1 },
         previous: null,
       },

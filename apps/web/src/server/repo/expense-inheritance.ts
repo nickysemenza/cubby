@@ -339,6 +339,19 @@ const draftTradeResolution = (
   };
 };
 
+/** An adjustment with no trade of its own follows its principals' shares for
+ * trade and cost type, so a draft cannot name either value for it. */
+const draftAllocatedShare = (): FieldResolution => ({
+  mode: "allocated",
+  storedValue: null,
+  value: null,
+  fallbackValue: null,
+  source: "Follows items",
+  sourceEntity: null,
+  matchesFallback: true,
+  canReset: false,
+});
+
 /** Resolve preview/editor provenance without materializing inherited values. */
 export async function resolveDraftExpenseFields(
   db: Database | DrizzleTransaction,
@@ -411,8 +424,21 @@ export async function resolveDraftExpenseFields(
   if (!row) return {};
   const projectExplicit = lineKind === "principal" && projectId !== null;
 
+  const projectResolution = draftProjectResolution(
+    draft,
+    row,
+    lineKind,
+    projectExplicit,
+  );
+  if (lineKind !== "principal" && trade === null) {
+    return {
+      projectId: projectResolution,
+      trade: draftAllocatedShare(),
+      costType: draftAllocatedShare(),
+    };
+  }
   return {
-    projectId: draftProjectResolution(draft, row, lineKind, projectExplicit),
+    projectId: projectResolution,
     trade: draftTradeResolution(draft, row, trade, lineKind),
   };
 }

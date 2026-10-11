@@ -1,9 +1,11 @@
+import type { CostType } from "@cubby/schemas/expense-fields";
 import type {
   ExpenseId,
   ProjectId,
   PurchaseId,
   SpendingCategoryId,
 } from "@cubby/schemas/identifiers";
+import type { Trade } from "@cubby/schemas/project";
 import { sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -14,7 +16,10 @@ import {
   spendingCategoryCatalogSql,
   type ExpenseSpendingCategoryResolutionDraft,
 } from "./expense-category-resolution";
-import { effectiveExpenseProjectSql } from "./expense-inheritance";
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+} from "./expense-inheritance";
 
 export type ExpenseProjectAllocationBasis =
   | "principal"
@@ -40,6 +45,11 @@ export type ExpenseJointAllocationRow = ExpenseProjectAllocationRow & {
   spendingCategoryShortcode: string | null;
   spendingCategoryName: string | null;
   categoryIncomplete: boolean;
+  /** The share's trade and cost type: its principal's, unless the adjustment
+   * names its own trade. A share with no principal keeps a null trade and the
+   * adjustment's own cost type. Trade is null on a project-only read. */
+  trade: Trade | null;
+  costType: CostType;
 };
 
 type RawAllocationRow<T> = Omit<T, "sourceCents" | "attributedCents"> & {
@@ -75,6 +85,8 @@ export const expenseJointAllocationSql = (
           ? effectiveExpenseSpendingCategorySql("e", draft)
           : sql`NULL::uuid`
       } AS "spendingCategoryId",
+      ${categories ? effectiveExpenseTradeSql("e") : sql`NULL::text`} AS trade,
+      e."costType"::text AS "costType",
       round(e."cost"::numeric * 100)::bigint AS cost_cents,
       live_purchase."id" IS NOT NULL AS live_purchase
     FROM ${
@@ -100,7 +112,7 @@ export const expenseJointAllocationSql = (
     FROM principal_fact WHERE live_purchase GROUP BY "purchaseId"
   ), principal_weight AS (
     SELECT f."purchaseId", f."expenseId" AS "principalExpenseId",
-      f."projectId", f."spendingCategoryId",
+      f."projectId", f."spendingCategoryId", f.trade, f."costType",
       CASE WHEN d.has_negative AND NOT d.has_positive THEN 'refund' ELSE 'positive' END::text AS basis,
       greatest(abs(f.cost_cents), 1)::bigint AS weight
     FROM principal_fact f JOIN purchase_direction d USING ("purchaseId")
@@ -114,6 +126,7 @@ export const expenseJointAllocationSql = (
   ), fallback_weight AS (
     SELECT p."id" AS "purchaseId", NULL::uuid AS "principalExpenseId",
       default_project."id" AS "projectId", NULL::uuid AS "spendingCategoryId",
+      NULL::text AS trade, NULL::text AS "costType",
       'default'::text AS basis, 1::bigint AS weight
     FROM "Purchase" p LEFT JOIN "Project" default_project
       ON default_project."id" = p."defaultProjectId" AND default_project."deletedAt" IS NULL
@@ -129,6 +142,13 @@ export const expenseJointAllocationSql = (
         WHEN e."cost" < 0 AND e."lineKind" <> 'discount' AND coalesce(d.has_positive, false) THEN NULL
         ELSE w."spendingCategoryId"
       END AS "spendingCategoryId",
+      -- A trade typed onto the adjustment claims the whole charge at the
+      -- adjustment's own cost type; otherwise each share follows its principal.
+      -- A share with no principal to follow keeps no trade but the
+      -- adjustment's own cost type.
+      CASE WHEN e."trade" IS NOT NULL THEN e."trade"::text ELSE w.trade END AS trade,
+      CASE WHEN e."trade" IS NOT NULL OR w."costType" IS NULL THEN e."costType"::text
+        ELSE w."costType" END AS "costType",
       coalesce(w.basis, 'default') AS basis, coalesce(w.weight, 1::bigint) AS weight,
       round(e."cost"::numeric * 100)::bigint AS source_cents,
       sum(coalesce(w.weight, 1::bigint)) OVER (PARTITION BY e."id") AS total_weight,
@@ -154,14 +174,14 @@ export const expenseJointAllocationSql = (
     FROM adjustment_floor
   ), allocated AS (
     SELECT f."expenseId", f."purchaseId", f."expenseId" AS "principalExpenseId",
-      f."projectId", f."spendingCategoryId", f.cost_cents AS source_cents,
+      f."projectId", f."spendingCategoryId", f.trade, f."costType", f.cost_cents AS source_cents,
       f.cost_cents AS attributed_cents, 'principal'::text AS basis,
       f.cost_cents IS NULL AS incomplete,
       f."spendingCategoryId" IS NULL AS category_incomplete
     FROM principal_fact f
     UNION ALL
     SELECT r."expenseId", r."purchaseId", r."principalExpenseId", r."projectId", r."spendingCategoryId",
-      r.source_cents, CASE WHEN r.source_cents IS NULL THEN NULL ELSE
+      r.trade, r."costType", r.source_cents, CASE WHEN r.source_cents IS NULL THEN NULL ELSE
         sign(r.source_cents) * (r.base_cents + CASE
           WHEN r.remainder_rank <= abs(r.source_cents) - r.assigned_cents THEN 1 ELSE 0 END)
       END::bigint AS attributed_cents, r.basis,
@@ -173,7 +193,8 @@ export const expenseJointAllocationSql = (
     p."shortcode" AS "projectShortcode", p."name" AS "projectName",
     a."spendingCategoryId", c."shortcode" AS "spendingCategoryShortcode", c."name" AS "spendingCategoryName",
     a.source_cents::text AS "sourceCents", a.attributed_cents::text AS "attributedCents",
-    a.basis, a.incomplete, a.category_incomplete AS "categoryIncomplete"
+    a.basis, a.incomplete, a.category_incomplete AS "categoryIncomplete",
+    a.trade, a."costType"
   FROM allocated a
   LEFT JOIN "Project" p ON p."id" = a."projectId" AND p."deletedAt" IS NULL
   LEFT JOIN ${spendingCategoryCatalogSql(draft)} c ON c."id" = a."spendingCategoryId" AND c."deletedAt" IS NULL
@@ -197,6 +218,8 @@ export type ExpenseAllocationProjectScope = {
   presence?: "has" | "none";
   spendingCategoryIds?: readonly SpendingCategoryId[];
   categoryPresence?: "has" | "none";
+  trades?: readonly Trade[];
+  costTypes?: readonly CostType[];
 };
 
 export const expenseAllocationScopeConditionSql = (
@@ -234,9 +257,24 @@ export const expenseAllocationScopeConditionSql = (
     categoryMatch && categoryPresence
       ? sql`(${categoryMatch} OR ${categoryPresence})`
       : (categoryMatch ?? categoryPresence);
-  return projectCondition && categoryCondition
-    ? sql`(${projectCondition} AND ${categoryCondition})`
-    : (projectCondition ?? categoryCondition);
+  const shareMatch = (column: string, values?: readonly string[]) =>
+    values === undefined
+      ? undefined
+      : values.length === 0
+        ? sql`false`
+        : sql`${allocation}.${sql.raw(`"${column}"`)} IN (${sql.join(
+            values.map((value) => sql`${value}`),
+            sql`, `,
+          )})`;
+  const conditions = [
+    projectCondition,
+    categoryCondition,
+    shareMatch("trade", scope.trades),
+    shareMatch("costType", scope.costTypes),
+  ].filter((condition) => condition !== undefined);
+  return conditions.length === 0
+    ? undefined
+    : sql`(${sql.join(conditions, sql` AND `)})`;
 };
 
 /** Search retains every attributed project while keeping one expense document. */

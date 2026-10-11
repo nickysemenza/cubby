@@ -36,7 +36,7 @@ describe("expense workflow observability", () => {
       reconciliation: {
         tail: { current: zero, previous: null },
         causes: {
-          adjustments: { current: zero, previous: null },
+          unallocated: { current: zero, previous: null },
           unattributedProject: { current: zero, previous: null },
           unattributedVendor: { current: zero, previous: null },
         },

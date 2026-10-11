@@ -27,7 +27,8 @@ const line = (
   links: Pick<
     typeof expense.$inferInsert,
     "purchaseId" | "projectId" | "spendingCategoryId"
-  >,
+  > &
+    Partial<Pick<typeof expense.$inferInsert, "trade" | "costType">>,
 ) =>
   insertWithShortcode(ctx.db, "expense", {
     name,
@@ -276,6 +277,51 @@ describe("joint expense spending allocation", () => {
   });
   // Regression: an award ticket's $0 fare left every tax and fee on the
   // booking without a category or Project share.
+  it("carries each principal's trade and cost type onto adjustment shares", async () => {
+    const { projects, purchase } = await fixture();
+    await line("Synthetic wire", 1, "principal", {
+      purchaseId: purchase.id,
+      projectId: projects[0]!.id,
+      trade: "electrical",
+      costType: "materials",
+    });
+    await line("Synthetic saw", 3, "principal", {
+      purchaseId: purchase.id,
+      projectId: projects[0]!.id,
+      trade: "plumbing",
+      costType: "tools",
+    });
+    const tax = await line("Synthetic tax", 0.04, "tax", {
+      purchaseId: purchase.id,
+      trade: null,
+      costType: "services",
+    });
+    // A trade typed onto the adjustment keeps the whole charge, at its own
+    // cost type, while its Project and category shares still split.
+    const delivery = await line("Synthetic delivery", 0.08, "shipping", {
+      purchaseId: purchase.id,
+      trade: "logistics",
+      costType: "services",
+    });
+    const rows = await loadExpenseJointAllocations(ctx.db, [
+      tax.id,
+      delivery.id,
+    ]);
+    const shares = (id: string) =>
+      rows
+        .filter((row) => row.expenseId === id)
+        .map((row) => [row.trade, row.costType, row.attributedCents])
+        .sort();
+    expect(shares(tax.id)).toEqual([
+      ["electrical", "materials", 1n],
+      ["plumbing", "tools", 3n],
+    ]);
+    expect(shares(delivery.id)).toEqual([
+      ["logistics", "services", 2n],
+      ["logistics", "services", 6n],
+    ]);
+  });
+
   it("splits adjustments evenly across priced $0 principals", async () => {
     const { projects, categories, vendor } = await fixture();
     const purchase = await insertWithShortcode(ctx.db, "purchase", {

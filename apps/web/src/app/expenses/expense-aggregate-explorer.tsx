@@ -339,7 +339,8 @@ function tailLabel(data: ExpenseAnalyzeReadyOut) {
     return "Not represented in this grid";
   if (data.rowDimension === "project") return "Unattributed to a project";
   if (data.rowDimension === "vendor") return "Unattributed to a vendor";
-  return "Purchase adjustments";
+  if (data.rowDimension === "trade") return "Charges not allocated to an item";
+  return "Not represented in this grid";
 }
 
 export function expenseAnalyzeGridTotalFilter(
@@ -418,9 +419,9 @@ function ReconciliationNote({
 }) {
   const causeEntries: [
     string,
-    ExpenseAnalyzeReadyOut["reconciliation"]["causes"]["adjustments"],
+    ExpenseAnalyzeReadyOut["reconciliation"]["causes"]["unallocated"],
   ][] = [
-    ["Adjustments", data.reconciliation.causes.adjustments],
+    ["Not allocated to an item", data.reconciliation.causes.unallocated],
     ["Unattributed project", data.reconciliation.causes.unattributedProject],
     ["Unattributed vendor", data.reconciliation.causes.unattributedVendor],
   ];

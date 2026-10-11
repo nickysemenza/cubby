@@ -10,7 +10,7 @@ type ExportRecordType =
   | "scope_total"
   | "grid_total"
   | "reconciliation_tail"
-  | "adjustments_explanation"
+  | "unallocated_explanation"
   | "unattributed_project_explanation"
   | "unattributed_vendor_explanation";
 
@@ -115,17 +115,12 @@ export function expenseAnalyzeCsv(data: ExpenseAnalyzeReadyOut): string {
   rows.push(...pairRows(data, "grid_total", data.totals.grid));
   rows.push(...pairRows(data, "reconciliation_tail", data.reconciliation.tail));
 
-  const principalAxis =
-    data.rowDimension === "trade" ||
-    data.rowDimension === "costType" ||
-    data.columnDimension === "trade" ||
-    data.columnDimension === "costType";
-  if (principalAxis) {
+  if (data.rowDimension === "trade" || data.columnDimension === "trade") {
     rows.push(
       ...pairRows(
         data,
-        "adjustments_explanation",
-        data.reconciliation.causes.adjustments,
+        "unallocated_explanation",
+        data.reconciliation.causes.unallocated,
       ),
     );
   }

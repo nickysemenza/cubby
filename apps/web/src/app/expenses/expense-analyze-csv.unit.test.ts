@@ -61,7 +61,7 @@ const compared = {
   reconciliation: {
     tail: { current: aggregate(10), previous: aggregate(10) },
     causes: {
-      adjustments: { current: aggregate(10), previous: aggregate(10) },
+      unallocated: { current: aggregate(10), previous: aggregate(10) },
       unattributedProject: {
         current: aggregate(0, 0),
         previous: aggregate(0, 0),
@@ -91,7 +91,7 @@ describe("expense Analyze CSV", () => {
       "reconciliation_tail,previous,trade,,,costType,,,10,0,0,10,1",
     );
     expect(csv).toContain(
-      "adjustments_explanation,current,trade,,,costType,,,10,0,0,10,1",
+      "unallocated_explanation,current,trade,,,costType,,,10,0,0,10,1",
     );
     expect(csv).not.toContain("unattributed_project_explanation");
     expect(csv).not.toContain("delta");

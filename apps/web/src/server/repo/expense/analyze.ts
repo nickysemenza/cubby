@@ -22,7 +22,6 @@ import {
   and,
   eq,
   isNotNull,
-  ne,
   notExists,
   type SQL,
   type SQLWrapper,
@@ -43,11 +42,9 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   EXPENSE_MONTH_BUCKET,
   expenseAggregateFields,
+  expenseShareAggregateFields,
 } from "~/server/repo/expense-aggregate-sql";
-import {
-  effectiveExpenseProjectSql,
-  effectiveExpenseTradeSql,
-} from "~/server/repo/expense-inheritance";
+import { effectiveExpenseProjectSql } from "~/server/repo/expense-inheritance";
 import {
   expenseAllocatedCostSql,
   expenseAllocationScopeConditionSql,
@@ -83,15 +80,16 @@ type FacetId = ExpenseFacetId;
  * unattributed expense, not a bucket with a stale label.
  */
 const dimensionSpecs = {
+  // Trade and cost type are per-share: an adjustment follows its principals.
   trade: {
-    key: effectiveExpenseTradeSql(),
-    label: effectiveExpenseTradeSql(),
-    relation: "expense",
+    key: sql<string>`allocation.trade`,
+    label: sql<string>`allocation.trade`,
+    relation: "allocation",
   },
   costType: {
-    key: expense.costType,
-    label: expense.costType,
-    relation: "expense",
+    key: sql<string>`allocation."costType"`,
+    label: sql<string>`allocation."costType"`,
+    relation: "allocation",
   },
   month: {
     key: EXPENSE_MONTH_BUCKET,
@@ -110,7 +108,12 @@ const dimensionSpecs = {
   {
     key: SQLWrapper;
     label: SQLWrapper;
-    relation: "expense" | "project" | "vendor" | "spendingCategory";
+    relation:
+      | "expense"
+      | "project"
+      | "vendor"
+      | "spendingCategory"
+      | "allocation";
   }
 >;
 
@@ -118,10 +121,8 @@ type DirectDimension = Exclude<Dimension, "project" | "vendor">;
 
 /** Scalar facets all share the same cardinality query and null label policy. */
 const scalarFacetSpecs = {
-  costType: { value: expense.costType },
   lineKind: { value: expense.lineKind },
   lineBasis: { value: expense.lineBasis },
-  trade: { value: effectiveExpenseTradeSql() },
   future: {
     value: sql<string>`case when ${expense.future} then 'true' else 'false' end`,
   },
@@ -129,14 +130,20 @@ const scalarFacetSpecs = {
     value: sql<string>`case when ${expense.productId} is null then 'none' else 'has' end`,
   },
 } as const satisfies Record<
-  Exclude<FacetId, "project" | "vendor" | "orderIdPresence">,
+  Exclude<FacetId, AllocatedFacetId | "project" | "vendor" | "orderIdPresence">,
   { value: SQLWrapper }
 >;
 
 type ScalarFacetId = keyof typeof scalarFacetSpecs;
+type AllocatedFacetId = "trade" | "costType";
 
-export function isExpenseScalarFacet(id: FacetId): id is ScalarFacetId {
-  return Object.hasOwn(scalarFacetSpecs, id);
+const isExpenseAllocatedFacet = (id: FacetId): id is AllocatedFacetId =>
+  id === "trade" || id === "costType";
+
+export function isExpenseScalarFacet(
+  id: FacetId,
+): id is ScalarFacetId | AllocatedFacetId {
+  return Object.hasOwn(scalarFacetSpecs, id) || isExpenseAllocatedFacet(id);
 }
 
 const zeroAggregate = (): ExpenseAnalyzeAggregate => ({
@@ -183,10 +190,8 @@ const subtractAggregate = (
 const bucketFilter = (
   dimension: Dimension,
   key: string,
-  principalOnly: boolean,
 ): ExpenseAnalyzeBucket["filter"] => {
   const filter: ExpenseAnalyzeBucket["filter"] = {};
-  if (principalOnly) filter.lineKind = "principal";
   switch (dimension) {
     case "trade":
       filter.trade = key;
@@ -214,19 +219,14 @@ const bucketFilter = (
 const dimensionColumns = (dimension: DirectDimension) =>
   dimensionSpecs[dimension];
 
-const hasPrincipalAxis = (input: ExpenseAnalyzeInput) =>
-  input.rowDimension === "trade" ||
-  input.rowDimension === "costType" ||
-  input.columnDimension === "trade" ||
-  input.columnDimension === "costType";
+const isAllocatedDimension = (dimension: Dimension) =>
+  dimension === "project" ||
+  dimension === "spendingCategory" ||
+  dimension === "trade" ||
+  dimension === "costType";
 
-export const expenseAnalysisWhere = (
-  where: SQL | undefined,
-  input: ExpenseAnalyzeInput,
-) =>
-  hasPrincipalAxis(input)
-    ? and(where, eq(expense.lineKind, "principal"))
-    : where;
+const hasTradeAxis = (input: ExpenseAnalyzeInput) =>
+  input.rowDimension === "trade" || input.columnDimension === "trade";
 
 const analysisAggregateFields = (
   allocationScope: ExpenseAllocationProjectScope | undefined,
@@ -249,22 +249,14 @@ async function scopeAggregate(
   return aggregate(rows[0]);
 }
 
-const allocationAggregateFields = () => ({
-  actual: sql<number>`coalesce(sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = false), 0)::float`,
-  committed: sql<number>`coalesce(sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = true), 0)::float`,
-  credits: sql<number>`coalesce(-sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint < 0), 0)::float`,
-  net: sql<number>`coalesce(sum(allocation."attributedCents"::bigint) / 100.0, 0)::float`,
-  count: sql<number>`count(distinct ${expense.id})::int`,
-});
-
-async function allocatedProjectAggregate(
+async function allocatedAggregate(
   db: Database,
   where: SQL | undefined,
-  projectCondition: SQL,
+  shareCondition: SQL,
   allocationScope?: ExpenseAllocationProjectScope,
 ) {
   const rows = await getDb(db)
-    .select(allocationAggregateFields())
+    .select(expenseShareAggregateFields())
     .from(expense)
     .innerJoin(
       sql`(${expenseJointAllocationSql()}) allocation`,
@@ -273,7 +265,7 @@ async function allocatedProjectAggregate(
     .where(
       and(
         where,
-        projectCondition,
+        shareCondition,
         allocationScope
           ? expenseAllocationScopeConditionSql("allocation", allocationScope)
           : undefined,
@@ -290,12 +282,12 @@ async function groupedDimension(
 ): Promise<BucketRow[]> {
   const database = getDb(db);
   const spec = dimensionSpecs[dimension];
-  if (dimension === "project" || dimension === "spendingCategory") {
+  if (isAllocatedDimension(dimension)) {
     const rows = await database
       .select({
         key: spec.key,
         label: spec.label,
-        ...allocationAggregateFields(),
+        ...expenseShareAggregateFields(),
       })
       .from(expense)
       .innerJoin(
@@ -370,16 +362,15 @@ async function groupedCells(
   const row = dimensionSpecs[rowDimension];
   const column = dimensionColumns(columnDimension);
   if (
-    rowDimension === "project" ||
-    rowDimension === "spendingCategory" ||
-    columnDimension === "spendingCategory"
+    isAllocatedDimension(rowDimension) ||
+    isAllocatedDimension(columnDimension)
   ) {
     const charge = alias(purchase, "analyzeAllocatedCellCharge");
     const rows = await database
       .select({
         rowKey: row.key,
         columnKey: column.key,
-        ...allocationAggregateFields(),
+        ...expenseShareAggregateFields(),
       })
       .from(expense)
       .innerJoin(
@@ -568,6 +559,38 @@ async function scalarFacetOptions(
     .from(expense)
     .where(where)
     .groupBy(spec.value);
+  return rows.map((row) => ({
+    value: String(row.value),
+    label: null,
+    count: Number(row.count),
+  }));
+}
+
+/** A row counts once per distinct trade or cost type among its shares. */
+async function allocatedFacetOptions(
+  db: Database,
+  where: SQL | undefined,
+  id: AllocatedFacetId,
+  allocationScope?: ExpenseAllocationProjectScope,
+): Promise<ExpenseFacetOption[]> {
+  const value = dimensionSpecs[id].key;
+  const rows = await getDb(db)
+    .select({ value, count: sql<number>`count(distinct ${expense.id})::int` })
+    .from(expense)
+    .innerJoin(
+      sql`(${expenseJointAllocationSql()}) allocation`,
+      sql`allocation."expenseId" = ${expense.id}`,
+    )
+    .where(
+      and(
+        where,
+        isNotNull(value),
+        allocationScope
+          ? expenseAllocationScopeConditionSql("allocation", allocationScope)
+          : undefined,
+      ),
+    )
+    .groupBy(value);
   return rows.map((row) => ({
     value: String(row.value),
     label: null,
@@ -808,7 +831,8 @@ export const loadExpenseAnalysisCauses = async (
   where: SQL | undefined,
   allocationScope?: ExpenseAllocationProjectScope,
 ) => {
-  const principalAxis = hasPrincipalAxis(input);
+  // Adjustment shares that follow no principal have no trade.
+  const tradeAxis = hasTradeAxis(input);
   const projectAxis = input.rowDimension === "project";
   const vendorAxis = input.rowDimension === "vendor";
   const liveCharge = alias(purchase, "analyzeLiveCharge");
@@ -824,17 +848,18 @@ export const loadExpenseAnalysisCauses = async (
         and(eq(liveCharge.id, expense.purchaseId), notDeleted(liveCharge)),
       ),
   );
-  const [adjustments, unattributedProject, unattributedVendor] =
+  const [unallocated, unattributedProject, unattributedVendor] =
     await Promise.all([
-      principalAxis
-        ? scopeAggregate(
+      tradeAxis
+        ? allocatedAggregate(
             db,
-            and(where, ne(expense.lineKind, "principal")),
+            where,
+            sql`allocation.trade IS NULL`,
             allocationScope,
           )
         : Promise.resolve(zeroAggregate()),
       projectAxis
-        ? allocatedProjectAggregate(
+        ? allocatedAggregate(
             db,
             where,
             sql`allocation."projectId" IS NULL`,
@@ -845,18 +870,17 @@ export const loadExpenseAnalysisCauses = async (
         ? scopeAggregate(db, and(where, missingVendor), allocationScope)
         : Promise.resolve(zeroAggregate()),
     ]);
-  return { adjustments, unattributedProject, unattributedVendor };
+  return { unallocated, unattributedProject, unattributedVendor };
 };
 
 const projectAnalysisBuckets = (
   rows: Map<string, BucketRow>,
   dimension: Dimension,
-  principalOnly: boolean,
 ) =>
   [...rows.values()].map((row) => ({
     key: row.key,
     label: row.label,
-    filter: bucketFilter(dimension, row.key, principalOnly),
+    filter: bucketFilter(dimension, row.key),
   }));
 
 export type ExpenseAnalysisCauses = Awaited<
@@ -931,9 +955,9 @@ const buildAnalysisReconciliation = (
       : null,
   ),
   causes: {
-    adjustments: analysisPair(
-      currentCauses.adjustments,
-      previousCauses?.adjustments ?? null,
+    unallocated: analysisPair(
+      currentCauses.unallocated,
+      previousCauses?.unallocated ?? null,
     ),
     unattributedProject: analysisPair(
       currentCauses.unattributedProject,
@@ -955,7 +979,6 @@ export const readyExpenseAnalysisOutput = (
   currentCauses: ExpenseAnalysisCauses,
   previousCauses: ExpenseAnalysisCauses | null,
 ): ExpenseAnalyzeOut => {
-  const principalOnly = hasPrincipalAxis(input);
   return {
     status: "ready",
     rowDimension: input.rowDimension,
@@ -964,17 +987,9 @@ export const readyExpenseAnalysisOutput = (
       mode: input.comparison,
       previousRange: comparison?.range ?? null,
     },
-    rows: projectAnalysisBuckets(
-      grid.rowMap,
-      input.rowDimension,
-      principalOnly,
-    ),
+    rows: projectAnalysisBuckets(grid.rowMap, input.rowDimension),
     columns: input.columnDimension
-      ? projectAnalysisBuckets(
-          grid.columnMap,
-          input.columnDimension,
-          principalOnly,
-        )
+      ? projectAnalysisBuckets(grid.columnMap, input.columnDimension)
       : [],
     cells: grid.cells,
     totals: {
@@ -1000,8 +1015,12 @@ export const loadExpenseFacetWhere = async (
 export const loadExpenseScalarFacetOptions = (
   db: Database,
   where: SQL | undefined,
-  id: ScalarFacetId,
-) => scalarFacetOptions(db, where, scalarFacetSpecs[id]);
+  id: ScalarFacetId | AllocatedFacetId,
+  allocationScope?: ExpenseAllocationProjectScope,
+) =>
+  isExpenseAllocatedFacet(id)
+    ? allocatedFacetOptions(db, where, id, allocationScope)
+    : scalarFacetOptions(db, where, scalarFacetSpecs[id]);
 
 export const loadExpenseFacetAllocationScope = async (
   db: Database,

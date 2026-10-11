@@ -48,6 +48,18 @@ export const expenseAggregateFields = (
   count: sql<number>`count(*)::int`,
 });
 
+/**
+ * The same columns over joint-allocation shares (alias `allocation`): each
+ * share's attributed cents, with `count` still counting distinct Expenses.
+ */
+export const expenseShareAggregateFields = () => ({
+  actual: sql<number>`coalesce(sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = false), 0)::float`,
+  committed: sql<number>`coalesce(sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = true), 0)::float`,
+  credits: sql<number>`coalesce(-sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint < 0), 0)::float`,
+  net: sql<number>`coalesce(sum(allocation."attributedCents"::bigint) / 100.0, 0)::float`,
+  count: sql<number>`count(distinct ${expense.id})::int`,
+});
+
 /** `"YYYY-MM"` bucket expression, reused for both the SELECT and its GROUP/ORDER BY. */
 export const EXPENSE_MONTH_BUCKET = sql<string>`to_char(${expense.date}, 'YYYY-MM')`;
 

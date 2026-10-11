@@ -15,7 +15,6 @@ import {
   filterGetterFromSearch,
   soleValue,
 } from "~/entity/filters";
-import { formatCurrency } from "~/lib/utils";
 import { Grid, Section, Stack } from "~/ui/layout";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -239,7 +238,6 @@ function ExpenseAnalytics({
 
   const {
     summary,
-    adjustments,
     byCostType,
     tradeCostMatrix,
     monthly,
@@ -257,7 +255,6 @@ function ExpenseAnalytics({
             : "ledger"
         }
         summary={summary}
-        adjustmentsNet={adjustments.net}
       />
 
       <Section
@@ -277,7 +274,7 @@ function ExpenseAnalytics({
       <Grid cols="pair">
         <Section
           title="Spending by Category"
-          description={`Principal spend only; ${formatCurrency(adjustments.net, 0)} in purchase adjustments is included in Net above.`}
+          description="Tax, shipping, and fees follow the items they were charged on."
         >
           <CostTypeDonut
             byCostType={byCostType}
@@ -299,7 +296,7 @@ function ExpenseAnalytics({
                 Clear selection
               </button>
             ) : (
-              `Principal spend only; ${formatCurrency(adjustments.net, 0)} in purchase adjustments is included in Net above.`
+              "Tax, shipping, and fees follow the items they were charged on."
             )
           }
         >
@@ -317,7 +314,7 @@ function ExpenseAnalytics({
 
       <Section
         title="Trade × Cost Type"
-        description={`Principal spend only; ${formatCurrency(adjustments.net, 0)} in purchase adjustments is included in Net. Click a cell to filter the Ledger view.`}
+        description="Tax, shipping, and fees follow the items they were charged on. Click a cell to filter the Ledger view."
       >
         <TradeCostMatrixAggregate
           tradeCostMatrix={tradeCostMatrix}

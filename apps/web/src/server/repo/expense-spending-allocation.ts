@@ -1,4 +1,6 @@
+import type { CostType } from "@cubby/schemas/expense-fields";
 import type { ExpenseId, SpendingCategoryId } from "@cubby/schemas/identifiers";
+import type { Trade } from "@cubby/schemas/project";
 import { sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -17,6 +19,9 @@ export type ExpenseSpendingAllocationRow = {
   amount: number | null;
   basis: ExpenseProjectAllocationBasis;
   incomplete: boolean;
+  /** Distinct trades and cost types among this category's shares. */
+  trades: Trade[];
+  costTypes: CostType[];
 };
 
 type RawSpendingAllocationRow = ExpenseSpendingAllocationRow & {
@@ -30,7 +35,9 @@ export const expenseSpendingAllocationSql = (
 ): SQL => sql`
   SELECT a."expenseId", a."spendingCategoryId", a."spendingCategoryShortcode", a."spendingCategoryName",
     (sum(a."attributedCents"::bigint) / 100.0)::double precision AS amount,
-    a.basis, bool_or(a."categoryIncomplete") AS incomplete
+    a.basis, bool_or(a."categoryIncomplete") AS incomplete,
+    array_remove(array_agg(DISTINCT a.trade), NULL) AS trades,
+    array_remove(array_agg(DISTINCT a."costType"), NULL) AS "costTypes"
   FROM (${expenseJointAllocationSql(expenseIds, draft)}) a
   GROUP BY a."expenseId", a."spendingCategoryId", a."spendingCategoryShortcode", a."spendingCategoryName", a.basis
   ORDER BY a."expenseId", a."spendingCategoryId" NULLS LAST
