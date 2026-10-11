@@ -36,14 +36,22 @@ whose journal already contains an undeployed contract.
 
 ## Email convergence cutover
 
-This rollout uses one breaking migration because downtime is authorized. Quiesce
-all requests, import writers, scheduled work, workflows and agent coordinators
-before applying `0035_email_import_cutover`. Keep them stopped until the matching
-server and clients are deployed and preservation/schema readbacks pass. The old
-server must never write the contracted schema.
+This rollout uses one breaking migration. The member explicitly requests leaving
+production services enabled: preserve existing queue/Workflow states and do not
+set maintenance. Verify activity/backlog and capture financial/provenance baselines.
+Idleness is only an observation; the migration locks retired Run tables before
+copy/drop and holds those locks through commit. Existing timeouts refuse contention.
+Old requests may fail on removed tables/columns during the authorized breaking
+interval. Apply the migration, verify SQL preservation/catalog, then merge and
+verify the matching server deployment:
 
 ```sh
 pnpm --filter @cubby/web db:migrate --target=production --through=0035_email_import_cutover
+```
+
+After matching code deploys and old in-flight work finishes, run the transform:
+
+```sh
 pnpm --filter @cubby/web db:promote-historical-orders --target=production
 pnpm --filter @cubby/web db:promote-historical-orders --target=production --apply
 pnpm --filter @cubby/web db:promote-historical-orders --target=production --apply
@@ -52,7 +60,9 @@ pnpm --filter @cubby/web db:promote-historical-orders --target=production --appl
 The transformation requires bookkeeping exactly at that migration. It uses the
 runtime validator and canonical JavaScript fingerprint, writes only immutable
 observations and accepted references, and rolls back if ledger or stock rows change.
-Record aggregate counts, investigate every refusal, disclose remaining unknown
-snapshots, and verify the second apply promotes zero rows. Never reconstruct unknown
-original extractions from current Expenses or Products. Merge/deploy only after the
-migration and transformation readbacks; reopen traffic after deployment verification.
+Do not promote before deployment: old surviving import paths can change checksums
+without maintaining the new accepted reference. Record aggregate counts, investigate
+every refusal, disclose unknown snapshots, verify accepted-reference consistency,
+and confirm the second apply promotes zero. Never reconstruct unknown extractions
+from current Expenses or Products. Verify data/schema and automated client delivery
+before normal use. On migration failure, verify rollback/bookkeeping before retrying.

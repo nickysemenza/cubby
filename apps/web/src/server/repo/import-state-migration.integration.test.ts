@@ -6,11 +6,12 @@ import { runTargetEntityKind } from "@cubby/schemas/run-fields";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { photoRunImage, runOperation } from "~/server/db/schema";
 import { startAgentRunFixture } from "~/server/purchase-import/import-run.fixtures";
 
-import { getDb } from "./database-helpers";
+import { getDb, withTransaction } from "./database-helpers";
 import {
   createImageFixture,
   createProductFixture,
@@ -20,6 +21,58 @@ import { insertWithShortcode } from "./shortcode-utils";
 
 describe("retired target ownership migration", () => {
   const ctx = withTestDb();
+  it("excludes legacy device updates before copying and dropping Run state", async () => {
+    const migration = readFileSync(
+      new URL(
+        "../../../drizzle/0035_email_import_cutover.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const statements = migration.split("--> statement-breakpoint");
+    const firstCreate = statements.findIndex((statement) =>
+      statement.includes('CREATE TABLE "SourceOrderObservation"'),
+    );
+    if (firstCreate < 0) throw new Error("Cutover expansion boundary missing");
+    await getDb(ctx.db).execute(
+      sql`CREATE TABLE "RunTarget" (id uuid PRIMARY KEY, "deviceWorkState" text)`,
+    );
+    await getDb(ctx.db).execute(
+      sql`CREATE TABLE "RunProgress" (id uuid PRIMARY KEY, phase text)`,
+    );
+    const id = crypto.randomUUID();
+    await getDb(ctx.db).execute(
+      sql`INSERT INTO "RunTarget" VALUES (${id}::uuid, ${runTargetDeviceWorkState.enum.running})`,
+    );
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        for (const statement of statements.slice(0, firstCreate))
+          if (statement.trim()) await tx.execute(sql.raw(statement));
+        const result = await withTransaction(ctx.db, async (writer) => {
+          await writer.execute(sql`SET LOCAL lock_timeout = '50ms'`);
+          await writer.execute(
+            sql`UPDATE "RunTarget" SET "deviceWorkState" = ${runTargetDeviceWorkState.enum.completed} WHERE id = ${id}::uuid`,
+          );
+        }).then(
+          () => null,
+          (error: unknown) =>
+            z.object({ cause: z.object({ code: z.string() }) }).parse(error),
+        );
+        expect(result).toMatchObject({
+          cause: expect.objectContaining({ code: "55P03" }),
+        });
+        expect(
+          (
+            await tx.execute(
+              sql`SELECT "deviceWorkState" FROM "RunTarget" WHERE id = ${id}::uuid`,
+            )
+          ).rows,
+        ).toEqual([{ deviceWorkState: "running" }]);
+      });
+    } finally {
+      await getDb(ctx.db).execute(sql`DROP TABLE "RunTarget", "RunProgress"`);
+    }
+  });
   it("preserves photo work and non-photo no-op receipts across repeat transforms", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic migration member",

@@ -26,11 +26,13 @@ its foreign keys, so a new write path that hard-deletes the referenced row
 fails until the drop. Either drop the legacy FKs in the expand step or run the
 drop right after the deploy (the ADR 0006 image joins blocked image deletes
 this way).
-For an explicitly authorized breaking downtime cutover, all writers may instead
-be quiesced before a single expansion/transform/drop migration. Keep the old
-deployment offline until the matching code deploys; verify household preservation
-and the catalog before reopening traffic. The migration remains immutable after
-merge.
+For an explicitly authorized breaking cutover, use its owning runbook. Prefer
+quiesced writers; when the member explicitly keeps services enabled, lock retired
+copy/drop sources before reading them and hold the locks through commit. Observed
+idleness is not a barrier. Verify SQL preservation before merge and deploy matching
+code immediately; historical accepted-reference promotion follows deployment and
+completion of old in-flight work. Verify preservation and the catalog before normal
+use. The migration remains immutable after merge.
 
 Traps, all seen for real:
 

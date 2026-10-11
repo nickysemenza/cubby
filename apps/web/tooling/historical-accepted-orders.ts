@@ -147,7 +147,7 @@ async function main() {
     );
     if (boundary < 0 || applied !== boundary + 1)
       throw new Error(
-        `Historical transform requires bookkeeping exactly through ${CUTOVER_TAG}, while every writer remains quiesced before deployment.`,
+        `Historical transform requires bookkeeping exactly through ${CUTOVER_TAG}; deploy the matching server and drain old in-flight work before promotion.`,
       );
     const client = drizzle(pool, { schema });
     const database = new Database(() => ({

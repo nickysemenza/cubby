@@ -1,5 +1,7 @@
 SET LOCAL lock_timeout = '5s';--> statement-breakpoint
 SET LOCAL statement_timeout = '120s';--> statement-breakpoint
+-- Services remain enabled; exclude committed legacy updates throughout copy/drop.
+LOCK TABLE "RunTarget", "RunProgress" IN ACCESS EXCLUSIVE MODE;--> statement-breakpoint
 CREATE TABLE "SourceOrderObservation" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"sourceClaimId" uuid NOT NULL,
@@ -1054,7 +1056,7 @@ WHERE e.classification IS NOT NULL
 
 SET LOCAL lock_timeout = '5s';--> statement-breakpoint
 SET LOCAL statement_timeout = '120s';--> statement-breakpoint
--- Breaking cutover: every writer stays quiesced until the matching deployment.
+-- Early transaction-held locks preserve retired sources while services remain enabled.
 -- Refuse to discard an unmigrated roster, outcome or progress identity.
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM "RunTarget" old WHERE old."entityKind" = 'image'

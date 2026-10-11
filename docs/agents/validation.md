@@ -100,10 +100,12 @@ migration (`DROP COLUMN`, or a constraint the deployed code would violate) is
 the exception: ship the code that stops reading or writing the old shape first,
 then apply the migration right after that deploy and read it back
 ([domain rules](domain-rules.md)).
-An explicitly authorized breaking downtime cutover may consolidate expansion,
-transformation and contraction before merge. Quiesce every writer first, keep
-maintenance active through the matching deploy, and verify household preservation
-and the final catalog before reopening traffic.
+An explicitly authorized breaking cutover may consolidate expansion and contraction
+before merge. Follow its owning runbook: normally quiesce writers, or honor an
+explicit services-enabled request with transaction-held copy/drop locks. Verify SQL
+preservation before merge, deploy matching code immediately, and run historical
+accepted-reference promotion only after old in-flight work finishes. Verify household
+preservation, client delivery and the final catalog before normal use.
 
 ## Explicit local diagnostics
 

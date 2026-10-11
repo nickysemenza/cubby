@@ -18,13 +18,14 @@ accesses production. T3 delegates use explicit Codex models/efforts. Shared file
 stay with root or receive a sequential handoff; independent lanes never overlap.
 
 1. Root inventories persisted shapes, all readers, client contracts and incoming
-   edges; defines the authorized single-migration downtime cutover and writes failing
+   edges; defines the authorized single-migration breaking cutover and writes failing
    persisted-state regressions before changing each guarded behavior. Resolve
    runtime facts from the checkout rather than copying historical observations.
    Complete when each deletion has a reader replacement, data disposition and
    named regression, and migration ownership is exclusive.
-   Quiesce all writers before the migration, run the validated historical transform,
-   and keep traffic stopped through the matching deploy and preservation readbacks.
+   Preserve the member-requested service states. Lock retired copy/drop sources
+   inside the migration, verify SQL preservation, then merge/deploy. Promote
+   historical evidence only after matching code replaces old in-flight work.
 2. Root changes the manifest/storage/contracts and generates the shared spine.
    Preserve identity and shortcode mappings over the union of existing mail rows,
    accepted source families, dismissals, promoted images and operation outcomes.
@@ -167,24 +168,27 @@ Watch through T3, verify all required checks on the exact final head, then merge
 
 ## Production order and stop conditions
 
-Root is the exclusive migration owner. Downtime is authorized. Quiesce relevant
-writers, discovery, scheduled jobs, Workflows and coordinators before migration;
-a maintenance page alone does not stop background writes.
+Root is the exclusive migration owner. The member authorizes a breaking cutover
+but explicitly requests leaving production services running. Do not toggle
+maintenance, pause queues or Workflows, or change existing paused states. Verify
+current activity and backlog, but do not treat observed idleness as a concurrency
+barrier. Old requests may fail on contracted tables/columns until deployment.
 
-1. With every writer quiesced, apply the single breaking migration
-   `0035_email_import_cutover` before merge. It carries the ordered schema and SQL
-   transforms, including the guarded drops and Email rename, with transaction-local
-   lock and statement timeouts. The old deployment cannot operate against this schema.
-   Run the validated historical accepted-order TypeScript transform, verify its
-   financial/stock preservation snapshots, and verify a second apply promotes zero.
-   Read back identity mappings, provenance, accepted observations, photo outcomes
-   and financial invariants; investigate refusals and disclose unknown history.
-   Production schema changes remain serialized with other sessions.
-2. Keep requests, scheduled jobs, workflows and coordinators stopped through the
-   final-head merge and deployment. Verify the matching server and every automated
-   native build/TestFlight delivery plus the compatibility gate. Read back catalog
-   and data invariants before reopening traffic. There is no second migration or
-   interval where old code is allowed to write the contracted schema.
+1. After exact-head checks pass, capture financial and provenance snapshots and
+   apply `0035_email_import_cutover` before merge. Its transaction-held exclusive
+   locks precede the first read of retired Run tables, excluding committed updates
+   during copy/drop. Lock and statement timeouts refuse and roll back rather than
+   bypass contention. Read back SQL preservation, identity mappings, source history,
+   photo outcomes and the catalog before merge; verify rollback/bookkeeping after
+   any migration failure. Production schema changes remain serialized.
+2. Merge immediately after migration readbacks and verify the matching server
+   deployment. After old in-flight work finishes, run the canonical historical
+   accepted-order TypeScript transform, investigate refusals, verify financial/stock
+   preservation and accepted-reference consistency, and confirm a second apply
+   promotes zero. Promotion must follow deployment: old import writers can update
+   surviving associations without maintaining the new observation reference.
+   Verify automated native/TestFlight delivery and the compatibility gate. There
+   is no second migration; normal use resumes after deployment verification.
 3. Dispatch recovery-only `maintenance.recover`, not the catch-up action that also
    queues purchase discovery. Use a one-time cutoff covering newly settled Runs
    while preserving oldest-first batches, destroy/confirm and failure isolation.
