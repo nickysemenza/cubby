@@ -199,8 +199,9 @@ historical Runs stay readable through generic reports.
 - ⏳ **Accept live Mail import and Burn-down.** Live work stays paused until the
   member resumes it. Remaining acceptance: the approved 26-Product scope, the
   remaining evidence-supported facts and the separate Row 7 naming question,
-  the reported duplicate Product creation, known-vendor and unmatched-transaction
-  backfills, full Gmail history excluding Spam/Trash, separately verified
+  live verification that imports refuse exact-identity Product forks and
+  resolve Vendors by Sender proof or Vendor alias, known-vendor and
+  unmatched-transaction backfills, full Gmail history excluding Spam/Trash, separately verified
   continuous new-mail processing, and persisted Purchases, Products, related
   Emails, financial events, Sources and images, plus Spending. Installed-client
   acceptance is excluded at the member's request. Paid Gateway fallback stays within the existing caps ($10 pilot, $10
