@@ -1,3 +1,4 @@
+import type { CostType } from "@cubby/schemas/expense-fields";
 import {
   type ExpenseLineKind,
   resolveExpenseLineKind,
@@ -228,6 +229,7 @@ export type ExpenseFieldDraft = {
   productId?: string | null;
   purchaseId?: string | null;
   trade?: Trade | null;
+  costType?: CostType | null;
 };
 
 type DraftResolutionRow = {
@@ -340,10 +342,11 @@ const draftTradeResolution = (
 };
 
 /** An adjustment with no trade of its own follows its principals' shares for
- * trade and cost type, so a draft cannot name either value for it. */
-const draftAllocatedShare = (): FieldResolution => ({
+ * trade and cost type, so a draft cannot name either value for it. Its own
+ * stored value stays the editing baseline. */
+const draftAllocatedShare = (storedValue: string | null): FieldResolution => ({
   mode: "allocated",
-  storedValue: null,
+  storedValue,
   value: null,
   fallbackValue: null,
   source: "Follows items",
@@ -433,8 +436,8 @@ export async function resolveDraftExpenseFields(
   if (lineKind !== "principal" && trade === null) {
     return {
       projectId: projectResolution,
-      trade: draftAllocatedShare(),
-      costType: draftAllocatedShare(),
+      trade: draftAllocatedShare(null),
+      costType: draftAllocatedShare(draft.costType ?? null),
     };
   }
   return {

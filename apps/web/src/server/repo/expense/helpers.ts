@@ -372,7 +372,8 @@ const allocatedShareResolution = <K extends "trades" | "costTypes">(
   const values = [...new Set(allocations.flatMap((a) => a[key]))];
   return {
     mode: "allocated",
-    storedValue: null,
+    // Every Expense keeps a stored cost type; editors seed from it.
+    storedValue: key === "costTypes" ? row.costType : null,
     value: values.length === 1 ? values[0]! : null,
     fallbackValue: null,
     source: expenseSpendingCategoryAllocationSource(values.length === 1),

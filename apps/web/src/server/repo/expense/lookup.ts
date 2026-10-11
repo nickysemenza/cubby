@@ -547,7 +547,8 @@ const hydrateExpenseRows = async (
         rows.map((row) => row.id),
       ),
     ),
-    loadListGroup(projection, "relations", () =>
+    // Derived trade/cost-type resolutions read the same allocation shares.
+    loadListGroup(projection, ["relations", "derived"], () =>
       loadExpenseSpendingAllocations(
         db,
         rows.map((row) => row.id),

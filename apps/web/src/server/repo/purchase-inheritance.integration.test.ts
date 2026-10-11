@@ -331,10 +331,11 @@ describe("purchase inheritance lifecycle", () => {
         name: "Sales tax",
         lineKind: "tax",
         purchaseId: source.shortcode,
+        costType: "services",
       }),
     ).toMatchObject({
       trade: { mode: "allocated" },
-      costType: { mode: "allocated" },
+      costType: { mode: "allocated", storedValue: "services" },
     });
     expect(
       await resolveDraftExpenseFields(ctx.db, {

@@ -999,8 +999,12 @@ export async function suggestFields(
       ? {}
       : await resolveSuggestionInheritance(db, input);
   const eligibleTargets = input.targets.filter((target) => {
-    if (input.basisMode === "provided") return true;
     const resolution = fieldResolutions[target];
+    // A value that follows a purchase's items (an adjustment's Project, trade,
+    // or cost type) has no per-line choice to make, in any basis mode:
+    // accepting one would turn the allocation into an override.
+    if (resolution?.mode === "allocated") return false;
+    if (input.basisMode === "provided") return true;
     return (
       resolution === undefined ||
       (resolution.mode === "inherit" && resolution.value === null)

@@ -40,7 +40,7 @@ import {
   updateExpense,
 } from "~/server/repo/expense/crud";
 import { updateExpensesInBulk } from "~/server/repo/expense/crud";
-import { expenseList } from "~/server/repo/expense/lookup";
+import { expenseList, expenseListRead } from "~/server/repo/expense/lookup";
 import { createProduct } from "~/server/repo/product/crud";
 import { getPurchaseExpenses, purchaseList } from "~/server/repo/purchase";
 import {
@@ -813,9 +813,11 @@ describe("expense repository — expenseAnalytics", () => {
       mode: "allocated",
       value: "travel",
     });
+    // Editors seed from storedValue: the tax keeps its own stored cost type.
     expect(read?.fieldResolutions?.costType).toMatchObject({
       mode: "allocated",
       value: "services",
+      storedValue: "materials",
     });
     const names = async (filters: Parameters<typeof expenseList>[1]) =>
       (
@@ -832,6 +834,18 @@ describe("expense repository — expenseAnalytics", () => {
       "synthetic award departure tax",
       "synthetic award fare",
     ]);
+    // A list patch of only the derived group resolves like a full read.
+    const derived = await expenseListRead(
+      ctx.db,
+      { search: "synthetic award departure" },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+      { kind: "enrichment", groups: ["derived"] },
+    );
+    expect(derived.data[0]?.fieldResolutions).toMatchObject({
+      trade: { mode: "allocated", value: "travel" },
+      costType: { mode: "allocated", value: "services" },
+    });
     // The tax's stored "materials" no longer classifies it; its share does.
     expect(await names({ costType: "materials" })).toEqual([]);
     expect(await names({ costType: "services" })).toHaveLength(2);
