@@ -1,6 +1,10 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { seedVendorDisplayPrerequisite } from "./fixtures-catalog";
+import {
+  seedInventoryPrerequisites,
+  seedVendorDisplayPrerequisite,
+} from "./fixtures-catalog";
+import { seedCookbookSourcePrerequisite } from "./fixtures-recipes";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -94,6 +98,15 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
   const defaults = await headerIds(page);
   expect(defaults.slice(0, 2)).toEqual(["select", "image"]);
   expect(defaults.at(-1)).toBe("actions");
+  expect(defaults.slice(-3)).toEqual(["createdAt", "updatedAt", "actions"]);
+  for (const id of ["createdAt", "updatedAt"]) {
+    const timestamp = page.locator(`[data-cell-col="${id}"]`).first();
+    await expect(timestamp).toHaveText(/^(now|\d+(m|h|d|w|mo|y))$/);
+    await timestamp.getByRole("button").hover();
+    await expect(
+      page.getByText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
+    ).toBeVisible();
+  }
   for (const id of [
     "dataQuality",
     "spendingProfile",
@@ -188,6 +201,18 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
   const dragHandle = (label: string) =>
     dialog.getByRole("button", { name: `Drag ${label}`, exact: true });
   const row = (id: string) => dialog.locator(`[data-column-id="${id}"]`);
+
+  // The audit pair follows the same visibility controls as domain columns.
+  await dialog
+    .getByRole("button", { name: "Hide Created", exact: true })
+    .click();
+  await expect
+    .poll(() => headerIds(page))
+    .toEqual(expected.filter((id) => id !== "createdAt"));
+  await dialog
+    .getByRole("button", { name: "Show Created", exact: true })
+    .click();
+  await expect.poll(() => headerIds(page)).toEqual(expected);
 
   await pointerDrag(
     page,
@@ -299,4 +324,39 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
     page.getByRole("link", { name, exact: true }),
   );
   await expect.poll(() => headerIds(page)).toEqual(defaults);
+});
+
+test("audit columns are visible on Inventory and client-backed Cookbook lists", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const prefix = `Audit columns ${Date.now()}`;
+  const name = `${prefix} product`;
+  await seedInventoryPrerequisites(page, {
+    locationName: `${prefix} shelf`,
+    products: [{ name, quantity: 1, unit: "each" }],
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/inventory?productNameFilter=${encodeURIComponent(name)}`,
+    page.getByRole("row").filter({ hasText: name }).first(),
+  );
+  expect((await headerIds(page)).slice(-3)).toEqual([
+    "createdAt",
+    "updatedAt",
+    "actions",
+  ]);
+
+  const cookbookName = `${prefix} cookbook`;
+  await seedCookbookSourcePrerequisite(page, cookbookName);
+  await gotoAuthenticatedPage(
+    page,
+    `/cookbooks?searchQuery=${encodeURIComponent(cookbookName)}`,
+    page.getByRole("row").filter({ hasText: cookbookName }).first(),
+  );
+  expect((await headerIds(page)).slice(-3)).toEqual([
+    "createdAt",
+    "updatedAt",
+    "actions",
+  ]);
 });
