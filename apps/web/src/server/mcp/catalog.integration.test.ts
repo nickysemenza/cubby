@@ -526,6 +526,12 @@ describe("MCP catalog", () => {
   // Failure modes: the outer action hides the writer's choice; omission or
   // an unsupported choice must not resolve the retained finding.
   it("dismisses and applies retained findings through the published operation action", async () => {
+    const { tools } = await listMcpToolCatalog();
+    expect(
+      tools.find((tool) => tool.name === "run")?.inputSchema,
+    ).toMatchObject({
+      properties: { operationAction: { enum: ["apply", "dismiss"] } },
+    });
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic finding member",
       kind: "member",
