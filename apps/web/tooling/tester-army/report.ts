@@ -1,19 +1,31 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Reporter } from "e2e";
-import {
-  collectTesterArmyEvidence,
-  testerArmySummarySchema,
-} from "../../../../scripts/lib/tester-army-ci.ts";
+import { z } from "zod";
 import { testerArmyDriverIdentity } from "./model";
-import { readBrowserCookies } from "./scenario";
 
-const summarySchema = testerArmySummarySchema;
+const summarySchema = z.object({
+  schemaVersion: z.literal(1),
+  status: z.string(),
+  model: z.string(),
+  effort: z.literal("medium"),
+  tokens: z.number(),
+  modelCalls: z.number(),
+  estimatedCostUsd: z.number().optional(),
+  cases: z.array(
+    z.object({ name: z.string(), status: z.string(), durationMs: z.number() }),
+  ),
+  replay: z.object({
+    replayed: z.number(),
+    handedOff: z.number(),
+    missed: z.number(),
+  }),
+});
 
 export const testerArmyReporter: Reporter = {
   name: "cubby-sanitized-summary",
-  async onRunFinished({ report, reportPath, artifactsRoot }) {
+  async onRunFinished({ report, reportPath }) {
     if (!reportPath) throw new Error("Tester Army did not save its report");
     const results = report.run.results.filter((result) => result.selected);
     const steps = results.flatMap((result) =>
@@ -51,48 +63,6 @@ export const testerArmyReporter: Reporter = {
       path.join(path.dirname(reportPath), "agent-summary.json"),
       `${JSON.stringify(summary, null, 2)}\n`,
     );
-    if (
-      process.env.GITHUB_ACTIONS === "true" &&
-      process.env.TESTER_ARMY_CI_EVIDENCE === "1"
-    ) {
-      const target = process.env.TESTER_ARMY_TARGET;
-      if (target !== "web" && target !== "ios")
-        throw new Error("Invalid CI evidence target");
-      const output = path.join(
-        fileURLToPath(
-          new URL(
-            "../../../../artifacts/tester-army-evidence/",
-            import.meta.url,
-          ),
-        ),
-        target,
-        path.basename(path.dirname(reportPath)),
-      );
-      collectTesterArmyEvidence(artifactsRoot, output, [
-        process.env.TESTER_ARMY_CF_API_TOKEN ?? "",
-        ...(target === "web"
-          ? readBrowserCookies().map((cookie) => cookie.value)
-          : []),
-      ]);
-      mkdirSync(output, { recursive: true });
-      writeFileSync(
-        path.join(output, "cases.json"),
-        `${JSON.stringify(
-          results.map((result, index) => ({
-            scenario: index + 1,
-            name: result.titlePath.join(" > "),
-            status: result.status,
-            attempts: result.attempts.map((attempt) => ({
-              status: attempt.status,
-              durationMs: attempt.durationMs,
-              errorCode: attempt.error?.code,
-            })),
-          })),
-          null,
-          2,
-        )}\n`,
-      );
-    }
   },
 };
 

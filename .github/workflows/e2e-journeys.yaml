@@ -40,28 +40,32 @@ env:
 jobs:
   route:
     name: Select background journeys
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       web: ${{ steps.route.outputs.web }}
       ios: ${{ steps.route.outputs.ios }}
       imports: ${{ steps.route.outputs.imports }}
+      simulator: ${{ steps.route.outputs.simulator }}
+      web-matrix: ${{ steps.route.outputs.web-matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version-file: .nvmrc
       - id: route
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          TESTER_ARMY_JOURNEY: ${{ inputs.journey }}
         run: node scripts/tester-army-ci.ts route
 
   simulator-e2e:
     name: iPhone simulator E2E (manual)
-    if: startsWith(inputs.journey, 'simulator-') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'simulator-e2e') && (github.event.action != 'labeled' || github.event.label.name == 'simulator-e2e'))
+    if: needs.route.outputs.simulator == 'true'
+    needs: route
     runs-on: macos-26
     timeout-minutes: 40
     steps:
@@ -153,23 +157,30 @@ jobs:
           path: artifacts/sealed-simulator-e2e
 
   tester-army-web:
-    name: Tester Army web (informational)
-    if: always() && !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (github.event_name == 'schedule' || inputs.journey == 'tester-army-web' || inputs.journey == 'tester-army-both' || inputs.journey == 'tester-army-all' || (github.event_name == 'pull_request' && (needs.route.outputs.web == 'true' || (contains(github.event.pull_request.labels.*.name, 'tester-army') && (github.event.action != 'labeled' || github.event.label.name == 'tester-army')))))
+    name: Tester Army ${{ matrix.lane }} (informational)
+    if: needs.route.outputs.web == 'true' || needs.route.outputs.imports == 'true'
     needs: route
     permissions:
       contents: read
       actions: read
       pull-requests: write
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.route.outputs.web-matrix) }}
+    timeout-minutes: ${{ matrix.timeout }}
     env:
       TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN }}
       TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
       TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL }}
+      TESTER_ARMY_AGENT_MODEL: ${{ vars.TESTER_ARMY_AGENT_MODEL }}
+      TESTER_ARMY_AGENT_EFFORT: ${{ vars.TESTER_ARMY_AGENT_EFFORT }}
+      TESTER_ARMY_LANE: ${{ matrix.lane }}
       E2E_TELEMETRY_DISABLED: "1"
       TESTER_ARMY_CI_EVIDENCE: "1"
+      GITHUB_TOKEN: ${{ github.token }}
       TESTER_ARMY_REPLAY: ${{ github.event_name == 'pull_request' && '1' || '0' }}
-    services: &test-databases
+    services:
       postgres:
         image: mirror.gcr.io/pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
         env:
@@ -208,95 +219,22 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: apps/web/.e2e/cache
-          key: tester-army-replay-v1-web-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: tester-army-replay-v1-${{ matrix.lane }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            tester-army-replay-v1-web-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
-      - run: pnpm test:e2e:agent:preflight
+            tester-army-replay-v1-${{ matrix.lane }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
-      - run: pnpm test:e2e:agent:web -- --harness standard
+      - run: pnpm test:e2e:agent:web -- --harness ${{ matrix.harness }}
       - name: Save verified action recordings
         if: always() && !cancelled() && github.event_name == 'pull_request'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: apps/web/.e2e/cache
-          key: tester-army-replay-v1-web-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: Save synthetic web run bundle
+          key: tester-army-replay-v1-${{ matrix.lane }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Save synthetic run bundle
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: tester-army-web-run
-          retention-days: 7
-          if-no-files-found: warn
-          path: |
-            artifacts/tester-army/web/*/run-manifest.json
-            artifacts/tester-army/web/*/run-results.json
-            artifacts/tester-army/web/*/agent-summary.json
-            artifacts/tester-army/web/*/SHA256SUMS
-      - name: Save screenshots, failure traces and video
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: tester-army-web-evidence-${{ github.event.pull_request.head.sha || github.sha }}
-          retention-days: 7
-          if-no-files-found: warn
-          path: artifacts/tester-army-evidence/web
-      - name: Update informational result
-        if: always()
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          TESTER_ARMY_LANE: web
-          TESTER_ARMY_JOB_STATUS: ${{ job.status }}
-        run: node scripts/tester-army-ci.ts publish
-
-  tester-army-import:
-    name: Tester Army import (informational)
-    if: always() && !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (github.event_name == 'schedule' || inputs.journey == 'tester-army-import' || inputs.journey == 'tester-army-all' || (github.event_name == 'pull_request' && (needs.route.outputs.imports == 'true' || (contains(github.event.pull_request.labels.*.name, 'tester-army:import') && (github.event.action != 'labeled' || github.event.label.name == 'tester-army:import')))))
-    needs: route
-    permissions:
-      contents: read
-      actions: read
-      pull-requests: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN }}
-      TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
-      TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL }}
-      TESTER_ARMY_AGENT_MODEL: ${{ vars.TESTER_ARMY_AGENT_MODEL }}
-      TESTER_ARMY_AGENT_EFFORT: ${{ vars.TESTER_ARMY_AGENT_EFFORT }}
-      E2E_TELEMETRY_DISABLED: "1"
-      TESTER_ARMY_CI_EVIDENCE: "1"
-      TESTER_ARMY_REPLAY: ${{ github.event_name == 'pull_request' && '1' || '0' }}
-    services: *test-databases
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: restore
-      - name: Restore verified action recordings
-        if: github.event_name == 'pull_request'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: apps/web/.e2e/cache
-          key: tester-army-replay-v1-import-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            tester-army-replay-v1-import-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
-      - run: pnpm test:e2e:agent:preflight
-      - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
-      - run: pnpm test:e2e:agent:web -- --harness coupled
-      - name: Save verified action recordings
-        if: always() && !cancelled() && github.event_name == 'pull_request'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: apps/web/.e2e/cache
-          key: tester-army-replay-v1-import-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: Save synthetic import run bundle
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: tester-army-import-run
+          name: tester-army-${{ matrix.lane }}-run
           retention-days: 7
           if-no-files-found: warn
           path: |
@@ -309,21 +247,22 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: tester-army-import-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          name: tester-army-${{ matrix.lane }}-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           retention-days: 7
           if-no-files-found: warn
-          path: artifacts/tester-army-evidence/web
-      - name: Update informational result
-        if: always()
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          TESTER_ARMY_LANE: import
-          TESTER_ARMY_JOB_STATUS: ${{ job.status }}
-        run: node scripts/tester-army-ci.ts publish
+          include-hidden-files: true
+          path: |
+            apps/web/.e2e/runs/web/**/report.json
+            apps/web/.e2e/runs/web/**/junit.xml
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/screenshots/*.png
+            apps/web/.e2e/runs/web/**/results/*/trace.md
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/screen-at-failure.txt
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/video/*.webm
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/video/*.mp4
 
   tester-army-ios:
     name: Tester Army ios (informational)
-    if: always() && !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (github.event_name == 'schedule' || inputs.journey == 'tester-army-ios' || inputs.journey == 'tester-army-both' || inputs.journey == 'tester-army-all' || (github.event_name == 'pull_request' && (needs.route.outputs.ios == 'true' || (contains(github.event.pull_request.labels.*.name, 'tester-army:ios') && (github.event.action != 'labeled' || github.event.label.name == 'tester-army:ios')))))
+    if: needs.route.outputs.ios == 'true'
     needs: route
     permissions:
       contents: read
@@ -337,6 +276,7 @@ jobs:
       TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL }}
       E2E_TELEMETRY_DISABLED: "1"
       TESTER_ARMY_CI_EVIDENCE: "1"
+      GITHUB_TOKEN: ${{ github.token }}
       TESTER_ARMY_REPLAY: ${{ github.event_name == 'pull_request' && '1' || '0' }}
       CUBBY_SIM_DB_EXTERNAL: "1"
     steps:
@@ -420,11 +360,12 @@ jobs:
           name: tester-army-ios-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           retention-days: 7
           if-no-files-found: warn
-          path: artifacts/tester-army-evidence/ios
-      - name: Update informational result
-        if: always()
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          TESTER_ARMY_LANE: ios
-          TESTER_ARMY_JOB_STATUS: ${{ job.status }}
-        run: node scripts/tester-army-ci.ts publish
+          include-hidden-files: true
+          path: |
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/report.json
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/junit.xml
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/screenshots/*.png
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/trace.md
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/screen-at-failure.txt
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/video/*.webm
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/video/*.mp4
