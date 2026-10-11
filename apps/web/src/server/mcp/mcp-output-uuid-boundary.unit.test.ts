@@ -51,6 +51,7 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // Nullable row handles in the reviewed replacement snapshot participate in
   // the approval fingerprint and attribution comparison in applyFix.
   "activity.runFindings[].proposedFix.reviewedLineIdentities[].productId",
+  "activity.runFindings[].proposedFix.reviewedLineIdentities[].distinctFrom[].productId",
   "activity.runFindings[].proposedFix.reviewedLineAttributions[].partyId",
   // The source observation a reconcile_source_order proposal was built from;
   // applyFix commits exactly that observation, never a newer one.
