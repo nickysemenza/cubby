@@ -17,6 +17,8 @@ const candidate = (
   model: null,
   price,
   inventoried: false,
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
 });
 
 const wish = (

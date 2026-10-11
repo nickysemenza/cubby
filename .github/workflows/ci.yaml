@@ -112,8 +112,26 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
         with:
-          cache: true
-          cache-workspaces: ". -> target"
+          cache: false
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        id: rust-cache
+        with:
+          workspaces: ". -> target"
+          # Root workspace profiles are not part of rust-cache's member manifest hash.
+          # Retire immutable empty entries saved when Nx replayed both Rust targets.
+          prefix-key: rust-gate-v3
+          key: ${{ hashFiles('Cargo.toml') }}
+          cache-on-failure: false
+      # Populate both check metadata and linked test dependencies even if Nx replays.
+      # Keep package and feature selection aligned with each project's Rust target.
+      - name: Populate Rust dependency cache
+        if: steps.rust-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo clippy --manifest-path recipebridge/Cargo.toml --locked --profile ci --all-targets -- -D warnings
+          cargo clippy --manifest-path recipebridge/Cargo.toml --locked --profile ci --no-default-features -- -D warnings
+          cargo test --manifest-path recipebridge/Cargo.toml --locked --profile ci --no-run
+          cargo clippy --manifest-path cubby-ffi/Cargo.toml --locked --profile ci --all-targets -- -D warnings
+          cargo test --manifest-path cubby-ffi/Cargo.toml --locked --profile ci --no-run
       # One crate at a time: both share the workspace target directory.
       - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream
 

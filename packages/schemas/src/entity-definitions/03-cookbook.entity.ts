@@ -2,6 +2,7 @@ import { defineEntity } from "./definition.js";
 import { cookbookProductSummary } from "@cubby/schemas/cookbook-fields";
 import { cookbookShortcode } from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
+import { timestampedFields } from "../base-entity.js";
 import { z } from "zod";
 export default defineEntity({
   key: "cookbook",
@@ -100,8 +101,24 @@ export default defineEntity({
         reference: { entity: "product" },
       },
       { key: "importedAt", kind: "timestamp" },
-      { key: "createdAt", kind: "timestamp" },
-      { key: "updatedAt", kind: "timestamp" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        validation: {
+          read: timestampedFields.createdAt,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        validation: {
+          read: timestampedFields.updatedAt,
+          create: null,
+          update: null,
+        },
+      },
       {
         key: "deletedAt",
         kind: "timestamp",
@@ -262,6 +279,8 @@ export default defineEntity({
       "sourceRecipeCount",
       "needsReextract",
       "product",
+      "createdAt",
+      "updatedAt",
     ],
   },
   fields: {

@@ -238,6 +238,21 @@ function useListColumns(
   return { columns, identityEditable };
 }
 
+function useListInitialColumnVisibility(
+  entity: BrowserRoutedEntity,
+  overrides?: Record<string, boolean>,
+) {
+  return useMemo(
+    () => ({
+      ...entityListHiddenColumns(entity),
+      ...overrides,
+      createdAt: true,
+      updatedAt: true,
+    }),
+    [entity, overrides],
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Component                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -332,11 +347,9 @@ function ServerListBody({
 
   // `deletable` defaults ON: a top-level list page owns its entity's rows,
   // where an embedded relationship ledger does not.
-  // Declared `display.listHidden` columns start hidden even for an entity
-  // with no list module; a module's own visibility map still wins.
-  const initialColumnVisibility = useMemo(
-    () => entityListHiddenColumns(entity),
-    [entity],
+  const initialColumnVisibility = useListInitialColumnVisibility(
+    entity,
+    listOptions?.initialColumnVisibility,
   );
   const additionalReadFields = useMemo(() => {
     const parentField = entitySummary[entity].list.tree?.parentField;
@@ -376,8 +389,8 @@ function ServerListBody({
     columns,
     deletable: true,
     preview: DEFAULT_PREVIEW,
-    initialColumnVisibility,
     ...listOptions,
+    initialColumnVisibility,
     additionalReadFields,
     filterOptions,
     // SAFETY: the flat and tree overloads only differ in whether `tree` is
@@ -655,6 +668,10 @@ function ClientListBody({
   const { density } = useEntityListCardDensity();
   const parts = override.use(context);
   const { columns } = useListColumns(entity, parts, false);
+  const initialColumnVisibility = useListInitialColumnVisibility(
+    entity,
+    parts.list?.initialColumnVisibility,
+  );
   const client = parts.client;
   if (!client)
     throw new Error(`${entity} list override declares no client rows`);
@@ -669,6 +686,7 @@ function ClientListBody({
     columns,
     preview: DEFAULT_PREVIEW,
     ...parts.list,
+    initialColumnVisibility,
   });
   usePageCount(
     client.isLoading
