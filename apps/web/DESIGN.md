@@ -32,7 +32,7 @@ Today/Home uses only the existing task, problem, meal, activity, nutrition, inve
 
 ## Generic records
 
-Entity declarations own names, domains, images, fields, view choices, relations, sections, and action availability. Generated route shells and `GenericEntityList`/`GenericEntityDetail` render them. An entity-specific page may supply a declared slot or necessary query adapter; it does not introduce its own page chrome. The external USDA catalog remains an external-reference exception.
+Entity declarations own names, domains, images, fields, view choices, relations, sections, and action availability. Generated route shells and `GenericEntityList`/`GenericEntityDetail` render them. An entity-specific page may supply a declared slot or necessary query adapter; it does not introduce its own page chrome. List workbenches use two stable rows: editorial identity and count beside primary actions, then search, active filter chips, a Filters disclosure, and a single manifest-driven view menu. Inactive filters stay inside the disclosure. Full filtered totals and suggestion sweep/review status share one compact wrapping strip directly above the records; errors and diagnostics remain visible with their controls. Phone query tools get their own full-width row and retain the filter/sort sheet. The external USDA catalog remains an external-reference exception.
 
 A complete record uses a clear human identity, optional true media, compact metadata, declared facts, direct relationships, supporting evidence, and actions the entity can actually perform. An inspector is a bounded preview of the loaded record and its direct context, never a second canonical detail page or a separate batch selection state. A row click inspects; a checkbox selects for batch work.
 

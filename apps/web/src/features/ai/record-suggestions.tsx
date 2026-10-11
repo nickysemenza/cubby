@@ -25,6 +25,7 @@ import {
   type ContextType,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { z } from "zod";
 
 import { detailEditRequest } from "~/entity/editing/editor-requests";
@@ -433,6 +434,7 @@ export function RecordSuggestionsProvider({
   records,
   fieldKeys,
   children,
+  statusTarget,
   operations,
   mutationPort,
   readRecord,
@@ -442,6 +444,7 @@ export function RecordSuggestionsProvider({
   records: readonly unknown[];
   fieldKeys: readonly string[];
   children: ReactNode;
+  statusTarget?: HTMLElement | null;
   operations?: EntitySuggestionsOperations;
   mutationPort?: EntityMutationPort;
   readRecord?: (
@@ -457,6 +460,7 @@ export function RecordSuggestionsProvider({
   return (
     <SuggestionVisitProvider key={crud}>
       <BoundRecordSuggestions
+        statusTarget={statusTarget}
         entity={crud}
         records={records}
         fieldKeys={fieldKeys}
@@ -637,11 +641,22 @@ function statusFieldsForRows(
 
 const NO_RECORDS: readonly unknown[] = [];
 
+function SuggestionStatusPlacement({
+  target,
+  children,
+}: {
+  target?: HTMLElement | null;
+  children: ReactNode;
+}) {
+  return target ? createPortal(children, target) : children;
+}
+
 function BoundRecordSuggestions({
   entity,
   records: allRecords,
   fieldKeys,
   children,
+  statusTarget,
   operations = productionEntitySuggestionsOperations,
   mutationPort,
   readRecord = async (currentEntity, id) =>
@@ -652,6 +667,7 @@ function BoundRecordSuggestions({
   records: readonly unknown[];
   fieldKeys: readonly string[];
   children: ReactNode;
+  statusTarget?: HTMLElement | null;
   operations?: EntitySuggestionsOperations;
   mutationPort?: EntityMutationPort;
   readRecord?: (
@@ -898,16 +914,21 @@ function BoundRecordSuggestions({
     requests.length === 0 && records.length > 0 && targets.targets.length > 0
       ? firstBasisFieldLabel(entity, targets)
       : null;
+  const status = (
+    <SuggestionStatus
+      checking={checking}
+      failures={failures}
+      count={count}
+      fields={statusFieldsForRows(entity, rows)}
+      unasked={unasked}
+    />
+  );
   return (
     <SuggestionSchedulerContext value={scheduler}>
       <RecordSuggestionsContext value={context}>
-        <SuggestionStatus
-          checking={checking}
-          failures={failures}
-          count={count}
-          fields={statusFieldsForRows(entity, rows)}
-          unasked={unasked}
-        />
+        <SuggestionStatusPlacement target={statusTarget}>
+          {status}
+        </SuggestionStatusPlacement>
         {children}
         {correctionRecord ? (
           <EntityEditDialog<EditableEntity>

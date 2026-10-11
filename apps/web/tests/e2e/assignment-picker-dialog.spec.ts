@@ -1,3 +1,4 @@
+import { chooseListView } from "./e2e-helpers";
 import { z } from "zod";
 
 import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
@@ -34,7 +35,7 @@ test("an assignment picker keeps its label through search, clear, and create", a
     page,
     `/locations?name=${encodeURIComponent(`${token} child`)}`,
   );
-  await page.getByRole("button", { name: "List view", exact: true }).click();
+  await chooseListView(page, "List");
   for (const name of childNames) {
     await page
       .getByRole("row")

@@ -24,6 +24,13 @@ import {
 } from "./navigation-timing";
 import { dispatchesOperation, operationResult } from "./dispatch-wire";
 
+export async function chooseListView(page: Page, label: string) {
+  await page.getByRole("button", { name: / view: / }).click();
+  await page
+    .getByRole("menuitem", { name: `${label} view`, exact: true })
+    .click();
+}
+
 /** A public shortcode body, for composing route and id patterns. */
 export const SHORTCODE = SHORTCODE_BODY_PATTERN;
 
