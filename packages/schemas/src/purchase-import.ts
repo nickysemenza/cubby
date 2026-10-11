@@ -356,6 +356,8 @@ export const replacementLineIdentity = z.object({
   reversalKind: z
     .enum(["return", "concession", "cancellation", "replacement"])
     .nullable(),
+  /** A committed Distinct-from decision, carried into a reviewed fix. */
+  distinctFrom: z.array(distinctFromProduct(z.uuid())).optional(),
 });
 
 export const replacementLineAttribution = z.object({

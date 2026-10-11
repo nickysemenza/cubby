@@ -4,6 +4,7 @@ import {
   expenseLineKindValues,
   type ExpenseLineKind,
 } from "@cubby/schemas/expense-line-kind";
+import { GTIN_KIND, GTIN_SOURCE } from "@cubby/schemas/external-id";
 import {
   parseEntityId,
   userId as userIdSchema,
@@ -23,6 +24,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
+import { wasm } from "~/lib/wasm";
 import {
   PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
   PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
@@ -66,6 +68,7 @@ import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
 import {
   externalIdKey,
   findProductsByExternalIds,
+  type ExternalIdPair,
 } from "~/server/repo/product/find-by-external-ids";
 import { findExactProductNameMatches } from "~/server/repo/product/resolve-names";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
@@ -330,6 +333,33 @@ const lineIdentifiers = (
   ];
 };
 
+/** Every exact identifier a line can share with a Product; prepare flags and commit refuses the same set. */
+export const lineIdentifierRequests = (
+  source: string,
+  line: ExtractedPurchaseLine,
+): ExternalIdPair[] => {
+  const ids = [
+    ...new Set(
+      [line.sku, amazonAsin(line.productUrl)].filter((id): id is string =>
+        Boolean(id),
+      ),
+    ),
+  ];
+  return [
+    ...ids.flatMap((externalId) => [
+      { source, externalId, kind: "retailer_sku" as const },
+      { source, externalId, kind: "asin" as const },
+    ]),
+    ...ids.flatMap<ExternalIdPair>((id) => {
+      const gtin = wasm.scan_code_gtin14(id);
+      return gtin
+        ? [{ source: GTIN_SOURCE, externalId: gtin, kind: GTIN_KIND }]
+        : [];
+    }),
+    ...manufacturerPartRequests(line),
+  ];
+};
+
 /** The same vendor SKU in one order must resolve to one Product decision. */
 export const lineExternalIdentity = (
   line: Pick<ExtractedPurchaseLine, "productUrl" | "sku">,
@@ -511,10 +541,7 @@ async function assertNoExactIdentity(
   source: string,
   distinctFrom: readonly ExplicitDistinctFrom[],
 ) {
-  const requests = [
-    ...lineIdentifiers(line).map((identifier) => ({ ...identifier, source })),
-    ...manufacturerPartRequests(line),
-  ];
+  const requests = lineIdentifierRequests(source, line);
   const owners = await findProductsByExternalIds(tx, requests);
   for (const request of requests) {
     const [owner] = owners.get(externalIdKey(request)) ?? [];
@@ -545,9 +572,13 @@ export async function resolveLineProduct(
   decision: LineIdentityDecision,
   vendorId: string,
   productsByExternalIdentity: Map<string, string>,
-  onCreated?: (productId: ProductId) => void,
-  recorder?: ActorContext,
+  options: {
+    /** Records a Distinct-from decision's Source on the created Product. */
+    recorder: ActorContext;
+    onCreated?: (productId: ProductId) => void;
+  },
 ) {
+  const { recorder, onCreated } = options;
   // A line decided to carry no Product (expense-only, or coarse-only) keeps
   // none, even when an earlier line with the same SKU resolved one.
   if (!decision.productId && !decision.promote && !decision.unresolvedReason)
@@ -575,6 +606,11 @@ export async function resolveLineProduct(
     return productId;
   }
   if (decision.lineKind !== "principal" || !decision.promote) return null;
+  // A second `new` line with the same title reuses the Product this commit
+  // just created; the guard would otherwise refuse it against that Product.
+  const titleKey = `title:${line.title.trim().toLowerCase()}`;
+  const createdEarlier = productsByExternalIdentity.get(titleKey);
+  if (createdEarlier) return parseEntityId("product", createdEarlier);
   await assertNoExactIdentity(tx, line, source, decision.distinctFrom ?? []);
   const created = await insertWithShortcode(tx, "product", {
     name: line.title,
@@ -582,10 +618,6 @@ export async function resolveLineProduct(
   });
   onCreated?.(created.id);
   if (decision.distinctFrom?.length) {
-    if (!recorder)
-      throw new Error(
-        "A Distinct-from decision needs an actor to record its Source.",
-      );
     await recordEntitySources(tx, {
       entityKind: "product",
       entityId: created.id,
@@ -596,6 +628,7 @@ export async function resolveLineProduct(
   await learnLineIdentifiers(tx, created.id, line, source);
   if (externalIdentity)
     productsByExternalIdentity.set(externalIdentity, created.id);
+  productsByExternalIdentity.set(titleKey, created.id);
   return created.id;
 }
 
@@ -1417,14 +1450,16 @@ export async function importVendorOrder(
           identity,
           input.vendorId,
           productsByExternalIdentity,
-          (createdId) =>
-            rowMutations.push({
-              targetKind: "product",
-              targetId: createdId,
-              mutationKind: "create",
-              fields: ["name", "externalIds"],
-            }),
-          importActor,
+          {
+            recorder: importActor,
+            onCreated: (createdId) =>
+              rowMutations.push({
+                targetKind: "product",
+                targetId: createdId,
+                mutationKind: "create",
+                fields: ["name", "externalIds"],
+              }),
+          },
         );
         if (productId) productLines.push({ lineIndex, productId });
         if (identity.unresolvedReason)
@@ -1572,14 +1607,16 @@ export async function importVendorOrder(
             productsByExternalIdentity,
             // Recorded on this run so its follow-up enrichment and Changes
             // list know which Products the import created.
-            (createdId) =>
-              rowMutations.push({
-                targetKind: "product",
-                targetId: createdId,
-                mutationKind: "create",
-                fields: ["name", "externalIds"],
-              }),
-            importActor,
+            {
+              recorder: importActor,
+              onCreated: (createdId) =>
+                rowMutations.push({
+                  targetKind: "product",
+                  targetId: createdId,
+                  mutationKind: "create",
+                  fields: ["name", "externalIds"],
+                }),
+            },
           );
           const quantity = receiptProductQuantity(productId, line, identity);
           if (productId) productLines.push({ lineIndex, productId });

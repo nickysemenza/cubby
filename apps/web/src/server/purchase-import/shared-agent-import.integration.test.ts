@@ -1540,6 +1540,73 @@ describe("member prepare and commit identity fences", () => {
     }
   });
 
+  it("refuses an explicit new Product whose SKU is a barcode another Product owns", async () => {
+    const { vendor } = await scope();
+    const owner = await existingProduct({
+      name: "Synthetic labeled fitting",
+      manufacturer: "Synthetic works",
+    });
+    await withTransaction(ctx.db, async (tx) => {
+      await ensureExternalSources(tx, ["gtin"]);
+      await tx.insert(entityExternalId).values({
+        entityId: owner.id,
+        entityKind: "product" as const,
+        source: "gtin",
+        kind: "gtin_14",
+        externalId: "00012345678905",
+        isPrimary: true,
+      });
+    });
+    const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
+      key: "barcode-fork",
+      defaultTrade: "other",
+      orders: [
+        productOrder(
+          vendor.shortcode,
+          { title: "Fitting from a receipt", sku: "012345678905" },
+          { kind: "new" },
+        ),
+      ],
+    });
+    expect(
+      preparation.prepared.orders[0]?.lines[0]?.candidates[0],
+    ).toMatchObject({ productId: owner.shortcode, exactIdentifierMatch: true });
+    await expect(preparation.commit()).rejects.toThrow(
+      new RegExp(owner.shortcode),
+    );
+    await expectNothingWritten();
+  });
+
+  it("creates one Product for two new lines with the same title in one order", async () => {
+    const { vendor } = await scope();
+    const order = productOrder(
+      vendor.shortcode,
+      { title: "Synthetic hose clamp" },
+      { kind: "new" },
+    );
+    const lines = order.extraction.candidate!.lines;
+    const { committed } = await memberImport(ctx.db, ctx.actor, {
+      key: "same-title",
+      defaultTrade: "other",
+      orders: [
+        {
+          ...order,
+          extraction: {
+            status: "ready",
+            candidate: {
+              ...order.extraction.candidate!,
+              printedGrandTotal: 48,
+              lines: [...lines, ...lines],
+            },
+          },
+          resolutions: [{ kind: "new" }, { kind: "new" }],
+        },
+      ],
+    });
+    expect(committed.items[0]?.purchaseId).toBeTruthy();
+    expect(await liveProductIds()).toHaveLength(1);
+  });
+
   it("creates a Product beside an exact name match only with a sourced distinct-from decision", async () => {
     const { vendor } = await scope();
     const existing = await existingProduct({
