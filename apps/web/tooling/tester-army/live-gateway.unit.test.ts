@@ -31,6 +31,31 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// Hosted Worker catalog reads timed out before paid admission. Preserve the
+// fresh host-fetched response, including billing bounds, without a second read.
+it("serves the live catalog snapshot without outbound inference or another catalog read", async () => {
+  const catalog = JSON.stringify({
+    openai: {
+      models: {
+        "gpt-6-luna": {
+          cost: { input: 1, output: 2 },
+          limit: { context: 10_000, input: 9_000, output: 1_000 },
+        },
+      },
+    },
+  });
+  const gatewayEnv = { ...env, PRICING_CATALOG: catalog };
+  vi.stubGlobal("fetch", upstream);
+  upstream.mockRejectedValue(new Error("Worker catalog transport timed out"));
+  const response = await liveGateway.fetch(
+    new Request("https://models.dev/api.json?type=all"),
+    gatewayEnv,
+  );
+  expect(response.status).toBe(200);
+  expect(await response.text()).toBe(catalog);
+  expect(upstream).not.toHaveBeenCalled();
+});
+
 async function send(
   gatewayEnv: Parameters<typeof liveGateway.fetch>[1],
   pathname: string,

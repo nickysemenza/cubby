@@ -211,11 +211,14 @@ const coupledJourneys: Journey[] = [
       },
       {
         awaitRun: photoRun("awaiting_approval"),
-        goal: "Approve every proposed item group on this page, one group at a time, until none is left to approve.",
-        web: [
-          "Approve the currently selected item group. Finish with that item marked Approved.",
-          "Select the other item marked Review in Photo item groups, then approve that item. Finish with Review complete and 2 of 2 photos settled.",
-        ],
+        tapControl: { web: { role: "button", name: "Approve item" } },
+        check: { visible: () => ["Approved"] },
+      },
+      {
+        web: "Check the remaining Review item's checkbox for batch approval. Finish with Approve 1 selected item enabled.",
+        tapControl: {
+          web: { role: "button", name: "Approve 1 selected item" },
+        },
       },
     ],
     awaitRun: photoRun("completed"),

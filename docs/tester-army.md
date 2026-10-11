@@ -317,6 +317,8 @@ operations. The order journey imports from its seeded Email and opens the result
 
 Coupled journey failures print the browser harness's sanitized Worker logs before cleanup. Inspect those logs for the underlying authorization or pricing error when the coordinator reports `model_error`; the SDK screenshot and run status alone can omit that exception.
 
+Before starting a coupled harness, the host fetches the fresh official `models.dev` catalog with all model types and a 30-second deadline. Both live peers serve that exact response to the application's pricing client for the run. Hosted Worker fetches timed out under the pricing client's five-second deadline, leaving paid admission unpriced. No bundled catalog, synthetic rates or authorization bypass is used; a failed host read stops startup.
+
 Final assertions read the imported Purchase, its expense total,
 the imported order candidate, or the committed photo groups.
 

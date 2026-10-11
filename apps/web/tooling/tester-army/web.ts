@@ -167,11 +167,15 @@ function coupledGatewayToken(config: ReturnType<typeof modelConfiguration>) {
   return config.TESTER_ARMY_CF_API_TOKEN;
 }
 
-function liveGatewayWorker(swap?: typeof agentModel): WorkerdModelWorker {
+function liveGatewayWorker(
+  pricingCatalog: string,
+  swap?: typeof agentModel,
+): WorkerdModelWorker {
   const config = modelConfiguration();
   const vars: NonNullable<WorkerdModelWorker["vars"]> = {
     ACCOUNT_ID: config.TESTER_ARMY_CF_ACCOUNT_ID,
     GATEWAY_ENVIRONMENT: testAiGatewayEnvironment(process.env.CI),
+    PRICING_CATALOG: pricingCatalog,
   };
   if (swap) {
     vars.RESPONSES_MODEL = swap.model;
@@ -185,6 +189,14 @@ function liveGatewayWorker(swap?: typeof agentModel): WorkerdModelWorker {
 }
 
 async function runCoupled() {
+  const catalog = await fetch("https://models.dev/api.json?type=all", {
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!catalog.ok)
+    throw new Error(
+      `Live pricing catalog ${catalog.status}: ${await catalog.text()}`,
+    );
+  const pricingCatalog = await catalog.text();
   const { createE2EWorkerRuntime } =
     await import("../../tests/e2e/e2e-worker-runtime");
   const { seedCoupledJourneys } =
@@ -194,8 +206,8 @@ async function runCoupled() {
     parallelIndex: 0,
     profile: "coupled",
     models: {
-      agent: liveGatewayWorker(agentModel),
-      gateway: liveGatewayWorker(),
+      agent: liveGatewayWorker(pricingCatalog, agentModel),
+      gateway: liveGatewayWorker(pricingCatalog),
     },
     objectStorage: { publish: publicStorageOrigin },
   });
