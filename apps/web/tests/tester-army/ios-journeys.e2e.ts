@@ -14,7 +14,7 @@ async function centerInEditor(screen: Screen, target: Locator, editor: string) {
   const form = await screen.getByTestId(editor).boundingBox();
   if (!form) throw new Error("Editor viewport is unavailable");
   const top = form.y + form.height / 4;
-  const bottom = form.y + (3 * form.height) / 4;
+  const bottom = form.y + (form.height * 3) / 4;
   for (let step = 0; step < 10; step += 1) {
     const box = await target.boundingBox();
     if (!box) throw new Error("Setup control bounds are unavailable");
@@ -28,11 +28,46 @@ async function centerInEditor(screen: Screen, target: Locator, editor: string) {
   throw new Error("Setup control did not reach the editor viewport");
 }
 
+async function clearKeyboardAccessory(
+  screen: Screen,
+  field: Locator,
+  editor: string,
+) {
+  // The floating keyboard Done button can cover the focused row.
+  const done = screen.getByRole("button", {
+    name: "Done",
+    exact: true,
+  });
+  const box = await field.boundingBox();
+  const accessory = await done.boundingBox();
+  const form = await screen.getByTestId(editor).boundingBox();
+  if (!box || !accessory || !form)
+    throw new Error("Focused input bounds are unavailable");
+  if (box.y + box.height >= accessory.y) {
+    // AX field bounds can lag keyboard movement. Start above Done in the label gutter;
+    // a gesture inside TextField selects text instead of scrolling the Form.
+    const x = form.x + form.width / 8;
+    const y = accessory.y - box.height;
+    const end = Math.max(
+      form.y + box.height,
+      y - (box.y + box.height - accessory.y + box.height),
+    );
+    if (end >= y) throw new Error("No clear keyboard scroll path");
+    await screen.swipe({
+      from: { x, y },
+      to: { x, y: end },
+      duration: 500,
+    });
+    await expect(field).toBeFocused();
+  }
+}
+
 for (const journey of selectedJourneys(journeys, "ios"))
   test(journey.title, async ({ app, agent, screen, device }) => {
     await runJourney(journey, "ios", {
       agent,
-      tapTestId: (id) => screen.getByTestId(id).tap(),
+      // iOS 26 can echo the identifier onto a wrapper and its button.
+      tapTestId: (id) => device.locator(`id=${id} role=button`).tap(),
       tapControl: (control) => runJourneyControl(screen, control),
       expectButtonDisabled: (name) =>
         expect(
@@ -44,18 +79,29 @@ for (const journey of selectedJourneys(journeys, "ios"))
         else await expect(target).toBeHidden();
       },
       open: async ({ entity, ios }) => {
+        const confirmation = device.locator(
+          'role=alert label="Open in “Cubby”?"',
+        );
+        // A failed case can leave a pending URL; discard it before opening this case's URL.
+        if (await confirmation.isVisible()) await device.alert("dismiss");
         await app.open();
         const link = ios ?? (entity ? `cubby://entity/${entity}` : undefined);
-        if (link) await device.openLink(link);
-        const confirmation = screen.getByRole("alert", {
-          name: "Open in “Cubby”?",
-          exact: true,
-        });
+        const target = entity
+          ? screen.getByText(entity, { exact: true }).first()
+          : undefined;
+        if (link) {
+          await device.openLink(link);
+          await expect
+            .poll(
+              async () =>
+                (await confirmation.isVisible()) ||
+                (target !== undefined && (await target.isVisible())),
+              { timeout: 60_000 },
+            )
+            .toBe(true);
+        }
         if (await confirmation.isVisible()) await device.alert("accept");
-        if (entity)
-          await expect(
-            screen.getByText(entity, { exact: true }).first(),
-          ).toBeVisible({ timeout: 60_000 });
+        if (target) await expect(target).toBeVisible({ timeout: 60_000 });
         // Structured-entry journeys isolate fields; rename covers editor navigation.
         // The SDK offers offscreen native buttons to Jev, so establish a reachable start.
         const setup =
@@ -66,8 +112,12 @@ for (const journey of selectedJourneys(journeys, "ios"))
               : undefined;
         if (setup) {
           const editor = `editor.${setup.entity}`;
-          await screen.getByTestId(`detail.${setup.entity}.edit`).tap();
-          const add = screen.getByTestId(`${editor}.${setup.field}.add`);
+          await device
+            .locator(`id=detail.${setup.entity}.edit role=button`)
+            .tap();
+          const add = device.locator(
+            `id=${editor}.${setup.field}.add role=button`,
+          );
           await screen.scrollUntilVisible(add, { direction: "down" });
           await centerInEditor(screen, add, editor);
           await add.tap();
@@ -75,10 +125,49 @@ for (const journey of selectedJourneys(journeys, "ios"))
             screen.getByTestId(`${editor}.${setup.field}.0.source`),
           ).toBeVisible();
         }
-        if (journey.id.startsWith("finance-split-")) {
-          const split = screen.getByTestId("section.splitExpense");
-          await screen.scrollUntilVisible(split, { direction: "down" });
-          await centerInEditor(screen, split, "detail.expense");
+        const input =
+          journey.id === "field-source-claim"
+            ? {
+                entity: "expense",
+                field: "sourceClaims.0.normalizedEvidence.description",
+              }
+            : journey.id === "field-label-nutrition"
+              ? { entity: "product", field: "labelNutrition.nutrients.kcal" }
+              : undefined;
+        if (input) {
+          await device
+            .locator(`id=detail.${input.entity}.edit role=button`)
+            .tap();
+          const editor = `editor.${input.entity}`;
+          const field = screen.getByTestId(`${editor}.${input.field}`);
+          await screen.scrollUntilVisible(field, { direction: "down" });
+          await centerInEditor(screen, field, editor);
+          await field.focus();
+          await expect(field).toBeFocused();
+          if (journey.id === "field-source-claim")
+            await clearKeyboardAccessory(screen, field, editor);
+        }
+        const report = journey.id.startsWith("finance-split-")
+          ? { control: "section.splitExpense", detail: "detail.expense" }
+          : journey.id === "finance-attach-products"
+            ? { control: "section.linkProducts", detail: "detail.purchase" }
+            : undefined;
+        if (report) {
+          if (journey.id === "finance-attach-products") {
+            // The lazy report must appear before its actions enter the AX tree.
+            const heading = screen.getByRole("button", {
+              name: "Reconciliation: Reconciliation",
+              exact: true,
+            });
+            await screen.scrollUntilVisible(heading, { direction: "down" });
+            await centerInEditor(screen, heading, report.detail);
+            await expect(
+              device.locator("id=section.linkProducts role=button"),
+            ).toBeAttached();
+          }
+          const control = device.locator(`id=${report.control} role=button`);
+          await screen.scrollUntilVisible(control, { direction: "down" });
+          await centerInEditor(screen, control, report.detail);
         }
       },
       reload: () =>

@@ -71,16 +71,16 @@ and identifier into separate goals that explicitly use the app's Done
 button, then taps the known Save control as a supported hybrid step. External-ID and source-ref fixtures establish a reachable structured-entry row, centered in
 the measured Form viewport; product rename covers editor navigation. The generic native editors
 expose that shared Done action and render structured fields as separate Form
-rows for keyboard avoidance. Keep unsupported interaction handling in the
+rows for keyboard avoidance. Token-entry fields derive stable identifiers from the entity and field keys so the native driver can rebind them after keyboard movement. Source-alias row creation uses its known Add control before field entry. Source-alias and sale entry dismiss the keyboard between fields; the floating Done accessory can otherwise cover the next input. Keep unsupported interaction handling in the
 journeys or product UI rather than patching the E2E SDK. Goals end at observable
 states, with exact database read-back establishing persistence. HTTP and network
 inference failures fail once at Cubby's gateway boundary; aborts stay aborts.
-Native keyboard Done uses the SDK’s exact button tap; editor Save and hero-action confirmations use `tapTestId` rather than model completion: both compound
+Native keyboard Done uses the SDK’s exact button tap; editor Save and hero-action confirmations use `tapTestId` rather than model completion. Native identifier taps also require `role=button`, because iOS 26 can expose both a wrapper and its child with the same identifier: both compound
 and simple Save goals returned inconclusive after successfully saving. The
 following visible-value check and exact SQL assertions verify the saved external
 ID, source and kind. Jev still enters the fields and drives product rename. Board movement asks Jev only to open Move and leave its menu open; the existing exact lane tap commits the change before SQL read-back.
 
-Native deep links accept the system Open in Cubby confirmation when it appears, then wait for the selected fixture code to be visible before setup or agent actions; hosted sign-in can outlast the initial launch. Expense split setup reuses the SDK's bounded scroll-to-control and viewport centering. Unbounded downward model scrolling skipped the Purchase report and kept scrolling at the bottom, so cents conservation and unknown-cost refusal begin with its Split control reachable. The final Split tap is scoped to its confirmation group because the underlying detail action remains in the native accessibility tree.
+Native deep links discard an already-visible stale system confirmation before dispatching a new URL, then wait for either the exact target or the Open in Cubby confirmation before accepting once. A one-shot prompt check can miss a delayed confirmation and leak its URL into the next case. The exact fixture code must be visible before setup or agent actions; hosted sign-in can outlast the initial launch. Expense split setup uses the SDK's bounded scroll-to-control and viewport centering. Purchase-product attachment first reveals the lazy Reconciliation report, waits for its action to attach, then centers that control. Claim and nutrition setup establish focus on their known inputs before typing; claim entry swipes through the measured label gutter to clear the floating keyboard Done button, since a gesture inside the text field selects text. Unbounded downward model scrolling skipped the Purchase report and kept scrolling at the bottom, so cents conservation and unknown-cost refusal begin with its Split control reachable. Native nutrition targets the Kcal input, and recipe entry leaves Save to the known editor control. The final Split tap is scoped to its confirmation group because the underlying detail action remains in the native accessibility tree.
 
 ## Failure modes and acceptance
 

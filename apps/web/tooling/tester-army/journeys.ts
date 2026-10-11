@@ -407,7 +407,7 @@ export const journeys: Journey[] = [
         goal: 'Use the Record sale action on this product: name it "Synthetic chair sale", enter a cost of -12.50, set Trade to "Appliances & Furniture", and save the new expense.',
         ios: [
           "Open More and select Record sale. Finish on the Record Sale or Disposal editor.",
-          'Set Name to "Synthetic chair sale" and Cost to -12.50. Leave the expense editor open with those values.',
+          'Set Name to "Synthetic chair sale". Leave the expense editor open with that Name.',
         ],
         tapControl: {
           ios: { role: "button", name: "Done" },
@@ -416,6 +416,12 @@ export const journeys: Journey[] = [
         web: [
           'Open Record sale and enter Name "Synthetic chair sale" and Cost -12.50. Leave the dialog open.',
         ],
+      },
+      {
+        ios: [
+          "Set Cost to -12.50. Leave the expense editor open with that Cost.",
+        ],
+        tapControl: { ios: { role: "button", name: "Done" } },
       },
       {
         ios: [
@@ -474,9 +480,10 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: 'Use the Set status action to set this project to "In progress".',
-        ios: "Open More, choose Set status and select In progress. Leave the action sheet open with In progress selected.",
-        tapTestId: { ios: "heroAction.submit" },
+        ios: "Open More and choose Set status. Leave the action sheet open without selecting a status.",
+        tapControl: { ios: { role: "button", name: "In progress" } },
       },
+      { tapTestId: { ios: "heroAction.submit" } },
     ],
     visible: () => [],
     db: [
@@ -601,9 +608,18 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: 'Edit this account, add a source alias with Source "synthetic-bank" and Alias "SYN CHK 1234", leave the external ID empty, and save.',
+        ios: ["Open Edit Account. Leave the editor open."],
+        tapTestId: { ios: "editor.financialAccount.sourceAliases.add" },
+      },
+      {
         ios: [
-          "Open Edit Account. Leave the editor open.",
-          'Add a source alias with Source "synthetic-bank" and Alias "SYN CHK 1234", leaving External id blank. Leave the editor open with that alias.',
+          'Set Source to "synthetic-bank". Leave the editor open with that Source value.',
+        ],
+        tapControl: { ios: { role: "button", name: "Done" } },
+      },
+      {
+        ios: [
+          'Set the source alias Alias to "SYN CHK 1234", leaving External account id blank. Leave the editor open with that Alias.',
         ],
         tapTestId: { ios: "editor.financialAccount.save" },
       },
@@ -636,8 +652,6 @@ export const journeys: Journey[] = [
       {
         goal: 'Edit this expense and change the description of its source claim to "Synthetic claim evidence revised", then save.',
         ios: [
-          "Open Edit Expense. Leave the editor open.",
-          "Scroll down in the expense form until the Source claims section and its Description field are visible. Leave the editor open.",
           'Change the source claim Description to "Synthetic claim evidence revised", leave the editor open with the revised Description.',
         ],
         tapTestId: { ios: "editor.expense.save" },
@@ -669,10 +683,7 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: "Edit this product's label nutrition: change the Calories amount from 120 to 150, keep everything else, and save.",
-        ios: [
-          "Open Edit Product. Leave the editor open.",
-          "Change Calories from 120 to 150. Leave the editor open with Calories 150.",
-        ],
+        ios: "Change Kcal from 120 to 150. Leave the editor open with Kcal 150.",
         tapTestId: { ios: "editor.product.save" },
         web: [
           "Open Edit Product, open Nutrition and set Calories (kcal) to 150. Finish with the editor open and that field showing 150.",
@@ -793,6 +804,8 @@ export const journeys: Journey[] = [
     steps: [
       {
         goal: "Edit this recipe and change the flour ingredient amount from 250 g to 300 g, then save.",
+        ios: "Edit this recipe and change the flour ingredient amount from 250 g to 300 g. Leave the recipe editor open with the amount 300 g.",
+        tapTestId: { ios: "editor.recipe.save" },
       },
     ],
     visible: () => [],
@@ -941,7 +954,7 @@ export const journeys: Journey[] = [
     start: "purchase",
     steps: [
       {
-        ios: "Scroll down through this purchase detail until Attach products is visible in its report. Leave that button visible on the detail page.",
+        ios: [],
         tapTestId: { ios: "section.linkProducts" },
         tapControl: { web: { role: "button", name: "Attach products" } },
       },
