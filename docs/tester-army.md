@@ -185,8 +185,11 @@ Apple FFI uses the same target-specific action as required Apple CI. On a
 GitHub output-cache miss, jobs with installed workspace dependencies use the
 existing Nx artifact cache before compiling. Archive jobs without those
 dependencies retain their direct build path.
-Both manual simulator lanes restore the same Xcode-versioned DerivedData cache
-as the regular Apple build gate. Hosted builds use its SPM clone directory,
+The native journey lanes restore both the SPM package cache and the same
+Xcode-versioned DerivedData cache as the regular Apple build gate. Do not disable
+SPM restoration while restoring DerivedData: its saved workspace metadata can
+refer to binary artifacts such as Sentry's XCFramework that are absent from
+DerivedData itself. Hosted builds use the shared SPM clone directory,
 content-based source mtimes, native arm64 slice, and batch compilation. They
 resolve package dependencies before validating a certificate for the cached app.
 An unchanged toolchain, generated inputs, Swift and resource files, FFI bytes,
