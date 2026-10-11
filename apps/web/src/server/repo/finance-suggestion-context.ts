@@ -221,18 +221,27 @@ export async function loadFinanceSuggestionContext(
     )
     .digest("hex");
   const basis = savedFinanceBasis(entity, root, purchases, lines);
-  const lineCategoryIds = new Set(
-    lines.flatMap((line) => {
-      const value = z
-        .object({ value: z.string().nullable() })
-        .parse(line.classification).value;
-      return value ? [value] : [];
-    }),
-  );
+  // Purchase fallback precedence in `expenseSpendingCategoryResolutionSql`:
+  // only these sources outrank it on a principal line.
+  const outranksFallback = new Set([
+    "expense override",
+    "vendor food context",
+    "product category mapping",
+  ]);
+  const lineCategories = lines.map((line) => {
+    const { value, source } = z
+      .object({ value: z.string().nullable(), source: z.string() })
+      .parse(line.classification);
+    return {
+      value,
+      takesFallback:
+        line.lineKind === "principal" && !outranksFallback.has(source),
+    };
+  });
   return {
     subject,
     fingerprint,
-    lineCategoryIds,
+    lineCategories,
     hasSignal:
       lines.length > 0 ||
       purchases.some((p) => p.vendor || p.displayLabel || p.notes),

@@ -202,6 +202,19 @@ describe("reviewed finance suggestions", () => {
     expect(different.suggestions.spendingCategoryId?.value).toBe(
       groceries!.shortcode,
     );
+
+    // An unresolved principal line would take the fallback, so the same
+    // category is no longer a no-op.
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Fixture potting mix",
+      cost: 8,
+      date: "2026-01-01",
+      costType: "materials",
+      lineKind: "principal",
+      purchaseId: purchase.id,
+    });
+    const fills = await suggest(input, modelPicking(garden!.shortcode));
+    expect(fills.suggestions.spendingCategoryId?.value).toBe(garden!.shortcode);
   });
 
   it("does not call the model or invent a category when no live roster exists", async () => {

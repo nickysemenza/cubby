@@ -887,20 +887,28 @@ type SavedSuggestionContext = Awaited<
   ReturnType<typeof savedSuggestionContext>
 >;
 /** A Purchase fallback equal to a category its Expense lines already resolve
- * to changes nothing; it is withheld as a policy decline. */
+ * to, where every line that would take the fallback already has it, changes
+ * nothing; it is withheld as a policy decline. */
 function repeatsLineCategory(
   input: FieldSuggestionsInput,
   target: string,
   context: SavedSuggestionContext,
   suggestion: FieldSuggestion | null,
 ): boolean {
+  if (
+    input.entity !== "purchase" ||
+    target !== "spendingCategoryId" ||
+    !suggestion ||
+    !context ||
+    !("lineCategories" in context)
+  )
+    return false;
+  const value = String(suggestion.value);
   return (
-    input.entity === "purchase" &&
-    target === "spendingCategoryId" &&
-    suggestion !== null &&
-    context !== null &&
-    "lineCategoryIds" in context &&
-    context.lineCategoryIds.has(String(suggestion.value))
+    context.lineCategories.some((line) => line.value === value) &&
+    context.lineCategories.every(
+      (line) => !line.takesFallback || line.value === value,
+    )
   );
 }
 
