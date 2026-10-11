@@ -15,7 +15,8 @@ contracts; a small browser or Tester Army journey establishes navigation,
 editing and supported visible outcomes. AI chooses a path through the real UI;
 deterministic read-back establishes whether the action worked. Previews cover
 presentation states, not writes or navigation. Live model journeys always use Jev decisions through Cloudflare AI Gateway;
-manual workflow dispatch controls when they run. They do not replace the
+informational PR routing, weekly uncached coverage and manual dispatch control
+when they run (see [Tester Army](../tester-army.md)). They do not replace the
 deterministic content-hash merge gate.
 
 Keep an isolated test only when its named failure cannot reasonably be observed

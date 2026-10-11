@@ -53,6 +53,9 @@ export default {
   cleanupTimeout: 60_000,
   cache: process.env.TESTER_ARMY_REPLAY === "1" ? "read-write" : "off",
   reporters: ["list", "junit", testerArmyReporter],
+  trace: "retain-on-failure",
+  video:
+    process.env.TESTER_ARMY_CI_EVIDENCE === "1" ? "retain-on-failure" : "off",
   secrets: {
     ...Object.fromEntries(
       cookies.map((cookie, index) => [`session-${index}`, cookie.value]),

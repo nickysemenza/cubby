@@ -55,4 +55,9 @@ for (const journey of selectedJourneys(journeys, "ios"))
       reload: () =>
         Promise.reject(new Error("iOS journeys never wait on a live run")),
     });
+    if (
+      process.env.GITHUB_ACTIONS === "true" &&
+      process.env.TESTER_ARMY_CI_EVIDENCE === "1"
+    )
+      await app.screenshot("verified-outcome");
   });
