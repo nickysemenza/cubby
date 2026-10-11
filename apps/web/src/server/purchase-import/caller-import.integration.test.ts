@@ -512,6 +512,50 @@ describe("caller-driven purchase import writes", () => {
     expect(await getDb(ctx.db).select().from(expense)).toHaveLength(3);
   });
 
+  // Regression: every imported line was stored as "materials", so an award
+  // ticket's fare and taxes read as physical goods.
+  it("stores each extracted line's cost type", async () => {
+    const { vendor } = await scope();
+    const { committed } = await memberImport(ctx.db, ctx.actor, {
+      key: "award-ticket",
+      orders: [
+        {
+          stableOrderId: "award-ticket",
+          vendorId: vendor.shortcode,
+          source: source("award-ticket", "d"),
+          extraction: {
+            status: "ready" as const,
+            candidate: candidate("EXAMPLE-AWARD", [
+              { ...service(0, "Synthetic award fare"), costType: "services" },
+              {
+                title: "Synthetic departure tax",
+                amount: 5,
+                lineKind: "tax",
+                costType: "services",
+              },
+              { ...service(3, "Synthetic seat cushion") },
+            ]),
+          },
+          resolutions: [
+            { kind: "expense_only" as const },
+            { kind: "expense_only" as const },
+          ],
+        },
+      ],
+    });
+    const saved = await purchaseByShortcode(committed.items[0]?.purchaseId);
+    const lines = await getDb(ctx.db)
+      .select({ name: expense.name, costType: expense.costType })
+      .from(expense)
+      .where(eq(expense.purchaseId, saved.id));
+    expect(Object.fromEntries(lines.map((l) => [l.name, l.costType]))).toEqual({
+      "Synthetic award fare": "services",
+      "Synthetic departure tax": "services",
+      // An extractor that states no cost type keeps the materials default.
+      "Synthetic seat cushion": "materials",
+    });
+  });
+
   it("imports a supported receipt without inventing purpose or replacing member attribution", async () => {
     const { vendor } = await scope();
     const existing = await insertWithShortcode(ctx.db, "purchase", {

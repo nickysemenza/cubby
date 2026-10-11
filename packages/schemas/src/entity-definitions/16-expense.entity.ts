@@ -27,7 +27,7 @@ import {
   ledgerSourceClaimsOut,
 } from "@cubby/schemas/ledger-transfer-fields";
 import { wholeCentAmount } from "@cubby/schemas/money";
-import { tradeSchema } from "@cubby/schemas/task-fields";
+import { TRADE_SUGGEST_RULE, tradeSchema } from "@cubby/schemas/task-fields";
 import { FILTER_NONE } from "../filter-sentinel-fields.js";
 import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
@@ -562,15 +562,7 @@ Rules:
           options: selectControlOptions.trade,
           suggest: {
             basis: ["name", "notes", "productId", "vendor", "projectId"],
-            rules: [
-              `You are a home-project trade classification assistant. Given a task or expense name and its available context, determine the most appropriate trade.
-
-Rules:
-1. Match the physical work being described, not the room it happens in.
-2. A product or vendor name is a strong signal: electrical supply vendors imply "electrical", lumber implies "building".
-3. Prefer the most specific trade that fits over "other".
-4. "planning" is for pre-work (design, permits, estimates), not the work itself.`,
-            ],
+            rules: [TRADE_SUGGEST_RULE],
           },
         },
         display: {

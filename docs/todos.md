@@ -129,6 +129,12 @@ See also the image operational passes at the end of this file.
 
 ### Reconcile charges and refunds
 
+- 🧱 **Record points and miles redemptions.** An award ticket's fare is a $0
+  principal Expense; only its taxes and fees are money. Record the loyalty
+  program, points spent, and an optional cents-per-point value on the Expense,
+  outside `cost`, so a trip Project can show cash plus points without breaking
+  `SUM(Expense.cost)`. Decide whether a per-program balance is in scope.
+
 ### Review and apply corrections
 
 ## Import pipeline architecture

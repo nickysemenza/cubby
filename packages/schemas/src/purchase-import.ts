@@ -6,6 +6,7 @@ import { plainDate } from "./base-entity";
 import { mailEvent } from "./mailbox-research";
 import { money } from "./money";
 import { runPurpose, runStatus, runTrigger } from "./run-fields";
+import { costTypeSchema } from "./expense-fields";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import {
   imageShortcode,
@@ -112,10 +113,13 @@ export const importSourceIdentity = z.object({
   externalKey: z.string().trim().min(1).max(512),
   checksum: z.string().regex(/^[a-f0-9]{64}$/),
 });
+const LINE_COST_TYPE =
+  "The line's accounting role: materials for consumed or installed goods, tools for equipment that outlives the job, services for labor, travel, delivery, taxes, fees, and other non-material charges.";
 export const extractedPurchaseLine = z.object({
   title: z.string().trim().min(1).max(500),
   amount: money,
   lineKind: expenseLineKindSchema.default("principal"),
+  costType: costTypeSchema.optional().describe(LINE_COST_TYPE),
   quantity: z.number().positive().finite().optional(),
   productUrl: z.url().optional(),
   imageUrl: z.url().optional(),
@@ -216,6 +220,7 @@ const extractedPurchaseLineModelOutput = z.object({
   title: z.string().trim().min(1).max(500),
   amount: money,
   lineKind: expenseLineKindSchema.nullable(),
+  costType: costTypeSchema.nullable().describe(LINE_COST_TYPE),
   quantity: z.number().positive().finite().nullable(),
   productUrl: z.url().nullable(),
   imageUrl: z.url().nullable(),
@@ -273,6 +278,7 @@ export function normalizeImportExtractionModelOutput(
             amount: line.amount,
             lineKind: line.lineKind ?? "principal",
           };
+          if (line.costType !== null) normalized.costType = line.costType;
           if (line.quantity !== null) normalized.quantity = line.quantity;
           if (line.productUrl !== null) normalized.productUrl = line.productUrl;
           if (line.imageUrl !== null) normalized.imageUrl = line.imageUrl;
