@@ -456,6 +456,11 @@ entity kernel. A factory never defaults a relation id; pass it. E2E specs call
 and keep domain seeders in `tests/e2e/fixtures-*.ts`. `seedBaseWorld` seeds Home
 and the taxonomy roots for every lane.
 
+Mail-import Run report fixtures persist a valid frozen `mail_research` source
+roster with its retained original and Email identity; a null Run input fails
+source validation before report behavior. Verified Email targets use research
+counts, so browser assertions check the current work unit and numeric outcome.
+
 Instruction-only Recipe fixture sections omit the optional `ingredients` input;
 when present, that input requires at least one ingredient. A cached Recipe Flow
 fingerprint still includes `ingredients: []`, matching the persisted section
