@@ -236,9 +236,9 @@ device runner remain necessary even with a cached app.
 
 The **E2E journeys** workflow (`e2e-journeys.yaml`) runs an informational
 trial after successful required CI completes. `tester-army-pr.yaml` validates
-that the same-repository PR is still open at the tested head, then dispatches
+that all six required jobs passed in that CI run and the same-repository PR is still open at the tested head, then dispatches
 `e2e-journeys.yaml` with its number and exact revision. Routing checks that
-state again before checkout. Automatic web coverage selects `product-rename`,
+state again before checkout. Optional purchase-import failures do not suppress dispatch; missing, failed, skipped or cancelled required jobs do. Label-triggered dispatch uses the same required-job gate on the latest CI run for that head. Automatic web coverage selects `product-rename`,
 `receive-purchase`, and `field-product-tags`; their persisted-state checks remain
 unchanged. The GitHub reporter receives the PR number and head in the runner's
 event payload and continues to post its normal comment and job summary. The full iOS catalog runs only when explicitly selected

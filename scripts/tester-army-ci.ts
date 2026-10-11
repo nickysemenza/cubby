@@ -18,7 +18,9 @@ async function github(route: string, body?: string) {
     },
   );
   if (!response.ok) throw new Error(`GitHub ${route}: ${response.status}`);
-  return response.status === 204 ? undefined : response.json();
+  return response.status === 204
+    ? undefined
+    : JSON.parse(await response.text());
 }
 
 if (process.argv[2] === "dispatch") {
@@ -26,7 +28,7 @@ if (process.argv[2] === "dispatch") {
   if (
     run &&
     (run.event !== "pull_request" ||
-      run.conclusion !== "success" ||
+      run.status !== "completed" ||
       run.head_repository?.full_name !== env.GITHUB_REPOSITORY)
   )
     process.exit(0);
@@ -45,16 +47,36 @@ if (process.argv[2] === "dispatch") {
     pull.head.repo.full_name !== env.GITHUB_REPOSITORY
   )
     process.exit(0);
-  if (!run) {
-    const runs = await github(
-      `actions/workflows/ci.yaml/runs?event=pull_request&head_sha=${pull.head.sha}&per_page=1`,
+  const completedRun =
+    run ??
+    (
+      await github(
+        `actions/workflows/ci.yaml/runs?event=pull_request&head_sha=${pull.head.sha}&per_page=1`,
+      )
+    ).workflow_runs[0];
+  if (completedRun?.status !== "completed") process.exit(0);
+  // Keep these in sync with the main ruleset; optional jobs cannot suppress coverage.
+  const required = new Set([
+    "Scope",
+    "Validation",
+    "Auxiliary tests and builds",
+    "Rust - recipebridge and cubby-ffi",
+    "Web checks",
+    "Apple checks",
+  ]);
+  for (let page = 1; ; page++) {
+    const batch = await github(
+      `actions/runs/${completedRun.id}/jobs?filter=latest&per_page=100&page=${page}`,
     );
-    if (
-      runs.workflow_runs[0]?.status !== "completed" ||
-      runs.workflow_runs[0]?.conclusion !== "success"
-    )
-      process.exit(0);
+    for (const job of batch.jobs) {
+      if (!required.has(job.name)) continue;
+      if (job.status !== "completed" || job.conclusion !== "success")
+        process.exit(0);
+      required.delete(job.name);
+    }
+    if (page * 100 >= batch.total_count) break;
   }
+  if (required.size > 0) process.exit(0);
   await github(
     "actions/workflows/e2e-journeys.yaml/dispatches",
     JSON.stringify({

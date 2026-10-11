@@ -123,22 +123,40 @@ test("CI completion dispatches an open current same-repository PR and accepts Gi
     state: "open",
     head: { sha: "synthetic-head", repo: { full_name: "example/project" } },
   };
+  const jobs = [
+    "Scope",
+    "Validation",
+    "Auxiliary tests and builds",
+    "Rust - recipebridge and cubby-ffi",
+    "Web checks",
+    "Apple checks",
+  ].map((name) => ({ name, status: "completed", conclusion: "success" }));
+  jobs.push({
+    name: "E2E tests (purchase import agent, optional)",
+    status: "completed",
+    conclusion: "failure",
+  });
   let dispatches = 0;
   const server = createServer((request, response) => {
     if (request.method === "POST") {
       dispatches++;
       response.writeHead(204).end();
+    } else if (request.url?.includes("/jobs?")) {
+      response.end(JSON.stringify({ jobs, total_count: jobs.length }));
     } else response.end(JSON.stringify([pull]));
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   // oxlint-disable-next-line anti-slop/no-runtime-typeof -- The test owns a TCP listener.
   assert(address && typeof address !== "string");
+  const apiUrl = `http://127.0.0.1:${address.port}`;
   const event = {
     repository: { owner: { login: "example" }, default_branch: "main" },
     workflow_run: {
+      id: 42,
+      status: "completed",
       event: "pull_request",
-      conclusion: "success",
+      conclusion: "failure",
       head_branch: "synthetic-branch",
       head_sha: "synthetic-head",
       head_repository: { full_name: "example/project" },
@@ -157,7 +175,7 @@ test("CI completion dispatches an open current same-repository PR and accepts Gi
             PATH: process.env.PATH,
             GITHUB_EVENT_PATH: eventPath,
             GITHUB_REPOSITORY: "example/project",
-            GITHUB_API_URL: `http://127.0.0.1:${address.port}`,
+            GITHUB_API_URL: apiUrl,
             GITHUB_TOKEN: "synthetic",
           },
         });
@@ -170,6 +188,22 @@ test("CI completion dispatches an open current same-repository PR and accepts Gi
     }
     await run();
     assert.equal(dispatches, 1);
+    const requiredJob = jobs[1];
+    assert(requiredJob);
+    for (const conclusion of ["failure", "cancelled", "skipped"]) {
+      requiredJob.conclusion = conclusion;
+      await run();
+      assert.equal(dispatches, 1);
+    }
+    requiredJob.conclusion = "success";
+    requiredJob.status = "in_progress";
+    await run();
+    assert.equal(dispatches, 1);
+    requiredJob.status = "completed";
+    jobs.splice(1, 1);
+    await run();
+    assert.equal(dispatches, 1);
+    jobs.splice(1, 0, requiredJob);
     pull.state = "closed";
     await run();
     pull.state = "open";

@@ -9,14 +9,14 @@ gate ([ADR 0009](adr/0009-content-hash-merge-gate.md),
 deploys every production Worker, including after a documentation-only change;
 deployment never waits for post-merge CI.
 
-`ci.yaml` holds only those checks, so every job in a PR's run graph gates it.
+`ci.yaml` holds the required checks and an optional purchase-import browser lane. The six required status contexts below own the merge gate.
 Tester Army background coverage lives in `e2e-journeys.yaml`: three web smoke
 journeys after successful same-repository PR CI, opt-in iOS with the
 `tester-army:ios` label, and coupled
 imports for affected import/shared/backend changes. All remain informational,
 with verified action replay, SDK evidence uploads and the built-in GitHub
 reporter. `tester-army-pr.yaml` dispatches the exact still-open PR head after CI
-completes. Updates and closure cancel its automatic runs, independently of CI,
+completes and its six required jobs pass; an optional purchase-import failure does not suppress dispatch. Updates and closure cancel its automatic runs, independently of CI,
 deployment and manual/weekly coverage. One routing step selects the jobs.
 The weekly matrix disables action replay. Manual dispatch and PR labels can
 select additional journeys; deterministic simulator journeys stay optional.
