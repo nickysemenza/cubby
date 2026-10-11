@@ -419,8 +419,11 @@ compact adaptive index and preserve draft state when switching views. Hidden
 workspace bodies mount after hydration: streaming their shared report queries
 alongside the initial workspace can leave its lazy sections pending until a tab
 is clicked. The persisted-counts Run E2E guards initial loading without that
-interaction. Lazy slot bodies start after hydration as well, preserving their
-SSR loading placeholder on direct workspace hashes. Apple
+interaction. Workspace selection starts
+in Overview on the server and initial client render, then follows the fragment
+after commit because HTTP does not carry URL fragments. Photo comparison grids
+respond to their own width so the workspace rail cannot collapse identity
+evidence into a zero-width column. Apple
 retains its native detail renderer; the Run evidence pilot renders only the
 shared Evidence group in its isolated hosted surface.
 Workspace choices are presentation-only literal unions, separate from persisted

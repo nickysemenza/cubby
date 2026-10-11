@@ -752,7 +752,7 @@ function PhotoProductSuggestions({
   if (!suggestions.data.candidates.length) return null;
   return (
     <section
-      className="min-w-0 border-t border-border pt-3"
+      className="@container/photo-comparison min-w-0 border-t border-border pt-3"
       aria-label="Product comparison"
     >
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
@@ -770,7 +770,7 @@ function PhotoProductSuggestions({
           return (
             <article
               key={candidate.id}
-              className="grid min-w-0 gap-3 py-3 xl:grid-cols-[minmax(0,1fr)_minmax(17rem,0.85fr)]"
+              className="grid min-w-0 gap-3 py-3 @min-[40rem]/photo-comparison:grid-cols-[minmax(0,1fr)_minmax(17rem,0.85fr)]"
             >
               <div className="min-w-0">
                 <div className="flex min-w-0 items-start gap-3">

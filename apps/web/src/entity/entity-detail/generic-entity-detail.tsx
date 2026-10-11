@@ -16,7 +16,7 @@ import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { PuzzlePieceIcon } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
 import { QuotesIcon } from "@phosphor-icons/react/dist/csr/Quotes";
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
@@ -52,7 +52,6 @@ import { RecordSuggestionsProvider } from "~/features/ai/record-suggestions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { useHydrated } from "~/ui/hooks/useHydrated";
 import type { DetailHeroActions, DetailHeroStat } from "~/ui/layouts/page-hero";
 import { Page } from "~/ui/page/Page";
 import {
@@ -333,17 +332,6 @@ function SlotFallback() {
   return <Skeleton className="h-16 w-full" />;
 }
 
-function HydratedSlot({ children }: { children: ReactNode }) {
-  const hydrated = useHydrated();
-  // SSR has no slot query data. Start lazy slots after hydration so a direct
-  // workspace hash cannot strand a shared Suspense boundary before its effects attach.
-  return hydrated ? (
-    <Suspense fallback={<SlotFallback />}>{children}</Suspense>
-  ) : (
-    <SlotFallback />
-  );
-}
-
 /** The journal variant leads with its relation; the record's own fields become the rail. */
 function orderSections(
   variant: CompiledEntityPresentation["detail"]["variant"],
@@ -483,9 +471,9 @@ function declaredSections<E extends GenericDetailEntity>(
             ) : undefined,
             surface: section.title === null ? ("plain" as const) : undefined,
             content: (
-              <HydratedSlot>
+              <Suspense fallback={<SlotFallback />}>
                 <Slot record={record as never} />
-              </HydratedSlot>
+              </Suspense>
             ),
           },
         ];

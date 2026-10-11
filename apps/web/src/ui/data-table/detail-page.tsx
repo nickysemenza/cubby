@@ -1008,9 +1008,9 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       sectionVisibility,
     ],
   );
-  const [activeMode, setActiveMode] = useState<DetailMode>(
-    () => resolveHash(locationHash).mode,
-  );
+  // URL fragments are unavailable to SSR. The hash effect selects the focused
+  // workspace after the identical server/initial-client Overview render commits.
+  const [activeMode, setActiveMode] = useState<DetailMode>("overview");
 
   const setHash = useCallback(
     (hash: string | undefined, replace: boolean) => {
