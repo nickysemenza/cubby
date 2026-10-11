@@ -249,7 +249,7 @@ checks. Successful hosted timings, costs and reliability must be measured in
 this trial before promoting any journey to a required check. Current lane
 ceilings are 25 minutes for web, 30 for imports and 40 for iOS, including setup;
 these are limits, not measured completion times. The standard catalog's five-second
-pacing adds 1 minute 40 seconds across 20 journeys, or 50 seconds per native shard.
+pacing adds 1 minute 40 seconds across 20 native journeys, or 50 seconds per native shard; web adds its Email metadata journey for 21 cases.
 
 PR runs enable verified action replay, with separate lane/OS/lockfile caches.
 Each completed run saves a unique recording snapshot even after a journey
