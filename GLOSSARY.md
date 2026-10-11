@@ -24,6 +24,14 @@ _Avoid_: dry run, Jev-only scan
 Unattended interpretation of classified Emails into Purchases, Expenses and Product resolutions.
 _Avoid_: mail research, email processing
 
+**Vendor alias**:
+Another name a Vendor trades under, recorded by a member, a Vendor merge, or Sender proof, so import finds the existing Vendor by that name.
+_Avoid_: vendor nickname, similar vendor
+
+**Sender proof**:
+An order Email arriving from a sender address already recorded on a Vendor, which proves that Vendor regardless of the merchant name the Email shows. A shared domain alone is not Sender proof.
+_Avoid_: domain match
+
 **Research queue**:
 The derived, unstored list of household records whose quality further research could improve.
 _Avoid_: worklist, enrichment queue, backlog

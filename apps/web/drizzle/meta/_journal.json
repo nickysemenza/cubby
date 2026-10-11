@@ -253,6 +253,13 @@
       "when": 1791673833432,
       "tag": "0035_email_import_cutover",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791736458406,
+      "tag": "0036_vendor_aliases",
+      "breakpoints": true
     }
   ]
 }

@@ -104,8 +104,13 @@ same outcome without prescribing an agent runtime.
 
 ## Vendor export
 
-1. Resolve the Vendor (`vendorId`, or `vendor.name` to reuse or create an
-   exact-name Vendor).
+1. Resolve the Vendor (`vendorId`, or `vendor.name`). A name resolves by
+   Sender proof first (a mail source from an exact sender address one Vendor
+   records, which also saves the name as a Vendor alias), then by the Vendor's
+   exact name or alias ignoring case; only an unmatched name creates a Vendor,
+   and a name two Vendors share is refused. A similar name or shared domain
+   never matches: merge real duplicates, which keeps the merged names as
+   aliases.
 2. Collect one preparation payload per order: stable source identity, header, printed
    grand total and currency, item and adjustment lines, shipment state,
    transaction evidence, and finalized document image shortcodes.

@@ -64,7 +64,7 @@ import {
 } from "~/server/repo/retained-mail";
 import { readOperation } from "~/server/repo/run-operation";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { findOrCreateVendor } from "~/server/repo/vendor";
+import { resolveImportVendor } from "~/server/repo/vendor";
 import { ensureRun } from "~/server/runs/ensure-run";
 import { executeAtomicOperation } from "~/server/runs/operation";
 
@@ -173,16 +173,25 @@ async function importRunScope(
   return loadImportScope(db, runId, actor);
 }
 
-/** An order's Vendor: named, created by exact name, or the import Run's own. */
+/**
+ * An order's Vendor: named by id, proven by its Email's sender or found by
+ * exact name or alias (`resolveImportVendor`), else the import Run's own.
+ */
 async function preparedOrderVendor(
   db: Database,
   order: PreparePurchaseImportInput["orders"][number],
   scope: ImportScope,
+  mail: RetainedMailSource | null | undefined,
+  actor: ActorContext,
 ): Promise<VendorId> {
   const vendorId = order.vendorId
     ? await resolveOrThrow(db, "vendor", order.vendorId)
     : order.vendor
-      ? await findOrCreateVendor(db, order.vendor.name)
+      ? await resolveImportVendor(
+          db,
+          { name: order.vendor.name, sender: mail?.sender ?? null },
+          actor,
+        )
       : scope.vendorId;
   if (!vendorId)
     throw new Error("Name each order's Vendor (vendorId or vendor.name).");
@@ -262,6 +271,24 @@ async function retainedMailSource(
   if (scope.purpose === "mail_import")
     await assertMailRunMembership(database, scope.runId, retained.mail.id);
   return retained.mail;
+}
+
+/** Each order's verified retained Email, checked before any write. */
+async function retainedMailSources(
+  db: Database,
+  scope: ImportScope,
+  orders: PreparePurchaseImportInput["orders"],
+) {
+  const retained = new Map<
+    PreparePurchaseImportInput["orders"][number],
+    RetainedMailSource | null
+  >();
+  for (const order of orders)
+    retained.set(
+      order,
+      await retainedMailSource(db, scope, order.source, order.evidenceChecksum),
+    );
+  return retained;
 }
 
 const lineIdentifierRequests = (
@@ -570,13 +597,11 @@ export async function preparePurchaseImport(
           throw new Error(`Purchase import run is fenced in ${scope.status}`);
         // After replay: a completed prepare returns its recorded result even
         // once its Email is excluded or resolved.
-        for (const order of input.orders)
-          await retainedMailSource(
-            transactionDb,
-            scope,
-            order.source,
-            order.evidenceChecksum,
-          );
+        const retainedMail = await retainedMailSources(
+          transactionDb,
+          scope,
+          input.orders,
+        );
         await ledger.start(database);
 
         const outputOrders = [];
@@ -586,6 +611,8 @@ export async function preparePurchaseImport(
             transactionDb,
             order,
             scope,
+            retainedMail.get(order),
+            actor,
           );
           claimDistinctSourceOrder(sourceOrders, order, vendorId);
           const primaryDocumentImageId = order.primaryDocumentImageId

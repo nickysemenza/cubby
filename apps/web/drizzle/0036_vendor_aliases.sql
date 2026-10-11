@@ -1,0 +1,1 @@
+ALTER TABLE "Vendor" ADD COLUMN "aliases" text[] DEFAULT '{}'::text[] NOT NULL;

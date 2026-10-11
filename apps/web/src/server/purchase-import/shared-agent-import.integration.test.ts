@@ -4,12 +4,13 @@ import {
   commitPurchaseImportInput,
   proposedImportFix,
 } from "@cubby/schemas/purchase-import";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
   entityExternalId,
+  entitySource,
   externalSource,
   auditLog,
   expense,
@@ -36,8 +37,10 @@ import { resolveRunFinding } from "./findings";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { startImportRunFixture } from "./import-run.fixtures";
 import {
+  mailSource,
   memberImport,
   prepareMemberImport,
+  retainedMailFixture,
   type MemberImportOrder,
 } from "./order-import.fixtures";
 import { prepareSourceOrderReconciliation } from "./reconciliation";
@@ -1409,5 +1412,137 @@ describe("member prepare and commit identity fences", () => {
       .where(eq(vendorTable.id, vendor.id));
     await expect(preparation.commit()).rejects.toThrow(/deleted or merged/);
     await expectNothingWritten();
+  });
+
+  const storeName = "The Synthetic Hardware Store";
+
+  async function senderVendor() {
+    const { party } = await scope();
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Hardware",
+      orderEmailSenders: ["orders@hardware.example"],
+    });
+    const existing = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "ORDER-ONE",
+    });
+    return { party, vendor, existing };
+  }
+
+  const orderMail = (
+    ledgerPartyId: Parameters<typeof retainedMailFixture>[1]["ledgerPartyId"],
+    sender: string,
+  ) =>
+    retainedMailFixture(ctx.db, {
+      ledgerPartyId,
+      messageId: `synthetic-${sender.length}`,
+      checksum: checksum("c"),
+      sender,
+    });
+
+  const vendorRows = () =>
+    getDb(ctx.db)
+      .select({
+        id: vendorTable.id,
+        name: vendorTable.name,
+        aliases: vendorTable.aliases,
+      })
+      .from(vendorTable)
+      // Every case starts from scope()'s own unrelated Vendor.
+      .where(ne(vendorTable.name, "Synthetic service merchant"));
+
+  it("converges an order Email on the Vendor its exact sender proves and learns the merchant name", async () => {
+    const { party, vendor, existing } = await senderVendor();
+    const mail = await orderMail(
+      party.id,
+      `"${storeName}" <Orders@Hardware.example>`,
+    );
+    const { committed } = await memberImport(ctx.db, ctx.actor, {
+      key: "sender-proof",
+      defaultTrade: "other",
+      orders: [
+        {
+          stableOrderId: "sender-proof",
+          vendor: { name: storeName },
+          source: mailSource(mail),
+          extraction: { status: "ready", candidate: candidate("ORDER-ONE") },
+        },
+      ],
+    });
+    expect(committed.items[0]?.purchaseId).toBe(existing.shortcode);
+    expect(await vendorRows()).toEqual([
+      { id: vendor.id, name: vendor.name, aliases: [storeName] },
+    ]);
+    const sources = await getDb(ctx.db)
+      .select({ quote: entitySource.quote })
+      .from(entitySource)
+      .where(eq(entitySource.entityId, vendor.id));
+    expect(sources.map(({ quote }) => quote)).toEqual([
+      expect.stringContaining("orders@hardware.example"),
+    ]);
+  });
+
+  it("finds a Vendor by an exact alias apart from letter case", async () => {
+    const { vendor, existing } = await senderVendor();
+    await getDb(ctx.db)
+      .update(vendorTable)
+      .set({ aliases: [storeName] })
+      .where(eq(vendorTable.id, vendor.id));
+    const { committed } = await memberImport(ctx.db, ctx.actor, {
+      key: "alias",
+      defaultTrade: "other",
+      orders: [
+        {
+          stableOrderId: "alias",
+          vendor: { name: `  ${storeName.toLowerCase()} ` },
+          source,
+          extraction: { status: "ready", candidate: candidate("ORDER-ONE") },
+        },
+      ],
+    });
+    expect(committed.items[0]?.purchaseId).toBe(existing.shortcode);
+    expect((await vendorRows()).map(({ id }) => id)).toEqual([vendor.id]);
+  });
+
+  it("does not treat a shared sender domain as Sender proof", async () => {
+    const { party, vendor } = await senderVendor();
+    const mail = await orderMail(party.id, "promotions@hardware.example");
+    await memberImport(ctx.db, ctx.actor, {
+      key: "shared-domain",
+      defaultTrade: "other",
+      orders: [
+        {
+          stableOrderId: "shared-domain",
+          vendor: { name: "Synthetic Hardware Outlet" },
+          source: mailSource(mail),
+          extraction: { status: "ready", candidate: candidate("ORDER-ONE") },
+        },
+      ],
+    });
+    const rows = await vendorRows();
+    expect(rows).toHaveLength(2);
+    expect(rows.find(({ id }) => id === vendor.id)?.aliases).toEqual([]);
+  });
+
+  it("refuses a merchant name that is an alias of two Vendors", async () => {
+    await scope();
+    for (const name of ["Synthetic Hardware East", "Synthetic Hardware West"])
+      await insertWithShortcode(ctx.db, "vendor", {
+        name,
+        aliases: [storeName],
+      });
+    await expect(
+      prepareMemberImport(ctx.db, ctx.actor, {
+        key: "ambiguous-alias",
+        orders: [
+          {
+            stableOrderId: "ambiguous-alias",
+            vendor: { name: storeName },
+            source,
+            extraction: { status: "ready", candidate: candidate("ORDER-ONE") },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/VEN-.*VEN-/);
   });
 });

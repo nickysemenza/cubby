@@ -118,6 +118,7 @@ describe("complete connected record tables", () => {
       {
         defaultSpendingCategoryId: null,
         spendingProfile: "unspecified",
+        aliases: [],
         name: "Example supplier",
         website: null,
         orderUrlTemplate: null,

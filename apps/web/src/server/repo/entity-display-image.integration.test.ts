@@ -436,6 +436,7 @@ describe("entity display image resolver", () => {
         {
           defaultSpendingCategoryId: null,
           spendingProfile: "unspecified",
+          aliases: [],
           name: `Logo Vendor ${crypto.randomUUID()}`,
           website: null,
           orderUrlTemplate: null,

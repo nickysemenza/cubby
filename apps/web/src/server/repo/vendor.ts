@@ -29,6 +29,7 @@ import {
 } from "@cubby/schemas/vendor-import-fields";
 import {
   and,
+  arrayContains,
   asc,
   desc,
   eq,
@@ -42,6 +43,7 @@ import {
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { entityAttachment, image, purchase, vendor } from "~/server/db/schema";
+import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
@@ -52,10 +54,12 @@ import {
   lockAndValidateForDelete,
   notDeleted,
   rangeConditions,
+  unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { agentHintsLabel } from "~/server/repo/detail-display-labels";
 import { patchEntityRows } from "~/server/repo/entity-patch";
+import { recordEntitySources } from "~/server/repo/entity-source";
 import { reapUnreferencedImages } from "~/server/repo/image";
 import {
   displayableImageSql,
@@ -321,6 +325,7 @@ const vendorColumns = {
   defaultSpendingCategoryId: sql<SpendingCategoryShortcode | null>`(SELECT sc.shortcode FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
   evidenceExpectation: vendor.evidenceExpectation,
   orderEvidence: vendor.orderEvidence,
+  aliases: vendor.aliases,
   orderEmailSenders: vendor.orderEmailSenders,
   browserDomains: vendor.browserDomains,
   returnWindowDays: vendor.returnWindowDays,
@@ -367,6 +372,7 @@ type VendorRow = {
   id: VendorId;
   shortcode: string;
   name: string;
+  aliases: string[];
   website: string | null;
   orderUrlTemplate: string | null;
   spendingProfile: string;
@@ -455,6 +461,7 @@ const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
   return {
     id: parseShortcodeFor("vendor", row.shortcode),
     name: row.name,
+    aliases: row.aliases,
     defaultSpendingCategoryName: row.defaultSpendingCategoryName,
     defaultSpendingCategoryEmoji: row.defaultSpendingCategoryEmoji,
     website: row.website,
@@ -693,12 +700,32 @@ export const vendorOptions = async (
   }));
 };
 
-/** Race-safe exact-name lookup; near-duplicates require an explicit merge. */
+/**
+ * The Vendor named exactly, by its name or a Vendor alias apart from letter
+ * case and surrounding spaces, else a new one (race-safe). Near-duplicates
+ * require an explicit merge; a name two Vendors share is refused.
+ */
 export const findOrCreateVendor = async (
   db: Database | DrizzleTransaction,
   name: string,
 ): Promise<VendorId> => {
   const trimmed = name.trim();
+  const [resolved] = await resolveNames(db, "vendor", [{ name: trimmed }], {
+    create: false,
+  });
+  if (resolved?.row) {
+    if (resolved.candidates.length > 0)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Vendor name "${trimmed}" matches ${[
+          resolved.row,
+          ...resolved.candidates,
+        ]
+          .map(({ shortcode }) => shortcode)
+          .join(", ")}; name the intended Vendor by id or merge them.`,
+      );
+    return resolved.row.id;
+  }
   const { row } = await findOrCreateWithShortcode(db, "vendor", {
     where: and(eq(vendor.name, trimmed), notDeleted(vendor)),
     values: () => ({
@@ -706,6 +733,70 @@ export const findOrCreateVendor = async (
     }),
   });
   return row.id;
+};
+
+/** The bare address of a From header such as `"Store" <orders@store.example>`. */
+const senderAddress = (sender: string | null): string | null => {
+  const address = (/<([^>]+)>/u.exec(sender ?? "")?.[1] ?? sender ?? "")
+    .trim()
+    .toLowerCase();
+  return address.includes("@") ? address : null;
+};
+
+/**
+ * An imported order's Vendor (GLOSSARY "Sender proof", "Vendor alias"): an
+ * Email from an exact sender address one Vendor records proves that Vendor,
+ * and the merchant name it shows becomes an alias with the Email as its
+ * Source. Otherwise the exact name or alias, else a new Vendor. A shared
+ * domain is never proof.
+ */
+export const resolveImportVendor = async (
+  db: Database | DrizzleTransaction,
+  input: { name: string; sender: string | null },
+  actor: ActorContext,
+): Promise<VendorId> => {
+  const name = input.name.trim();
+  const address = senderAddress(input.sender);
+  const proven = address
+    ? await unwrapDb(db)
+        .select({ id: vendor.id, name: vendor.name, aliases: vendor.aliases })
+        .from(vendor)
+        .where(
+          and(
+            notDeleted(vendor),
+            arrayContains(vendor.orderEmailSenders, [address]),
+          ),
+        )
+    : [];
+  const [owner] = proven;
+  if (!owner || proven.length > 1) return findOrCreateVendor(db, name);
+  const known = [owner.name, ...owner.aliases].map((value) =>
+    value.toLowerCase(),
+  );
+  if (!known.includes(name.toLowerCase())) {
+    const aliases = [...owner.aliases, name];
+    await unwrapDb(db)
+      .update(vendor)
+      .set({ aliases })
+      .where(eq(vendor.id, owner.id));
+    await logAuditEntry(db, actor, {
+      entityKind: "vendor",
+      entityId: owner.id,
+      action: "update",
+      changes: { aliases: { from: owner.aliases, to: aliases } },
+    });
+    await recordEntitySources(db, {
+      entityKind: "vendor",
+      entityId: owner.id,
+      sources: [
+        {
+          quote: `Order Email from ${address} names the merchant "${name}".`,
+        },
+      ],
+      recorder: actor,
+    });
+  }
+  return owner.id;
 };
 
 export const createVendor = async (
@@ -728,6 +819,7 @@ export const createVendor = async (
         : null,
       evidenceExpectation: data.evidenceExpectation,
       orderEvidence: data.orderEvidence,
+      aliases: data.aliases,
       orderEmailSenders: data.orderEmailSenders,
       browserDomains: data.browserDomains,
       returnWindowDays: data.returnWindowDays,
@@ -1013,6 +1105,28 @@ export const mergeVendors = async (
     const { logoImageId: carriedLogo, ...carriedColumns } = plan.carried;
     if (Object.keys(carriedColumns).length > 0) {
       await tx.update(vendor).set(carriedColumns).where(eq(vendor.id, keepId));
+    }
+    // The losers' names stay Vendor aliases so imports keep finding the keeper.
+    const named = await tx
+      .select({ id: vendor.id, name: vendor.name, aliases: vendor.aliases })
+      .from(vendor)
+      .where(inArray(vendor.id, [keepId, ...losers]));
+    const keeperNamed = named.find(({ id }) => id === keepId);
+    if (keeperNamed) {
+      const seen = new Set([keeperNamed.name.toLowerCase()]);
+      const aliases = [
+        ...keeperNamed.aliases,
+        ...named
+          .filter(({ id }) => id !== keepId)
+          .flatMap((row) => [row.name, ...row.aliases]),
+      ].filter((alias) => {
+        const key = alias.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if (aliases.length !== keeperNamed.aliases.length)
+        await tx.update(vendor).set({ aliases }).where(eq(vendor.id, keepId));
     }
 
     const loserLogos: string[] = [];
