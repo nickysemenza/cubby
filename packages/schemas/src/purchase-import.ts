@@ -780,8 +780,8 @@ export const preparedProductCandidate = z.object({
   manufacturer: z.string().max(300),
   model: z.string().max(300).nullable(),
   exactIdentifierMatch: z.boolean(),
-  /** The candidate's name or an alias equals the line title (case and surrounding spaces aside). */
-  exactNameMatch: z.boolean(),
+  /** Name/alias equality at preparation; null means the historical snapshot did not record it. */
+  exactNameMatch: z.boolean().nullable().default(null),
   /** Why a non-exact candidate ranks (e.g. a shared model/style number). */
   matchReason: z.string().max(300).optional(),
 });
