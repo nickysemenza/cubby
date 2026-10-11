@@ -413,6 +413,10 @@ control and include unrelated records with a small page size when testing a
 filtered record; an ignored filter can pass against a small local corpus and
 hide the target behind pagination in CI.
 
+When changing shared list view controls, update interaction tests for every
+consumer, including USDA lists. Preserve their query and destination regressions
+when replacing the control's selectors.
+
 ## Preview tests (real-browser layout invariants)
 
 The `preview` Vitest project (`**/*.preview.test.tsx`, `pnpm --dir apps/web
