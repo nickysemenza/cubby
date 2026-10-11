@@ -47,6 +47,10 @@ for (const journey of selectedJourneys(journeys, "ios"))
         await app.open();
         const link = ios ?? (entity ? `cubby://entity/${entity}` : undefined);
         if (link) await device.openLink(link);
+        if (entity)
+          await expect(
+            screen.getByText(entity, { exact: true }).first(),
+          ).toBeVisible({ timeout: 60_000 });
         // Structured-entry journeys isolate fields; rename covers editor navigation.
         // The SDK offers offscreen native buttons to Jev, so establish a reachable start.
         const setup =
@@ -65,6 +69,11 @@ for (const journey of selectedJourneys(journeys, "ios"))
           await expect(
             screen.getByTestId(`${editor}.${setup.field}.0.source`),
           ).toBeVisible();
+        }
+        if (journey.id.startsWith("finance-split-")) {
+          const split = screen.getByTestId("section.splitExpense");
+          await screen.scrollUntilVisible(split, { direction: "down" });
+          await centerInEditor(screen, split, "detail.expense");
         }
       },
       reload: () =>

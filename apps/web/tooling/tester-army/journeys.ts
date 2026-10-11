@@ -813,7 +813,7 @@ export const journeys: Journey[] = [
     start: "expense",
     steps: [
       {
-        ios: "Scroll down through this expense detail until its report's Split button is visible. Leave the detail page open with Split visible.",
+        ios: [],
         tapTestId: { ios: "section.splitExpense" },
         tapControl: { web: { role: "button", name: "Split..." } },
       },
@@ -841,7 +841,15 @@ export const journeys: Journey[] = [
         tapTestId: { ios: "split.save" },
         tapControl: { web: { role: "button", name: "Split into 2" } },
       },
-      { tapControl: { ios: { role: "button", name: "Split" } } },
+      {
+        tapControl: {
+          ios: {
+            role: "button",
+            name: "Split",
+            within: { role: "group", name: "Split this expense?" },
+          },
+        },
+      },
     ],
     visible: () => [],
     db: [
@@ -869,7 +877,7 @@ export const journeys: Journey[] = [
       {
         goal: "Try to split this expense into two parts without entering any costs, and confirm the split. Stop when the app refuses.",
         web: [],
-        ios: "Scroll down through this expense detail until its report's Split button is visible. Leave the detail page open with Split visible.",
+        ios: [],
         tapTestId: { ios: "section.splitExpense" },
         tapControl: { web: { role: "button", name: "Split..." } },
         check: {

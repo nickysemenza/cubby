@@ -80,6 +80,8 @@ and simple Save goals returned inconclusive after successfully saving. The
 following visible-value check and exact SQL assertions verify the saved external
 ID, source and kind. Jev still enters the fields and drives product rename.
 
+Native deep links wait for the selected fixture code to be visible before setup or agent actions; hosted sign-in can outlast the initial launch. Expense split setup reuses the SDK's bounded scroll-to-control and viewport centering. Unbounded downward model scrolling skipped the Purchase report and kept scrolling at the bottom, so cents conservation and unknown-cost refusal begin with its Split control reachable. The final Split tap is scoped to its confirmation group because the underlying detail action remains in the native accessibility tree.
+
 ## Failure modes and acceptance
 
 Freeze all source files until every concurrent SDK run has exited, including formatters, imports, and cases that already failed. Startup is not an edit boundary. The SDK can re-import a test module between cases while retaining its dependency exports; changing a fixture import during a run caused a worker crash before the next case. Collect repairs while tests run, then edit after all runs exit, rebuild the fingerprinted input, and run only the affected cases. Evidence from an edited running tree is exploratory, not exact-revision acceptance.
