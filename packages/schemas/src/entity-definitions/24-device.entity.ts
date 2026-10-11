@@ -76,7 +76,7 @@ export default defineEntity({
             { value: "macos", label: "macOS" },
           ],
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: {
           read: devicePlatform,
           create: devicePlatform,

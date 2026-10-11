@@ -239,7 +239,7 @@ export default defineEntity({
             { value: "ephemeral", label: "Ephemeral" },
           ],
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: readOnly(runTrigger),
       },
       {

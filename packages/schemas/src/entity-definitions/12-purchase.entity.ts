@@ -222,7 +222,7 @@ export default defineEntity({
             { value: "recorded", label: "Recorded" },
           ],
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: {
           read: purchaseEvidenceCoverage.shape.booking,
           create: null,
@@ -245,7 +245,7 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: {
           read: purchaseEvidenceCoverage.shape.document,
           create: null,
@@ -268,7 +268,7 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: {
           read: purchaseEvidenceCoverage.shape.itemization,
           create: null,
@@ -292,7 +292,7 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: { list: true, detail: true },
         validation: {
           read: purchaseEvidenceCoverage.shape.products,
           create: null,

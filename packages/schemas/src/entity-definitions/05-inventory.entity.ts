@@ -296,7 +296,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          width: "sm",
           format: "timestamp",
           mobile: { slot: "meta", priority: 60 },
         },

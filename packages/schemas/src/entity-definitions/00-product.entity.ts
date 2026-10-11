@@ -1190,7 +1190,6 @@ Rules:
         control: { kind: "checkbox" },
         display: {
           list: true,
-          width: "sm",
           listHidden: true,
         },
         validation: {
@@ -1426,7 +1425,6 @@ Rules:
         display: {
           list: true,
           listHidden: true,
-          width: "xs",
           readPath: "modelPresence",
           format: "presence",
           valueOptions: [
@@ -1453,7 +1451,6 @@ Rules:
         display: {
           list: true,
           listHidden: true,
-          width: "xs",
           readPath: "upcPresence",
           format: "presence",
           valueOptions: [
@@ -1481,7 +1478,6 @@ Rules:
         display: {
           list: true,
           listHidden: true,
-          width: "xs",
           readPath: "notesPresence",
           format: "presence",
           valueOptions: [
@@ -1673,7 +1669,6 @@ Rules:
         // always headed this "Purchase date".
         display: {
           list: true,
-          width: "sm",
           format: "plainDate",
           mobile: { slot: "meta", priority: 55 },
         },

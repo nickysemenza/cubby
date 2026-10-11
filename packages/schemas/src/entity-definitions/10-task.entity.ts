@@ -175,7 +175,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          width: "sm",
           mobile: { slot: "subtitle", priority: 10 },
         },
         validation: {
@@ -328,7 +327,6 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          width: "sm",
           format: "plainDate",
           mobile: { slot: "meta", priority: 40, interactive: true },
         },
