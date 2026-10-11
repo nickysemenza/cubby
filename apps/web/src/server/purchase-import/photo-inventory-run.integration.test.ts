@@ -118,7 +118,7 @@ describe("photo import finalize", () => {
       .select({ id: runTable.ledgerPartyId })
       .from(runTable)
       .where(eq(runTable.id, run.id));
-    await getDb(ctx.db)
+    const [finding] = await getDb(ctx.db)
       .insert(runFinding)
       .values({
         runId: run.id,
@@ -128,7 +128,8 @@ describe("photo import finalize", () => {
         kind: "synthetic_note",
         summary: "Synthetic status finding",
         evidenceFingerprint: "f".repeat(64),
-      });
+      })
+      .returning({ id: runFinding.id });
     const server = createMcpServer();
     const entityKernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, {
@@ -153,9 +154,17 @@ describe("photo import finalize", () => {
           warning: "Too blurry to identify",
         },
       ],
-      findings: [{ summary: "Synthetic status finding" }],
+      // The finding id is the declared write handle run.resolve_finding takes.
+      findings: [{ id: finding?.id, summary: "Synthetic status finding" }],
     });
-    expect(JSON.stringify(response.structuredContent)).not.toMatch(
+    const { findings, ...rest } = z
+      .looseObject({ findings: z.array(z.looseObject({ id: z.string() })) })
+      .parse(response.structuredContent);
+    const withoutHandles = {
+      ...rest,
+      findings: findings.map(({ id: _id, ...item }) => item),
+    };
+    expect(JSON.stringify(withoutHandles)).not.toMatch(
       /[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}/iu,
     );
   });

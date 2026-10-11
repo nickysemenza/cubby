@@ -75,7 +75,7 @@ Every call has a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
 for reads that declare `modelBacked` (Jev's 30 s retry budget plus database
 work), and 230 s for writes. An action that can wait on Jev or another model
 declares `modelBacked: true` in `apps/web/src/contracts/mcp-tools.ts`; today
-that is `entity_read.preview`. Past its budget the call answers
+those are `entity_read.preview` and `entity_read.suggest_fields`. Past its budget the call answers
 `MCP_TOOL_DEADLINE_EXCEEDED` with the elapsed time, request id, and Sentry event id, logs a
 warning, and reports to Sentry. The deadline aborts the call's `signal`, which
 stops AI and upstream fetches but not Postgres queries or kernel verbs. Work

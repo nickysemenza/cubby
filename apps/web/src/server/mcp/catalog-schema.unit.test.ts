@@ -525,9 +525,10 @@ describe("MCP catalog schemas", () => {
       // kind's shortcode, resolved by the handler.
       "entity.id",
       "entity.entityId",
-      // entity_read.suggest_fields names its record by the `entity` kind's
-      // shortcode; suggestion_queue filters by records of that kind and by
-      // the suggestions' ai_suggest Run id.
+      // suggest_fields' entityId and suggestion_queue's recordIds are
+      // shortcodes of the kind `entity` names, so no single prefix pattern
+      // fits. suggestion_queue's runId is the internal Run id its rows echo
+      // (not a RUN- code).
       "entity_read.entityId",
       "entity_read.recordIds",
       "entity_read.runId",

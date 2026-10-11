@@ -2,8 +2,9 @@ import {
   fieldSuggestionsInput,
   financeCategoryApplyInput,
 } from "@cubby/schemas/ai";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -21,6 +22,7 @@ import { spendingClassificationRevision } from "~/server/repo/expense-category-r
 import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
 import { SHORTCODE_TABLE } from "~/server/repo/generated/shortcode-tables.gen";
 import {
+  lookupShortcodes,
   resolveLiveShortcode,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
@@ -78,7 +80,7 @@ export async function listPendingSuggestions(
     .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(and(...conditions))
     .orderBy(desc(suggestionTable.confidence));
-  return rows.flatMap(({ suggestion, runInput }) => {
+  const reviewable = rows.flatMap(({ suggestion, runInput }) => {
     const decisionModel = z
       .object({ decisionModel: z.string().optional() })
       .passthrough()
@@ -86,6 +88,16 @@ export async function listPendingSuggestions(
     return !suggestion.pairKey || decisionModel === suggestion.model
       ? [suggestionRowSchema.parse(suggestion)]
       : [];
+  });
+  // Stored rows key records by uuid; the public queue names them by shortcode.
+  const refs = reviewable.map((row) =>
+    parseEntityRef(row.entity, row.recordId),
+  );
+  const codes = await lookupShortcodes(db, refs);
+  return reviewable.flatMap((row, index) => {
+    const ref = refs[index];
+    const recordId = ref && codes.get(entityRefKey(ref.entity, ref.id));
+    return recordId ? [{ ...row, recordId }] : [];
   });
 }
 
