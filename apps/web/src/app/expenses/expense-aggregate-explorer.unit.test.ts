@@ -139,9 +139,13 @@ describe("ExpenseAggregateExplorer", () => {
   });
 
   it("only exposes exact grid-total populations to Ledger drilldown", () => {
-    expect(expenseAnalyzeGridTotalFilter(ready)).toEqual({
-      lineKind: "principal",
-    });
+    // Adjustment shares are in trade/cost-type grids, so the Ledger population
+    // spans every line kind. Unassigned-trade shares sit outside a trade grid,
+    // so only the cost-type grid total is an exact Ledger population.
+    expect(expenseAnalyzeGridTotalFilter(ready)).toBeNull();
+    expect(
+      expenseAnalyzeGridTotalFilter({ ...ready, rowDimension: "costType" }),
+    ).toEqual({});
     expect(
       expenseAnalyzeGridTotalFilter({
         ...ready,

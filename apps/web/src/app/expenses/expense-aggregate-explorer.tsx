@@ -347,17 +347,17 @@ export function expenseAnalyzeGridTotalFilter(
   data: ExpenseAnalyzeReadyOut,
   filters: Pick<ExpenseFilters, "dateFrom" | "dateTo" | "dateRelative"> = {},
 ): Record<string, string> | null {
-  if (data.rowDimension === "project" || data.rowDimension === "vendor") {
+  // These axes leave a tail (unattributed rows, unassigned-trade shares)
+  // outside the grid, so its total is no exact Ledger population.
+  if (
+    data.rowDimension === "project" ||
+    data.rowDimension === "vendor" ||
+    data.rowDimension === "trade" ||
+    data.columnDimension === "trade"
+  ) {
     return null;
   }
-  const principalOnly =
-    data.rowDimension === "trade" ||
-    data.rowDimension === "costType" ||
-    data.columnDimension === "trade" ||
-    data.columnDimension === "costType";
-  const filter: Record<string, string> = principalOnly
-    ? { lineKind: "principal" }
-    : {};
+  const filter: Record<string, string> = {};
   const monthBuckets =
     data.rowDimension === "month"
       ? data.rows

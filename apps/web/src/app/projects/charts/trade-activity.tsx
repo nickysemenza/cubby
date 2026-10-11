@@ -46,11 +46,21 @@ export function TradeActivity({
         .sort((a, b) => a.actual + a.committed - (b.actual + b.committed)),
     [rows],
   );
+  // Bars stack spend; credits (refunds, discounts) would only read as more
+  // spend there, so they are disclosed rather than charted.
+  const credits = rows.reduce((total, row) => total + row.credits, 0);
+  const creditsNote =
+    credits > 0 ? (
+      <p className="mt-2 text-center text-xs text-muted-foreground">
+        Bars exclude {formatCurrency(credits, 0)} in credits.
+      </p>
+    ) : null;
 
   if (data.length === 0) {
     return (
       <div>
         <ChartEmpty icon={HammerIcon} title="No trade spend yet." />
+        {creditsNote}
       </div>
     );
   }
@@ -105,6 +115,7 @@ export function TradeActivity({
         )}
         theme={nivoChartTheme}
       />
+      {creditsNote}
     </div>
   );
 }

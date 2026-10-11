@@ -430,6 +430,58 @@ async function groupedCells(
   return rows.map((row) => ({ ...row, rowKey: String(row.rowKey) }));
 }
 
+/**
+ * Distinct Expenses in an allocated grid. One adjustment split across several
+ * buckets counts once in each, so summing cell counts would overstate the grid.
+ */
+async function allocatedGridCount(
+  db: Database,
+  where: SQL | undefined,
+  rowDimension: ExpenseAnalyzeRowDimension,
+  columnDimension: ExpenseAnalyzeColumnDimension | null | undefined,
+  allocationScope?: ExpenseAllocationProjectScope,
+): Promise<number> {
+  const keys = [rowDimension, columnDimension]
+    .filter((dimension) => dimension != null)
+    .map((dimension) => dimensionSpecs[dimension])
+    .filter((spec) => spec.relation !== "expense")
+    .map((spec) => isNotNull(spec.key));
+  const charge = alias(purchase, "analyzeGridCountCharge");
+  const [row] = await getDb(db)
+    .select({ count: sql<number>`count(distinct ${expense.id})::int` })
+    .from(expense)
+    .innerJoin(
+      sql`(${expenseJointAllocationSql()}) allocation`,
+      sql`allocation."expenseId" = ${expense.id}`,
+    )
+    .leftJoin(
+      project,
+      and(sql`${project.id} = allocation."projectId"`, notDeleted(project)),
+    )
+    .leftJoin(
+      spendingCategory,
+      and(
+        sql`${spendingCategory.id} = allocation."spendingCategoryId"`,
+        notDeleted(spendingCategory),
+      ),
+    )
+    .leftJoin(
+      charge,
+      and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
+    )
+    .leftJoin(vendor, and(eq(charge.vendorId, vendor.id), notDeleted(vendor)))
+    .where(
+      and(
+        where,
+        ...keys,
+        allocationScope
+          ? expenseAllocationScopeConditionSql("allocation", allocationScope)
+          : undefined,
+      ),
+    );
+  return Number(row?.count ?? 0);
+}
+
 export function previousExpenseFilters(filters: ExpenseFilters) {
   // The schema rejects unbounded comparison requests. This guard keeps the
   // repository sound for direct internal callers as well.
@@ -723,6 +775,8 @@ export type ExpenseAnalysisPeriod = {
   columns: BucketRow[];
   cells: CellRow[];
   scope: ExpenseAnalyzeAggregate;
+  /** Distinct Expenses in an allocated grid; absent when cells partition rows. */
+  gridCount?: number;
 };
 
 const asOneDimensionCells = (rows: BucketRow[]): CellRow[] =>
@@ -746,7 +800,10 @@ export const loadExpenseAnalysisPeriod = async (
     rowDimension,
     allocationScope,
   );
-  const [rows, columns, cells, scope] = await Promise.all([
+  const allocated =
+    isAllocatedDimension(rowDimension) ||
+    (columnDimension != null && isAllocatedDimension(columnDimension));
+  const [rows, columns, cells, scope, gridCount] = await Promise.all([
     rowsPromise,
     columnDimension
       ? groupedDimension(db, gridWhere, columnDimension, allocationScope)
@@ -761,8 +818,17 @@ export const loadExpenseAnalysisPeriod = async (
         )
       : rowsPromise.then(asOneDimensionCells),
     scopeAggregate(db, scopeWhere, allocationScope),
+    allocated
+      ? allocatedGridCount(
+          db,
+          gridWhere,
+          rowDimension,
+          columnDimension,
+          allocationScope,
+        )
+      : Promise.resolve(undefined),
   ]);
-  return { rows, columns, cells, scope };
+  return { rows, columns, cells, scope, gridCount };
 };
 
 const analysisLimitResult = (
@@ -911,14 +977,28 @@ export const buildExpenseAnalysisGrid = (
     comparison !== null,
   );
   const cells = mergedCells.cells;
-  const gridCurrent = cells.reduce(
-    (total, cell) => addAggregate(total, cell.current),
-    zeroAggregate(),
+  const withGridCount = (
+    total: ExpenseAnalyzeAggregate,
+    period: ExpenseAnalysisPeriod | null,
+  ) =>
+    period?.gridCount === undefined
+      ? total
+      : { ...total, count: period.gridCount };
+  const gridCurrent = withGridCount(
+    cells.reduce(
+      (total, cell) => addAggregate(total, cell.current),
+      zeroAggregate(),
+    ),
+    current,
   );
   const gridPrevious = comparison
-    ? cells.reduce(
-        (total, cell) => addAggregate(total, cell.previous ?? zeroAggregate()),
-        zeroAggregate(),
+    ? withGridCount(
+        cells.reduce(
+          (total, cell) =>
+            addAggregate(total, cell.previous ?? zeroAggregate()),
+          zeroAggregate(),
+        ),
+        previous,
       )
     : null;
   return {

@@ -837,6 +837,47 @@ describe("expense repository — expenseAnalytics", () => {
     expect(await names({ costType: "services" })).toHaveLength(2);
   });
 
+  it("counts a split adjustment once in a trade grid's totals", async () => {
+    const purchaseIdentity = {
+      vendor: "Synthetic hardware store",
+      orderId: "SYNTHETIC-SPLIT-1",
+    };
+    for (const [name, trade] of [
+      ["synthetic split wire", "electrical"],
+      ["synthetic split pipe", "plumbing"],
+    ] as const)
+      await createRepoEntity(ctx, "expense", {
+        ...purchaseIdentity,
+        date: "2026-06-14",
+        name,
+        trade,
+        costType: "materials",
+        cost: 10,
+      });
+    await createRepoEntity(ctx, "expense", {
+      ...purchaseIdentity,
+      date: "2026-06-14",
+      name: "synthetic split tax",
+      lineKind: "tax",
+      trade: null,
+      costType: "services",
+      cost: 2,
+    });
+    const analysis = await expenseAnalyzeWorkflow(ctx.db, {
+      filters: { search: "synthetic split" },
+      rowDimension: "trade",
+      comparison: "none",
+    });
+    expect(analysis).toMatchObject({
+      status: "ready",
+      totals: {
+        scope: { current: { net: 22, count: 3 } },
+        grid: { current: { net: 22, count: 3 } },
+      },
+      reconciliation: { tail: { current: { net: 0, count: 0 } } },
+    });
+  });
+
   it("uses attributed adjustment shares throughout project-filtered analytics", async () => {
     const { output: projectA } = await createRepoEntity(ctx, "project", {
       name: "scoped analytics project a",
