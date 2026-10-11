@@ -77,4 +77,9 @@ After deployment, recovery-only queue messages may include
 `task.coordinatorRetireBefore` as a fixed ISO timestamp covering the settled Runs
 to retire. Repeat that same cutoff until readback finds zero; do not enqueue
 `maintenance.purchase-discovery` during this recovery. Ordinary recovery omits
-the override and preserves the 24-hour conversation window.
+the override and preserves the 24-hour conversation window. A legacy
+account_sync Run whose stored `agentSessionId` is a bare session UUID retires
+through the same pass: the coordinator erases it only when exactly one settled
+Run of a retired purpose stores that exact name, and refuses otherwise without
+touching storage. Investigate a refusal; never rewrite the stored identity or
+stamp `retiredAt` by hand.

@@ -39,6 +39,33 @@ export async function assertRetirableRun(db: Database, runId: string) {
 }
 
 /**
+ * Retirement-only authority for a coordinator name that is not an import Run
+ * identity: legacy account_sync Runs stored a bare session UUID as
+ * `agentSessionId`. Exactly one settled Run of a retired purpose must store
+ * that exact name; execution never resolves such names.
+ */
+export async function assertRetirableLegacySession(
+  db: Database,
+  agentSessionId: string,
+) {
+  const rows = await getDb(db)
+    .select({ status: runTable.status, purpose: runTable.purpose })
+    .from(runTable)
+    .where(eq(runTable.agentSessionId, agentSessionId))
+    .limit(2);
+  const [row] = rows;
+  if (
+    rows.length !== 1 ||
+    !row ||
+    !TERMINAL.some((status) => status === row.status) ||
+    agentImportRunPurpose.safeParse(row.purpose).success
+  )
+    throw new Error(
+      "Only one settled Run storing this coordinator name can retire it.",
+    );
+}
+
+/**
  * Destroy the coordinators of agent Runs that settled before `before`, oldest
  * first, a bounded batch per call (one catch-up makes at most two coordinator
  * RPCs per Run). A destroying call reports `disposed: false` (SDK destroy may
