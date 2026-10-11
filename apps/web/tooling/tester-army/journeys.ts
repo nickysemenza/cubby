@@ -347,13 +347,26 @@ export const journeys: Journey[] = [
         },
       },
       {
+        tapControl: { web: { role: "combobox", name: "Location" } },
+        ios: [],
+      },
+      {
+        tapControl: {
+          web: {
+            role: "option",
+            name: JOURNEY_NAMES.receiveShelf,
+            exact: false,
+          },
+        },
+      },
+      {
         goal: `Receive this expense into Inventory: pick the location "${JOURNEY_NAMES.receiveShelf}", set the quantity to add to 3, and confirm Receive.`,
         ios: [
           `Select Location "${JOURNEY_NAMES.receiveShelf}" and enter Quantity 3. Leave the receiving sheet open with that Location and Quantity.`,
         ],
         tapTestId: { ios: "receive.confirm" },
         web: [
-          `In the open Receive dialog, select Location "${JOURNEY_NAMES.receiveShelf}" and enter Amount Value 3. Finish with the receiving dialog still open and those values entered.`,
+          "In the open Receive dialog, enter Amount Value 3. Finish with the receiving dialog still open and that value entered.",
         ],
         tapControl: { web: { role: "button", name: "Add to inventory" } },
       },
@@ -538,9 +551,14 @@ export const journeys: Journey[] = [
         },
       },
       {
-        goal: "Now confirm the deletion.",
-        ios: [],
         tapTestId: { ios: "heroAction.submit" },
+        tapControl: {
+          web: {
+            role: "button",
+            name: "Delete",
+            within: { role: "dialog", name: "Delete 1 Task?" },
+          },
+        },
       },
       {
         tapControl: {

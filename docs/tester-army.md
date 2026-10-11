@@ -60,6 +60,8 @@ before it opens its page, so the same catalog covers phone layouts. Prefer
 exact text that appears once: a label that also names a hidden `<option>`
 matches the hidden node first.
 
+Web receiving opens Location and taps its uniquely named option through the SDK before agent amount entry. The option tap waits for the actual choice to load; substring matching excludes its generated code and ancestry. Web deletion confirms through the exact Delete button scoped to its impact-preview dialog; the preview and cascade SQL checks remain the outcome oracle. Both actions previously succeeded before model completion returned a false failure.
+
 The web fixture waits for `[data-hydrating]` controls to clear after opening or
 reloading a page. Jev cannot choose a server-rendered Edit button while the app
 intentionally disables it until React attaches its handlers. This wait observes

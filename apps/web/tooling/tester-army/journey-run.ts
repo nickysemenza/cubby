@@ -15,12 +15,12 @@ import {
 
 export async function runJourneyControl(
   screen: Screen,
-  { role, name, swipe, within }: JourneyControl,
+  { role, name, exact = true, swipe, within }: JourneyControl,
 ): Promise<void> {
   const scope = within
     ? screen.getByRole(within.role, { name: within.name, exact: true })
     : screen;
-  const control = scope.getByRole(role, { name, exact: true });
+  const control = scope.getByRole(role, { name, exact });
   if (swipe) await control.swipe(swipe);
   else if (role === "textbox") {
     await screen.scrollUntilVisible(control, { direction: "down" });
