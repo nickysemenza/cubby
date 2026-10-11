@@ -4,10 +4,9 @@ import { describe, expect, it } from "vitest";
 
 import { detailSlotsFor } from "./detail-slots";
 
-// A Run's page is the generic detail; its purpose and status decide which slots render. AI runs
-// (no vendor, orders or transcript) once had no page at all, so the import slots must never
-// claim them, nor any run lose progress, usage or changes. The live and stopped progress
-// variants split on whether the run is still moving.
+// Non-purchase Runs once had no detail page. Their shared evidence must render
+// without claiming purchase workflow slots. Live and stopped progress variants
+// still split on whether an import Run is moving.
 const IMPORT_SLOTS = [
   "import-controls",
   "import-stats",
@@ -35,10 +34,28 @@ describe("Run detail slots", () => {
       .map(([id]) => id);
 
   it.each<[RunOut["purpose"], string[]]>([
-    ["ai_suggest", ["ai-usage", "changes"]],
-    ["mail_search", ["ai-usage", "changes"]],
-    ["background", ["ai-usage", "changes"]],
-    ["photo_inventory", ["photo-batch", "ai-usage", "changes"]],
+    [
+      "ai_suggest",
+      ["import-timeline", "import-debug-log", "ai-usage", "changes"],
+    ],
+    [
+      "mail_search",
+      ["import-timeline", "import-debug-log", "ai-usage", "changes"],
+    ],
+    [
+      "background",
+      ["import-timeline", "import-debug-log", "ai-usage", "changes"],
+    ],
+    [
+      "photo_inventory",
+      [
+        "import-timeline",
+        "import-debug-log",
+        "photo-batch",
+        "ai-usage",
+        "changes",
+      ],
+    ],
   ])("a %s run renders %j", (purpose, expected) => {
     expect(applying(purpose, "completed")).toEqual([
       "live-progress",
