@@ -755,7 +755,9 @@ describe("suggestFields", () => {
       expect(out.suggestions.categoryId).toBeNull();
       expect(out.outcomes?.categoryId).toMatchObject({
         kind: "evaluated",
-        answer: "pick",
+        answer: "none",
+        confidence: "low",
+        probability: null,
         alternatives: expect.not.arrayContaining([
           expect.objectContaining({ value: "CAT-AAAA" }),
         ]),

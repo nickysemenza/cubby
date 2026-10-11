@@ -485,17 +485,8 @@ async function resolveReferenceTarget(
     spec.detailOf,
   );
   if (suppressed) {
-    return {
-      suggestion: null,
-      rawValue: null,
-      outcome: {
-        kind: "evaluated",
-        answer: "pick",
-        confidence,
-        probability,
-        alternatives,
-      },
-    };
+    // The policy declined the pick; its probability cannot describe a decline.
+    return declined({ confidence: "low", probability: null, alternatives });
   }
   const reasoning = placement
     ? `Most specific pick was ${spec.labelOf(outcome.selected)} (${Math.round((outcome.probability ?? 0) * 100)}%); the ${spec.labelOf(selected)} branch as a whole is ${Math.round(placement.probability * 100)}%.`

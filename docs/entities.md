@@ -1320,6 +1320,8 @@ values participate in suggestion requests and drift checks; sibling corrections,
 refinements, and broad classifications for empty fields remain available.
 Stored category corrections wait for the current hierarchy projection before
 cell or bulk acceptance; stored ancestor downgrades are withheld as well.
+Suppressed live ancestors report a non-pick outcome with no calibrated decline
+probability, so outcome summaries never count them as proposed changes.
 
 Manifest-declared suggestion targets appear as field pills in entity lists.
 Pending Suggestions and confident live answers both appear in those cells as the
