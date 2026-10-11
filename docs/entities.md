@@ -415,7 +415,11 @@ delete), so web and native show the same verdict. A list/multi-select verb
 A section or slot can declare `workspace: "overview" | "work" | "evidence"`
 for the browser Work surface. Relations default to Work and timelines to
 Evidence; other sections default to Overview. The browser groups share a
-compact adaptive index and preserve draft state when switching views. Apple
+compact adaptive index and preserve draft state when switching views. Hidden
+workspace bodies mount after hydration: streaming their shared report queries
+alongside the initial workspace can leave its lazy sections pending until a tab
+is clicked. The persisted-counts Run E2E guards initial loading without that
+interaction. Apple
 retains its native detail renderer; the Run evidence pilot renders only the
 shared Evidence group in its isolated hosted surface.
 Workspace choices are presentation-only literal unions, separate from persisted

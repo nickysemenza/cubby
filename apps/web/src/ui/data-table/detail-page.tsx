@@ -19,6 +19,7 @@ import { z } from "zod";
 
 import { cn, formatCount } from "~/lib/utils";
 import { useDebug } from "~/ui/hooks/useDebug";
+import { useHydrated } from "~/ui/hooks/useHydrated";
 import { usePageDetailContext } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
@@ -850,6 +851,9 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   heroImages,
   heroMedia,
 }) => {
+  // Hidden lazy reports must not join the active workspace's SSR stream.
+  // Once hydrated, keep every workspace mounted to retain drafts and empty-state reports.
+  const hydrated = useHydrated();
   const workspaceRef = useRef<HTMLDivElement>(null);
   const [wide, setWide] = useState(false);
   useEffect(() => {
@@ -1121,12 +1125,14 @@ export const DetailSections: FC<DetailSectionsProps> = ({
 
             <TabsContent value="overview" keepMounted className="text-sm/5">
               <div className="space-y-4 md:space-y-2">
-                <div className="min-w-0">
-                  {renderResponsiveLayout({
-                    sections: overviewSections,
-                    visual,
-                  })}
-                </div>
+                {(hydrated || activeMode === "overview") && (
+                  <div className="min-w-0">
+                    {renderResponsiveLayout({
+                      sections: overviewSections,
+                      visual,
+                    })}
+                  </div>
+                )}
 
                 {isDebugEnabled && (
                   <Card>
@@ -1148,7 +1154,12 @@ export const DetailSections: FC<DetailSectionsProps> = ({
                 className="text-sm/5"
               >
                 {renderResponsiveLayout({
-                  sections: mode === "work" ? workSections : evidenceSections,
+                  sections:
+                    hydrated || activeMode === mode
+                      ? mode === "work"
+                        ? workSections
+                        : evidenceSections
+                      : [],
                 })}
               </TabsContent>
             ))}

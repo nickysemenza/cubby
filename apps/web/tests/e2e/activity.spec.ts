@@ -184,9 +184,11 @@ test("Mail import exposes its persisted counts in the shared Run detail", async 
   await expect(
     page.locator("#import-targets").getByRole("link", { name: /^EML-/ }),
   ).toHaveCount(1);
+  await page.getByRole("tab", { name: "Work", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Purchases changed", exact: true }),
   ).toBeVisible();
+  await page.getByRole("tab", { name: "Evidence", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Run progress", exact: true }),
   ).toBeVisible();

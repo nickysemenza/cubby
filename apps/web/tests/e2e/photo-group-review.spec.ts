@@ -36,7 +36,7 @@ test("approves two selected photo groups with one reviewed batch action", async 
   );
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
   const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
@@ -78,7 +78,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
 
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
 
@@ -249,7 +249,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   };
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
   const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
@@ -408,7 +408,7 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
   ];
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
   const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
@@ -537,7 +537,7 @@ test("distinguishes blocking description failure from optional cutout failure", 
   );
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
   const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
@@ -615,7 +615,7 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
   ];
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}`,
+    `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
   const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
