@@ -1,6 +1,7 @@
 import {
   inventoryShortcode,
   locationShortcode,
+  shortcode,
 } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
@@ -124,7 +125,7 @@ describe("describeDiscard", () => {
       [tray, box],
       input({
         quantity: 12,
-        inventoryEntryId: inventoryShortcode.parse("INV-BBBB"),
+        inventoryEntryId: shortcode("INV-BBBB"),
       }),
     );
     expect(preview.selectedShelf).toBe(box);

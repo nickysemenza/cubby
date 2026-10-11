@@ -1,5 +1,5 @@
 import type { FieldExplanationVerification } from "@cubby/schemas/field-explanation";
-import { runShortcode } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
@@ -56,7 +56,7 @@ it("shows each field Source with whether it still supports the current value", (
     recorder: {
       channel: "mcp",
       oauthClientId: null,
-      runId: key === "current" ? runShortcode.parse("RUN-4K7M") : null,
+      runId: key === "current" ? shortcode("RUN-4K7M") : null,
       deviceId: null,
     },
     observedAt: null,

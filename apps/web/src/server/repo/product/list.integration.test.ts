@@ -1,4 +1,4 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import type { LocationCreateInput } from "@cubby/schemas/location";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -578,7 +578,7 @@ describe("productList location subtree filter", () => {
       .set({ deletedAt: new Date() })
       .where(eq(location.id, closet.entityId));
     expect(await listAt(closet.id)).toEqual([]);
-    expect(await listAt(parseShortcodeFor("location", "LOC-ZZZZ"))).toEqual([]);
+    expect(await listAt(shortcode("LOC-ZZZZ"))).toEqual([]);
   });
 
   it("terminates on a parentId cycle", async () => {

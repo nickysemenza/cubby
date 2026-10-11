@@ -2,7 +2,7 @@ import {
   imageId as parseImageId,
   runEntityId as parseRunId,
   runShortcode,
-  parseShortcodeFor,
+  shortcode,
 } from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { eq } from "drizzle-orm";
@@ -463,7 +463,7 @@ describe("photo import finalize", () => {
           runId: run.publicId,
           images: [
             {
-              imageId: parseShortcodeFor("image", "IMG-4K7M"),
+              imageId: shortcode("IMG-4K7M"),
               position: 0,
               sha256: "c".repeat(64),
               width: 1,
@@ -521,7 +521,7 @@ describe("photo import finalize", () => {
           runId: runShortcode.parse(otherRun.shortcode),
           images: [
             {
-              imageId: parseShortcodeFor("image", "IMG-4K7M"),
+              imageId: shortcode("IMG-4K7M"),
               position: 0,
               sha256: "d".repeat(64),
               width: 1,

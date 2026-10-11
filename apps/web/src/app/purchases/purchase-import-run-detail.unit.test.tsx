@@ -1,4 +1,4 @@
-import { runShortcode } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import type { RunOut } from "@cubby/schemas/run";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -23,7 +23,7 @@ let restoreDispatch: () => void;
 const operationCalls: Array<{ operation: string; input: unknown }> = [];
 
 const run: RunDetail = {
-  publicId: runShortcode.parse("RUN-4K7M"),
+  publicId: shortcode("RUN-4K7M"),
   status: "completed",
   purpose: "mail_import",
   trigger: "manual",
@@ -284,7 +284,7 @@ it("explains an erased retired run and offers no retry or restart", async () => 
     status: "needs_review",
     retirementReason: "unrelated_source",
     restartInputs: null,
-    parentRunId: runShortcode.parse("RUN-5K8N"),
+    parentRunId: shortcode("RUN-5K8N"),
     targets: [],
   };
   render(<RunImportControls record={record} />, { wrapper: harness.wrapper });
@@ -305,8 +305,8 @@ it("explains an erased retired run and offers no retry or restart", async () => 
 it("separates the source parent from retry lineage and shows the declared cause and attempt", async () => {
   detailRun = {
     ...run,
-    parentRunId: runShortcode.parse("RUN-5K8N"),
-    predecessorRunPublicId: runShortcode.parse("RUN-6K9P"),
+    parentRunId: shortcode("RUN-5K8N"),
+    predecessorRunPublicId: shortcode("RUN-6K9P"),
     cause: "import_completed",
     attempt: 2,
   };

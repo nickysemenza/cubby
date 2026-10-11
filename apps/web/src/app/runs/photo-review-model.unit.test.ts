@@ -1,4 +1,4 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor, shortcode } from "@cubby/schemas/identifiers";
 import type { PhotoGroupProposal } from "@cubby/schemas/photo-import-run";
 import { describe, expect, it } from "vitest";
 
@@ -113,7 +113,7 @@ describe("photo review edits", () => {
     });
 
     it("accepts a save that picks the replacement", () => {
-      const replacement = parseShortcodeFor("product", "PRD-4K7M");
+      const replacement = shortcode("PRD-4K7M");
       expect(
         toGroupInput(deletedProduct, {
           product: { kind: "existing", existingId: replacement },

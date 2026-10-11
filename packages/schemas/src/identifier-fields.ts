@@ -234,6 +234,7 @@ export {
   parseShortcodeFor,
   recipeShortcode,
   shortcodeSchema,
+  shortcode,
   taskShortcode,
   vendorShortcode,
   vendorAccountShortcode,

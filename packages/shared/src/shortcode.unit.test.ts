@@ -6,6 +6,9 @@ import {
   SHORTCODE_CHARS,
   SHORTCODE_PREFIX,
   type LocationShortcode,
+  type AnyShortcode,
+  type EmailShortcode,
+  type RunShortcode,
   type ProductShortcode,
   type ShortcodeFor,
   type ShortcodeType,
@@ -13,12 +16,57 @@ import {
   generateShortcode,
   parseShortcode,
   parseShortcodeFor,
+  shortcode,
   shortcodeSchema,
 } from "./shortcode";
 
 const ENTITIES = Object.keys(SHORTCODE_PREFIX).filter(
   (entity): entity is ShortcodeType => Object.hasOwn(SHORTCODE_PREFIX, entity),
 );
+
+// Prefix inference must not misbrand a literal or accept an invalid body;
+// runtime strings must retain the union until their entity is narrowed.
+describe("shortcode", () => {
+  it("validates prefix-inferred identifiers without losing their brands", () => {
+    const run = shortcode("RUN-4K7M");
+    const email = shortcode("eml-4k7m");
+    expectTypeOf(run).toEqualTypeOf<RunShortcode>();
+    expectTypeOf(email).toEqualTypeOf<EmailShortcode>();
+    expectTypeOf(run).not.toMatchTypeOf<EmailShortcode>();
+    expect(run).toBe("RUN-4K7M");
+    expect(email).toBe("EML-4K7M");
+    const input: string = " EML-4K7M ";
+    const dynamic = shortcode(input);
+    expectTypeOf(dynamic).toEqualTypeOf<AnyShortcode>();
+    expect(dynamic).toBe("EML-4K7M");
+    const union = shortcode(Math.random() < 0.5 ? "RUN-4K7M" : "EML-4K7M");
+    expectTypeOf(union).toEqualTypeOf<RunShortcode | EmailShortcode>();
+    const legacy = shortcode("P-4K7M");
+    expectTypeOf(legacy).toEqualTypeOf<ProductShortcode>();
+    expect(legacy).toBe("PRD-4K7M");
+  });
+
+  it("throws for unknown prefixes and invalid bodies", () => {
+    for (const invalid of [
+      "XYZ-4K7M",
+      "RUN-0OIL",
+      "EML-4K7",
+      "RUN-4K7MNN",
+      "",
+    ]) {
+      expect(() => shortcode(invalid)).toThrow(/Invalid shortcode/);
+    }
+  });
+
+  it("keeps normalized union members from borrowing another entity's brand", () => {
+    for (const input of ["RUN-4K7M", " EML-4K7M "] as const) {
+      const parsed = shortcode(input);
+      expectTypeOf(parsed).toEqualTypeOf<AnyShortcode>();
+      expectTypeOf(parsed).not.toMatchTypeOf<RunShortcode>();
+      expect(parsed).toBe(input.trim());
+    }
+  });
+});
 
 describe("prefix registry", () => {
   it("uses a distinct prefix per entity", () => {

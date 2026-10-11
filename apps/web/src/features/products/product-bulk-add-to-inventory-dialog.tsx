@@ -24,6 +24,7 @@ import {
   locationShortcode,
   type ProductShortcode,
   productShortcode,
+  shortcode,
 } from "@cubby/schemas/identifiers";
 import { positiveAmount } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -146,7 +147,7 @@ export const ProductBulkAddToInventoryDialog: FC<
   const { data: preview } = useQuery({
     ...productOperations.addToInventoryPreview.queryOptions({
       // A parseable placeholder keeps the disabled query's input valid.
-      productId: sole?.id ?? productShortcode.parse("PRD-2222"),
+      productId: sole?.id ?? shortcode("PRD-2222"),
       locationId,
     }),
     enabled: open && sole !== undefined,

@@ -1,5 +1,5 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, shortcode } from "@cubby/schemas/identifiers";
 import { count, eq } from "drizzle-orm";
 import {
   raceUniqueInsert,
@@ -49,7 +49,7 @@ describe("createLocation name race", () => {
     // raises a unique violation, which must surface as DUPLICATE_RECORD naming
     // the surviving location rather than an unclassified 500.
     const name = "Garage";
-    const winnerCode = parseShortcodeFor("location", "LOC-RACE");
+    const winnerCode = shortcode("LOC-RACE");
 
     const { loser: outcome } = await raceUniqueInsert(ctx, {
       winner: ({ releaseSignal, markWinnerReady }) =>
@@ -107,7 +107,7 @@ describe("location storage integrity", () => {
         .values({
           name: "Orphaned raw location",
           type: "area",
-          shortcode: parseShortcodeFor("location", "LOC-2345"),
+          shortcode: shortcode("LOC-2345"),
           parentId: parseEntityId(
             "location",
             "00000000-0000-4000-8000-000000000099",

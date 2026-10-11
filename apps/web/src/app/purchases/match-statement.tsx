@@ -1,5 +1,8 @@
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
-import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
+import {
+  financialTransactionShortcode,
+  shortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   PurchaseSettlementSuggestOut,
   SettlementAllocationDraft,
@@ -40,7 +43,7 @@ import {
 type AllocationRow = SettlementAllocationDraft & { key: string };
 
 /** A well-formed placeholder for the disabled check; never sent. */
-const IDLE_TRANSACTION = financialTransactionShortcode.parse("FTX-2222");
+const IDLE_TRANSACTION = shortcode("FTX-2222");
 
 const settledDraft = z.object({
   transactionId: financialTransactionShortcode,

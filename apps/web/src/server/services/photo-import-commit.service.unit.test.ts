@@ -1,4 +1,4 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PhotoImportCommitInput } from "~/contracts/photo-import.contract";
@@ -14,7 +14,7 @@ import {
 // SAFETY: every database operation in this unit is replaced by an injected
 // port; the object is only an opaque transaction identity token.
 const database = {} as Database;
-const imageCode = parseShortcodeFor("image", "IMG-ABCD");
+const imageCode = shortcode("IMG-ABCD");
 const imageRow = (status: "PENDING" | "UPLOADED") => ({
   id: "00000000-0000-4000-8000-000000000001",
   shortcode: imageCode,

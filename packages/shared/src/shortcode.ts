@@ -109,6 +109,47 @@ export { SHORTCODE_TYPES, type ShortcodeFor } from "./shortcode-schema";
 /** Any entity's shortcode, for surfaces that hold a code before resolving it. */
 export type AnyShortcode = z.infer<(typeof SHORTCODE_SCHEMA)[ShortcodeType]>;
 
+type ShortcodeFromPrefix<S extends string> = S extends unknown
+  ?
+      | {
+          [
+            T in ShortcodeType
+          ]: Uppercase<S> extends `${(typeof SHORTCODE_PREFIX)[T]}${string}`
+            ? ShortcodeFor<T>
+            : never;
+        }[ShortcodeType]
+      | {
+          [
+            P in keyof typeof LEGACY_SHORTCODE_PREFIX
+          ]: Uppercase<S> extends `${P}${string}`
+            ? ShortcodeFor<(typeof LEGACY_SHORTCODE_PREFIX)[P]>
+            : never;
+        }[keyof typeof LEGACY_SHORTCODE_PREFIX]
+  : never;
+
+// Fall back per input member so a normalized member cannot disappear from a
+// literal union and leave the result branded as a different entity.
+type ShortcodeFromInput<S extends string> = S extends unknown
+  ? [ShortcodeFromPrefix<S>] extends [never]
+    ? AnyShortcode
+    : ShortcodeFromPrefix<S>
+  : never;
+
+/**
+ * Validate a code without repeating its entity. Canonical and legacy literals
+ * infer their brand from the generated prefix registry, ignoring case. A runtime
+ * string (or a literal with surrounding whitespace) retains the entity union.
+ * Use an entity schema when the caller requires one particular entity.
+ */
+export function shortcode<const S extends string>(
+  code: S,
+): ShortcodeFromInput<S>;
+export function shortcode(code: string): AnyShortcode {
+  const parsed = parseShortcode(code);
+  if (!parsed) throw new Error(`Invalid shortcode: ${code}`);
+  return parsed.shortcode;
+}
+
 const shortcodeBody = customAlphabet(SHORTCODE_CHARS, SHORTCODE_BODY_LENGTH);
 
 /**

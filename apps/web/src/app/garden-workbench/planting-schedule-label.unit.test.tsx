@@ -1,5 +1,5 @@
 import { plantingGuides } from "@cubby/schemas/garden-guides";
-import { imageShortcode } from "@cubby/schemas/identifiers";
+import { shortcode } from "@cubby/schemas/identifiers";
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -36,7 +36,7 @@ function Fixture() {
       id: "PLT-TEST",
       displayImages: [
         {
-          id: imageShortcode.parse("IMG-TEST"),
+          id: shortcode("IMG-TEST"),
           url: "https://example.com/seed.jpg",
         },
       ],

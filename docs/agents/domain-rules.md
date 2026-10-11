@@ -98,6 +98,17 @@ MCP—shortcodes do. Resolve codes through `shortcode-resolver`, mint through
 `insertWithShortcode`, never reuse them, and keep `shortcodeSchema` a
 `ZodString`.
 
+For a standalone code, `shortcode("RUN-4K7M")` validates it and infers its
+branded type from the generated prefix registry (case-insensitive, including
+legacy label prefixes). Runtime strings and whitespace-wrapped literals return
+the shortcode union; use `parseShortcode` when its entity discriminator is
+needed for narrowing. Use `shortcodeSchema(entity)` or `parseShortcodeFor`
+when an ingress field must require a particular entity rather than accept any
+valid prefix. Entity-specific schemas remain the declaration shape.
+Prefix inference applies the union fallback to each input member before
+combining results, so whitespace-wrapped members cannot borrow another
+member's entity brand.
+
 Drizzle raw-`sql` traps: an interpolated column renders **unqualified** on a
 single-table select, so a correlated subquery over the same table silently
 self-joins (use `sql.raw` with hand-qualified names); a JS array interpolates as
