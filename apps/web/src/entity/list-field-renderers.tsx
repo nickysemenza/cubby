@@ -199,7 +199,7 @@ const categorySummaryRenderer = <
         id: "spendingCategorySummary",
         header: "Expense categories",
         enableSorting: false,
-        meta: { className: "w-56", mobile: { slot: "meta", priority: 35 } },
+        meta: { className: "w-40", mobile: { slot: "meta", priority: 35 } },
         cell: (info) => {
           const summary = info.row.original.spendingCategorySummary;
           return summary ? (
