@@ -1,7 +1,8 @@
+import { createPostgresPool } from "../../tooling/postgres-pool";
 import { createHash, randomBytes } from "node:crypto";
 import { request as apiRequest } from "@playwright/test";
 import { z } from "zod";
-import { Pool } from "pg";
+
 import { retryStaleKeepAlive } from "../../tooling/stale-keep-alive";
 import { createCubbyClient } from "./http-api-client";
 import {
@@ -31,7 +32,9 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
   const client = createCubbyClient({ baseUrl: baseURL!, apiKey: key.key });
   const headers = { "x-api-key": key.key };
   try {
-    const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+    const pool = createPostgresPool({
+      connectionString: process.env.E2E_DATABASE_URL,
+    });
     try {
       const stored = await pool.query<{
         key: string;

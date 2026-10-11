@@ -1,5 +1,6 @@
+import { createPostgresPool } from "./postgres-pool";
 import { pollUntil } from "@cubby/shared/retry";
-import { Pool } from "pg";
+import { type Pool } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 import { createE2EDatabase } from "../tests/e2e/e2e-database";
 import { leaseDatabase, prepareTemplate } from "./test-database-lease";
@@ -24,7 +25,7 @@ function maintenancePool(databaseUrl: string): Pool {
   const key = url.toString();
   let pool = maintenance.get(key);
   if (!pool) {
-    pool = new Pool({ connectionString: key, max: 1 });
+    pool = createPostgresPool({ connectionString: key, max: 1 });
     maintenance.set(key, pool);
   }
   return pool;
@@ -39,7 +40,7 @@ async function databaseOid(databaseUrl: string, name: string) {
 }
 
 async function writeProbe(databaseUrl: string) {
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const pool = createPostgresPool({ connectionString: databaseUrl, max: 1 });
   try {
     await pool.query("CREATE TABLE lease_probe (id integer)");
   } finally {
@@ -48,7 +49,7 @@ async function writeProbe(databaseUrl: string) {
 }
 
 async function hasProbe(databaseUrl: string) {
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const pool = createPostgresPool({ connectionString: databaseUrl, max: 1 });
   try {
     const { rows } = await pool.query<{ probe: string | null }>(
       "SELECT to_regclass('public.lease_probe')::text AS probe",
@@ -126,7 +127,10 @@ describe("disposable database lease", { timeout: 60_000 }, () => {
   });
 
   it("keeps the Vitest and browser templates apart while both are leased", async () => {
-    const vitest = new Pool({ connectionString: ctx.databaseUrl, max: 1 });
+    const vitest = createPostgresPool({
+      connectionString: ctx.databaseUrl,
+      max: 1,
+    });
     try {
       const [browser, current] = await Promise.all([
         prepareTemplate("browser").then(() => createE2EDatabase()),

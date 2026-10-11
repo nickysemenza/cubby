@@ -1,6 +1,6 @@
+import { createPostgresPool } from "./postgres-pool";
 import { randomUUID } from "node:crypto";
 
-import { Pool } from "pg";
 import { expect } from "vitest";
 
 async function signUp(origin: string) {
@@ -20,7 +20,7 @@ async function signUp(origin: string) {
 }
 
 async function hasUser(databaseUrl: string, email: string) {
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const pool = createPostgresPool({ connectionString: databaseUrl, max: 1 });
   try {
     const { rows } = await pool.query('SELECT 1 FROM "user" WHERE email = $1', [
       email,

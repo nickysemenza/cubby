@@ -1,10 +1,11 @@
+import { createPostgresPool } from "../../tooling/postgres-pool";
 import "./build-constants";
 import { buildActorContext } from "@cubby/schemas/context";
 import { testUserId } from "@cubby/schemas/testing";
 import type { Page } from "@playwright/test";
 import { and, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+
 import { z } from "zod";
 import { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
@@ -44,7 +45,11 @@ export function getFixtureDb(): Database {
     );
   }
   // Room for FIXTURE_CONCURRENCY parallel writes plus their nested reads.
-  const pool = new Pool({ connectionString, max: 8, allowExitOnIdle: true });
+  const pool = createPostgresPool({
+    connectionString,
+    max: 8,
+    allowExitOnIdle: true,
+  });
   const client = drizzle(pool, { schema });
   fixtureDb = new Database(() => ({
     client,

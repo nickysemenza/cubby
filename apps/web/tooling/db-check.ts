@@ -1,10 +1,11 @@
+import { createPostgresPool } from "./postgres-pool";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import { Client, Pool } from "pg";
+import { Client } from "pg";
 
 import { renderDerivedDdl } from "../src/server/db/derived-ddl";
 import * as schema from "../src/server/db/schema";
@@ -97,7 +98,7 @@ async function withDb(
   url: string,
   build: (db: NodePgDatabase) => Promise<void>,
 ): Promise<void> {
-  const pool = new Pool({ connectionString: url });
+  const pool = createPostgresPool({ connectionString: url });
   try {
     await build(drizzle(pool));
   } finally {

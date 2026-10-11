@@ -1,3 +1,4 @@
+import { createPostgresPool } from "./postgres-pool";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -5,7 +6,7 @@ import { parseArgs } from "node:util";
 import { getTableName, sql } from "drizzle-orm";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+
 import { z } from "zod";
 
 import { Database } from "~/server/db";
@@ -131,7 +132,7 @@ async function main() {
     throw new Error(
       "Use --target=production with a valid direct PRODUCTION_DIRECT_DATABASE_URL; no ambient database fallback.",
     );
-  const pool = new Pool({ connectionString: url, max: 1 });
+  const pool = createPostgresPool({ connectionString: url, max: 1 });
   try {
     const entries = z
       .object({ entries: z.array(z.object({ tag: z.string() })) })

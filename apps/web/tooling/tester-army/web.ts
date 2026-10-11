@@ -1,7 +1,8 @@
+import { createPostgresPool } from "../postgres-pool";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { testAiGatewayEnvironment } from "@cubby/shared/ai/gateway-metadata";
-import { Pool } from "pg";
+import { type Pool } from "pg";
 import { z } from "zod";
 import { runOrThrow } from "../../../../scripts/lib/run.ts";
 import type { WorkerdModelWorker } from "../workerd-harness";
@@ -66,7 +67,7 @@ const phaseOutput = (harness: Harness) => path.join(rawOutput, harness);
 
 /** Seeds one harness's journeys and runs them in a single Tester Army run. */
 async function runJourneys(harness: Harness, runtime: Runtime) {
-  const pool = new Pool({ connectionString: runtime.databaseUrl });
+  const pool = createPostgresPool({ connectionString: runtime.databaseUrl });
   const idsFile = path.join(output, `journey-ids-${harness}.json`);
   const state = path.join(output, `browser-state-${harness}.json`);
   try {

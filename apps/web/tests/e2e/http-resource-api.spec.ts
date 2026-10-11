@@ -1,5 +1,6 @@
+import { createPostgresPool } from "../../tooling/postgres-pool";
 import { z } from "zod";
-import { Pool } from "pg";
+
 import { createCubbyClient } from "./http-api-client";
 import {
   settledCalendarFeedRevision,
@@ -339,7 +340,9 @@ test("a revoked session is rejected once its cookie cache is gone", async ({
 }) => {
   const context = await browser.newContext({ baseURL });
   retryStaleKeepAlive(context.request);
-  const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+  const pool = createPostgresPool({
+    connectionString: process.env.E2E_DATABASE_URL,
+  });
   try {
     const login = await context.request.post("/api/auth/sign-in/email", {
       headers: { Origin: baseURL! },

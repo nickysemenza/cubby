@@ -1,3 +1,4 @@
+import { createPostgresPool } from "./postgres-pool";
 import { pollUntil } from "@cubby/shared/retry";
 import {
   type DatabaseLease,
@@ -18,7 +19,7 @@ import {
 import { testUserId } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { type Pool } from "pg";
 import { beforeEach } from "vitest";
 import {
   Database,
@@ -211,7 +212,9 @@ async function getFileDb() {
     lease,
     prepared: { pool, tables },
   } = await leaseDatabase("vitest", async ({ databaseUrl }) => {
-    const pool = countPoolQueries(new Pool({ connectionString: databaseUrl }));
+    const pool = countPoolQueries(
+      createPostgresPool({ connectionString: databaseUrl }),
+    );
     // `resetTestDb` terminates this pool's own idle backends; node-postgres
     // surfaces that as an 'error' on the idle client, and an unhandled one
     // takes the whole worker down. Swallow it — the pool just opens a fresh

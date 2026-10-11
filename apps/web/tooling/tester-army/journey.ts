@@ -1,7 +1,8 @@
+import { createPostgresPool } from "../postgres-pool";
 import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
 import { unique, type Role, type SwipeOptions } from "e2e";
-import { Pool } from "pg";
+import { type Pool } from "pg";
 import { z } from "zod";
 import { pollUntil } from "@cubby/shared/retry";
 import { parseShortcode } from "@cubby/shared";
@@ -206,7 +207,7 @@ export async function assertDatabase(
   ids: JourneyIds,
   wrong: boolean,
 ) {
-  const pool = new Pool({
+  const pool = createPostgresPool({
     connectionString: z.string().min(1).parse(process.env.DATABASE_URL),
   });
   try {
@@ -337,7 +338,7 @@ export async function awaitRun(
   wait: RunWait,
   ids: JourneyIds,
 ) {
-  const pool = new Pool({
+  const pool = createPostgresPool({
     connectionString: z.string().min(1).parse(process.env.DATABASE_URL),
   });
   let runId: string | undefined;
