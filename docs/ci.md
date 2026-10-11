@@ -11,7 +11,7 @@ deployment never waits for post-merge CI.
 
 `ci.yaml` holds only those checks, so every job in a PR's run graph gates it.
 Tester Army background coverage lives in `e2e-journeys.yaml`: standard web on
-same-repository code PRs, iOS for native/shared/backend changes, and coupled
+same-repository code PRs, opt-in iOS with the `tester-army:ios` label, and coupled
 imports for affected import/shared/backend changes. All remain informational,
 with verified action replay, SDK evidence uploads and the built-in GitHub
 reporter. One routing step selects the jobs; job conditions only read its outputs.

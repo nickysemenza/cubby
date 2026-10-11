@@ -607,10 +607,7 @@ export const journeys: Journey[] = [
           'Type "synthetic-new-tag" into Add tag and press Return to add it. Leave the editor open with the new tag and existing tags.',
         ],
         tapTestId: { ios: "editor.product.save" },
-        web: [
-          'Open Edit Product. In the Tags section, type "synthetic-new-tag" into the textbox with placeholder "e.g. grinder-4.5in, M18" and press Enter. Leave Collections unchanged. Finish with synthetic-new-tag and synthetic-old-tag chips in Tags and the editor still open.',
-          "Save changes. Finish with the editor closed.",
-        ],
+        web: 'Edit this product. Type "synthetic-new-tag" into Tags and use its Add value button to add it. Keep the existing tags and collections, then save.',
       },
     ],
     visible: () => ["synthetic-new-tag"],

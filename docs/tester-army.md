@@ -199,17 +199,13 @@ Apple FFI uses the same target-specific action as required Apple CI. On a
 GitHub output-cache miss, jobs with installed workspace dependencies use the
 existing Nx artifact cache before compiling. Archive jobs without those
 dependencies retain their direct build path.
-The native journey lanes restore both the SPM package cache and the same
-Xcode-versioned DerivedData cache as the regular Apple build gate. Do not disable
-SPM restoration while restoring DerivedData: its saved workspace metadata can
-refer to binary artifacts such as Sentry's XCFramework that are absent from
-DerivedData itself. Hosted builds use the shared SPM clone directory,
-content-based source mtimes, native arm64 slice, and batch compilation. They
-resolve package dependencies before validating a certificate for the cached app.
-An unchanged toolchain, generated inputs, Swift and resource files, FFI bytes,
-dependency pins, and complete app-bundle checksum allow compilation to be skipped.
-Otherwise they run the normal incremental build and certify its result. The
-required Apple gate always compiles and supplies the same certificate. The optional
+On an Nx simulator-app cache miss, Tester Army iOS jobs restore both the SPM
+package cache and the Xcode-versioned DerivedData cache used by the Apple gate.
+Keep both together: DerivedData workspace metadata can refer to binary artifacts
+such as Sentry's XCFramework that live in the SPM cache. The harness generates
+the project and invokes the Nx simulator-build target before installation;
+unchanged inputs reuse its app output, while changed inputs compile normally.
+The required Apple gate uses the same cached target. The optional
 GitHub native jobs start simulator boot after dependency installation, overlapping
 startup with Apple tool setup and cache restores. Booting during extraction and
 generation increased observed dependency setup from 42 seconds to 84–386 seconds;
@@ -233,11 +229,17 @@ original error without starting XCTest again for a UI snapshot. Failures after
 successful preparation still capture the UI tree.
 A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.
+Tester Army iOS jobs first reuse the existing Nx simulator-build cache probe. A cached
+app skips the large Swift package-clone and DerivedData restores; a miss keeps
+the shared compilation setup. FFI verification, project generation and the
+device runner remain necessary even with a cached app.
 
 The **E2E journeys** workflow (`e2e-journeys.yaml`) runs an informational
 trial in parallel with required checks. Same-repository code PRs run all
-standard web journeys. Native, shared package, backend/API/contract, tooling,
-workflow and root configuration changes also run iOS; import/vendor/run changes
+standard web journeys. The full iOS catalog runs only when explicitly selected
+with the `tester-army:ios` label, manual dispatch, or the weekly schedule;
+native/shared/backend changes retain their required Apple checks without
+automatically starting paid native journeys. Import/vendor/run changes
 and shared/backend changes also run the coupled import journeys. Prose-only PRs
 and fork PRs do not automatically call paid models. The complete native catalog runs in two parallel SDK shards (`--shard 1/2` and `2/2`), with separate recording caches, reports and reporter keys. The partition preserves all native cases; it lowers work per job while using more concurrent macOS runners. Changed-file routing lives
 in `scripts/tester-army-ci.ts`; renamed files include their old paths.

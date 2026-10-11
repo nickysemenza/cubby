@@ -300,16 +300,29 @@ jobs:
           restore-keys: |
             tester-army-replay-v1-ios-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - run: pnpm test:e2e:agent:preflight
+      - name: Reuse the cached simulator app
+        id: cached-app
+        continue-on-error: true
+        env:
+          CUBBY_NX_CACHE_PROBE: "1"
+        run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
+        with:
+          restore-spm-clones: ${{ steps.cached-app.outcome != 'success' }}
       - uses: ./.github/actions/setup-apple-build-cache
+        if: steps.cached-app.outcome != 'success'
         id: derived-data
+      - uses: ./.github/actions/toolchain-hash
+        id: native-xcode
+        with:
+          command: xcodebuild -version
       - uses: ./.github/actions/setup-apple-test-runner-cache
         id: test-runner
         with:
-          toolchain-hash: ${{ steps.derived-data.outputs.toolchain-hash }}
+          toolchain-hash: ${{ steps.native-xcode.outputs.hash }}
       - name: Start native PostgreSQL 17 with pgvector
         shell: bash
         run: |
@@ -330,6 +343,7 @@ jobs:
           cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
           matched-key: ${{ steps.test-runner.outputs.matched-key }}
       - name: Save DerivedData cache
+        if: steps.cached-app.outcome != 'success'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.derived-data.outputs.cache-paths }}
