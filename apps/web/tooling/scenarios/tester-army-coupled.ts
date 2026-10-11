@@ -124,7 +124,10 @@ async function uploadPhotoRun(services: CoupledServices) {
   };
   const { runId } = await post(
     "createRun",
-    { notes: "Synthetic wardrobe photos" },
+    {
+      notes:
+        "Synthetic wardrobe photos of two separate items: a slate-blue crew-neck T-shirt and a brown ankle boot. Brand and size are unknown.",
+    },
     z.object({ runId: runShortcode }),
   );
   const photos = await Promise.all(

@@ -298,7 +298,10 @@ seeds the sources. Mail fixtures reuse `authorizeSyntheticBackfill` for the same
 - `import-photo-inventory`: two synthetic photos uploaded over the native HTTP
   API (create run, stage, PUT, finalize). The journey waits for their cloud
   descriptions, starts grouping, waits for the agent's proposals, and
-  approves them; two Products must result.
+  approves them; two Products must result. Run notes identify the illustrated
+  T-shirt and ankle boot as separate wardrobe items, leaving brand and size
+  unknown. Without that owner context, the live model correctly asked whether
+  the stylized boot silhouette was footwear or a non-apparel object.
 
 Cloud description fetches the photo back through its public object URL, and
 the external-fetch guard refuses loopback hosts by name, so the harness serves
