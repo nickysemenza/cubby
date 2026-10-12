@@ -2,7 +2,7 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { type FC, useMemo } from "react";
 
 import { computePerUnitPrices } from "~/lib/price-mapping-utils";
-import { formatUnitPrice } from "~/lib/unit-price-format";
+import { formatPerUnitPrice, formatUnitPrice } from "~/lib/unit-price-format";
 
 /**
  * The derived per-unit price for one product's conversion graph.
@@ -24,7 +24,7 @@ export const UnitPriceLine: FC<{
   const prices = suppliedPrices ?? computedPrices;
   if (!prices.natural) return null;
 
-  const natural = `${formatUnitPrice(prices.natural.price)}/${prices.natural.unit}`;
+  const natural = formatPerUnitPrice(prices.natural);
   // Per-gram is the cross-product comparator, so it is worth its own figure —
   // but it is redundant when grams ARE the natural basis.
   const perGram =

@@ -46,7 +46,7 @@ test("related Runs show account labels and shared quality", async ({
   await expect(
     row.getByRole("link", { name: account.label, exact: true }),
   ).toHaveAttribute("href", `/vendor-accounts/${account.shortcode}`);
-  await expect(row.getByText("100/100", { exact: true })).toBeVisible();
+  await expect(row.getByText("100", { exact: true })).toBeVisible();
   await row.hover();
   await row
     .getByRole("button", { name: "How quality is determined", exact: true })
@@ -61,5 +61,5 @@ test("related Runs show account labels and shared quality", async ({
   const listRow = page
     .getByRole("row")
     .filter({ hasText: "Synthetic reference vendor" });
-  await expect(listRow.getByText("100/100", { exact: true })).toBeVisible();
+  await expect(listRow.getByText("100", { exact: true })).toBeVisible();
 });

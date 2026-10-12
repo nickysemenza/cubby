@@ -16,10 +16,11 @@ import { isInspectableFieldProvenance } from "~/entity/field-provenance";
 import {
   FieldResolutionBadge,
   fieldResolutionFor,
+  resolutionIsDerived,
 } from "~/entity/field-resolution";
 import { RecordFieldSuggestion } from "~/features/ai/record-suggestions";
 import { cn } from "~/lib/utils";
-import { StackedCellContext } from "~/ui/common/stacked-value";
+import { DenseCellContext } from "~/ui/common/stacked-value";
 import { Button } from "~/ui/primitives/button";
 import { TableCell, TableRow } from "~/ui/primitives/table";
 
@@ -112,11 +113,17 @@ function explainedCellContent<TItem extends RowData>(
     explanation?.field ?? cell.column.id,
   );
   const rowIdentity = dataRowIdentitySchema.safeParse(cell.row.original);
-  // A resolution mark is status (an inherited or defaulted value), so its
-  // rail stays visible; a bare explanation overlays the active row only.
+  // Every rail overlays the active row; a derived value reads muted instead
+  // of reserving width for its ↳ in every row.
+  const value =
+    resolution && resolutionIsDerived(resolution) ? (
+      <span className="text-muted-foreground">{content}</span>
+    ) : (
+      content
+    );
   return explanation && rowIdentity.success ? (
     <CellFrame
-      overlay={!resolution}
+      overlay
       trailing={
         <FieldExplanation
           entity={explanation.entity}
@@ -128,10 +135,11 @@ function explainedCellContent<TItem extends RowData>(
         />
       }
     >
-      {content}
+      {value}
     </CellFrame>
   ) : resolution ? (
     <CellFrame
+      overlay
       trailing={
         <FieldResolutionBadge
           record={cell.row.original}
@@ -141,7 +149,7 @@ function explainedCellContent<TItem extends RowData>(
         />
       }
     >
-      {content}
+      {value}
     </CellFrame>
   ) : (
     content
@@ -197,7 +205,9 @@ function DesktopDataCell<TItem extends RowData>({
     >
       <div className={ROW_DENSITY.cellContentClass}>
         <div className="min-w-0">
-          <StackedCellContext value>
+          <DenseCellContext
+            value={{ linksTo: cell.column.columnDef.meta?.linksTo ?? null }}
+          >
             <RecordFieldSuggestion
               record={cell.row.original}
               field={cell.column.id}
@@ -205,7 +215,7 @@ function DesktopDataCell<TItem extends RowData>({
             >
               {explained}
             </RecordFieldSuggestion>
-          </StackedCellContext>
+          </DenseCellContext>
         </div>
       </div>
     </TableCell>

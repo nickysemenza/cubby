@@ -14,3 +14,13 @@ export const formatUnitPrice = (price: number): string => {
   const decimals = magnitude >= 1 ? 2 : magnitude >= 0.01 ? 3 : 5;
   return formatCurrency(price, decimals);
 };
+
+/**
+ * "$3.49/ea", "$0.085/fl oz": one unit price against its natural basis. A
+ * count reads "ea" so a table column stays narrow; measures keep their names.
+ */
+export const formatPerUnitPrice = (natural: {
+  price: number;
+  unit: string;
+}): string =>
+  `${formatUnitPrice(natural.price)}/${natural.unit === "each" ? "ea" : natural.unit}`;

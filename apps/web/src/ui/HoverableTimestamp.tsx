@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 
 import { formatInstant } from "~/lib/date-format";
 import { yearMark } from "~/lib/date-span";
-import { StackedValue, useStackedCell } from "~/ui/common/stacked-value";
+import { StackedValue, useDenseCell } from "~/ui/common/stacked-value";
 import {
   Tooltip,
   TooltipContent,
@@ -56,7 +56,7 @@ export function HoverableTimestamp({
 }: HoverableTimestampProps) {
   const tooltipId = useId();
   const [open, setOpen] = useState(false);
-  const stack = useStackedCell(stacked);
+  const stack = useDenseCell(stacked);
   const date = new Date(timestamp);
   const formattedDate = formatInstant(date, "isoDateTimeSeconds");
   const relativeTime = formatCompactRelative(date);

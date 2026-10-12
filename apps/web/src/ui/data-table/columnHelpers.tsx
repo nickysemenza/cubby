@@ -651,6 +651,7 @@ export function createEntityInlineLinkColumn<
       filterConfig: options?.filterConfig,
       mobile: options?.mobile,
       provenance: options?.provenance,
+      linksTo: entity,
       entityRefs: (row) => entityInlineItemRefs(entity, row[accessor]),
     }),
     cell: (info) =>
@@ -1354,6 +1355,7 @@ export function createSingleEntityInlineLinkColumn<
       filterConfig: options?.filterConfig,
       provenance: options?.provenance,
       cellData,
+      linksTo: entity,
       entityRefs: (row) => {
         const item = valueFor(row);
         return entity === "usda-food" || !item || !("id" in item)

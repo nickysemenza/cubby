@@ -564,6 +564,20 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   the form but never shown: `entityEditBannerIssues`
   (`entity-edit-dialog-content.tsx`) excludes every field-scoped issue, so Save
   fails silently. Surface issues no registered control can display.
+- 🟢 ✨ **Spill clipped names outside tables.** `useCellSpill` lifts a clipped
+  table value or header over its neighbours on hover or focus; the same
+  overlay would read truncated names elsewhere without a tooltip. Generalise
+  the hook's root from a table pane to any container that opts in, rather
+  than adding a second overlay:
+  - Pickers: long option names in `ui/combobox/entity-picker.tsx` and
+    `ui/primitives/combobox.tsx` ("Synthetic pantry staples and long-keeping
+    dry…").
+  - Record lists: `EntityRefLink variant="list"` rows
+    (`entity/components/ref-link/list.tsx`) in detail-page related sections
+    and `ui/DocumentViewerList.tsx` file names.
+  - Navigation: sidebar entries and group labels
+    (`ui/navigation/sidebar-rail-group.tsx`, `workspace-navigator.tsx`) and
+    the shell's page title in `authenticated-app-shell.tsx`.
 - 🤔 🛠️ **RTable visual polish pass.** Quieter cells read as finished; the
   mocked target has fewer marks and type-led hierarchy. Start with
   `cubby-ui-design-audit` measuring live computed styles against the mock,

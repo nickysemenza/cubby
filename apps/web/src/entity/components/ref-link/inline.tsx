@@ -20,6 +20,11 @@ import { LocationIcon } from "~/features/locations/location-icons";
 import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { cn, formatCurrency } from "~/lib/utils";
+import {
+  STACKED_SECONDARY_CLASS,
+  useDenseCell,
+  useHeaderEntity,
+} from "~/ui/common/stacked-value";
 
 import { PreviewRefLink } from "./leaf";
 
@@ -38,6 +43,13 @@ export type InlineRefLinkProps = {
   truncate?: boolean;
   /** An adjacent dedicated image/mark already identifies this record. */
   showIdentityMark?: boolean;
+  /**
+   * Name over its context in two 12px lines; defaults to on inside a table
+   * cell (`useDenseCell`). Without context a long name wraps to two lines.
+   */
+  stacked?: boolean;
+  /** Muted context leading the metadata ("1 each" for a stocked location). */
+  context?: string;
   /** Canonical backend-resolved cover; null intentionally renders the mark. */
   displayImage: ImageUrlSummary | null;
 } & (
@@ -236,6 +248,8 @@ const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
 // dotted-underlined text link, with optional muted metadata.
 const linkClass =
   "group inline-flex max-w-full items-baseline gap-2 align-baseline text-foreground transition-colors hover:text-primary";
+const nameClass =
+  "min-w-0 font-medium underline decoration-border/70 decoration-dotted underline-offset-2 group-hover:decoration-primary group-hover:decoration-solid";
 
 export function InlineRefLink(props: InlineRefLinkProps) {
   const {
@@ -246,8 +260,19 @@ export function InlineRefLink(props: InlineRefLinkProps) {
     className,
     compact,
     truncate,
+    stacked,
+    context,
   } = props;
   const { id, name, metadata, mark, trailing } = inlineSpec(props);
+  const dense = useDenseCell(stacked);
+  const emoji = z
+    .object({ emoji: z.string().nullish() })
+    .parse(props.data).emoji;
+  // The header already paints this entity's icon; a record's own image or
+  // emoji still identifies it.
+  const generic =
+    useHeaderEntity() === entity && displayImage === null && !emoji;
+  const detail = [context, metadata].filter(Boolean).join(" · ");
 
   return (
     <PreviewRefLink
@@ -258,30 +283,58 @@ export function InlineRefLink(props: InlineRefLinkProps) {
         <RecordMarkByReference
           entity={entity}
           recordId={id}
-          emoji={
-            z.object({ emoji: z.string().nullish() }).parse(props.data).emoji
-          }
+          emoji={emoji}
           size={12}
           fallback={mark}
         />
       }
-      showIdentityMark={showIdentityMark}
+      showIdentityMark={generic ? false : showIdentityMark}
       openInNewTab={openInNewTab}
-      className={cn(linkClass, truncate && "min-w-0", className)}
+      className={cn(
+        linkClass,
+        dense && "min-w-0 items-center gap-0.5 text-xs",
+        truncate && "min-w-0",
+        className,
+      )}
     >
-      <span
-        className={cn(
-          "min-w-0 font-medium underline decoration-border/70 decoration-dotted underline-offset-2 group-hover:decoration-primary group-hover:decoration-solid",
-          compact && "max-w-32 truncate",
-          truncate && "truncate",
-        )}
-      >
-        {name}
-      </span>
-      {metadata && (
-        <span className="shrink-0 text-2xs text-muted-foreground">
-          · {metadata}
+      {dense ? (
+        <span className="flex min-w-0 flex-col">
+          <span
+            data-stacked-line=""
+            className={cn(
+              nameClass,
+              detail
+                ? "block truncate leading-[15px]"
+                : "line-clamp-2 leading-[14px] break-words whitespace-normal",
+            )}
+          >
+            {name}
+          </span>
+          {detail && (
+            <span data-stacked-line="" className={STACKED_SECONDARY_CLASS}>
+              {/* The link reads "name · detail", as on one line. */}
+              <span className="sr-only"> · </span>
+              {detail}
+            </span>
+          )}
         </span>
+      ) : (
+        <>
+          <span
+            className={cn(
+              nameClass,
+              compact && "max-w-32 truncate",
+              truncate && "truncate",
+            )}
+          >
+            {name}
+          </span>
+          {detail && (
+            <span className="shrink-0 text-2xs text-muted-foreground">
+              · {detail}
+            </span>
+          )}
+        </>
       )}
       {trailing && <span className="shrink-0 self-center">{trailing}</span>}
     </PreviewRefLink>

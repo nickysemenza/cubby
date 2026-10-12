@@ -242,7 +242,8 @@ export const productListOverride = defineListOverride<
             columnHelper.accessor("primaryGtin", {
               header: "Barcode / ISBN",
               meta: {
-                className: "w-32 font-mono",
+                className: "w-24",
+                mono: true,
                 mobile: { interactive: true },
               },
               cell: (info) => {

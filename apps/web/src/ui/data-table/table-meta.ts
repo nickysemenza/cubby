@@ -113,6 +113,12 @@ export interface CubbyColumnMeta<TData = CellData> {
    * the same entity.
    */
   countOf?: Entity;
+  /**
+   * Every value links to one entity's records: the header paints that
+   * entity's icon once and each link drops its generic icon
+   * (`DenseCellContext`), keeping record images and marks.
+   */
+  linksTo?: Entity;
   numeric?: boolean;
   mono?: boolean;
   filterConfig?: FilterConfig;

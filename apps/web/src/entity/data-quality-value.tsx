@@ -8,6 +8,7 @@ import {
   dataQualityOptions,
   dataQualityStatusLabel,
 } from "~/lib/data-quality-options";
+import { useDenseCell } from "~/ui/common/stacked-value";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
 import { FieldExplanation } from "./field-explanation";
@@ -19,6 +20,7 @@ export function DataQualityValue({
   quality?: Pick<DataQuality, "score" | "status">;
   scored?: boolean;
 }) {
+  const dense = useDenseCell();
   if (!quality)
     return (
       <span
@@ -30,7 +32,8 @@ export function DataQualityValue({
     );
   const label = dataQualityStatusLabel(quality.status);
   // Exceptions-only completeness is a distinct state, not a plain 100: the
-  // marker is visible and spoken, not color alone.
+  // marker is visible and spoken, not color alone. It trails the score as a
+  // superscript; as the pill's leading icon it widened the whole column.
   const excepted = quality.status === "complete_with_exceptions";
   return (
     <EnumPill
@@ -38,7 +41,6 @@ export function DataQualityValue({
         dataQualityOptions.find((option) => option.value === quality.status)
           ?.color
       }
-      icon={excepted ? <AsteriskSimpleIcon weight="bold" /> : undefined}
       description={label}
       className="tabular-nums"
     >
@@ -48,8 +50,18 @@ export function DataQualityValue({
         // Caps keep an unresolved gap at 99 or below, so this never rounds
         // a gap up to 100.
         <>
-          {Math.round(quality.score)}/100
-          {excepted ? <span className="sr-only">, {label}</span> : null}
+          {Math.round(quality.score)}
+          {dense ? null : "/100"}
+          {excepted ? (
+            <>
+              <AsteriskSimpleIcon
+                weight="bold"
+                aria-hidden
+                className="inline size-2 align-super"
+              />
+              <span className="sr-only">, {label}</span>
+            </>
+          ) : null}
         </>
       )}
     </EnumPill>

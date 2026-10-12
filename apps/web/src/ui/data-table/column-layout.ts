@@ -305,6 +305,7 @@ type TableWidthColumn = {
       entityColumnRole?: EntityColumnRole;
       numeric?: boolean;
       mono?: boolean;
+      linksTo?: string;
       cellData?: { kind: string };
     };
   };
@@ -332,14 +333,16 @@ function isFlexibleColumn(column: TableWidthColumn) {
 
 /**
  * The widest a fitted column paints, by what it holds: a record title stops
- * at 240px, free text and references at 160px, a status pill at 120px and a
- * code at 96px; clipped values spill over on hover (`useCellSpill`).
+ * at 240px, free text at 160px, a status pill or a column of links to one
+ * entity (whose names wrap to two lines) at 120px and a code at 96px;
+ * clipped values spill over on hover (`useCellSpill`).
  * Quantities, money and dates keep their natural width. A person's resize
  * still reaches `maxSize`.
  */
 const IDENTITY_FIT_MAX = 240;
 const TEXT_FIT_MAX = 160;
 const SELECT_FIT_MAX = 120;
+const LINK_FIT_MAX = 120;
 const CODE_FIT_MAX = 96;
 
 function kindFitMax(meta: TableWidthColumn["columnDef"]["meta"]) {
@@ -348,6 +351,7 @@ function kindFitMax(meta: TableWidthColumn["columnDef"]["meta"]) {
   if (meta?.numeric || (kind !== undefined && FIXED_WIDTH_KINDS.has(kind)))
     return kind === "select" ? SELECT_FIT_MAX : Number.POSITIVE_INFINITY;
   if (meta?.mono) return CODE_FIT_MAX;
+  if (meta?.linksTo) return LINK_FIT_MAX;
   return TEXT_FIT_MAX;
 }
 

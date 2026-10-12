@@ -65,7 +65,10 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     labels.findIndex((text) => text.includes("Product")) + 1,
   );
   const row = table.getByRole("row").filter({ hasText: name }).first();
-  await expect(row).toContainText("/100");
+  // A table cell drops the "/100" its header already implies.
+  await expect(row.locator('[data-cell-col="dataQuality"]')).toHaveText(
+    /^\d+$/,
+  );
   // A row's explanation appears once the row is hovered or focused.
   await row.hover();
   await row
@@ -136,8 +139,12 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   const related = page.locator("#products");
   await expect(related.getByText("Quality", { exact: true })).toBeVisible();
   await expect(
-    related.getByRole("row").filter({ hasText: name }).first(),
-  ).toContainText("/100");
+    related
+      .getByRole("row")
+      .filter({ hasText: name })
+      .first()
+      .locator('[data-cell-col="dataQuality"]'),
+  ).toHaveText(/^\d+$/);
 
   const categoryName = `${name} category`;
   await createEntityFixture(page, "spendingCategory", { name: categoryName });
@@ -151,7 +158,7 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     .first();
   await expect(
     categoryRow.locator('[data-cell-col="dataQuality"] [data-cell-value]'),
-  ).toHaveText("0/100");
+  ).toHaveText("0");
 
   const plannedName = `${name} planned`;
   await createEntityFixture(page, "expense", {
@@ -276,7 +283,7 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
   const acceptedCell = acceptedRow.locator(
     '[data-cell-col="dataQuality"] [data-cell-value]',
   );
-  await expect(acceptedCell).toContainText("100/100");
+  await expect(acceptedCell).toContainText("100");
   await expect(acceptedCell).toContainText("Complete with exceptions");
   await expect(acceptedCell.locator("svg")).toBeVisible();
   const updated = await page.request.patch(`/api/v1/products/${product.id}`, {

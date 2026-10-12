@@ -33,7 +33,10 @@ import { useCellSpill } from "./useCellSpill";
 //   disappears under the spill-over it sits beside;
 // - the ⓘ hides the tail of a value that exactly fits, or of its spill-over;
 // - nested rails (explanation around a relation workbench) stack on one
-//   spot so one control is unreachable.
+//   spot so one control is unreachable;
+// - a value wrapped in its own in-flow frame (a suggestion mark) spills over
+//   the outer ⓘ without copying it;
+// - a two-line name or header clamps away its end with no way to read it.
 
 function Fixture({
   cells,
@@ -59,6 +62,7 @@ function Fixture({
             {cells.map((cell, index) => (
               <TableHead
                 key={cell.id}
+                data-column-id={`c${index}`}
                 data-testid={`head-${index}`}
                 className="px-1 text-xs"
                 style={{ width: cell.width }}
@@ -366,6 +370,43 @@ describe("table density", () => {
     }
   });
 
+  it("keeps the ⓘ when a value inside an in-flow frame spills", async () => {
+    await page.viewport(1440, 900);
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c13",
+            width: 120,
+            content: (
+              <CellFrame
+                overlay
+                trailing={
+                  <button
+                    type="button"
+                    aria-label="Explain"
+                    className={CELL_RAIL_BUTTON_CLASS}
+                  >
+                    i
+                  </button>
+                }
+              >
+                <CellFrame trailing={<span aria-label="Suggested" />}>
+                  <span className="block truncate">{LONG_NAME}</span>
+                </CellFrame>
+              </CellFrame>
+            ),
+          },
+        ]}
+      />,
+    );
+    await userEvent.hover(view.getByTestId("cell-0"));
+    await waitFor(() => expect(overlay()?.textContent).toContain(LONG_NAME));
+    expect(
+      overlay()?.querySelector("[data-cell-spill-rail] [aria-label='Explain']"),
+    ).not.toBeNull();
+  });
+
   it("wraps chips to two lines and counts what does not fit", async () => {
     await page.viewport(1440, 900);
     const names = [
@@ -414,28 +455,63 @@ describe("table density", () => {
     expect(Math.round(rect(cell).height)).toBe(32);
   });
 
-  it("keeps a code's distinguishing tail when it truncates", async () => {
+  it("keeps a code's first and last four characters when it truncates", async () => {
     await page.viewport(1440, 900);
     const view = render(
       <Fixture
         cells={[
           {
             id: "c6",
-            width: 112,
-            content: <MiddleTruncate text="113-2171451-2151435" />,
+            width: 88,
+            content: (
+              <MiddleTruncate
+                text="113-2171451-2151435"
+                className="font-mono"
+              />
+            ),
           },
         ]}
       />,
     );
-    const tail = view.getByText("2151435");
-    expect(tail.scrollWidth).toBeLessThanOrEqual(tail.clientWidth);
-    expect(rect(tail).right).toBeLessThanOrEqual(
-      rect(view.getByTestId("cell-0")).right,
-    );
-    await userEvent.hover(view.getByTestId("cell-0"));
+    const cell = view.getByTestId("cell-0");
+    for (const end of ["113-", "…", "1435"]) {
+      const part = view.getByText(end, { exact: true });
+      expect(part.scrollWidth).toBeLessThanOrEqual(part.clientWidth);
+      expect(rect(part).width).toBeGreaterThan(0);
+      expect(rect(part).right).toBeLessThanOrEqual(rect(cell).right);
+    }
+    await userEvent.hover(cell);
     await waitFor(() =>
       expect(overlay()?.textContent).toBe("113-2171451-2151435"),
     );
+  });
+
+  it("spills a name clamped to two lines and a clamped header", async () => {
+    await page.viewport(1440, 900);
+    const header = "Synthetic itemization coverage across purchases";
+    const view = render(
+      <Fixture
+        header={header}
+        cells={[
+          {
+            id: "c14",
+            width: 72,
+            content: (
+              <span
+                data-stacked-line=""
+                className="line-clamp-2 leading-[14px] break-words whitespace-normal"
+              >
+                {LONG_NAME}
+              </span>
+            ),
+          },
+        ]}
+      />,
+    );
+    await userEvent.hover(view.getByTestId("cell-0"));
+    await waitFor(() => expect(overlay()?.textContent).toBe(LONG_NAME));
+    await userEvent.hover(view.getByTestId("head-0"));
+    await waitFor(() => expect(overlay()?.textContent).toBe(header));
   });
 
   it("wraps a long header to two lines inside a narrow column", async () => {

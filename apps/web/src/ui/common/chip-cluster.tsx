@@ -17,12 +17,15 @@ const MAX_LINES = 2;
  */
 export function ChipCluster({
   items,
+  more = 0,
   limit = null,
   leading,
   trailing,
   className,
 }: {
   items: readonly ChipClusterItem[];
+  /** Items past a bounded preview's `items`; they count toward "+N". */
+  more?: number;
   /** A declared most-chips bound; the rest count toward "+N" as well. */
   limit?: number | null;
   /** Muted state word before the chips ("Partial"). */
@@ -87,13 +90,13 @@ export function ChipCluster({
           {item.node}
         </span>
       ))}
-      {hidden.length > 0 && (
+      {hidden.length + more > 0 && (
         <span
           data-chip-overflow=""
           className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums"
-          title={hidden.map((item) => item.label).join(", ")}
+          title={hidden.map((item) => item.label).join(", ") || undefined}
         >
-          +{hidden.length}
+          +{hidden.length + more}
         </span>
       )}
       {trailing && (
