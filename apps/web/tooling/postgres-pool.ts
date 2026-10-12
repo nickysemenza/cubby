@@ -2,7 +2,13 @@ import { Pool, type PoolConfig, type PoolClient } from "pg";
 
 const clientClosures = new WeakMap<Pool, Map<PoolClient, Promise<void>>>();
 
-/** Reset must not hand a killed idle client to the next test before its error arrives. */
+/**
+ * Reset must not hand a killed idle client to the next test before its error
+ * arrives: a successful pg_terminate_backend does not mean node-postgres has
+ * received the fatal 57P01, and checking the client out first removes its pool
+ * error listener. Checked-out targets get a temporary handler that consumes
+ * only the deliberate 57P01 and its disconnect; other errors still surface.
+ */
 export async function terminateOtherPostgresConnections(
   pool: Pool,
 ): Promise<void> {

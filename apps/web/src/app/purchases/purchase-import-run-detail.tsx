@@ -677,7 +677,6 @@ function TerminalAgentSurface({ run }: { run: RunDetail }) {
   );
 }
 
-// eslint-disable-next-line complexity -- Active agent and awaiting-review states share this run surface.
 function ActiveAgentSurface({ run }: { run: RunDetail }) {
   const awaitingReview =
     run.status === "needs_review" ||

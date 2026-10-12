@@ -5,7 +5,7 @@ import { pollUntil } from "../../packages/shared/src/retry.ts";
 
 /**
  * Low-level `container` CLI wrapper shared by scripts/test-services.ts
- * (ephemeral, per-run containers) and scripts/dev-db.ts (a persistent,
+ * (the pair every worktree's test runs share) and scripts/dev-db.ts (a persistent,
  * fixed-name container). Keep this module free of any run-specific lifecycle
  * policy (naming, cleanup-on-exit) — that belongs in the caller.
  */
@@ -73,16 +73,12 @@ export async function findContainer(
 }
 
 /** `container run --detach --rm ...`. Resolves once the create RPC completes. */
-export async function runDetached(
-  name: string,
-  args: string[],
-  { rm = true }: { rm?: boolean } = {},
-): Promise<void> {
+export async function runDetached(name: string, args: string[]): Promise<void> {
   await containerCli(
     [
       "run",
       "--detach",
-      ...(rm ? ["--rm"] : []),
+      "--rm",
       "--platform",
       "linux/arm64",
       "--name",

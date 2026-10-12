@@ -12,8 +12,9 @@ clients update with the change ([breaking changes](../../AGENTS.md#breaking-chan
 Schema reaches every database only through
 committed migrations in `apps/web/drizzle/`: `pnpm db:generate` writes them
 (drizzle-kit for `schema.ts`, plus a custom migration when the derived DDL in
-`src/server/db/derived-ddl.ts` changes), and `pnpm db:migrate
---target=production` applies them with `PRODUCTION_DIRECT_DATABASE_URL`.
+`src/server/db/derived-ddl.ts` changes), and `pnpm --filter @cubby/web
+db:migrate --target=production` applies them with
+`PRODUCTION_DIRECT_DATABASE_URL`.
 Migrations are the one committed generated artifact and are immutable once
 merged — the runner refuses bookkeeping that is not a prefix of the journal.
 A data transform is a custom migration (`drizzle-kit generate --custom`). CI `db:check` fails when `schema.ts` has no migration or the
@@ -26,13 +27,22 @@ its foreign keys, so a new write path that hard-deletes the referenced row
 fails until the drop. Either drop the legacy FKs in the expand step or run the
 drop right after the deploy (the ADR 0006 image joins blocked image deletes
 this way).
-For an explicitly authorized breaking cutover, use its owning runbook. Prefer
-quiesced writers; when the member explicitly keeps services enabled, lock retired
-copy/drop sources before reading them and hold the locks through commit. Observed
-idleness is not a barrier. Verify SQL preservation before merge and deploy matching
-code immediately; historical accepted-reference promotion follows deployment and
-completion of old in-flight work. Verify preservation and the catalog before normal
-use. The migration remains immutable after merge.
+
+`deploy.yaml` deploys every `main` push and never applies schema. A PR that adds
+a migration is opened without auto-merge and merges only after that migration
+has run in production and been read back. A contract migration (`DROP COLUMN`,
+or a constraint the deployed code would violate) is the exception: ship the code
+that stops reading or writing the old shape first, then apply the migration
+right after that deploy and read it back.
+
+An explicitly authorized breaking cutover may consolidate expansion and
+contraction before merge; follow its owning runbook. Prefer quiesced writers;
+when the member explicitly keeps services enabled, lock retired copy/drop
+sources before reading them and hold the locks through commit. Observed idleness
+is not a barrier. Verify SQL preservation before merge, deploy matching code
+immediately, and run historical accepted-reference promotion only after old
+in-flight work finishes. Verify preservation, client delivery, and the catalog
+before normal use.
 
 Traps, all seen for real:
 
@@ -182,11 +192,10 @@ Before adding a module, verify that its path does not already exist. A filename
 collision must preserve the existing module and its callers; use a distinct path
 for the new responsibility.
 
-Generated output is gitignored and never committed; it is identified by its
-generated header. Never hand-edit one — edit its generator or input and run
-`pnpm generate` (install, build, typecheck and tests run it when inputs
-changed). A missing expected output means run its owning generator and
-investigate the reported failure.
+Generated output carries a generated header and is regenerated automatically
+([quality](validation-quality.md)). Never hand-edit one — edit its generator or
+input. A missing expected output means run its owning generator and investigate
+the reported failure.
 
 Entity route modules: the generator emits the list/detail modules from
 `route.list` / `route.detail` (`apps/web/src/routes/_authenticated/<basePath>.index.tsx`

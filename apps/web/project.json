@@ -35,36 +35,16 @@
           "target": "wasm"
         },
         {
+          "projects": ["cubby-checks"],
+          "target": "generate"
+        },
+        {
           "projects": ["@cubby/mcp-apps"],
           "target": "build"
         }
       ],
       "inputs": ["webGate"],
       "outputs": ["{projectRoot}/.vitest-results.json"]
-    },
-    "typecheck": {
-      "command": "pnpm run typecheck",
-      "options": { "cwd": "apps/web" },
-      "cache": true,
-      "dependsOn": [{ "projects": ["cubby-checks"], "target": "wasm" }],
-      "inputs": [
-        "repo",
-        "sharedGlobals",
-        { "dependentTasksOutputFiles": "packages/wasm/**/*" }
-      ],
-      "outputs": ["{projectRoot}/tsconfig.tsbuildinfo"]
-    },
-    "typecheck:app": {
-      "command": "pnpm run typecheck:app",
-      "options": { "cwd": "apps/web" },
-      "cache": true,
-      "dependsOn": [{ "projects": ["cubby-checks"], "target": "wasm" }],
-      "inputs": [
-        "repo",
-        "sharedGlobals",
-        { "dependentTasksOutputFiles": "packages/wasm/**/*" }
-      ],
-      "outputs": ["{projectRoot}/tsconfig.app.tsbuildinfo"]
     },
     // CUBBY_POSTGRES_SHARD (`index/count`) splits the files across CI runners.
     "postgres": {
@@ -77,12 +57,22 @@
         {
           "projects": ["cubby-checks"],
           "target": "wasm"
+        },
+        {
+          "projects": ["cubby-checks"],
+          "target": "generate"
         }
       ],
       "inputs": ["webGate", { "env": "CUBBY_POSTGRES_SHARD" }]
     },
     "db-check": {
       "command": "pnpm run db:check",
+      "dependsOn": [
+        {
+          "projects": ["cubby-checks"],
+          "target": "generate"
+        }
+      ],
       "options": {
         "cwd": "apps/web"
       },
@@ -102,6 +92,10 @@
         {
           "projects": ["cubby-checks"],
           "target": "wasm"
+        },
+        {
+          "projects": ["cubby-checks"],
+          "target": "generate"
         }
       ],
       "inputs": ["webGate"]
@@ -116,6 +110,10 @@
         {
           "projects": ["cubby-checks"],
           "target": "wasm"
+        },
+        {
+          "projects": ["cubby-checks"],
+          "target": "generate"
         }
       ],
       "inputs": [
@@ -153,6 +151,10 @@
         {
           "projects": ["cubby-checks"],
           "target": "wasm"
+        },
+        {
+          "projects": ["cubby-checks"],
+          "target": "generate"
         }
       ],
       "inputs": ["webGate", { "env": "CUBBY_E2E_SHARD" }],
@@ -169,6 +171,10 @@
         {
           "projects": ["cubby-checks"],
           "target": "wasm"
+        },
+        {
+          "projects": ["cubby-checks"],
+          "target": "generate"
         }
       ],
       "inputs": ["webGate"],

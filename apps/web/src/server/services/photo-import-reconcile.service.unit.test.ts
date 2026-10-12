@@ -5,8 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { Database } from "~/server/db";
 import { reconcilePhotoImport } from "~/server/services/photo-import-reconcile.service";
 
-// SAFETY: every test replaces all database-touching ports; this value is only
-// an opaque identity token passed between the injected transaction callbacks.
 const database = {} as Database;
 const imageA = shortcode("IMG-AAAA");
 const imageB = shortcode("IMG-BBBB");

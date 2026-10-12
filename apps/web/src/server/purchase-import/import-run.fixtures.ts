@@ -87,6 +87,12 @@ export async function startImportRunFixture(
  * A member's running Pi Mail import Run with a live dispatch identity: the
  * coordinator lifecycle subject (dispatch, acknowledgement, pause/resume,
  * settlement, expiry) without admitting retained mail.
+ *
+ * Public Run controls need the complete actor snapshot, agent session and
+ * dispatch identity; copy attribution from an owned admitted scope rather
+ * than inventing a minimally attributed row. A cloned Run mints its own UUID,
+ * shortcode, dispatch event and agent session. A dispatch-failed Run takes the
+ * public `abort` action; `cancel` applies only to active Runs.
  */
 export async function startAgentRunFixture(
   db: Database,

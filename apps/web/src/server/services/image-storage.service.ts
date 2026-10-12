@@ -750,7 +750,6 @@ const attachmentResponse = <TDatabase>(
  * accepts PDFs, so it drives the bytes path directly rather than reusing that
  * helper.
  */
-// eslint-disable-next-line complexity -- three source modes converge before one transactional attachment path.
 const attachFileToEntityWithPorts = async <TDatabase>(
   ports: ImageStoragePorts<TDatabase>,
   db: TDatabase,

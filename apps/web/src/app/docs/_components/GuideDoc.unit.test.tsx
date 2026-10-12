@@ -9,19 +9,19 @@ describe("GuideDoc", () => {
   it("loads a Markdown asset and keeps links to other docs in the app", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      text: async () => "# Agent guide\n\n[Terminology](../terminology.md)",
+      text: async () => "# Burn-down\n\n[Terminology](terminology.md)",
     });
     vi.stubGlobal("fetch", fetchMock);
 
     render(
-      <GuideDoc sourcePath="agents/web-ui.md" sourceUrl="/assets/web-ui.md" />,
+      <GuideDoc sourcePath="burn-down.md" sourceUrl="/assets/burn-down.md" />,
     );
 
     expect(
-      await screen.findByRole("heading", { name: "Agent guide" }),
+      await screen.findByRole("heading", { name: "Burn-down" }),
     ).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
-      "/assets/web-ui.md",
+      "/assets/burn-down.md",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(screen.getByRole("link", { name: "Terminology" })).toHaveAttribute(

@@ -1,4 +1,3 @@
-/* oxlint-disable anti-slop/no-runtime-typeof -- Routing reads GitHub JSON before dependency installation. */
 import assert from "node:assert/strict";
 import { appendFileSync, readFileSync } from "node:fs";
 

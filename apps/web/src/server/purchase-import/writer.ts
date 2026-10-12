@@ -530,7 +530,7 @@ export function receiptProductQuantity(
 }
 
 /**
- * A created Product must not fork an Exact identity match (GLOSSARY). An
+ * A created Product must not fork an Exact identity match (terminology). An
  * identifier another Product owns always refuses; an exact name or alias match
  * refuses unless a Distinct-from decision names it. A distinct Product still
  * cannot take the identical name, which the (name, manufacturer) index holds.
@@ -816,7 +816,6 @@ async function recordOriginalProductBindings(
 
 /** Source ownership and accepted order identity are shared by imports and lifecycle links. */
 // Accepted observation and original Product identity must be retained atomically.
-// eslint-disable-next-line complexity
 async function recordImportSourceAssociation(
   tx: Pick<DrizzleTransaction, "insert" | "select" | "update">,
   input: ImportSourceAssociationInput,

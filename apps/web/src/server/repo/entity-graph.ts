@@ -245,7 +245,6 @@ const graphRelationshipsFor = (
   ),
 ];
 
-// oxlint-disable-next-line eslint/complexity -- One branch per entity whose label is not a plain name column.
 export const labelSql = (entity: Entity, alias: string) => {
   const prefix = alias ? `${alias}.` : "";
   const column = (name: string) => sql.raw(`${prefix}"${name}"`);
@@ -351,7 +350,6 @@ const metadataFor = (entity: Entity, alias = "t") => {
  */
 // Relationship manifests, pagination, canonical evidence, and response caps
 // stay in one batched read so callers cannot assemble subtly different graphs.
-// eslint-disable-next-line complexity
 export async function readEntityGraph(
   db: Database | DrizzleTransaction,
   input: EntityGraphInput,

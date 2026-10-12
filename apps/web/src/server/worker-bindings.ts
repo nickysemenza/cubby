@@ -3,7 +3,7 @@
 // Wrangler's `import("./src/cf-server")`). That file is a global script, and
 // tsc re-checks the whole program after an edit to anything it reaches, so
 // each binding names a type-only RPC interface whose module imports nothing
-// but schema types (docs/local-check-performance.md#typechecking).
+// but schema types (docs/reports/local-check-performance.md#typechecking).
 import type { Rpc } from "@cloudflare/workers-types";
 import type { SearchIndexRepairCounters } from "@cubby/schemas/maintenance";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";

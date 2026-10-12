@@ -7,8 +7,7 @@ Repositories and specialized controls retain the domain rules that cannot be
 expressed as ordinary scalar operations.
 
 See [compiled entities](../entities.md) for declaration syntax, generation,
-transport ownership, and adding an entity. The [ownership reconciliation](./ownership.md)
-identifies the migrated surfaces and their remaining domain ports.
+transport ownership, and adding an entity.
 
 ## Entity ownership
 

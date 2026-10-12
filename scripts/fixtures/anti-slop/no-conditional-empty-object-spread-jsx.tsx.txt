@@ -1,3 +1,0 @@
-declare const includeValue: boolean;
-
-const element = <div {...(includeValue ? { title: "value" } : {})} />;

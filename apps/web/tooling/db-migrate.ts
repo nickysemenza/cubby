@@ -48,7 +48,7 @@ export async function assertMigrationBookkeeping(
     if ((rows[0]?.count ?? 0) === 0) return 0;
     throw new Error(
       "Refusing to migrate: public has tables but drizzle.__drizzle_migrations records no migrations " +
-        "(a push-built database). Rebuild it with `pnpm dev:reset`.",
+        "(a push-built database). Rebuild it with `pnpm dev reset`.",
     );
   }
   applied.forEach((row, index) => {

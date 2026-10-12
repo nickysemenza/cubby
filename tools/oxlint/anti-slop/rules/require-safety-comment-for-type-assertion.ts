@@ -20,6 +20,31 @@ function isConstAssertion(node: TypeAssertion): boolean {
   );
 }
 
+interface SafetyCommentOptions {
+  allowLiteralTypes?: boolean;
+}
+
+function isSafetyCommentOptions(value: unknown): value is SafetyCommentOptions {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** `x as "open" | "closed"` narrows to literals the surrounding code already enumerates. */
+function isLiteralTypeAssertion(node: TypeAssertion): boolean {
+  const type = node.typeAnnotation;
+  if (type.type === "TSLiteralType") return true;
+  return (
+    type.type === "TSUnionType" &&
+    type.types.every((member) => member.type === "TSLiteralType")
+  );
+}
+
+function isExportDeclaration(node: ESTree.Node): boolean {
+  return (
+    node.type === "ExportNamedDeclaration" ||
+    node.type === "ExportDefaultDeclaration"
+  );
+}
+
 function hasSafetyComment(
   sourceCode: SourceCode,
   node: TypeAssertion,
@@ -37,7 +62,8 @@ function hasSafetyComment(
       return true;
     }
     if (
-      commentOwnerKinds.has(current.type) ||
+      (commentOwnerKinds.has(current.type) &&
+        !isExportDeclaration(current.parent)) ||
       current.parent.type === "Program"
     )
       return false;
@@ -45,14 +71,24 @@ function hasSafetyComment(
   }
 }
 
-/** Require every non-const type assertion to state the invariant TypeScript cannot express. */
+/** Require type assertions to state the invariant TypeScript cannot express. */
 export const requireSafetyCommentForTypeAssertionRule = defineRule({
   meta: {
     type: "problem",
     docs: {
       description:
-        "Require a nearby SAFETY comment for every TypeScript type assertion except const assertions.",
+        "Require a nearby SAFETY comment for every TypeScript type assertion except const assertions and, with `allowLiteralTypes`, literal-type narrowing.",
     },
+    schema: [
+      {
+        type: "object",
+        properties: {
+          allowLiteralTypes: { type: "boolean" },
+        },
+        additionalProperties: false,
+      },
+    ],
+    defaultOptions: [{ allowLiteralTypes: false }],
     messages: {
       missingSafetyComment:
         "This type assertion has no `SAFETY:` justification. State the checked invariant immediately before the assertion or its containing statement.",
@@ -60,7 +96,14 @@ export const requireSafetyCommentForTypeAssertionRule = defineRule({
   },
   createOnce(context) {
     const checkAssertion = (node: TypeAssertion) => {
-      if (isConstAssertion(node) || hasSafetyComment(context.sourceCode, node))
+      const option = context.options?.[0];
+      const allowLiteralTypes =
+        isSafetyCommentOptions(option) && option.allowLiteralTypes === true;
+      if (
+        isConstAssertion(node) ||
+        (allowLiteralTypes && isLiteralTypeAssertion(node)) ||
+        hasSafetyComment(context.sourceCode, node)
+      )
         return;
       context.report({ node, messageId: "missingSafetyComment" });
     };

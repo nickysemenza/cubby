@@ -85,7 +85,6 @@ interface UseInfiniteTableListReturn<TData extends IdentifiedListRow> {
  * Uses useInfiniteQuery to accumulate pages client-side.
  * This is the sole server-backed entity-list data path.
  */
-// oxlint-disable-next-line complexity -- One pager combines base-page transitions, serialized pagination, and optional deferred reads without separate row owners.
 export function useInfiniteTableList<
   TFilters,
   TData extends IdentifiedListRow,

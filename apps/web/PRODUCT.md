@@ -65,7 +65,7 @@ Cubby joins recipes to specific stocked products, locations, prices, unit mappin
 - `../../README.md` is the canonical source for Cubby’s purpose, tenets, household use cases, entities, and example scenarios; `../../docs/development.md` covers architecture and operations; `../../docs/entities.md` covers the declaration-driven entity model.
 - `DESIGN.md` holds the web design language; `../apple/DESIGN.md` holds the native one.
 - `../../docs/inventory-audit.md` records the deliberate recount model and its known workflow constraints.
-- `../../docs/terminology.md` is the canonical glossary for distinctions such as Vendor, Purchase, Expense, and settlement evidence.
+- `../../docs/guide/terminology.md` is the canonical glossary for distinctions such as Vendor, Purchase, Expense, and settlement evidence.
 - `../../docs/todos.md` contains the authoritative product backlog and preserved design decisions.
 - The existing authenticated routes under `src/routes/` demonstrate the shipped inventory, recipe, meal, planning, project, garden, spending, import, reconciliation, search, USDA, and administration workflows.
 - The repository contains no approved testimonials, customer claims, press, commercial metrics, or public benchmarks. Future work must not fabricate them.

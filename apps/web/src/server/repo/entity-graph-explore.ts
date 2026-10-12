@@ -141,7 +141,6 @@ const uniqueBranches = (
  */
 // Frontier batching, alternate shortest routes, cycles, and four independent
 // completion causes share one state machine so partial output stays honest.
-// eslint-disable-next-line complexity
 export async function exploreEntityGraph(
   root: EntityRef,
   requestedDepth: 1 | 2 | 3,

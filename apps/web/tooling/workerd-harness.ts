@@ -8,9 +8,12 @@ import { createTestHarness, type TestHarnessOptions } from "wrangler";
 import { z } from "zod";
 
 import { SYNTHETIC_USDA_RELEASE } from "../../../scripts/lib/dev-profile.ts";
+import {
+  holdLock,
+  WORKTREE_HARNESS_LOCK,
+} from "../../../scripts/lib/harness-lock.ts";
 
 import { seedUsdaRelease } from "./dev/usda-synthetic-release";
-import { holdHarnessLock } from "./harness-lock";
 import { COUPLED_WORKER_BUILDS, ensureWorkerBuilds } from "./worker-builds";
 
 const webRoot = path.resolve(
@@ -48,7 +51,7 @@ interface WorkerdProfileDefinition {
    */
   purchaseAgentPeers: boolean;
   /**
-   * Take the machine-wide harness lock and rebuild a stale Worker before
+   * Take this worktree's harness lock and rebuild a stale Worker before
    * starting. A Playwright run already holds the lock from global setup, and
    * its workers pass straight through.
    */
@@ -381,6 +384,8 @@ export function workerdHarnessOptions(
   };
 }
 
+// Snapshotted and restored process-wide, so a process runs one runtime at a
+// time: two concurrent runtimes would restore each other's environment.
 const databaseEnvironmentKeys = [
   // Test-side fixtures and helpers connect through this.
   "E2E_DATABASE_URL",
@@ -403,13 +408,13 @@ function installDatabaseEnvironment(databaseUrl: string) {
 }
 
 /**
- * Queue for the machine-wide harness lock, then make every coupled Worker
+ * Queue for this worktree's harness lock, then make every coupled Worker
  * build current (rebuilding a stale one locally). The `integration-workerd`
  * global setup calls this once per run, so the wait and any rebuild never
  * count against a test's timeout.
  */
 export async function holdWorkerdHarness(): Promise<() => Promise<void>> {
-  const release = await holdHarnessLock();
+  const release = await holdLock(WORKTREE_HARNESS_LOCK);
   try {
     ensureWorkerBuilds(COUPLED_WORKER_BUILDS);
   } catch (error) {

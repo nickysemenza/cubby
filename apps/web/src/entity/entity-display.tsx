@@ -211,7 +211,6 @@ function listItems(value: ScalarDisplayValue): readonly unknown[] | null {
  * the value's runtime kind doesn't match the declared formatter (an "empty"
  * value always short-circuits, regardless of format).
  */
-// oxlint-disable-next-line eslint/complexity -- One exhaustive dispatcher over the declared display formats.
 function renderFormattedScalar(
   format: DisplayField["display"]["format"],
   value: ScalarDisplayValue,

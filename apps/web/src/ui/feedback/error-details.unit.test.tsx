@@ -122,9 +122,6 @@ describe("showErrorToast", () => {
     expect(firstOptions?.id).toBeDefined();
     expect(firstOptions?.id).toBe(secondOptions?.id);
 
-    // SAFETY: `showErrorToast` always builds `action` as the
-    // `{ label, onClick }` object literal below, never the alternate
-    // `ReactNode` shape the library's `action` type otherwise allows.
     const action = firstOptions?.action as
       | { label: React.ReactNode; onClick: () => void }
       | undefined;

@@ -80,9 +80,7 @@ describe("putPresignedObject", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(PresignedUploadError);
-    // SAFETY: the toBeInstanceOf assertion above just confirmed the type.
     expect((caught as PresignedUploadError).status).toBe(500);
-    // SAFETY: the toBeInstanceOf assertion above just confirmed the type.
     expect((caught as PresignedUploadError).detail).toBe("Unknown error");
   });
 

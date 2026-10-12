@@ -20,7 +20,7 @@ export const modulesChildren = [
   ...emailFinancialAssociationChildren,
   ...imageProcessingChildren,
   /**
-   * Where a fact about any entity was seen (GLOSSARY "Source"), written in the
+   * Where a fact about any entity was seen (terminology "Source"), written in the
    * same transaction as the mutation it supports. History: a merge moves the
    * rows to the survivor, a delete leaves them on the tombstone. `runId` and
    * `deviceId` deliberately carry no FK, like `oauthClientId`: the recorder

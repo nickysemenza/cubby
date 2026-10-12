@@ -46,9 +46,6 @@ function fakeCallTarget(response: JsonObject) {
       model: faux.getModel(),
       complete: (context, options) => {
         calls.push(context);
-        // SAFETY: the faux provider accepts any API's stream options as an
-        // untyped bag; `options` already came from `chatCompletionOptionsFor`,
-        // shaped for the real model's API.
         return models.complete(
           faux.getModel(),
           context,

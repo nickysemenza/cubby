@@ -1014,8 +1014,6 @@ describe("caller-driven purchase import writes", () => {
             stableOrderId: "retired-browser-order",
             vendorId: vendor.shortcode,
             source: {
-              // SAFETY: the retired kind is outside the input type on purpose;
-              // the runtime parse must refuse it.
               kind: "browser_order" as never,
               externalKey: "synthetic:browser-order",
               checksum: "b".repeat(64),

@@ -1,7 +1,7 @@
 # Purchase import: Mail import, member imports and Burn-down
 
 [ADR 0010](../../../../../docs/adr/0010-mail-import-unattended-burn-down-interactive.md)
-splits purchase work in two (vocabulary: [GLOSSARY](../../../../../GLOSSARY.md)):
+splits purchase work in two (vocabulary: [terminology](../../../../../docs/guide/terminology.md#purchase-research)):
 
 - **Mail import** (unattended): Gmail discovery classifies and retains order
   Email, and a Pi agent turns it into Purchases, Expenses, Product resolutions

@@ -452,8 +452,6 @@ function ToolRosterTable({
   );
   const onSortingChange = useCallback<OnChangeFn<SortingState>>(
     (updater) => {
-      // TanStack's controlled updater is a value-or-function by contract.
-      // oxlint-disable-next-line anti-slop/no-runtime-typeof
       const next = typeof updater === "function" ? updater(sorting) : updater;
       const active = next[0];
       if (!active || !isToolSort(active.id)) {

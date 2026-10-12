@@ -160,7 +160,7 @@ export const findProductNameCandidates = async (db: Database, name: string) => {
 
 /**
  * Live Products whose name or an alias equals `name` apart from letter case and
- * surrounding spaces (GLOSSARY "Exact identity match"), oldest first.
+ * surrounding spaces (terminology "Exact identity match"), oldest first.
  */
 export const findExactProductNameMatches = async (
   db: Database | DrizzleTransaction,

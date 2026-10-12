@@ -312,7 +312,6 @@ async function resolveProduct(
  * member, but an explicit `person` mode without `ownerPartyId` is refused
  * rather than silently guessing who owns it (see `commitPhotoGroupInventory`).
  */
-// eslint-disable-next-line complexity -- The commit boundary validates ownership, placement, and add-mode invariants atomically.
 async function receiveInventory(
   txDb: Database,
   scope: RunScope,

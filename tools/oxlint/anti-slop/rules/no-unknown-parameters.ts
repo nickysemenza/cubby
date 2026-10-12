@@ -179,7 +179,109 @@ function isDecoderParameter(
   );
 }
 
-/** Disallow unknown inputs except error causes and values consumed only by decoders. */
+interface UnknownParametersOptions {
+  exportedOnly?: boolean;
+}
+
+function isUnknownParametersOptions(
+  value: unknown,
+): value is UnknownParametersOptions {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isExportDeclaration(node: ESTree.Node): boolean {
+  return (
+    node.type === "ExportNamedDeclaration" ||
+    node.type === "ExportDefaultDeclaration"
+  );
+}
+
+function isNamedInExportList(
+  declaration: ESTree.Node,
+  sourceCode: SourceCode,
+): boolean {
+  return sourceCode.scopeManager
+    .getDeclaredVariables(declaration)
+    .some((variable) =>
+      variable.references.some(
+        (reference) => reference.identifier.parent.type === "ExportSpecifier",
+      ),
+    );
+}
+
+function isExportedBinding(
+  declaration: ESTree.Node,
+  sourceCode: SourceCode,
+): boolean {
+  const holder =
+    declaration.type === "VariableDeclarator"
+      ? declaration.parent
+      : declaration;
+  return (
+    isExportDeclaration(holder.parent) ||
+    isNamedInExportList(declaration, sourceCode)
+  );
+}
+
+/** A runtime function is exported when its own binding, or its class's, leaves the module. */
+function isExportedRuntimeFunction(
+  owner: ESTree.ArrowFunctionExpression | ESTree.Function,
+  sourceCode: SourceCode,
+): boolean {
+  const parent = owner.parent;
+  if (owner.type === "FunctionDeclaration") {
+    return isExportedBinding(owner, sourceCode);
+  }
+  if (isExportDeclaration(parent)) return true;
+  if (parent.type === "VariableDeclarator" && parent.init === owner) {
+    return isExportedBinding(parent, sourceCode);
+  }
+  if (
+    parent.type === "MethodDefinition" ||
+    parent.type === "PropertyDefinition"
+  ) {
+    const classNode = parent.parent.parent;
+    return (
+      isExportDeclaration(classNode.parent) ||
+      (classNode.type === "ClassDeclaration" &&
+        isNamedInExportList(classNode, sourceCode))
+    );
+  }
+  return false;
+}
+
+/** A type-level signature is exported when it sits in an exported type, not inside a function body. */
+function isExportedTypeSignature(
+  owner: ParameterOwner,
+  sourceCode: SourceCode,
+): boolean {
+  let current: ESTree.Node = owner.parent;
+  while (current.type !== "Program") {
+    if (isExportDeclaration(current)) return true;
+    if (
+      (current.type === "TSTypeAliasDeclaration" ||
+        current.type === "TSInterfaceDeclaration" ||
+        current.type === "TSDeclareFunction") &&
+      isNamedInExportList(current, sourceCode)
+    ) {
+      return true;
+    }
+    if (current.type === "BlockStatement") return false;
+    current = current.parent;
+  }
+  return false;
+}
+
+function isExportedSignature(
+  owner: ParameterOwner,
+  sourceCode: SourceCode,
+): boolean {
+  return isRuntimeFunction(owner)
+    ? isExportedRuntimeFunction(owner, sourceCode)
+    : isExportedTypeSignature(owner, sourceCode);
+}
+
+/** Disallow unknown inputs except error causes, values consumed only by decoders, and (with `exportedOnly`) module-private signatures. */
 export const noUnknownParametersRule = defineRule({
   meta: {
     type: "problem",
@@ -187,6 +289,16 @@ export const noUnknownParametersRule = defineRule({
       description:
         "Disallow explicitly unknown function parameters except `cause` and genuine schema/parser boundaries.",
     },
+    schema: [
+      {
+        type: "object",
+        properties: {
+          exportedOnly: { type: "boolean" },
+        },
+        additionalProperties: false,
+      },
+    ],
+    defaultOptions: [{ exportedOnly: false }],
     messages: {
       unknownParameter:
         "Parameter `{{parameter}}` leaves input unparsed. Accept a named domain type or consume every use directly with the boundary schema/parser.",
@@ -195,6 +307,14 @@ export const noUnknownParametersRule = defineRule({
   createOnce(context) {
     const checkParameters = (node: ParameterOwner) => {
       if (hasTypePredicateReturn(node)) return;
+      const option = context.options?.[0];
+      if (
+        isUnknownParametersOptions(option) &&
+        option.exportedOnly === true &&
+        !isExportedSignature(node, context.sourceCode)
+      ) {
+        return;
+      }
       for (const parameter of node.params) {
         const annotation = parameterAnnotation(parameter);
         if (annotation?.typeAnnotation.type !== "TSUnknownKeyword") continue;

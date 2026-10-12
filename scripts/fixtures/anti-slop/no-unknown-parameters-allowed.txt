@@ -21,3 +21,14 @@ export const parseWithContract: TextParser = (value: unknown) =>
   textSchema.parse(value);
 
 export const decodeText = (value: unknown) => textSchema.safeParse(value);
+
+function privateHelper(value: unknown): boolean {
+  return value !== null;
+}
+
+export function withCallback(values: readonly string[]): boolean {
+  return values.some((value: unknown) => privateHelper(value));
+}
+
+type LocalConsumer = (value: unknown) => void;
+export const consume: LocalConsumer = () => undefined;

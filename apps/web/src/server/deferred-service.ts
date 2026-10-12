@@ -36,7 +36,6 @@ export function deferredService<T extends object>(
         const synchronousKey = key as keyof typeof object;
         return object[synchronousKey];
       }
-      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- ECMAScript Proxy symbol/then probes are protocol lookups, not domain input.
       if (key === "then" || typeof key === "symbol") return undefined;
       return (...args: MethodArguments<T[keyof T]>) =>
         loaded().then((service) => {

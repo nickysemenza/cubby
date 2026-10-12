@@ -71,13 +71,20 @@ bundle alone does not establish a finished Worker build and provenance stamp.
 
 ## Commit, push, and merge
 
+Inspect CI logs and annotations before editing. Fix only change-caused failures;
+report flakes, infrastructure, and unavailable checks separately. Use an
+isolated worktree when maintenance must not alter the configured checkout.
+Validate deploy-only steps against CI token scopes because PR jobs do not
+exercise them. Prefer a fresh branch after a squash merge.
+
 When a shell call runs a check before dependent Git operations, stop on failure
 with `set -e` or use separate calls. A failed check must not be followed by a
 commit, push, or rebase continuation in the same call.
 
-Commits run only `pnpm check:staged`: read-only Oxlint and Oxfmt checks on staged
-files, with the existing rules and ignore patterns. Partial staging is preserved;
-fix reported issues explicitly and stage the intended corrections. Use the
+Commits run only `pnpm check:staged`: Oxlint checks staged files and Oxfmt
+formats them in place, with the existing rules and ignore patterns. Partial
+staging is preserved. Never run Oxfmt by hand; commit and let the hook format.
+Fix reported lint issues explicitly and stage the intended corrections. Use the
 commit hook normally; bypass it only when the user explicitly requests that.
 
 Pushes run no validation and do not require a clean working tree or a refreshed
@@ -92,21 +99,8 @@ seconds ([ADR 0009](../adr/0009-content-hash-merge-gate.md),
 [CI](../ci.md#cache-keys-and-the-remote-cache)). Running `pnpm apple check`
 locally before a PR therefore lets CI replay the Apple lanes. A green earlier
 commit with different content is not evidence. `main` runs CI after deployment
-starts, so post-merge CI does not replace this gate.
-
-`deploy.yaml` deploys every `main` push and never applies schema. A PR that adds
-a migration under `apps/web/drizzle/` is opened without auto-merge and merges
-only after that migration has run in production and been read back. A contract
-migration (`DROP COLUMN`, or a constraint the deployed code would violate) is
-the exception: ship the code that stops reading or writing the old shape first,
-then apply the migration right after that deploy and read it back
-([domain rules](domain-rules.md)).
-An explicitly authorized breaking cutover may consolidate expansion and contraction
-before merge. Follow its owning runbook: normally quiesce writers, or honor an
-explicit services-enabled request with transaction-held copy/drop locks. Verify SQL
-preservation before merge, deploy matching code immediately, and run historical
-accepted-reference promotion only after old in-flight work finishes. Verify household
-preservation, client delivery and the final catalog before normal use.
+starts, so post-merge CI does not replace this gate. A PR that adds a
+migration follows the [production change rules](domain-rules.md#production-changes).
 
 ## Explicit local diagnostics
 
@@ -122,13 +116,3 @@ Coverage remains manually dispatchable in GitHub Actions.
   changed `.tsx`, PostgreSQL, E2E, WASM, or package test work.
 - [Quality and local diagnostics](validation-quality.md) for lint/type failures,
   dependencies, generated surfaces, or broad local verification.
-- [PR, CI, and client acceptance](validation-delivery.md) for a PR, failing
-  hosted check, deployment path, or automated phone-width browser check.
-
-Vitest reuses source/config-keyed module transforms (`fsModuleCache`) across focused
-runs. Keep it enabled for local feedback; changed source still recompiles and
-tests still execute. Reuse successful unchanged cases rather than restarting a tier.
-
-Temporary `.lint-fixture-*` directories belong only to lint regressions. Keep them
-out of generator discovery and input fingerprints so parallel validation cannot
-read a fixture after its owner removes it.

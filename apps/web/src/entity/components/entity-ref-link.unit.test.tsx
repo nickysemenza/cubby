@@ -343,8 +343,6 @@ describe("EntityRefLink audit variant", () => {
   it("does not link an entity without a browser route", () => {
     // A legacy audit row can carry a kind that is no longer an entity; it has
     // no route, so it must not become a dead link.
-    // SAFETY: the audit union is a compile-time subset; the runtime row may
-    // still carry a kind without a route, which is what is exercised here.
     const unrouted = "imageSighting" as never;
     expect(isBrowserRoutedEntity(unrouted)).toBe(false);
 

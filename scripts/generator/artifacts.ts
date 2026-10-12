@@ -50,7 +50,7 @@ const carriesGeneratedHeader = async (absolutePath: string) => {
  */
 export const removeExtraArtifacts = async (
   root: string,
-  artifacts: readonly EntityArtifacts[],
+  artifacts: readonly Pick<EntityArtifacts, "relativePath">[],
 ) => {
   const expected = new Set(artifacts.map(({ relativePath }) => relativePath));
   const directories = new Set(
@@ -84,6 +84,15 @@ export const removeExtraArtifacts = async (
   }
   return removed.sort();
 };
+
+/**
+ * Lists every artifact one generation produced. It is an Nx output, so a cache
+ * hit restores it with the artifacts, and `ensure.ts` prunes generated files it
+ * does not list: a replayed cache entry writes its files but never deletes a
+ * newer revision's extra ones.
+ */
+export const ARTIFACT_MANIFEST =
+  "apps/web/src/lib/generated/artifacts.gen.json";
 
 export const writeArtifacts = async (
   root: string,

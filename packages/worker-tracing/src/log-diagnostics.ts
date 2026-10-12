@@ -1,7 +1,5 @@
 import { scrubCredentialValues } from "./scrub-error-message";
 
-/* oxlint-disable anti-slop/no-runtime-typeof -- logging is the serialization boundary for arbitrary thrown values, including primitives and native errors. */
-
 type SerializedLogValue =
   | string
   | number
@@ -28,7 +26,6 @@ const credentialField =
 export function serializeLogFields<T extends object>(value: T): object {
   const ancestors = new Set<object>();
   let remaining = 1000;
-  // oxlint-disable-next-line eslint/complexity -- one traversal handles JavaScript value kinds while sharing the entry budget and ancestor cycle guard.
   const visit = <TEntry>(entry: TEntry, depth: number): SerializedLogValue => {
     if (remaining-- <= 0) return "[Truncated]";
     if (typeof entry === "string") return scrubCredentialValues(entry);

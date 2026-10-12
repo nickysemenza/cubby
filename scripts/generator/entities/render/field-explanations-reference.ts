@@ -90,7 +90,7 @@ export const renderFieldExplanationReference = (
 
   return [
     {
-      relativePath: "docs/how-values-are-determined.md",
+      relativePath: "docs/guide/how-values-are-determined.md",
       source:
         markdownGeneratedHeader +
         [

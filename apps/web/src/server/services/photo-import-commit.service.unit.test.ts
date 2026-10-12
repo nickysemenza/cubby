@@ -11,8 +11,6 @@ import {
   type PhotoImportRouteAdapter,
 } from "./photo-import-commit.service";
 
-// SAFETY: every database operation in this unit is replaced by an injected
-// port; the object is only an opaque transaction identity token.
 const database = {} as Database;
 const imageCode = shortcode("IMG-ABCD");
 const imageRow = (status: "PENDING" | "UPLOADED") => ({

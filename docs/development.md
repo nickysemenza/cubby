@@ -70,20 +70,18 @@ contracts separately.
 | Command                                                            | What it does                                                                |
 | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
 | `pnpm dev`                                                         | Local workerd HMR session with isolated persistent resources                |
-| `pnpm build`                                                       | Build the production Worker bundles                                         |
-| `pnpm check`                                                       | Generate, TypeScript, lint, format, Knip                                    |
+| `pnpm build`                                                       | Build the production Worker bundle                                          |
+| `pnpm check`                                                       | Generate, design tokens, TypeScript, lint, format, Knip                     |
 | `pnpm check:all`                                                   | `check` plus Worker/OpenAPI, script tests and security validation           |
 | `pnpm generate` / `pnpm check:clean`                               | Regenerate entity/contract/OpenAPI artifacts, then prove them clean         |
 | `pnpm typecheck` · `lint` · `lint:fix` · `format` · `format:check` | Individual checks                                                           |
 | `pnpm test`                                                        | Fast unit, UI, contract and auxiliary-package tests                         |
 | `pnpm test:postgres`                                               | Authoritative PostgreSQL contracts                                          |
 | `pnpm test:e2e`                                                    | PostgreSQL-backed Playwright tests                                          |
-| `pnpm test:all`                                                    | Fast tests, then PostgreSQL, then Playwright (sequential)                   |
 | `pnpm test:e2e:local`                                              | Headless + simulator smoke; choose lanes or `--all` for extended acceptance |
 | `pnpm test:e2e:sim [-- --headless\|--watch\|--video\|--layout]`    | iOS simulator or headless CLI journey against a disposable DB               |
-| `pnpm --filter @cubby/web test:e2e:watch`                          | Warm services + `vite build --watch` + Playwright `--ui`                    |
-| `pnpm test:services:down`                                          | Remove warm test containers                                                 |
-| `pnpm test:services:prune`                                         | Recover abandoned disposable test containers                                |
+| `pnpm --filter @cubby/web test:e2e:watch`                          | Shared services + `vite build --watch` + Playwright `--ui`                  |
+| `pnpm test:services:down`                                          | Remove shared test containers that no live run uses                         |
 | `pnpm db:generate` / `pnpm db:check`                               | Generate a migration from `schema.ts` / prove migrations match it           |
 | `pnpm --filter @cubby/web db:migrate --target=production`          | Apply migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`                    |
 | `pnpm deploy:all`                                                  | Deploy web                                                                  |
@@ -128,7 +126,7 @@ three foundation foods (9900001–9900003) and one branded food (9900010, UPC
 `299000000106`, superseding 9900009). The E2E harness seeds the same release.
 `/__dev/ready` stays 503 with `usdaReady: false` while the release loads and
 reports the raw error if the load fails. Changing the synthetic foods needs a
-new release id or `pnpm dev:reset`, because a loaded release object keeps its
+new release id or `pnpm dev reset`, because a loaded release object keeps its
 data.
 
 Changing the release tables bumps `USDA_RELEASE_GENERATION` in
@@ -167,10 +165,12 @@ native PostgreSQL installation remain owned by their existing runners.
 - Rust builds share `~/.cache/cubby/cargo-target`.
   [scripts/ensure-wasm.ts](../scripts/ensure-wasm.ts) keys the WASM artifact on
   Cargo's resolved graph and file contents, so it never drifts silently.
+  `pnpm typecheck`, `pnpm typecheck:web` and every web Vitest run call it, so
+  a fresh worktree restores or builds the WASM on demand.
   The workspace `Cargo.lock` is tracked so worktrees share a key. Commit its
   churn after a parser bump.
 - `pnpm dev` gives each checkout its own database and Worker namespace on free
-  ports. Discover the session with `pnpm dev:status -- --json`.
+  ports. Discover the session with `pnpm dev status --json`.
   Local development defaults to Apple `container` on macOS and Docker on Linux;
   select Docker on macOS with `CUBBY_DEV_SERVICES=docker`. See
   [local development](local-development.md#start-and-discover) for volume and
@@ -180,19 +180,22 @@ native PostgreSQL installation remain owned by their existing runners.
   synthetic dev user (`apps/web/tooling/dev/state.ts`) through better-auth.
   The route exists only in the local dev Worker entry and the button only in
   Vite dev builds; `check-client-bundle` rejects `/__dev/` in production output.
-- On macOS, each database or browser test command owns a disposable Apple
-  `container` PostgreSQL/IntegreSQL pair, cleaned up on exit.
-  - `CUBBY_TEST_SERVICES=warm` reuses fixed-name containers.
+- On macOS, every worktree's database and browser test commands share one
+  Apple `container` PostgreSQL/IntegreSQL pair (`cubby-test-<config>-*`),
+  started on first use and reused afterwards; each worktree gets its own
+  IntegreSQL templates and disposable databases. Workers, peers and Playwright
+  listen on OS-assigned ports, so worktrees never collide. Startup runs under
+  the machine-wide `/tmp/cubby-test-services.lock`, and each live run records
+  itself in `/tmp/cubby-test-services/runs`: a pair a live run uses is never
+  removed, an idle pair of a superseded configuration is removed, and an idle
+  pair holding more than 250 databases is recreated empty.
   - `CUBBY_TEST_SERVICES=external` connects to services already running; it
     does not start a container runtime. Linux and CI use this mode with Docker
     services (`docker compose -p cubby up -d` for local Linux setup). For another
     service, override `INTEGRESQL_URL`, `INTEGRESQL_DATABASE_HOST` and
     `INTEGRESQL_DATABASE_PORT` together.
-  - SIGKILL cannot execute exit cleanup. The next managed run recovers abandoned
-    per-run services, or run `pnpm test:services:prune`. Recovery requires a dead
-    owner PID, the expected image and no mounts; it preserves active runs,
-    `cubby-dev-pg`, warm services and unrelated containers. A reused PID is
-    conservatively treated as live, so inspect remaining containers manually.
+  - A killed run's record is ignored once its PID is gone; a reused PID is
+    conservatively treated as live.
 - Parallelism overrides: `VITEST_MAX_WORKERS` for Vitest and Playwright's
   `--workers` flag (for example, `pnpm test:e2e --workers=2`).
 - In dev, `await __jsProfile(5000)` in the browser console summarizes the

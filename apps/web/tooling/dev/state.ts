@@ -23,7 +23,7 @@ const DEV_DB_PORT = "55432";
 export function assertDevDatabaseUrl(databaseUrl: string | undefined): URL {
   if (!databaseUrl) {
     throw new Error(
-      "DATABASE_URL is not set. Use `pnpm db:dev:migrate` or `pnpm dev:seed`.",
+      "DATABASE_URL is not set. Use `pnpm db:dev:migrate` or `pnpm dev seed`.",
     );
   }
   let url: URL;

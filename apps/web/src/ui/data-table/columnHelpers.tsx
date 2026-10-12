@@ -1102,15 +1102,10 @@ function CanonicalSingleEntityLink({
 type SingleEntityAdapter = {
   /** Validates a row's relation summary once before constructing its UI data. */
   parse: (
-    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Runtime projections cross the table boundary here and this function consumes them directly with the target schema.
     value: unknown,
   ) => { item: ComboboxItem<string> | null; link: ReactNode } | null;
   /** A collection parser derived from this adapter's singular schema. */
-  renderCollection?: (
-    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Collections use the same runtime schema boundary and deliberately reject malformed items.
-    value: unknown,
-    dedupe: boolean,
-  ) => ReactNode;
+  renderCollection?: (value: unknown, dedupe: boolean) => ReactNode;
   SearchProvider?: (props: SearchProviderProps<string>) => ReactNode;
 };
 

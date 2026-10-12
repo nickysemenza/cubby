@@ -43,7 +43,6 @@ const isoInternalDate = (internalDate: string | undefined): string | null => {
 type BodyState = { text: string | null; html: string | null };
 
 // The branches deliberately mirror MIME's recursive body/attachment variants.
-// eslint-disable-next-line complexity
 const walkParts = (
   part: GmailMessagePart,
   path: string,

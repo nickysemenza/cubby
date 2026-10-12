@@ -152,7 +152,7 @@ handles settlement separately and creates no new inventory.
 ## Joining later evidence
 
 Treat this run as the photo side of the [product identity
-journey](../../../docs/product-identity-journey.md). An agent may later find an
+journey](../../../docs/guide/product-identity-journey.md). An agent may later find an
 itemized retailer order through connected Gmail or a retailer account, and a
 posted charge through a statement import. Only the order line can establish a
 Purchase-to-Product relationship; the statement can settle that Purchase but

@@ -196,7 +196,7 @@ function printLinks(session: Session): void {
 async function start(profile: DevProfile, preview: boolean): Promise<void> {
   if (preview && profile.profile === "integrations")
     throw new Error(
-      "Integration peers run under Vite HMR; use pnpm dev:integrations. Built preview currently supports the offline profile.",
+      "Integration peers run under Vite HMR; use pnpm dev integrations. Built preview currently supports the offline profile.",
     );
   cancelled = false;
   const previous = readSession(profile);
@@ -527,8 +527,15 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2).filter((arg) => arg !== "--");
   const command = args[0] ?? "start";
   const json = args.includes("--json");
+  // `integrations` is `start` with live AI/provider peers.
+  if (command === "integrations")
+    process.env.CUBBY_DEV_PROFILE = "integrations";
   const profile = resolveDevProfile(root);
-  if (command === "start" || command === "preview")
+  if (
+    command === "start" ||
+    command === "integrations" ||
+    command === "preview"
+  )
     return start(profile, command === "preview");
   if (command === "down") return stop(profile);
   if (command === "reset") {

@@ -51,7 +51,6 @@ const fakeGitHub = (
   get: async <T>(route: string) => {
     const body = routes[route];
     if (body === undefined) throw new Error(`GET ${route}: 403 forbidden`);
-    // SAFETY: each fixture route holds the documented response shape for its path.
     return body as T;
   },
   artifactText: async (id) => {
