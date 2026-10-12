@@ -84,9 +84,10 @@ describe("schedule layout", () => {
     if (!item) throw new Error("Missing mobile schedule row");
     expect(item.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     expect(item.textContent).toContain("after the autumn harvest is complete");
-    expect(getComputedStyle(item.querySelector(".text-xs")!).whiteSpace).toBe(
-      "normal",
-    );
+    expect(
+      getComputedStyle(item.querySelector('[data-ledger-slot="secondary"]')!)
+        .whiteSpace,
+    ).toBe("normal");
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(402);
   });
 

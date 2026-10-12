@@ -8,6 +8,7 @@ import {
   type EntityGraphOutput,
 } from "@cubby/schemas/entity-graph";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import type { EntityRecommendationGroup } from "@cubby/schemas/entity-recommendations";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
@@ -34,14 +35,13 @@ import {
   type EntityRecommendationOperations,
 } from "~/entity/relatedness/entity-recommendations";
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
-import { PhysicalConnectionsPanel } from "~/entity/relationships/physical-connections";
 import { useInventoryPlacementAction } from "~/features/inventory/inventory-placement-suggestion";
 import {
   inventory,
   entityGraph,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
-import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
@@ -130,9 +130,15 @@ export function EntityRelations({
   operations = entityGraph,
   recommendationOperations,
   recommendationActionOperations = productionRecommendationActionOperations,
+  placement = "explorer",
 }: {
   entity: Entity;
   sourceId: string;
+  /**
+   * A detail page already lists the record's own relations and its similar
+   * products, so its Relationships section is the graph explorer alone.
+   */
+  placement?: "detail" | "explorer";
   state?: EntityRelationsState;
   onStateChange?: (state: EntityRelationsState) => void;
   operations?: EntityGraphOperations;
@@ -146,6 +152,29 @@ export function EntityRelations({
     [entity, sourceId],
   );
   if (!supportsEntityGraph(entity)) return null;
+  if (placement === "detail")
+    return (
+      <Stack gap="md">
+        <RelationshipRecommendations
+          source={root}
+          operations={recommendationOperations}
+          actionOperations={recommendationActionOperations}
+          exclude={DETAIL_SLOT_RECOMMENDATIONS}
+        />
+        <GraphExplorer
+          key={`${entity}:${sourceId}`}
+          root={root}
+          operations={operations}
+          embedded
+          onRootChange={(value) =>
+            void router.navigate({
+              to: "/graph",
+              search: { entity: value.entityKind, root: value.entityId },
+            })
+          }
+        />
+      </Stack>
+    );
   if ((state?.view ?? localView) === "graph")
     return (
       <GraphExplorer
@@ -443,14 +472,19 @@ function EntityRelationsSession(
   return <EntityRelationsContent {...useEntityRelationsModel(props)} />;
 }
 
+/** Groups a detail page already shows in its own slot. */
+const DETAIL_SLOT_RECOMMENDATIONS = ["product-related"] as const;
+
 function RelationshipRecommendations({
   source,
   operations,
   actionOperations,
+  exclude,
 }: {
   source: EntityRef;
   operations?: EntityRecommendationOperations;
   actionOperations: EntityRecommendationActionOperations;
+  exclude?: readonly EntityRecommendationGroup["kind"][];
 }) {
   const expenseUpdate = useMutation(actionOperations.expenseUpdate());
   const inventoryPlacement = useInventoryPlacementAction({
@@ -461,6 +495,7 @@ function RelationshipRecommendations({
     <EntityRecommendations
       source={source}
       operations={operations}
+      exclude={exclude}
       pending={expenseUpdate.isPending || inventoryPlacement.isPending}
       onAcceptExpenseProject={async (proposal) => {
         await expenseUpdate.mutateAsync({
@@ -479,7 +514,6 @@ function EntityRelationsContent(
   const {
     root,
     router,
-    operations,
     current,
     trail,
     cursor,
@@ -682,7 +716,6 @@ function EntityRelationsContent(
           room for another.
         </p>
       )}
-      <PhysicalConnectionsPanel subject={selectedRef} operations={operations} />
     </Stack>
   );
 }
@@ -818,23 +851,24 @@ function RelationshipBranches({
               />
             )}
             {current.view !== "graph" && (
-              <Ledger className="mt-1">
+              <RecordList className="mt-1">
                 {nodes.map((node) => (
-                  <LedgerRow key={graphRefKey(node)}>
-                    <LedgerCell slot="leading">
+                  <RecordRow
+                    key={graphRefKey(node)}
+                    leading={
                       <EntityIcon
                         entity={node.entityKind}
                         colored
                         className="size-3.5"
                       />
-                    </LedgerCell>
-                    <LedgerCell slot="primary">
+                    }
+                    primary={
                       <GraphRecordLink
                         node={node}
                         href={hrefFor(node, router)}
                       />
-                    </LedgerCell>
-                    <LedgerCell slot="actions">
+                    }
+                    actions={
                       <Button
                         variant="ghost"
                         size="sm"
@@ -843,10 +877,10 @@ function RelationshipBranches({
                       >
                         Explore
                       </Button>
-                    </LedgerCell>
-                  </LedgerRow>
+                    }
+                  />
                 ))}
-              </Ledger>
+              </RecordList>
             )}
             {branch.totalCount === 0 && (
               <p className="text-sm text-muted-foreground">

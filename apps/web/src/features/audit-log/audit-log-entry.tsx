@@ -1,34 +1,23 @@
 import type { AuditJsonValue, AuditLogListOut } from "@cubby/schemas/audit";
 import { parseShortcode } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
 import { sortBy } from "es-toolkit";
-import { useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { EntityIcon, entityLabel } from "~/entity/entities";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCount } from "~/lib/utils";
+import {
+  RecordDetail,
+  RecordDot,
+  RecordRow,
+  RecordTime,
+} from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { MutedBox } from "~/ui/layout/muted-box";
 import { Avatar, AvatarFallback, AvatarImage } from "~/ui/primitives/avatar";
-import { Badge } from "~/ui/primitives/badge";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
-import { Description } from "~/ui/primitives/description";
-import {
-  AuditTimelineContent,
-  AuditTimelineIndicator,
-  AuditTimelineItem,
-  AuditTimelineSeparator,
-} from "~/ui/reui/timeline";
 
-import { HoverableTimestamp } from "../../ui/HoverableTimestamp";
+import { foldedFields } from "./audit-log-fold";
 
 type AuditLogEntry = AuditLogListOut["entries"][number];
 type AuditChanges = NonNullable<AuditLogEntry["changes"]>;
@@ -239,102 +228,17 @@ function ChangesList({ changes }: { changes: AuditChanges }) {
   );
 }
 
-interface AuditLogEntryProps {
-  entry: AuditLogEntry;
-  showEntityLink?: boolean;
-  step: number;
-  /**
-   * "ledger" renders a glanceable single line (name + one-line diff ... time)
-   * with no avatar, timeline, or expandable change detail — the home feed. The
-   * diff is a projection: it shows at most two fields and discloses the rest as
-   * an omitted count.
-   */
-  variant?: "default" | "ledger";
-}
-
-function LedgerAuditEntry({
-  entry,
-  showEntityLink,
-  step,
-}: Omit<AuditLogEntryProps, "variant">) {
-  const fallbackEntityLabel = entityLabel(entry.entityKind);
-  const action = getStatusBadgeProps("audit", entry.action);
-  const summary =
-    entry.action === "update" ? summarizeChanges(entry.changes) : null;
-  return (
-    <AuditTimelineItem step={step} className="not-last:pb-2">
-      <AuditTimelineIndicator className="size-2 border-0 bg-primary ring-2 ring-background" />
-      <AuditTimelineSeparator className="left-[-1.5rem] h-[calc(100%-0.5rem)] translate-y-2 bg-border" />
-      <AuditTimelineContent>
-        <Row
-          align="center"
-          justify="between"
-          gap="sm"
-          className="min-h-11 sm:min-h-7"
-        >
-          <Row align="center" gap="sm" className="min-w-0">
-            {showEntityLink && entry.entityId ? (
-              <EntityRefLink
-                variant="audit"
-                entityKind={entry.entityKind}
-                entityId={entry.entityId}
-                name={entry.entityName}
-                displayImage={entry.displayImage}
-                compact
-              />
-            ) : (
-              <>
-                <EntityIcon
-                  entity={entry.entityKind}
-                  colored
-                  className="size-4 flex-shrink-0"
-                />
-                <span className="truncate text-sm font-medium">
-                  {entry.entityName ?? fallbackEntityLabel}
-                </span>
-              </>
-            )}
-            {summary ? (
-              <LedgerChangeSummary
-                shown={summary.shown}
-                omitted={summary.omitted}
-              />
-            ) : (
-              <Badge variant={action.variant} className="text-2xs">
-                {action.label}
-              </Badge>
-            )}
-          </Row>
-          <span className="shrink-0 text-muted-foreground">
-            <HoverableTimestamp timestamp={entry.createdAt} />
-          </span>
-        </Row>
-      </AuditTimelineContent>
-    </AuditTimelineItem>
-  );
-}
-
-/** "Claude · Kitchen iPad · RUN-4K7M": the client, device and run behind a write. */
+/** "Claude · Kitchen iPad": the client and device behind a write; the run links separately. */
 const auditVia = (entry: AuditLogEntry): string | null => {
   const parts = [
     entry.oauthClient ? (entry.oauthClient.name ?? "OAuth client") : null,
     entry.device ? (entry.device.name ?? entry.device.id) : null,
-    entry.runId,
   ].filter((part): part is string => part !== null);
   return parts.length > 0 ? parts.join(" · ") : null;
 };
 
-function AuditActor({ entry }: { entry: AuditLogEntry }) {
-  const via = auditVia(entry);
-  return (
-    <>
-      <Description as="span">
-        by {entry.user ? (entry.user.name ?? entry.user.email) : "System"}
-      </Description>
-      {via && <Description as="span">via {via}</Description>}
-    </>
-  );
-}
+const actorName = (entry: AuditLogEntry) =>
+  entry.user ? (entry.user.name ?? entry.user.email) : "System";
 
 const auditUserInitials = (user: AuditLogEntry["user"]): string => {
   if (!user?.name) return "SY";
@@ -346,112 +250,138 @@ const auditUserInitials = (user: AuditLogEntry["user"]): string => {
     .slice(0, 2);
 };
 
-export function AuditLogEntryComponent({
-  entry,
-  showEntityLink = true,
-  step,
-  variant = "default",
-}: AuditLogEntryProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const changes = entry.changes;
-  const hasChanges = changes !== null && Object.keys(changes).length > 0;
-
-  const fallbackEntityLabel = entityLabel(entry.entityKind);
-  const action = getStatusBadgeProps("audit", entry.action);
-
-  if (variant === "ledger") {
-    return (
-      <LedgerAuditEntry
-        entry={entry}
-        showEntityLink={showEntityLink}
-        step={step}
-      />
-    );
-  }
-
-  const userInitials = auditUserInitials(entry.user);
-
+/** The writer as an initial badge; the full "by …" reads in its title and to assistive tech. */
+function AuditActor({ entry }: { entry: AuditLogEntry }) {
+  const name = actorName(entry);
   return (
-    <AuditTimelineItem step={step}>
-      <AuditTimelineIndicator className="size-3 border-0 bg-primary ring-4 ring-background" />
-      <AuditTimelineSeparator className="bg-border" />
-      <AuditTimelineContent>
-        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-          <Row align="start" gap="sm">
-            <Avatar className="size-6 flex-shrink-0">
-              {entry.user?.image ? (
-                <AvatarImage
-                  src={entry.user.image}
-                  alt={entry.user.name ?? ""}
-                />
-              ) : null}
-              <AvatarFallback
-                className={cn(
-                  "text-xs",
-                  !entry.user && "bg-muted text-muted-foreground",
-                )}
-              >
-                {entry.user ? userInitials : <RobotIcon className="size-4" />}
-              </AvatarFallback>
-            </Avatar>
+    <Avatar className="size-4 shrink-0" title={`by ${name}`}>
+      {entry.user?.image ? <AvatarImage src={entry.user.image} alt="" /> : null}
+      <AvatarFallback
+        className={cn(
+          "text-[0.5625rem]",
+          !entry.user && "bg-muted text-muted-foreground",
+        )}
+      >
+        {entry.user ? (
+          auditUserInitials(entry.user)
+        ) : (
+          <RobotIcon className="size-2.5" />
+        )}
+      </AvatarFallback>
+      <span className="sr-only">by {name}</span>
+    </Avatar>
+  );
+}
 
-            <div className="min-w-0 flex-1">
-              <Row align="center" gap="sm" wrap>
-                {showEntityLink && entry.entityId ? (
+const ACTION_TONE = {
+  create: "positive",
+  update: undefined,
+  delete: "destructive",
+} as const;
+
+/** One audit event, or a folded burst of updates, as a timeline row. */
+export function AuditRecordRow({
+  group,
+  showEntityLink,
+  dayShown,
+}: {
+  group: readonly AuditLogEntry[];
+  showEntityLink: boolean;
+  dayShown: boolean;
+}) {
+  const [entry] = group;
+  if (!entry) return null;
+  const action = getStatusBadgeProps("audit", entry.action);
+  const folded = group.length > 1;
+  const fields = folded ? foldedFields(group) : undefined;
+  // A burst shows its newest diff merged over the older ones' fields.
+  const changes: AuditChanges | null = folded
+    ? Object.assign(
+        {},
+        ...[...group].reverse().map((item) => item.changes ?? {}),
+      )
+    : entry.changes;
+  const summary = entry.action === "update" ? summarizeChanges(changes) : null;
+  const via = auditVia(entry);
+  const changedCount = Object.keys(changes ?? {}).length;
+  const shownCount = summary?.shown.length ?? 0;
+  return (
+    <RecordRow
+      leading={
+        <RecordDot tone={ACTION_TONE[entry.action]} label={action.label} />
+      }
+      primary={
+        <>
+          {showEntityLink && entry.entityId ? (
+            <EntityRefLink
+              variant="audit"
+              entityKind={entry.entityKind}
+              entityId={entry.entityId}
+              name={entry.entityName}
+              displayImage={entry.displayImage}
+              compact
+            />
+          ) : null}
+          <span
+            className={cn(
+              "shrink-0",
+              showEntityLink && entry.entityId
+                ? "text-xs text-muted-foreground"
+                : "font-medium",
+            )}
+          >
+            {folded && fields
+              ? `${countLabel(group.length, "update")} · ${countLabel(fields.size, "field")}`
+              : action.label}
+          </span>
+        </>
+      }
+      secondary={
+        summary || via || entry.runId ? (
+          <span className="flex min-w-0 items-baseline gap-2">
+            {summary ? (
+              <LedgerChangeSummary shown={summary.shown} omitted={0} />
+            ) : null}
+            {via || entry.runId ? (
+              <span className="flex shrink-0 items-baseline gap-1">
+                via {via}
+                {via && entry.runId ? " · " : null}
+                {entry.runId ? (
                   <EntityRefLink
-                    variant="audit"
-                    entityKind={entry.entityKind}
-                    entityId={entry.entityId}
-                    name={entry.entityName}
-                    displayImage={entry.displayImage}
-                    compact
+                    variant="chip"
+                    entity="run"
+                    id={entry.runId}
+                    name={entry.runId}
+                    displayImage={null}
+                    emoji={null}
                   />
-                ) : (
-                  <>
-                    <EntityIcon
-                      entity={entry.entityKind}
-                      colored
-                      className="size-4 flex-shrink-0"
-                    />
-                    <span className="text-sm font-medium">
-                      {entry.entityName ?? fallbackEntityLabel}
-                    </span>
-                  </>
-                )}
-
-                <Badge variant={action.variant} className="text-xs">
-                  {action.label}
-                </Badge>
-
-                <AuditActor entry={entry} />
-
-                <span className="text-xs text-muted-foreground">
-                  <HoverableTimestamp timestamp={entry.createdAt} />
-                </span>
-              </Row>
-
-              {changes && hasChanges && (
-                <CollapsibleTrigger className="mt-1 flex min-h-11 items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground md:mt-2 md:min-h-0">
-                  {isOpen ? (
-                    <CaretDownIcon className="size-3" />
-                  ) : (
-                    <CaretRightIcon className="size-3" />
-                  )}
-                  {countLabel(Object.keys(changes).length, "field")} changed
-                </CollapsibleTrigger>
-              )}
-
-              <CollapsibleContent className="mt-2">
-                {changes && (
-                  <MutedBox padding="sm">
-                    <ChangesList changes={changes} />
-                  </MutedBox>
-                )}
-              </CollapsibleContent>
-            </div>
-          </Row>
-        </Collapsible>
-      </AuditTimelineContent>
-    </AuditTimelineItem>
+                ) : null}
+              </span>
+            ) : null}
+          </span>
+        ) : null
+      }
+      trailing={
+        <span className="inline-flex items-center gap-1.5">
+          <AuditActor entry={entry} />
+          <RecordTime at={entry.createdAt} dayShown={dayShown} />
+        </span>
+      }
+      detail={
+        changes && changedCount > shownCount ? (
+          <RecordDetail
+            summary={
+              shownCount > 0
+                ? `${countLabel(changedCount - shownCount, "more field")}`
+                : `${countLabel(changedCount, "field")} changed`
+            }
+          >
+            <MutedBox padding="sm">
+              <ChangesList changes={changes} />
+            </MutedBox>
+          </RecordDetail>
+        ) : null
+      }
+    />
   );
 }

@@ -766,7 +766,7 @@ describe("shared entity Relations", () => {
     ).toBeVisible();
   });
 
-  it("shows physical connections separately from derived relationships", async () => {
+  it("shows physical connections in the detail explorer", async () => {
     const image = { entityKind: "image", entityId: "IMG-4K7M" } as const;
     const operations = {
       ...entityGraph,
@@ -795,6 +795,7 @@ describe("shared entity Relations", () => {
         entity="cookbook"
         sourceId={root.entityId}
         operations={operations}
+        placement="detail"
       />,
       { wrapper: harness.wrapper },
     );

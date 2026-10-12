@@ -210,7 +210,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await page
     .getByRole("heading", { level: 2, name: "Relations", exact: true })
     .scrollIntoViewIfNeeded();
-  await page.getByRole("button", { name: "Graph view", exact: true }).click();
+  // A detail page's Relationships section is the explorer itself.
   await expect(
     page.getByRole("link", { name: "Open graph", exact: true }),
   ).toBeVisible();

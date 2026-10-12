@@ -196,6 +196,12 @@ existing block. Extend the generic path when it almost fits. See
   model (summary, child rows, destinations, keys, disclosure) behind both the
   search page and the command menu. Each surface keeps its own outer element
   and child limit.
+- Read-only record lists: `RecordList` (`ui/common/record-list.tsx`) for
+  rows, groups with "+N more", folded absences, the Activity/timeline
+  variant, and shared trailing formats. Detail-page connected records read
+  `entity.connectedRecordsPreview` once per record; `/connections` and
+  relation-table evidence page `entity.connectedRecords` per view. Audit
+  bursts fold through `foldAuditEntries` (`features/audit-log/audit-log-fold.ts`).
 - Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
 - Data: generated query catalog operations, `useActionMutation`,
   `useUpdateMutation`, `useDeletableConfig`, `useAllEntityRecords`.

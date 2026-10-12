@@ -32,6 +32,7 @@ import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.
 import { formatCalendarDay } from "~/lib/date-format";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCount, formatCurrency } from "~/lib/utils";
+import { RecordHeading, RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -350,29 +351,31 @@ function Amount({ amount }: { amount: number | null | undefined }) {
 
 function EventLine({ event }: { event: EntityTimelineEvent }) {
   return (
-    <li className="relative grid gap-x-3 gap-y-0.5 py-2 pl-5 md:grid-cols-[minmax(12rem,1fr)_8rem_minmax(0,1fr)_8rem] md:items-center">
-      <span
-        aria-hidden
-        className="absolute top-3.5 left-0 size-2.5 -translate-x-[calc(50%-1px)] rounded-full border-2 border-background"
-        style={{ backgroundColor: kindColor(event.kind) }}
-      />
-      <TimelineLink link={event.link} className="min-w-0 truncate text-sm">
-        {event.label}
-      </TimelineLink>
-      <EnumPill color={kindColor(event.kind)} className="text-xs">
-        {kindLabel(event.kind)}
-      </EnumPill>
-      {event.detail ? (
-        <Description size="xs" className="min-w-0 truncate">
-          <ShortcodeProse>{event.detail}</ShortcodeProse>
-        </Description>
-      ) : (
-        <span />
-      )}
-      <span className="md:text-right">
-        <Amount amount={event.amount} />
-      </span>
-    </li>
+    <RecordRow
+      leading={
+        <span className="flex h-5 items-center">
+          <span
+            aria-hidden
+            className="size-2 rounded-full"
+            style={{ backgroundColor: kindColor(event.kind) }}
+          />
+        </span>
+      }
+      primary={
+        <>
+          <TimelineLink link={event.link} className="min-w-0 truncate">
+            {event.label}
+          </TimelineLink>
+          <EnumPill color={kindColor(event.kind)} className="text-xs">
+            {kindLabel(event.kind)}
+          </EnumPill>
+        </>
+      }
+      secondary={
+        event.detail ? <ShortcodeProse>{event.detail}</ShortcodeProse> : null
+      }
+      trailing={<Amount amount={event.amount} />}
+    />
   );
 }
 
@@ -384,28 +387,29 @@ function EventGroup({
   showDate?: boolean;
 }) {
   return (
-    <section>
-      <Row align="baseline" wrap gap="sm" className="pb-1">
-        {showDate ? (
-          <span className="font-mono text-sm tabular-nums">
-            {group.date === null
-              ? "Date unknown"
-              : formatCalendarDay(group.date, "dateShort")}
-          </span>
-        ) : null}
-        {group.label && (
-          <TimelineLink link={group.link} className="text-sm">
-            {group.label}
-          </TimelineLink>
-        )}
-      </Row>
-      {/* A 2px rail carries data meaning here: the dots sit on it. */}
-      <ul className="ml-1 border-l-2 border-border">
-        {group.events.map((event) => (
-          <EventLine key={event.id} event={event} />
-        ))}
-      </ul>
-    </section>
+    <>
+      {showDate || group.label ? (
+        <RecordHeading
+          label={
+            <span className="flex flex-wrap items-baseline gap-2">
+              {showDate ? (
+                <span className="tabular-nums">
+                  {group.date === null
+                    ? "Date unknown"
+                    : formatCalendarDay(group.date, "dateShort")}
+                </span>
+              ) : null}
+              {group.label && (
+                <TimelineLink link={group.link}>{group.label}</TimelineLink>
+              )}
+            </span>
+          }
+        />
+      ) : null}
+      {group.events.map((event) => (
+        <EventLine key={event.id} event={event} />
+      ))}
+    </>
   );
 }
 
@@ -417,23 +421,25 @@ function EventsView({ groups }: { groups: EntityTimelineGroup[] }) {
         title="Nothing dated in this window."
       />
     );
+  const dated = groups.filter((group) => group.date !== null);
+  const undated = groups.filter((group) => group.date === null);
   return (
     <Stack gap="md">
-      {groups
-        .filter((group) => group.date !== null)
-        .map((group) => (
-          <EventGroup key={group.key} group={group} />
-        ))}
-      {groups.some((group) => group.date === null) ? (
+      {dated.length > 0 ? (
+        <RecordList variant="timeline" aria-label="Timeline events">
+          {dated.map((group) => (
+            <EventGroup key={group.key} group={group} />
+          ))}
+        </RecordList>
+      ) : null}
+      {undated.length > 0 ? (
         <section aria-label="Date unknown">
-          <h3 className="mb-2 text-sm font-medium">Date unknown</h3>
-          <Stack gap="md">
-            {groups
-              .filter((group) => group.date === null)
-              .map((group) => (
-                <EventGroup key={group.key} group={group} showDate={false} />
-              ))}
-          </Stack>
+          <h3 className="mb-1 text-sm font-medium">Date unknown</h3>
+          <RecordList variant="timeline">
+            {undated.map((group) => (
+              <EventGroup key={group.key} group={group} showDate={false} />
+            ))}
+          </RecordList>
         </section>
       ) : null}
     </Stack>

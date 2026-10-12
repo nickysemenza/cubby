@@ -23,6 +23,7 @@ import {
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useIsMobile } from "~/ui/hooks/useMobile";
 import { Row, Stack } from "~/ui/layout";
@@ -71,6 +72,7 @@ export function GraphExplorer({
   onRootChange,
   onNavigationChange,
   onList,
+  embedded = false,
   fill = false,
   operations = entityGraph,
 }: {
@@ -85,6 +87,8 @@ export function GraphExplorer({
     start?: string;
   }) => void;
   onList?: () => void;
+  /** Drawn inside a detail page: offers the full graph workspace. */
+  embedded?: boolean;
   fill?: boolean;
   operations?: GraphExplorerOperations;
 }) {
@@ -155,6 +159,7 @@ export function GraphExplorer({
   const inspector = (
     <Stack gap="md">
       <GraphRecordInspector
+        embedded={embedded}
         model={model}
         root={root}
         operations={operations}
@@ -269,7 +274,7 @@ export function GraphExplorer({
         >
           {showList ? <NetworkIcon /> : <ListIcon />}
         </Button>
-        {onList ? (
+        {onList || embedded ? (
           <>
             <Link
               to="/graph"
@@ -282,9 +287,11 @@ export function GraphExplorer({
             >
               Open graph
             </Link>
-            <Button variant="ghost" onClick={onList}>
-              Relations list
-            </Button>
+            {onList ? (
+              <Button variant="ghost" onClick={onList}>
+                Relations list
+              </Button>
+            ) : null}
           </>
         ) : (
           <Link to="/entities" className="text-xs text-primary">
@@ -349,26 +356,36 @@ export function GraphExplorer({
               className="absolute inset-0 overflow-auto rounded-md border border-border bg-card"
               aria-label="Map records"
             >
-              <ul className="divide-y">
-                {matches.map((node) => (
-                  <li key={graphRefKey(node)}>
-                    <Button
-                      variant="ghost"
-                      className="h-auto min-h-11 w-full justify-start text-left whitespace-normal"
-                      onClick={() => {
-                        select(graphRefKey(node), true);
-                        setQuery("");
-                        setShowList(false);
-                      }}
-                    >
-                      {node.label}
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        {entityLabel(node.entityKind)}
-                      </span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <div className="px-3 py-1">
+                <RecordList>
+                  {matches.map((node) => (
+                    <RecordRow
+                      key={graphRefKey(node)}
+                      primary={
+                        <button
+                          type="button"
+                          className="min-w-0 truncate text-left hover:underline focus-visible:underline"
+                          onClick={() => {
+                            select(graphRefKey(node), true);
+                            setQuery("");
+                            setShowList(false);
+                          }}
+                        >
+                          {node.label}
+                          {/* The kind stays in the button's name; the trailing copy is visual. */}
+                          <span className="sr-only">
+                            {" "}
+                            {entityLabel(node.entityKind)}
+                          </span>
+                        </button>
+                      }
+                      trailing={
+                        <span aria-hidden>{entityLabel(node.entityKind)}</span>
+                      }
+                    />
+                  ))}
+                </RecordList>
+              </div>
               {!matches.length && (
                 <p className="p-4 text-sm">No explored records match.</p>
               )}
@@ -408,9 +425,11 @@ function GraphRecordInspector({
   onRootChange,
   onResetCamera,
   onClearPath,
+  embedded,
 }: {
   model: ReturnType<typeof useGraphExplorer>;
   root: EntityRef;
+  embedded: boolean;
   operations: GraphExplorerOperations;
   onRootChange: (root: EntityRef) => void;
   onResetCamera: () => void;
@@ -422,6 +441,7 @@ function GraphRecordInspector({
   const selected = model.data.nodes.find(
     (node) => graphRefKey(node) === model.selected,
   );
+  const Title = embedded && model.selected === rootKey ? "p" : "h2";
   const branches = model.data.branches.filter(
     (branch) =>
       graphRefKey(branch.root) === model.selected && branch.totalCount > 0,
@@ -446,9 +466,10 @@ function GraphRecordInspector({
             <span className="text-xs text-muted-foreground">
               {entityLabel(selected.entityKind)} · {selected.entityId}
             </span>
-            <h2 className="text-base font-semibold break-words">
+            {/* On its own detail page the root record is already the page heading. */}
+            <Title className="text-base font-semibold break-words">
               {selected.label}
-            </h2>
+            </Title>
             {recordLink(selected) && (
               <Link
                 to={recordLink(selected)}

@@ -60,8 +60,6 @@ function ConnectionsPage() {
         sourceId={id}
         viewKey={view}
         target={target}
-        initialOpenAll
-        hideWhenEmpty={false}
       />
     </main>
   );

@@ -3,6 +3,8 @@ import {
   connectedRecordsOutputSchema,
   type ConnectedRecordsInput,
   type ConnectedRecordsOutput,
+  type ConnectedRecordsPreviewInput,
+  type ConnectedRecordsPreviewOutput,
 } from "@cubby/schemas/connected-records";
 import {
   connectedPathVariants,
@@ -126,22 +128,15 @@ export async function getConnectedRecords(
       targetEntity: view.target,
       totalCount: 0,
       items: [],
-      routeHopRange: { min: 1, max: 1 },
     };
   const routes = compiledConnectedRoutes(source.entityKind, viewKey);
   if (routes.length === 0)
     throw new Error(`No routes for ${source.entityKind}.${viewKey}`);
-  const hopCounts = routes.map((route) => route.hops);
-  const routeHopRange = {
-    min: Math.min(...hopCounts),
-    max: Math.max(...hopCounts),
-  };
   if (input.targetIds?.length === 0) {
     return {
       targetEntity: view.target,
       totalCount: 0,
       items: [],
-      routeHopRange,
     };
   }
   const rootTable = entityManifest[source.entityKind].dbTable;
@@ -206,6 +201,23 @@ export async function getConnectedRecords(
     targetEntity: view.target,
     totalCount: row.totalCount,
     items,
-    routeHopRange,
   });
+}
+
+/** The detail page's one Connected records section: every view's first rows and total. */
+export async function getConnectedRecordsPreview(
+  db: Database,
+  input: ConnectedRecordsPreviewInput,
+): Promise<ConnectedRecordsPreviewOutput> {
+  const views = await Promise.all(
+    connectedViews[input.source.entityKind].map(async (view) => {
+      const page = await getConnectedRecords(db, {
+        source: input.source,
+        viewKey: view.key,
+        limit: input.limit ?? 3,
+      });
+      return { ...page, viewKey: view.key, title: view.title };
+    }),
+  );
+  return { views };
 }

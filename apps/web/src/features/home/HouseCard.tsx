@@ -15,6 +15,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { CalendarDate } from "~/ui/common/calendar-date";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -87,35 +88,41 @@ function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
     entityId: item.projectId ?? "",
   });
   return (
-    <div className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 border-b border-border py-2 last:border-b-0 sm:min-h-0 sm:py-1.5">
-      <EntityRefLink
-        entity="task"
-        data={{ id: item.id, name: item.name, status: item.status }}
-        displayImage={taskImage}
-        className={TODAY_ENTITY_LINK_CLASS}
-        truncate
-      />
-      <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-        <CalendarDate start={item.dueDate} end={item.dueEndDate} />
-      </span>
-      {item.projectId && item.projectName ? (
+    <RecordRow
+      primary={
         <EntityRefLink
-          entity="project"
-          data={{
-            id: item.projectId,
-            name: item.projectName,
-            emoji: item.projectEmoji,
-          }}
-          displayImage={projectImage}
+          entity="task"
+          data={{ id: item.id, name: item.name, status: item.status }}
+          displayImage={taskImage}
           className={TODAY_ENTITY_LINK_CLASS}
-          compact
+          truncate
         />
-      ) : (
-        <span className="font-mono text-2xs text-slate uppercase">
-          House task
+      }
+      secondary={
+        item.projectId && item.projectName ? (
+          <EntityRefLink
+            entity="project"
+            data={{
+              id: item.projectId,
+              name: item.projectName,
+              emoji: item.projectEmoji,
+            }}
+            displayImage={projectImage}
+            className={TODAY_ENTITY_LINK_CLASS}
+            compact
+          />
+        ) : (
+          <span className="font-mono text-2xs text-slate uppercase">
+            House task
+          </span>
+        )
+      }
+      trailing={
+        <span className="font-mono text-2xs tabular-nums">
+          <CalendarDate start={item.dueDate} end={item.dueEndDate} />
         </span>
-      )}
-    </div>
+      }
+    />
   );
 }
 
@@ -217,9 +224,11 @@ export function TodayAttention() {
           </p>
         ) : (
           <EntityDisplayImagesProvider refs={imageRefs}>
-            {briefing.data?.next.map((item) => (
-              <TodayTaskRow key={item.id} task={item} />
-            ))}
+            <RecordList aria-label="Next tasks" className="py-1">
+              {briefing.data?.next.map((item) => (
+                <TodayTaskRow key={item.id} task={item} />
+              ))}
+            </RecordList>
           </EntityDisplayImagesProvider>
         )}
       </div>

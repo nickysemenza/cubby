@@ -460,11 +460,14 @@ export function EntityReportSlot({
   // The slot's own verbs (attach, analyze, validate) stay available while the rows load or fail.
   const verbs = record === undefined ? [] : slotActionsOf(input.slot);
   return (
-    <Stack gap="sm" className="items-start">
+    // Blocks stretch: a start-aligned stack shrinks every ledger to its widest sibling.
+    <Stack gap="sm">
       {record !== undefined
         ? verbs.map((action) => (
             <DetailAction key={action}>
-              <ReportVerb action={action} record={record} />
+              <div className="self-start">
+                <ReportVerb action={action} record={record} />
+              </div>
             </DetailAction>
           ))
         : null}
@@ -493,6 +496,7 @@ export function EntityReportSlot({
               type="button"
               size="sm"
               variant="outline"
+              className="self-start"
               disabled={query.more.pending}
               onClick={query.more.load}
             >

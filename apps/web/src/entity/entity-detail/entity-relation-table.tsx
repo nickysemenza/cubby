@@ -60,11 +60,7 @@ import {
 import { type BaseListRow, useEntityList } from "../../ui/hooks/useEntityList";
 import type { ListQueryOptionsFn } from "../../ui/hooks/usePaginatedTableCore";
 import { useEntityFieldSave } from "../../ui/hooks/useUpdateMutation";
-import {
-  connectionRefs,
-  HopRange,
-  RecordPaths,
-} from "./connected-records-table";
+import { connectionRefs, RecordPaths } from "./connected-records-table";
 import { RelationScopeContext } from "./relation-scope";
 import {
   relationshipMovementSource,
@@ -653,9 +649,6 @@ function LiveEntityRelationTable({
       operations={operations}
     >
       <div className="space-y-2">
-        {evidenceQuery.data ? (
-          <HopRange range={evidenceQuery.data.routeHopRange} />
-        ) : null}
         <EntityDisplayImagesProvider
           refs={connectionRefs(evidenceQuery.data?.items ?? [])}
         >
@@ -672,7 +665,7 @@ function LiveEntityRelationTable({
                     {movementSource !== null ? (
                       <RelationshipMovementBadges id={row.id} />
                     ) : null}
-                    {item ? <RecordPaths paths={item.paths} /> : null}
+                    {item ? <RecordPaths paths={item.paths} compact /> : null}
                   </div>
                 ) : null;
               }}

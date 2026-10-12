@@ -7,10 +7,12 @@ import { type ReactNode, useState } from "react";
 import { formatInstant } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
 import {
-  Ledger,
-  LedgerCell,
-  LedgerRow as AlignedRow,
-} from "~/ui/common/ledger";
+  RecordDetail,
+  RecordDot,
+  RecordList,
+  RecordRow,
+  RecordTime,
+} from "~/ui/common/record-list";
 import { Badge } from "~/ui/primitives/badge";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
@@ -22,15 +24,6 @@ import {
   TONE_TEXT,
 } from "./records-row-parts";
 import { CommandButton, type ReportCommands } from "./report-commands";
-
-type Tone = keyof typeof TONE_TEXT;
-
-const DOT = {
-  positive: "bg-positive",
-  warning: "bg-warning",
-  destructive: "bg-destructive",
-  muted: "border border-dashed border-muted-foreground/60",
-} as const satisfies Record<Tone, string>;
 
 /** Whether a block can draw as a ledger: read-mostly rows, no row decision, photo or verb. */
 const isLedger = (block: {
@@ -67,24 +60,6 @@ function ledgerDay(rows: readonly ReportRecordRow[]) {
     rows.flatMap((row) => (row.at ? [formatInstant(row.at, "dateShort")] : [])),
   );
   return days.size === 1 ? [...days][0]! : null;
-}
-
-/** A row's state is its first status: a toned dot whose label stays readable to assistive tech. */
-function StateDot({ status }: { status: ReportRecordRow["statuses"] }) {
-  const state = status?.[0];
-  if (!state) return <span aria-hidden />;
-  return (
-    <span className="flex h-5 items-center" title={state.label}>
-      <span
-        aria-hidden
-        className={cn(
-          "size-2 rounded-full",
-          state.tone ? DOT[state.tone] : "bg-foreground/50",
-        )}
-      />
-      <span className="sr-only">{state.label}</span>
-    </span>
-  );
 }
 
 /** Failures and warnings wrap in full: a raw diagnostic is never clipped behind a tooltip. */
@@ -152,78 +127,68 @@ function LedgerRow({
   const opened = (row.commands ?? []).find((command) => command.id === open);
   const extraStatuses = (row.statuses ?? []).slice(1);
   const parts = textParts(row);
+  const state = row.statuses?.[0];
   return (
-    <AlignedRow>
-      <LedgerCell slot="leading">
-        <StateDot status={row.statuses} />
-      </LedgerCell>
-      <LedgerCell slot="primary" className="flex flex-wrap items-center gap-1">
-        <RowTitle row={row} />
-        {extraStatuses.map((status) => (
-          <Badge
-            key={status.label}
-            variant={status.tone ? STATUS_VARIANT[status.tone] : "secondary"}
-          >
-            {status.label}
-          </Badge>
-        ))}
-        {(row.badges ?? []).map((badge) => (
-          <Badge key={badge} variant="warning">
-            {badge}
-          </Badge>
-        ))}
-      </LedgerCell>
-      {parts.length > 0 ? (
-        <LedgerCell slot="secondary">
-          <RowText row={row} parts={parts} />
-        </LedgerCell>
-      ) : null}
-      <LedgerCell
-        slot="trailing"
-        className="text-xs/5 whitespace-nowrap text-muted-foreground"
-      >
-        {row.trailing ? <span>{row.trailing} </span> : null}
-        {row.at ? (
-          <time dateTime={row.at}>
-            {formatInstant(row.at, day ? "time" : "monthDayTime")}
-          </time>
-        ) : null}
-      </LedgerCell>
-      {row.commands?.length || row.externalLink ? (
-        <LedgerCell slot="actions">
+    <RecordRow
+      leading={<RecordDot tone={state?.tone} label={state?.label} />}
+      primary={
+        <span className="flex flex-wrap items-center gap-1">
+          <RowTitle row={row} />
+          {extraStatuses.map((status) => (
+            <Badge
+              key={status.label}
+              variant={status.tone ? STATUS_VARIANT[status.tone] : "secondary"}
+            >
+              {status.label}
+            </Badge>
+          ))}
+          {(row.badges ?? []).map((badge) => (
+            <Badge key={badge} variant="warning">
+              {badge}
+            </Badge>
+          ))}
+        </span>
+      }
+      clip={false}
+      secondary={parts.length > 0 ? <RowText row={row} parts={parts} /> : null}
+      trailing={
+        <>
+          {row.trailing ? <span>{row.trailing} </span> : null}
+          {row.at ? <RecordTime at={row.at} dayShown={day !== null} /> : null}
+        </>
+      }
+      actions={
+        row.commands?.length || row.externalLink ? (
           <LedgerCommands
             row={row}
             commands={commands}
             open={open}
             onOpen={setOpen}
           />
-        </LedgerCell>
-      ) : null}
-      {opened ? (
-        <LedgerCell
-          as="div"
-          slot="detail"
-          className="flex flex-wrap items-center gap-2"
-        >
-          <CommandButton command={opened} commands={commands} compact />
-          <Button variant="ghost" size="sm" onClick={() => setOpen(null)}>
-            Cancel
-          </Button>
-        </LedgerCell>
-      ) : null}
-      {row.detail ? (
-        <LedgerCell as="div" slot="detail">
-          <details className="text-xs">
-            <summary className="cursor-pointer text-muted-foreground">
-              {row.detail.label}
-            </summary>
-            <pre className="mt-1 max-h-80 overflow-auto bg-muted/30 p-2 font-mono break-words whitespace-pre-wrap">
-              {row.detail.text}
-            </pre>
-          </details>
-        </LedgerCell>
-      ) : null}
-    </AlignedRow>
+        ) : null
+      }
+      detail={
+        opened || row.detail ? (
+          <>
+            {opened ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <CommandButton command={opened} commands={commands} compact />
+                <Button variant="ghost" size="sm" onClick={() => setOpen(null)}>
+                  Cancel
+                </Button>
+              </div>
+            ) : null}
+            {row.detail ? (
+              <RecordDetail summary={row.detail.label}>
+                <pre className="max-h-80 overflow-auto bg-muted/30 p-2 font-mono break-words whitespace-pre-wrap">
+                  {row.detail.text}
+                </pre>
+              </RecordDetail>
+            ) : null}
+          </>
+        ) : null
+      }
+    />
   );
 }
 
@@ -286,10 +251,10 @@ export function RecordLedger({
 }) {
   const keys = rowKeys(rows);
   return (
-    <Ledger>
+    <RecordList>
       {rows.map((row, index) => (
         <LedgerRow key={keys[index]} row={row} day={day} commands={commands} />
       ))}
-    </Ledger>
+    </RecordList>
   );
 }

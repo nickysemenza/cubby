@@ -212,74 +212,22 @@ public final class EntityRelationshipsModel {
     public private(set) var activity: Activity = .idle
     public private(set) var graphError: String?
     public private(set) var recommendationError: String?
-    public private(set) var collapsedBranchIDs: Set<String> = []
-    public private(set) var pagingBranchIDs: Set<String> = []
-    public private(set) var pageErrors: [String: String] = [:]
-    public private(set) var selectedNode: EntityRef?
-    public private(set) var selectedPathIndex = 0
     public private(set) var acceptingRecommendationID: String?
     public private(set) var acceptError: String?
     public private(set) var depth = 1
-    public private(set) var showsEmptyBranches = false
-
-    public var displayedBranches: [EntityGraphBranch] {
-        guard let graph else { return [] }
-        return graph.branches.filter { showsEmptyBranches || $0.totalCount > 0 || !$0.items.isEmpty }
-    }
-
-    public var hasEmptyBranches: Bool {
-        graph?.branches.contains { $0.totalCount == 0 && $0.items.isEmpty } == true
-    }
-
-    public var visibleGraph: EntityGraph? {
-        guard let graph else { return nil }
-        let hiddenEdgeIDs = Set(
-            graph.branches.filter { collapsedBranchIDs.contains($0.id) }.flatMap(\.edgeIds))
-        let candidateEdges = graph.edges.filter { !hiddenEdgeIDs.contains($0.id) }
-        var reachable: Set<EntityRef> = [graph.root]
-        var changed = true
-        while changed {
-            changed = false
-            for edge in candidateEdges {
-                if reachable.contains(edge.source), reachable.insert(edge.target).inserted { changed = true }
-                if reachable.contains(edge.target), reachable.insert(edge.source).inserted { changed = true }
-            }
-        }
-        return EntityGraph(
-            root: graph.root,
-            nodes: graph.nodes.filter { reachable.contains($0.reference) },
-            edges: candidateEdges.filter {
-                reachable.contains($0.source) && reachable.contains($0.target)
-            },
-            branches: graph.branches,
-            paths: graph.paths.filter { Set($0.nodeRefs).isSubset(of: reachable) },
-            completion: graph.completion,
-            truncated: graph.truncated
-        )
-    }
-
-    public var selectedPath: EntityGraphPath? {
-        let candidates = paths(to: selectedNode)
-        guard candidates.indices.contains(selectedPathIndex) else { return candidates.first }
-        return candidates[selectedPathIndex]
-    }
 
     private let client: any EntityRelationshipsClient
-    private let pageSize: Int
     private var requestGeneration = 0
     private var graphTask: Task<EntityGraph, Error>?
     private var recommendationTask: Task<EntityRecommendationsOut, Error>?
-    private var pageTasks: [String: Task<EntityGraphOutput, Error>] = [:]
     private var acceptTask: Task<RelationshipAcceptance, Error>?
 
     public init(
         client: any EntityRelationshipsClient,
-        pageSize: Int = 12,
         initialGraph: EntityGraph? = nil,
         initialRecommendations: EntityRecommendationsOut? = nil
     ) {
         self.client = client
-        self.pageSize = pageSize
         graph = initialGraph
         recommendationDocument = initialRecommendations
         source = initialGraph?.root ?? initialRecommendations.map { EntityRef($0.source) }
@@ -320,83 +268,6 @@ public final class EntityRelationshipsModel {
         Task { @MainActor [self] in
             await refresh()
         }
-    }
-
-    public func requestNextPage(for branch: EntityGraphBranch) {
-        Task { @MainActor [self] in
-            await loadNextPage(for: branch)
-        }
-    }
-
-    public func focus(on reference: EntityRef) async {
-        guard let source, graph?.nodes.contains(where: { $0.reference == reference }) == true else {
-            return
-        }
-        await load(source: source, graphRoot: reference, retainingContent: graph != nil)
-        if graph?.root == reference { select(reference) }
-    }
-
-    public func setShowsEmptyBranches(_ showsEmptyBranches: Bool) {
-        self.showsEmptyBranches = showsEmptyBranches
-    }
-
-    public func toggle(_ branch: EntityGraphBranch) {
-        if collapsedBranchIDs.contains(branch.id) {
-            collapsedBranchIDs.remove(branch.id)
-        } else {
-            collapsedBranchIDs.insert(branch.id)
-            if let selectedNode,
-                visibleGraph?.nodes.contains(where: { $0.reference == selectedNode }) != true
-            {
-                select(nil)
-            }
-        }
-    }
-
-    public func loadNextPage(for branch: EntityGraphBranch) async {
-        guard let offset = branch.nextOffset, !pagingBranchIDs.contains(branch.id) else { return }
-        pageErrors[branch.id] = nil
-        pagingBranchIDs.insert(branch.id)
-        let generation = requestGeneration
-        let client = client
-        let task = Task {
-            try Task.checkCancellation()
-            return try await client.relationshipPage(
-                root: branch.root,
-                relationshipKey: branch.relationshipKey,
-                offset: offset,
-                limit: pageSize
-            )
-        }
-        pageTasks[branch.id] = task
-        do {
-            let page = try await task.value
-            guard generation == requestGeneration else { return }
-            graph = graph?.merging(page, for: branch)
-        } catch is CancellationError {
-            // A new source or depth owns the graph now.
-        } catch {
-            guard generation == requestGeneration else { return }
-            pageErrors[branch.id] = error.userMessage
-        }
-        guard generation == requestGeneration else { return }
-        pageTasks[branch.id] = nil
-        pagingBranchIDs.remove(branch.id)
-    }
-
-    public func select(_ node: EntityRef?) {
-        selectedNode = node
-        selectedPathIndex = 0
-    }
-
-    public func selectPath(at index: Int) {
-        guard paths(to: selectedNode).indices.contains(index) else { return }
-        selectedPathIndex = index
-    }
-
-    public func paths(to node: EntityRef?) -> [EntityGraphPath] {
-        guard let node else { return [] }
-        return visibleGraph?.paths.filter { $0.destination == node } ?? []
     }
 
     @discardableResult
@@ -478,14 +349,10 @@ public final class EntityRelationshipsModel {
         graphError = nil
         recommendationError = nil
         acceptError = nil
-        pageErrors = [:]
         activity = retainingContent ? .refreshing : .loadingInitial
         if !retainingContent {
             graph = nil
             recommendationDocument = nil
-            collapsedBranchIDs = []
-            showsEmptyBranches = false
-            select(nil)
             phase = .loading
         }
 
@@ -504,16 +371,7 @@ public final class EntityRelationshipsModel {
 
         do {
             let result = try await nextGraphTask.value
-            if generation == requestGeneration {
-                graph = result
-                if let selectedNode,
-                    !result.nodes.contains(where: { $0.reference == selectedNode })
-                {
-                    select(nil)
-                } else if !paths(to: selectedNode).indices.contains(selectedPathIndex) {
-                    selectedPathIndex = 0
-                }
-            }
+            if generation == requestGeneration { graph = result }
         } catch is CancellationError {
             // A new source or depth owns the state now.
         } catch {
@@ -546,13 +404,10 @@ public final class EntityRelationshipsModel {
     private func cancelRequests() {
         graphTask?.cancel()
         recommendationTask?.cancel()
-        pageTasks.values.forEach { $0.cancel() }
         acceptTask?.cancel()
         graphTask = nil
         recommendationTask = nil
-        pageTasks = [:]
         acceptTask = nil
         acceptingRecommendationID = nil
-        pagingBranchIDs = []
     }
 }

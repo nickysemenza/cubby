@@ -11,6 +11,7 @@ import {
   recommendations,
   search,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { RecordList } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 
@@ -182,12 +183,16 @@ export function RelatednessRail({
         }))}
         seeded={seededDisplayImages}
       >
-        {visibleItems.map((item) => (
-          <RelatedProductRowWithCanonicalImage
-            key={item.target.id}
-            item={item}
-          />
-        ))}
+        {visibleItems.length > 0 && (
+          <RecordList aria-label="Similar products">
+            {visibleItems.map((item) => (
+              <RelatedProductRowWithCanonicalImage
+                key={item.target.id}
+                item={item}
+              />
+            ))}
+          </RecordList>
+        )}
       </EntityDisplayImagesProvider>
 
       {items.length > visibleCount && (
@@ -235,11 +240,7 @@ function RelatedProductRowWithCanonicalImage({
             : evidence.signal,
         )
         .join(" · ")}
-      action={
-        <span className="font-mono text-2xs text-slate">
-          {item.score > 0 ? `${Math.round(item.score * 100)}% similar` : null}
-        </span>
-      }
+      score={item.score}
     />
   );
 }

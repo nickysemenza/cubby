@@ -223,6 +223,54 @@ export const noRawTableRule = defineRule({
   },
 });
 
+/** A static class string on a JSX attribute: `className="…"` or `className={"…"}`. */
+function classNameText(node: ESTree.JSXOpeningElement): string | undefined {
+  for (const attribute of node.attributes) {
+    if (
+      attribute.type !== "JSXAttribute" ||
+      attribute.name.type !== "JSXIdentifier" ||
+      attribute.name.name !== "className"
+    )
+      continue;
+    const value = attribute.value;
+    if (value?.type === "Literal" && typeof value.value === "string")
+      return value.value;
+    if (
+      value?.type === "JSXExpressionContainer" &&
+      value.expression.type === "Literal" &&
+      typeof value.expression.value === "string"
+    )
+      return value.expression.value;
+  }
+  return undefined;
+}
+
+/** `<ul className="divide-y …">`: a hand-rolled list of record rows. */
+export const noHandRolledRecordListRule = defineRule({
+  meta: {
+    type: "suggestion",
+    docs: {
+      description: "Render read-only record lists through RecordList.",
+    },
+    messages: {
+      recordList: `Use RecordList (ui/common/record-list.tsx) instead of a divide-y list; prose lists such as recipe ingredients may baseline. ${CATALOG}`,
+    },
+  },
+  createOnce(context) {
+    return {
+      JSXOpeningElement(node) {
+        if (
+          node.name.type !== "JSXIdentifier" ||
+          (node.name.name !== "ul" && node.name.name !== "ol")
+        )
+          return;
+        if (/(?:^|\s)divide-y(?:\s|$)/u.test(classNameText(node) ?? ""))
+          context.report({ node, messageId: "recordList" });
+      },
+    };
+  },
+});
+
 /** `productCreateInput.parse({...})` in tests and tooling. */
 export const noHandParsedCreateInputRule = defineRule({
   meta: {

@@ -11,6 +11,7 @@ import { product } from "~/server/db/schema";
 import {
   compiledConnectedRoutes,
   getConnectedRecords,
+  getConnectedRecordsPreview,
 } from "./connected-records";
 import { getDb } from "./database-helpers";
 import { createExpense } from "./expense/crud";
@@ -222,6 +223,21 @@ describe("complete connected record tables", () => {
     expect(firstRecord?.paths.filter((path) => path.length === 4)).toHaveLength(
       2,
     );
+
+    // The detail page reads every view at once: totals stay complete while
+    // rows stop at the preview limit, in manifest order.
+    const preview = await getConnectedRecordsPreview(ctx.db, {
+      source,
+      limit: 1,
+    });
+    expect(preview.views.map((view) => view.viewKey)).toEqual(
+      connectedViews.plant.map((view) => view.key),
+    );
+    const purchases = preview.views.find(
+      (view) => view.viewKey === "purchases",
+    );
+    expect(purchases?.totalCount).toBe(2);
+    expect(purchases?.items).toEqual(page1.items);
 
     await getDb(ctx.db)
       .update(product)

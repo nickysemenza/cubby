@@ -1,0 +1,116 @@
+/* RecordList: compact read-only rows over the records Ledger. */
+.ledger[data-record-list] > .ledger-row {
+  min-height: 1.75rem;
+  padding-block: 0.1875rem;
+}
+
+.ledger[data-record-list] > .ledger-row[data-record-heading] {
+  min-height: 0;
+  padding-block: var(--brand-space-3) var(--brand-space-1);
+  border-top: 0;
+}
+.ledger[data-record-list] > .ledger-row[data-record-heading]:first-child {
+  padding-top: 0;
+}
+.ledger[data-record-list]
+  > .ledger-row[data-record-heading]
+  > [data-ledger-slot="group"] {
+  display: flex;
+  align-items: baseline;
+  gap: var(--brand-space-2);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.ledger[data-record-list] > .ledger-row[data-record-heading] + .ledger-row {
+  border-top: 0;
+}
+
+.ledger[data-record-list]
+  > .ledger-row:is([data-record-more], [data-record-fold]) {
+  min-height: 1.5rem;
+  border-top: 0;
+}
+.ledger[data-record-list] > .ledger-row[data-record-fold] {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.ledger[data-record-list="timeline"]
+  > .ledger-row[data-record-heading]
+  > [data-ledger-slot="group"] {
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: 0.75rem;
+}
+
+/* Timeline: the leading column carries a continuous rail through each dot. */
+.ledger[data-record-list="timeline"]
+  > .ledger-row:not(
+    [data-record-heading],
+    [data-record-more],
+    [data-record-fold]
+  )
+  > [data-ledger-slot="leading"] {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  width: 0.75rem;
+}
+.ledger[data-record-list="timeline"]
+  > .ledger-row:not(
+    [data-record-heading],
+    [data-record-more],
+    [data-record-fold]
+  )
+  > [data-ledger-slot="leading"]::before {
+  content: "";
+  position: absolute;
+  inset-block: calc(-1 * var(--brand-space-1) - 1px);
+  left: 50%;
+  width: 1px;
+  background: var(--border);
+}
+.ledger[data-record-list="timeline"]
+  > .ledger-row:not(
+    [data-record-heading],
+    [data-record-more],
+    [data-record-fold]
+  )
+  > [data-ledger-slot="leading"]
+  > * {
+  position: relative;
+  background: var(--card);
+}
+.ledger[data-record-list="timeline"] > .ledger-row {
+  border-top: 0;
+}
+
+@media (max-width: 767px) {
+  .ledger[data-record-list] > .ledger-row:has(a, button, input, summary) {
+    min-height: 2.75rem;
+  }
+}
+
+/* Without a leading cell the empty first track still owns a column gap;
+   evidence and detail start under identity instead. */
+.ledger[data-record-list]:not(
+    :has(> .ledger-row > [data-ledger-slot="leading"])
+  )
+  > .ledger-row
+  > [data-ledger-slot="detail"] {
+  grid-column: 1 / -1;
+}
+@container ledger (width < 32rem) {
+  .ledger[data-record-list]:not(
+      :has(> .ledger-row > [data-ledger-slot="leading"])
+    )
+    > .ledger-row
+    > [data-ledger-slot="secondary"] {
+    grid-column: 1 / -1;
+  }
+}

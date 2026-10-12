@@ -13,6 +13,7 @@ import {
 import { formatInstant } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
 import { cn } from "~/lib/utils";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 
 /* oxlint-disable jsx-a11y/prefer-tag-over-role -- Pinned labels and independently scrolling dates require flex layout; native table layout cannot preserve those regions. */
 
@@ -342,57 +343,66 @@ export function ScheduleGrid({
         </div>
       </div>
 
-      <ul className="divide-y divide-border md:hidden" aria-label={ariaLabel}>
-        {rows.map((row) => (
-          <li key={row.id} className="min-h-11 px-3 py-2">
-            <div
-              className="flex items-center gap-2 font-medium"
-              style={{ paddingInlineStart: `${Math.min(row.depth, 6) * 12}px` }}
-            >
-              {row.expandable && onToggle && (
-                <button
-                  type="button"
-                  aria-label={`${row.expanded ? "Collapse" : "Expand"} ${row.name}`}
-                  aria-expanded={row.expanded ?? false}
-                  onClick={() => onToggle(row.id)}
-                  className="-m-2 inline-flex size-11 shrink-0 items-center justify-center"
-                >
-                  {row.expanded ? (
-                    <CaretDownIcon className="size-4" />
-                  ) : (
-                    <CaretRightIcon className="size-4" />
-                  )}
-                </button>
-              )}
-              <span className="min-w-0 flex-1 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:max-w-full [&_a]:items-center">
-                {rowLabel(row)}
-              </span>
-            </div>
-            {row.meta && (
-              <div
-                className="text-xs break-words text-muted-foreground"
-                style={{
-                  paddingInlineStart: `${Math.min(row.depth, 6) * 12}px`,
-                }}
-              >
-                {row.meta}
-              </div>
-            )}
-            {!row.group && (
-              <div
-                className="mt-1 text-xs text-muted-foreground"
-                style={{
-                  paddingInlineStart: `${Math.min(row.depth, 6) * 12}px`,
-                }}
-              >
-                {row.segments.length > 0
-                  ? row.segments.map(segmentDescription).join(" · ")
-                  : (row.noDateLabel ?? "No date")}
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
+      {/* `.ledger` sets display, so the breakpoint hides a wrapper instead. */}
+      <div className="px-3 py-1 md:hidden">
+        <RecordList aria-label={ariaLabel}>
+          {rows.map((row) => {
+            const indent = {
+              paddingInlineStart: `${Math.min(row.depth, 6) * 12}px`,
+            };
+            return (
+              <RecordRow
+                key={row.id}
+                clip={false}
+                primary={
+                  <span
+                    className="flex min-w-0 flex-1 items-center gap-2 font-medium"
+                    style={indent}
+                  >
+                    {row.expandable && onToggle && (
+                      <button
+                        type="button"
+                        aria-label={`${row.expanded ? "Collapse" : "Expand"} ${row.name}`}
+                        aria-expanded={row.expanded ?? false}
+                        onClick={() => onToggle(row.id)}
+                        className="-m-2 inline-flex size-11 shrink-0 items-center justify-center"
+                      >
+                        {row.expanded ? (
+                          <CaretDownIcon className="size-4" />
+                        ) : (
+                          <CaretRightIcon className="size-4" />
+                        )}
+                      </button>
+                    )}
+                    <span className="min-w-0 flex-1 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:max-w-full [&_a]:items-center">
+                      {rowLabel(row)}
+                    </span>
+                  </span>
+                }
+                secondary={
+                  row.meta ? (
+                    <span className="block break-words" style={indent}>
+                      {row.meta}
+                    </span>
+                  ) : null
+                }
+                detail={
+                  row.group ? null : (
+                    <span
+                      className="block text-xs/5 text-muted-foreground"
+                      style={indent}
+                    >
+                      {row.segments.length > 0
+                        ? row.segments.map(segmentDescription).join(" · ")
+                        : (row.noDateLabel ?? "No date")}
+                    </span>
+                  )
+                }
+              />
+            );
+          })}
+        </RecordList>
+      </div>
 
       <div
         ref={gridRef}

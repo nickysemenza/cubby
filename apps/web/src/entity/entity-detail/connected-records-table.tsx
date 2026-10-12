@@ -11,10 +11,18 @@ import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
+import {
+  RecordFold,
+  RecordGroup,
+  RecordHops,
+  RecordList,
+  type RecordListState,
+  RecordMore,
+  RecordRow,
+} from "~/ui/common/record-list";
 import { Button } from "~/ui/primitives/button";
 
 import {
-  useContinuousDetail,
   useSectionCount,
   useSectionEmpty,
 } from "../../ui/data-table/detail-section-state";
@@ -25,6 +33,7 @@ import {
 } from "./relationship-movement";
 
 const PAGE_SIZE = 20;
+const PREVIEW_SIZE = 3;
 
 type ConnectedItem = ConnectedRecordsOutput["items"][number];
 
@@ -42,22 +51,21 @@ const kindLabel = (kind: Entity) =>
   isBrowserRoutedEntity(kind) ? entities[kind].label : kind;
 
 /**
- * One record as a cover-or-icon chip. A path often repeats a name (an Expense
- * is named after its Product), so a `repeated` node — the same label as the
- * node before it, or as the target it leads to — shows its kind instead of
- * the same long label twice; the full name stays in the title.
+ * One record as a cover-or-icon chip. `kind` names an intermediate record by
+ * its entity kind (paths repeat names: an Expense is named after its Product);
+ * the full name stays in the trail's title.
  */
 function RecordChip({
   node,
-  repeated = false,
+  kind = false,
 }: {
   node: ConnectedPathNode;
-  repeated?: boolean;
+  kind?: boolean;
 }) {
   if (!isBrowserRoutedEntity(node.entityKind))
     return (
       <span className="min-w-0 truncate" title={node.label}>
-        {node.label}
+        {kind ? node.entityKind : node.label}
       </span>
     );
   return (
@@ -65,20 +73,11 @@ function RecordChip({
       variant="chip"
       entity={node.entityKind}
       id={node.entityId}
-      name={repeated ? entities[node.entityKind].label : node.label}
+      name={kind ? entities[node.entityKind].label : node.label}
       // The batched provider supplies covers; a per-chip emoji lookup would
       // spend one request per path node.
       emoji={null}
     />
-  );
-}
-
-export function HopRange({ range }: { range: { min: number; max: number } }) {
-  return (
-    <span className="font-mono text-xs text-muted-foreground">
-      {range.min === range.max ? range.min : `${range.min}–${range.max}`} record{" "}
-      {range.max === 1 ? "hop" : "hops"}
-    </span>
   );
 }
 
@@ -116,13 +115,7 @@ function PathTrail({
               →
             </span>
           ) : null}
-          <RecordChip
-            node={node}
-            repeated={
-              path[index]?.label === node.label ||
-              (index === middle.length - 1 && path.at(-1)?.label === node.label)
-            }
-          />
+          <RecordChip node={node} kind />
         </li>
       ))}
     </ol>
@@ -180,36 +173,26 @@ export function RecordPaths({
 }
 
 function ConnectionPager({
-  openAll,
   page,
   totalCount,
-  setOpenAll,
   setPage,
 }: {
-  openAll: boolean;
   page: number;
   totalCount: number;
-  setOpenAll: (value: boolean) => void;
   setPage: (value: number) => void;
 }) {
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <span>
-        Showing {openAll ? page * PAGE_SIZE + 1 : 1}–
-        {Math.min((openAll ? page + 1 : 1) * PAGE_SIZE, totalCount)} of{" "}
+      <span className="tabular-nums">
+        {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} of{" "}
         {totalCount}
       </span>
-      {!openAll && totalCount > PAGE_SIZE ? (
-        <Button variant="ghost" size="sm" onClick={() => setOpenAll(true)}>
-          Open all
-        </Button>
-      ) : null}
-      {openAll && page > 0 ? (
+      {page > 0 ? (
         <Button variant="ghost" size="sm" onClick={() => setPage(page - 1)}>
           Previous
         </Button>
       ) : null}
-      {openAll && (page + 1) * PAGE_SIZE < totalCount ? (
+      {(page + 1) * PAGE_SIZE < totalCount ? (
         <Button variant="ghost" size="sm" onClick={() => setPage(page + 1)}>
           Next
         </Button>
@@ -218,55 +201,82 @@ function ConnectionPager({
   );
 }
 
-/** A complete connection query; Overview previews the first page, then pages in the same scope. */
+/** One connected record: identity, the route that reached it, and its distance. */
+function ConnectedRow({
+  item,
+  movement,
+}: {
+  item: ConnectedItem;
+  movement: boolean;
+}) {
+  return (
+    <RecordRow
+      primary={
+        <>
+          <RecordChip node={item.target} />
+          {movement ? (
+            <RelationshipMovementBadges id={item.target.entityId} />
+          ) : null}
+        </>
+      }
+      clip={false}
+      secondary={<RecordPaths paths={item.paths} compact />}
+      trailing={<RecordHops count={item.shortestHops} />}
+    />
+  );
+}
+
+const pluralLabel = (target: Entity) =>
+  isBrowserRoutedEntity(target) ? entities[target].pluralLabel : "Records";
+
+const listState = (
+  query: {
+    isPending: boolean;
+    isError: boolean;
+    error: unknown;
+    refetch: () => void;
+  },
+  rows: number,
+): RecordListState =>
+  query.isPending
+    ? { status: "pending", rows }
+    : query.isError
+      ? {
+          status: "error",
+          error: query.error,
+          title: "connected records",
+          onRetry: query.refetch,
+        }
+      : { status: "success" };
+
+/** Every row of one connected view, paged; the `/connections` page. */
 export function ConnectedRecordsTable({
   source,
   sourceId,
   viewKey,
   target,
-  initialOpenAll = false,
-  hideWhenEmpty = true,
 }: {
   source: Entity;
   sourceId: string;
   viewKey: string;
   target: Entity;
-  initialOpenAll?: boolean;
-  hideWhenEmpty?: boolean;
 }) {
   const movementSource = relationshipMovementSource(
     source,
     target,
     viewKey.startsWith("relation:") ? viewKey.slice("relation:".length) : "",
   );
-  const continuous = useContinuousDetail();
-  const [openAll, setOpenAll] = useState(initialOpenAll);
   const [page, setPage] = useState(0);
   const query = useQuery(
     entityGraph.connectedRecords.queryOptions({
       source: { entityKind: source, entityId: sourceId },
       viewKey,
-      offset: openAll ? page * PAGE_SIZE : 0,
+      offset: page * PAGE_SIZE,
       limit: PAGE_SIZE,
     }),
   );
-  useSectionCount(query.data?.totalCount);
-  useSectionEmpty(query.isSuccess && query.data.totalCount === 0);
-  if (query.isPending)
-    return (
-      <p className="text-sm text-muted-foreground">Loading connections…</p>
-    );
-  if (query.isError)
-    return (
-      <p role="alert" className="text-sm text-destructive">
-        {String(query.error)}
-      </p>
-    );
-  const { items, totalCount, routeHopRange } = query.data;
-  if (totalCount === 0)
-    return hideWhenEmpty && !continuous ? null : (
-      <p className="text-sm text-muted-foreground">No connected records.</p>
-    );
+  const items = query.data?.items ?? [];
+  const totalCount = query.data?.totalCount ?? 0;
   return (
     <RelationshipMovementProvider
       source={movementSource}
@@ -276,39 +286,103 @@ export function ConnectedRecordsTable({
       <EntityDisplayImagesProvider
         refs={[...items.map((item) => item.target), ...connectionRefs(items)]}
       >
-        <ul
+        <RecordList
           // Named like the mobile card lists so record rows read the same.
-          aria-label={`${isBrowserRoutedEntity(target) ? entities[target].pluralLabel : "Records"} list`}
-          className="divide-y divide-border rounded-md border border-border"
+          aria-label={`${pluralLabel(target)} list`}
+          state={listState(query, 6)}
+          empty="No connected records."
+          footer={
+            totalCount > PAGE_SIZE ? (
+              <ConnectionPager
+                page={page}
+                totalCount={totalCount}
+                setPage={setPage}
+              />
+            ) : null
+          }
         >
           {items.map((item) => (
-            <li
+            <ConnectedRow
               key={item.target.entityId}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-sm"
-            >
-              <span className="max-w-full min-w-0 font-medium sm:max-w-80">
-                <RecordChip node={item.target} />
-              </span>
-              {movementSource !== null ? (
-                <RelationshipMovementBadges id={item.target.entityId} />
-              ) : null}
-              <RecordPaths paths={item.paths} />
-            </li>
+              item={item}
+              movement={movementSource !== null}
+            />
           ))}
-        </ul>
+        </RecordList>
       </EntityDisplayImagesProvider>
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <HopRange range={routeHopRange} />
-        {totalCount > PAGE_SIZE ? (
-          <ConnectionPager
-            openAll={openAll}
-            page={page}
-            totalCount={totalCount}
-            setOpenAll={setOpenAll}
-            setPage={setPage}
-          />
-        ) : null}
-      </div>
     </RelationshipMovementProvider>
+  );
+}
+
+/**
+ * The detail page's one Connected records section: each curated view with
+ * results is a group of its first rows, closing with a link to the complete
+ * view; views with no results fold into one line.
+ */
+export function ConnectedRecordsSection({
+  source,
+  sourceId,
+}: {
+  source: Entity;
+  sourceId: string;
+}) {
+  const query = useQuery(
+    entityGraph.connectedRecordsPreview.queryOptions({
+      source: { entityKind: source, entityId: sourceId },
+      limit: PREVIEW_SIZE,
+    }),
+  );
+  const views = query.data?.views ?? [];
+  const found = views.filter((view) => view.totalCount > 0);
+  const absent = views.filter((view) => view.totalCount === 0);
+  useSectionCount(
+    query.data
+      ? views.reduce((total, view) => total + view.totalCount, 0)
+      : undefined,
+  );
+  useSectionEmpty(query.isSuccess && found.length === 0);
+  const items = found.flatMap((view) => view.items);
+  return (
+    <EntityDisplayImagesProvider
+      refs={[...items.map((item) => item.target), ...connectionRefs(items)]}
+    >
+      <RecordList
+        aria-label="Connected records"
+        state={listState(query, 4)}
+        empty="No connected records."
+      >
+        {found.map((view) => (
+          <RecordGroup
+            key={view.viewKey}
+            label={view.title}
+            count={view.totalCount}
+            more={
+              view.totalCount > view.items.length ? (
+                <RecordMore
+                  label={`${view.totalCount - view.items.length} more`}
+                  link={{
+                    to: "/connections",
+                    search: { source, id: sourceId, view: view.viewKey },
+                  }}
+                />
+              ) : null
+            }
+          >
+            {view.items.map((item) => (
+              <ConnectedRow
+                key={item.target.entityId}
+                item={item}
+                movement={false}
+              />
+            ))}
+          </RecordGroup>
+        ))}
+        {found.length > 0 && absent.length > 0 ? (
+          <RecordFold>
+            No connections: {absent.map((view) => view.title).join(", ")}
+          </RecordFold>
+        ) : null}
+      </RecordList>
+    </EntityDisplayImagesProvider>
   );
 }

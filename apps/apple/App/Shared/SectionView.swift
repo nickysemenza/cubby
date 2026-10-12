@@ -70,6 +70,8 @@ struct RouteDestinationView: View {
         // identity, and its model/sections are bound to the first record's descriptor.
         case .entityDetail(let key, let id):
             EntityDetailView(key: key, id: id).id("\(key.rawValue)/\(id)")
+        case .connectedRecords(let source, let viewKey):
+            ConnectedRecordsListView(source: source, viewKey: viewKey)
         case .wardrobe(let ownerID, let ownerName):
             WardrobeView(ownerID: ownerID, ownerName: ownerName)
         case .entityList(let key, let filters): EntityListView(key: key, filters: filters)

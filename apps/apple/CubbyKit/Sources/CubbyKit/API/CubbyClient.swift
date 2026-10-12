@@ -299,6 +299,18 @@ public actor CubbyClient {
         }
     }
 
+    /// Every curated connected view of `source` in manifest order: each view's complete count and
+    /// its first `limit` rows.
+    public func connectedRecordsPreview(source: EntityRef, limit: Int = 3) async throws
+        -> ConnectedRecordsPreviewOutput
+    {
+        try await perform {
+            try await api.entity_connectedRecordsPreview(
+                body: .json(.init(source: source.graphRootInput, limit: limit))
+            ).ok.body.json
+        }
+    }
+
     public func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph {
         let depth = min(3, max(1, depth))
         return try await perform {

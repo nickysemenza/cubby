@@ -5,11 +5,13 @@ import { PulseIcon } from "@phosphor-icons/react/dist/csr/Pulse";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
+import { formatInstant } from "~/lib/date-format";
+import { RecordHeading, RecordList } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Row } from "~/ui/layout";
@@ -22,9 +24,9 @@ import {
   EmptyTitle,
 } from "~/ui/primitives/empty";
 import { Spinner } from "~/ui/primitives/spinner";
-import { AuditTimeline } from "~/ui/reui/timeline";
 
-import { AuditLogEntryComponent } from "./audit-log-entry";
+import { AuditRecordRow } from "./audit-log-entry";
+import { foldAuditEntries } from "./audit-log-fold";
 
 export interface AuditLogListOperations {
   list: typeof auditLog.list;
@@ -48,8 +50,6 @@ interface AuditLogListProps {
   showEntityLink?: boolean;
   /** Number of entries per page (default 20) */
   limit?: number;
-  /** "ledger" renders glanceable single-line entries (home feed) */
-  variant?: "default" | "ledger";
   /** Remote audit-log descriptor; browser tests supply an in-memory transport. */
   operations?: AuditLogListOperations;
   /** Auth state is an external browser boundary, independent of the log query. */
@@ -63,7 +63,6 @@ export function AuditLogList({
   channel,
   showEntityLink = true,
   limit = 20,
-  variant = "default",
   operations = productionOperations,
   session: suppliedSession,
 }: AuditLogListProps) {
@@ -105,6 +104,17 @@ export function AuditLogList({
       ),
     [data],
   );
+  // The household day prints once as a heading; rows print only their time.
+  const days = useMemo(() => {
+    const result: { label: string; groups: (typeof entries)[] }[] = [];
+    for (const group of foldAuditEntries(entries)) {
+      const label = formatInstant(group[0]!.createdAt, "dateShort");
+      const day = result.at(-1);
+      if (day?.label === label) day.groups.push(group);
+      else result.push({ label, groups: [group] });
+    }
+    return result;
+  }, [entries]);
 
   useSectionEmpty(
     data !== undefined &&
@@ -158,38 +168,44 @@ export function AuditLogList({
   }
 
   return (
-    <div>
-      <AuditTimeline>
-        {entries.map((entry, index) => (
-          <AuditLogEntryComponent
-            key={entry.entryKey}
-            entry={entry}
-            step={index + 1}
-            showEntityLink={showEntityLink}
-            variant={variant}
-          />
-        ))}
-      </AuditTimeline>
-
-      {hasNextPage && (
-        <Row justify="center" className="pt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchNextPage({ cancelRefetch: false })}
-            disabled={isFetchingNextPage}
-          >
-            {isFetchingNextPage ? (
-              <>
-                <Spinner className="mr-2" />
-                Loading...
-              </>
-            ) : (
-              "Load more"
-            )}
-          </Button>
-        </Row>
-      )}
-    </div>
+    <RecordList
+      variant="timeline"
+      aria-label="Activity"
+      footer={
+        hasNextPage ? (
+          <Row justify="center" className="pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchNextPage({ cancelRefetch: false })}
+              disabled={isFetchingNextPage}
+            >
+              {isFetchingNextPage ? (
+                <>
+                  <Spinner className="mr-2" />
+                  Loading...
+                </>
+              ) : (
+                "Load more"
+              )}
+            </Button>
+          </Row>
+        ) : null
+      }
+    >
+      {days.map((day) => (
+        <Fragment key={day.label}>
+          <RecordHeading label={day.label} />
+          {day.groups.map((group) => (
+            <AuditRecordRow
+              key={group[0]?.entryKey}
+              group={group}
+              showEntityLink={showEntityLink}
+              dayShown
+            />
+          ))}
+        </Fragment>
+      ))}
+    </RecordList>
   );
 }

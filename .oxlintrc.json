@@ -416,7 +416,8 @@
         "apps/web/src/ui/reui/**"
       ],
       "rules": {
-        "cubby/no-raw-table": "error"
+        "cubby/no-raw-table": "error",
+        "cubby/no-hand-rolled-record-list": "error"
       }
     },
     {
@@ -478,6 +479,18 @@
       ],
       "rules": {
         "cubby/no-raw-table": "off"
+      }
+    },
+    {
+      "files": [
+        "apps/web/src/app/collections/collection-assignment-matrix.tsx",
+        "apps/web/src/app/meals/meal-nutrition-summary.tsx",
+        "apps/web/src/features/recipes/RecipeMagazineView.tsx",
+        "apps/web/src/features/recipes/recipe-form/recipe-live-preview.tsx",
+        "apps/web/src/ui/navigation/application-directory.tsx"
+      ],
+      "rules": {
+        "cubby/no-hand-rolled-record-list": "off"
       }
     }
   ]
