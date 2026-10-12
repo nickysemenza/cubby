@@ -3,7 +3,6 @@ import SwiftUI
 /// Packs record facts into the available width without hiding them behind horizontal scrolling.
 struct WrappingFactsLayout: Layout {
     var spacing: CGFloat = 8
-    var layoutDirection: LayoutDirection = .leftToRight
 
     private func arrangement(width: CGFloat, subviews: Subviews) -> (CGSize, [CGRect]) {
         var frames: [CGRect] = []
@@ -38,7 +37,7 @@ struct WrappingFactsLayout: Layout {
         for (view, frame) in zip(subviews, frames) {
             view.place(
                 at: CGPoint(
-                    x: layoutDirection == .rightToLeft ? bounds.maxX - frame.maxX : bounds.minX + frame.minX,
+                    x: bounds.minX + frame.minX,
                     y: bounds.minY + frame.minY),
                 anchor: .topLeading,
                 proposal: ProposedViewSize(frame.size))

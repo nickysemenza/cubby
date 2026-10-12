@@ -1005,7 +1005,6 @@ struct EntityRowView: View {
     /// Preview-only image injection keeps the production row on the shared URL-backed Thumb
     /// while allowing previews to exercise the real image geometry and clipping.
     var previewImage: Image? = nil
-    @Environment(\.layoutDirection) private var layoutDirection
 
     private var presentation: EntityRowPresentation {
         EntityRowPresentation.resolve(
@@ -1058,7 +1057,7 @@ struct EntityRowView: View {
         if presentation.facts.isEmpty && row.pendingFields.isEmpty && row.failedFields.isEmpty && !photoMode {
             EmptyView()
         } else {
-            WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm, layoutDirection: layoutDirection) {
+            WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm) {
                 ForEach(presentation.facts) { fact in factView(fact) }
                 if !row.pendingFields.isEmpty {
                     Text("Loading details…").font(.caption).foregroundStyle(.secondary)
