@@ -6,12 +6,11 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { auditLog, entityLink } from "~/server/db/schema";
+import { auditLog } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { taskBulkReorderWorkflow } from "~/server/operations/task.server";
 import { getDb } from "~/server/repo/database-helpers";
-import { linkValues } from "~/server/repo/entity-links";
 import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
@@ -192,30 +191,6 @@ describe("task repository — listActionableTasks", () => {
     expect(row?.reasons[0]?.chain.map((n) => n.id)).toEqual([b.id, c.id]);
   });
 
-  it("rejects a multi-hop dependency cycle without replacing prior edges", async () => {
-    const { output: a } = await createRepoEntity(ctx, "task", {
-      trade: "other",
-      name: "task cycle a",
-    });
-    const { output: b } = await createRepoEntity(ctx, "task", {
-      trade: "other",
-      name: "task cycle b",
-    });
-    const { output: c } = await createRepoEntity(ctx, "task", {
-      trade: "other",
-      name: "task cycle c",
-    });
-    await updateTask(ctx.db, a.id, { blockedByIds: [b.id] }, ctx.actor);
-    await updateTask(ctx.db, b.id, { blockedByIds: [c.id] }, ctx.actor);
-
-    await expect(
-      updateTask(ctx.db, c.id, { blockedByIds: [a.id] }, ctx.actor),
-    ).rejects.toMatchObject({ reason: "DEPENDENCY_CYCLE" });
-    await expect(getTaskByShortcode(ctx.db, c.id)).resolves.toMatchObject({
-      blockedByIds: [],
-    });
-  });
-
   it("serializes opposite dependency writes so only one side can commit", async () => {
     const { output: a } = await createRepoEntity(ctx, "task", {
       trade: "other",
@@ -237,19 +212,6 @@ describe("task repository — listActionableTasks", () => {
     expect(
       results.find((result) => result.status === "rejected"),
     ).toMatchObject({ reason: { reason: "DEPENDENCY_CYCLE" } });
-  });
-
-  it("backstops task self dependency with a database CHECK", async () => {
-    const { entityId } = await createRepoEntity(ctx, "task", {
-      trade: "other",
-      name: "raw self dependency task",
-    });
-
-    await expect(
-      getDb(ctx.db)
-        .insert(entityLink)
-        .values(linkValues("taskDependency", entityId, entityId)),
-    ).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 });
 

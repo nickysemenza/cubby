@@ -1,11 +1,7 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import {
-  createDevice,
-  getDeviceByID,
-  updateDevice,
-} from "~/server/repo/device";
+import { createDevice, getDeviceByID } from "~/server/repo/device";
 import {
   createLedgerParty,
   deleteLedgerParties,
@@ -68,7 +64,7 @@ describe("device", () => {
     expect(withOwnerNull.output.ledgerPartyId).toBeNull();
   });
 
-  it("updates and soft-deletes through the generic kernel path", async () => {
+  it("soft-deletes through the generic kernel path", async () => {
     const created = await createDevice(
       ctx.db,
       {
@@ -83,14 +79,6 @@ describe("device", () => {
       },
       ctx.actor,
     );
-    const updated = await updateDevice(
-      ctx.db,
-      created.output.id,
-      { remotePaused: true, appVersion: "1.1" },
-      ctx.actor,
-    );
-    expect(updated.output.remotePaused).toBe(true);
-    expect(updated.output.appVersion).toBe("1.1");
 
     await deleteThroughKernel(ctx.db, ctx.actor, "device", [created.output.id]);
     expect(

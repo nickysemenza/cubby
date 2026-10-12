@@ -8,28 +8,28 @@
  *   kind, is refused;
  * - a live link to a deleted entity is refused by the trigger, while
  *   soft-deleting such a link stays possible;
- * - an acyclic kind refuses a write that would close a cycle;
+ * - an acyclic kind refuses a write that would close a cycle, and a
+ *   self-dependency is refused by the database;
  * - a merge repoint resolves collisions by each end's declared rule and
  *   drops the links it would turn into self-links.
  */
 import { and, eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { entityLink, product, task } from "~/server/db/schema";
+import { entityLink, product } from "~/server/db/schema";
 
-import {
-  getDb,
-  replaceDependencyEdges,
-  withTransaction,
-} from "./database-helpers";
+import { getDb, withTransaction } from "./database-helpers";
 import { linkValues, liveLinks, repointLinkEnd } from "./entity-links";
+import { getProjectByID, updateProject } from "./project/crud";
 import {
   createProductFixture as createProduct,
   makeProductInput,
 } from "./repo.fixtures";
 import { insertWithShortcode } from "./shortcode-utils";
+import { getTaskByShortcode, updateTask } from "./task/crud";
 
 /** The Postgres error behind Drizzle's wrapper, for its code and constraint. */
 const pgRefusal = z.object({
@@ -50,8 +50,6 @@ describe("EntityLink constraints", () => {
   const mkProduct = async (name: string) =>
     (await createProduct(ctx.db, makeProductInput({ name }), ctx.actor))
       .entityId;
-  const mkTask = async (name: string) =>
-    (await insertWithShortcode(ctx.db, "task", { name, trade: "other" })).id;
   const mkWish = async (name: string) =>
     (await insertWithShortcode(ctx.db, "wish", { name })).id;
 
@@ -155,41 +153,101 @@ describe("EntityLink constraints", () => {
       .where(eq(entityLink.id, link!.id));
   });
 
-  it("refuses a task dependency that closes a cycle", async () => {
-    const [a, b, c] = [
-      await mkTask("Task A"),
-      await mkTask("Task B"),
-      await mkTask("Task C"),
-    ];
-    const replace = (id: typeof a, blockedBy: (typeof a)[]) =>
-      withTransaction(ctx.db, (tx) =>
-        replaceDependencyEdges(
-          tx,
-          { entityTable: task, entity: "task" },
-          id,
-          blockedBy,
+  /**
+   * Task and project dependencies share one acyclic link path; each kind is
+   * driven through its own repository update so the wiring is covered too.
+   */
+  const dependencyGraph = {
+    task: async () => {
+      const rows: Awaited<ReturnType<typeof createRepoEntity<"task">>>[] = [];
+      for (const name of ["a", "b", "c"])
+        rows.push(
+          await createRepoEntity(ctx, "task", {
+            trade: "other",
+            name: `dependency task ${name}`,
+          }),
+        );
+      const ids = (at: number[]) => at.map((index) => rows[index]!.output.id);
+      return {
+        linkKind: "taskDependency" as const,
+        entityIds: rows.map((row) => row.entityId),
+        ids,
+        block: (at: number, blockedBy: number[]) =>
+          updateTask(
+            ctx.db,
+            rows[at]!.output.id,
+            { blockedByIds: ids(blockedBy) },
+            ctx.actor,
+          ),
+        blockedBy: async (at: number) =>
+          (await getTaskByShortcode(ctx.db, rows[at]!.output.id))?.blockedByIds,
+      };
+    },
+    project: async () => {
+      const rows: Awaited<ReturnType<typeof createRepoEntity<"project">>>[] =
+        [];
+      for (const name of ["a", "b", "c"])
+        rows.push(
+          await createRepoEntity(ctx, "project", {
+            name: `dependency project ${name}`,
+          }),
+        );
+      const ids = (at: number[]) => at.map((index) => rows[index]!.output.id);
+      return {
+        linkKind: "projectDependency" as const,
+        entityIds: rows.map((row) => row.entityId),
+        ids,
+        block: (at: number, blockedBy: number[]) =>
+          updateProject(
+            ctx.db,
+            rows[at]!.output.id,
+            { blockedByIds: ids(blockedBy) },
+            ctx.actor,
+          ),
+        blockedBy: async (at: number) =>
+          (await getProjectByID(ctx.db, rows[at]!.entityId)).blockedByIds,
+      };
+    },
+  };
+
+  it.each(["task", "project"] as const)(
+    "refuses a %s dependency cycle or self-link and keeps prior edges",
+    async (kind) => {
+      const graph = await dependencyGraph[kind]();
+      await graph.block(0, [1]);
+      await graph.block(1, [2]);
+
+      await expect(graph.block(2, [0])).rejects.toMatchObject({
+        reason: "DEPENDENCY_CYCLE",
+      });
+      // The refused write replaced nothing, on either end of the cycle.
+      expect(await graph.blockedBy(0)).toEqual(graph.ids([1]));
+      expect(await graph.blockedBy(2)).toEqual([]);
+
+      // The database backstops a self-dependency the repository never writes.
+      const [self] = graph.entityIds;
+      await expect(
+        pgCause(
+          getDb(ctx.db)
+            .insert(entityLink)
+            .values(linkValues(graph.linkKind, self!, self!)),
         ),
-      );
-    await replace(a, [b]);
-    await replace(b, [c]);
-    await expect(replace(c, [a])).rejects.toMatchObject({
-      reason: "DEPENDENCY_CYCLE",
-    });
-    // Replacing a set soft-deletes the dropped link; the pair can return.
-    await replace(a, []);
-    await replace(c, [a]);
-    const live = await getDb(ctx.db)
-      .select({ from: entityLink.fromEntityId, to: entityLink.toEntityId })
-      .from(entityLink)
-      .where(liveLinks("taskDependency"));
-    expect(live).toEqual(
-      expect.arrayContaining([
-        { from: b, to: c },
-        { from: c, to: a },
-      ]),
-    );
-    expect(live).toHaveLength(2);
-  });
+      ).resolves.toMatchObject({ code: "23514" });
+
+      // Replacing a set soft-deletes the dropped link; the pair can return.
+      await graph.block(0, []);
+      await graph.block(2, [0]);
+      expect(await graph.blockedBy(2)).toEqual(graph.ids([0]));
+      expect(await graph.blockedBy(1)).toEqual(graph.ids([2]));
+      expect(await graph.blockedBy(0)).toEqual([]);
+      await expect(
+        getDb(ctx.db)
+          .select({ id: entityLink.id })
+          .from(entityLink)
+          .where(liveLinks(graph.linkKind)),
+      ).resolves.toHaveLength(2);
+    },
+  );
 });
 
 describe("repointLinkEnd", () => {
