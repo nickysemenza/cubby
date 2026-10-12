@@ -35,6 +35,8 @@ mod availability;
 mod conversion;
 mod costing;
 mod display_format;
+#[cfg(feature = "html")]
+mod email;
 mod estimates;
 mod food_calculation;
 mod food_mappings;
@@ -52,6 +54,8 @@ pub use availability::*;
 pub use conversion::*;
 pub use costing::*;
 pub use display_format::*;
+#[cfg(feature = "html")]
+pub use email::*;
 pub use estimates::*;
 pub use food_calculation::*;
 pub use food_mappings::*;

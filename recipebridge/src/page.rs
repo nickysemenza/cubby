@@ -60,17 +60,17 @@ pub struct WCompactPage {
 
 /// Every element matching a static selector; a selector that fails to parse
 /// (a bug here, never page input) matches nothing rather than panicking.
-fn select<'a>(document: &'a Html, css: &str) -> Vec<ElementRef<'a>> {
+pub(crate) fn select<'a>(document: &'a Html, css: &str) -> Vec<ElementRef<'a>> {
     Selector::parse(css)
         .map(|selector| document.select(&selector).collect())
         .unwrap_or_default()
 }
 
-fn collapse(value: &str) -> String {
+pub(crate) fn collapse(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-fn resolve(base: Option<&Url>, raw: &str) -> Option<String> {
+pub(crate) fn resolve(base: Option<&Url>, raw: &str) -> Option<String> {
     let raw = raw.trim();
     if raw.is_empty() || raw.starts_with("javascript:") || raw.starts_with("data:") {
         return None;
@@ -83,7 +83,7 @@ fn resolve(base: Option<&Url>, raw: &str) -> Option<String> {
 }
 
 /// Elements whose text a reader never sees.
-fn is_hidden(element: &ElementRef) -> bool {
+pub(crate) fn is_hidden(element: &ElementRef) -> bool {
     let value = element.value();
     if matches!(
         value.name(),
@@ -100,7 +100,7 @@ fn is_hidden(element: &ElementRef) -> bool {
     })
 }
 
-fn is_block(name: &str) -> bool {
+pub(crate) fn is_block(name: &str) -> bool {
     matches!(
         name,
         "p" | "div"
@@ -169,7 +169,7 @@ fn push_text(element: ElementRef, out: &mut String) {
     }
 }
 
-fn truncate_utf8(value: &mut String, max: usize) {
+pub(crate) fn truncate_utf8(value: &mut String, max: usize) {
     if value.len() <= max {
         return;
     }
@@ -242,7 +242,7 @@ fn literal_navigation(handler: &str) -> Option<&str> {
 }
 
 /// What a reader sees in an element, collapsed to one line.
-fn visible_text(element: ElementRef) -> String {
+pub(crate) fn visible_text(element: ElementRef) -> String {
     let mut out = String::new();
     push_text(element, &mut out);
     collapse(&out)
@@ -250,7 +250,7 @@ fn visible_text(element: ElementRef) -> String {
 
 /// A clickable element's label. A table row reads as its first visible cell
 /// (an order number, say), not every column run together.
-fn link_label(element: ElementRef) -> String {
+pub(crate) fn link_label(element: ElementRef) -> String {
     let label = if element.value().name() == "tr" {
         element
             .children()
@@ -269,7 +269,7 @@ fn link_label(element: ElementRef) -> String {
     }
 }
 
-fn image_source<'a>(element: &'a ElementRef<'a>) -> Option<&'a str> {
+pub(crate) fn image_source<'a>(element: &'a ElementRef<'a>) -> Option<&'a str> {
     let value = element.value();
     value
         .attr("src")
