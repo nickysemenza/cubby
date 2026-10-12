@@ -1195,9 +1195,11 @@ Rules:
           listHidden: true,
           detail: true,
         },
+        // "intentional": a Product's own decision that matches its category
+        // is still a decision, so bulk "Use inherited values" never clears it.
         resolution: {
           reset: { stockTracked: null },
-          redundancy: "eligible",
+          redundancy: "intentional",
         },
         explanation: {
           ruleId: "product.effective-stock-tracking",

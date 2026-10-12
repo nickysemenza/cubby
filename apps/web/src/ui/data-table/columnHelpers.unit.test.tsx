@@ -1,4 +1,5 @@
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
+import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { testShortcode } from "@cubby/schemas/testing";
 import { flexRender, type RowData, useTable } from "@tanstack/react-table";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -712,6 +713,59 @@ describe("createBooleanColumn", () => {
     fireEvent.click(screen.getByText("Tracked"));
     expect(screen.queryByRole("button", { name: /^Clear/i })).toBeNull();
   });
+});
+
+// An inherited value is what the row lives by, so the cell shows it; the
+// editor still edits the stored decision, or choosing the value already
+// inherited is a silent no-op and the row never gets its own decision.
+describe("createBooleanColumn with a field resolution", () => {
+  type ResolvedRow = TrackedRow & {
+    fieldResolutions: Record<string, FieldResolution>;
+  };
+  const inheriting = (value: boolean): ResolvedRow => ({
+    stockTracked: null,
+    fieldResolutions: {
+      stockTracked: {
+        mode: "inherit",
+        storedValue: null,
+        value,
+        fallbackValue: value,
+        source: "Synthetic category",
+        sourceEntity: null,
+        matchesFallback: false,
+        canReset: false,
+      },
+    },
+  });
+
+  it.each([
+    [false, "Not tracked"],
+    [true, "Tracked"],
+  ] as const)(
+    "shows the inherited %s and saves it as an explicit decision",
+    async (value, label) => {
+      const saved: (boolean | null)[] = [];
+      renderColumn<ResolvedRow, string | null>(
+        createBooleanColumn(
+          createCubbyColumnHelper<ResolvedRow>(),
+          "stockTracked",
+          {
+            trueFalseOptions: TRACKED_OPTIONS,
+            undecided: { label: "Undecided" },
+            editable: {
+              onSave: async (next) => {
+                saved.push(next);
+              },
+            },
+          },
+        ),
+        inheriting(value),
+      );
+      fireEvent.click(screen.getByText(label));
+      fireEvent.click(await screen.findByRole("option", { name: label }));
+      await vi.waitFor(() => expect(saved).toEqual([value]));
+    },
+  );
 });
 
 describe("createCurrencyColumn zero handling", () => {

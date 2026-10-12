@@ -592,11 +592,14 @@ export async function resolveRunFinding(
  *
  * Partial-receipt rule: a Purchase can have several product-bearing Expense
  * lines (one per shipment/item), and a member may receive them one at a time.
- * The finding is left open until EVERY live, product-bearing Expense line on
- * the Purchase has at least one live InventoryEntry for its Product — so
- * receiving line 1 of 2 does not silently close out line 2. This is checked
- * fresh on every call rather than cached, so it stays correct regardless of
- * how many partial receives happened before this one.
+ * The finding stays open until every receivable Product on a live line — one
+ * that is stock-tracked or undecided (ADR 0013) — has at least one live
+ * InventoryEntry, so receiving line 1 of 2 does not silently close out line 2.
+ * Untracked Products are never received and never hold it open; when every
+ * product line has become untracked there is nothing left to receive and it
+ * resolves. A Purchase with no product line at all leaves it open rather than
+ * resolving vacuously. This is checked fresh on every call rather than cached,
+ * so it stays correct regardless of how many partial receives happened first.
  */
 export async function resolveArrivedFindingsForPurchase(
   db: Database,
@@ -636,16 +639,17 @@ export async function resolveArrivedFindingsForPurchase(
           notDeleted(expense),
         ),
       );
-    // Only lines the writer asked about need stock: an untracked Product is
-    // never received (ADR 0013). No such line at all: nothing to receive
-    // against, so leave the finding open rather than resolving it vacuously.
+    // No product-bearing line at all: nothing to receive against, so leave
+    // the finding open rather than resolving it vacuously.
+    if (productLines.length === 0) return { resolved: 0 };
+    // Only receivable Products need stock: an untracked one is never
+    // received (ADR 0013), so lines that are all untracked resolve.
     const productIds = [
       ...(await receivableProductIds(
         tx,
         productLines.flatMap(({ productId }) => (productId ? [productId] : [])),
       )),
     ];
-    if (productIds.length === 0) return { resolved: 0 };
     const stocked = await tx
       .select({ productId: inventoryEntry.productId })
       .from(inventoryEntry)

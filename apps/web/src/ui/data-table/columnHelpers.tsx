@@ -32,6 +32,7 @@ import {
   entityPluralLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { fieldResolutionFor } from "~/entity/field-resolution";
 import { multiSelectFilterFn } from "~/entity/filters";
 import {
   fieldSuggestionBasisFromRecord,
@@ -1517,9 +1518,6 @@ export function createBooleanColumn<
      * `—`, but the editor can only ever move away from it.
      */
     undecided?: { label: string };
-    /** The value the row shows when it differs from the stored column, such
-     * as an inherited decision; edits still save the stored column. */
-    value?: (row: T) => boolean | null | undefined;
     className?: string;
     mobile?: MobileColumnMeta;
     /** `null` opts out of a filter control entirely; omit to derive one. */
@@ -1529,7 +1527,15 @@ export function createBooleanColumn<
     };
   },
 ) {
-  const read = options.value ?? ((row: T) => row[accessor]);
+  // A row with a `fieldResolutions` entry (an inherited value) displays the
+  // effective value but edits the stored one, like generic entity fields; a
+  // cell cleared to undecided therefore shows the inherited value again.
+  const stored = (row: T) => row[accessor];
+  const effective = (row: T): boolean | null | undefined => {
+    const resolution = fieldResolutionFor(row, String(accessor));
+    if (!resolution) return stored(row);
+    return typeof resolution.value === "boolean" ? resolution.value : null;
+  };
   const selectOptions = options.trueFalseOptions;
   const filterPlaceholder = options.placeholder ?? "Set value...";
   // The editor's own empty state names the undecided state where there is one,
@@ -1545,7 +1551,7 @@ export function createBooleanColumn<
     ? (row: T, value: string | null) => editable.onSave(decode(value), row)
     : undefined;
   const cellData = selectCellData<T>(
-    (row) => encode(read(row)),
+    (row) => encode(effective(row)),
     selectOptions,
     save,
   );
@@ -1560,7 +1566,7 @@ export function createBooleanColumn<
 
   return createEditableAccessorColumn(
     columnHelper,
-    (row: T) => encode(read(row)),
+    (row: T) => encode(effective(row)),
     {
       id: String(accessor),
       header: options.header,
@@ -1573,7 +1579,7 @@ export function createBooleanColumn<
       renderEditable: editable
         ? (value, row, clipboard) => (
             <EditableCell
-              value={value}
+              value={encode(stored(row))}
               onSave={(nextValue) => editable.onSave(decode(nextValue), row)}
               clipboard={clipboard}
               config={{
@@ -1586,7 +1592,10 @@ export function createBooleanColumn<
                 clearable: options.undecided !== undefined,
               }}
               renderValue={(nextValue) =>
-                renderOptionCell(nextValue, selectOptions)
+                renderOptionCell(
+                  nextValue === encode(stored(row)) ? value : nextValue,
+                  selectOptions,
+                )
               }
             />
           )

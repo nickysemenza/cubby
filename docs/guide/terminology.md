@@ -503,7 +503,7 @@ A Product whose movements net to one or more units owned, with no live inventory
 _Avoid_: lost product, missing inventory, shrinkage
 
 **Stock tracking**:
-Whether a Product belongs on a shelf as Inventory. A Product's own decision wins; when it has none, it inherits the nearest Product Category's. Only a stock-tracked Product asks to be received when its order arrives, and only an undecided or stock-tracked one can be an Unlocated product worth triage.
+Whether a Product belongs on a shelf as Inventory. A Product's own decision wins; when it has none, it inherits the nearest Product Category's. Only an explicit or inherited not-tracked decision keeps an arriving order from asking to be received; tracked and undecided Products, and lines with no Product yet, still ask. The "Not on a shelf" triage holds only undecided Unlocated products; a tracked Product with nothing on a shelf is not in that view, and no saved view lists it.
 _Avoid_: inventoried, shelved, stocked item
 
 **Consumable**:

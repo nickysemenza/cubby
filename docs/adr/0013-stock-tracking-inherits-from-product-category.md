@@ -17,8 +17,9 @@ same receive prompt as a new tool.
 A Product Category carries a stock-tracking default that descendants inherit,
 the same way `feature` and the spending mapping do. A Product's own decision
 wins; with none, the nearest category decision applies; with neither, the
-Product is undecided. An arrived order asks to be received only when one of its
-lines is effectively stock-tracked, and "Not on a shelf" filters on the
+Product is undecided. Only an explicit or inherited not-tracked decision keeps
+an arriving order from asking to be received; tracked and undecided Products,
+and lines with no Product yet, still ask. "Not on a shelf" filters on the
 effective value.
 
 A category default is a member's explicit decision made once for a kind of

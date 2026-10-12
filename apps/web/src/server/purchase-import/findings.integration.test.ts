@@ -5,7 +5,12 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { runFinding, orderMailEvent, user } from "~/server/db/schema";
+import {
+  product as productTable,
+  runFinding,
+  orderMailEvent,
+  user,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   createInventoryFixture,
@@ -31,7 +36,7 @@ import {
   liveExpenseCents,
   purchasesForOrder,
 } from "./order-import.fixtures";
-import { importVendorOrder } from "./writer";
+import { arrivalAsksToReceive, importVendorOrder } from "./writer";
 
 describe("resolveArrivedFindingsForPurchase", () => {
   const ctx = withTestDb();
@@ -281,6 +286,67 @@ describe("resolveArrivedFindingsForPurchase", () => {
     ).resolves.toEqual({ resolved: 1 });
     expect((await readFinding(findingId)).status).toBe("applied");
   });
+  // A member deciding the goods are not tracked after the prompt was filed
+  // must not strand it open forever; a Purchase with no Product line at all
+  // still never resolves vacuously.
+  it("resolves when every product line has become untracked, but not when there is no product line", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Findings Decided Buyer",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendorId = await findOrCreateVendor(
+      ctx.db,
+      "Findings Decided Vendor",
+    );
+    const [decided, empty] = await Promise.all(
+      ["Later decided order", "Order with no product line"].map(
+        (displayLabel) =>
+          insertWithShortcode(ctx.db, "purchase", {
+            vendorId,
+            date: "2026-01-01",
+            displayLabel,
+          }),
+      ),
+    );
+    const snack = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Arrived later untracked snack" }),
+      ctx.actor,
+    );
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Snack line",
+      cost: 10,
+      date: "2026-01-01",
+      costType: "materials",
+      productId: snack.entityId,
+      purchaseId: decided!.id,
+    });
+    const decidedFinding = await fileArrivedFinding(
+      party.id,
+      decided!.id,
+      "decided-finding",
+    );
+    const emptyFinding = await fileArrivedFinding(
+      party.id,
+      empty!.id,
+      "empty-finding",
+    );
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ stockTracked: false })
+      .where(eq(productTable.id, snack.entityId));
+
+    for (const [purchaseId, resolved] of [
+      [decided!.id, 1],
+      [empty!.id, 0],
+    ] as const)
+      await expect(
+        resolveArrivedFindingsForPurchase(ctx.db, { purchaseId }, ctx.actor),
+      ).resolves.toEqual({ resolved });
+    expect((await readFinding(decidedFinding)).status).toBe("applied");
+    expect((await readFinding(emptyFinding)).status).toBe("open");
+  });
 });
 
 /**
@@ -421,6 +487,45 @@ describe("arrived finding follows stock tracking", () => {
         { title: "Synthetic mystery item", unresolved: true },
       ]),
     ).toBe(true);
+  });
+
+  // A reviewed aggregate replacement defers creating a promoted line's
+  // Product, so the line has no Product yet; applying the replacement later
+  // never re-evaluates the prompt, so the pending promotion must ask now.
+  it("asks to receive a pending promotion that has no Product yet", async () => {
+    const { flour } = await world();
+    const vendorId = await findOrCreateVendor(
+      ctx.db,
+      "Pending promotion vendor",
+    );
+    const pending = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId,
+      date: "2026-09-01",
+      displayLabel: "Aggregate awaiting replacement",
+    });
+    const decision = {
+      productId: null,
+      promote: false,
+      variantDoubt: false,
+      probability: 1,
+      unresolvedReason: null,
+      lineKind: "principal" as const,
+      kitKind: "single" as const,
+      reversalKind: null,
+    };
+    const asks = (promote: boolean) =>
+      getDb(ctx.db).transaction((tx) =>
+        arrivalAsksToReceive(tx, {
+          purchaseId: pending.id,
+          identityDecisions: [
+            { ...decision, productId: flour.id },
+            { ...decision, promote },
+          ],
+          productLines: [],
+        }),
+      );
+    expect(await asks(false)).toBe(false);
+    expect(await asks(true)).toBe(true);
   });
 
   it("asks to receive a Product tracked by its own decision inside an untracked category", async () => {

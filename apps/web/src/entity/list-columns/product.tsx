@@ -24,7 +24,6 @@ import { ProductGtin } from "~/entity/components/product-gtin";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { entityListHiddenColumns } from "~/entity/entity-display";
 import { relationshipFieldProvenance } from "~/entity/field-provenance";
-import { fieldResolutionFor } from "~/entity/field-resolution";
 import { useCreateInventoryMutation } from "~/features/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "~/features/inventory/inventory-entries-quick-edit-dialog";
 import {
@@ -287,8 +286,8 @@ export const productListOverride = defineListOverride<
           // Editable, and tri-state on purpose: `null` is the undecided
           // backlog the "Not on a shelf" saved view filters on, so this cell
           // is where that view gets worked. It shows the effective decision
-          // (the product's own, else its category's — ADR 0013), the value
-          // that view filters; an edit sets the product's own.
+          // (the product's own, else its category's — ADR 0013) and edits the
+          // product's own.
           add(
             createBooleanColumn(columnHelper, "stockTracked", {
               header: "Stock tracking",
@@ -296,15 +295,6 @@ export const productListOverride = defineListOverride<
               placeholder: "Filter stock tracking...",
               trueFalseOptions: STOCK_TRACKED_OPTIONS,
               undecided: { label: "Undecided" },
-              value: (product) => {
-                const effective = fieldResolutionFor(
-                  product,
-                  "stockTracked",
-                )?.value;
-                return typeof effective === "boolean"
-                  ? effective
-                  : product.stockTracked;
-              },
               // The header control stays the manifest's presence filter
               // (undecided vs reviewed), which backs the worklist view.
               filterConfig: null,
