@@ -32,6 +32,7 @@ import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.
 import { formatCalendarDay } from "~/lib/date-format";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCount, formatCurrency } from "~/lib/utils";
+import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
@@ -697,6 +698,21 @@ function timelineParams<E extends TimelineEntity>(
   } as EntityTimelineParams<E>;
 }
 
+function isEmptyTimeline(
+  data: EntityTimelineOut | undefined,
+  success: boolean,
+  placeholder: boolean,
+) {
+  return (
+    success &&
+    !placeholder &&
+    !!data &&
+    data.meta.totalCount === 0 &&
+    data.stats.length === 0 &&
+    data.notes.length === 0
+  );
+}
+
 export function EntityTimeline<E extends TimelineEntity>({
   entity,
   filters,
@@ -733,6 +749,9 @@ export function EntityTimeline<E extends TimelineEntity>({
     placeholderData: keepPreviousData,
   });
   const { data, isError, isLoading } = query;
+  useSectionEmpty(
+    isEmptyTimeline(data, query.isSuccess, query.isPlaceholderData),
+  );
   const inBand = controlsPlacement === "band";
   const band = (hasRows: boolean, meta?: EntityTimelineMeta) =>
     inBand ? (

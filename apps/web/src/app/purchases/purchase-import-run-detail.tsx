@@ -42,7 +42,7 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/utils";
-import { useSectionVisible } from "~/ui/data-table/detail-page";
+import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -1014,7 +1014,7 @@ function ImportRunSlot({
   const runQuery = useSyncedRun(record, primary);
   const run = runQuery.data;
   const shown = run ? visible(run) : primary;
-  useSectionVisible(shown);
+  useSectionEmpty(runQuery.isSuccess && !shown);
   if (!run) {
     if (!primary) return null;
     if (runQuery.isError)
@@ -1023,7 +1023,7 @@ function ImportRunSlot({
       );
     return <StatusText>Loading import run…</StatusText>;
   }
-  return shown ? children(run) : null;
+  return shown ? children(run) : <StatusText>No items.</StatusText>;
 }
 
 /** Run detail slot: control actions, lineage and restart inputs. */

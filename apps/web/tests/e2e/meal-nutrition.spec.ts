@@ -152,9 +152,7 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await refreshedProductRow
     .getByRole("button", { name: "Remove food" })
     .click();
-  await expect(
-    page.getByText(`${name} snack`, { exact: true }),
-  ).not.toBeVisible();
+  await expect(refreshedProductRow).toHaveCount(0);
   const refreshedIngredientRow = page
     .getByRole("region", { name: `${name} member nutrition` })
     .getByRole("listitem")

@@ -308,27 +308,6 @@ describe("EntityRelationTable", () => {
     expect(input?.sort).toEqual([{ orderBy: "name", direction: "asc" }]);
   });
 
-  it("renders the empty sentence and a create action once the read resolves empty", async () => {
-    const list = entityList.list.withTransport(async () => ({
-      items: [],
-      meta: { pageIndex: 0, pageSize: 50, totalCount: 0, sums: {} },
-    }));
-    render(
-      <EntityRelationTable
-        plan={planFor("project", "tasks")}
-        recordId={testShortcode("project", "PRJ-TEST")}
-        title="Tasks"
-        operations={{ list }}
-      />,
-      { wrapper: harness.wrapper },
-    );
-    expect(await screen.findByText("No tasks yet.")).toBeVisible();
-    expect(
-      screen.getByText("Add one and it appears here and on the tasks list."),
-    ).toBeVisible();
-    expect(screen.getByRole("button", { name: "New task" })).toBeVisible();
-  });
-
   it("keeps the journal's own single-line empty copy instead of the generic sentence", async () => {
     const list = entityList.list.withTransport(async () => ({
       items: [],

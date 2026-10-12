@@ -41,6 +41,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
+import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
@@ -243,6 +244,9 @@ function useEntityRelationsModel({
         ...pages.values(),
       ]),
     [initial.data, pages],
+  );
+  useSectionEmpty(
+    initial.isSuccess && !initial.isError && data.edges.length === 0,
   );
   const selected =
     data.nodes.find((node) => graphRefKey(node) === selectedKey) ??

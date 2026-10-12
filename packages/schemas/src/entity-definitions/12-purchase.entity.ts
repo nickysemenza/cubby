@@ -91,7 +91,6 @@ export default defineEntity({
             "costType",
             "trade",
           ],
-          collapseWhenEmpty: true,
         },
         { kind: "slot", id: "project-allocation", title: "Project allocation" },
         { kind: "slot", id: "receiving", title: "Receive into Inventory" },

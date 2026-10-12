@@ -9,3 +9,17 @@ wait "id=search.result.${PRODUCT_ID}" 30000
 click "id=search.result.${PRODUCT_ID}"
 wait "role=Button id=detail.product.edit" 30000
 wait text "Synthetic Atlas Lantern" 30000
+
+click "id=detail.contents"
+wait text "Contents" 30000
+scroll down 0.6 --until "id=detail.contents.sources"
+click "id=detail.contents.sources"
+wait text "No sources" 30000
+wait text "Raw record" 30000
+
+# Repeated jumps to the same destination must be delivered after the sheet closes.
+click "id=detail.contents"
+wait text "Contents" 30000
+scroll down 0.6 --until "id=detail.contents.sources"
+click "id=detail.contents.sources"
+wait text "No sources" 30000

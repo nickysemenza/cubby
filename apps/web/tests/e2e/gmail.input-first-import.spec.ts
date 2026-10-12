@@ -544,9 +544,10 @@ for (const statementFirst of [true, false]) {
       .and(page.locator(`a[href="${originalMailUrl}"]`));
     await expect(originalMail).toBeVisible();
     await expect(originalMail).toHaveAttribute("href", originalMailUrl);
-    await page.getByRole("tab", { name: "Work", exact: true }).click();
     await expect(
-      page.getByRole("link", { name: names.productName, exact: true }).first(),
+      page
+        .locator("#products")
+        .getByRole("link", { name: names.productName, exact: true }),
     ).toBeVisible();
     const purchases = await database.query.purchase.findMany({
       where: and(

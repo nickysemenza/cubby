@@ -48,49 +48,55 @@ struct ConnectedSectionView: View {
 
     var body: some View {
         Group {
-            if !model.loaded || model.totalCount > 0 || model.error != nil {
-                Section {
-                    if let error = model.error {
-                        InlineLoadFailure(message: error) { await model.refresh() }
-                    } else if !model.loaded {
-                        LoadingIndicator(label: "Loading \(model.spec.title)")
-                    } else {
-                        ForEach(model.items, id: \.target.entityId) { item in
-                            VStack(alignment: .leading, spacing: 6) {
-                                NavigationLink(
-                                    value: Route.entityDetail(
-                                        item.target.entityKind, id: item.target.entityId)
-                                ) {
-                                    RecordListRow(
-                                        title: item.target.label,
-                                        symbol: EntityCatalog[item.target.entityKind].sfSymbol
-                                    ) {
-                                        Text(EntityCatalog[item.target.entityKind].singular)
-                                    } rail: {
-                                        EmptyView()
-                                    } supplement: {
-                                        EmptyView()
-                                    }
-                                }
-                                RecordPathView(paths: item.paths)
-                            }
-                            .padding(.vertical, 3)
-                        }
-                        if model.hasMore {
-                            Button(model.expanded ? "Load more" : "Open all · \(model.totalCount) records") {
-                                Task { await model.loadNextPage() }
-                            }
-                        }
+            Section {
+                if let error = model.error {
+                    InlineLoadFailure(message: error) { await model.refresh() }
+                } else if !model.loaded {
+                    LoadingIndicator(label: "Loading \(model.spec.title)")
+                } else {
+                    if model.items.isEmpty {
+                        Text("No connected records").foregroundStyle(.secondary)
+                            .preference(key: DetailSectionEmpty.self, value: true)
                     }
-                } header: {
-                    HStack {
-                        Text(model.spec.title)
-                        if let range = model.hopRange {
-                            Text(recordHopLabel(min: range.min, max: range.max))
-                                .font(.caption.monospaced()).foregroundStyle(.secondary)
+                    ForEach(model.items, id: \.target.entityId) { item in
+                        VStack(alignment: .leading, spacing: 6) {
+                            NavigationLink(
+                                value: Route.entityDetail(
+                                    item.target.entityKind, id: item.target.entityId)
+                            ) {
+                                RecordListRow(
+                                    title: item.target.label,
+                                    symbol: EntityCatalog[item.target.entityKind].sfSymbol
+                                ) {
+                                    Text(EntityCatalog[item.target.entityKind].singular)
+                                } rail: {
+                                    EmptyView()
+                                } supplement: {
+                                    EmptyView()
+                                }
+                            }
+                            RecordPathView(paths: item.paths)
+                        }
+                        .padding(.vertical, 3)
+                    }
+                    if model.hasMore {
+                        Button(model.expanded ? "Load more" : "Open all · \(model.totalCount) records") {
+                            Task { await model.loadNextPage() }
                         }
                     }
                 }
+            } header: {
+                HStack {
+                    Text(model.spec.title).foregroundStyle(
+                        model.loaded && model.items.isEmpty ? .secondary : .primary)
+                    if model.loaded && model.items.isEmpty {
+                        Text("Empty").font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let range = model.hopRange {
+                        Text(recordHopLabel(min: range.min, max: range.max))
+                            .font(.caption.monospaced()).foregroundStyle(.secondary)
+                    }
+                }.detailContentsHeader(empty: model.loaded && model.items.isEmpty && model.error == nil)
             }
         }
         .task { await model.loadInitial() }

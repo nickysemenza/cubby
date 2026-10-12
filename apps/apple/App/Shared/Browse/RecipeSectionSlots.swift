@@ -56,7 +56,7 @@ struct IngredientNutritionProductSlot: View {
 
 /// `cookbook.toc`: which ingredients the book's recipes use most, from `recipe.getIngredientUsage`
 /// scoped to this cookbook (the share is the server's rounded percent), and the stored extraction's
-/// report, which the server words (`cookbook.extraction-report`) and is read only once opened.
+/// report, which the server words (`cookbook.extraction-report`) and stays open.
 /// A book in the retired format has no readable report, as on web.
 struct CookbookContentsSlot: View {
     let cookbookID: String
@@ -64,7 +64,6 @@ struct CookbookContentsSlot: View {
     @Environment(AppModel.self) private var appModel
     @State private var usage: IngredientUsage?
     @State private var error: String?
-    @State private var reportOpen = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
@@ -76,12 +75,16 @@ struct CookbookContentsSlot: View {
                 LoadingIndicator(label: "Loading contents")
             }
             if hasReadableExtraction {
-                DisclosureGroup("Extraction report", isExpanded: $reportOpen) {
-                    if reportOpen {
-                        ReportDetailSlot(slot: .cookbook_extractionReport, id: cookbookID)
-                    }
+                OpenDetailGroup(title: "Extraction report") {
+                    ReportDetailSlot(slot: .cookbook_extractionReport, id: cookbookID)
+                        .transformPreference(DetailSectionEmpty.self) { $0 = false }
                 }
                 .accessibilityIdentifier("cookbook.extractionReport")
+            } else {
+                OpenDetailGroup(title: "Extraction report") {
+                    Text("Empty").font(.caption).foregroundStyle(.secondary)
+                    Text("No readable extraction report").foregroundStyle(.secondary)
+                }
             }
         }
         .task(id: cookbookID) { await load() }
@@ -162,6 +165,7 @@ struct CookbookImportProgressSlot: View {
                 DisclosureGroup("Add or reprocess recipes", isExpanded: $open) {
                     if open {
                         ReportDetailSlot(slot: .cookbook_importProgress, id: row.id)
+                            .transformPreference(DetailSectionEmpty.self) { $0 = false }
                     }
                 }
                 .accessibilityIdentifier("cookbook.importProgress")

@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { roundTo } from "~/lib/utils";
 import { StaticPicker } from "~/ui/combobox/static-picker";
+import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -68,6 +69,7 @@ export function RecipeScaleControl({
   factor,
   onFactorChange,
 }: RecipeScaleControlProps) {
+  const hydrated = useHydrated();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<AnchorMode>("multiplier");
   const [draft, setDraft] = useState("");
@@ -137,6 +139,7 @@ export function RecipeScaleControl({
       {/* Quick ×-chips */}
       <ToggleGroup
         aria-label="Scale recipe"
+        disabled={!hydrated}
         variant="outline"
         size="sm"
         value={[activeChip != null ? String(activeChip) : "custom"]}
@@ -161,7 +164,12 @@ export function RecipeScaleControl({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           render={
-            <Button variant="outline" size="sm" className="max-sm:min-h-11">
+            <Button
+              variant="outline"
+              size="sm"
+              className="max-sm:min-h-11"
+              disabled={!hydrated}
+            >
               <ArrowsOutIcon className="mr-1 size-3" />
               {scaled ? `${roundTo(factor, 2)}×` : "Custom"}
             </Button>

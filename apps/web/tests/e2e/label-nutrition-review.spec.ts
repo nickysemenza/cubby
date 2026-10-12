@@ -92,10 +92,13 @@ test("detected label nutrition stays editable and requires Save before replacing
   expect(saved?.inferenceEvidence).toBe(
     "Not a significant source of total fat.",
   );
-  await page.getByRole("button", { name: "More details", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Nutrition", exact: true }).click();
+  await page
+    .getByRole("heading", { name: "Nutrition", exact: true })
+    .scrollIntoViewIfNeeded();
   await expect(page.getByText(/inferred zero/).first()).toBeVisible();
-  await page.getByRole("tab", { name: "Overview", exact: true }).click();
+  await page
+    .getByRole("heading", { level: 2, name: "Overview", exact: true })
+    .scrollIntoViewIfNeeded();
   await page.reload();
   await expect(
     page

@@ -152,7 +152,6 @@ describe("relation coverage across the catalog", () => {
       );
     expect(plantings).toMatchObject({
       derived: true,
-      collapseWhenEmpty: true,
       filter: { descriptor: "taskId" },
     });
   });

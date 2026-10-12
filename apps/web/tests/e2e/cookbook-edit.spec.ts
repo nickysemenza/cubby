@@ -23,11 +23,15 @@ test("a cookbook is retitled from its page and a recipe is re-pointed to it from
   await expect(
     actions.getByRole("button", { name: "Reprocess", exact: true }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Relations", exact: true }).click();
+  await page
+    .getByRole("heading", { level: 2, name: "Relations", exact: true })
+    .scrollIntoViewIfNeeded();
   await expect(
     actions.getByRole("button", { name: "Reprocess", exact: true }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Overview", exact: true }).click();
+  await page
+    .getByRole("heading", { level: 2, name: "Overview", exact: true })
+    .scrollIntoViewIfNeeded();
   await page.getByRole("button", { name: "Edit Cookbook" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit cookbook" });
   await dialog.getByLabel("Title").fill(retitled);

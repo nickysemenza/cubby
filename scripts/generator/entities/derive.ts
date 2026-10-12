@@ -513,7 +513,6 @@ export const deriveRelationSections = (
         id,
         title: relation.label,
         placement: "primary",
-        collapsed: false,
         overview: detailSectionInOverview(detail.overviewSections, id),
         relation: relation.key,
         filter,
@@ -526,8 +525,6 @@ export const deriveRelationSections = (
         sort: null,
         limit: null,
         empty: relation.empty ?? null,
-        hideWhenEmpty: false,
-        collapseWhenEmpty: true,
         derived: true,
       });
     }

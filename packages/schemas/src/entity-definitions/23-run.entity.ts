@@ -148,7 +148,6 @@ export default defineEntity({
           workspace: "evidence",
           title: "Runtime",
           placement: "supporting",
-          collapsed: true,
           fields: [
             "coordinatorModel",
             "skillRevision",

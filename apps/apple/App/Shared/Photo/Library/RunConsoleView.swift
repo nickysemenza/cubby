@@ -78,9 +78,15 @@ struct RunConsoleView: View {
                     if let view = DetailSlotRegistry.view(slot: section.id, row: row) {
                         // A full-width slot draws its own sections.
                         if section.placement == .full {
+                            Section {
+                            } header: {
+                                Text(section.title ?? section.id)
+                                    .detailContentsHeader().detailContentsAnchor(section.id)
+                            }
                             view
                         } else {
-                            Section(section.title ?? "") { view }
+                            ContinuousDetailSection(title: section.title ?? "") { view }.detailContentsAnchor(
+                                section.id)
                         }
                     }
                 }
@@ -92,6 +98,12 @@ struct RunConsoleView: View {
                 LoadingIndicator(label: "Loading run")
             }
         }
+        .modifier(
+            DetailContentsNavigation(
+                entries: sections.map {
+                    .init(id: $0.id, title: $0.title ?? $0.id, group: "Run")
+                })
+        )
         .fieldGuideDetailDensity()
         .fieldGuideScreen()
         .accessibilityIdentifier("run.console")

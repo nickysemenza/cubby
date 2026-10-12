@@ -128,9 +128,12 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
 
   await gotoAuthenticatedPage(page, `/purchases/${purchase.id}#work`);
   const products = page.locator("#products");
-  await expect(products.getByRole("heading", { level: 2 })).toHaveText(
-    /Products\s*5/,
-  );
+  await expect(
+    products.getByRole("heading", { level: 3, name: "Products", exact: true }),
+  ).toBeVisible();
+  await expect(
+    recordRows(products).filter({ has: page.locator('a[href^="/products/"]') }),
+  ).toHaveCount(5);
   const mixedRow = recordRows(products).filter({ hasText: `${name} mixed` });
   for (const role of [
     "Acquired",
@@ -182,11 +185,19 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
   );
   await page.getByRole("link", { name: `${name} mixed`, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/products/${mixed.id}`));
-  await page.getByRole("tab", { name: "Work", exact: true }).click();
   const purchases = page.locator("#purchases");
-  await expect(purchases.getByRole("heading", { level: 2 })).toHaveText(
-    /Purchases\s*1/,
-  );
+  await expect(
+    purchases.getByRole("heading", {
+      level: 3,
+      name: "Purchases",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    recordRows(purchases).filter({
+      has: page.locator('a[href^="/purchases/"]'),
+    }),
+  ).toHaveCount(1);
   for (const role of [
     "Acquired",
     "Exited",
@@ -307,8 +318,8 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page.locator("#nutrition")).toHaveCount(0);
-    await expect(page.locator("#runs")).toHaveCount(0);
+    await expect(page.locator("#nutrition")).toBeVisible();
+    await expect(page.locator("#runs")).toBeVisible();
     if (state === "exited") {
       await expect(
         ownership.getByText("Recorded ownership ended on 2026-01-06.", {
@@ -348,14 +359,11 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
       ).toHaveCount(0);
     }
     await page
-      .getByRole("button", { name: "More details", exact: true })
-      .click();
-    await page
-      .getByRole("menuitem", {
+      .getByRole("heading", {
         name: feature === "food" ? "Nutrition" : "Unit mappings",
         exact: true,
       })
-      .click();
+      .scrollIntoViewIfNeeded();
     if (feature === "food") {
       await expect(
         page.getByText(
@@ -376,13 +384,12 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
           }),
         ).toBeVisible();
     }
-    await page.getByRole("tab", { name: "Overview", exact: true }).click();
     await page
-      .getByRole("button", { name: "More details", exact: true })
-      .click();
+      .getByRole("heading", { level: 2, name: "Overview", exact: true })
+      .scrollIntoViewIfNeeded();
     await page
-      .getByRole("menuitem", { name: "Enrichment history", exact: true })
-      .click();
+      .getByRole("heading", { name: "Enrichment history", exact: true })
+      .scrollIntoViewIfNeeded();
     const { db, actor } = await createEvidenceHarnessContext(page);
     const report = await buildEntityReport(
       db,
@@ -415,11 +422,10 @@ test("Similar products shows the first twelve tag matches and expands the rest",
     seedProductPrerequisite(page, candidate),
   );
   await gotoAuthenticatedPage(page, `/products/${source.id}`);
-  await expect(page.locator("#fits-with")).toHaveCount(0);
-  await page.getByRole("button", { name: "More details", exact: true }).click();
+  await expect(page.locator("#fits-with")).toBeVisible();
   await page
-    .getByRole("menuitem", { name: "Similar products", exact: true })
-    .click();
+    .getByRole("heading", { name: "Similar products", exact: true })
+    .scrollIntoViewIfNeeded();
   const similar = page.locator("#fits-with");
   const links = similar.getByRole("link", {
     name: new RegExp(`^${escapeRegExp(name)} candidate`),

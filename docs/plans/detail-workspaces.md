@@ -33,14 +33,7 @@ transcript, logs and AI usage. Native Run overview, actions, capture and all
 other entity details remain intact. Do not delete native detail/report renderers
 or weaken their coverage on behalf of this experiment.
 
-The shared composition uses a compact identity and a small set of useful record
-views. Overview leads with condition/outcome and relevant facts. Work exposes
-connected records and declared commands. Evidence holds logs, provenance and
-technical metadata. A section or slot's optional `workspace` declaration owns
-its grouping; relations default to Work and timelines to Evidence. Availability
-follows declarations and loaded content. Wide surfaces use a compact left index;
-phone surfaces use a horizontal view strip. Switching grouped views preserves
-mounted draft state. Reuse PR #1886's ledger for stage and log rows.
+Full record composition is now continuous: every section and body stays visible, including empty sections. Web groups declared sections into Overview, Work and Evidence, followed by Relations and Activity; a wide record gets a sticky expanded outline and narrow widths a compact Jump to menu. Empty sections use secondary headings and explicit Empty cues; actions retain normal contrast. Fragment links and browser history scroll/focus the same mounted sections, preserving drafts. Scrolling highlights the current entry without changing history. Apple retains native details, with Contents in an iPhone sheet, iPad popover and toggleable Mac outline; the native outline follows native reading order. Pagination and show-more remain. Section navigation responds immediately without entrance animation. The hosted Run evidence pilot remains an isolated Evidence-only surface.
 
 The native session bootstrap is POST `/api/native-workspace/session`. It verifies
 the signed bearer independently of ambient browser cookies and returns the
@@ -51,7 +44,9 @@ discard the store and restoration state. Credentials never enter JavaScript.
 
 Run entry routes retain `nativeWorkspace=run-evidence` through canonical redirects and omit
 web app navigation chrome. The hosted surface renders only Evidence, without
-Overview/Work navigation or record hero commands. The flag has no effect on other
+Overview/Work navigation or record hero commands. Unsupported hosted fragments
+are cleared without removing the pilot query flag; this normalization is confined
+to the hosted surface. The flag has no effect on other
 entities. Native owns cross-record links, imperative record
 navigation and its Back/selection history. Web owns views, hashes, drafts and
 inline commands. The version-1 main-frame bridge validates the exact configured

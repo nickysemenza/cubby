@@ -124,6 +124,11 @@ struct ReportBlocksView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+            if report.blocks.isEmpty {
+                Text("Empty").font(.caption).foregroundStyle(.secondary)
+                Text("No items").foregroundStyle(.secondary)
+                    .preference(key: DetailSectionEmpty.self, value: true)
+            }
             ForEach(Array(report.blocks.enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .stats(let title, let figures): ReportStatsView(title: title, figures: figures)
@@ -261,12 +266,15 @@ private struct ReportTableView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            if let title = table.title { Eyebrow(title) }
-            if table.rows.isEmpty {
-                if let empty = table.empty {
-                    Text(empty).font(.footnote).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            if let title = table.title {
+                HStack {
+                    Eyebrow(title)
+                    if table.rows.isEmpty { Text("Empty").font(.caption).foregroundStyle(.secondary) }
                 }
+            }
+            if table.rows.isEmpty {
+                Text(table.empty ?? "No items").font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 // The server's column headings, in the same label/value layout as the rows.
                 if let first = table.columns.first {

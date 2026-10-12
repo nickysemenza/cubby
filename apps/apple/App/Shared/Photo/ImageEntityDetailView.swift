@@ -5,14 +5,12 @@ import SwiftUI
 
 /// One image: the photo, its owning records, and its analysis diagnostics.
 struct ImageEntityDetailView: View {
-    enum Tab: String, CaseIterable { case photo = "Photo", diagnostics = "Diagnostics" }
 
     let id: ImageCode
     @Environment(AppModel.self) private var appModel
     @Environment(\.developerOverlays) private var developerOverlays
     @State private var detail: ImageWithEntity?
     @State private var error: String?
-    @State private var tab: Tab = .photo
     @State private var diagnostics = ImageDiagnosticsCompareModel()
     @State private var processing = ImageProcessingHistoryModel()
     @State private var jobs = ImageJobHistoryModel()
@@ -22,43 +20,62 @@ struct ImageEntityDetailView: View {
     var body: some View {
         List {
             if let detail {
-                Picker("View", selection: $tab) {
-                    ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .listRowSeparator(.hidden)
-                switch tab {
-                case .photo:
-                    PhotoTab(
-                        detail: detail, appModel: appModel, onChanged: { Task { await load() } },
-                        preferredAnalysis: processing.preferred,
-                        history: processing.entries,
-                        totalAnalyses: processing.total, jobs: jobs.runs, totalJobs: jobs.total,
-                        showingAllAnalyses: $showingAllAnalyses, showingAllJobs: $showingAllJobs)
-                    if developerOverlays {
-                        Section("Developer overlays") {
-                            DevOverlayText(ImageDiagnostics.compareCaption(diagnostics))
-                        }
+                PhotoTab(
+                    detail: detail, appModel: appModel, onChanged: { Task { await load() } },
+                    preferredAnalysis: processing.preferred,
+                    history: processing.entries,
+                    totalAnalyses: processing.total, jobs: jobs.runs, totalJobs: jobs.total,
+                    showingAllAnalyses: $showingAllAnalyses, showingAllJobs: $showingAllJobs
+                )
+                if developerOverlays {
+                    Section("Developer overlays") {
+                        DevOverlayText(ImageDiagnostics.compareCaption(diagnostics))
                     }
-                case .diagnostics:
-                    if let url = detail.imageURL {
-                        Section("Image being compared") {
-                            DiagnosticPhotoPreview(
-                                photo: .init(
-                                    id: id.rawValue, filename: detail.filename, source: .remote(url)),
-                                caption:
-                                    "Local Vision comparison of Cubby's display rendition. This is separate from cloud and companion image processing."
-                            )
-                        }
-                    }
-                    ImageDiagnosticsCompareView(model: diagnostics)
                 }
+                if let url = detail.imageURL {
+                    Section("Image being compared") {
+                        DiagnosticPhotoPreview(
+                            photo: .init(
+                                id: id.rawValue, filename: detail.filename, source: .remote(url)),
+                            caption:
+                                "Local Vision comparison of Cubby's display rendition. This is separate from cloud and companion image processing."
+                        )
+                    }
+                }
+                Text("Diagnostics").font(.headline).accessibilityAddTraits(.isHeader)
+                    .detailContentsHeader().detailContentsAnchor("diagnostics")
+                Section {
+                    if diagnostics.loading {
+                        Button("Cancel diagnostics") { diagnostics.cancel() }
+                    } else if diagnostics.server == nil, diagnostics.device == nil {
+                        Text("Run diagnostics to compare local Vision results with the stored analysis.")
+                            .foregroundStyle(.secondary)
+                        Button("Run diagnostics", systemImage: "viewfinder") {
+                            diagnostics.run(id: id, detail: detail, client: appModel.client)
+                        }
+                        .accessibilityIdentifier("image.diagnostics.run")
+                    }
+                }
+                ImageDiagnosticsCompareView(model: diagnostics)
             } else if let error {
                 LoadFailureView(title: "Couldn't load image", message: error) { await load() }
             } else {
                 LoadingIndicator(label: "Loading image")
             }
         }
+        .modifier(
+            DetailContentsNavigation(entries: [
+                .init(id: "photo", title: "Preferred representation", group: "Image"),
+                .init(id: "compare-representations", title: "Compare representations", group: "Image"),
+                .init(id: "preferred-description", title: "Preferred description", group: "Image"),
+                .init(id: "ai-history", title: "AI history", group: "Image"),
+                .init(id: "processing-jobs", title: "Processing jobs", group: "Image"),
+                .init(id: "provenance", title: "Provenance", group: "Image"),
+                .init(id: "in-libraries", title: "In libraries", group: "Image"),
+                .init(id: "used-in", title: "Used in", group: "Image"),
+                .init(id: "diagnostics", title: "Diagnostics", group: "Image"),
+            ])
+        )
         .fieldGuideDetailDensity()
         .navigationTitle(detail?.filename ?? "Image")
         #if os(iOS)
@@ -104,10 +121,6 @@ struct ImageEntityDetailView: View {
                     }
             }
         }
-        .onChange(of: tab) { _, newValue in
-            guard newValue == .diagnostics, let detail else { return }
-            diagnostics.run(id: id, detail: detail, client: appModel.client)
-        }
         .onDisappear { diagnostics.cancel() }
     }
 
@@ -141,18 +154,21 @@ private struct PhotoTab: View {
     @Binding var showingAllJobs: Bool
 
     var body: some View {
-        if let url = detail.imageURL {
-            Section("Preferred representation") {
+        ContinuousDetailSection(title: "Preferred representation") {
+            if let url = detail.imageURL {
                 ZoomablePhoto(
                     url: url, id: detail.id.rawValue, filename: detail.filename
                 )
                 LabeledContent(
                     "Showing",
                     value: detail.representations?.preferredKind.rawValue.capitalized ?? "Original")
+            } else {
+                Text("No image representation").foregroundStyle(.secondary)
+                    .preference(key: DetailSectionEmpty.self, value: true)
             }
-        }
-        if let original = detail.originalImageURL, let transparent = detail.transparentImageURL {
-            Section("Compare representations") {
+        }.detailContentsAnchor("photo")
+        ContinuousDetailSection(title: "Compare representations") {
+            if let original = detail.originalImageURL, let transparent = detail.transparentImageURL {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 12) {
                         representation(title: "Original", url: original)
@@ -163,65 +179,76 @@ private struct PhotoTab: View {
                         representation(title: "Cutout", url: transparent)
                     }
                 }
+            } else {
+                Text("No alternative representation").foregroundStyle(.secondary)
+                    .preference(key: DetailSectionEmpty.self, value: true)
             }
-        }
+        }.detailContentsAnchor("compare-representations")
         LabeledContent("Image", value: detail.id.rawValue)
-        Section("Preferred description") {
+        ContinuousDetailSection(title: "Preferred description") {
             if let analysis = preferredAnalysis {
                 Text(analysis.result.description)
                 LabeledContent("Provider", value: "\(analysis.provider) · \(analysis.model)")
                     .font(.caption)
             } else {
                 Text("No AI description yet").foregroundStyle(.secondary)
+                    .preference(key: DetailSectionEmpty.self, value: true)
             }
-        }
-        if !history.isEmpty {
-            Section("AI history") {
-                ForEach(Array(history.prefix(10).enumerated()), id: \.offset) { _, entry in
-                    ImageAnalysisHistoryRow(entry: entry)
-                }
-                if totalAnalyses > 10 {
-                    Button("View all \(totalAnalyses)") { showingAllAnalyses = true }
+        }.detailContentsAnchor("preferred-description")
+        ContinuousDetailSection(title: "AI history") {
+            if history.isEmpty {
+                Text("No AI history").foregroundStyle(.secondary)
+                    .preference(key: DetailSectionEmpty.self, value: true)
+            }
+            ForEach(Array(history.prefix(10).enumerated()), id: \.offset) { _, entry in
+                ImageAnalysisHistoryRow(entry: entry)
+            }
+            if totalAnalyses > 10 {
+                Button("View all \(totalAnalyses)") { showingAllAnalyses = true }
+            }
+        }.detailContentsAnchor("ai-history")
+        ContinuousDetailSection(title: "Processing jobs") {
+            if jobs.isEmpty {
+                Text("No processing jobs").foregroundStyle(.secondary)
+                    .preference(key: DetailSectionEmpty.self, value: true)
+            }
+            ForEach(jobs.prefix(10), id: \.id) { job in
+                NavigationLink(value: Route.activityDetail(job.id)) {
+                    ImageJobRow(job: job)
                 }
             }
-        }
-        if !jobs.isEmpty {
-            Section("Processing jobs") {
-                ForEach(jobs.prefix(10), id: \.id) { job in
-                    NavigationLink(value: Route.activityDetail(job.id)) {
-                        ImageJobRow(job: job)
-                    }
-                }
-                if totalJobs > 10 {
-                    Button("View all \(totalJobs)") { showingAllJobs = true }
-                }
+            if totalJobs > 10 {
+                Button("View all \(totalJobs)") { showingAllJobs = true }
             }
-        }
-        Section("Provenance") {
+        }.detailContentsAnchor("processing-jobs")
+        ContinuousDetailSection(title: "Provenance") {
             ProvenanceRows(detail: detail)
-        }
-        if let sightings = detail.sightings, !sightings.isEmpty {
-            Section("In libraries") {
-                ForEach(Array(sightings.enumerated()), id: \.offset) { _, sighting in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(
-                            "\(sighting.ownerName ?? "Unknown owner") · \(sighting.deviceName ?? "Unknown device")"
-                        )
-                        Text(
-                            (sighting.capturedAt ?? sighting.observedAt)
-                                .formatted(date: .abbreviated, time: .omitted)
-                        )
-                        .font(.caption).foregroundStyle(.secondary)
-                    }
+        }.detailContentsAnchor("provenance")
+        ContinuousDetailSection(title: "In libraries") {
+            let sightings = detail.sightings ?? []
+            if sightings.isEmpty {
+                Text("No library sightings").foregroundStyle(.secondary)
+                    .preference(key: DetailSectionEmpty.self, value: true)
+            }
+            ForEach(Array(sightings.enumerated()), id: \.offset) { _, sighting in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(
+                        "\(sighting.ownerName ?? "Unknown owner") · \(sighting.deviceName ?? "Unknown device")"
+                    )
+                    Text(
+                        (sighting.capturedAt ?? sighting.observedAt)
+                            .formatted(date: .abbreviated, time: .omitted)
+                    )
+                    .font(.caption).foregroundStyle(.secondary)
                 }
             }
-        }
-        Section("Used in") {
+        }.detailContentsAnchor("in-libraries")
+        ContinuousDetailSection(title: "Used in") {
             ReportDetailSlot(
                 slot: .image_associations, id: detail.id.rawValue,
                 host: EntityCatalog[.image].row(from: (try? JSONValue(encoding: detail)) ?? .null)
                     .map { ReportHost(entity: .image, row: $0, onChanged: onChanged) })
-        }
+        }.detailContentsAnchor("used-in")
     }
 
     private func representation(title: String, url: URL) -> some View {
@@ -376,7 +403,12 @@ private struct ImageAnalysisHistoryRow: View {
         case .parsed(let analysis):
             ImageAnalysisRow(analysis: analysis)
         case .unparsed(let analysis):
-            DisclosureGroup {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Unsupported historical result").font(.subheadline.weight(.medium))
+                Text(
+                    "\(analysis.provider ?? "Unknown provider") · \(analysis.model ?? "Unknown model") · \(analysis.createdAt.formatted(.relative(presentation: .named)))"
+                )
+                .font(.caption).foregroundStyle(.secondary)
                 LabeledContent("Prompt version", value: analysis.promptVersion)
                 if let revision = analysis.resultSchemaRevision {
                     LabeledContent("Result schema", value: String(revision))
@@ -385,16 +417,8 @@ private struct ImageAnalysisHistoryRow: View {
                 Text(analysis.rawResultJson)
                     .font(.caption.monospaced())
                     .textSelection(.enabled)
-            } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Unsupported historical result")
-                    Text(
-                        "\(analysis.provider ?? "Unknown provider") · \(analysis.model ?? "Unknown model") · \(analysis.createdAt.formatted(.relative(presentation: .named)))"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
             }
+
         }
     }
 }
@@ -446,7 +470,7 @@ private struct ZoomablePhoto: View {
 }
 
 /// Developer overlays layer 5: server vs. device sha256/pHash, read from whichever
-/// `ImageDiagnosticsCompareModel` results are already loaded (the Diagnostics tab having been
+/// `ImageDiagnosticsCompareModel` results are already loaded (the continuous detail having been
 /// visited this session) — never triggers a device analysis just for this caption.
 private enum ImageDiagnostics {
     static func compareCaption(_ model: ImageDiagnosticsCompareModel) -> String {
@@ -462,7 +486,7 @@ private enum ImageDiagnostics {
     }
 }
 
-/// Layer 7's "Copy diagnostics" payload for the Photo tab.
+/// Layer 7's "Copy diagnostics" payload for Image detail.
 private struct ImageDetailDiagnostics: Encodable {
     let id: String
     let preferredRepresentation: String?

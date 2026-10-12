@@ -902,10 +902,6 @@ const buildMetadataSchemas = () => {
     placement: sectionPlacement,
     /** Focused detail workspace; omission follows the section's semantic kind. */
     workspace: sectionWorkspace.optional(),
-    collapsed: z
-      .boolean({ error: "must be a boolean" })
-      .optional()
-      .default(false),
   };
   /**
    * One detail section. `fields` names every `display.detail` field exactly
@@ -961,17 +957,6 @@ const buildMetadataSchemas = () => {
          * uninformatively on its own (e.g. "No products yet." under "Kit
          * components"). */
         empty: nonEmptyString().nullable().optional().default(null),
-        /** Skip the whole section, on both platforms, when its first page is empty. */
-        hideWhenEmpty: z
-          .boolean({ error: "must be a boolean" })
-          .optional()
-          .default(false),
-        /** Keep the header (title, count, create) but fold the body away
-         * when the first page is empty — what a derived section defaults to. */
-        collapseWhenEmpty: z
-          .boolean({ error: "must be a boolean" })
-          .optional()
-          .default(false),
         /** Set by the compiler on a section it derived from a `many`
          * relation nobody declared or omitted; never declared by hand. */
         derived: z
@@ -996,10 +981,6 @@ const buildMetadataSchemas = () => {
         explanationField: fieldKey.nullable().optional().default(null),
         workspace: sectionWorkspace.optional(),
         placement: sectionPlacement,
-        collapsed: z
-          .boolean({ error: "must be a boolean" })
-          .optional()
-          .default(false),
       })
       .strict(),
   ]);

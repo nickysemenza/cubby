@@ -11,8 +11,9 @@ this requirement. For `.tsx` changes, choose browser E2E when it observes
 the behavior; use the UI or preview tier for distinct rendering or layout
 failures. Keep pure logic imported by node tests in alias-free `.ts` files.
 
-Detail renderer and browser tests select a section's hash before asserting its
-content or using its actions; Overview does not expose Work or Evidence sections. After changing
+Detail renderer and browser tests assert the continuous page: every section is
+accessible without a view switch. Select a section hash to verify scrolling,
+focus and history; empty sections retain headings, index entries and actions. After changing
 any test fixture or query, use the web `typecheck` command: `typecheck:app`
 excludes all test files, including browser previews, and cannot verify them.
 Testing Library role queries use exact string names by default; Playwright's

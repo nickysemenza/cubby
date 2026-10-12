@@ -1,16 +1,15 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
-  createContext,
   type FC,
   type ReactNode,
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -27,9 +26,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 import { EntityHero } from "../../entity/components/EntityHero";
 import {
@@ -39,15 +38,18 @@ import {
 import { relationshipsSectionIcon } from "../../entity/relationships/relationship-tree";
 import { AuditLogList } from "../../features/audit-log/audit-log-list";
 import JsonRenderer from "../json-renderer";
+import {
+  ContinuousDetailContext,
+  SectionCountContext,
+  SectionEmptyContext,
+  SectionEmptyRegistryContext,
+} from "./detail-section-state";
 
 /** Stable id every auto-appended Activity section uses — also the opt-out key: a
  * caller that already supplies a section with this id (e.g. a page composing its
  * own custom activity placement) keeps its own instead of getting a second one. */
 const ACTIVITY_SECTION_ID = "history";
 const RELATIONS_SECTION_ID = "relationships";
-
-type DetailMode = string;
-type DetailHashResolution = { mode: DetailMode; valid: boolean };
 
 const detailRecordSchema = z
   .object({
@@ -73,36 +75,6 @@ function detailSourceId(
     : undefined;
 }
 
-function modeForHash({
-  hash,
-  overviewIds,
-  hasRelations,
-  hasActivity,
-  dedicatedIds,
-}: {
-  hash: string;
-  overviewIds: ReadonlySet<string>;
-  dedicatedIds: ReadonlySet<string>;
-  hasRelations: boolean;
-  hasActivity: boolean;
-}): DetailHashResolution {
-  const sectionId = normalizedHash(hash);
-  if (!sectionId) return { mode: "overview", valid: true };
-  if (sectionId === RELATIONS_SECTION_ID) {
-    return {
-      mode: hasRelations ? "relations" : "overview",
-      valid: hasRelations,
-    };
-  }
-  if (sectionId === ACTIVITY_SECTION_ID) {
-    return { mode: hasActivity ? "activity" : "overview", valid: hasActivity };
-  }
-  return {
-    mode: dedicatedIds.has(sectionId) ? sectionId : "overview",
-    valid: overviewIds.has(sectionId) || dedicatedIds.has(sectionId),
-  };
-}
-
 type DetailPlacement = "primary" | "supporting" | "full";
 
 export interface DetailSection {
@@ -113,7 +85,7 @@ export interface DetailSection {
   icon: React.ElementType;
   /** Explicit narrative role; there is deliberately no automatic default. */
   placement: DetailPlacement;
-  /** Independently excludes this section from Overview; its id remains reachable. */
+  /** Supporting sections join Evidence unless an explicit workspace owns them. */
   overview?: boolean;
   workspace?: "overview" | "work" | "evidence";
   /** Exclude low-value/debug regions from the jump index. */
@@ -125,104 +97,9 @@ export interface DetailSection {
   /** Specialized workflows can supply their own internal surface while retaining
    * the shared index, relationship, activity, and debug extensions. */
   surface?: "card" | "plain";
-  /** Starts folded; the body mounts only once opened (a heavy analytics view). */
-  collapsed?: boolean;
+  /** Resolved emptiness for sections whose data is already in the detail record. */
+  empty?: boolean;
 }
-
-/**
- * A relation/list section reports its true row count up through here so the
- * section's own `<h2>` can carry it (mono, secondary) without the section
- * body reaching back into the header it doesn't render. Mirrors
- * `usePageCount`: an effect-based report, `undefined` cleans it back up on
- * unmount, and a call outside a `SectionCard` body is a safe no-op.
- */
-const SectionCountContext = createContext<
-  ((count: number | undefined) => void) | null
->(null);
-
-export function useSectionCount(count: number | undefined) {
-  const setCount = useContext(SectionCountContext);
-  useEffect(() => {
-    setCount?.(count);
-    return () => setCount?.(undefined);
-  }, [setCount, count]);
-}
-
-/**
- * A `hideWhenEmpty` relation section reports here once its first page
- * resolves — `false` hides the whole `SectionCard` (header, "+Add", body),
- * not just the body, so a section nobody asked to see leaves no trace it was
- * ever declared. Hidden through the `hidden` attribute rather than an
- * unmount: the section's own data hook (`useEntityList`) stays mounted, so a
- * later create doesn't force it to refetch from scratch, and `[hidden]`
- * already drops the subtree from the accessibility tree and from
- * `getByRole` queries. Mirrors `useSectionCount`: an effect-based report, a
- * call outside a `SectionCard` body is a safe no-op, and unmounting restores
- * visibility.
- */
-const SectionVisibilityContext = createContext<
-  ((visible: boolean) => void) | null
->(null);
-
-export function useSectionVisible(visible: boolean) {
-  const setVisible = useContext(SectionVisibilityContext);
-  useEffect(() => {
-    setVisible?.(visible);
-    return () => setVisible?.(true);
-  }, [setVisible, visible]);
-}
-
-/**
- * A `collapseWhenEmpty` relation section reports here once its first page
- * resolves empty: the card keeps its header (title, `0` count, "+Add") and
- * hides only the body, so an empty relation stays one line tall yet still
- * offers its first create. Same effect-based shape as `useSectionVisible`.
- */
-const SectionCollapsedContext = createContext<
-  ((collapsed: boolean) => void) | null
->(null);
-
-export function useSectionCollapsed(collapsed: boolean) {
-  const setCollapsed = useContext(SectionCollapsedContext);
-  useEffect(() => {
-    setCollapsed?.(collapsed);
-    return () => setCollapsed?.(false);
-  }, [setCollapsed, collapsed]);
-}
-
-/**
- * Mirrors each `SectionCard`'s own (per-card) visibility up to `DetailSections`,
- * keyed by section id, so the jump index (`DetailAnchorIndex`) can drop a
- * `hideWhenEmpty` section that is currently hidden instead of always listing
- * every declared section regardless of the `hidden` attribute `SectionCard`
- * sets on itself. A section absent from the map hasn't reported yet and is
- * treated as visible.
- */
-const SectionVisibilityRegistryContext = createContext<
-  ((id: string, visible: boolean) => void) | null
->(null);
-
-/**
- * Sections still on their first `hideWhenEmpty` fetch. Index-only: the card
- * renders as usual. An absent id is not pending.
- */
-const SectionIndexPendingRegistryContext = createContext<
-  ((id: string, pending: boolean) => void) | null
->(null);
-
-/** Keep a `hideWhenEmpty` section out of the jump index until its first fetch resolves. */
-export function useSectionIndexPending(pending: boolean) {
-  const registerPending = useContext(SectionIndexPendingRegistryContext);
-  const sectionId = useContext(SectionIdContext);
-  useEffect(() => {
-    if (!sectionId) return;
-    registerPending?.(sectionId, pending);
-    return () => registerPending?.(sectionId, false);
-  }, [registerPending, sectionId, pending]);
-}
-
-/** The enclosing `SectionCard`'s id, for section-keyed registry hooks. */
-const SectionIdContext = createContext<string | null>(null);
 
 function SectionCard({
   section,
@@ -231,112 +108,75 @@ function SectionCard({
   section: DetailSection;
   className?: string;
 }) {
-  // Starts open unless the declaration folds it; the body only ever mounts
-  // (and so can only ever report a count) once it's open — a collapsed
-  // section shows no count.
-  const [open, setOpen] = useState(!section.collapsed);
   const [count, setCount] = useState<number | undefined>(undefined);
-  const [visible, setVisible] = useState(true);
-  const [bodyCollapsed, setBodyCollapsed] = useState(false);
-  const registerVisibility = useContext(SectionVisibilityRegistryContext);
-  const sectionId = section.id;
-  const reportVisible = useCallback(
-    (next: boolean) => {
-      setVisible(next);
-      registerVisibility?.(sectionId, next);
-    },
-    [registerVisibility, sectionId],
-  );
-
-  if (section.surface === "plain") {
-    return (
-      <section
-        id={section.id}
-        tabIndex={-1}
-        className={cn(
-          "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none",
-          className,
-        )}
-      >
-        {section.content}
-      </section>
-    );
-  }
-
-  const heading = (
-    <>
-      <section.icon
-        className={cn(
-          "size-3.5 shrink-0",
-          section.collapsed && !open ? "text-muted-foreground" : "text-slate",
-        )}
-      />
-      {section.title}
-      {open && count !== undefined ? (
-        <span className="text-xs font-normal text-muted-foreground">
-          {formatCount(count)}
-        </span>
-      ) : null}
-    </>
-  );
-
+  const [reportedEmpty, setEmpty] = useState(false);
+  const register = useContext(SectionEmptyRegistryContext);
+  const continuous = useContext(ContinuousDetailContext);
+  const empty =
+    section.empty === true ||
+    reportedEmpty ||
+    count === 0 ||
+    section.content == null;
+  useEffect(() => {
+    register?.(section.id, empty);
+    return () => register?.(section.id, false);
+  }, [register, section.id, empty]);
+  const Heading = continuous ? "h3" : "h2";
   return (
-    <SectionVisibilityContext.Provider value={reportVisible}>
-      <section
-        id={section.id}
-        tabIndex={-1}
-        hidden={!visible}
-        className={cn(
-          "scroll-mt-[calc(var(--app-chrome-top)+3rem)] px-3 py-3 focus:outline-none md:px-3 md:py-2",
-          // Offscreen sections skip layout and paint (a vendor page stacks
-          // several related tables). Paint containment clips overflow, so a
-          // section that must overflow opts out.
-          section.overflowVisible
-            ? "overflow-visible"
-            : "[contain-intrinsic-size:auto_320px] [content-visibility:auto]",
-          className,
-        )}
-      >
-        {/* Phone header actions are 44px targets, so the row centres there;
-            desktop's 28px ghosts sit flush with the title's first line. */}
-        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 max-md:items-center">
-          <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold tracking-tight">
-            {section.collapsed ? (
-              <button
-                type="button"
-                aria-expanded={open}
-                onClick={() => setOpen((current) => !current)}
-                className="flex min-w-0 items-center gap-2 font-medium text-muted-foreground transition-colors hover:text-foreground"
+    <SectionEmptyContext.Provider value={setEmpty}>
+      <SectionCountContext.Provider value={setCount}>
+        <section
+          id={section.id}
+          aria-labelledby={`${section.id}-heading`}
+          tabIndex={-1}
+          data-empty={empty || undefined}
+          data-detail-section
+          className={cn(
+            "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+            section.surface !== "plain" && "px-3 py-3 md:py-2",
+            section.overflowVisible
+              ? "overflow-visible"
+              : "[contain-intrinsic-size:auto_320px] [content-visibility:auto]",
+            className,
+          )}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 max-md:items-center">
+            <div className="flex min-w-0 items-center gap-2">
+              <Heading
+                id={`${section.id}-heading`}
+                className={cn(
+                  "flex min-w-0 items-center gap-2 text-sm font-semibold tracking-tight",
+                  empty && "text-muted-foreground",
+                )}
               >
-                <CaretRightIcon
-                  className={cn(
-                    "size-3.5 shrink-0 transition-transform",
-                    open && "rotate-90",
-                  )}
-                />
-                {heading}
-              </button>
-            ) : (
-              heading
+                <section.icon className="size-3.5 shrink-0 text-muted-foreground" />
+                {section.title}
+              </Heading>
+              {empty ? (
+                <span
+                  id={`${section.id}-empty`}
+                  className="text-xs text-muted-foreground"
+                >
+                  Empty
+                </span>
+              ) : count !== undefined ? (
+                <span className="text-xs text-muted-foreground">
+                  {formatCount(count)}
+                </span>
+              ) : null}
+            </div>
+            {section.headerAction ? (
+              <div className="max-w-full min-w-0">{section.headerAction}</div>
+            ) : null}
+          </div>
+          <div className="mt-2 md:mt-1.5">
+            {section.content ?? (
+              <p className="text-sm text-muted-foreground">No items.</p>
             )}
-          </h2>
-          {section.headerAction && (!section.collapsed || open) ? (
-            <div className="max-w-full min-w-0">{section.headerAction}</div>
-          ) : null}
-        </div>
-        {open ? (
-          <SectionIdContext.Provider value={sectionId}>
-            <SectionCountContext.Provider value={setCount}>
-              <SectionCollapsedContext.Provider value={setBodyCollapsed}>
-                <div className="mt-2 md:mt-1.5" hidden={bodyCollapsed}>
-                  {section.content}
-                </div>
-              </SectionCollapsedContext.Provider>
-            </SectionCountContext.Provider>
-          </SectionIdContext.Provider>
-        ) : null}
-      </section>
-    </SectionVisibilityContext.Provider>
+          </div>
+        </section>
+      </SectionCountContext.Provider>
+    </SectionEmptyContext.Provider>
   );
 }
 
@@ -403,267 +243,199 @@ function heroVisual({
   ) : undefined;
 }
 
-function DetailAnchorIndex({
-  sections,
-  onSelect,
-  wide = false,
-}: {
-  wide?: boolean;
-  sections: Array<Pick<DetailSection, "id" | "title" | "includeInIndex">>;
-  onSelect: (id: string) => void;
-}) {
-  const indexed = useMemo(
-    () => sections.filter((section) => section.includeInIndex !== false),
-    [sections],
-  );
-  const indexedIds = useMemo(
-    () => indexed.map((section) => section.id),
-    [indexed],
-  );
-  const [activeId, setActiveId] = useState(indexedIds[0]);
+type DetailGroup = { id: string; title: string; sections: DetailSection[] };
 
-  useEffect(() => {
-    if (indexedIds.length < 2 || !("IntersectionObserver" in window)) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort(
-            (a, b) =>
-              Math.abs(a.boundingClientRect.top) -
-              Math.abs(b.boundingClientRect.top),
-          )[0];
-        if (visible?.target.id) setActiveId(visible.target.id);
-      },
-      { rootMargin: "-96px 0px -65% 0px", threshold: [0, 0.01, 0.5] },
-    );
-    for (const id of indexedIds) {
-      const target = document.getElementById(id);
-      if (target) observer.observe(target);
-    }
-    return () => observer.disconnect();
-  }, [indexedIds]);
-
-  if (indexed.length < 2) return null;
-
-  const jump = (id: string) => {
-    const target = document.getElementById(id);
-    const reduceMotion = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    target?.scrollIntoView({
-      behavior: reduceMotion ? "auto" : "smooth",
-      block: "start",
-    });
-    target?.focus({ preventScroll: true });
-    setActiveId(id);
-  };
-
-  const activeTitle =
-    indexed.find((section) => section.id === activeId)?.title ??
-    indexed[0]?.title;
-
-  return (
-    <>
-      {/* md+: one scrolling line (never wraps, so the strip keeps its
-          height), hairline-left, same IntersectionObserver. */}
-      <nav
-        aria-label="Section index"
-        className={cn(
-          "hidden min-w-0 gap-x-3 gap-y-1 text-xs text-muted-foreground md:flex",
-          wide
-            ? "flex-col items-start border-t border-border pt-3"
-            : "flex-nowrap items-center overflow-x-auto border-l border-border pl-2 text-nowrap",
-        )}
-      >
-        {indexed.map((section) => (
-          <a
-            key={section.id}
-            href={`#${section.id}`}
-            aria-current={activeId === section.id ? "location" : undefined}
-            className={cn(
-              "shrink-0 transition-colors hover:text-foreground",
-              activeId === section.id && "font-medium text-foreground",
-            )}
-            onClick={(event) => {
-              event.preventDefault();
-              onSelect(section.id);
-              jump(section.id);
-            }}
-          >
-            {section.title}
-          </a>
-        ))}
-      </nav>
-      {/* Below md: a 44px "Jump to: <active>" bar opening the same list. */}
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              className="min-h-11 w-full min-w-0 justify-between px-0 text-muted-foreground hover:text-foreground md:hidden"
-            />
-          }
-        >
-          <span className="min-w-0 truncate">
-            Jump to:{" "}
-            <span className="font-medium text-foreground">{activeTitle}</span>
-          </span>
-          <CaretDownIcon className="size-3.5 shrink-0" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-52">
-          {indexed.map((section) => (
-            <DropdownMenuItem
-              key={section.id}
-              render={<a href={`#${section.id}`} aria-label={section.title} />}
-              aria-current={activeId === section.id ? "location" : undefined}
-              onClick={(event) => {
-                event.preventDefault();
-                onSelect(section.id);
-                jump(section.id);
-              }}
-            >
-              {section.title}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
-  );
+function hashForDetailTarget(id: string, groups: DetailGroup[]) {
+  const alias = id.replace("detail-group-", "");
+  return groups.some((group) =>
+    group.sections.some((section) => section.id === alias),
+  )
+    ? id
+    : alias;
 }
 
-const detailTabClass = (wide: boolean) =>
-  wide ? "w-full flex-none justify-start px-2 py-2" : undefined;
-const dedicatedViewLabel = (sections: DetailSection[], activeMode: string) =>
-  sections.find((section) => section.id === activeMode)?.title;
+const currentDetailAnchorClass =
+  "bg-muted font-medium before:absolute before:inset-y-1.5 before:start-1 before:w-0.5 before:rounded-full before:bg-foreground";
 
-function DetailCommandStrip({
-  activeMode,
-  hasRelations,
-  hasActivity,
-  hasOverviewTools,
-  hasWork,
-  hasEvidence,
+function DetailAnchorIndex({
+  groups,
+  emptySections,
+  activeId,
   wide,
-  overviewSections,
-  dedicatedSections,
-  onSelectDedicatedSection,
-  onSelectOverviewSection,
+  onSelect,
 }: {
-  activeMode: DetailMode;
-  hasRelations: boolean;
-  hasActivity: boolean;
-  hasOverviewTools: boolean;
-  hasWork: boolean;
-  hasEvidence: boolean;
+  groups: DetailGroup[];
+  emptySections: ReadonlyMap<string, boolean>;
+  activeId: string | undefined;
   wide: boolean;
-  overviewSections: DetailSection[];
-  dedicatedSections: DetailSection[];
-  onSelectDedicatedSection: (sectionId: string) => void;
-  onSelectOverviewSection: (sectionId: string) => void;
+  onSelect: (id: string) => void;
 }) {
-  const showOverviewTools = activeMode === "overview" && hasOverviewTools;
+  const navigationRef = useRef<HTMLElement>(null);
+  const menuTargetRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const nav = navigationRef.current;
+    const active = nav?.querySelector<HTMLElement>(
+      'a[aria-current="location"]',
+    );
+    if (!wide || !nav || !active) return;
+    const viewport = nav.getBoundingClientRect();
+    const item = active.getBoundingClientRect();
+    if (item.top < viewport.top) nav.scrollTop += item.top - viewport.top;
+    else if (item.bottom > viewport.bottom)
+      nav.scrollTop += item.bottom - viewport.bottom;
+  }, [activeId, wide]);
+  const selectMenuTarget = (id: string) => {
+    menuTargetRef.current = document.getElementById(id);
+    onSelect(id);
+  };
+  const activeTitle =
+    groups
+      .flatMap((group) => [group, ...group.sections])
+      .find((entry) => entry.id === activeId)?.title ?? groups[0]?.title;
+  const entryState = (id: string) => ({
+    "aria-current": activeId === id ? ("location" as const) : undefined,
+    "aria-describedby": emptySections.get(id) ? `${id}-empty` : undefined,
+  });
   return (
     <div
       className={cn(
-        "sticky top-[var(--app-chrome-top)] z-30 bg-card",
-        wide
-          ? "w-40 shrink-0 self-start border-r border-border py-2 pr-3"
-          : "border-y border-border",
+        "sticky top-[var(--app-chrome-top)] z-30 self-start",
+        wide ? "w-44 shrink-0" : "bg-background",
       )}
     >
-      <div
+      <nav
+        ref={navigationRef}
+        aria-label="Section index"
         className={cn(
-          "flex min-h-11",
-          wide
-            ? "flex-col items-stretch gap-2"
-            : "flex-wrap items-stretch md:min-h-9 md:flex-nowrap md:items-center md:px-2",
+          "max-h-[calc(100dvh-var(--app-chrome-top)-1rem)] overflow-y-auto overscroll-contain py-2 pr-3 text-xs",
+          !wide && "hidden",
         )}
       >
-        <TabsList
-          variant="line"
-          aria-label="Record views"
-          className={cn(
-            "justify-start",
-            wide
-              ? "h-auto w-full flex-col items-stretch gap-1"
-              : "h-11 min-w-0 flex-1 overflow-x-auto px-1 md:h-9 md:flex-none md:px-0",
-          )}
-        >
-          <TabsTrigger className={detailTabClass(wide)} value="overview">
-            Overview
-          </TabsTrigger>
-          {hasWork && (
-            <TabsTrigger className={detailTabClass(wide)} value="work">
-              Work
-            </TabsTrigger>
-          )}
-          {hasEvidence && (
-            <TabsTrigger className={detailTabClass(wide)} value="evidence">
-              Evidence
-            </TabsTrigger>
-          )}
-          {hasRelations ? (
-            <TabsTrigger className={detailTabClass(wide)} value="relations">
-              Relations
-            </TabsTrigger>
-          ) : null}
-          {hasActivity ? (
-            <TabsTrigger className={detailTabClass(wide)} value="activity">
-              Activity
-            </TabsTrigger>
-          ) : null}
-        </TabsList>
-        {dedicatedSections.length > 0 ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label={
-                dedicatedViewLabel(dedicatedSections, activeMode) ??
-                "More details"
-              }
-              render={
-                <Button
-                  variant="ghost"
-                  className="min-h-11 shrink-0 md:min-h-9"
-                />
-              }
+        {groups.map((group) => (
+          <div key={group.id} className="mb-3 last:mb-0">
+            <a
+              href={`#${hashForDetailTarget(group.id, groups)}`}
+              {...entryState(group.id)}
+              className={cn(
+                "relative block rounded-md px-2 py-1.5 font-semibold hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                activeId === group.id && currentDetailAnchorClass,
+              )}
+              onClick={(event) => {
+                event.preventDefault();
+                onSelect(group.id);
+              }}
             >
-              {dedicatedViewLabel(dedicatedSections, activeMode) ??
-                (wide ? "More details" : "More")}
-              <CaretDownIcon className="size-3.5" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {dedicatedSections.map((section) => (
-                <DropdownMenuItem
-                  key={section.id}
-                  onClick={() => onSelectDedicatedSection(section.id)}
-                >
-                  {section.title}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-        {/* Verbs live on the plate now — this strip's right side carries only
-            the overview section index. */}
-        {showOverviewTools ? (
-          <div
-            data-testid="detail-overview-tools"
-            className={cn(
-              "flex w-full min-w-0 gap-2",
-              wide
-                ? "flex-col px-2"
-                : "min-h-11 items-center border-t border-border px-2 md:min-h-0 md:flex-1 md:border-t-0 md:px-0 md:pl-2",
-            )}
-          >
-            <DetailAnchorIndex
-              sections={overviewSections}
-              onSelect={onSelectOverviewSection}
-              wide={wide}
-            />
+              {group.title}
+            </a>
+            <ul className="mt-0.5 space-y-0.5">
+              {group.sections
+                .filter((section) => section.includeInIndex !== false)
+                .map((section) => (
+                  <li key={section.id}>
+                    <a
+                      href={`#${section.id}`}
+                      {...entryState(section.id)}
+                      aria-label={section.title}
+                      aria-describedby={
+                        emptySections.get(section.id)
+                          ? `${section.id}-empty`
+                          : undefined
+                      }
+                      className={cn(
+                        "relative flex min-h-7 items-center justify-between gap-2 rounded-md py-1 pr-2 pl-4 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                        activeId === section.id && currentDetailAnchorClass,
+                        activeId === section.id &&
+                          !emptySections.get(section.id) &&
+                          "text-foreground",
+                      )}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        onSelect(section.id);
+                      }}
+                    >
+                      <span>{section.title}</span>
+                      {emptySections.get(section.id) && (
+                        <span className="text-[11px] font-normal text-muted-foreground">
+                          Empty
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                ))}
+            </ul>
           </div>
-        ) : null}
-      </div>
+        ))}
+      </nav>
+      {!wide && (
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (open) menuTargetRef.current = null;
+          }}
+        >
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                className="min-h-11 w-full justify-between px-2 text-muted-foreground"
+              />
+            }
+          >
+            <span className="min-w-0 truncate">
+              Jump to:{" "}
+              <span className="font-medium text-foreground">{activeTitle}</span>
+            </span>
+            <CaretDownIcon className="size-3.5 shrink-0" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            finalFocus={() => menuTargetRef.current ?? true}
+            className="max-h-[70dvh] w-72 overflow-y-auto"
+          >
+            {groups.map((group, index) => (
+              <div key={group.id}>
+                {index > 0 && <DropdownMenuSeparator />}
+                <DropdownMenuItem
+                  render={
+                    <a
+                      href={`#${hashForDetailTarget(group.id, groups)}`}
+                      aria-label={group.title}
+                    />
+                  }
+                  className="font-semibold"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    selectMenuTarget(group.id);
+                  }}
+                >
+                  {group.title}
+                </DropdownMenuItem>
+                {group.sections
+                  .filter((section) => section.includeInIndex !== false)
+                  .map((section) => (
+                    <DropdownMenuItem
+                      key={section.id}
+                      render={
+                        <a href={`#${section.id}`} aria-label={section.title} />
+                      }
+                      {...entryState(section.id)}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        selectMenuTarget(section.id);
+                      }}
+                    >
+                      <span className="min-w-0 flex-1">{section.title}</span>
+                      {emptySections.get(section.id) && (
+                        <span className="text-xs text-muted-foreground">
+                          Empty
+                        </span>
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+              </div>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 }
@@ -831,12 +603,6 @@ function validateDetailSectionIds(
   }
 }
 
-function hashForDetailMode(mode: DetailMode) {
-  if (mode === "relations") return RELATIONS_SECTION_ID;
-  if (mode === "activity") return ACTIVITY_SECTION_ID;
-  return undefined;
-}
-
 function contextSourceId(
   pageDetail: ReturnType<typeof usePageDetailContext>,
   record: DetailRecord | undefined,
@@ -851,17 +617,18 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   heroImages,
   heroMedia,
 }) => {
-  // Hidden lazy reports must not join the active workspace's SSR stream.
-  // Once hydrated, keep every workspace mounted to retain drafts and empty-state reports.
   const hydrated = useHydrated();
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const [wide, setWide] = useState(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = workspaceRef.current;
-    if (!element || !("ResizeObserver" in window)) return;
-    const observer = new ResizeObserver((entries) => {
-      setWide((entries[0]?.contentRect.width ?? 0) >= 800);
-    });
+    if (!element) return;
+    setWide(element.getBoundingClientRect().width >= 800);
+    if (!("ResizeObserver" in window)) return;
+    const observer = new ResizeObserver((entries) =>
+      setWide((entries[0]?.contentRect.width ?? 0) >= 800),
+    );
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -873,335 +640,310 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const detailRecord = parsedDetailRecord?.success
     ? parsedDetailRecord.data
     : undefined;
-  const locationHash = useLocation({ select: (location) => location.hash });
-  const navigate = useNavigate();
   const sourceId = contextSourceId(pageDetail, detailRecord);
-  // Per-`SectionCard` `hideWhenEmpty` visibility, mirrored up here by id so
-  // the jump index can drop a hidden section instead of always listing every
-  // declared one (`SectionVisibilityRegistryContext`/`reportVisible` above).
-  const [sectionVisibility, setSectionVisibility] = useState<
-    Map<string, boolean>
-  >(new Map());
-  const registerSectionVisibility = useCallback((id: string, next: boolean) => {
-    setSectionVisibility((prev) =>
-      prev.get(id) === next ? prev : new Map(prev).set(id, next),
-    );
-  }, []);
-  const [sectionIndexPending, setSectionIndexPending] = useState<
-    Map<string, boolean>
-  >(new Map());
-  const registerSectionIndexPending = useCallback(
-    (id: string, next: boolean) => {
-      setSectionIndexPending((prev) =>
-        prev.get(id) === next ? prev : new Map(prev).set(id, next),
-      );
-    },
-    [],
+  const relationship = useMemo(
+    () => resolveRelationshipDetail(pageDetail, sourceId, sections),
+    [pageDetail, sourceId, sections],
   );
-  const visibleSections = useMemo(
-    () =>
+  const activity = useMemo(
+    () => resolveActivityDetail(pageDetail, sourceId, sections),
+    [pageDetail, sourceId, sections],
+  );
+  validateDetailSectionIds(sections, relationship, activity);
+  const groups = useMemo(() => {
+    const groupSections = (workspace: "overview" | "work" | "evidence") =>
       sections.filter(
-        (section) => section.content !== null && section.content !== undefined,
-      ),
-    [sections],
-  );
-  // A detail page may own a semantically richer relationship composition than
-  // the generic explorer. The explicit section wins just as an explicit
-  // History section does below; appending both would duplicate the anchor and
-  // let the generic graph contradict the page-owned relationship contract.
-  const relationshipDetail = resolveRelationshipDetail(
-    pageDetail,
-    sourceId,
-    visibleSections,
-  );
-  const relationshipSection = relationshipDetail.section;
-  // Every auditable entity gets its audit trail for free. The id check is the
-  // opt-out: a page that already places its own `id: "history"` section
-  // keeps that one instead of getting a second.
-  const activityDetail = resolveActivityDetail(
-    pageDetail,
-    sourceId,
-    visibleSections,
-  );
-  const resolvedActivitySection = activityDetail.section;
-  const overviewSections = useMemo(
-    () =>
-      visibleSections.filter(
         (section) =>
           section.id !== RELATIONS_SECTION_ID &&
           section.id !== ACTIVITY_SECTION_ID &&
-          section.overview !== false &&
-          (!section.workspace || section.workspace === "overview"),
-      ),
-    [visibleSections],
+          (section.workspace ??
+            (section.overview === false ? "evidence" : "overview")) ===
+            workspace,
+      );
+    const result: DetailGroup[] = [
+      {
+        id: "detail-group-overview",
+        title: "Overview",
+        sections: groupSections("overview"),
+      },
+      {
+        id: "detail-group-work",
+        title: "Work",
+        sections: groupSections("work"),
+      },
+      {
+        id: "detail-group-evidence",
+        title: "Evidence",
+        sections: groupSections("evidence"),
+      },
+      {
+        id: "detail-group-relations",
+        title: "Relations",
+        sections: relationship.section ? [relationship.section] : [],
+      },
+      {
+        id: "detail-group-activity",
+        title: "Activity",
+        sections: activity.section ? [activity.section] : [],
+      },
+    ];
+    return result.filter((group) => group.sections.length > 0);
+  }, [sections, relationship.section, activity.section]);
+  const [emptySections, setEmptySections] = useState<Map<string, boolean>>(
+    new Map(),
   );
-
-  const workspaceSections = visibleSections.filter(
-    (section) =>
-      section.workspace === "work" || section.workspace === "evidence",
-  );
-  const workSections = workspaceSections.filter(
-    (section) => section.workspace === "work",
-  );
-  const evidenceSections = workspaceSections.filter(
-    (section) => section.workspace === "evidence",
-  );
-  const hasWork = workSections.some(
-    (section) => sectionVisibility.get(section.id) !== false,
-  );
-  const hasEvidence = evidenceSections.some(
-    (section) => sectionVisibility.get(section.id) !== false,
-  );
-  const dedicatedSections = visibleSections.filter(
-    (section) =>
-      section.overview === false && !workspaceSections.includes(section),
-  );
-  const dedicatedIdKey = dedicatedSections
-    .map((section) => section.id)
-    .join("\u001f");
-  const dedicatedIds = useMemo(
-    () => new Set(dedicatedIdKey ? dedicatedIdKey.split("\u001f") : []),
-    [dedicatedIdKey],
-  );
-
-  // Validate the authored ledger and shared extensions together before
-  // partitioning them into modes. A duplicate relationship/history id is still
-  // an invalid record page even though only one mode is visible at a time.
-  validateDetailSectionIds(visibleSections, relationshipDetail, activityDetail);
-
-  const overviewIdKey = overviewSections
-    .map((section) => section.id)
-    .join("\u001f");
-  const overviewIds = useMemo(
-    () => new Set(overviewIdKey ? overviewIdKey.split("\u001f") : []),
-    [overviewIdKey],
-  );
-  const hasRelations = Boolean(relationshipSection);
-  const hasActivity = Boolean(resolvedActivitySection);
-  const resolveHash = useCallback(
-    (hash: string) => {
-      const id = normalizedHash(hash);
-      const workspace = workspaceSections.find(
-        (section) =>
-          section.id === id && sectionVisibility.get(section.id) !== false,
-      )?.workspace;
-      if (workspace) return { mode: workspace, valid: true };
-      if (id === "work" && hasWork) return { mode: "work", valid: true };
-      if (id === "evidence" && hasEvidence)
-        return { mode: "evidence", valid: true };
-      return modeForHash({
-        hash,
-        overviewIds,
-        dedicatedIds,
-        hasRelations,
-        hasActivity,
-      });
-    },
-    [
-      hasActivity,
-      hasRelations,
-      overviewIds,
-      dedicatedIds,
-      workspaceSections,
-      hasWork,
-      hasEvidence,
-      sectionVisibility,
-    ],
-  );
-  // URL fragments are unavailable to SSR. The hash effect selects the focused
-  // workspace after the identical server/initial-client Overview render commits.
-  const [activeMode, setActiveMode] = useState<DetailMode>("overview");
-
-  const setHash = useCallback(
-    (hash: string | undefined, replace: boolean) => {
-      void navigate({
-        to: ".",
-        hash,
-        replace,
-        resetScroll: false,
-        hashScrollIntoView: false,
-      });
-    },
-    [navigate],
-  );
-
-  // TanStack Router updates this value for Link navigation and browser
-  // back/forward. That makes Product route branch links switch back to Overview
-  // before their formerly hidden section is focused.
+  const registerEmpty = useCallback((id: string, empty: boolean) => {
+    setEmptySections((previous) =>
+      previous.get(id) === empty ? previous : new Map(previous).set(id, empty),
+    );
+  }, []);
+  const [activeId, setActiveId] = useState<string | undefined>(undefined);
+  const jumpTargetRef = useRef<
+    | {
+        id: string;
+        positions: Map<Element, number>;
+      }
+    | undefined
+  >(undefined);
+  const locationHash = useLocation({ select: (location) => location.hash });
+  const scrollIntentRef = useRef(false);
+  const navigate = useNavigate();
+  const targetForHash = useCallback((hash: string) => {
+    const id = normalizedHash(hash);
+    const direct = document.getElementById(id);
+    if (direct && workspaceRef.current?.contains(direct)) return id;
+    const group = document.getElementById(`detail-group-${id}`);
+    return group && workspaceRef.current?.contains(group) ? group.id : id;
+  }, []);
+  const focusTarget = useCallback((id: string) => {
+    const target = document.getElementById(id);
+    if (!target || !workspaceRef.current?.contains(target)) return;
+    target.scrollIntoView({ behavior: "instant", block: "start" });
+    target.focus({ preventScroll: true });
+    const positions = new Map<Element, number>();
+    for (
+      let ancestor: HTMLElement | null = target;
+      ancestor;
+      ancestor = ancestor.parentElement
+    )
+      positions.set(ancestor, ancestor.scrollTop);
+    jumpTargetRef.current = { id, positions };
+    scrollIntentRef.current = false;
+    setActiveId(id);
+  }, []);
+  const selectSection = (id: string) => {
+    focusTarget(id);
+    void navigate({
+      to: ".",
+      hash: hashForDetailTarget(id, groups),
+      replace: false,
+      resetScroll: false,
+      hashScrollIntoView: false,
+    });
+  };
+  // A fragment selects a location, never a hidden view. Back/forward and repeated
+  // links preserve mounted editors; invalid fragments leave the page readable.
   useEffect(() => {
-    const resolved = resolveHash(locationHash);
-    setActiveMode(resolved.mode);
-    if (!resolved.valid) setHash(undefined, true);
-  }, [locationHash, resolveHash, setHash]);
-
+    if (hydrated && locationHash && !onlyWorkspace)
+      focusTarget(targetForHash(locationHash));
+  }, [hydrated, locationHash, onlyWorkspace, targetForHash, focusTarget]);
   useEffect(() => {
-    if (activeMode !== "overview") return;
-    const sectionId = normalizedHash(locationHash);
-    if (!overviewIds.has(sectionId)) return;
-    const target = document.getElementById(sectionId);
-    target?.scrollIntoView({ behavior: "auto", block: "start" });
-    target?.focus({ preventScroll: true });
-  }, [activeMode, locationHash, overviewIds]);
-
-  const selectMode = (nextMode: string) => {
+    if (!hydrated || onlyWorkspace !== "evidence" || !locationHash) return;
+    const id = normalizedHash(locationHash);
     if (
-      !["overview", "work", "evidence", "relations", "activity"].includes(
-        nextMode,
-      ) &&
-      !dedicatedIds.has(nextMode)
+      id === "evidence" ||
+      sections.some(
+        (section) => section.workspace === "evidence" && section.id === id,
+      )
     )
       return;
-    const mode = nextMode;
-    if (
-      (mode === "relations" && !hasRelations) ||
-      (mode === "activity" && !hasActivity)
-    ) {
-      return;
-    }
-    setActiveMode(mode);
-    setHash(
-      dedicatedIds.has(mode) || mode === "work" || mode === "evidence"
-        ? mode
-        : hashForDetailMode(mode),
-      false,
-    );
-  };
-
-  const selectOverviewSection = (sectionId: string) => {
-    setActiveMode("overview");
-    setHash(sectionId, true);
-  };
-
-  // Hidden `hideWhenEmpty` sections stay mounted but leave the index; one still
-  // on its first fetch is left out too, so it can't appear and then vanish.
-  const indexEligibleSections = overviewSections.filter(
-    (section) =>
-      sectionVisibility.get(section.id) !== false &&
-      sectionIndexPending.get(section.id) !== true,
-  );
-  const hasOverviewTools =
-    indexEligibleSections.filter((section) => section.includeInIndex !== false)
-      .length >= 2;
+    void navigate({
+      to: ".",
+      search: true,
+      hash: "",
+      replace: true,
+      resetScroll: false,
+      hashScrollIntoView: false,
+    });
+  }, [hydrated, onlyWorkspace, locationHash, sections, navigate]);
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body || !hydrated) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const targets = Array.from(
+        body.querySelectorAll<HTMLElement>(
+          "[data-detail-group], [data-detail-section]",
+        ),
+      );
+      const top = targets[0]
+        ? parseFloat(getComputedStyle(targets[0]).scrollMarginTop) || 88
+        : 88;
+      // A clamped jump can leave its heading below the reading line. Preserve
+      // the explicit destination until scrolling moves away or the user scrolls.
+      const jumped = targets.find(
+        (target) => target.id === jumpTargetRef.current?.id,
+      );
+      const jumpedRect = jumped?.getBoundingClientRect();
+      if (
+        jumped &&
+        jumpedRect &&
+        jumpedRect.bottom > 0 &&
+        jumpedRect.top < window.innerHeight
+      ) {
+        setActiveId(jumped.id);
+        return;
+      }
+      jumpTargetRef.current = undefined;
+      const current =
+        body.getBoundingClientRect().bottom <= window.innerHeight + 1
+          ? targets.at(-1)
+          : (targets
+              .filter((target) => target.getBoundingClientRect().top <= top + 1)
+              .at(-1) ?? targets[0]);
+      if (current) setActiveId(current.id);
+    };
+    const schedule = (event?: Event) => {
+      const scroller =
+        event?.target instanceof Element
+          ? event.target
+          : document.scrollingElement;
+      const prior = scroller && jumpTargetRef.current?.positions.get(scroller);
+      if (
+        event?.type === "scroll" &&
+        scrollIntentRef.current &&
+        scroller &&
+        prior != null &&
+        Math.abs(scroller.scrollTop - prior) > 1
+      )
+        jumpTargetRef.current = undefined;
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    const onScrollIntent = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (event.type === "pointerdown") {
+        if (jumpTargetRef.current?.positions.has(target))
+          scrollIntentRef.current = true;
+        return;
+      }
+      if (
+        !body.contains(target) &&
+        !jumpTargetRef.current?.positions.has(target)
+      )
+        return;
+      if (event instanceof KeyboardEvent) {
+        if (
+          ![
+            "ArrowUp",
+            "ArrowDown",
+            "PageUp",
+            "PageDown",
+            "Home",
+            "End",
+            " ",
+          ].includes(event.key) ||
+          target.closest(
+            'input,textarea,select,[contenteditable],[role="menu"],[role="listbox"]',
+          )
+        )
+          return;
+      }
+      scrollIntentRef.current = true;
+    };
+    update();
+    document.addEventListener("wheel", onScrollIntent, { passive: true });
+    document.addEventListener("touchmove", onScrollIntent, { passive: true });
+    document.addEventListener("pointerdown", onScrollIntent);
+    document.addEventListener("keydown", onScrollIntent);
+    document.addEventListener("scroll", schedule, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("resize", schedule);
+    const observer =
+      "ResizeObserver" in window
+        ? new ResizeObserver(() => {
+            const id = jumpTargetRef.current?.id;
+            if (
+              id &&
+              !scrollIntentRef.current &&
+              document.activeElement?.id === id
+            )
+              focusTarget(id);
+            schedule();
+          })
+        : undefined;
+    observer?.observe(body);
+    return () => {
+      document.removeEventListener("scroll", schedule, true);
+      document.removeEventListener("wheel", onScrollIntent);
+      document.removeEventListener("touchmove", onScrollIntent);
+      document.removeEventListener("pointerdown", onScrollIntent);
+      document.removeEventListener("keydown", onScrollIntent);
+      window.removeEventListener("resize", schedule);
+      observer?.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [hydrated, groups, focusTarget]);
   const visual = heroVisual({
     heroImages,
     heroMedia: heroMedia ?? pageDetail?.heroMedia,
   });
-
-  if (onlyWorkspace === "evidence") {
+  if (onlyWorkspace === "evidence")
     return (
       <div className="space-y-2" data-run-evidence>
-        {renderSectionStack(evidenceSections)}
+        {renderSectionStack(
+          sections.filter((section) => section.workspace === "evidence"),
+        )}
       </div>
     );
-  }
-
   return (
-    <div ref={workspaceRef} className="min-w-0">
-      <SectionVisibilityRegistryContext.Provider
-        value={registerSectionVisibility}
-      >
-        <SectionIndexPendingRegistryContext.Provider
-          value={registerSectionIndexPending}
-        >
-          <Tabs
-            value={activeMode}
-            orientation={wide ? "vertical" : "horizontal"}
-            onValueChange={selectMode}
-            className="min-w-0 gap-3"
-          >
-            <DetailCommandStrip
-              activeMode={activeMode}
-              wide={wide}
-              hasRelations={hasRelations}
-              hasActivity={hasActivity}
-              hasWork={hasWork}
-              hasEvidence={hasEvidence}
-              hasOverviewTools={hasOverviewTools}
-              overviewSections={indexEligibleSections}
-              dedicatedSections={dedicatedSections}
-              onSelectDedicatedSection={selectMode}
-              onSelectOverviewSection={selectOverviewSection}
-            />
-
-            <TabsContent value="overview" keepMounted className="text-sm/5">
-              <div className="space-y-4 md:space-y-2">
-                {(hydrated || activeMode === "overview") && (
-                  <div className="min-w-0">
-                    {renderResponsiveLayout({
-                      sections: overviewSections,
-                      visual,
-                    })}
-                  </div>
-                )}
-
-                {isDebugEnabled && (
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle as="h2">Raw Details</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <JsonRenderer input={rawData} pretty />
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </TabsContent>
-            {(["work", "evidence"] as const).map((mode) => (
-              <TabsContent
-                key={mode}
-                value={mode}
-                keepMounted
-                className="text-sm/5"
+    <div
+      ref={workspaceRef}
+      className={cn("min-w-0", wide ? "flex items-start gap-4" : "space-y-2")}
+    >
+      <ContinuousDetailContext.Provider value>
+        <SectionEmptyRegistryContext.Provider value={registerEmpty}>
+          <DetailAnchorIndex
+            groups={groups}
+            emptySections={emptySections}
+            activeId={activeId}
+            wide={wide}
+            onSelect={selectSection}
+          />
+          <div ref={bodyRef} className="min-w-0 flex-1 space-y-6 text-sm/5">
+            {groups.map((group, index) => (
+              <div
+                key={group.id}
+                id={group.id}
+                data-detail-group
+                tabIndex={-1}
+                className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] space-y-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
+                <h2 className="px-1 text-base font-semibold tracking-tight">
+                  {group.title}
+                </h2>
                 {renderResponsiveLayout({
-                  sections:
-                    hydrated || activeMode === mode
-                      ? mode === "work"
-                        ? workSections
-                        : evidenceSections
-                      : [],
+                  sections: group.sections,
+                  visual: index === 0 ? visual : undefined,
                 })}
-              </TabsContent>
+              </div>
             ))}
-
-            {dedicatedSections
-              .filter((section) => section.id === activeMode)
-              .map((section) => (
-                <TabsContent
-                  key={section.id}
-                  value={section.id}
-                  className="text-sm/5"
-                >
-                  {renderResponsiveLayout({
-                    sections: [{ ...section, placement: "full" }],
-                  })}
-                </TabsContent>
-              ))}
-
-            {activeMode === "relations" && relationshipSection ? (
-              <TabsContent value="relations" className="text-sm/5">
-                <div className="min-w-0">
-                  {renderResponsiveLayout({
-                    sections: [{ ...relationshipSection, placement: "full" }],
-                  })}
-                </div>
-              </TabsContent>
-            ) : null}
-
-            {activeMode === "activity" && resolvedActivitySection ? (
-              <TabsContent value="activity" className="text-sm/5">
-                <div className="min-w-0">
-                  {renderResponsiveLayout({
-                    sections: [
-                      { ...resolvedActivitySection, placement: "full" },
-                    ],
-                  })}
-                </div>
-              </TabsContent>
-            ) : null}
-          </Tabs>
-        </SectionIndexPendingRegistryContext.Provider>
-      </SectionVisibilityRegistryContext.Provider>
+            {isDebugEnabled && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle as="h2">Raw Details</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <JsonRenderer input={rawData} pretty />
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </SectionEmptyRegistryContext.Provider>
+      </ContinuousDetailContext.Provider>
     </div>
   );
 };
