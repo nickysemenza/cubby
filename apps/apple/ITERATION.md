@@ -151,7 +151,7 @@ bundles and DerivedData without compiling again.
    and dropped afterward; artifacts stay under `artifacts/sim-e2e/`.
 
 For manual exploration with a stable corpus, start `pnpm dev`, then use
-`pnpm dev:sim -- --sim <name>`. The launcher discovers the session origin and
+`pnpm dev sim --sim <name>`. The launcher discovers the session origin and
 persists the app's development server choice. That database persists across
 runs; see [local development](../../docs/local-development.md). The disposable headless and simulator lanes
 have their own synthetic account and seed. SwiftUI previews use in-memory

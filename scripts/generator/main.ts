@@ -2,7 +2,6 @@ import { modulesChildren } from "../../packages/schemas/src/child-tables/modules
 import { retainedTableExports } from "../../packages/schemas/src/child-tables/retained.ts";
 import { readFile } from "node:fs/promises";
 import { validateRetainedTableBoundary } from "./entities/child-table-boundary.ts";
-import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -157,18 +156,6 @@ const main = async () => {
   // output directories, so a per-stage scan would remove the others' files.
   const removed = await removeExtraArtifacts(ROOT, written);
   await writeRouteTree(ROOT);
-  // ensure.ts reruns generation when any of these is missing.
-  const outputs = resolve(ROOT, "node_modules/.cache/cubby-generate.outputs");
-  await mkdir(dirname(outputs), { recursive: true });
-  await writeFile(
-    outputs,
-    [
-      ...written.map(({ relativePath }) => relativePath),
-      "apps/web/src/routeTree.gen.ts",
-    ]
-      .sort()
-      .join("\n") + "\n",
-  );
   console.log(
     changed.length === 0 && removed.length === 0
       ? "Generated artifacts are unchanged."

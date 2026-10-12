@@ -8,11 +8,6 @@ pnpm run agent:setup
 """
 
 [[actions]]
-name = "Web"
-icon = "run"
-command = "pnpm --filter @cubby/web run dev"
-
-[[actions]]
 name = "Dev stack"
 icon = "run"
 command = "pnpm run dev"
@@ -23,14 +18,9 @@ icon = "test"
 command = "pnpm run check"
 
 [[actions]]
-name = "Unit"
+name = "Test"
 icon = "test"
-command = "pnpm test:unit"
-
-[[actions]]
-name = "UI"
-icon = "test"
-command = "pnpm test:ui"
+command = "pnpm test"
 
 [[actions]]
 name = "Integration"

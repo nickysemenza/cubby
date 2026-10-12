@@ -144,7 +144,7 @@ export const rustFingerprint = (
 // Runs one cached Nx target of the root `cubby-checks` project. The daemon is
 // off so the run is self-contained; without node_modules the nx entry cannot
 // resolve, which is the "run pnpm install first" case.
-export const runNxTarget = (target: string) => {
+export const runNxTarget = (target: string, args: string[] = []) => {
   let nx: string;
   try {
     nx = fileURLToPath(import.meta.resolve("nx/bin/nx.js"));
@@ -153,9 +153,13 @@ export const runNxTarget = (target: string) => {
       `cannot resolve nx; run \`pnpm install --frozen-lockfile\` before ${target}`,
     );
   }
-  execFileSync(process.execPath, [nx, "run", `cubby-checks:${target}`], {
-    cwd: ROOT,
-    stdio: "inherit",
-    env: { ...process.env, NX_DAEMON: "false" },
-  });
+  execFileSync(
+    process.execPath,
+    [nx, "run", `cubby-checks:${target}`, ...args],
+    {
+      cwd: ROOT,
+      stdio: "inherit",
+      env: { ...process.env, NX_DAEMON: "false" },
+    },
+  );
 };
