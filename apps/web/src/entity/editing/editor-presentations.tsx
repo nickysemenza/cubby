@@ -25,7 +25,6 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import type { PendingImage } from "~/entity/entity-media/PendingImageUpload";
-import { readRecordField } from "~/entity/entity-references";
 import { formatCalendarDay } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { AliasesField } from "~/ui/forms/aliases-field";
@@ -578,7 +577,8 @@ const presentations = {
   },
   "product:update:full": {
     title: () => "Edit product",
-    description: ({ record }) => recordIdentityLine("product", record),
+    // The dialog shell names the record; there is no extra note.
+    description: () => "",
     submitLabel: "Save changes",
     size: "lg",
     Fields: ProductFields,
@@ -686,21 +686,6 @@ const presentations = {
   >;
 };
 
-/** The record's own title — which record an update dialog edits. */
-function recordIdentityLine(
-  entity: EditableEntity,
-  record: EntityEditRecord | undefined,
-): string {
-  if (!record) return "";
-  return (
-    readRecordField(
-      record,
-      entitySummary[entity].titleField,
-      z.string().nullish().catch(null),
-    ) ?? ""
-  );
-}
-
 /**
  * The presentation every entity gets without a hand-written one: the
  * intent's declared fields in model order (`EntityIntentFields`), titled from
@@ -724,10 +709,9 @@ function genericPresentation<E extends EditableEntity>(input: {
   );
   return {
     title: () => (isUpdate ? `Edit ${singular}` : `New ${singular}`),
-    description: ({ record }) =>
-      isUpdate
-        ? recordIdentityLine(input.entity, record)
-        : `Add a ${singular.toLocaleLowerCase()}.`,
+    // An update's subtitle is the record's own name (the dialog shell).
+    description: () =>
+      isUpdate ? "" : `Add a ${singular.toLocaleLowerCase()}.`,
     submitLabel: isUpdate ? "Save changes" : "Create",
     Fields,
     successMessage: () =>

@@ -1,8 +1,16 @@
 import { entityImageOf, type ImageEntity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { getErrorMessage } from "@cubby/shared";
 import { isEqual } from "es-toolkit";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -10,6 +18,7 @@ import {
   PendingImageUpload,
   type PendingImage,
 } from "~/entity/entity-media/PendingImageUpload";
+import { readRecordField } from "~/entity/entity-references";
 import {
   fieldSuggestionBasisFromRecord,
   suggestTargetsFor,
@@ -255,6 +264,33 @@ export function staticSuggestionBasisFor(
   );
 }
 
+/** The record's own title — which record an update dialog edits. */
+function recordIdentityLine(
+  entity: EditableEntity,
+  record: EntityEditRecord | undefined,
+): string {
+  if (!record) return "";
+  return (
+    readRecordField(
+      record,
+      entitySummary[entity].titleField,
+      z.string().nullish().catch(null),
+    ) ?? ""
+  );
+}
+
+/** An update dialog names its record first; a presentation's own note (a
+ * list-replacement warning, say) follows on its own line. */
+function dialogDescription(identity: string, note: ReactNode): ReactNode {
+  if (!identity) return note;
+  return (
+    <>
+      {identity}
+      {note ? <span className="block">{note}</span> : null}
+    </>
+  );
+}
+
 export function EntityEditDialogContent<E extends EditableEntity>({
   open,
   onOpenChange,
@@ -332,7 +368,12 @@ export function EntityEditDialogContent<E extends EditableEntity>({
         onOpenChange(next);
       }}
       title={presentation.title({ context, record })}
-      description={presentation.description({ context, record })}
+      description={dialogDescription(
+        request.operation === "update"
+          ? recordIdentityLine(request.entity, record)
+          : "",
+        presentation.description({ context, record }),
+      )}
       size={presentation.size ?? "md"}
       bodyMode="form"
     >

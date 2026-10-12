@@ -724,6 +724,8 @@ function FieldSuggestionStatusBridge({
         outcome,
         suggestion: suggestions[target.key] ?? null,
         currentValue: context.currentValueFor(target.key),
+        alternative: alternativeTargets.includes(target.key),
+        autoFilled: context.isAutoFilled(target.key),
       },
     ];
   });

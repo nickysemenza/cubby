@@ -663,6 +663,7 @@ export function SideBySideFields({
 }): ReactNode {
   return (
     <div
+      data-slot="side-by-side-fields"
       className={cn(
         "flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2",
         className,

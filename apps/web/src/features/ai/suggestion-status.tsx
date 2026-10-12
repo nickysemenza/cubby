@@ -21,6 +21,10 @@ export interface SuggestionStatusField {
   readonly suggestion: FieldSuggestion | null;
   readonly currentValue: string | null;
   readonly currentLabel?: string | null;
+  /** Edit-mode empty targets need the higher alternative bar; the breakdown
+   * must judge actionability exactly as the field's own review does. */
+  readonly alternative?: boolean;
+  readonly autoFilled?: boolean;
 }
 
 /** Beyond this many fields the popover switches from a per-field list to
@@ -178,6 +182,7 @@ export function SuggestionStatus({
                       actionable: actionableSuggestion(
                         field.suggestion,
                         field.currentValue,
+                        field.alternative,
                       ),
                     })}
                   </Description>
