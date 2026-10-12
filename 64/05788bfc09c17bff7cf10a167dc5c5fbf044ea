@@ -1,0 +1,19 @@
+packages/schemas/src/entity-definitions/28-email.entity.ts
+  s_d8b0104fa13905::t_3e0ecc57b0d02e 351-352
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6405788bfc09c17bff7cf10a167dc5c5fbf044ea",
+  "prompts": {},
+  "sessions": {
+    "s_d8b0104fa13905": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd9091e5-6d0e-4f69-a35f-3af868a5b12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
