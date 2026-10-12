@@ -217,7 +217,8 @@ function DateFitFixture({ inherited = false }: { inherited?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const measured = useRenderedColumnWidths(table, ref, "date", true);
   const column = table.getVisibleLeafColumns()[0];
-  const cell = table.getRowModel().rows[0].getVisibleCells()[0];
+  const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
+  if (!column || !cell) throw new Error("Missing synthetic date cell");
   const fitted = measured.date ?? column.getSize();
   return (
     <div
