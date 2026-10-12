@@ -178,6 +178,18 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the original Run that produced the evidence",
   },
+  "EmailFinancialAssociation.emailId": {
+    classification: "metadata",
+    reason: "a member-reviewed association owned by its Email",
+  },
+  "EmailFinancialAssociation.transactionId": {
+    classification: "metadata",
+    reason: "reviewed history naming the settlement transaction it links",
+  },
+  "EmailFinancialAssociation.reviewedAccountId": {
+    classification: "metadata",
+    reason: "reviewed history naming the account a member confirmed",
+  },
 
   "ImportPreparedOrder.targetPurchaseId": {
     classification: "metadata",

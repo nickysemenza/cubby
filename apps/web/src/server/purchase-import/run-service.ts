@@ -2187,6 +2187,7 @@ export async function controlRun(
           vendorId: runTable.vendorId,
           purpose: runTable.purpose,
           trigger: runTable.trigger,
+          parentRunId: runTable.parentRunId,
           notes: runTable.notes,
           input: runTable.input,
           skillRevision: runTable.skillRevision,
@@ -2256,6 +2257,8 @@ export async function controlRun(
           vendorAccountId: locked.vendorAccountId,
           vendorId: locked.vendorId,
           predecessorRunId: scope.public.runId,
+          parentRunId:
+            locked.purpose === "mail_import" ? locked.parentRunId : null,
           purpose: locked.purpose,
           trigger: "manual",
           notes: locked.notes,
@@ -2432,6 +2435,8 @@ export async function controlRun(
           vendorAccountId: successorVendorAccountId,
           vendorId: locked.vendorId,
           predecessorRunId: scope.public.runId,
+          parentRunId:
+            locked.purpose === "mail_import" ? locked.parentRunId : null,
           purpose: locked.purpose,
           trigger: locked.trigger,
           input: successorInput,

@@ -32,8 +32,11 @@ import { getDb } from "~/server/repo/database-helpers";
 import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/repo/image-processing";
 import {
   createImageFixture,
+  createInventoryFixture,
+  createLocationFixture,
   insertEntityAttachments,
   createProductFixture,
+  makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
@@ -1045,5 +1048,72 @@ describe("member actionable Work queue", () => {
     expect(
       (await read(ctx.actor.userId, { waitingFor: second.shortcode })).isError,
     ).toBe(true);
+  });
+  // Failure modes: rows carry no thumbnail, a borrowed-image entity misses
+  // its product's cover, or a member read exposes imagery borrowed through a
+  // linked record the member's routing never established.
+  it("carries each source record's resolved display images", async () => {
+    const pictured = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic pictured queue item",
+        categoryId: null,
+      }),
+      ctx.actor,
+    );
+    const cover = await createImageFixture(ctx.db, "Synthetic queue cover", {
+      sha256: "f".repeat(64),
+      source: "catalog",
+    });
+    await insertEntityAttachments(ctx.db, {
+      entityId: pictured.entityId,
+      imageId: cover.id,
+      role: "cover",
+    });
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic queue shelf" }),
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: pictured.id,
+        locationId: shelf.id,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+    const queue = await readWorkQueue(
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({
+        query: "Synthetic pictured queue item",
+        pageSize: 100,
+      }),
+      false,
+    );
+    const imagesFor = (entity: string) =>
+      queue.items
+        .filter((row) => row.entity === entity)
+        .map((row) => row.displayImages.map((image) => image.id));
+    expect(imagesFor("product").length).toBeGreaterThan(0);
+    expect(new Set(imagesFor("product").flat())).toEqual(
+      new Set([cover.shortcode]),
+    );
+    expect(imagesFor("inventory").length).toBeGreaterThan(0);
+    for (const ids of imagesFor("inventory"))
+      expect(ids).toEqual([cover.shortcode]);
+    const memberRead = await readWorkQueue(
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({
+        query: "Synthetic pictured queue item",
+        pageSize: 100,
+      }),
+      true,
+    );
+    expect(memberRead.items.length).toBeGreaterThan(0);
+    for (const row of memberRead.items) expect(row.displayImages).toEqual([]);
   });
 });

@@ -7,9 +7,9 @@ import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 // The virtualizer positions rows at ROW_DENSITY.rowHeight; a cell that stacks
-// lines (brand/category/UPC, nutrient chips over a count, wrapped reference
-// chips under a "View all" link) grows the painted row past it and scrolling
-// jumps.
+// lines past it (brand/category/UPC, nutrient chips over a count, reference
+// chips wrapping onto a third line beside a "View all" link) grows the
+// painted row and scrolling jumps.
 async function expectRowsAtDensity(page: Page, table: string, text: string) {
   const rows = page
     .getByRole("table", { name: table })
@@ -37,7 +37,7 @@ test("USDA rows paint at the fixed virtualized row height", async ({
   await expectRowsAtDensity(page, "USDA Foods Table", "Synthetic");
 });
 
-test("multi-reference list cells stay on one row line", async ({
+test("multi-reference list cells stay within the row height", async ({
   page,
   baseURL,
 }) => {
@@ -65,7 +65,11 @@ test("multi-reference list cells stay on one row line", async ({
     });
   await gotoAuthenticatedPage(page, "/spending-categories");
   const row = page.getByRole("row").filter({ hasText: name });
-  await expect(row).toContainText("+2 more");
+  // However many chips fit two lines, the rest are counted, never dropped.
+  const overflow = row.locator("[data-chip-overflow]");
+  await expect(overflow).toHaveText(/^\+\d+$/);
+  const hidden = Number((await overflow.textContent())?.slice(1));
+  await expect(row.locator("[data-chip]")).toHaveCount(4 - hidden);
   await expect(row.getByRole("link", { name: "View all" })).toBeVisible();
   await expectRowsAtDensity(
     page,

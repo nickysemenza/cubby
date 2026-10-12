@@ -40,8 +40,12 @@ decisions are reachable on MCP too
 (`run.approve_execution`, `run.discover_mail`, `run.commit_prepared`,
 `run.resolve_finding`, `photo_run.approve_groups`,
 `product_enrichment.merge_match`, suggestion review). An agent calls one only
-on the member's explicit instruction for that specific budget or scope. No run
-purpose holds the `start_run` or `member_decision` capability
+on the member's explicit instruction for that specific budget or scope. An
+exact-checksum member-selected Luna Email import or its member-controlled retry
+needs no dollar grant. Explicit member selections of Vendor order Emails use
+the same policy within the existing selection limit. Historical discovery still needs its
+separate scope authorization; other paid models keep their allowance checks.
+No run purpose holds the `start_run` or `member_decision` capability
 (`server/purchase-import/capabilities.ts`), so a coordinator never starts
 another run or makes a member's decision. That gate applies only to
 Run-delegated tokens: a member OAuth session, including an automated routine

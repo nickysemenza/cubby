@@ -2,7 +2,13 @@ import { Pool, type PoolConfig, type PoolClient } from "pg";
 
 const clientClosures = new WeakMap<Pool, Map<PoolClient, Promise<void>>>();
 
-/** Reset must not hand a killed idle client to the next test before its error arrives. */
+/**
+ * Reset must not hand a killed idle client to the next test before its error
+ * arrives: a successful pg_terminate_backend does not mean node-postgres has
+ * received the fatal 57P01, and checking the client out first removes its pool
+ * error listener. Checked-out targets get a temporary handler that consumes
+ * only the deliberate 57P01 and its disconnect; other errors still surface.
+ */
 export async function terminateOtherPostgresConnections(
   pool: Pool,
 ): Promise<void> {
@@ -10,12 +16,29 @@ export async function terminateOtherPostgresConnections(
   if (!clients) throw new Error("Reset requires a createPostgresPool pool");
   const control = await pool.connect();
   try {
-    const closing = [...clients]
-      .filter(([client]) => client !== control)
-      .map(([, closed]) => closed);
-    await control.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-      WHERE datname = current_database() AND pid <> pg_backend_pid()`);
-    await Promise.all(closing);
+    const targets = [...clients].filter(([client]) => client !== control);
+    const listeners = targets
+      .filter(([client]) => client.listenerCount("error") === 0)
+      .map(([client]) => {
+        const expectedTermination = (error: Error) => {
+          if ("code" in error && error.code === "57P01") {
+            return;
+          }
+          if (error.message === "Connection terminated unexpectedly") return;
+          throw error;
+        };
+        // Checked-out clients have no pg-pool idle handler during deliberate reset.
+        client.on("error", expectedTermination);
+        return { client, expectedTermination };
+      });
+    try {
+      await control.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+        WHERE datname = current_database() AND pid <> pg_backend_pid()`);
+      await Promise.all(targets.map(([, closed]) => closed));
+    } finally {
+      for (const { client, expectedTermination } of listeners)
+        client.removeListener("error", expectedTermination);
+    }
   } finally {
     control.release();
   }

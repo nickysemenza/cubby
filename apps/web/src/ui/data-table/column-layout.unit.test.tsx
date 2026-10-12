@@ -48,8 +48,8 @@ describe("desktop surplus allocation", () => {
     getIsPinned: () => extra.pinned ?? false,
     columnDef: { header: id, maxSize: extra.maxSize, meta: extra.meta },
   });
-  const name = column("name", 256, {
-    maxSize: 512,
+  const name = column("name", 240, {
+    maxSize: 480,
     meta: { entityColumnRole: "identity" },
   });
   const parent = column("parent", 176, { maxSize: 352 });
@@ -58,6 +58,7 @@ describe("desktop surplus allocation", () => {
     maxSize: 272,
     meta: { cellData: { kind: "select" } },
   });
+  const code = column("orderId", 160, { maxSize: 320, meta: { mono: true } });
   const actions = column("actions", 40, {
     pinned: "end",
     meta: { entityColumnRole: "action" },
@@ -66,47 +67,75 @@ describe("desktop surplus allocation", () => {
   // Regressions: all slack went to one column past its maxSize, so a
   // three-column list painted a 1200px name beside crammed facts; even
   // spreading then widened every text column while the title stayed clipped.
-  it.each([
+  // A name wider than 240px then pushed every fact off the pane, so the
+  // identity fits to 240px and clipped names spill over on hover instead.
+  it.each<{
+    case: string;
+    columns: WidthColumn[];
+    available: number;
+    userSized: string[];
+    measured: Record<string, number>;
+    widths: Record<string, number>;
+    spacer: number;
+  }>([
     {
-      case: "fills the identity to maxSize before other flexible columns",
+      case: "grows a short identity to its 240px fit before its peers",
       columns: [name, parent, cost, actions],
-      available: 900,
+      available: 800,
       userSized: [],
-      // 324px slack: name takes its 256px of room, parent the last 68px.
-      widths: { name: 512, parent: 244, cost: 104, actions: 40 },
-      spacer: 0,
+      measured: { name: 180 },
+      // 300px slack: name takes 60px up to its fit, parent its 176px of room.
+      widths: { name: 240, parent: 352, cost: 104, actions: 40 },
+      spacer: 64,
     },
     {
       case: "splits slack across the identity's peers by configured width",
       columns: [name, parent, column("notes", 88, { maxSize: 1000 })],
       available: 1080,
       userSized: ["name"],
-      // 560px slack in a 176:88 ratio; parent caps at 352, notes takes the rest.
-      widths: { name: 256, parent: 352, notes: 472 },
+      measured: {},
+      // 576px slack in a 176:88 ratio; parent caps at 352, notes takes the rest.
+      widths: { name: 240, parent: 352, notes: 488 },
       spacer: 0,
     },
     {
-      case: "caps each column at maxSize and leaves the rest to the spacer",
+      case: "caps each column at its fit and leaves the rest to the spacer",
       columns: [name, parent, status, actions],
       available: 2000,
       userSized: [],
-      widths: { name: 512, parent: 352, status: 136, actions: 40 },
-      spacer: 2000 - (512 + 352 + 136 + 40),
+      measured: { name: 900 },
+      widths: { name: 240, parent: 352, status: 136, actions: 40 },
+      spacer: 2000 - (240 + 352 + 136 + 40),
     },
     {
-      case: "never widens a column a person sized",
-      columns: [name, parent, actions],
+      case: "fits a code column to 128px however long its values are",
+      columns: [code],
+      available: 400,
+      userSized: [],
+      measured: { orderId: 190 },
+      widths: { orderId: 128 },
+      spacer: 272,
+    },
+    {
+      case: "never refits a column a person sized",
+      columns: [
+        column("name", 420, { maxSize: 480, meta: name.columnDef.meta }),
+        parent,
+        actions,
+      ],
       available: 1000,
       userSized: ["name"],
-      widths: { name: 256, parent: 352, actions: 40 },
-      spacer: 1000 - (256 + 352 + 40),
+      measured: { name: 180 },
+      widths: { name: 420, parent: 352, actions: 40 },
+      spacer: 1000 - (420 + 352 + 40),
     },
     {
       case: "keeps configured widths when the pane is narrower",
       columns: [name, cost, actions],
       available: 300,
       userSized: [],
-      widths: { name: 256, cost: 104, actions: 40 },
+      measured: {},
+      widths: { name: 240, cost: 104, actions: 40 },
       spacer: 0,
     },
     {
@@ -114,14 +143,16 @@ describe("desktop surplus allocation", () => {
       columns: [column("verifiedAt", 128, { pinned: "end" })],
       available: 400,
       userSized: [],
+      measured: {},
       widths: { verifiedAt: 128 },
       spacer: 272,
     },
-  ])("$case", ({ columns, available, userSized, widths, spacer }) => {
+  ])("$case", ({ columns, available, userSized, measured, widths, spacer }) => {
     const resolved = resolvedTableColumnWidths(
       columns,
       available,
       new Set(userSized),
+      measured,
     );
     expect(resolved.widths).toEqual(widths);
     expect(resolved.spacer).toBe(spacer);
@@ -135,16 +166,16 @@ describe("column sizing defaults", () => {
   it.each<{ meta: CubbyColumnMeta; size: number }>([
     { meta: {}, size: 160 },
     { meta: { numeric: true }, size: 72 },
-    { meta: { cellData: dateCellData(() => null) }, size: 232 },
-    { meta: { cellData: timestampCellData(() => null) }, size: 64 },
+    { meta: { cellData: dateCellData(() => null) }, size: 96 },
+    { meta: { cellData: timestampCellData(() => null) }, size: 72 },
     {
       meta: {
         numeric: true,
         explanation: { entity: "product", field: "price", label: "Price" },
       },
-      size: 72 + 20,
+      size: 72 + 18,
     },
-    { meta: { className: "w-20", suggest: true }, size: 80 + 20 },
+    { meta: { className: "w-20", suggest: true }, size: 80 + 18 },
   ])("sizes column $# to $size", ({ meta, size }) => {
     const columns = createCubbyColumnCollection<Row>((add) => {
       add(helper.accessor("cost", { header: "Cost", meta }));
@@ -153,11 +184,13 @@ describe("column sizing defaults", () => {
     expect(result.current.columns[0]).toMatchObject({ size });
   });
 
-  // A narrow kind default must not truncate a short header ("Storage
-  // status" beside its pill); a long header truncates past a fixed cap.
+  // Headers wrap to two lines, so a label needs only its longest word or
+  // about half its length: "Itemization coverage" no longer widens its pill
+  // column to 154px, and a long header still stops at a fixed cap.
   it.each([
     { header: "Kind", size: 104 },
-    { header: "Storage status", size: 14 * 6.5 + 24 },
+    { header: "Itemization coverage", size: 104 },
+    { header: "Refrigeration requirements", size: Math.ceil(15 * 6.5) + 24 },
     { header: "A very long header that would otherwise dominate", size: 160 },
   ])("fits the $header header", ({ header, size }) => {
     const columns = createCubbyColumnCollection<Row>((add) => {
@@ -179,7 +212,7 @@ describe("column sizing defaults", () => {
         suggest: true,
         explanation: { entity: "product", field: "price", label: "Price" },
       }),
-    ).toBe(40);
+    ).toBe(36);
   });
 });
 

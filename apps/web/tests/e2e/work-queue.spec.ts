@@ -1,6 +1,12 @@
 import { eq } from "drizzle-orm";
 
-import { email, run } from "~/server/db/schema";
+import {
+  email,
+  entityAttachment,
+  image,
+  product,
+  run,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -13,6 +19,7 @@ import {
   getFixtureDb,
 } from "./fixtures-core";
 import { seedUnimportedOrderMail } from "./fixtures-mail";
+import { seedImagePrerequisite } from "./fixtures-photos";
 
 // Failure modes: a member filter widens to shared work, filtering runs only on
 // the loaded page, URL state is lost on reload, a queue row loses its source,
@@ -149,4 +156,72 @@ test("Work queue Run navigation stays on passive Problems", async ({
     where: eq(run.id, paused.id),
   });
   expect(saved?.status).toBe("paused_auth");
+});
+
+// Failure modes: the queue sits inside a contained gutter instead of reaching
+// the workbench edges, a source record loses its thumbnail, categorical values
+// lose their labels, or the rule's next action disappears with its column.
+test("Work queue rows show the source record's image, type and next action", async ({
+  page,
+  e2eRuntime,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const name = uniqueName(testInfo, "Queue pictured product");
+  const seeded = await seedProductPrerequisite(page, { name });
+  const picture = await seedImagePrerequisite(
+    `queue-thumb-${Date.now()}`,
+    e2eRuntime.objectStorageUrl,
+  );
+  const db = getDb(getFixtureDb());
+  const [owner] = await db
+    .select({ id: product.id })
+    .from(product)
+    .where(eq(product.shortcode, seeded.id));
+  const [stored] = await db
+    .select({ id: image.id })
+    .from(image)
+    .where(eq(image.shortcode, picture.id));
+  if (!owner || !stored) throw new Error("Synthetic queue image is missing");
+  await db.insert(entityAttachment).values({
+    entityId: owner.id,
+    entityKind: "product",
+    purpose: "item",
+    role: "cover",
+    imageId: stored.id,
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/work-queue?query=${encodeURIComponent(name)}&source=research`,
+  );
+  const record = page.getByRole("link", { name, exact: true });
+  const row = page.getByRole("row").filter({ has: record });
+  await expect
+    .poll(() =>
+      row
+        .getByRole("img", { name: "Image", exact: true })
+        .evaluate(
+          (node) => node instanceof HTMLImageElement && node.naturalWidth > 0,
+        ),
+    )
+    .toBe(true);
+  await expect(
+    row.getByRole("cell", { name: "Product", exact: true }),
+  ).toBeVisible();
+  await expect(
+    row.getByRole("cell", { name: "Research", exact: true }),
+  ).toHaveCount(2);
+  await expect(
+    page.getByRole("columnheader", { name: "Next action", exact: true }),
+  ).toHaveCount(0);
+  // Research rows replace the reason with the record's current gaps; the
+  // rule's next action stays as the reason's description.
+  await expect(
+    row.getByTitle("Review missing facts and add verified evidence.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  const table = await page.getByRole("table").boundingBox();
+  const main = await page.getByRole("main").boundingBox();
+  expect(table && main && main.width - table.width).toBeLessThanOrEqual(2);
 });

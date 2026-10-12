@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { formatDateSpan } from "./date-span";
+import { dateSpanParts, formatDateSpan } from "./date-span";
 
 const span = (start: string | null, end: string | null) =>
   formatDateSpan(start, end, "2026-12-31");
@@ -92,5 +92,36 @@ describe("past, present and future date context", () => {
 
   it("preserves impossible dates instead of rolling them forward", () => {
     expect(formatDateSpan("2026-02-30", null, "2026-02-01")).toBe("2026-02-30");
+  });
+});
+
+// Stacked table dates print the day and its compact distance as separate
+// lines; a calendar-day distance, never elapsed hours.
+describe("dateSpanParts", () => {
+  it.each([
+    ["2026-10-05", { label: "Oct 5", relative: "today" }],
+    ["2026-10-04", { label: "Oct 4", relative: "yesterday" }],
+    ["2026-10-06", { label: "Oct 6", relative: "tomorrow" }],
+    ["2026-09-30", { label: "Sep 30", relative: "5d ago" }],
+    ["2026-10-24", { label: "Oct 24", relative: "in 3w" }],
+    ["2027-05-14", { label: "May 14, 2027", relative: "in 7mo" }],
+    ["2024-09-30", { label: "Sep 30, 2024", relative: "2y ago" }],
+  ])("%s", (day, expected) => {
+    expect(dateSpanParts(day, null, "2026-10-05")).toEqual(expected);
+  });
+
+  it("keeps ranges and unreadable values on the label line", () => {
+    expect(dateSpanParts("2026-10-01", "2026-10-08", "2026-10-05")).toEqual({
+      label: "Oct 1 – 8",
+      relative: "ongoing",
+    });
+    expect(dateSpanParts(null, null, "2026-10-05")).toEqual({
+      label: "No date",
+      relative: null,
+    });
+    expect(dateSpanParts("2026-02-30", null, "2026-02-01")).toEqual({
+      label: "2026-02-30",
+      relative: null,
+    });
   });
 });

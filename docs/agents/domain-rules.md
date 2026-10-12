@@ -120,8 +120,10 @@ combining results, so whitespace-wrapped members cannot borrow another
 member's entity brand.
 
 Drizzle raw-`sql` traps: an interpolated column renders **unqualified** on a
-single-table select, so a correlated subquery over the same table silently
-self-joins (use `sql.raw` with hand-qualified names); a JS array interpolates as
+single-table select, including inside a nested projection. A correlated
+subquery can silently compare its own columns instead of the outer row;
+use explicit table aliases and literal qualified names for that correlation.
+A JS array interpolates as
 a **row constructor**, not a Postgres array (use `eqAny`/`inArray`/
 `arrayOverlaps`/`uuidArrayParam`; the `no-unsafe-sql-array-interpolation`
 Oxlint rule guards it). A new FK that closes a loop between tables makes every

@@ -139,19 +139,17 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
+- 🤔 🛠️ **Clarify explicit selection of an already-admitted Email.** A member's
+  selection can reuse an automatic Run through existing source ownership or
+  replay identity, retaining that Run's original execution authority. Surface
+  the existing owner or offer a bounded reviewed handoff without unpausing its
+  whole discovery batch; preserve source history and frozen scope.
+
 - ⏳ 🐛 **Gmail discovery re-authentication.** Promote when production Gmail
   returns 401/403 after refresh-token expiry or revocation: actionable
   reconnect, resumable Problem, never an "empty mailbox".
 
 ### Reconcile charges and refunds
-
-- 🤔 🛠️ **Resolve combined-credit Emails without false order attribution.**
-  A bank alert can describe one credit covering refunds from several orders.
-  `mail.resolve` currently links one Purchase. Investigate an evidence-backed
-  settlement association or explicit reviewed disposition that preserves the
-  Email and every constituent payment leg, without choosing one order to stand
-  for the combined credit or booking it again. Keep account identity proof and
-  source ownership as separate requirements.
 
 - 🧱 ✨ **Record points and miles redemptions.** An award ticket's fare is a $0
   principal Expense; only its taxes and fees are money. Record the loyalty
@@ -571,6 +569,21 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   the form but never shown: `entityEditBannerIssues`
   (`entity-edit-dialog-content.tsx`) excludes every field-scoped issue, so Save
   fails silently. Surface issues no registered control can display.
+- 🤔 🛠️ **RTable visual polish pass.** Quieter cells read as finished; the
+  mocked target has fewer marks and type-led hierarchy. Start with
+  `cubby-ui-design-audit` measuring live computed styles against the mock,
+  then land what holds up, updating `apps/web/DESIGN.md` (RTable):
+  - Drop the tag glyph on every category chip; the chip already says "tag".
+  - Show header provenance/link icons only on header hover or focus.
+  - Lighter status pills: 12px text, ~2px vertical padding, softer borders,
+    well short of the row height.
+  - Quieter headers: 12px medium muted label, one stronger bottom rule, no
+    icons at rest.
+  - Monospace only for codes and shortcodes, never timestamps or counts.
+  - Secondary values as a muted smaller line or tone, never in parentheses.
+  - Fainter column rules and row separators than the header boundary.
+  - Audit other per-cell icons (hierarchy, external link) for the same
+    every-row repetition; keep one only where it changes the action.
 - 🤔 ✨ **All-entities record interaction parity.** Reuse standard row inspection,
   selection, clipboard behavior, and actions in the Records tab. Decide which
   actions are eligible for mixed entity types before enabling batch work;

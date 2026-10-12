@@ -6,6 +6,8 @@ import type { CubbyTable } from "./table-features";
 
 const SAMPLE_ROWS = 12;
 const HEADER_CAP = 160;
+/** A two-line header's widest line is at least about half its label. */
+const HEADER_LINE_SHARE = 0.55;
 const INHERITED_TYPOGRAPHY = [
   "font-family",
   "font-size",
@@ -56,6 +58,64 @@ function naturalCell(cell: HTMLElement) {
     }
   }
   return clone;
+}
+
+const labelOf = (clone: HTMLElement) =>
+  clone.querySelector<HTMLElement>("[data-header-label]");
+
+/** The header clone with its label shrunk to its longest word. */
+function wrappedHeaderClone(cell: HTMLElement) {
+  const clone = naturalCell(cell);
+  const label = clone && labelOf(clone);
+  if (!clone || !label) return undefined;
+  label.style.width = "min-content";
+  label.style.flex = "0 0 auto";
+  return clone;
+}
+
+/**
+ * Header labels wrap to two lines, so the label's share of the width is its
+ * longest word or about half its one-line width, whichever is wider.
+ */
+function twoLineHeaderWidth(clone: HTMLElement, wrapped: HTMLElement) {
+  const painted = clone.getBoundingClientRect().width;
+  const label = labelOf(clone)?.getBoundingClientRect().width ?? 0;
+  const word = labelOf(wrapped)?.getBoundingClientRect().width ?? 0;
+  return Math.ceil(painted - label + Math.max(word, label * HEADER_LINE_SHARE));
+}
+
+type FitSample = {
+  id: string;
+  header: boolean;
+  clone: HTMLElement;
+  /** A header's label wrapped at its longest word. */
+  wrapped?: HTMLElement;
+};
+
+/** The offscreen clones that measure one cell, or none for unfit content. */
+function fitSample(id: string, cell: HTMLElement): FitSample | null {
+  if (cell.querySelector("input,textarea,[contenteditable=true]")) return null;
+  // Wrapping chip clusters fill whatever width the column has; on one line
+  // they would claim the column's whole maximum.
+  if (cell.querySelector("[data-cell-wrap]")) return null;
+  const clone = naturalCell(cell);
+  if (!clone) return null;
+  const header = cell.tagName === "TH";
+  return {
+    id,
+    header,
+    clone,
+    wrapped: header ? wrappedHeaderClone(cell) : undefined,
+  };
+}
+
+function sampleWidth(sample: FitSample) {
+  const painted = Math.ceil(sample.clone.getBoundingClientRect().width);
+  if (painted === 0 || !sample.header) return painted;
+  const header = sample.wrapped
+    ? twoLineHeaderWidth(sample.clone, sample.wrapped)
+    : painted;
+  return Math.min(header, HEADER_CAP);
 }
 
 export function renderedColumnFitScope<TData extends RowData>(
@@ -123,30 +183,24 @@ export function useRenderedColumnWidths<TData extends RowData>(
       host.inert = true;
       host.style.cssText =
         "position:fixed;left:-100000px;top:0;width:max-content;visibility:hidden;pointer-events:none;";
-      const samples: Array<{
-        id: string;
-        header: boolean;
-        clone: HTMLElement;
-      }> = [];
+      const samples: FitSample[] = [];
       for (const cell of cells) {
         const id = cell.dataset.columnId;
         const column = id ? table.getColumn(id) : undefined;
         if (!id || !column || isLockedColumn(column)) continue;
-        if (cell.querySelector("input,textarea,[contenteditable=true]"))
-          continue;
-        const clone = naturalCell(cell);
-        if (!clone) continue;
-        host.append(clone);
-        samples.push({ id, header: cell.tagName === "TH", clone });
+        const sample = fitSample(id, cell);
+        if (!sample) continue;
+        host.append(sample.clone);
+        if (sample.wrapped) host.append(sample.wrapped);
+        samples.push(sample);
       }
       // All writes precede all layout reads; remove the inert batch only after
       // the reads finish. No React components or network requests are mounted.
       document.body.append(host);
       const widths: Record<string, number> = {};
       for (const sample of samples) {
-        const painted = Math.ceil(sample.clone.getBoundingClientRect().width);
-        if (painted === 0) continue;
-        const natural = sample.header ? Math.min(painted, HEADER_CAP) : painted;
+        const natural = sampleWidth(sample);
+        if (natural === 0) continue;
         widths[sample.id] = Math.max(widths[sample.id] ?? 0, natural);
       }
       host.remove();

@@ -230,7 +230,7 @@ export function createNameColumn<T extends BaseRow>(
     id: options?.id ?? String(resolvedFieldName),
     enableSorting: options?.enableSorting ?? true,
     meta: attachCubbyColumnMeta({
-      className: options?.className ?? "w-64",
+      className: options?.className ?? "w-60",
       entityColumnRole: "identity",
       surplus: true,
       filterConfig: options?.filterConfig,
@@ -433,7 +433,10 @@ export function createTimestampColumn<T extends BaseRow>(
 
 interface CreateImageColumnOptions<T> {
   /** Entity type for colored placeholder icon when no image */
-  entity: Entity;
+  entity?: Entity;
+  /** Per-row placeholder entity for a table whose rows name different
+   *  entities (the Work queue); takes precedence over `entity`. */
+  rowEntity?: (row: T) => Entity | undefined;
   /** Field-key id when an entity declares an images column. */
   id?: string;
   /** How this row resolves its thumbnail. Defaults to `row.displayImages` —
@@ -465,12 +468,12 @@ interface DisplayImagesRow {
  * page's embedded expense table). A predicate, not an assertion: the guard
  * scripts forbid asserting into a branded-id shape.
  */
-export const hasDisplayImages = <T extends BaseRow>(
+export const hasDisplayImages = <T extends object>(
   row: T,
 ): row is T & DisplayImagesRow =>
   "displayImages" in row && Array.isArray(row.displayImages);
 
-type ImageColumnDef<T extends BaseRow> = CubbyColumnDef<
+type ImageColumnDef<T extends object> = CubbyColumnDef<
   T,
   Array<{ id: string; url: string; filename?: string }>
 >;
@@ -483,11 +486,11 @@ type ImageColumnDef<T extends BaseRow> = CubbyColumnDef<
 export const isImageColumnId = (id: string | null | undefined): boolean =>
   id === "image" || id === "images";
 
-export function createImageColumn<T extends BaseRow & DisplayImagesRow>(
+export function createImageColumn<T extends object & DisplayImagesRow>(
   columnHelper: ColumnHelper<T>,
   options: CreateImageColumnOptions<T>,
 ): ImageColumnDef<T>;
-export function createImageColumn<T extends BaseRow>(
+export function createImageColumn<T extends object>(
   columnHelper: ColumnHelper<T>,
   options: CreateImageColumnOptions<T> & {
     getImages: (
@@ -495,11 +498,12 @@ export function createImageColumn<T extends BaseRow>(
     ) => Array<{ id: string; url: string; filename?: string }>;
   },
 ): ImageColumnDef<T>;
-export function createImageColumn<T extends BaseRow>(
+export function createImageColumn<T extends object>(
   columnHelper: ColumnHelper<T>,
   options: CreateImageColumnOptions<T>,
 ) {
   const { entity } = options;
+  const rowEntity = (row: T) => options.rowEntity?.(row) ?? entity;
   // Only the first overload (`T extends DisplayImagesRow`) omits `getImages`,
   // so every row reaching the default actually carries `displayImages` — the
   // implementation signature just can't say so, hence the runtime predicate.
@@ -521,7 +525,9 @@ export function createImageColumn<T extends BaseRow>(
     // the 32px row; layout normalization adds any explanation rail beside it.
     meta: {
       provenance: options.provenance,
-      explanation: declaredColumnExplanation(entity, options.id ?? "image"),
+      explanation: entity
+        ? declaredColumnExplanation(entity, options.id ?? "image")
+        : undefined,
       entityColumnRole: "image",
       className: cn("h-px w-8 overflow-hidden px-0 py-0", options?.className),
       mobile: options?.mobile ?? { slot: "image", priority: -10 },
@@ -541,7 +547,7 @@ export function createImageColumn<T extends BaseRow>(
         images={getImages(info.row.original)}
         alt="Image"
         lazyPreview={true}
-        entity={entity}
+        entity={rowEntity(info.row.original)}
       />
     ),
   });
@@ -851,7 +857,10 @@ export function createTextColumn<
   const renderValue =
     options?.renderValue ??
     ((v: string | null) =>
-      renderScalarValue({ kind: "text", raw: v ?? "", label: v ?? "" }));
+      renderScalarValue(
+        { kind: "text", raw: v ?? "", label: v ?? "" },
+        "list",
+      ));
   const renderRow = (value: string | null, row: T) => renderValue(value, row);
   const editable = options?.editable;
   const textValue = (row: T): string | null => row[accessor] ?? null;
