@@ -933,6 +933,12 @@ export async function updateFinancialTransaction(
 }
 
 const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
+  "EmailFinancialAssociation.transactionId": {
+    code: "preserve-reviewed-email-association",
+    effect: "preserve",
+    description:
+      "A reviewed Email association keeps naming the deleted transaction's tombstone; the review is history and is never rewritten.",
+  },
   "FinancialTransactionAllocation.transactionId": {
     code: "soft-delete-association",
     effect: "soft-delete",

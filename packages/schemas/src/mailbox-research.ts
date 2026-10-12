@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { purchaseShortcode } from "./identifier-fields";
+import {
+  purchaseShortcode,
+  financialTransactionShortcode,
+  financialAccountShortcode,
+} from "./identifier-fields";
 import { executionAuthorizationRef } from "./execution-authorization.js";
 
 export const MAILBOX_RESEARCH_VERSION = "2026-10-11.1";
@@ -196,15 +200,57 @@ export const mailSearchInput = z.object({
 });
 export type MailSearchInput = z.infer<typeof mailSearchInput>;
 
+export const mailFinancialReview = z.strictObject({
+  transactionId: financialTransactionShortcode,
+  reviewedAccountId: financialAccountShortcode,
+  sourceAccountLabel: z.string().trim().min(1).max(320),
+  reviewReason: z.string().trim().min(1).max(1_000),
+});
+export const mailSettlementReview = z.strictObject({
+  refundAmount: z
+    .number()
+    .finite()
+    .negative()
+    .refine(
+      (amount) => Math.abs(amount * 100 - Math.round(amount * 100)) < 0.0000001,
+      "Refund amount must be whole cents.",
+    ),
+  associations: z
+    .array(mailFinancialReview)
+    .min(1)
+    .max(50)
+    .refine(
+      (rows) =>
+        new Set(rows.map((row) => row.transactionId)).size === rows.length,
+      "Refund references must be distinct.",
+    ),
+});
+export type MailSettlementReview = z.infer<typeof mailSettlementReview>;
+export const mailFinancialAssociation = mailFinancialReview.extend({
+  currentAccountId: financialAccountShortcode.nullable(),
+  evidenceChecksum: sha256,
+  reviewedAt: z.iso.datetime(),
+  transactionDeleted: z.boolean(),
+  reviewedAccountDeleted: z.boolean(),
+  accountChanged: z.boolean(),
+});
 export const mailResolveDisposition = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("linked"),
-      purchaseId: purchaseShortcode,
+      purchaseIds: z
+        .array(purchaseShortcode)
+        .min(1)
+        .max(50)
+        .refine(
+          (ids) => new Set(ids).size === ids.length,
+          "Purchase links must be distinct.",
+        ),
       event: mailEvent,
+      settlement: mailSettlementReview.optional(),
     })
     .describe(
-      "The Email records this lifecycle event of an existing Purchase (shipment, delivery, cancellation, refund …). Writes no Expenses.",
+      "The Email records this lifecycle event of existing Purchases. Writes no Expenses.",
     ),
   z
     .object({
@@ -234,7 +280,8 @@ export type MailResolveInput = z.infer<typeof mailResolveInput>;
 export const mailResolveOut = mailMessageRef.extend({
   status: emailStatus,
   disposition: z.enum(["linked", "unresolved", "unrelated"]),
-  purchaseId: purchaseShortcode.nullable(),
+  purchaseIds: z.array(purchaseShortcode),
+  financialAssociations: z.array(mailFinancialAssociation),
 });
 export const MAIL_ATTACHMENT_MAX_BYTES = 3 * 1024 * 1024;
 /** A retained attachment's original bytes, read through `mail.read`. */
@@ -265,6 +312,7 @@ export const mailReadOut = mailMessageRef.extend({
   originalAttachment: mailAttachmentOriginal.optional(),
   /** True when Pi reads an Email its Mail import Run admitted. */
   boundToRun: z.boolean(),
+  financialAssociations: z.array(mailFinancialAssociation).default([]),
 });
 export const mailSearchOut = z.object({
   status: z.enum(["ok", "mailbox_required", "gmail_reconnect_required"]),

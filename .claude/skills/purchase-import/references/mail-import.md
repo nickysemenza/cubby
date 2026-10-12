@@ -31,8 +31,15 @@ Claude or Codex session researches it later through the Research queue.
      untracked spending. The commit links the Email to the Purchase.
    - **A lifecycle Email about an existing Purchase** (shipped, delivered,
      cancelled, refunded, or another event): find that Purchase by order id
-     and Vendor, then `mail` `resolve` with `linked` and the event. A refund
+     and Vendor, then `mail` `resolve` with `linked`, `purchaseIds` containing
+     every source-supported Purchase, and the event. A refund
      Email never books money by itself; the refund remains review work.
+     A combined-credit alert may support several Purchases. A member reviews
+     each existing posted refund, its allocation and account identity before
+     providing `settlement`; the Mail import coordinator leaves account-mapping
+     review for that member. The reviewed credit must equal those refund legs,
+     whose existing allocations must explain exactly the named Purchases.
+     This associates evidence without changing money, allocations or stock.
    - **An order whose Purchase you cannot establish**: `mail` `resolve` with
      `unresolved` and the concrete gap.
    - **Not about a purchase**: `mail` `resolve` with `unrelated`. Cubby deletes

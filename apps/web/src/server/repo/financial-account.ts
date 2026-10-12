@@ -64,6 +64,12 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { completeListReader } from "./list-read-adapters";
 
 export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
+  "EmailFinancialAssociation.reviewedAccountId": {
+    code: "preserve-reviewed-email-association",
+    effect: "preserve",
+    description:
+      "A reviewed Email association keeps naming the deleted account's tombstone; the review is history and is never rewritten.",
+  },
   "FinancialTransaction.accountId": {
     code: "block-live-financial-transactions",
     effect: "block",

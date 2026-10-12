@@ -267,6 +267,13 @@
       "when": 1791758241897,
       "tag": "0037_statement_export_membership",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791816917217,
+      "tag": "0038_email_financial_associations",
+      "breakpoints": true
     }
   ]
 }
