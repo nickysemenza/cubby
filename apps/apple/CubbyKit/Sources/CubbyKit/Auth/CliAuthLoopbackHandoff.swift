@@ -128,7 +128,6 @@
         var hasPublishedResult: Bool { queue.sync { resultPublished } }
 
         public func close() {
-            var hasPublishedResult: Bool { queue.sync { resultPublished } }
             queue.async { [weak self] in
                 guard let self, !self.closed else { return }
                 self.closed = true
