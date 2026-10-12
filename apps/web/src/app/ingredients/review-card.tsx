@@ -1,7 +1,9 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
+import { countLabel } from "@cubby/shared/pluralize";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useQuery } from "@tanstack/react-query";
+import pluralize from "pluralize";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 
 import { verbDef } from "~/entity/actions/action-verbs";
@@ -225,7 +227,7 @@ export function ReviewCard({
               <div>
                 <div className="text-lg font-medium">{row.name}</div>
                 <div className="text-xs text-muted-foreground">
-                  × {row.recipeCount} recipe{row.recipeCount === 1 ? "" : "s"}
+                  × {countLabel(row.recipeCount, "recipe")}
                   {row.product.length > 0 && " · has product"}
                 </div>
               </div>
@@ -266,7 +268,7 @@ export function ReviewCard({
               {mergeOptions.length > 0 && (
                 <Stack gap="xs">
                   <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    Possible duplicate{mergeOptions.length === 1 ? "" : "s"}
+                    Possible {pluralize("duplicate", mergeOptions.length)}
                   </p>
                   <div className="divide-y border border-dashed">
                     {mergeOptions.map((opt, i) => (

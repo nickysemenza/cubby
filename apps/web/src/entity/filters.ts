@@ -1,11 +1,10 @@
 import type { FILTER_KINDS } from "@cubby/schemas/entity-definitions/definition";
 import { FILTER_ANY, FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import { humanize, UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { partition } from "es-toolkit";
 import { match } from "ts-pattern";
 import { z } from "zod";
-
-import { countLabel } from "~/lib/pluralize";
 
 /**
  * text: substring match. select: one enum value. multiselect: any-of a set of

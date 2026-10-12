@@ -1,4 +1,5 @@
 import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
+import { countLabel } from "@cubby/shared/pluralize";
 import { CarrotIcon } from "@phosphor-icons/react/dist/csr/Carrot";
 
 import { RankedBarBreakdown } from "~/ui/charts/kit";
@@ -15,10 +16,7 @@ export function IngredientUsageChart({
 }) {
   const top = rows
     .slice(0, 3)
-    .map(
-      (row) =>
-        `${row.name} ${row.recipeCount} recipe${row.recipeCount === 1 ? "" : "s"}`,
-    )
+    .map((row) => `${row.name} ${countLabel(row.recipeCount, "recipe")}`)
     .join("; ");
   const summary = `Ingredient usage: ${top}; ${rows.length} ingredients total`;
 
@@ -38,7 +36,7 @@ export function IngredientUsageChart({
       color={() => "var(--chart-2)"}
       showValueLabel
       labelSkipWidth={24}
-      formatValue={(value) => `${value} recipe${value === 1 ? "" : "s"}`}
+      formatValue={(value) => countLabel(value, "recipe")}
       formatLabel={(value) => `${value}`}
       axisBottomFormat={(value) => `${value}`}
       emptyIcon={CarrotIcon}

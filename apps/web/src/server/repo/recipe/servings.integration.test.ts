@@ -1,3 +1,4 @@
+import { countLabel } from "@cubby/shared/pluralize";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
@@ -19,13 +20,11 @@ it("words a recipe's composition and totals for the detail read", async () => {
   const sections = read?.sections ?? [];
   const ingredients = sections.flatMap((section) => section.ingredients);
   const steps = sections.flatMap((section) => section.instructions);
-  const plural = (count: number, noun: string) =>
-    `${count} ${noun}${count === 1 ? "" : "s"}`;
   expect(read?.compositionLabel).toBe(
     [
-      plural(sections.length, "section"),
-      plural(ingredients.length, "ingredient"),
-      plural(steps.length, "step"),
+      countLabel(sections.length, "section"),
+      countLabel(ingredients.length, "ingredient"),
+      countLabel(steps.length, "step"),
     ].join(" · "),
   );
   // Whatever costing has produced, the label words that same total.

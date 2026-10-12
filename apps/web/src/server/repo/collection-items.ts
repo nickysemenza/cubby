@@ -6,6 +6,7 @@ import type {
 import type { ImageAssociation } from "@cubby/schemas/image";
 import type { ProductCookbookRefOut } from "@cubby/schemas/product";
 import type { RunSummary } from "@cubby/schemas/run";
+import { countLabel } from "@cubby/shared/pluralize";
 
 /**
  * Rows for `collection` detail sections (`presentation.detail.sections`, kind `collection`).
@@ -13,9 +14,6 @@ import type { RunSummary } from "@cubby/schemas/run";
  * of text is worded once, here. Kept free of the formatting/WASM modules so the repositories that
  * attach the rows to a record stay light on the request path.
  */
-
-const count = (value: number, noun: string) =>
-  `${value} ${noun}${value === 1 ? "" : "s"}`;
 
 export const phaseLabel = (phase: string) =>
   phase.replaceAll("_", " ").replace(/^./u, (letter) => letter.toUpperCase());
@@ -33,7 +31,7 @@ export const cookbookItems = (
     title: cookbook.name,
     subtitle: null,
     // The count doubles as the link to the recipes taken from this cookbook.
-    trailing: count(cookbook.recipeCount, "recipe"),
+    trailing: countLabel(cookbook.recipeCount, "recipe"),
     listLink: { entity: "recipe", filters: { source: cookbook.id } },
   }));
 

@@ -2,6 +2,7 @@ import type {
   InfLocation,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowsInLineVerticalIcon } from "@phosphor-icons/react/dist/csr/ArrowsInLineVertical";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CaretUpDownIcon } from "@phosphor-icons/react/dist/csr/CaretUpDown";
@@ -254,7 +255,7 @@ export function LocationTree({ data }: LocationTreeProps) {
           <span>
             {isSearching
               ? `${shownLocationCount} of ${meta.locationCount} locations`
-              : `${meta.locationCount} location${meta.locationCount === 1 ? "" : "s"}`}
+              : countLabel(meta.locationCount, "location")}
           </span>
           {showInventory && (
             <span>

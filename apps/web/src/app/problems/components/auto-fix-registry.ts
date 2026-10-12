@@ -1,5 +1,6 @@
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import type { AllProblems, MaintenanceCounts } from "@cubby/schemas/problems";
+import { countLabel } from "@cubby/shared/pluralize";
 import { sumBy } from "es-toolkit";
 
 import { openRecipeRecomputeStaleStream } from "~/app/recipes/recipe-streams";
@@ -13,7 +14,6 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { backfillLocationDescriptionsStream } from "~/lib/ai-streams";
 import { collectBulkStream } from "~/lib/bulk-progress";
-import { countLabel } from "~/lib/pluralize";
 
 /** What one task did, for the run's summary toast. */
 type AutoFixOutcome = {

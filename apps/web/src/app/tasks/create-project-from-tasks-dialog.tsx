@@ -1,6 +1,7 @@
 import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import { plainDate, projectKindSchema } from "@cubby/schemas/project";
 import { getErrorMessage } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -71,7 +72,7 @@ export function CreateProjectFromTasksDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="New Project From Tasks"
-      description={`Create a project and move ${count} selected task${count !== 1 ? "s" : ""} onto it.`}
+      description={`Create a project and move ${countLabel(count, "selected task")} onto it.`}
       bodyMode="form"
     >
       <FormWrapper

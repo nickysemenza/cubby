@@ -1,5 +1,6 @@
 import type { ReportBlock, ReportCommand } from "@cubby/schemas/entity-report";
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
+import { countLabel } from "@cubby/shared/pluralize";
 import { and, eq, sql } from "drizzle-orm";
 
 import { formatCurrency } from "~/lib/utils";
@@ -199,7 +200,7 @@ export async function cookbookImportProgressReport(
         id: "reprocess",
         label: "Reprocess",
         prominent: false,
-        confirm: `Re-derive the ${importedCount} imported recipe${importedCount === 1 ? "" : "s"} from the stored extraction (no AI)? This rewrites those recipes.`,
+        confirm: `Re-derive the ${countLabel(importedCount, "imported recipe")} from the stored extraction (no AI)? This rewrites those recipes.`,
         request: { kind: "reprocess-cookbook", cookbookId },
       },
     ],

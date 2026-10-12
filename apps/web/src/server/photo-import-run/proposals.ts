@@ -1,21 +1,3 @@
-/**
- * Review queue in front of the photo-inventory writer: an agent proposes item
- * groups for a run, a household member edits and approves them on the run
- * page, and approval commits each group through `commitPhotoGroup` with the
- * stored payload. See `packages/schemas/src/photo-import-run.ts` for the wire
- * contract.
- *
- * Invariants:
- *  - every image a `proposed` row mentions is a reviewable target of its run
- *    when saved (`pending`, or `unresolved` after a stopped photo run), and
- *    appears in exactly one `proposed` row (attached or
- *    skipped); deleting an image later hard-deletes its target but leaves its
- *    id in the row's JSON, so every reader drops ids with no run target
- *    (`liveRoster`) instead of failing;
- *  - `committed` and `discarded` rows are frozen: a save naming their
- *    groupKey leaves them untouched and reports it as frozen;
- *  - a discard commits the group's images as `skip` so the run can complete.
- */
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   parseShortcodeFor,
@@ -50,6 +32,25 @@ import {
 } from "@cubby/schemas/photo-import-run";
 import { runPurpose, runStatus } from "@cubby/schemas/purchase-import";
 import { getErrorMessage } from "@cubby/shared";
+/**
+ * Review queue in front of the photo-inventory writer: an agent proposes item
+ * groups for a run, a household member edits and approves them on the run
+ * page, and approval commits each group through `commitPhotoGroup` with the
+ * stored payload. See `packages/schemas/src/photo-import-run.ts` for the wire
+ * contract.
+ *
+ * Invariants:
+ *  - every image a `proposed` row mentions is a reviewable target of its run
+ *    when saved (`pending`, or `unresolved` after a stopped photo run), and
+ *    appears in exactly one `proposed` row (attached or
+ *    skipped); deleting an image later hard-deletes its target but leaves its
+ *    id in the row's JSON, so every reader drops ids with no run target
+ *    (`liveRoster`) instead of failing;
+ *  - `committed` and `discarded` rows are frozen: a save naming their
+ *    groupKey leaves them untouched and reports it as frozen;
+ *  - a discard commits the group's images as `skip` so the run can complete.
+ */
+import { countLabel } from "@cubby/shared/pluralize";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -933,7 +934,7 @@ async function approveRow(
       });
       if (unfinished.length)
         throw new Error(
-          `AI description is still processing or needs retry for ${unfinished.length} photo${unfinished.length === 1 ? "" : "s"}`,
+          `AI description is still processing or needs retry for ${countLabel(unfinished.length, "photo")}`,
         );
     }
     const input = await commitInputFor(db, run, row, roster);

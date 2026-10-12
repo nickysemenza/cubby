@@ -1,6 +1,7 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
+import { countLabel } from "@cubby/shared/pluralize";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
 
@@ -93,8 +94,7 @@ export function EnrichmentWorkbenchInspector({
             row.recipeCount > 0 ? (
               <Stack gap="sm">
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  Appears in {row.recipeCount} recipe
-                  {row.recipeCount === 1 ? "" : "s"}
+                  Appears in {countLabel(row.recipeCount, "recipe")}
                 </p>
                 {usages.data && usages.data.length > 0 ? (
                   <div className="overflow-x-auto border border-[var(--border)] bg-background/60 p-2">

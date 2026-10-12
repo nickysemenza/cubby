@@ -5,6 +5,7 @@ import type {
 } from "@cubby/schemas/project";
 import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 import { capitalize } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
 import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
@@ -367,8 +368,8 @@ function OverviewView({
             search={{ view: "table", statuses: "done" }}
             className="text-xs text-muted-foreground hover:text-foreground hover:underline"
           >
-            {data.completedCount} completed project
-            {data.completedCount !== 1 ? "s" : ""} — view completed →
+            {countLabel(data.completedCount, "completed project")} — view
+            completed →
           </Link>
         )}
       </Section>

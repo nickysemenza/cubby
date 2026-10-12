@@ -5,6 +5,7 @@ import {
   type LocationType,
   type ProductCategory,
 } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { sum, sumBy } from "es-toolkit";
 
 import { formatCurrency } from "~/lib/utils";
@@ -739,7 +740,7 @@ function hitTestPieces(
       return {
         type: "furniture",
         label: piece.name,
-        detail: `${breadcrumb} — ${piece.items.length} item${piece.items.length !== 1 ? "s" : ""}${valuationStr}`,
+        detail: `${breadcrumb} — ${countLabel(piece.items.length, "item")}${valuationStr}`,
         screenX: 0,
         screenY: 0,
         locationId: piece.locationId,

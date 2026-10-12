@@ -1,5 +1,6 @@
 import type { ExpenseCostTypeAggregate } from "@cubby/schemas/project";
 import { capitalize } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
@@ -54,7 +55,7 @@ export function CostTypeDonut({
         const count = data.find((d) => d.id === id)?.count ?? 0;
         return (
           <div className="mt-1 text-xs text-muted-foreground">
-            {count} expense{count === 1 ? "" : "s"}
+            {countLabel(count, "expense")}
           </div>
         );
       }}

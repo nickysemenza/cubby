@@ -1,4 +1,5 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
+import { countLabel } from "@cubby/shared/pluralize";
 
 import { AiProvenance } from "~/features/ai/ai-proposal-card";
 import { AiProposalList } from "~/features/ai/ai-proposal-list";
@@ -99,7 +100,7 @@ export function SuggestionReviewTray({
         rows={proposalRows}
         onReject={onReject}
         onAcceptAll={onCreate}
-        acceptAllLabel={`Create ${creatableCount} product${creatableCount === 1 ? "" : "s"}`}
+        acceptAllLabel={`Create ${countLabel(creatableCount, "product")}`}
         rejectAllLabel="Reject all"
         pending={isPending}
         acceptAllDisabled={creatableCount === 0}

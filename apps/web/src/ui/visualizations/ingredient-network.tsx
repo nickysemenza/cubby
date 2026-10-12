@@ -2,6 +2,7 @@ import type {
   IngredientEdge,
   IngredientNode,
 } from "@cubby/schemas/ingredient-cooccurrence";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as d3Force from "d3-force";
@@ -227,10 +228,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
     const top = [...nodes]
       .sort((a, b) => b.recipeCount - a.recipeCount)
       .slice(0, 3)
-      .map(
-        (n) =>
-          `${n.name} ${n.recipeCount} recipe${n.recipeCount !== 1 ? "s" : ""}`,
-      )
+      .map((n) => `${n.name} ${countLabel(n.recipeCount, "recipe")}`)
       .join("; ");
     return `Ingredient co-occurrence network: ${top}; ${nodes.length} ingredients, ${edges.length} connections`;
   }, [nodes, edges]);
@@ -439,8 +437,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
             </button>
           </div>
           <div className="mt-2 text-xs text-muted-foreground">
-            Together in {selectedLink.weight} recipe
-            {selectedLink.weight !== 1 ? "s" : ""}:
+            Together in {countLabel(selectedLink.weight, "recipe")}:
           </div>
           <div className="mt-2 space-y-1">
             {selectedLink.recipes.map((recipe) => (
@@ -471,8 +468,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
             </Link>
           </div>
           <div className="mt-1 text-muted-foreground">
-            Used in {hoveredNode.recipeCount} recipe
-            {hoveredNode.recipeCount !== 1 ? "s" : ""}
+            Used in {countLabel(hoveredNode.recipeCount, "recipe")}
           </div>
           <div className="text-xs text-muted-foreground">
             {

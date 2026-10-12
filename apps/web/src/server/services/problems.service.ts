@@ -45,6 +45,7 @@ import {
   isNonFoodCategory,
   getErrorMessage,
 } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { createLogger } from "@cubby/worker-tracing";
 import { sum, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
@@ -55,7 +56,6 @@ import {
   conversionCoverage,
   gradedKinds,
 } from "~/lib/conversion-coverage";
-import { countLabel } from "~/lib/pluralize";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";

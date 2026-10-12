@@ -1,3 +1,4 @@
+import { countLabel } from "@cubby/shared/pluralize";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 
 import { formatSmallCurrency, formatCompactCount } from "~/lib/utils";
@@ -35,7 +36,7 @@ export function EstimatePanel({
           </span>
           <Description as="span" size="xs">
             {formatMinuteRange(estimate.wallMsLow, estimate.wallMsHigh)} ·{" "}
-            {estimate.chunks} chunk{estimate.chunks === 1 ? "" : "s"} ·{" "}
+            {countLabel(estimate.chunks, "chunk")} ·{" "}
             {formatCompactCount(estimate.lines, 1)} lines ·{" "}
             {formatCompactCount(estimate.inputTokens, 1)} in /{" "}
             {formatCompactCount(estimate.outputTokens, 1)} out tokens

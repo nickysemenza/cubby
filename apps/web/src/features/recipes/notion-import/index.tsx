@@ -1,5 +1,6 @@
 import type { notionPreviewOut } from "@cubby/schemas/import-recipe";
 import { getErrorMessage } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
@@ -144,7 +145,7 @@ export function NotionImport() {
         },
         successToast: (r) =>
           r.succeeded > 0
-            ? `Imported ${r.succeeded} recipe${r.succeeded === 1 ? "" : "s"} from Notion`
+            ? `Imported ${countLabel(r.succeeded, "recipe")} from Notion`
             : null,
       },
     );
@@ -179,7 +180,7 @@ export function NotionImport() {
       <Row align="center" gap="sm">
         {preview.isSuccess && (
           <Description as="span">
-            {items.length} recipe{items.length === 1 ? "" : "s"}
+            {countLabel(items.length, "recipe")}
             {summary && ` · ${summary}`}
           </Description>
         )}

@@ -1,3 +1,4 @@
+import { countLabel } from "@cubby/shared/pluralize";
 import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
 import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { memo, useMemo, useState } from "react";
@@ -316,7 +317,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
           Prep sheet
           <span className="text-muted-foreground/50">
             {" · "}
-            {components.length} component{components.length === 1 ? "" : "s"}
+            {countLabel(components.length, "component")}
           </span>
         </span>
       </header>

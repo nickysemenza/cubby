@@ -14,6 +14,7 @@ import {
   productWithoutMappingsSchema,
 } from "@cubby/schemas/problems";
 import { getMiscDisplayName } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { z } from "zod";
 
 import {
@@ -38,7 +39,6 @@ import {
   viewProblemDeclarations,
 } from "~/entity/view-manifest";
 import { householdLocalDate } from "~/lib/household-date";
-import { countLabel } from "~/lib/pluralize";
 import type { Database } from "~/server/db";
 import { expenseList } from "~/server/repo/expense/lookup";
 import { listFinancialTransactions } from "~/server/repo/financial-transaction";

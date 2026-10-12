@@ -1,4 +1,5 @@
 import type { Progress } from "@cubby/recipebridge/cookbook";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 
@@ -38,7 +39,7 @@ export function ExtractStatusLine({
     return (
       <Description as="span" size="xs">
         {outline
-          ? `${outline.chapters} chapter${outline.chapters === 1 ? "" : "s"} · ${outline.navRecipeTitles} recipe${outline.navRecipeTitles === 1 ? "" : "s"} in contents`
+          ? `${countLabel(outline.chapters, "chapter")} · ${countLabel(outline.navRecipeTitles, "recipe")} in contents`
           : "Ready to extract"}
       </Description>
     );
@@ -73,7 +74,7 @@ export function ExtractStatusLine({
   }
   return (
     <Description as="span" size="xs">
-      {recipeCount} recipe{recipeCount === 1 ? "" : "s"}
+      {countLabel(recipeCount, "recipe")}
     </Description>
   );
 }
@@ -116,8 +117,8 @@ export function ExtractProgressPanel({
         <>
           <Description size="xs">
             {progress.in_flight} in flight · {progress.failed} failed ·{" "}
-            {progress.cached} cached · {progress.recipes_so_far} recipe
-            {progress.recipes_so_far === 1 ? "" : "s"} ·{" "}
+            {progress.cached} cached ·{" "}
+            {countLabel(progress.recipes_so_far, "recipe")} ·{" "}
             {formatSmallCurrency(progress.cost_so_far_usd)} spent ·{" "}
             {formatMinutesSeconds(progress.elapsed_ms)} elapsed
           </Description>

@@ -1,4 +1,5 @@
 import type { UnexpandedSubRecipe } from "@cubby/schemas/meal";
+import { countLabel } from "@cubby/shared/pluralize";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -309,7 +310,7 @@ export function ShoppingMatrix({
         footer={[
           {
             key: "counts",
-            label: `${rows.length} ingredient${rows.length === 1 ? "" : "s"}`,
+            label: countLabel(rows.length, "ingredient"),
             cell: (columnKey) => {
               const n = rows.filter((r) =>
                 cells.get(r.key)?.values.has(columnKey),

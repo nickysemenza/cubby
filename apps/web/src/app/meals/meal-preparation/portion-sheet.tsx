@@ -2,6 +2,7 @@ import type {
   MealFoodAmount,
   MealPreparationYieldBasis,
 } from "@cubby/schemas/meal";
+import { countLabel } from "@cubby/shared/pluralize";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -336,7 +337,7 @@ function YieldFields({
           Recipe declares{" "}
           {[
             source.recipeServings
-              ? `${source.recipeServings} serving${source.recipeServings === 1 ? "" : "s"}`
+              ? countLabel(source.recipeServings, "serving")
               : null,
             source.recipeYield ? formatFoodAmount(source.recipeYield) : null,
           ]

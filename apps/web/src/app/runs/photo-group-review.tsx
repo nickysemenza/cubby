@@ -10,6 +10,7 @@ import type {
   PhotoRunImage,
   ReviewPhotoGroupsAction,
 } from "@cubby/schemas/photo-import-run";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
@@ -1321,8 +1322,7 @@ function ProposalCard({
         ) : null}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
           <p className="max-w-2xl text-xs text-muted-foreground">
-            Approve {proposal.images.length} photo
-            {proposal.images.length === 1 ? "" : "s"} (
+            Approve {countLabel(proposal.images.length, "photo")} (
             {proposal.images.map((image) => image.purpose).join(", ")}) for{" "}
             <strong className="text-foreground">
               {proposalName(proposal)}
@@ -1970,8 +1970,7 @@ export function PhotoGroupReview({
               onClick={() => void approveBatch()}
             >
               <CheckIcon />
-              Approve {selectedBatch.length} selected item
-              {selectedBatch.length === 1 ? "" : "s"}
+              Approve {countLabel(selectedBatch.length, "selected item")}
             </Button>
           </Row>
         ) : null}

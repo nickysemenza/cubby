@@ -27,6 +27,7 @@ import {
   shortcode,
 } from "@cubby/schemas/identifiers";
 import { positiveAmount } from "@cubby/schemas/inventory";
+import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
@@ -195,8 +196,8 @@ export const ProductBulkAddToInventoryDialog: FC<
       savedWithBackgroundWork(
         data.sideEffects,
         data.mergedCount === 0
-          ? `Stocked ${data.createdCount} product${data.createdCount === 1 ? "" : "s"}`
-          : `Stocked ${data.items.length} product${data.items.length === 1 ? "" : "s"} — ${data.mergedCount} merged into stock already there`,
+          ? `Stocked ${countLabel(data.createdCount, "product")}`
+          : `Stocked ${countLabel(data.items.length, "product")} — ${data.mergedCount} merged into stock already there`,
       ),
     onSuccess: () => {
       handleOpenChange(false);
@@ -225,7 +226,7 @@ export const ProductBulkAddToInventoryDialog: FC<
       onOpenChange={handleOpenChange}
       size="lg"
       title="Add to inventory"
-      description={`Stock ${products.length} product${products.length === 1 ? "" : "s"} at one location.`}
+      description={`Stock ${countLabel(products.length, "product")} at one location.`}
       footer={
         <Button
           type="button"

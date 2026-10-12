@@ -1,11 +1,12 @@
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
+import { countLabel } from "@cubby/shared/pluralize";
 import { match } from "ts-pattern";
 
 import { formatCalendarDay } from "~/lib/date-format";
-import { formatCount, formatCurrency } from "~/lib/utils";
+import { formatCurrency } from "~/lib/utils";
 
 const d = (date: string) => formatCalendarDay(date, "dateShort");
-const days = (n: number) => `${formatCount(n)} day${n === 1 ? "" : "s"}`;
+const days = (n: number) => countLabel(n, "day", { formatted: true });
 
 /**
  * The measured finding for one attention row, labeled — the client-side
@@ -29,7 +30,7 @@ export function attentionEvidence(item: ProjectAttentionItem): string {
     )
     .with({ type: "blocked_work" }, ({ facts }) => {
       const n = facts.blockedTasks;
-      return `${n} blocked task${n === 1 ? "" : "s"} · no unblocked next action`;
+      return `${countLabel(n, "blocked task")} · no unblocked next action`;
     })
     .with(
       { type: "stalled_project" },
