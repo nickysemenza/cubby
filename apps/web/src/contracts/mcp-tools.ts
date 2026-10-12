@@ -611,7 +611,7 @@ export const MCP_TOOLS = defineMcpTools({
       run_transcript: mcpAction({
         op: runContract.ops.transcript,
         description:
-          "Read one owned Run's committed coordinator messages, tool inputs/results/errors and submission settlements without loading or resuming execution. Both arrays are paged in chronological order; pass nextCursor as cursor until null. Defaults to 5 entries per array, at most 20. Live generation partials, credentials and binary bodies are omitted. Absent means no retained conversation; it does not prove the Run never executed. Unfinished conversations may change between pages.",
+          "Read one owned Run's committed coordinator messages, tool inputs/results/errors and submission settlements without loading or resuming execution. Both arrays are paged in chronological order; pass nextCursor as cursor until null. Defaults to 5 entries per array, at most 20. Live generation partials, credentials and binary bodies are omitted. Discovery Workflows have no coordinator conversation and return absent; read their persisted evidence with run_status. Absent means no retained conversation; it does not prove the Run never executed. Unfinished conversations may change between pages.",
       }),
       run_status: mcpAction({
         op: runContract.ops.workSnapshot,
@@ -630,7 +630,7 @@ export const MCP_TOOLS = defineMcpTools({
           ),
         }),
         description:
-          "One Run's live state: status, counts, findings (each `id` is what run.resolve_finding takes; activity.problems shows a proposed fix), each target's outcome (`warning` holds a skip's reason), the agent's progress history, and its write operations. Read this to follow a run instead of polling entity_read.",
+          "One Run's live state: status, counts, findings (each `id` is what run.resolve_finding takes; activity.problems shows a proposed fix), each target's outcome (`warning` holds a skip's reason), progress history, and write operations. An owned discovery Run also returns mailDiscovery: frozen mailbox scope, persisted Workflow checkpoint, current mailbox coverage, retained execution approval/expiry and receipt summary, recorded AI usage/retries, and failure diagnostics. Reads stored evidence only; it never loads or resumes execution. Reservations are allowance consumption, not measured spend. Read this to follow a run instead of polling entity_read.",
       }),
       photo_context: mcpAction({
         op: photoImportContract.ops.runContext,
@@ -787,12 +787,12 @@ export const MCP_TOOLS = defineMcpTools({
       prepare_reconciliation: mcpAction({
         op: purchaseImportContract.ops.prepareReconciliation,
         description:
-          "Persist a reviewed source-order preview with explicit line bindings, affected Expenses, original party cents, payment evidence, statement allocations and spend delta. Writes the finding's reviewed snapshot and may preserve a validated historical source observation; changes no ledger or stock. Review with the member, then apply the finding using its returned reviewedFingerprint or commit its accepted-source review; changed state refuses the commit.",
+          "Persist a reviewed source-order preview with line bindings, Expenses, party cents, payments, allocations and spend delta. A known accepted original may request line.newProduct {kind:'new'} from its exact retained preparation; the returned preparedFingerprint freezes that identity review. Changes no ledger or stock. Apply the finding with reviewedFingerprint or commit the full accepted-source review; changed state refuses.",
       }),
       commit_accepted_reconciliation: mcpAction({
         op: purchaseImportContract.ops.commitAcceptedReconciliation,
         description:
-          "Commit the exact reviewed accepted-source preview to bind existing item Expenses to existing Products. Pass the full preview as review and its sourceOrderId. Rechecks ownership, source, money, party cents, payment allocations and Products; changed state refuses. Creates no Expense or Inventory and never receives stock.",
+          "Commit the full accepted-source preview as review with sourceOrderId. Binds existing item Expenses to existing Products, or reviewed line.newProduct choices from exact retained preparation with host-filled preparedFingerprint. Rechecks ownership, source, identity, money, party cents and allocations; drift refuses. Creates no Expense or Inventory.",
       }),
       prepare: mcpAction({
         op: purchaseImportContract.ops.prepare,

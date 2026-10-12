@@ -139,6 +139,25 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
+- 🤔 🐛 **Generalize accepted-original Product repair preparation lookup.**
+  The reviewed mail repair requires one exact retained preparation. Non-mail
+  sources can legitimately use different source and evidence checksums, and
+  repeated identical preparations can leave several exact candidates. Add
+  persisted regressions before relaxing these safe refusals: preserve original
+  identity and candidate-review fingerprints, accept only equivalent snapshots,
+  and keep unknown historical originals unrepairable without authentic evidence.
+  Compare canonical Product-association retention between import and reviewed
+  reconciliation when the same source family uses a new order key; both paths
+  must preserve complete observation bindings without duplicating canonical rows.
+
+- 🤔 🧪 **Complete durable historical discovery coverage and transport evidence.**
+  Owned discovery reads expose the frozen scope, current cursor/checkpoint,
+  retained approval receipts and recorded AI usage. Historical readiness still
+  lacks a cumulative coverage ledger and persisted Gmail request/retry history.
+  Record these through the owning Workflow; distinguish current coverage from
+  each Run's observations and unpriced usage from measured spend. Reading
+  readiness must never restart scanning or admit imports.
+
 - 🤔 🛠️ **Clarify explicit selection of an already-admitted Email.** A member's
   selection can reuse an automatic Run through existing source ownership or
   replay identity, retaining that Run's original execution authority. Surface

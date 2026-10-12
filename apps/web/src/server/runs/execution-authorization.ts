@@ -17,7 +17,7 @@ import {
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
   ledgerParty,
@@ -167,7 +167,7 @@ const periodKey = (approval: ExecutionAuthorizationInput, now: Date) =>
     : now.toISOString().slice(0, 7);
 
 async function receiptsFor(
-  tx: DrizzleTransaction,
+  tx: DrizzleClient | DrizzleTransaction,
   ref: ExecutionAuthorizationRef,
   approval: ExecutionAuthorizationInput,
 ) {
@@ -215,6 +215,40 @@ async function receiptsFor(
     receipts.push(receipt);
   }
   return receipts;
+}
+
+/** Read retained evidence even after expiry/revocation; never grant execution. */
+export async function readExecutionAuthorizationEvidence(
+  db: Database,
+  ref: ExecutionAuthorizationRef,
+  owner: ExecutionAuthorizationOwner,
+) {
+  const database = getDb(db);
+  const [root] = await database
+    .select()
+    .from(run)
+    .where(eq(run.id, ref.runId))
+    .limit(1);
+  // includes-deleted: a deleted approval remains evidence of its disposition.
+  const approval = executionAuthorizationInput.parse(root?.input);
+  if (
+    !root ||
+    root.actorUserId !== owner.userId ||
+    root.ledgerPartyId !== owner.ledgerPartyId ||
+    approval.owner.userId !== owner.userId ||
+    approval.owner.ledgerPartyId !== owner.ledgerPartyId
+  )
+    throw new Error("Execution authorization does not belong to this owner.");
+  if ((await snapshotFingerprint(approval)) !== ref.approvalFingerprint)
+    throw new Error(
+      "Execution approval snapshot changed; retained evidence does not match.",
+    );
+  return {
+    root,
+    ref,
+    approval,
+    receipts: await receiptsFor(database, ref, approval),
+  };
 }
 
 async function writeReceipt(

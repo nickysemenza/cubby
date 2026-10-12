@@ -67,6 +67,20 @@ export async function lockFindingSettlement(
   await lockPartySettlement(tx, owner.ledgerPartyId);
 }
 
+async function reviewedProductIds(
+  tx: DrizzleTransaction,
+  resolution: SourceOrderReconciliationResolution | undefined,
+) {
+  const ids = new Set<string>();
+  for (const binding of resolution?.lines ?? []) {
+    if (binding.productId)
+      ids.add(await resolveOrThrow(tx, "product", binding.productId));
+    for (const distinct of binding.newProduct?.distinctFrom ?? [])
+      ids.add(await resolveOrThrow(tx, "product", distinct.productId));
+  }
+  return ids;
+}
+
 // One locked snapshot covers source ownership, ledger and Product dependencies.
 export async function loadSourceReconciliationState(
   tx: DrizzleTransaction,
@@ -284,9 +298,8 @@ export async function loadSourceReconciliationState(
   for (const binding of observation.productBindings)
     if (binding.productId)
       allProductIds.add(parseEntityId("product", binding.productId));
-  for (const binding of resolution?.lines ?? [])
-    if (binding.productId)
-      allProductIds.add(await resolveOrThrow(tx, "product", binding.productId));
+  for (const id of await reviewedProductIds(tx, resolution))
+    allProductIds.add(parseEntityId("product", id));
   const products = allProductIds.size
     ? await tx
         .select()

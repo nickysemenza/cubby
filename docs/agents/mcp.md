@@ -34,7 +34,16 @@ Runs are started by Mail discovery (scheduled, or `run.discover_mail` on the
 member's instruction), photo uploads and a member's own
 `purchase_import.prepare`; nothing else on MCP starts research
 ([ADR 0010](../adr/0010-mail-import-unattended-burn-down-interactive.md)).
-`imports_read.run_status` reads one Run; `run.lifecycle` runs every Run control
+`imports_read.run_status` reads one Run. An owned `mail_discovery` Run includes
+`mailDiscovery`: its frozen mailbox/query scope, persisted Workflow checkpoint,
+current mailbox coverage, retained approval expiry and reservation/claim/revocation
+receipts, recorded AI-call usage/retries and failure diagnostics. Current mailbox
+coverage can advance after that Run; the Workflow checkpoint belongs to that Run.
+Reservations consume allowance and are separate from priced usage; unpriced calls
+remain counted. Missing approval/checkpoint/coverage stays null. These reads never
+load or resume a Workflow. Discovery has no coordinator conversation, so its owned
+`imports_read.run_transcript` returns `absent`; that is not evidence it never ran.
+`run.lifecycle` runs every Run control
 (cancel, retry, restart, approve, reject and the rest). Review and paid-grant
 decisions are reachable on MCP too
 (`run.approve_execution`, `run.discover_mail`, `run.commit_prepared`,

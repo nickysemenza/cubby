@@ -242,6 +242,17 @@ messages only; live generation partials stay on the live UI),
 which holds the Email text the agent read, is destroyed by the daily cron a day
 after settlement (`run-retirement.ts`), stamping `Run.retiredAt`.
 
+Mail discovery is a Workflow rather than a purchase-agent coordinator. Its
+member-owned `imports_read.run_status.mailDiscovery` reads frozen mailbox inputs,
+the persisted Workflow checkpoint and current mailbox cursor coverage directly
+from storage. It also projects the bound approval's expiry/disposition and verified
+reservation/claim/revocation receipts, separately from recorded AI usage and retry
+counts. Coverage is current mailbox state, not a historical snapshot of that Run;
+AI counts describe retained usage rows, not unrecorded provider attempts. No read
+grants execution, checks a live Workflow, or resumes it. Discovery transcript reads
+return `absent` after the same ownership check because no coordinator transcript
+exists.
+
 Native Workers Traces carry the consumer's `job.purchase_agent_event` span
 (`run.id`, `event.type`, `dispatch.outcome`). Sentry receives the agent's
 errors through the Worker's own configuration (`server/worker-sentry.ts`;

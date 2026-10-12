@@ -39,6 +39,10 @@ import {
 } from "~/server/purchase-import/run-target";
 import { listAiUsageForRun } from "~/server/repo/ai-usage";
 import { getDb } from "~/server/repo/database-helpers";
+import {
+  findOwnedMailDiscovery,
+  loadMailDiscoveryRead,
+} from "~/server/repo/run-discovery-read";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
 import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
@@ -142,10 +146,22 @@ export const runHandlers = implementOperationDomain(runContract, {
       },
     }),
   transcript: async (context, input) => {
+    const party = await memberParty(context);
+    const discovery = await findOwnedMailDiscovery(context.db, input.runId, {
+      userId: context.auth.userId,
+      ledgerPartyId: party.id,
+    });
+    if (discovery)
+      return runContract.ops.transcript.output.parse({
+        status: "absent",
+        messages: [],
+        settlements: [],
+        nextCursor: null,
+      });
     const conversation = await readPurchaseAgentConversation({
       publicId: input.runId,
       context,
-      party: await memberParty(context),
+      party,
     });
     const end = input.cursor + input.limit;
     return {
@@ -160,6 +176,12 @@ export const runHandlers = implementOperationDomain(runContract, {
     };
   },
   workSnapshot: async (context, input) => {
+    const party = await context.currentParty();
+    const mailDiscovery = await loadMailDiscoveryRead(
+      context.db,
+      input.runId,
+      party ? { userId: context.auth.userId, ledgerPartyId: party.id } : null,
+    );
     const run = await loadRunDetail(context.db, input.runId);
     return {
       runId: input.runId,
@@ -190,6 +212,7 @@ export const runHandlers = implementOperationDomain(runContract, {
       })),
       progress: run.progress,
       operations: run.operations,
+      mailDiscovery,
     };
   },
   history: async (context, input) => {
