@@ -119,6 +119,7 @@ const BUILDERS = {
   "run.import-timeline": runBuilder("run.import-timeline"),
   "run.import-debug-log": runBuilder("run.import-debug-log"),
   "run.ai-usage": runBuilder("run.ai-usage"),
+  "run.suggestions": runBuilder("run.suggestions"),
   "run.changes": runBuilder("run.changes"),
 } as const satisfies Record<
   EntityReportInput["slot"],

@@ -277,6 +277,7 @@ export const nativeCoverage = {
       // after the confirmation each declares. Web keeps its corrections review (targets) and
       // audit diffs (changes) as richer fills of the same slots.
       "run.ai-usage",
+      "run.suggestions",
       "run.changes",
       "run.import-approvals",
       "run.import-debug-log",
@@ -300,10 +301,6 @@ export const nativeCoverage = {
     ...unsupported(
       ["run.import-agent-live", "run.import-agent-stopped"],
       "The live agent conversation is web-only: it streams from the import-run agent route, which native has no client for. Prompt, stop and review the agent on web.",
-    ),
-    ...unsupported(
-      ["run.suggestions"],
-      "A sweep's Suggestions are reviewed on the web AI Review tab or through the MCP suggestion actions.",
     ),
   },
   /**

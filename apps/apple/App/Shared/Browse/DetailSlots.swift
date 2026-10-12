@@ -65,6 +65,7 @@ enum DetailSlotRegistry {
         .runImportTimeline: { runReportSlot(.run_importTimeline, $0) },
         .runImportDebugLog: { runReportSlot(.run_importDebugLog, $0) },
         .runAiUsage: { runReportSlot(.run_aiUsage, $0, imports: false) },
+        .runSuggestions: { runReportSlot(.run_suggestions, $0, imports: false) },
         .runChanges: { runReportSlot(.run_changes, $0, imports: false) },
         // Native has no control command (resume and stop are web's), so a paused import says so
         // and hands off to web; other states have nothing to show.
