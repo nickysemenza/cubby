@@ -1210,7 +1210,6 @@ export async function importVendorOrder(
           .select()
           .from(importSourceProduct)
           .where(eq(importSourceProduct.sourceOrderId, existingOrder.id)));
-      const current = await existingExpenses(tx, existingOrder.purchaseId);
       let changedProductChoice = false;
       for (const resolution of explicitResolutions) {
         const line = candidate.lines[resolution.lineIndex];
@@ -1219,7 +1218,14 @@ export async function importVendorOrder(
           (binding) => binding.lineIndex === resolution.lineIndex,
         )?.productId;
         if (
-          resolution.kind === "new" ||
+          (resolution.kind === "new" &&
+            (!acceptedProduct ||
+              JSON.stringify(line) !==
+                JSON.stringify(
+                  acceptedSnapshot?.extraction.candidate?.lines[
+                    resolution.lineIndex
+                  ],
+                ))) ||
           resolution.kind === "unresolved" ||
           (resolution.kind === "expense_only" && acceptedProduct) ||
           (resolution.kind === "existing" &&
@@ -1229,12 +1235,7 @@ export async function importVendorOrder(
                 "product",
                 acceptedProduct,
                 resolution.productId,
-              )) ||
-              !current.some(
-                (row) =>
-                  importedLineMatchesExpense(row, line) &&
-                  row.productId === resolution.productId,
-              )))
+              ))))
         ) {
           changedProductChoice = true;
           break;
@@ -1834,8 +1835,8 @@ export async function importVendorOrder(
               mutationKind: "update",
               fields: ["productId", "productQuantity"],
             });
+            productLines.push({ lineIndex, productId });
           }
-          productLines.push({ lineIndex, productId });
         }
       } else if (decision.kind === "insert") {
         const productsByExternalIdentity = new Map<string, string>();

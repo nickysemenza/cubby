@@ -66,6 +66,11 @@ record exact name/alias equality explicitly. Historical candidates that never
 recorded that judgment expose `exactNameMatch: null`, rather than a fabricated
 non-match or a reconstruction from today's catalog. Reading a review does not
 rewrite its saved snapshot; commit independently rechecks current identities.
+An unchanged accepted item identity replays even when its original resolution
+was `new`, when money is incomplete, or after its Product merges. A changed
+choice or missing accepted binding requires reconciliation review. Equivalent
+second sources retain their observations without duplicating canonical Product
+association rows; binding an unbound manual item creates the association once.
 
 A member-reviewed refund reference from an Email is an
 `EmailFinancialAssociation`. It retains the exact Email checksum, the original
