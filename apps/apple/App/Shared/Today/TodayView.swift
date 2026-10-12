@@ -135,7 +135,7 @@ struct AuditEntryRow: View {
                     ?? entry.entityKind.rawValue)
         } rail: {
             Text(entry.action.rawValue.capitalized)
-            Text(entry.createdAt, style: .relative).monospacedDigit()
+            RecordRowTimestamp(date: entry.createdAt)
         } supplement: {
             EmptyView()
         }

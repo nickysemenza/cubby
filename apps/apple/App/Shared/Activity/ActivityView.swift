@@ -581,7 +581,7 @@ struct ActivityRunRow: View {
         } rail: {
             Text(run.state.replacingOccurrences(of: "_", with: " ").capitalized)
                 .foregroundStyle(run.active ? FieldGuideTokens.interaction : Color.secondary)
-            Text(run.createdAt, style: .relative).monospacedDigit()
+            RecordRowTimestamp(date: run.createdAt)
         } supplement: {
             if let progress = run.progressLine { Text(progress).monospacedDigit() }
             if let error = run.error { Text(error).foregroundStyle(FieldGuideTokens.destructive) }

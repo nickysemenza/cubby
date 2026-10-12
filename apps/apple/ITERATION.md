@@ -59,8 +59,11 @@ cover paging and pending-search response fencing; the simulator journey covers
 the controls and navigation boundary. Its evidence uses the usual checksummed
 QA artifact bundle.
 
-Catalog targets below the viewport need explicit scroll steps; `--until` does
-not repeatedly scroll a lazily loaded catalog into view. An identifier may be
+Reach catalog targets with `scroll down 0.5 --until "id=…"` using the current
+shared driver, whose scroll command repeats passes until the target is visible.
+Avoid fixed swipe counts: compact row changes can overshoot the intended entity.
+If the driver reports no progress, inspect the current tree and scroll surface
+before adding another swipe. An identifier may be
 shared by its row and child nodes, so narrow catalog clicks with the entity
 label. Inspect the current accessibility tree before adding role constraints:
 iOS View choices are cells, column toggles and table headers are buttons, and

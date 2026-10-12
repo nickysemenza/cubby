@@ -67,12 +67,22 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
     }
 }
 
+/// Relative timestamps show one localized unit, keeping the rail quiet as time advances.
+struct RecordRowTimestamp: View {
+    let date: Date
+
+    var body: some View {
+        Text(date, format: .relative(presentation: .named, unitsStyle: .abbreviated))
+            .monospacedDigit()
+    }
+}
+
 #Preview("Record status rail") {
     RecordListRow(title: "Synthetic workshop lantern", symbol: "lightbulb") {
         Text("Research · Background agent")
     } rail: {
         Text("Completed")
-        Text(Date.now, style: .relative).monospacedDigit()
+        RecordRowTimestamp(date: .now)
     } supplement: {
         EmptyView()
     }
