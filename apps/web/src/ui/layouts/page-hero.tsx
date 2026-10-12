@@ -264,7 +264,7 @@ export interface DetailWayfinding {
 interface DetailPlateProps {
   /** Entity drives record navigation. */
   entity: Entity;
-  wayfinding?: DetailWayfinding;
+  wayfinding?: DetailWayfinding | false;
   /** The big plate title (entity name). */
   name: ReactNode;
   /** Raw entity used for the added-date metadata. */
@@ -331,13 +331,15 @@ function DetailPlate({
           <div
             className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1" /* tight */
           >
-            <div className="col-span-2 min-w-0">
-              <DetailBreadcrumb
-                entity={entity}
-                heroNo={heroNo}
-                wayfinding={wayfinding}
-              />
-            </div>
+            {wayfinding !== false && (
+              <div className="col-span-2 min-w-0">
+                <DetailBreadcrumb
+                  entity={entity}
+                  heroNo={heroNo}
+                  wayfinding={wayfinding}
+                />
+              </div>
+            )}
             <h1 className="col-span-2 min-w-0 font-heading text-xl leading-6 font-semibold tracking-tight break-words sm:col-span-1 sm:text-2xl sm:leading-8">
               {name}
             </h1>
@@ -396,7 +398,7 @@ interface PageHeaderProps {
   title: ReactNode;
   eyebrow?: ReactNode;
   entity?: Entity;
-  wayfinding?: DetailWayfinding;
+  wayfinding?: DetailWayfinding | false;
   actions?: ReactNode;
   heroActions?: DetailHeroActions;
   className?: string;

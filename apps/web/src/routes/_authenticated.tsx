@@ -3,7 +3,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { SmartCollectionProvider } from "~/app/collections/smart-collection-state";
 
 export const Route = createFileRoute("/_authenticated")({
-  beforeLoad: ({ context }) => {
+  beforeLoad: ({ context, search }) => {
     // The root reads the signed session cookie server-side (see __root
     // beforeLoad / getGuardSession), so a direct load to a protected route is
     // gated during SSR — before any protected markup or chunks ship — and we
@@ -12,6 +12,7 @@ export const Route = createFileRoute("/_authenticated")({
       throw redirect({
         to: "/auth/$authView",
         params: { authView: "sign-in" },
+        search: { nativeWorkspace: search.nativeWorkspace },
       });
     }
   },

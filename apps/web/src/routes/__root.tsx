@@ -9,6 +9,8 @@ import {
   createRootRouteWithContext,
   HeadContent,
   Outlet,
+  retainSearchParams,
+  redirect,
   Scripts,
   useRouterState,
 } from "@tanstack/react-router";
@@ -89,6 +91,7 @@ const workspaceSearch = z.object({
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   validateSearch: workspaceSearch,
+  search: { middlewares: [retainSearchParams(["nativeWorkspace"])] },
   // Resolve `isAuthed` for nav chrome (MainNav, BottomNav) + the child guards
   // (`/`, `_authenticated`). On the SERVER (SSR / direct + refresh loads) read
   // the signed session cookie in-process so the first paint isn't a flash and
@@ -97,7 +100,23 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
   // instead — `import.meta.env.SSR` is statically replaced, so the server-fn is
   // dead-code-eliminated from the client bundle and an in-app navigation no
   // longer pays a `/_serverFn/` round-trip.
-  beforeLoad: async () => {
+  beforeLoad: async ({ location, search }) => {
+    if (
+      search.nativeWorkspace &&
+      !isNativeRunEvidence(location.pathname, search.nativeWorkspace) &&
+      !location.pathname.startsWith("/auth/")
+    ) {
+      const params = new URLSearchParams(location.searchStr);
+      params.delete("nativeWorkspace");
+      const query = params.toString();
+      const hash = location.hash.replace(/^#/u, "");
+      throw redirect({
+        href: `${location.pathname}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`,
+        replace: true,
+        // Client materialization would retain the flag from the pending location.
+        reloadDocument: true,
+      });
+    }
     if (import.meta.env.SSR) {
       const session = await getGuardSession();
       return { isAuthed: !!session };
@@ -160,7 +179,10 @@ function RootComponent() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  const nativeWorkspace = isNativeRunEvidence(pathname, search.nativeWorkspace);
+  const nativeAuth =
+    search.nativeWorkspace === "run-evidence" && pathname.startsWith("/auth/");
+  const nativeWorkspace =
+    nativeAuth || isNativeRunEvidence(pathname, search.nativeWorkspace);
   const buildMetadata = Route.useLoaderData();
   const footer = <AppFooter metadata={buildMetadata} />;
   const { queryClient } = Route.useRouteContext();
@@ -225,7 +247,7 @@ function RootComponent() {
           >
             <NativeRunEvidenceContext.Provider value>
               <NativeWorkspaceBridge />
-              {routeContent}
+              {!nativeAuth && routeContent}
             </NativeRunEvidenceContext.Provider>
           </main>
         ) : authed && isWorkspaceRoute ? (

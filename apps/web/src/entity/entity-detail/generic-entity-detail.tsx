@@ -571,6 +571,7 @@ function RunEvidenceDetail<E extends GenericDetailEntity>({
         variant="detail"
         entity={entity}
         title={`${title} · Evidence`}
+        wayfinding={false}
         rawData={record}
       >
         <DetailSections

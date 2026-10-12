@@ -1,5 +1,3 @@
-import { getCookies } from "better-auth/cookies";
-
 import { auth } from "~/lib/auth";
 
 /** Browser authority comes only from the supplied native credential, never an
@@ -22,7 +20,7 @@ export async function nativeWorkspaceSession(request: Request) {
       status: 401,
       headers,
     });
-  const cookie = getCookies(auth.options).sessionToken;
+  const cookie = (await auth.$context).authCookies.sessionToken;
   const attributes = cookie.attributes;
   // Preserve the configured name/security mode (including local HTTP tests).
   // Clamp cookie lifetime to the verified session's own expiry.
