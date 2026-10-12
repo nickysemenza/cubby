@@ -45,6 +45,23 @@ struct CubbyLinkTests {
         #expect(link("cubby://activity/local/../photos") == nil)
     }
 
+    @Test func cliAuthCarriesPortAndNonce() {
+        let nonce = String(repeating: "a", count: 43)
+        #expect(link("cubby://cli-auth?port=51234&nonce=\(nonce)") == .cliAuth(port: 51234, nonce: nonce))
+        // Ports are 1...65535, numeric, and singular.
+        #expect(link("cubby://cli-auth?port=0&nonce=\(nonce)") == nil)
+        #expect(link("cubby://cli-auth?port=65536&nonce=\(nonce)") == nil)
+        #expect(link("cubby://cli-auth?port=abc&nonce=\(nonce)") == nil)
+        #expect(link("cubby://cli-auth?nonce=\(nonce)") == nil)
+        #expect(link("cubby://cli-auth?port=51234&nonce=\(nonce)&port=51235") == nil)
+        // The nonce is required, ASCII, and bounded — it authenticates the loopback handoff.
+        #expect(link("cubby://cli-auth?port=51234") == nil)
+        #expect(link("cubby://cli-auth?port=51234&nonce=") == nil)
+        #expect(link("cubby://cli-auth?port=51234&nonce=has space") == nil)
+        #expect(link("cubby://cli-auth?port=51234&nonce=\(nonce)&nonce=\(nonce)") == nil)
+        #expect(link("cubby://cli-auth/extra?port=51234&nonce=\(nonce)") == nil)
+    }
+
     @Test func rejectsWrongSchemeHostOrScope() {
         #expect(link("cubby-mobile://entity/PRD-2345") == nil)
         #expect(link("cubby://entity/XYZ-1") == nil)
@@ -85,6 +102,7 @@ struct CubbyLinkTests {
             .activity(run: "RUN-EXAMPLE"),
             .activity(run: "IPR-EXAMPLE"),
             .localActivity("photo-library-scan"),
+            .cliAuth(port: 51234, nonce: String(repeating: "a", count: 43)),
         ]
         for original in links {
             #expect(CubbyLink(url: original.url) == original)

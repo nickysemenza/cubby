@@ -15,13 +15,48 @@ struct RootView: View {
             .environment(\.developerOverlays, developerOverlays)
     }
 
-    @ViewBuilder
     private var content: some View {
-        if model.requestTrace.clientUpdateRequired {
-            UpdateRequiredView()
-        } else {
-            phaseContent
+        Group {
+            if model.requestTrace.clientUpdateRequired {
+                UpdateRequiredView()
+            } else {
+                phaseContent
+            }
         }
+        .confirmationDialog(
+            "Share sign-in with the command line?",
+            isPresented: cliAuthPrompt,
+            presenting: model.navigator.pendingCliAuth
+        ) { request in
+            Button("Share sign-in") {
+                Task { await model.approveCliAuth(request) }
+            }
+            Button("Don't share", role: .cancel) {
+                model.navigator.pendingCliAuth = nil
+            }
+        } message: { _ in
+            Text(
+                "The command line gets a copy of this install's session. Its logout signs out here too."
+            )
+        }
+        .alert(model.cliAuthNotice ?? "", isPresented: cliAuthNoticeBinding) {
+            Button("OK") {}
+        }
+    }
+
+    private var cliAuthPrompt: Binding<Bool> {
+        Binding(
+            get: { model.navigator.pendingCliAuth != nil },
+            set: { presented in
+                // Any dismissal path must consume the request so it never reappears.
+                if !presented { model.navigator.pendingCliAuth = nil }
+            })
+    }
+
+    private var cliAuthNoticeBinding: Binding<Bool> {
+        Binding(
+            get: { model.cliAuthNotice != nil },
+            set: { presented in if !presented { model.cliAuthNotice = nil } })
     }
 
     @ViewBuilder

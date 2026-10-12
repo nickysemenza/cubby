@@ -82,9 +82,9 @@ struct CompanionCommand: AsyncParsableCommand {
         }
         defer { lock.release() }
         let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: outboxURL)
-        // The CLI is its own device: the app keeps its id in a data-protection Keychain item under
-        // its signed team identity, which the ad-hoc-signed CLI cannot read, and sharing one id
-        // would make the server treat the app's and the CLI's sockets as one device.
+        // The CLI is its own device: one id per process identity, so the server never treats
+        // the app's and the CLI's sockets as one device. (The app's id additionally lives in a
+        // data-protection Keychain item the CLI has no business reading.)
         let deviceID = try CompanionDeviceIdentity.loadOrCreate(
             at: URL.applicationSupportDirectory.appending(path: "Cubby/companion-device-id"))
         let deviceName = "\(ProcessInfo.processInfo.hostName) (cubby CLI)"

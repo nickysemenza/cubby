@@ -288,8 +288,8 @@ final class AppModel {
     }
 
     /// Preview state is fully established synchronously; constructing a canvas never starts work.
-    static func preview(signedIn: Bool, baseURL: URL) -> AppModel {
-        let store = InMemorySessionTokenStore()
+    static func preview(signedIn: Bool, baseURL: URL, store: (any SessionTokenStore)? = nil) -> AppModel {
+        let store = store ?? InMemorySessionTokenStore()
         let credential = CubbyCredential.bearer("preview.token")
         if signedIn { try? store.save(credential, for: CubbyBaseURL.host(of: baseURL)) }
         let model = AppModel(store: store, baseURL: baseURL)
@@ -394,6 +394,38 @@ final class AppModel {
         } catch {
             lastError = String(describing: error)
             Diagnostics.report(error, context: "auth.googleSignIn")
+        }
+    }
+
+    /// The last `cubby auth login` handoff failure, shown once in an alert.
+    var cliAuthNotice: String?
+
+    /// Sends this install's bearer token to a waiting CLI handoff listener. The CLI stores its own
+    /// copy, but the session stays shared: a later `cubby auth logout` revokes it server-side.
+    ///
+    /// The provider and origin are captured before the credential read and rechecked after: a
+    /// server switch mid-approval must never send one server's token labeled with another's
+    /// origin (`baseURL.didSet` rebinds `credentials` synchronously while this can suspend).
+    func approveCliAuth(_ request: CliAuthRequest, session: URLSession = .shared) async {
+        let provider = credentials
+        guard let origin = CliAuthOrigin.of(baseURL), phase == .signedIn else {
+            cliAuthNotice = "Sign in to Cubby first, then approve the command line again."
+            return
+        }
+        guard case .bearer(let token) = await provider.current(), !token.isEmpty,
+            provider === credentials, CliAuthOrigin.of(baseURL) == origin, phase == .signedIn
+        else {
+            cliAuthNotice =
+                "The server changed during approval. Approve the command line again."
+            return
+        }
+        do {
+            try await CliAuthSender.post(
+                token: token, to: request.port, nonce: request.nonce, origin: origin,
+                session: session)
+        } catch {
+            cliAuthNotice = "Could not reach the command line: \(String(describing: error))"
+            Diagnostics.report(error, context: "auth.cliHandoff")
         }
     }
 

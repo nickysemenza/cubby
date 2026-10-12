@@ -131,6 +131,8 @@ final class Navigator {
     /// Bumped by `CubbyCommands`' ⌘F so `SearchView` can pull keyboard focus to its search field
     /// without this class needing a `FocusState` of its own (see that view's `.searchFocused`).
     var focusSearchRequest = 0
+    /// Set by a `cli-auth` link; the confirmation dialog takes it once the user answers.
+    var pendingCliAuth: CliAuthRequest?
     /// Set the first time a deep link, Spotlight continuation, or Handoff activity opens a
     /// destination this launch. `RootSplitView`'s persisted-section restore checks this so a link
     /// that arrives either before or after the restore still wins — see that view's doc comment.
@@ -180,6 +182,9 @@ final class Navigator {
             openActivity(run.map { .serverRun($0) })
         case .localActivity(let id):
             openActivity(.localActivity(id))
+        case .cliAuth(let port, let nonce):
+            // Not navigation: the confirmation dialog in `RootView` takes this once answered.
+            pendingCliAuth = CliAuthRequest(port: port, nonce: nonce)
         }
     }
 

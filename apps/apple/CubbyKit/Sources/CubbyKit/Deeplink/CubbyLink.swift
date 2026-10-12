@@ -16,6 +16,9 @@ import Foundation
 /// - `cubby://activity/local/<id>` opens one running device-local activity.
 ///   (the server `ActivityRun` id shape — `packages/schemas/src/activity.ts`'s `activityRunId` —
 ///   is not a catalog entity shortcode, so it is validated here rather than through `CubbyLabel`).
+/// - `cubby://cli-auth?port=<port>&nonce=<nonce>` asks the app to hand its session to a waiting
+///   `cubby auth login` loopback listener. The nonce authenticates that listener; the app
+///   confirms with the user before sending anything.
 ///
 /// A Universal Link also resolves: `https://<any host>/<SHORTCODE>` or
 /// `https://<any host>/<anything>/<SHORTCODE>` (only the last path component is inspected) opens
@@ -33,6 +36,7 @@ public enum CubbyLink: Sendable, Hashable {
     case dev
     case activity(run: String?)
     case localActivity(String)
+    case cliAuth(port: UInt16, nonce: String)
 
     public static let scheme = "cubby"
 
@@ -80,6 +84,9 @@ public enum CubbyLink: Sendable, Hashable {
         case ("activity", 2):
             guard segments[0] == "local", let id = Self.localActivityID(segments[1]) else { return nil }
             self = .localActivity(id)
+        case ("cli-auth", 0):
+            guard let request = Self.cliAuthRequest(queryItems: components.queryItems) else { return nil }
+            self = .cliAuth(port: request.port, nonce: request.nonce)
         default:
             return nil
         }
@@ -105,6 +112,19 @@ public enum CubbyLink: Sendable, Hashable {
             raw.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") })
         else { return nil }
         return raw
+    }
+
+    /// A `cli-auth` link carries exactly one numeric port and one nonce. Anything else is a
+    /// malformed link, not a partial handoff request.
+    static func cliAuthRequest(queryItems: [URLQueryItem]?) -> CliAuthRequest? {
+        func singleValue(_ name: String) -> String? {
+            let matches = (queryItems ?? []).filter { $0.name == name }
+            return matches.count == 1 ? matches[0].value : nil
+        }
+        guard let portRaw = singleValue("port"), let port = UInt16(portRaw), port != 0,
+            let nonce = singleValue("nonce"), CliAuthRequest.isValidNonce(nonce)
+        else { return nil }
+        return CliAuthRequest(port: port, nonce: nonce)
     }
 
     public var url: URL {
@@ -136,6 +156,12 @@ public enum CubbyLink: Sendable, Hashable {
         case .localActivity(let id):
             components.host = "activity"
             components.path = "/local/\(id)"
+        case .cliAuth(let port, let nonce):
+            components.host = "cli-auth"
+            components.queryItems = [
+                URLQueryItem(name: "port", value: String(port)),
+                URLQueryItem(name: "nonce", value: nonce),
+            ]
         }
         // Every component above is scheme-safe ASCII, so this cannot fail.
         return components.url!
