@@ -230,7 +230,7 @@ export function createNameColumn<T extends BaseRow>(
     id: options?.id ?? String(resolvedFieldName),
     enableSorting: options?.enableSorting ?? true,
     meta: attachCubbyColumnMeta({
-      className: options?.className ?? "w-64",
+      className: options?.className ?? "w-60",
       entityColumnRole: "identity",
       surplus: true,
       filterConfig: options?.filterConfig,
@@ -857,7 +857,10 @@ export function createTextColumn<
   const renderValue =
     options?.renderValue ??
     ((v: string | null) =>
-      renderScalarValue({ kind: "text", raw: v ?? "", label: v ?? "" }));
+      renderScalarValue(
+        { kind: "text", raw: v ?? "", label: v ?? "" },
+        "list",
+      ));
   const renderRow = (value: string | null, row: T) => renderValue(value, row);
   const editable = options?.editable;
   const textValue = (row: T): string | null => row[accessor] ?? null;
