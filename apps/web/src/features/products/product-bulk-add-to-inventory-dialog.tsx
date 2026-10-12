@@ -40,6 +40,7 @@ import {
   AmountFieldGroup,
   DEFAULT_AMOUNT_UNIT,
 } from "~/features/inventory/amount-field-group";
+import { tryFormatAmount } from "~/features/inventory/format-amount";
 import {
   inventory,
   product as productOperations,
@@ -180,10 +181,10 @@ export const ProductBulkAddToInventoryDialog: FC<
   // Stock only: an installed fixture occupies a different slot, so it is not
   // what an added unit would merge into.
   const onHandByProductId = useMemo(() => {
-    const map = new Map<string, { value: number; unit: string }>();
+    const map = new Map<string, string>();
     for (const entry of existing ?? []) {
       if (entry.placement !== "stock") continue;
-      map.set(entry.product.id, entry.amount);
+      map.set(entry.product.id, tryFormatAmount(entry.amount));
     }
     return map;
   }, [existing]);
@@ -291,7 +292,7 @@ export const ProductBulkAddToInventoryDialog: FC<
           <Stack gap="sm" className="min-w-0">
             {fields.map((field, index) => {
               const onHand = sole
-                ? (preview?.existingAtLocation ?? undefined)
+                ? (preview?.existingAtLocationLabel ?? undefined)
                 : onHandByProductId.get(field.productId);
               return (
                 <Row
@@ -311,8 +312,7 @@ export const ProductBulkAddToInventoryDialog: FC<
                     </span>
                     {onHand && (
                       <Description size="xs">
-                        already {onHand.value} {onHand.unit} here — adds to that
-                        row
+                        already {onHand} here — adds to that row
                       </Description>
                     )}
                   </Stack>

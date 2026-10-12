@@ -1,8 +1,10 @@
+import type { WAmount } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import type { ProductAddToInventoryPreviewOut } from "@cubby/schemas/product";
 import { and, eq } from "drizzle-orm";
 
+import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import { inventoryEntry } from "~/server/db/schema";
 import {
@@ -41,6 +43,16 @@ export const kitsAccountedByParts = (
  * show one verdict. Proposals and warnings only: the operator confirms the
  * write, and nothing here decrements anything.
  */
+/** An amount as every client prints it (`3 each`), from the shared Rust formatter. */
+const amountLabel = (amount: Amount): string => {
+  const request: Pick<WAmount, "value" | "unit" | "upper_value"> = {
+    value: amount.value,
+    unit: amount.unit,
+  };
+  if (amount.upperValue !== undefined) request.upper_value = amount.upperValue;
+  return wasm.format_amount_labeled(request);
+};
+
 export const describeAddToInventory = (input: {
   expectedQuantity: number;
   ownOnHandUnits: number | null;
@@ -63,7 +75,9 @@ export const describeAddToInventory = (input: {
     kitWarning: overAccounted
       ? { accounted, expected: input.expectedQuantity }
       : null,
-    existingAtLocation: input.existingAtLocation,
+    existingAtLocationLabel: input.existingAtLocation
+      ? amountLabel(input.existingAtLocation)
+      : null,
   };
 };
 
