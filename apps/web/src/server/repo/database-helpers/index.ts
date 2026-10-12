@@ -49,6 +49,7 @@ export {
   eqAnyOrPresence,
   eqAnyRequested,
   executeListQueryWithCount,
+  escapeLike,
   formatSearchTerm,
   ilikeContains,
   householdDayRangeConditions,
