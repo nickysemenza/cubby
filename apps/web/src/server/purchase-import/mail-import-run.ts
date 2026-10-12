@@ -161,6 +161,12 @@ export async function admitMailImport(
     throw new Error("Choose at most fifty distinct retained mail sources.");
   const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);
   const actorId = userId.parse(input.userId);
+  const selectedSources = new Set(
+    input.expectedChecksums?.map((source) => source.orderMailId),
+  );
+  const memberSelected =
+    !input.parentRunId &&
+    input.messageIds.every((id) => selectedSources.has(id));
   return withTransaction(db, async (tx) => {
     const [party] = await tx
       .select()
@@ -224,24 +230,26 @@ export async function admitMailImport(
         parentRunId: input.parentRunId,
       }),
     );
-    const authorized = await bindRetainedMailBackfill(
-      tx,
-      inherited,
-      { userId: actorId, ledgerPartyId: party.id },
-      fresh.map((source) => [
-        {
-          externalKey: `gmail:${source.mailboxId}:${source.messageId}`,
-          checksum: source.rawChecksum,
-        },
-      ]),
-    );
+    const authorized = memberSelected
+      ? inherited
+      : await bindRetainedMailBackfill(
+          tx,
+          inherited,
+          { userId: actorId, ledgerPartyId: party.id },
+          fresh.map((source) => [
+            {
+              externalKey: `gmail:${source.mailboxId}:${source.messageId}`,
+              checksum: source.rawChecksum,
+            },
+          ]),
+        );
     const snapshot = await actorSnapshot(tx, actorId);
     const id = runEntityId.parse(crypto.randomUUID());
     const row = await insertWithShortcode(tx, "run", {
       id,
       ledgerPartyId: party.id,
       purpose: "mail_import",
-      trigger: "discovery",
+      trigger: memberSelected ? "foreground" : "discovery",
       status: "running",
       channel: "system",
       actorUserId: actorId,
@@ -251,7 +259,7 @@ export async function admitMailImport(
       actorLedgerPartyName: snapshot.ledgerPartyName,
       actorLedgerPartyKind: snapshot.ledgerPartyKind,
       parentRunId: input.parentRunId ?? null,
-      cause: "source_discovered",
+      cause: memberSelected ? "member_request" : "source_discovered",
       coordinatorModel: coordinatorModelFor("mail_import"),
       input: authorized,
       clientKey,

@@ -105,6 +105,11 @@ describe("mail routing at the paid transport boundary", () => {
         openai: {
           id: "openai",
           models: {
+            "gpt-6-luna": {
+              id: "gpt-6-luna",
+              cost: { input: 1, output: 2, reasoning: 3 },
+              limit: { context: 100, input: 100, output: 100 },
+            },
             "gpt-6-sol": {
               id: "gpt-6-sol",
               cost: { input: 1, output: 2, reasoning: 3 },
@@ -229,6 +234,39 @@ describe("mail routing at the paid transport boundary", () => {
       expect(transmit).toHaveBeenCalledTimes(1);
     },
   );
+  it("pauses bulk Luna mail import when its dollar allowance is exhausted", async () => {
+    const { transmit, runId } = await routing(
+      "exhausted",
+      undefined,
+      "import",
+      "mail_import",
+    );
+    const paid = gatewayFetchThrough({
+      provider: "openai",
+      beforePaidRequest: paidResearchPreflight(ctx.db, runId),
+      gateway: transmit,
+    });
+    await expect(
+      paid("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-luna", input: [] }),
+      }),
+    ).rejects.toThrow(/allowance/iu);
+    expect(transmit).not.toHaveBeenCalled();
+    const [stored] = await getDb(ctx.db)
+      .select({ status: run.status })
+      .from(run)
+      .where(eq(run.id, runId));
+    expect(stored?.status).toBe("needs_review");
+    await expect(
+      paid("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      }),
+    ).rejects.toThrow(/executable/iu);
+    expect(transmit).not.toHaveBeenCalled();
+  });
+
   it("pauses exhausted routing before transmission and scheduling until the next month", async () => {
     const { transmit, runId } = await routing("exhausted");
     const paid = gatewayFetchThrough({
