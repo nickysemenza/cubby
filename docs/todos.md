@@ -195,20 +195,21 @@ historical Runs stay readable through generic reports.
   stage and model. Use those conflicts to revise the triage and relevance
   prompts, and measure with an accuracy sample before and after each change.
 
-- 🟢 **Repair the published Run finding-resolution connector contract.**
-  `run.resolve_finding` exposes the outer action but omits the operation's
-  required `apply`/`dismiss` choice, so a valid connector call refuses with
-  `INVALID_INPUT`. Preserve both discriminators in the generated connector
-  shape and verify one reviewed dismissal and one supported apply through the
-  published tool. A successfully loaded Run page remains the supported
-  workaround; historical prepared-candidate reads need the fix below.
+- 🟢 **Run finding-resolution connector contract delivered.**
+  [PR #1896](https://github.com/nickysemenza/cubby/pull/1896) publishes the
+  member's `apply`/`dismiss` choice as `operationAction`, preserving the outer
+  tool discriminator and domain validation. Persisted registered-tool
+  regressions cover apply, dismissal and invalid choices; a deployed public
+  dismissal has passed readback. Refresh a cached connector schema before using
+  a newly published input rather than dropping the required choice.
 
-- ⏳ **Verify production delivery of historical prepared-candidate review.**
+- ⏳ **Finish client acceptance of historical prepared-candidate review.**
   [PR #1892](https://github.com/nickysemenza/cubby/pull/1892) preserves missing
   historical `exactNameMatch` judgments as null, with a persisted Run-detail
-  regression. It merged into its parent branch. Verify deployed public
-  `run_status` and the Findings panel before closing this delivery task;
-  preserve candidate snapshots and recheck current identity at commit.
+  regression. Deployment and the public `run_status` reader are verified.
+  Findings-panel acceptance remains separate; preserve candidate snapshots and
+  recheck current identity at commit. Installed-client acceptance is excluded
+  from the current member-directed closeout.
 
 - 🤔 **Clarify identifier-issuer collision diagnostics.** A reviewed receipt
   preparation refused because two Vendors claimed the product-page host. The
@@ -286,6 +287,12 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   findings while aggregate counts retain older totals. Investigate cache
   invalidation and shared read dependencies; verify both projections converge
   without changing declared source counts or dismissing unresolved evidence.
+
+- 🐛 **Distinguish blank browser captures from usable order documents.** A
+  retained PDF or image can contain only an empty browser page while still
+  satisfying primary-document presence. Preserve the original capture and its
+  history, record the missing evidence explicitly, and verify usable replacement
+  evidence before treating document presence as source acceptance.
 
 - 🐛 **Repair Run-list attention projection validation.** A live Runs page can
   reject its attention and list payload when a target's `entityKind` falls
@@ -897,21 +904,21 @@ historical records and stay readable. `oauth_client.requirePKCE` and
   singly, so replaying two settled identical charges fails (pass the resolved
   occurrence ref through). Keep `statementRowExternalId` frozen: stored
   `settlement_ref` values derive from it.
-- 🤔 **Verify statement export coverage independently of the first owning batch.**
-  The incomplete-import detector counts only rows first inserted by one export;
-  authentic replay can find every legacy identity already retained across other
-  exports while still reporting an incomplete batch. Preserve verified export
-  membership, source occurrence counts and immutable provider values instead
-  of lowering declared counts to silence the finding. Audit identity, account
-  and sign differences before replaying an old export through the newer
-  occurrence-ID adapter; preserve existing settlement references.
-- ⏳ **Verify delivery of complete provider account masks.**
+- 🟢 **Statement export membership delivered and verified.**
+  [PR #1898](https://github.com/nickysemenza/cubby/pull/1898) counts retained
+  export membership as well as first ownership.
+  [PR #1900](https://github.com/nickysemenza/cubby/pull/1900) supports reviewed
+  repeated-mask legacy membership. Public replay/readback preserved immutable
+  rows, settlement references, money, stock and claims. Unknown historical
+  physical occurrences remain unknown; new occurrence-ID ingest is not a
+  substitute for reviewing original source evidence.
+- 🟢 **Complete provider account masks delivered and verified.**
   [PR #1894](https://github.com/nickysemenza/cubby/pull/1894) removes Copilot's
   four-digit truncation and adds a public-parser regression for a five-digit
   non-card mask. Focused parser checks and source replay passed; independent
-  review approved. Verify production delivery before closing this task. Do
-  not infer a new account from the old truncated descriptor or rewrite stored
-  settlement identities.
+  review approved. The deployed writer accepted authentic replay with complete
+  masks and preserved stored identities. Do not infer a new account from an old
+  truncated descriptor or rewrite settlement references.
 - 🧱 **Re-extract flat-array cookbooks, then delete their fallback.** A few
   cookbooks still store the retired flat-array extraction
   (`repo/cookbook.ts`, `isLegacyCookbookRawJson`); the list shows a
