@@ -75,9 +75,10 @@ When a shell call runs a check before dependent Git operations, stop on failure
 with `set -e` or use separate calls. A failed check must not be followed by a
 commit, push, or rebase continuation in the same call.
 
-Commits run only `pnpm check:staged`: read-only Oxlint and Oxfmt checks on staged
-files, with the existing rules and ignore patterns. Partial staging is preserved;
-fix reported issues explicitly and stage the intended corrections. Use the
+Commits run only `pnpm check:staged`: Oxlint checks staged files and Oxfmt
+formats them in place, with the existing rules and ignore patterns. Partial
+staging is preserved. Never run Oxfmt by hand; commit and let the hook format.
+Fix reported lint issues explicitly and stage the intended corrections. Use the
 commit hook normally; bypass it only when the user explicitly requests that.
 
 Pushes run no validation and do not require a clean working tree or a refreshed
