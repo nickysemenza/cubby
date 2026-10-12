@@ -607,6 +607,11 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Vendor identity, its latest live purchase date overall, and sorted unique non-null order IDs from an inclusive date range.",
       }),
+      run_transcript: mcpAction({
+        op: runContract.ops.transcript,
+        description:
+          "Read one owned Run's committed coordinator messages, tool inputs/results/errors and submission settlements without loading or resuming execution. Both arrays are paged in chronological order; pass nextCursor as cursor until null. Defaults to 5 entries per array, at most 20. Live generation partials, credentials and binary bodies are omitted. Absent means no retained conversation; it does not prove the Run never executed. Unfinished conversations may change between pages.",
+      }),
       run_status: mcpAction({
         op: runContract.ops.workSnapshot,
         project: (output) => ({

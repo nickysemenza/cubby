@@ -179,6 +179,16 @@ class PurchaseImportRunAgentHost
     if (isMaintenanceMode(this.env)) return maintenanceResponse(request);
     const retired = () =>
       new Response("Import Run coordinator retired.", { status: 410 });
+    if (
+      request.method === "GET" &&
+      new URL(request.url).pathname === "/transcript"
+    ) {
+      return this.admit(async () => {
+        const { readStoredAgentConversation } =
+          await import("./agent-transcript");
+        return Response.json(readStoredAgentConversation(this.ctx.storage.sql));
+      }, retired());
+    }
     return this.admit(async () => {
       if (await this.fenced()) return retired();
       return (await this.loaded()).fetch(request);

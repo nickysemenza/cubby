@@ -370,6 +370,76 @@ describe("coordinator host retirement", () => {
   let shared: ScenarioHarness | undefined;
   const sharedRuntime = async () =>
     (shared ??= await startScenarioHarness(ctx.databaseUrl, { steps: [] }));
+
+  it("reads committed transcript on a cold coordinator without opening or recovering pending work", async () => {
+    const runtime = await sharedRuntime();
+    const runId = await agentRun();
+    const name = importRunAgentIdentity(runId, "mail_import");
+    let storage = await runtime.harness
+      .getWorker()
+      .getDurableObjectStorage("PurchaseImportRunAgent", { name });
+    // These are the installed pi SQLite adapter's persisted read surfaces.
+    // An execution harness cannot initialize this deliberately read-only seed.
+    await storage.exec(
+      "CREATE TABLE pi_durable_schema (singleton INTEGER, version INTEGER)",
+    );
+    await storage.exec("INSERT INTO pi_durable_schema VALUES (1, 1)");
+    await storage.exec(
+      "CREATE TABLE pi_conversations (id INTEGER, record TEXT)",
+    );
+    await storage.exec("INSERT INTO pi_conversations VALUES (1, '{}')");
+    await storage.exec(
+      "CREATE TABLE pi_entries (id INTEGER, conversation_id INTEGER, record TEXT)",
+    );
+    const entry = JSON.stringify({
+      id: 2,
+      conversationId: 1,
+      kind: "pi.user",
+      model: [
+        {
+          role: "user",
+          content: "Synthetic retained instruction",
+          timestamp: 1,
+        },
+      ],
+    });
+    await storage.exec("INSERT INTO pi_entries VALUES (2, 1, ?)", entry);
+    await storage.exec(
+      "CREATE TABLE pi_tasks (id INTEGER, conversation_id INTEGER, status TEXT, record TEXT)",
+    );
+    await storage.exec(
+      "INSERT INTO pi_tasks VALUES (3, 1, 'pending', '{\"syntheticPendingTool\":true}')",
+    );
+    const inventory = async () => ({
+      tables: await storage.exec(
+        "SELECT name, sql FROM sqlite_master ORDER BY name",
+      ),
+      entries: await storage.exec("SELECT * FROM pi_entries"),
+      tasks: await storage.exec("SELECT * FROM pi_tasks"),
+    });
+    const before = await inventory();
+    await runtime.harness.update((options) => options);
+    storage = await runtime.harness
+      .getWorker()
+      .getDurableObjectStorage("PurchaseImportRunAgent", { name });
+    const response = await runtime.harness
+      .getWorker("cubby-queue-producer")
+      .fetch("https://queue.test/coordinator-transcript", {
+        method: "POST",
+        body: JSON.stringify({ agentId: name }),
+      });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      status: "running",
+      messages: [
+        { parts: [{ type: "text", text: "Synthetic retained instruction" }] },
+      ],
+      settlements: [],
+    });
+    expect(await inventory()).toEqual(before);
+    expect(await runtime.emitted()).toEqual([]);
+    status = "passed";
+  }, 90_000);
   afterAll(() => shared?.close());
   let started: E2ERunIdentity;
   let status = "failed";

@@ -79,7 +79,8 @@ export const agentConversationSettlementSchema = z.object({
 export const agentConversationSchema = z.object({
   /**
    * `absent`: no run has been dispatched to this agent yet. `idle`: nothing
-   * is running. `running`: a model turn or tool round is in flight.
+   * is unfinished. `running`: durable model/tool work remains unfinished;
+   * a storage-only read does not prove that its execution is currently awake.
    */
   status: z.enum(["absent", "idle", "running"]),
   messages: z.array(agentConversationMessageSchema),

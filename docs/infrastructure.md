@@ -234,6 +234,9 @@ goes to `reconcileSettledRun`, an unanswered submission to `markRunFailed`
 (`agent_failed` / `agent_aborted`). The run page reads the conversation through
 `agent-proxy.ts` as the `AgentConversation` contract
 (`packages/schemas/src/agent-conversation.ts`). A settled Run's transcript,
+also readable through the owned, paginated `imports_read.run_transcript` MCP
+action's storage-only path without loading or resuming execution (committed
+messages only; live generation partials stay on the live UI),
 which holds the Email text the agent read, is destroyed by the daily cron a day
 after settlement (`run-retirement.ts`), stamping `Run.retiredAt`.
 

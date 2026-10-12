@@ -27,6 +27,11 @@ Its evidence and impact checks allow routine cleanup without another
 confirmation; ambiguous identity, attribution or money still needs review.
 
 Use `imports_read.run_status` to inspect an existing Run before controlling it.
+Use `imports_read.run_transcript` for its committed coordinator messages and exact
+tool inputs, results and errors. Follow `nextCursor` until null; this read does
+not authorize or start execution. An absent conversation may have been retired
+and is not proof that the Run never executed. Running snapshots can change
+between pages; live generation partials, credentials and binary bodies are omitted.
 `run.lifecycle` takes every Run `controlAction` (cancel, retry, restart,
 approve, reject …) through the shared member-owned controls. Paid grants and
 review decisions (`run.approve_execution`, `run.discover_mail`,
