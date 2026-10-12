@@ -1,7 +1,7 @@
 # Cubby — Work List
 
 The canonical backlog, grouped by area. Items are not ranked. Each item starts
-with one status marker naming its next blocker:
+with a status marker naming its next blocker, followed by a work-type marker:
 
 | Marker | Meaning                                                |
 | ------ | ------------------------------------------------------ |
@@ -12,9 +12,25 @@ with one status marker naming its next blocker:
 | 🔭     | Long-term direction                                    |
 
 An unresolved decision or missing evidence outranks an eventual schema change.
-**Probably not anytime soon** parks wanted-but-unpulled work, **Dormant
-schema** lists built-but-unused tables, and **Operational passes** are
-household data work rather than software; those three carry no markers.
+Work type describes the intended outcome, independently of status:
+
+| Marker | Meaning                                                        |
+| ------ | -------------------------------------------------------------- |
+| 🐛     | Bug: repair incorrect or broken existing behavior              |
+| ✨     | Feature: add or extend a capability                            |
+| 🛠️     | Maintenance: refactor, cleanup, performance, or infrastructure |
+| 🧪     | Investigation: gather evidence, evaluate, or verify behavior   |
+
+Use one of each, status first: `🤔 🐛` is a bug that needs investigation;
+`🟢 ✨` is a feature ready to implement. Choose the type by the primary
+outcome: investigating a reported defect remains 🐛; a comparison or
+acceptance pass with no committed repair is 🧪. Mark independently actionable
+numbered steps the same way.
+
+**Probably not anytime soon** parks wanted-but-unpulled work and carries only
+a work-type marker. **Dormant schema** lists built-but-unused tables, and
+**Operational passes** are household data work rather than software; those
+two carry no markers.
 
 Keep entries concise and outcome-oriented. Record only constraints that would
 change selection or implementation, with a pointer to the code or focused doc
@@ -26,14 +42,14 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
-- 🤔 **Review existing duplicate research images.** New research admissions
+- 🤔 🧪 **Review existing duplicate research images.** New research admissions
   reuse same-byte item attachments under the Product lock and retain each source's
   support. Existing duplicate galleries and historical images without SHA-256
   need an approved preservation/cleanup plan. Preserve member photos, cover order,
   labels and genuinely different variants; do not delete household records from
   a forward-prevention fix.
 
-- 🧱 **Full capture metadata from the Photos library.** The library match path
+- 🧱 ✨ **Full capture metadata from the Photos library.** The library match path
   (`LibraryMetadataSync` → `image.recordSightings`) already backfills
   `capturedAt` and location for every strong perceptual-hash match across the
   whole library, including photos never uploaded from that device, but sends
@@ -48,35 +64,35 @@ history is the archive. Permanent product constraints live in the
   dictionaries for uploads that still carry EXIF. Nothing reads shutter,
   aperture, or ISO yet; they are kept so the bytes never need refetching.
 
-- 🤔 **Identify what is in a photo.** Photo import stops at the entity type,
+- 🤔 ✨ **Identify what is in a photo.** Photo import stops at the entity type,
   and web location detection matches by name only. In order:
-  1. 🤔 Compare detected items visually against Product covers and
+  1. 🤔 ✨ Compare detected items visually against Product covers and
      subject-lift cutouts, not only by exact name then semantic name
      similarity. Needs an eval set like `inventory-detection-evals.ts`.
-  2. ⏳ Server vision ranking of a single record (`photo-import.identify`, a
+  2. ⏳ ✨ Server vision ranking of a single record (`photo-import.identify`, a
      `defineFeature` sibling of `product-identification`, fed into
      `PhotoEvidenceScorer` as an identity score) when deterministic evidence
      still leaves the chooser in default order often enough to matter.
 
-- ⏳ **Shared Vision gate for photo analysis.** The classification sweep (2 concurrent) and the review sheet's
+- ⏳ 🛠️ **Shared Vision gate for photo analysis.** The classification sweep (2 concurrent) and the review sheet's
   `LocalPhotoAnalyzer` (4) share no Vision gate. Promote if a review-sheet
   analysis measurably slows while the sweep runs: add a `PhotoVisionGate`
   actor both acquire, with the sheet yielding the sweep.
 
-- ⏳ **Product match queue recall and cost.** Each unfocused queue read now
+- ⏳ 🧪 **Product match queue recall and cost.** Each unfocused queue read now
   logs `queue read coverage`: vector lookups, unseeded photo Products, and
   photo Products with no candidate at all, split by whether they were seeded.
   Promote widening, caching, or write-time detection only when those logs from
   a real wardrobe import show unseeded photos without candidates that a person
   later matched (`apps/web/src/server/services/product-match.service.ts`).
 
-- 🤔 **Reproduce macOS photo-match export inside the sandbox.** Capture the
+- 🤔 🧪 **Reproduce macOS photo-match export inside the sandbox.** Capture the
   error chain and sandbox denial for Downloads, Desktop, and an iCloud
   Drive/file-provider destination before choosing between exact-file
   authorization, coordinated writes, or per-file copying. Keep the existing
   user-selected entitlement; no broad access or persistent bookmarks.
 
-- ⏳ **Image provenance follow-ups.** Each promotes on its own trigger:
+- ⏳ ✨ **Image provenance follow-ups.** Each promotes on its own trigger:
   - _Geolocated photo → nearest Location suggestion_ in import review, once
     Locations carry coordinates.
   - _Capture date as inventory evidence_: emit a sighting's `capturedAt` as a
@@ -93,23 +109,23 @@ history is the archive. Permanent product constraints live in the
     carries the `library` block.
   - _Map / per-place / per-trip photo filters_ over `captureLocation`.
 
-- ⏳ **Decode bytes in image verification.** Promote when a corrupt or fully
+- ⏳ 🐛 **Decode bytes in image verification.** Promote when a corrupt or fully
   transparent cover is next found by eye. `inspectImageFile`
   (`services/image-integrity.ts`) never rasterizes, so
   `product_enrichment.verify_images` reports `verified` for files that will not
   render; a subagent citing it is not proof of a good image.
 
-- ⏳ **Exact entity attribution for `image.attach_files`.** Promote if
+- ⏳ 🐛 **Exact entity attribution for `image.attach_files`.** Promote if
   mixed-entity batches distort the MCP usage dashboard; telemetry attributes a
   batch to its first item's entity.
 
-- ⏳ **Apparel photo routing and size/color fields.** Routing categories are
+- ⏳ ✨ **Apparel photo routing and size/color fields.** Routing categories are
   plants, food, documents, and home; size and color live in the Product name
   and notes, one Product per variant. Revisit an apparel category once the
   hosted coordinator routes photos, and structured size/color once wardrobe
   filtering by size is wanted.
 
-- ⏳ **Driven simulator smoke for the photo flow.** Promote when the next
+- ⏳ 🧪 **Driven simulator smoke for the photo flow.** Promote when the next
   SwiftUI identity/state bug ships. `simctl addmedia` two fixture photos, drive
   select A → Add to… → Cancel → Clear → select B → Add to… via Axiom `xcui`,
   and assert the hero names B. Run from `apple-check.sh` behind a flag, outside
@@ -123,13 +139,13 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
-- ⏳ **Gmail discovery re-authentication.** Promote when production Gmail
+- ⏳ 🐛 **Gmail discovery re-authentication.** Promote when production Gmail
   returns 401/403 after refresh-token expiry or revocation: actionable
   reconnect, resumable Problem, never an "empty mailbox".
 
 ### Reconcile charges and refunds
 
-- 🧱 **Record points and miles redemptions.** An award ticket's fare is a $0
+- 🧱 ✨ **Record points and miles redemptions.** An award ticket's fare is a $0
   principal Expense; only its taxes and fees are money. Record the loyalty
   program, points spent, and an optional cents-per-point value on the Expense,
   outside `cost`, so a trip Project can show cash plus points without breaking
@@ -151,7 +167,7 @@ Product enrichment, the research service family and its independent assessor
 were deleted in the [caller-driven research plan](plans/caller-driven-research.md);
 historical Runs stay readable through generic reports.
 
-- ⏳ **Reclaim retired research storage.** Migration
+- ⏳ 🛠️ **Reclaim retired research storage.** Migration
   `0034_drop_retired_research.sql` drops `RunFactEvidence`, `RunEvidence`,
   `RunOrderCandidate`, `ResearchSourceExposure`, `ResearchRetention` and
   `ImportHunt`; their code left with it. Remaining operator steps:
@@ -184,18 +200,18 @@ historical Runs stay readable through generic reports.
     `APPLE_CLIENT_COMPATIBILITY_VERSION` bump and a column-dropping migration
     that maps `paused_*` rows to a surviving status.
 
-- 🤔 **Server-side web search for Mail import.** Reintroduce `web_*` for Pi on
+- 🤔 ✨ **Server-side web search for Mail import.** Reintroduce `web_*` for Pi on
   [Cloudflare web search](https://developers.cloudflare.com/web-search/) to fill
   logged-out gaps an Email leaves (manufacturer, model, image), within the paid
   caps. It cannot reach logged-in order pages; those stay Burn-down work.
   Compare filled-at-import quality against Burn-down cost before adopting.
 
-- 🤔 **Tune Jev/Luna prompts from review conflicts.** The Emails Accuracy view
+- 🤔 🛠️ **Tune Jev/Luna prompts from review conflicts.** The Emails Accuracy view
   counts rule, Jev and model results that disagree with a member's review, by
   stage and model. Use those conflicts to revise the triage and relevance
   prompts, and measure with an accuracy sample before and after each change.
 
-- 🟢 **Run finding-resolution connector contract delivered.**
+- 🟢 ✨ **Run finding-resolution connector contract delivered.**
   [PR #1896](https://github.com/nickysemenza/cubby/pull/1896) publishes the
   member's `apply`/`dismiss` choice as `operationAction`, preserving the outer
   tool discriminator and domain validation. Persisted registered-tool
@@ -203,7 +219,7 @@ historical Runs stay readable through generic reports.
   dismissal has passed readback. Refresh a cached connector schema before using
   a newly published input rather than dropping the required choice.
 
-- ⏳ **Finish client acceptance of historical prepared-candidate review.**
+- ⏳ 🧪 **Finish client acceptance of historical prepared-candidate review.**
   [PR #1892](https://github.com/nickysemenza/cubby/pull/1892) preserves missing
   historical `exactNameMatch` judgments as null, with a persisted Run-detail
   regression. Deployment and the public `run_status` reader are verified.
@@ -211,7 +227,7 @@ historical Runs stay readable through generic reports.
   recheck current identity at commit. Installed-client acceptance is excluded
   from the current member-directed closeout.
 
-- 🤔 **Clarify identifier-issuer collision diagnostics.** A reviewed receipt
+- 🤔 🐛 **Clarify identifier-issuer collision diagnostics.** A reviewed receipt
   preparation refused because two Vendors claimed the product-page host. The
   error text exposed the issuer ambiguity, while the connector's structured
   result reported only `INVALID_ARGUMENT`. Preserve the diagnostic cause and
@@ -219,31 +235,31 @@ historical Runs stay readable through generic reports.
   recorded websites without merging distinct merchants. Read both error text
   and structured content before diagnosing a connector validation failure.
 
-- 🤔 **Fix import commit errors after a completed durable operation.** A member
+- 🤔 🐛 **Fix import commit errors after a completed durable operation.** A member
   commit returned `Import run ownership is unavailable` after its operation
   ledger had completed with a persisted source-reconciliation finding. Add a
   failing boundary regression before changing the response/finalization path.
   Return the durable result accurately; callers must read `purchase_status`
   with the original operation identity before retrying an ambiguous response.
 
-- 🤔 **Run Reclassify in the background.** A 200-Email Reclassify runs inside
+- 🤔 ✨ **Run Reclassify in the background.** A 200-Email Reclassify runs inside
   the request and defers what its 150 s budget does not reach, so the member
   reruns the remainder. Dispatch the `mail_reclassify` Run to a background
   runner with per-Email progress instead.
 
-- 🤔 **Settle a member search's abandoned matches.** A member's `mail.search`
+- 🤔 🐛 **Settle a member search's abandoned matches.** A member's `mail.search`
   runs only the free rule stage, so every new non-Spam/Trash match is retained
   as `uncertain` (an already-decided Email keeps its Relevance) until the session settles it with `mail.resolve`. A session that
   ends early leaves those copies retained. Either expire unsettled member
   matches or let members retain one Email by Gmail id instead of searching.
 
-- 🤔 **Expose conflicting supplier specifications during research.** An exact
+- 🤔 ✨ **Expose conflicting supplier specifications during research.** An exact
   supplier page can give incompatible values in its description and detail
   table. Retain both observations and ask for field-specific resolution before
   accepting that specification; page authority alone does not resolve an
   internal contradiction. Preserve already supported identity and assignments.
 
-- ⏳ **Accept live Mail import and Burn-down.** Live work stays paused until the
+- ⏳ 🧪 **Accept live Mail import and Burn-down.** Live work stays paused until the
   member resumes it. The approved Product scope has completed source-backed
   acceptance, including the member's packaging-label confirmations. Remaining
   acceptance: live verification that imports refuse exact-identity Product forks and
@@ -256,28 +272,28 @@ historical Runs stay readable through generic reports.
   before every paid transmission; prefer subscription inference. Populated
   fields and terminal Runs do not establish verification.
 
-- 🟢 **Cover the `replace_aggregate_line` fix path.** No integration test
+- 🟢 🧪 **Cover the `replace_aggregate_line` fix path.** No integration test
   applies an audit-proposed aggregate replacement; the first exact-identity
   guard broke its `distinctFrom` carry unnoticed. Add a commit → finding →
   approve case whose line carries a Distinct-from decision.
 
-- ⏳ **Measure paid fallback recovery.** A bounded live attempt saw the exact
+- ⏳ 🧪 **Measure paid fallback recovery.** A bounded live attempt saw the exact
   quota refusal inside an HTTP 200 stream; the shared router now qualifies it
   before admission, but live paid recovery after that refusal is unproven.
 
-- 🤔 **Gmail push for continuous new mail.** The daily cron plus backfill
+- 🤔 ✨ **Gmail push for continuous new mail.** The daily cron plus backfill
   covers new mail today; Gmail push notifications would shorten the delay.
   Decide only after continuous processing is verified.
 
 ## Runs, enrichment & browser capture
 
-- 🤔 **Fence the HTTP coordinator proxy by Run ownership.** Its route verifies
+- 🤔 🐛 **Fence the HTTP coordinator proxy by Run ownership.** Its route verifies
   member identity, but `proxyPurchaseAgentRequest` receives a party without
   checking it against the Run owner. Apply the owned transcript reader's
   actor-and-party fence to GET, streaming and control requests, with a real
   foreign-Run regression before dispatch.
 
-- 🤔 **Keep live conversation inspection from resuming Pi.** The existing
+- 🤔 🐛 **Keep live conversation inspection from resuming Pi.** The existing
   HTTP GET/stream path loads the Agent lifecycle, whose cold-start harness
   recovery can resume pending work. Move UI inspection onto a storage-only
   projection/subscription path while preserving committed history and live
@@ -287,110 +303,110 @@ Run is the one unit of unattended work (Mail import, photo inventory, a member's
 import) and the attempt history the shared activity projection presents.
 Burn-down writes are not Runs: they are audited member writes with Sources.
 
-- 🐛 **Preserve chronological timestamps for completed approval Runs.** A
+- 🤔 🐛 **Preserve chronological timestamps for completed approval Runs.** A
   completed execution-authorization root can end before its recorded start and
   trigger a timeline defect. Reproduce with synthetic approval creation, use
   one consistent clock for the terminal receipt, and preserve existing approval
   fingerprints, receipts and budget state during any historical repair.
 
-- 🐛 **Refresh aggregate problem counts after statement membership and finding
+- 🤔 🐛 **Refresh aggregate problem counts after statement membership and finding
   writes.** Targeted reads can show repaired export coverage or dismissed
   findings while aggregate counts retain older totals. Investigate cache
   invalidation and shared read dependencies; verify both projections converge
   without changing declared source counts or dismissing unresolved evidence.
 
-- 🐛 **Distinguish blank browser captures from usable order documents.** A
+- 🤔 🐛 **Distinguish blank browser captures from usable order documents.** A
   retained PDF or image can contain only an empty browser page while still
   satisfying primary-document presence. Preserve the original capture and its
   history, record the missing evidence explicitly, and verify usable replacement
   evidence before treating document presence as source acceptance.
 
-- 🐛 **Repair Run-list attention projection validation.** A live Runs page can
+- 🤔 🐛 **Repair Run-list attention projection validation.** A live Runs page can
   reject its attention and list payload when a target's `entityKind` falls
   outside the declared purchase/product/image/run enum. Reproduce using a
   synthetic target, align the shared projection contract with supported target
   kinds, and verify the list and attention summaries render. Individual Run
   detail pages still load; preserve their retained history.
 
-- ⏳ **Show the Research queue count where the household looks.** Surface the
+- ⏳ ✨ **Show the Research queue count where the household looks.** Surface the
   `research-queue` saved-view counts on Home or Activity, linking to the views,
   so Burn-down happens; no notifications or scheduling.
 
-- ⏳ **Accept research root grouping and record-level history in the
+- ⏳ 🧪 **Accept research root grouping and record-level history in the
   clients.** The grouped Activity reads and the Vendor/VendorAccount/Purchase
   Email reports ship on web and native; installed-household acceptance remains.
 
-- 🤔 **Link enriched seed Products to Plants.** `growsPlantId` is supported,
+- 🤔 ✨ **Link enriched seed Products to Plants.** `growsPlantId` is supported,
   but which growing facts belong on Plant versus a purchased seed Product is a
   separate domain decision.
 
-- 🤔 **Measure Mail import model routing before changing it.** Keep Luna by
+- 🤔 🧪 **Measure Mail import model routing before changing it.** Keep Luna by
   default until a controlled comparison on the same sources shows a safe
   alternative for purchased-variant judgments.
 
 ## Ingredients, recipes & nutrition
 
-- 🧱 **Ingredient as the grocery hub.** Product is SKU-grade and Ingredient
+- 🧱 ✨ **Ingredient as the grocery hub.** Product is SKU-grade and Ingredient
   the commodity layer, but imports never fill `ingredientId`, so
   `Cauliflower` / `Organic Cauliflower, 1 Each` and three ground-beef 80/20s
   stand unconnected. In order:
-  1. 🧱 Piece units resolve on the ingredient: `whole/bunch/crown/clove` come
+  1. 🧱 ✨ Piece units resolve on the ingredient: `whole/bunch/crown/clove` come
      from USDA `portionInfo` or an ingredient-level mapping; product `each`
      prices the package and never satisfies a piece unit.
-  2. 🧱 A durable ingredient-level unit mapping store, which the harvested
+  2. 🧱 ✨ A durable ingredient-level unit mapping store, which the harvested
      equivalences report (`lib/harvest-equivalences.ts`) then writes accepted
      suggestions into.
 
-- 🧱 **Salt amounts for “to taste” recipe lines.** Sanity-check the proposed
+- 🧱 ✨ **Salt amounts for “to taste” recipe lines.** Sanity-check the proposed
   1% of pot weight and define its applicability and evidence before changing
   parser or costing contracts. This estimation policy remains future work.
 
-- 🧱 **Cookbook identity merge.** Give cookbooks durable identity plus a
+- 🧱 ✨ **Cookbook identity merge.** Give cookbooks durable identity plus a
   merge/repoint path to stop same-title collisions and renamed-EPUB forks. A
   recipe changes cookbook only to fix an import, so merge/repoint is the
   sanctioned path; record `cookbookId` changes in the recipe audit roster
   (`server/repo/recipe/crud.ts`) and decide whether the recipe form's cookbook
   picker (`recipe-cookbook-field.tsx`, `resolveCookbookRepoint`) stays.
 
-- 🧱 **Portion shares alongside grams.** Accept `{share}` per portion in
+- 🧱 ✨ **Portion shares alongside grams.** Accept `{share}` per portion in
   `meal_recipe.save_preparation` and derive grams at read time from the
   current `estimatedYieldGrams`, so served-by-eye portions do not go stale.
 
-- 🤔 **Cookbook fallback evaluation.** Run the six-book answer-key corpus
+- 🤔 🧪 **Cookbook fallback evaluation.** Run the six-book answer-key corpus
   against GPT-6 Luna as the second ladder reader; compare recall, escalation
   rate, latency, and cost. Keep Gemini 2.5 Flash as first reader meanwhile.
 
-- 🤔 **Reconsider the remaining USDA MCP App.** The USDA Picker template
+- 🤔 🧪 **Reconsider the remaining USDA MCP App.** The USDA Picker template
   (`apps/mcp-apps/src/usda-picker.ts`) is 352,004 bytes raw / 83,655 gzip; keep
   it only while refinement and explicit selection beat a plain
   `usda_food.search`.
 
-- ⏳ **Explicit idempotency key for `meal_recipe.add`.** Promote if a re-sent
+- ⏳ 🐛 **Explicit idempotency key for `meal_recipe.add`.** Promote if a re-sent
   call duplicates a meal line. Not a natural-key index: one meal may repeat a
   recipe at different scales. First slice is an `operations/meal.server.ts`
   integration test asserting one meal holds one recipe twice with two
   independent shopping-list contributions.
 
-- ⏳ **Exact nutrition source tracing.** Resume with upstream conversion work:
+- ⏳ ✨ **Exact nutrition source tracing.** Resume with upstream conversion work:
   `ingredient-parser` reports retain actual mapping identities and competing
   mappings; Cubby exposes Product/USDA/manual provenance through nutrient
   cells and nested recipes from the same computation, never inferred from
   matching values.
 
-- ⏳ **Split compound ingredient lines.** Blocked upstream: `parse_ingredient`
+- ⏳ ✨ **Split compound ingredient lines.** Blocked upstream: `parse_ingredient`
   is singular and keeps "Salt and pepper" whole. Scope when unblocked: 14
   ingredients over 212 rows in 204 recipes, all with empty `amounts` (the
   discriminator). Choose split targets from `rawLine`; route writes through
   `handleSectionUpdates` sending each section's complete array; repoint the
   existing row to the first child. MCP cannot drive it (no line ids).
 
-- ⏳ **Portion solver.** Promote if agent-side amount iteration stays painful;
+- ⏳ ✨ **Portion solver.** Promote if agent-side amount iteration stays painful;
   solve component weights against macro constraints in one call.
 
-- ⏳ **Aggregate range materiality.** Promote if always-on cost/calorie/weight
+- ⏳ ✨ **Aggregate range materiality.** Promote if always-on cost/calorie/weight
   ranges create visible noise; collapse only immaterial aggregate spreads.
 
-- 🔭 **Recipe scaling extensions.** Pan-size targets, interactive parse
+- 🔭 ✨ **Recipe scaling extensions.** Pan-size targets, interactive parse
   clarification, and baker's-percentage comparison without a global density
   table.
 
@@ -398,7 +414,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Inventory, products & locations
 
-- **Accept legitimate fractional acquisition quantities in Product pricing
+- 🤔 🐛 **Accept legitimate fractional acquisition quantities in Product pricing
   reads.** A detailed Product read can fail validation because
   `pricing.knownUnitCount` requires an integer even when acquiring Expenses
   carry fractional quantities. Trace the quantity/unit contract and preserve
@@ -409,10 +425,10 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Tasks, projects & garden
 
-- 🔭 **Grow-to-table loop.** Beds and plantings, harvests received into pantry
+- 🔭 ✨ **Grow-to-table loop.** Beds and plantings, harvests received into pantry
   inventory, and what the yard can supply this week.
 
-- 🔭 **Seasonal garden planning and photo comparison.** Build past one-time
+- 🔭 ✨ **Seasonal garden planning and photo comparison.** Build past one-time
   `garden-plan-import` toward revising a standing plan season over season,
   comparing dated bed photos with AI, and explaining keep-versus-replace
   recommendations. Planting windows alone do not establish harvest forecasts.
@@ -421,23 +437,23 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Native app
 
-- 🤔 **Cluster and reproduce the native app-hang corpus before changing
+- 🤔 🐛 **Cluster and reproduce the native app-hang corpus before changing
   code.** Collect sanitized release, duration, foreground state, and top
   symbolicated main-thread frames per Sentry family; group by shared frames.
   Reproduce each in a Release build without LLDB (Time Profiler or System
   Trace) and make one repair per demonstrated root cause.
 
-- 🤔 **Swift 6.4 / OS 27 readiness pass.** Before a toolchain or floor change,
+- 🤔 🧪 **Swift 6.4 / OS 27 readiness pass.** Before a toolchain or floor change,
   audit state initialization, concurrency, availability, and resizing against
   the actual SDK with focused behavior tests. Preserve the OS 26 path until a
   floor bump is chosen. Owners: `apps/apple/project.yml`, `App`, `CubbyKit`.
 
-- 🤔 **Live Activities for server runs started on this device.** Record the
+- 🤔 ✨ **Live Activities for server runs started on this device.** Record the
   initiating install separately from `ActivityRun.executors`, then send
   ActivityKit push updates so the phone shows progress while suspended. Keep
   the local-work Live Activity feed separate.
 
-- ⏳ **Native workflow parity with web.** Promote when a recurring household
+- ⏳ ✨ **Native workflow parity with web.** Promote when a recurring household
   task still needs the web. Coverage is declared once in
   `packages/schemas/src/native-coverage.ts` with a shrink-only unsupported
   ceiling per kind. Every control, list cell, detail renderer and hero action
@@ -448,7 +464,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   comprehensive sheet lifecycle only on demonstrated friction. Owners:
   `apps/apple/App/Shared`, generated `EntityCatalog`.
 
-- ⏳ **Native agent conversation streaming.** The live and stopped agent slots
+- ⏳ ✨ **Native agent conversation streaming.** The live and stopped agent slots
   (`run.import-agent-live`, `run.import-agent-stopped`) stay web-only on
   purpose: the conversation is the coordinator's SSE stream plus prompt and abort over
   `/api/import/runs/{id}/agent/*` (`apps/web/src/routes/api/import/`), not a
@@ -461,7 +477,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   steer a running import from the phone instead of waiting for it to pause on
   web, then lower `NATIVE_UNSUPPORTED_CEILING.detailSlot` to zero.
 
-- ⏳ **Structured-value editor follow-ups.** Web and native edit every
+- ⏳ ✨ **Structured-value editor follow-ups.** Web and native edit every
   `structured-field` (recipe `sections`/`meta`/`yield`, meal `recipes` on
   create, account `identity`/`cardNumbers`, vendor `agentHints`, expense and
   transfer `sourceClaims`) with one generic editor over the generated
@@ -473,47 +489,47 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   `SourceRefsField` and the recipe form's meta/yield inputs in favour of the
   generic `StructuredValueField` (it already reads the same `valueSchema`).
 
-- ⏳ **Native recipe Share extension.** An iOS and macOS share-sheet extension
+- ⏳ ✨ **Native recipe Share extension.** An iOS and macOS share-sheet extension
   that sends a shared recipe URL to the existing server recipe import, reading
   the session token from a Keychain access group shared with the app. Promote
   when sharing recipes from the phone is wanted. Retiring the web manifest
   dropped `share_target` from installed Chromium/Android PWAs only; iOS Safari
   never supported Web Share Target, so nothing iOS-facing was lost.
 
-- ⏳ **Core native inventory experience.** Promote when everyday use exposes a
+- ⏳ ✨ **Core native inventory experience.** Promote when everyday use exposes a
   specific bottleneck: location-first browsing, stock comparison,
   capture/recount, photo completion. Owners: `App/Shared/Browse`, `Capture`,
   `Audit`; see [native design](../apps/apple/DESIGN.md).
 
-- ⏳ **Generated native list/detail parity.** Stay on generated `EntityCatalog`
+- ⏳ 🛠️ **Generated native list/detail parity.** Stay on generated `EntityCatalog`
   and OpenAPI; revisit shared Rust only for a rule those surfaces cannot
   express. Add collapsed-section parity only for a manifest-supported consumer.
 
-- ⏳ **Native numeric entry and units.** Promote only when a native amount
+- ⏳ ✨ **Native numeric entry and units.** Promote only when a native amount
   workflow shows decimal fields are insufficient; define locale-aware parsing
   and the unit contract first.
 
-- ⏳ **Native system-surface expansion.** One surface at a time once a
+- ⏳ ✨ **Native system-surface expansion.** One surface at a time once a
   workflow names it: Quick Look, typed drag/drop, App Intents, widgets,
   extensions, voice, timers. Keep confirmed writes and existing contracts.
 
-- ⏳ **On-device Apple Intelligence.** Promote when devices and a measured
+- ⏳ ✨ **On-device Apple Intelligence.** Promote when devices and a measured
   capture friction justify one draft-assistance workflow; evaluate on
   fixtures and confirm before writes. Owners: `App/Shared/Identify`, `Photo`,
   `Intents`.
 
-- ⏳ **Offline native writes and multiwindow.** Promote only when disconnected
+- ⏳ ✨ **Offline native writes and multiwindow.** Promote only when disconnected
   use or concurrent windows block a workflow; needs a write/retry/conflict
   model and window ownership rules.
 
-- ⏳ **Web-only parts inside the implemented native slots.** What is left
+- ⏳ ✨ **Web-only parts inside the implemented native slots.** What is left
   after the report commands: the recipe flow's "map" layout (a graph drawing);
   non-recipe foods and moving a portion to another meal (leftovers) in a meal's
   composition; the web cookbook reprocess progress bar (native runs the same
   workflow to its end and shows the summary). Promote one when a household
   task needs it on the phone.
 
-- ⏳ **Expose the rest of recipebridge via cubby-ffi.** Scaling (`scale_amount`,
+- ⏳ ✨ **Expose the rest of recipebridge via cubby-ffi.** Scaling (`scale_amount`,
   every scale-factor anchor including total weight, scaled counts) ships with
   native cook mode. Conversion,
   needs, costing, and nutrition stay web-only until a native screen prices a
@@ -523,68 +539,68 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Web UI
 
-- 🟢 **Show unmatched edit issues in the dialog banner.** A validation issue
+- 🟢 🐛 **Show unmatched edit issues in the dialog banner.** A validation issue
   whose path has no rendered control (e.g. `externalIds.0.isPrimary`) is set on
   the form but never shown: `entityEditBannerIssues`
   (`entity-edit-dialog-content.tsx`) excludes every field-scoped issue, so Save
   fails silently. Surface issues no registered control can display.
-- 🤔 **All-entities record interaction parity.** Reuse standard row inspection,
+- 🤔 ✨ **All-entities record interaction parity.** Reuse standard row inspection,
   selection, clipboard behavior, and actions in the Records tab. Decide which
   actions are eligible for mixed entity types before enabling batch work;
   build on `EntityRecordsTab` and shared RTable behavior.
 
-- 🤔 **Make narrow web layouts device agnostic.** The compact shell still uses
+- 🤔 ✨ **Make narrow web layouts device agnostic.** The compact shell still uses
   phone-style tabs and overlays. Design one compact navigation and overlay
   pattern for narrow widths on desktop and iPhone, keyed on width, keeping
   safe-area, keyboard, and touch behavior where exposed; update the design
   language and responsive checks.
 
-- 🤔 **Phone hit areas as pseudo-elements, app-wide.** Button's
+- 🤔 ✨ **Phone hit areas as pseudo-elements, app-wide.** Button's
   `mobileSize: "touch"` grows icon controls to 44px layout boxes, wrapping
   dense rows. The detail ledger keeps the target as an `::after` (the
   `checkbox.tsx` pattern). Decide whether `touch` itself becomes a
   pseudo-element target.
 
-- 🤔 **List-route SSR payloads are large.** `/projects` 826 KB, `/locations`
+- 🤔 🛠️ **List-route SSR payloads are large.** `/projects` 826 KB, `/locations`
   655 KB, `/recipes` 579 KB of HTML. Find what the list loader and slot views
   dehydrate before trimming or deferring.
 
-- 🤔 **Eyeball `/graph` after the canonical-owner change.** #1067 made the
+- 🤔 🧪 **Eyeball `/graph` after the canonical-owner change.** #1067 made the
   foreign-key side own a shared path, so `product → inventory` now reads
   `inventory → product`; inspect the Relationships tab and `/graph` for
   relations declared on both sides.
 
-- 🤔 **Server-backed table intelligence.** Extend exact facet counts and
+- 🤔 ✨ **Server-backed table intelligence.** Extend exact facet counts and
   aggregate summaries from Expenses to one justified server-paginated surface
   at a time; never analyze a partial client page as the population.
 
-- ⏳ **Named web fidelity losses from the manifest-rendering pass.** Promote
+- ⏳ 🐛 **Named web fidelity losses from the manifest-rendering pass.** Promote
   if a workflow misses one: the interactive subtask checklist, project's
   tasks list/board toggle, purchase per-line quantity/unit-cost columns,
   location's merged sub-locations+items surface, product's stock-stats row.
 
-- ⏳ **Timeline notes carry links and product `usedOnProjects`.** Promote when
+- ⏳ 🐛 **Timeline notes carry links and product `usedOnProjects`.** Promote when
   "N products omitted" needs to be clickable again or a lifecycle row needs a
   project link; `EntityTimelineOut.notes[]` are plain strings.
 
-- ⏳ **Push change feed for post-mutation refresh.** Promote only when a
+- ⏳ ✨ **Push change feed for post-mutation refresh.** Promote only when a
   derived value users wait on reliably lands after the +5 s / +30 s deferred
   refetch (`lib/deferred-invalidation.ts`). Design: a Durable Object change
   feed over WebSocket Hibernation; rejected for now as ~300–400 lines of
   infrastructure for a single-household tool.
 
-- ⏳ **Selective SSR expansion.** Promote another route family only if the
+- ⏳ ✨ **Selective SSR expansion.** Promote another route family only if the
   product-detail pilot wins a cold-cache comparison without INP, CLS, or
   Worker-error regressions.
 
-- ⏳ **Selection-control consolidation.** Promote a selector family when
+- ⏳ 🛠️ **Selection-control consolidation.** Promote a selector family when
   visual or keyboard inconsistency becomes painful.
 
-- ⏳ **Measured table-virtualizer investigation.** Revisit direct-DOM-write
+- ⏳ 🧪 **Measured table-virtualizer investigation.** Revisit direct-DOM-write
   options only during a measured investigation (`directDomUpdates` no longer
   exists in the installed `@tanstack/react-virtual`).
 
-- ⏳ **Residual N+1 repair** when a fresh trace finds concrete fan-out;
+- ⏳ 🛠️ **Residual N+1 repair** when a fresh trace finds concrete fan-out;
   **Sentry lazy initialization** if a fresh treemap shows Sentry on the
   critical path.
 
@@ -592,7 +608,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Entity platform & data model
 
-- 🤔 **Product Category feature expectations.** Decide whether Food _expects_
+- 🤔 ✨ **Product Category feature expectations.** Decide whether Food _expects_
   an ingredient and Books an ISBN (both `unknown` today, so no data-quality
   gap) and whether a Food Product may carry an ISBN outright rather than only
   by precedence; and whether seed/plant categories should expect
@@ -601,54 +617,54 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   Inherited classifications (Vendor → Purchase → Expense) resolve through
   their existing effective-value SQL before a refusal applies.
 
-- 🤔 **Declarative "many, clamped to one" cardinality.** Image provenance
+- 🤔 ✨ **Declarative "many, clamped to one" cardinality.** Image provenance
   chose a many-row `ImageSighting` child plus derived `one` Image fields over
   array relations with a runtime clamp. Revisit only when a second entity needs
   multi-evidence provenance; extend relation `provenance.sources[]` first.
 
-- 🤔 **Dependent batch program.** A bounded program of named operations whose
+- 🤔 ✨ **Dependent batch program.** A bounded program of named operations whose
   results feed later inputs: limits, failure propagation, ordered partial
   outcomes, retries preserving completed writes, explicit continuation.
 
-- 🤔 **MCP staged-file storage.** Before sharing a local upload beyond its
+- 🤔 ✨ **MCP staged-file storage.** Before sharing a local upload beyond its
   signed grant, define no-copy activation, grant replay, activation fencing,
   delete-before-expiry for a recreated orphan, and evidence ownership, on the
   `EntityAttachment` model in ADR 0006.
 
-- 🤔 **Host-provided MCP file references.** Adapt client-owned file handles
+- 🤔 ✨ **Host-provided MCP file references.** Adapt client-owned file handles
   and download URLs through capability-specific input metadata and the
   validated URL-fetch path; downloadable URLs remain the fallback.
 
-- ⏳ **Generic HTTP `resources.<entity>.batch` route.** Promote if a 5k-asset
+- ⏳ ✨ **Generic HTTP `resources.<entity>.batch` route.** Promote if a 5k-asset
   library makes one-row-per-request writes measurably slow; mirror
   `entity.commands`'s independent-item semantics.
 
-- ⏳ **Budget-aware MCP pagination.** Promote when a real tool result hits an
+- ⏳ ✨ **Budget-aware MCP pagination.** Promote when a real tool result hits an
   output limit: stable keyset cursors, byte and result limits, and a
   continuation preserving filters, sort, and budget.
 
-- ⏳ **Durable MCP transfer telemetry.** Persist call duration, response
+- ⏳ ✨ **Durable MCP transfer telemetry.** Persist call duration, response
   bytes, and per-item outcomes when repeated measurements justify it.
 
-- ⏳ **Entity relation runtime dispatch.** Promote when attach/detach
+- ⏳ 🛠️ **Entity relation runtime dispatch.** Promote when attach/detach
   genericization resumes; generate dispatch only for declared runtime ports.
 
-- ⏳ **`stored` descriptor sweep per repository.** Promote when a hand-built
+- ⏳ 🛠️ **`stored` descriptor sweep per repository.** Promote when a hand-built
   list drifts from its declared columns; convert per repository
   (`product/crud.ts`, `purchase.ts`) and verify with the real-query matrix.
 
-- ⏳ **RunFinding as a manifest entity.** Promote once a second parent needs
+- ⏳ ✨ **RunFinding as a manifest entity.** Promote once a second parent needs
   its list. It is the one run child with its own lifecycle and a Purchase
   relation; costs a prefix, a backfill, an `AuditEntityKind`, and the same
   delete/resolve disposition decision as StatementRow.
 
-- ⏳ **StatementRow and StatementImport as manifest entities.** Promote once
+- ⏳ ✨ **StatementRow and StatementImport as manifest entities.** Promote once
   the `supersededByRowId` disposition (block, detach, or cascade) is decided.
   Unblocks auditing: all three statement-row mutation paths write no audit
   trail. Backfill shortcodes in batches with an in-memory set of existing
   codes (`generateUniqueShortcode` is per-candidate SELECT).
 
-- ⏳ **Put `deleteStatementRows` on policy-driven removal.** The last
+- ⏳ 🛠️ **Put `deleteStatementRows` on policy-driven removal.** The last
   hand-written cascade (`repo/statement-row.ts`); waits on the item above. The
   image hard delete stays on `IMAGE_HARD_DELETE` on purpose
   (`repo/removal/core.unit.test.ts`).
@@ -666,7 +682,7 @@ Suggestion sweep, list field pills and `eval:decisions` exist; review happens
 in entity lists without a separate page
 ([entities](entities.md#classification-field-policies)).
 
-- 🤔 **Declare effective-value inheritance chains.** "Expense category =
+- 🤔 🛠️ **Declare effective-value inheritance chains.** "Expense category =
   override → vendor food context → product mapping (category ancestors) →
   Purchase default → Vendor default" lives in hand SQL
   (`repo/expense-category-resolution.ts`), as do project inheritance and
@@ -677,23 +693,23 @@ in entity lists without a separate page
   classification preview hand-writes. Generated SQL must match hand-tuned
   performance; #1712's preview equivalence and scale tests are the guard.
   Decide the declaration shape first.
-- 🤔 **Re-evaluate categories and Jev-backed dropdown options.** Review the
+- 🤔 🧪 **Re-evaluate categories and Jev-backed dropdown options.** Review the
   category hierarchies and declared classification choices against actual usage
   and per-field decision misses. Identify overlapping, ambiguous, stale or
   missing options; check that meanings and suggestion rules distinguish them.
   Carry existing assignments through any consolidation, update the declarations
   and generated consumers together, and compare decision quality before and
   after the change rather than adding more options by default.
-- 🟢 **Burn down raw enum literals in SQL.** `cubby/no-raw-enum-literal-in-sql`
+- 🟢 🛠️ **Burn down raw enum literals in SQL.** `cubby/no-raw-enum-literal-in-sql`
   holds a shrink-only per-file baseline
   (`tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json`). Replace
   literals with the shared value constants file by file, lowering each count;
   check whether generic values (`other`, `unknown`) cause false positives
   worth excluding.
-- 🟢 **Move the image backfill onto the paced batch Run.**
+- 🟢 🛠️ **Move the image backfill onto the paced batch Run.**
   `backfillImageProcessing` keeps its own settings-row pause and progress;
   move it onto `runs/paced-batch.ts` beside the Suggestion sweep.
-- 🤔 **Re-weight the decision trial from paired data.** Normal decision
+- 🤔 🧪 **Re-weight the decision trial from paired data.** Normal decision
   traffic stays 50/50 Jev/Clef (`CLEF_TRAFFIC_SHARE`). Once sweeps have
   produced paired rows and Misses, run `eval:decisions` and retier on its
   per-field results.
@@ -706,14 +722,14 @@ consume the declarations.
 
 ## AI & search
 
-- 🤔 **Assess Agents SDK capabilities for Pi.** Pi now runs only Mail import
+- 🤔 🧪 **Assess Agents SDK capabilities for Pi.** Pi now runs only Mail import
   and photo inventory on generic agent tools and mounted MCP actions. Adopt an
   [SDK capability](https://github.com/cloudflare/agents#features) only where it
   deletes existing lifecycle code (dispatch acknowledgement, settlement watch,
   stale-run expiry) or improves demonstrated behavior; do not add a second
   execution engine.
 
-- 🟢 **Show estimated API spend avoided by subscription inference.** Retain
+- 🟢 ✨ **Show estimated API spend avoided by subscription inference.** Retain
   each ChatGPT-plan call's catalog-priced API equivalent alongside its zero
   incremental API charge, then aggregate it through the shared AI usage and
   Run reports. Label the amount as estimated API spend avoided; preserve
@@ -721,7 +737,7 @@ consume the declarations.
   fees separate. Do not infer savings from missing usage or add a separate
   accounting workbench.
 
-- 🟢 **Use Claude subscriber API credits through AI Gateway BYOK.** Link an
+- 🟢 🛠️ **Use Claude subscriber API credits through AI Gateway BYOK.** Link an
   eligible Max or Team plan to a Claude Console organization and claim its
   [included API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers).
   Store that organization's Anthropic API key in Cloudflare AI Gateway under
@@ -733,7 +749,7 @@ consume the declarations.
   auto-reload when the expiring monthly credits run out. Reuse shared transport
   and usage reporting; credits are bounded, not unlimited free API access.
 
-- 🤔 **One pricing source for the upstream cookbook pipeline.** Cubby usage
+- 🤔 🛠️ **One pricing source for the upstream cookbook pipeline.** Cubby usage
   pricing uses `models.dev` through `packages/shared/src/ai/pricing.ts`, but
   ingredient-parser's `cookbook` crate still builds its own model-price table
   (`cookbook/src/models.rs`, `cost.rs`, `Cargo.toml`). Decide how that pipeline
@@ -741,7 +757,7 @@ consume the declarations.
   Cubby's pin. Preserve extraction estimates and token-cost accounting,
   including unknown prices as `null`; do not reintroduce a local fallback table.
 
-- 🤔 **Deferred MCP agent capabilities.** Real agent work no MCP tool exposes
+- 🤔 ✨ **Deferred MCP agent capabilities.** Real agent work no MCP tool exposes
   yet. Each operation declares `mcp: { omit: "deferred_capability" }` and
   `pnpm generate` requires it to be named here
   ([MCP exposure](agents/mcp.md#exposure)). Decide per group whether and how
@@ -764,7 +780,7 @@ consume the declarations.
   - ISBN create: `product.findOrCreateByCode`.
   - Derived-field explanations: `fieldExplanation.explain`.
 
-- 🤔 **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
+- 🤔 🧪 **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
   Compare recall against the OpenAI adapter with this eval set:
   `"plastic tarp"` → `blue plastic tarp` (product); `"drop cloth"` →
   `plastic drop cloth` (product); `"where are tarps"` → `tarps cloths
@@ -776,20 +792,20 @@ consume the declarations.
   are keyed on `(provider, model, dimensions)`, so `findRelatedSearchCandidates`
   must resolve the active `SemanticEmbeddingConfig` before embedding the query.
 
-- ⏳ **Trace the web Worker's AI calls into Sentry's Agents view.** Sentry
+- ⏳ 🛠️ **Trace the web Worker's AI calls into Sentry's Agents view.** Sentry
   wraps only `env.AI.run()`, not the `env.AI.gateway("cubby").run()` transport,
   and pi-ai calls use Cubby's shared gateway transport. Add `gen_ai.chat`
   spans at that transport when a web AI feature needs per-call debugging
   the Gateway cannot answer.
 
-- 🔭 **Standing household agents.** A registrar for records, quartermaster for
+- 🔭 ✨ **Standing household agents.** A registrar for records, quartermaster for
   consumable shortfalls, and foreman for stale or blocked projects, approving
   durable writes.
 
-- 🔭 **Ambient capture.** Voice memos, forwarded email, shared photos, and NFC
+- 🔭 ✨ **Ambient capture.** Voice memos, forwarded email, shared photos, and NFC
   entry points.
 
-- 🔭 **Cubby to Home Assistant** (maintenance due, weekend work, tonight's
+- 🔭 ✨ **Cubby to Home Assistant** (maintenance due, weekend work, tonight's
   meal for display and voice) and **Home Assistant to Cubby** (runtime,
   energy, fault, and weather signals into maintenance, evidence, and tasks).
 
@@ -797,7 +813,7 @@ consume the declarations.
 
 ## Dev tooling, tests & CI
 
-- 🤔 **Seed a connected synthetic development household across every entity.**
+- 🤔 🧪 **Seed a connected synthetic development household across every entity.**
   Add a repeatable dev-server fixture pack with representative records for all
   declared entities and meaningful cross-entity links, so Browse, details,
   relationships and specialist workflows can be exercised without empty domains.
@@ -806,7 +822,7 @@ consume the declarations.
   Keep the pack deterministic, idempotent and confined to development databases;
   derive coverage from the entity manifest and report unsupported seed cases.
 
-- 🤔 **Diagnose PostgreSQL test teardown disconnects.** A hosted integration
+- 🤔 🐛 **Diagnose PostgreSQL test teardown disconnects.** A hosted integration
   shard passed every assertion but failed on an unhandled `57P01` connection
   termination around `mail-import-run.integration.test.ts`. Establish the
   pool/database teardown lifecycle before changing error handling; preserve
@@ -818,13 +834,13 @@ small Tester Army navigation, and reuses verified native builds. Low-signal
 source/copy/declaration tests are removed. The shared T3
 device launcher is supported for finite simulator journeys.
 
-- 🤔 **Measure post-change routing speed and quality.** The
+- 🤔 🧪 **Measure post-change routing speed and quality.** The
   [2026-10-08 metadata recheck](agents/model-routing.md#routing-measurement-method)
   records delegation and token shares, but mostly predates the routing rule.
   Repeat after a full post-change window using the same accounting and explicit
   latency/quality evidence; do not infer improvement from token shares alone.
 
-- 🤔 **Capture exact runtime error shapes before broadening suppression.**
+- 🤔 🧪 **Capture exact runtime error shapes before broadening suppression.**
   Client-disconnected cancellation, missing update-result, opaque database
   failure, and pathological LIKE/GLOB reports need sanitized
   name/message/stack/route evidence and an event-shaped regression test before
@@ -833,7 +849,7 @@ device launcher is supported for finite simulator journeys.
 Fixture-backed generic list previews and optional warm HMR Playwright validation
 are implemented. See [local development](local-development.md#fixture-previews-and-warm-hmr-validation).
 
-- 🤔 **Evaluate off-the-shelf OpenAPI generation.** The HTTP/Swift emitters
+- 🤔 🧪 **Evaluate off-the-shelf OpenAPI generation.** The HTTP/Swift emitters
   under `scripts/generator/http-api/` might be replaceable by
   `swift-openapi-generator` and `openapi-typescript`; establish whether they
   cover the generated client contracts before replacing any emitter.
@@ -842,7 +858,7 @@ are implemented. See [local development](local-development.md#fixture-previews-a
 
 ## Infra & deploy
 
-- 🤔 **Maintenance mode.** The `MAINTENANCE_MODE` Worker secret makes the web
+- 🤔 ✨ **Maintenance mode.** The `MAINTENANCE_MODE` Worker secret makes the web
   Worker answer 503 and skips the cron (`server/maintenance.ts`); purchase
   coordinator callbacks and tool effects now defer/refuse before DB/model
   access.
@@ -856,7 +872,7 @@ are implemented. See [local development](local-development.md#fixture-previews-a
   `retry()` spends `max_retries: 3` with no dead-letter queue, so either call
   the Queues pause-delivery API from the toggle or retry with long delays.
 
-- 🤔 **Move mechanical backfills onto existing Workflow-backed Runs.**
+- 🤔 🛠️ **Move mechanical backfills onto existing Workflow-backed Runs.**
   Scheduled Gmail discovery uses a Workflow. Long, page-oriented
   mechanical backfills are the next fit: give each a
   Run whose progress is the cursor and reuse `server/workflow-runs/`. Evaluated
@@ -867,45 +883,45 @@ are implemented. See [local development](local-development.md#fixture-previews-a
   Device-local work (library scan, classification sweep, sighting backfill)
   can post into `runProjection` as a transport addition.
 
-- ⏳ **Failed Runs on the Problems page.** Routine scheduled Runs are hidden
+- ⏳ ✨ **Failed Runs on the Problems page.** Routine scheduled Runs are hidden
   by default, so a failed scheduled pass is visible only in the Runs list.
   Promote if one goes unnoticed.
 
-- ⏳ **TanStack Start observability.** Remove Cubby's wrapper when Start
+- ⏳ 🛠️ **TanStack Start observability.** Remove Cubby's wrapper when Start
   supplies named request/result/error events and exposes the dispatched
   operation id to a request hook (checked 2026-09-16: not yet).
   <https://tanstack.com/start/latest/docs/framework/react/guide/observability>
 
-- 🟢 **Resolve relation-filter shortcodes inside the list query.** A filter
+- 🟢 🛠️ **Resolve relation-filter shortcodes inside the list query.** A filter
   such as `growsPlantId` awaits a shortcode→id lookup before the page, count,
   and sums start (`repo/shortcode-resolver.ts`, `buildProductWhere`). Use a
   live-row subquery instead, keeping unknown and deleted codes matching
   nothing. The first query on a request also absorbs connection setup, so
   measure the gain rather than assuming the lookup's full duration.
 
-- 🤔 **Share product kit and category work across list queries.** One product
+- 🤔 🛠️ **Share product kit and category work across list queries.** One product
   page walks the kit graph four times (cost, valuation, sums, quality) and the
   category ancestors per row. Collapse those only where EXPLAIN on production
   data shows a win; keep unrounded valuation and signed expense sums, and do
   not merge everything into one relational query (its memory cost is
   documented in `repo/product/crud.ts`).
 
-- 🤔 **Summary `entity_read.get` without the detail read.** A summary get
+- 🤔 🛠️ **Summary `entity_read.get` without the detail read.** A summary get
   still runs the complete detail read (USDA, quality, ledger, breadcrumbs)
   before projecting to identity. Route it through `listFields` with an `ids`
   filter only after confirming each kind's list visibility matches `get`
   (default filters can hide rows a `get` returns).
 
-- ⏳ **Production query-cost repair.** Promote the specific offender a fresh
+- ⏳ 🛠️ **Production query-cost repair.** Promote the specific offender a fresh
   production trace confirms; remeasure before restructuring counters.
 
-- 🟢 **Pre-render the docs Mermaid diagrams.** Three diagrams pull ~108 client
+- 🟢 🛠️ **Pre-render the docs Mermaid diagrams.** Three diagrams pull ~108 client
   chunks (~4.9 MB raw, ~1.4 MB gzip, including the only >500 kB chunk, `elk`)
   through `app/docs/_components/MermaidDiagram.tsx`. Render them to SVG in
   `pnpm generate` (with a drift check) and delete the runtime dependency. Pick a
   renderer that runs without a browser first.
 
-- 🤔 **Trim duplicate and unused Worker dependencies (~0.4 MB gzip).**
+- 🤔 🛠️ **Trim duplicate and unused Worker dependencies (~0.4 MB gzip).**
   `agents` pins `@modelcontextprotocol/server`/`client` at exactly 2.0.0 next
   to the app's 2.2.0 (~210 kB duplicate; dedupe via override if the agent's API
   still matches); better-auth's kysely adapter bundles introspectors for every
@@ -923,7 +939,7 @@ transcript tool names (`app/purchases/agent-tool-names.ts`) are physical or
 historical records and stay readable. `oauth_client.requirePKCE` and
 `referenceId` are not legacy: Better Auth 1.7 still declares and reads them.
 
-- 🤔 **Require statement-row positions.** `repo/statement-row.ts` keeps the v1
+- 🤔 🛠️ **Require statement-row positions.** `repo/statement-row.ts` keeps the v1
   content-hash path for callers without file positions, and that path is what
   dedupes overlapping full-history exports today. Requiring positions needs a
   cross-file occurrence rule first. A prototype on branch
@@ -937,7 +953,7 @@ historical records and stay readable. `oauth_client.requirePKCE` and
   singly, so replaying two settled identical charges fails (pass the resolved
   occurrence ref through). Keep `statementRowExternalId` frozen: stored
   `settlement_ref` values derive from it.
-- 🟢 **Statement export membership delivered and verified.**
+- 🟢 ✨ **Statement export membership delivered and verified.**
   [PR #1898](https://github.com/nickysemenza/cubby/pull/1898) counts retained
   export membership as well as first ownership.
   [PR #1900](https://github.com/nickysemenza/cubby/pull/1900) supports reviewed
@@ -945,14 +961,14 @@ historical records and stay readable. `oauth_client.requirePKCE` and
   rows, settlement references, money, stock and claims. Unknown historical
   physical occurrences remain unknown; new occurrence-ID ingest is not a
   substitute for reviewing original source evidence.
-- 🟢 **Complete provider account masks delivered and verified.**
+- 🟢 🐛 **Complete provider account masks delivered and verified.**
   [PR #1894](https://github.com/nickysemenza/cubby/pull/1894) removes Copilot's
   four-digit truncation and adds a public-parser regression for a five-digit
   non-card mask. Focused parser checks and source replay passed; independent
   review approved. The deployed writer accepted authentic replay with complete
   masks and preserved stored identities. Do not infer a new account from an old
   truncated descriptor or rewrite settlement references.
-- 🧱 **Re-extract flat-array cookbooks, then delete their fallback.** A few
+- 🧱 🛠️ **Re-extract flat-array cookbooks, then delete their fallback.** A few
   cookbooks still store the retired flat-array extraction
   (`repo/cookbook.ts`, `isLegacyCookbookRawJson`); the list shows a
   needs-reextract badge. Re-extract them from their EPUBs (not stored), then
@@ -968,27 +984,27 @@ related active work can find its deferred follow-ups.
 
 ### Purchases, finance & household ledger
 
-- **Extend source-neutral statement import beyond CSV.** PDF and OFX with
+- ✨ **Extend source-neutral statement import beyond CSV.** PDF and OFX with
   source text, date semantics, and account evidence preserved; AI-proposed
   mappings behind a visible preview; never infer kind from the amount's sign.
 
-- **Bulk expense attribution and contribution-gap links.** Reuse the existing
+- ✨ **Bulk expense attribution and contribution-gap links.** Reuse the existing
   ledger editors and generic bulk path when shared-cost tagging or finding
   unresolved attribution becomes repetitive. Keep per-role replacement and
   one shared gap definition. Remaining slices and importer guidance:
   [ledger attribution follow-ups](plans/household-ledger-attribution-followups.md).
 
-- **Person-to-person repayment discovery.** Promote once Ledger Transfers
+- ✨ **Person-to-person repayment discovery.** Promote once Ledger Transfers
   entered by hand become a chore. Sources: imported statement rows for payment
   apps never promoted to Financial Transactions, and Gmail "paid you" mail.
   Review-only; never resolve a counterparty automatically. Context:
   `docs/plans/household-ledger-attribution-followups.md`.
 
-- **Project default beneficiaries.** Promote if shared-cost projects become
+- ✨ **Project default beneficiaries.** Promote if shared-cost projects become
   frequent: explicit, then project default, then household, following
   `expense-inheritance.ts`. Needs schema and allocation-SQL changes.
 
-- **Household finance analytics and cash-flow projection.** Category
+- ✨ **Household finance analytics and cash-flow projection.** Category
   breakdowns, a funder-to-category Sankey, transfer-pair acceptance, and Phase 2
   projection remain deferred until household planning needs these views.
   Preserve the proposed contracts in
@@ -996,119 +1012,119 @@ related active work can find its deferred follow-ups.
   and retirement need a separate product/tenet decision before a time-series
   model is introduced.
 
-- **Household balance sheet.** Promote when replacement planning, insurance,
+- ✨ **Household balance sheet.** Promote when replacement planning, insurance,
   or cost-basis exports are actually needed. Generalize location valuation
   into replacement forecasts and cost-per-project analysis.
 
-- **`imports_read.vendor_coverage` per account.** Promote when two members
+- ✨ **`imports_read.vendor_coverage` per account.** Promote when two members
   hold accounts at the same vendor.
 
-- **`PurchaseLine` SKU annotation.** Promote when store SKU, quantity, or
+- ✨ **`PurchaseLine` SKU annotation.** Promote when store SKU, quantity, or
   unit-price detail is genuinely wanted; `Expense` stays financial truth.
 
-- **Purchase evidence references** when Gmail, Drive, or portal evidence
+- ✨ **Purchase evidence references** when Gmail, Drive, or portal evidence
   must be queried beyond notes and attachments; **purchase
   replacement/exchange relations** when they need navigation, not notes.
 
-- **Per-edge breakdown for purchase merges.** Promote if `merge_entity`'s
+- 🐛 **Per-edge breakdown for purchase merges.** Promote if `merge_entity`'s
   empty `moved` array on purchase is noticed; `foldChargeInto` does not count
   moved expenses and documents.
 
-- **Multi-product Expense links.** Promote when one Expense needs several
+- ✨ **Multi-product Expense links.** Promote when one Expense needs several
   Products and `splitExpense` cannot truthfully split the money.
 
-- **Returned-unit price advisory.** Promote when another stocked Product
+- ✨ **Returned-unit price advisory.** Promote when another stocked Product
   has a materially inflated derived price or returns become structurally
   distinguishable from sales; stay advisory.
 
-- **Services-with-product advisory.** Promote when the first live row
+- ✨ **Services-with-product advisory.** Promote when the first live row
   appears or an import repeatedly creates one; advisory, not a constraint.
 
-- **Estimated-allocation analytics caveat.** Promote when
+- ✨ **Estimated-allocation analytics caveat.** Promote when
   materials-versus-labor analytics inform a real decision; disclose the
   allocation-basis portion without excluding it from total spend.
 
-- **Evaluate trade affinity in expense project suggestions.** Once the
+- 🧪 **Evaluate trade affinity in expense project suggestions.** Once the
   `expense.projectId` roster's per-project trade tallies
   (`server/ai/field-suggest/registry.ts`) have served real suggestions, compare
   accept/override rates on `/ai-usage` and drop the tallies if they do not help.
 
-- **Shared-expense export re-import dedupe.** A Splitwise-style CSV has no
+- 🐛 **Shared-expense export re-import dedupe.** A Splitwise-style CSV has no
   row id, so provider ids derive from date + description + amount; promote if
   a re-export with edited descriptions is imported again.
 
 ### Inventory, products & locations
 
-- **Persisted Collections and operational dashboard.** Smart starters
+- ✨ **Persisted Collections and operational dashboard.** Smart starters
   evaluate manufacturer, tags, Location names, and historical Trades with
   editable OR rules. Promote when Collection tags need metadata, rename-safe
   identity, durable rules, or richer rules; migrate `collection:*` tags into
   durable records, and evaluate smart membership from a saved Product filter at
   read time. Extend the Trade predicate with "primary inferred Trade matches".
 
-- **Repeat-purchase ranking.** Promote when enough Products have genuine
+- ✨ **Repeat-purchase ranking.** Promote when enough Products have genuine
   repeated acquisitions.
 
-- **Before-drywall spatial capture.** Promote immediately when construction
+- ✨ **Before-drywall spatial capture.** Promote immediately when construction
   is scheduled; define the smallest room/wall-indexed photo packet before
   walls close.
 
-- **Digital twin and spatial memory.** Promote when a specific building
+- ✨ **Digital twin and spatial memory.** Promote when a specific building
   knowledge retrieval need exceeds Location notes and attachments. Attach
   shutoffs, breaker maps, paint, and hidden utilities to the location tree.
 
-- **`location.tags` redundant-token pruning.** Locations hold only
+- 🛠️ **`location.tags` redundant-token pruning.** Locations hold only
   `collection:*` tags today.
 
 ### Ingredients, recipes & nutrition
 
-- **Durable shopping list.** Server-backed manual items (milk, paper towels)
+- ✨ **Durable shopping list.** Server-backed manual items (milk, paper towels)
   and checked state across date ranges and devices, independent of inventory.
   Blocks sending meal-suggestion shortfalls to the list and shopping pack
   rounding.
 
-- **Grocery cost basis.** Allow `productId` on `discount` rows (Whole Foods
+- ✨ **Grocery cost basis.** Allow `productId` on `discount` rows (Whole Foods
   promos, Buy-Again are per line) and let `productQuantity` carry `{value,
   unit}` for measured lines (`0.5 lb @ $4/lb`), folding both into derived cost
   basis without changing `SUM(Expense.cost)`. Promote when per-serving or
   per-unit cost numbers are actually used.
 
-- **Recurring meals, meal templates, and meal nutrition goals.** Each its own
+- ✨ **Recurring meals, meal templates, and meal nutrition goals.** Each its own
   slice; goals would compare planned nutrition against explicit targets.
 
 ### Tasks, projects & garden
 
-- **Project materials and shortfalls.** A project-material edge with
+- ✨ **Project materials and shortfalls.** A project-material edge with
   quantity, free-text unit, optional Product, and durable/consumable semantics
   (see `Product.kind`); derive have/need/buy through the availability engine
   without reservations or automatic decrement. Promote when a concrete
   project needs a have/need/buy worklist.
 
-- **House timeline.** Promote when project journals or before/after retrieval
+- ✨ **House timeline.** Promote when project journals or before/after retrieval
   need a chronological view beyond current timelines. Generalize `GardenEntry`
   into dated Location, Planting, and Project journal entries on
   `resources.<entity>.timeline`, then project milestones, photo comparisons,
   and an annual view.
 
-- **Heirloom outputs.** Promote when preparing an actual handoff or archive:
+- ✨ **Heirloom outputs.** Promote when preparing an actual handoff or archive:
   a future-owner house manual, project yearbooks, and a durable export format.
 
-- **Project locations as Locations.** `Project.locations` holds a few
+- ✨ **Project locations as Locations.** `Project.locations` holds a few
   free-text street addresses, mostly former residences.
 
-- **Recurring maintenance tasks.** Every-N-weeks/months; completing an
+- ✨ **Recurring maintenance tasks.** Every-N-weeks/months; completing an
   instance creates the next through one idempotent transactional rule.
 
-- **Hierarchical Project/Task parent pickers.** Rosters are shallow; revisit
+- ✨ **Hierarchical Project/Task parent pickers.** Rosters are shallow; revisit
   on deep nesting.
 
 ### Native app
 
-- **Accept recipe links from the iOS Share Sheet.**
+- ✨ **Accept recipe links from the iOS Share Sheet.**
 
 ### Web UI
 
-- **Saved user-created views.** Named filter/sort sets via the versioned
+- ✨ **Saved user-created views.** Named filter/sort sets via the versioned
   external-state pattern, beside manifest `presentation.list.views`.
 
 ---
