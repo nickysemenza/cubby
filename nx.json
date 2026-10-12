@@ -57,7 +57,8 @@
     // passing result for this hash satisfies the gate, so a false cache hit
     // skips a check that should have run: keep it broad. Every
     // non-documentation file (lockfile and CI configuration included) and the
-    // Markdown that the Worker bundles or generation reads; Nx applies a
+    // Markdown that the Worker bundles; generation-only TODO references have
+    // their own generate/types inputs in project.json. Nx applies a
     // negation to every file input, so that Markdown is hashed at runtime.
     // Platform and Node version stay out so a developer Mac's pass counts as
     // CI's; the nightly CI run reruns every lane uncached as the backstop.
@@ -68,7 +69,7 @@
       // Workflows that deploy, publish or review run no check.
       "!{workspaceRoot}/.github/workflows/{deploy.yaml,apple-testflight.yaml,claude.yml,claude-code-review.yml}",
       {
-        "runtime": "git ls-files -z -co --exclude-standard -- docs/README.md docs/todos.md .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256"
+        "runtime": "git ls-files -z -co --exclude-standard -- docs/README.md .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256"
       }
     ]
   },

@@ -788,6 +788,12 @@ consume the declarations.
   Keep the pack deterministic, idempotent and confined to development databases;
   derive coverage from the entity manifest and report unsupported seed cases.
 
+- 🤔 **Diagnose PostgreSQL test teardown disconnects.** A hosted integration
+  shard passed every assertion but failed on an unhandled `57P01` connection
+  termination around `mail-import-run.integration.test.ts`. Establish the
+  pool/database teardown lifecycle before changing error handling; preserve
+  failures from unexpected disconnections.
+
 The developer loop now defaults to focused headless + simulator smoke, retains
 extended domain lanes by name, uses deterministic stored-outcome read-back with
 small Tester Army navigation, and reuses verified native builds. Low-signal

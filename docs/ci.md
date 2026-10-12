@@ -24,6 +24,12 @@ See [Tester Army](tester-army.md) for routing, replay, evidence and timing limit
 
 ## Cache keys and the remote cache
 
+`docs/todos.md` remains in the generation and type-check keys: generation
+validates deferred MCP capability references against its entries. It does not
+invalidate the broad test keys. Formatting and build targets may independently
+include Markdown. The generator's
+own fingerprint still includes it, so changing a referenced entry is checked.
+
 ```mermaid
 flowchart LR
   Mac["Developer Mac: nx run target"] -->|PUT pass| Cache[("apps/nx-cache Worker + R2")]
@@ -35,8 +41,8 @@ flowchart LR
 
 The required test lanes key on the `gate` named input in `nx.json`: every
 non-documentation file (the lockfile and `.github/` included), the Markdown
-that the Worker bundles or generation reads (`docs/README.md`,
-`docs/todos.md`, and the purchase-import, product-enrichment, and
+that the Worker bundles (`docs/README.md` and the
+purchase-import, product-enrichment, and
 photo-inventory-import skills). Platform, Node version, locale, and `CI`
 stay out, so a developer Mac's pass counts for the Linux lanes. Web targets add
 ignored `.env*` files, the WASM their `dependsOn` builds, the preview-build
