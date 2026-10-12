@@ -728,7 +728,7 @@ describe("public mail tool", () => {
       });
       await getDb(ctx.db)
         .update(emailTable)
-        .set({ classificationStage: "jev", status: "completed" })
+        .set({ classificationStage: "decision", status: "completed" })
         .where(eq(emailTable.messageId, "synthetic-first"));
       await insertWithShortcode(ctx.db, "email", {
         ledgerPartyId: f.party.id,
@@ -784,7 +784,7 @@ describe("public mail tool", () => {
           {
             messageId: "synthetic-first",
             classification: "related",
-            classificationStage: "jev",
+            classificationStage: "decision",
             status: "completed",
             orderMailId: related.id,
             searchExpiresAt: null,

@@ -1,7 +1,7 @@
 /** Classification rules used by the decision-tier suggestions. */
 import type { ExternalIdKind } from "@cubby/schemas/external-id";
 
-/** The location-type rules; the types themselves are the Jev choices. */
+/** The location-type rules; the types themselves are the decision choices. */
 
 export const EXTERNAL_ID_KIND_DESCRIPTIONS = {
   asin: "Amazon's own catalog id: 'B0' followed by 8 letters/digits",

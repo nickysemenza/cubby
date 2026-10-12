@@ -53,6 +53,7 @@ const id = testShortcode("product", "first");
 const emptyStoredSuggestionOperations: StoredSuggestionOperations = {
   list: async () => [],
   accept: async ({ id }) => ({ id, status: "applied" }),
+  acceptMany: async () => [],
   reject: async ({ id }) => ({ id, status: "rejected" }),
 };
 const food = {
@@ -190,7 +191,7 @@ describe("record suggestions", () => {
     const recordId = "11111111-1111-4111-8111-111111111111";
     const storedRow = suggestionReviewRowSchema.parse({
       id: "22222222-2222-4222-8222-222222222222",
-      runId: "33333333-3333-4333-8333-333333333333",
+      runId: "RUN-3333",
       entity: "product",
       recordId: id,
       field: "categoryId",
@@ -199,7 +200,11 @@ describe("record suggestions", () => {
       confidence: 0.97,
       model: "typesafe/jev",
       kind: "addition",
+      status: "pending",
+      runnerUpValue: null,
+      runnerUpConfidence: null,
       correctValue: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
     });
     let finishStored!: (
       rows: Awaited<ReturnType<StoredSuggestionOperations["list"]>>,
@@ -216,6 +221,13 @@ describe("record suggestions", () => {
         },
       ),
       accept: vi.fn(async ({ id }) => ({ id, status: "applied" as const })),
+      acceptMany: vi.fn(async ({ ids }) =>
+        ids.map((id: string) => ({
+          id,
+          ok: true as const,
+          status: "applied" as const,
+        })),
+      ),
       reject: vi.fn(async ({ id }) => ({ id, status: "rejected" as const })),
     };
     const suggestFields = vi.fn((_input: FieldSuggestionsInput) => undefined);
@@ -250,10 +262,9 @@ describe("record suggestions", () => {
       await screen.findByRole("button", { name: "Accept suggestions (1)" }),
     );
     await waitFor(() =>
-      expect(stored.accept).toHaveBeenCalledWith(
-        expect.objectContaining({ id: "22222222-2222-4222-8222-222222222222" }),
-        expect.anything(),
-      ),
+      expect(stored.acceptMany).toHaveBeenCalledWith({
+        ids: ["22222222-2222-4222-8222-222222222222"],
+      }),
     );
     expect(suggestFields).not.toHaveBeenCalled();
   });
@@ -347,7 +358,7 @@ describe("record suggestions", () => {
       });
     });
     await screen.findByText("Suggested: Tools");
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     view.rerender(
       <Surface name="steel wrench" operations={operations} visible={false} />,
     );
@@ -440,11 +451,9 @@ describe("record suggestions", () => {
     await screen.findByRole("button", {
       name: /^Accept suggested value: \S/,
     });
-    expect(screen.queryByRole("button", { name: "Use suggestion" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Suggestion actions" }));
-    fireEvent.click(
-      await screen.findByRole("menuitem", { name: "Reject (Miss)" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
     await waitFor(() => expect(misses).toHaveLength(1));
     expect(
       screen.queryByRole("button", { name: /^Accept suggested value/ }),
@@ -456,7 +465,7 @@ describe("record suggestions", () => {
       await screen.findByRole("button", { name: "Suggestion actions" }),
     );
     fireEvent.click(
-      await screen.findByRole("menuitem", { name: "Use a different value" }),
+      await screen.findByRole("button", { name: "Use a different value…" }),
     );
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
@@ -479,7 +488,7 @@ describe("record suggestions", () => {
     expect(
       await screen.findByText("Synthetic category evidence"),
     ).toBeVisible();
-    expect(screen.getByText("Tools / Drivers")).toBeVisible();
+    expect(screen.getByText(/Runner-up: Tools \/ Drivers/)).toBeVisible();
   });
 
   it("opens the normal editor with the saved value after acceptance fails", async () => {
@@ -549,7 +558,7 @@ describe("record suggestions", () => {
     );
     await screen.findByText("Workshop");
     expect(calls).toBe(2);
-    fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     expect(
       await screen.findByRole("dialog", { name: "Edit Inventory Item" }),
     ).toBeInTheDocument();
@@ -629,7 +638,7 @@ describe("record suggestions", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Remove tags" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
     await waitFor(() => expect(commands).toHaveLength(1));
     expect(commands[0]).toEqual({
       action: "update",
@@ -696,7 +705,7 @@ describe("record suggestions", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Remove tags" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
     await screen.findByRole("alert");
     expect(commands).toHaveLength(0);
   });
@@ -794,7 +803,7 @@ describe("record suggestions", () => {
 
     const errorSpy = vi.spyOn(toast, "error").mockImplementation(() => "");
     await screen.findByText("Suggested: Electrical");
-    fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Suggestion inputs changed");
     expect(calls).toBe(1);
@@ -881,7 +890,7 @@ describe("record suggestions", () => {
     );
     await screen.findByText("Tools");
     expect(calls.length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     await waitFor(() => expect(commands).toHaveLength(1));
     expect(commands[0]).toMatchObject({
       action: "update",
@@ -942,9 +951,7 @@ describe("record suggestions", () => {
     );
 
     await screen.findByText("Electrical");
-    fireEvent.click(
-      screen.getByRole("button", { name: "Use inherited value" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     expect(
       await screen.findByRole("dialog", { name: "Edit Task" }),
     ).toBeInTheDocument();

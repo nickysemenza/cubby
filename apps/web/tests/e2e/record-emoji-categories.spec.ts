@@ -107,9 +107,7 @@ test("edits compound emoji, clears it, and browses inherited category membership
   expect(
     z.object({ emoji: z.null() }).parse(await beforeAcceptance.json()).emoji,
   ).toBeNull();
-  await dialog
-    .getByRole("button", { name: "Use suggestion", exact: true })
-    .click();
+  await dialog.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(
     dialog.getByRole("textbox", { name: "Emoji", exact: true }),
   ).toHaveValue("🥕");

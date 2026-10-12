@@ -110,7 +110,7 @@ export default defineEntity({
           id: "review-conflicts",
           label: "Review conflicts",
           description:
-            "Emails whose latest rule, Jev or model result disagrees with the member's review",
+            "Emails whose latest rule, decision-model or relevance-model result disagrees with the member's review",
           filters: [{ id: "reviewConflict", value: "true" }],
           sort: [{ id: "receivedAt", desc: true }],
           layout: { columnVisibility: { classificationReason: true } },
@@ -205,7 +205,7 @@ export default defineEntity({
           sources: [
             {
               label:
-                "Latest rule, Jev or model result disagrees with the member's resolution or review",
+                "Latest rule, decision-model or relevance-model result disagrees with the member's resolution or review",
             },
           ],
         },
@@ -723,7 +723,7 @@ export default defineEntity({
           weight: 1,
           label: "Member review",
           message:
-            "A rule, Jev or the relevance model decided; no member review.",
+            "A rule, the decision model or the relevance model decided; no member review.",
         },
         {
           id: "email_original_missing",

@@ -20,6 +20,7 @@ Cubby combines a native archive shell, a compact record dossier, and focused wor
 - Spacing comes from the shared token steps 4/8/12/12/16/16px (`packages/design-tokens/tokens.json`); the layout gap scale reads them, so web and native density move together. Desktop inputs, selects, pickers, date fields, and tab lists are 32px, matching the default button; menu items are 28px. Text, picker, date, and textarea controls share one surface: card fill, hairline border, 8px radius.
 - Panels have a 12px radius; controls 8px; compact chips 7px. Native Apple controls keep their system geometry. Nested surfaces follow concentric radii. Resting surfaces use tone and 1px structural rules, with shadow only for floating overlays.
   Web status, enum, category, and suggestion pills share `Pill` geometry. Saved values retain their semantic tint; suggestion mode uses a quiet dashed boundary with the same height and radius. Applying a suggestion shows pending feedback in that cell while the surrounding records remain readable.
+  Every field suggestion opens one body: the proposal (current → suggested), confidence as "92% · high", the runner-up, the basis fields the model read, a provenance caption (model · time · Run · AI usage), then Accept, Reject and "Use a different value…", whose caption says the value is written and the suggestion recorded as a Miss. Desktop detail shows the body inline; table cells and phone rows keep a compact mark that opens it. Meaning never rides in a `title`. `AiProposalCard` stays only for chat-tier proposals with prose (location descriptions, USDA matches, ingredient merges) and states confidence with the same helper and Accept verb.
 - Images use a faint neutral outline. A real record photo leads detail but has a bounded frame, leaving identity and useful facts nearby. Phone media appears before identity in a frame at most 320px wide and 176px tall, with 44px image selectors when there are several photos; wide detail puts photography beside facts. The full photo opens in preview. When there is no image, begin with identity and facts without an empty media area. Never place an unrelated illustration in an empty hero.
 - Motion explains state or space. High-frequency search, keyboard, table, and navigation actions respond immediately. Transitions name only changed properties and respect reduced motion.
 
@@ -52,7 +53,10 @@ Unresolved state with its explanation. Its filters and sort stack are URL state;
 the shared infinite pager loads more work on scroll. Checkboxes select
 record-backed work independently of the source record inspector. Copy codes
 uses source shortcodes, deduplicating records with multiple work reasons;
-aggregate Problems rows have no shortcode and are not selectable. Column
+aggregate Problems rows have no shortcode and are not selectable. Pending
+Suggestions appear as one row per entity and field with their count, opening
+the filtered AI Review list; Email rows name their pipeline gaps and receipt
+rows name the policy that requires the receipt. Column
 controls are session-only, matching entity lists. Reason is enriched after
 paging and remains unsortable; projected fields sort before paging. Record
 links open the existing source record and its review controls. Run titles

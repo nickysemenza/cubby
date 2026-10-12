@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import { buildActorContext } from "@cubby/schemas/context";
 import { emailClassificationObservationInput } from "@cubby/schemas/email-observations";
@@ -99,7 +100,7 @@ describe("member-owned blind Email accuracy", () => {
     const foreign = await member(otherActor.userId);
     const local = await prediction(party.id, "Synthetic receipt", {
       classification: "related",
-      stage: "jev",
+      stage: "decision",
       model: "typesafe/jev",
     });
     await prediction(foreign.id, "PRIVATE foreign receipt", {
@@ -190,7 +191,7 @@ describe("member-owned blind Email accuracy", () => {
     const party = await member();
     const original = await prediction(party.id, "Synthetic original", {
       classification: "unrelated",
-      stage: "jev",
+      stage: "decision",
       model: "typesafe/jev",
     });
     const evaluation = await createEmailAccuracyEvaluation(
@@ -275,13 +276,13 @@ describe("member-owned blind Email accuracy", () => {
     for (let i = 0; i < 6; i++)
       await prediction(party.id, "Synthetic receipt", {
         classification: "related",
-        stage: "jev",
+        stage: "decision",
         model: "typesafe/jev",
       });
     for (let i = 0; i < 2; i++)
       await prediction(party.id, "Synthetic bulletin", {
         classification: "related",
-        stage: "jev",
+        stage: "decision",
         model: null,
       });
     for (let i = 0; i < 4; i++)
@@ -369,7 +370,7 @@ describe("member-owned blind Email accuracy", () => {
       {
         subject: "Synthetic ambiguous label",
         classification: "related",
-        stage: "jev",
+        stage: "decision",
         model: "typesafe/jev",
         grade: "uncertain",
       },
@@ -597,7 +598,7 @@ describe("member-owned blind Email accuracy", () => {
     const foreign = await member(otherActor.userId);
     await prediction(party.id, "Synthetic known receipt", {
       classification: "related",
-      stage: "jev",
+      stage: "decision",
       model: "typesafe/jev",
     });
     const unknown = await insertWithShortcode(ctx.db, "email", {
@@ -682,7 +683,7 @@ describe("member-owned blind Email accuracy", () => {
     const historical = await prediction(
       party.id,
       "Synthetic historical decision",
-      { classification: "related", stage: "jev", model: null },
+      { classification: "related", stage: "decision", model: null },
     );
     await getDb(ctx.db).execute(
       sql`UPDATE "EmailClassificationObservation" SET "stage" = NULL, "reason" = NULL WHERE "id" = ${historical.observation.id}::uuid`,
@@ -757,7 +758,7 @@ describe("member-owned blind Email accuracy", () => {
     });
     await prediction(party.id, "Synthetic bulletin", {
       classification: "unrelated",
-      stage: "jev",
+      stage: "decision",
       model: "typesafe/jev",
     });
     await expect(
@@ -766,5 +767,69 @@ describe("member-owned blind Email accuracy", () => {
     expect(
       await getDb(ctx.db).select().from(emailAccuracyEvaluation),
     ).toHaveLength(0);
+  });
+  // 0041 widens and 0042 renames the stored `jev` stage; a frozen roster keeps
+  // the stage in its strata, items and JSON-encoded stratum ids.
+  it("carries jev predictions and frozen rosters through the decision stage contract", async () => {
+    const migration = (tag: string) =>
+      readFileSync(
+        new URL(`../../../drizzle/${tag}.sql`, import.meta.url),
+        "utf8",
+      )
+        .split("--> statement-breakpoint")
+        .filter((statement) => statement.trim());
+    for (const statement of migration("0041_decision_stage"))
+      await getDb(ctx.db).execute(sql.raw(statement));
+    const party = await member();
+    const local = await prediction(party.id, "Synthetic newsletter", {
+      classification: "unrelated",
+      stage: "decision",
+      model: "@cf/cloudflare/clef",
+    });
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ classificationStage: "decision" })
+      .where(eq(emailTable.id, local.email.id));
+    const evaluation = await createEmailAccuracyEvaluation(
+      ctx.db,
+      { sampleSize: 10 },
+      ctx.actor,
+    );
+    // Recreate the deployed shape the contract migration meets.
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Email" SET "classificationStage" = 'jev' WHERE id = ${local.email.id}::uuid`,
+    );
+    await getDb(ctx.db).execute(
+      sql`UPDATE "EmailClassificationObservation" SET stage = 'jev' WHERE id = ${local.observation.id}::uuid`,
+    );
+    await getDb(ctx.db).execute(
+      sql.raw(
+        `UPDATE "EmailAccuracyEvaluation" SET roster = replace(replace(roster::text, '"stage": "decision"', '"stage": "jev"'), '[\\"decision\\",', '[\\"jev\\",')::jsonb`,
+      ),
+    );
+    const before = await getDb(ctx.db).execute(
+      sql`SELECT roster::text AS roster FROM "EmailAccuracyEvaluation"`,
+    );
+    expect(String(before.rows[0]?.roster)).toContain('[\\"jev\\",');
+    for (const statement of migration("0042_decision_stage_contract"))
+      await getDb(ctx.db).execute(sql.raw(statement));
+    const [stored] = await getDb(ctx.db)
+      .select({ stage: emailTable.classificationStage })
+      .from(emailTable)
+      .where(eq(emailTable.id, local.email.id));
+    expect(stored?.stage).toBe("decision");
+    const report = await getEmailAccuracyReport(
+      ctx.db,
+      { evaluationId: evaluation.evaluationId },
+      ctx.actor,
+    );
+    expect(JSON.stringify(report)).not.toContain('jev"');
+    await expect(
+      getDb(ctx.db).execute(
+        sql`UPDATE "Email" SET "classificationStage" = 'jev' WHERE id = ${local.email.id}::uuid`,
+      ),
+    ).rejects.toMatchObject({
+      cause: { constraint: "Email_classification_stage_check" },
+    });
   });
 });

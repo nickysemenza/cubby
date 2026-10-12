@@ -94,7 +94,7 @@ describe("composeSettlementReview", () => {
     ]);
     expect(tied.tiedTransactionIds).toEqual([ftx("4K7M"), ftx("5N8P")]);
     expect(tied.suggestHint).toBe(
-      "2 charges rank equally. Jev can suggest which fits best; you still choose and allocate.",
+      "2 charges rank equally. The decision model can suggest which fits best; you still choose and allocate.",
     );
 
     const single = composeSettlementReview(purchase, [

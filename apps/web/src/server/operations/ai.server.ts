@@ -33,9 +33,11 @@ import {
   acceptSuggestions,
   latestSuggestionSweepStatus,
   listPagePendingSuggestions,
-  listPendingSuggestions,
+  listSuggestions,
   rejectSuggestion,
+  rejectSuggestions,
   recordFieldSuggestionMiss,
+  suggestionCounts,
 } from "~/server/repo/suggestion-review";
 import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 import {
@@ -228,6 +230,7 @@ const suggestionsForContext = async (
     context.db,
     await actorAiRun(context, { runKey: input.runKey }),
     input,
+    input.decisionModel ? { decisionModel: input.decisionModel } : undefined,
   );
 
 export const aiHandlers = implementOperationDomain(aiContract, {
@@ -320,13 +323,20 @@ export const aiHandlers = implementOperationDomain(aiContract, {
           recordIds: input.recordIds,
           fields: input.fields,
         })
-      : listPendingSuggestions(context.db, input),
+      : listSuggestions(context.db, input),
   acceptSuggestion: (context, input) =>
     acceptSuggestion(context.db, context, input),
   acceptSuggestions: (context, input) =>
     acceptSuggestions(context.db, context, input),
   rejectSuggestion: (context, input) =>
     rejectSuggestion(context.db, context, input),
+  rejectSuggestions: (context, input) =>
+    rejectSuggestions(context.db, context, input),
+  suggestionCounts: (context, input) => suggestionCounts(context.db, input),
+  decisionCatalog: async (context) => {
+    const { decisionCatalog } = await import("~/server/ai/decision-catalog");
+    return decisionCatalog(context.db);
+  },
   recordFieldSuggestionMiss: async (context, input) =>
     recordFieldSuggestionMiss(
       context.db,

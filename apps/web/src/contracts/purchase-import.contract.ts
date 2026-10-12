@@ -28,6 +28,8 @@ import {
   mailResolveOut,
   mailSearchInput,
   mailSearchOut,
+  mailTriagePreviewInput,
+  mailTriagePreviewOut,
 } from "@cubby/schemas/mailbox-research";
 import {
   commitAcceptedSourceOrderReconciliationInput,
@@ -161,6 +163,13 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     http: false,
     input: mailReadInput,
     output: mailReadOut,
+  }),
+  /** Mail triage on one Email's Gmail original; records no observation or Relevance. */
+  mailTriagePreview: query({
+    http: false,
+    readPolicy: "strong",
+    input: mailTriagePreviewInput,
+    output: mailTriagePreviewOut,
   }),
   /** Scoped live Gmail search for a missing original. */
   mailSearch: mutation({

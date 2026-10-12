@@ -174,7 +174,7 @@ const retainResearchOriginal = (
 
 /**
  * The classification and why: an unchanged message keeps its recorded verdict;
- * otherwise rules and Jev decide. Import-authorized work can settle uncertainty.
+ * otherwise rules and the decision model decide. Import-authorized work can settle uncertainty.
  */
 async function classifyMessage(
   prior: Awaited<ReturnType<typeof readEmail>>,
@@ -208,7 +208,7 @@ function classificationCallFor(
   triage: GmailClassificationCall | null,
   relevance: GmailClassificationCall | null,
 ) {
-  return stage === "jev" ? triage : stage === "model" ? relevance : null;
+  return stage === "decision" ? triage : stage === "model" ? relevance : null;
 }
 
 type PriorMessage = Awaited<ReturnType<typeof readEmail>>;
@@ -578,7 +578,8 @@ async function acquireEligible(
           stage: "rule",
           reason: "Found by a member's search; the caller decides",
         })
-      : () => routeGmailMessage(message, normalized, ports.triage),
+      : async () =>
+          (await routeGmailMessage(message, normalized, ports.triage)).decision,
     !relevanceModelRuns(input, executionPolicy)
       ? null
       : () =>

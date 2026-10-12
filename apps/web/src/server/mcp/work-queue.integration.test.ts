@@ -20,6 +20,7 @@ import {
   photoGroupProposal,
   runFinding,
   statementRow,
+  suggestion,
   vendorAccount,
 } from "~/server/db/schema";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
@@ -44,6 +45,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { recordStatementRows } from "~/server/repo/statement-row";
 import { readWorkQueue } from "~/server/repo/work-queue";
 import { requireActor } from "~/server/request-context";
+import { ensureRun } from "~/server/runs/ensure-run";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 // Failure modes: another member's private work leaks into an actionable page;
@@ -1153,5 +1155,75 @@ describe("member actionable Work queue", () => {
       pagedKeys.push(...page.items.map((row) => row.key));
     }
     expect(pagedKeys).toEqual(full.items.map((row) => row.key));
+  });
+
+  // Pending Suggestions surface as one row per suggested field, never one per
+  // Suggestion; a required receipt names the policy that requires it.
+  it("aggregates pending Suggestions per field and states a receipt gap's policy source", async () => {
+    const products = await Promise.all(
+      ["One", "Two"].map((suffix) =>
+        createProductFixture(
+          ctx.db,
+          makeProductInput({
+            name: `Synthetic suggested ${suffix}`,
+            categoryId: null,
+          }),
+          ctx.actor,
+        ),
+      ),
+    );
+    const runId = await ensureRun(
+      ctx.db,
+      { ...ctx.actor, runId: null },
+      { purpose: "ai_suggest" },
+    );
+    await getDb(ctx.db)
+      .insert(suggestion)
+      .values(
+        await Promise.all(
+          products.map(async (product) => ({
+            runId,
+            entity: "product",
+            recordId: await resolveOrThrow(ctx.db, "product", product.id),
+            field: "categoryId",
+            currentValue: null,
+            suggestedValue: "CAT-2222",
+            confidence: 0.9,
+            model: "typesafe/jev",
+            kind: "addition" as const,
+            status: "pending" as const,
+          })),
+        ),
+      );
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic receipt policy vendor",
+      evidenceExpectation: "required",
+    });
+    await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      displayLabel: "Synthetic receipt policy order",
+      date: "2026-09-20",
+    });
+    const queue = await readWorkQueue(
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({ pageSize: 100 }),
+      false,
+    );
+    const suggested = queue.items.filter((row) => row.source === "suggestion");
+    expect(suggested).toEqual([
+      expect.objectContaining({
+        entity: "product",
+        id: null,
+        suggestionField: "categoryId",
+        reason: "2 pending suggestions",
+      }),
+    ]);
+    const receipt = queue.items.find(
+      (row) => row.name === "Synthetic receipt policy order",
+    );
+    expect(receipt?.reason).toContain(
+      "Receipt required — inherited from Vendor Synthetic receipt policy vendor",
+    );
   });
 });

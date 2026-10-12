@@ -34,6 +34,7 @@ import { phaseLabel } from "~/server/repo/collection-items";
 import { getRunByShortcode } from "~/server/repo/run";
 import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { suggestionCounts } from "~/server/repo/suggestion-review";
 
 /**
  * The Run detail's report blocks: progress, approvals, findings, transcript, log, AI usage and
@@ -999,6 +1000,30 @@ export function runLogBlocks(log: {
 }
 
 /** Every AI call the run grouped, for any run purpose. */
+/** A sweep Run's stored Suggestion outcomes; review happens on web `/ai` or over MCP. */
+export function suggestionBlocks(
+  counts: Awaited<ReturnType<typeof suggestionCounts>>,
+): ReportBlock[] {
+  const total = (key: "pending" | "applied" | "rejected" | "superseded") =>
+    counts.reduce((sum, row) => sum + row[key], 0);
+  const figure = (label: string, value: number) => ({
+    label,
+    value,
+    format: "count" as const,
+  });
+  return [
+    {
+      kind: "stats",
+      figures: [
+        figure("Pending", total("pending")),
+        figure("Accepted", total("applied")),
+        figure("Rejected", total("rejected")),
+        figure("Superseded", total("superseded")),
+      ],
+    },
+  ];
+}
+
 export function aiUsageBlocks(usage: AiRunUsage): ReportBlock[] {
   const estimated = usage.unpricedCount > 0;
   return [
@@ -1115,6 +1140,7 @@ export type RunReportSlot =
   | "run.live-progress"
   | "run.import-debug-log"
   | "run.ai-usage"
+  | "run.suggestions"
   | "run.changes";
 
 const IMPORT_SLOT_IDS: ReadonlySet<string> = new Set(
@@ -1162,6 +1188,12 @@ export async function runReports<Slot extends RunReportSlot>(
         );
         return respond(aiUsageBlocks(usage), usage.nextCursor);
       }
+      case "run.suggestions":
+        return respond(
+          (detail?.purpose ?? header?.purpose) === "suggestion_sweep"
+            ? suggestionBlocks(await suggestionCounts(db, { runId }))
+            : [],
+        );
       case "run.changes": {
         const list = await listAuditLog(db, {
           runId,

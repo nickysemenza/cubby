@@ -17,13 +17,14 @@ import {
   updateExpensesInBulk,
 } from "~/server/repo/expense/crud";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { listPendingSuggestions } from "~/server/repo/suggestion-review";
+import { listSuggestions } from "~/server/repo/suggestion-review";
 
 import {
   categoryPorts,
   expenseFixture,
   kernelCtx,
   productFixture,
+  runCode,
   recordId,
   runSuggestions,
   seedPending,
@@ -216,8 +217,8 @@ describe("Suggestion supersede", () => {
         { context: kernelCtx(ctx), ...categoryPorts() },
       );
     const firstRun = await sweep();
-    const [first] = await listPendingSuggestions(ctx.db, {
-      runId: firstRun.id,
+    const [first] = await listSuggestions(ctx.db, {
+      runId: await runCode(ctx.db, firstRun.id),
       minConfidence: 0,
     });
     if (!first) throw new Error("Synthetic first Suggestion is missing");

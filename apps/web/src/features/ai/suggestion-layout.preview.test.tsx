@@ -1,5 +1,5 @@
 /**
- * Real-browser layout invariants for the Jev suggestion surfaces (PR #1223):
+ * Real-browser layout invariants for the decision suggestion surfaces (PR #1223):
  * a fixed glyph footprint across states, a phone inline review folding into
  * the glyph instead of growing the page, a desktop inline review staying on
  * its one wrapping row, and `SuggestionStatus`'s headline never wrapping.
@@ -168,7 +168,7 @@ describe("SuggestionReview inline surface — phone folding", () => {
 });
 
 describe("SuggestionReview inline surface — desktop one line", () => {
-  it("keeps a short actionable proposal on the value's row instead of wrapping", async () => {
+  it("keeps a short proposal and its confidence on one row instead of wrapping", async () => {
     await page.viewport(DESKTOP.width, DESKTOP.height);
     const suggestion = actionableSuggestionFixture();
 
@@ -185,14 +185,14 @@ describe("SuggestionReview inline surface — desktop one line", () => {
       </SuggestionReview>,
     );
 
-    // If the row wrapped, the suggested value and the "Use suggestion"
-    // button would land a full line height apart; on one row their tops
-    // sit within a few px of each other (icon/button baseline differences).
+    // If the proposal row wrapped, the suggested value and its confidence
+    // would land a full line height apart; on one row their tops sit within
+    // a few px of each other.
     const valueTop = screen.getByText("Tools").getBoundingClientRect().top;
-    const buttonTop = screen
-      .getByRole("button", { name: "Use suggestion" })
+    const confidenceTop = screen
+      .getByText("97% · high")
       .getBoundingClientRect().top;
-    expect(Math.abs(valueTop - buttonTop)).toBeLessThan(10);
+    expect(Math.abs(valueTop - confidenceTop)).toBeLessThan(10);
   });
 });
 

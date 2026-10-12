@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { Database } from "~/server/db";
 
+import { DECISION_MAX_CANDIDATES, type DecisionPort } from "./decision-model";
 import { FIELD_SUGGESTION_FEATURE } from "./features";
-import { JEV_MAX_CANDIDATES, type JevPort } from "./jev";
 import {
   type AiSelectionSpec,
   type AiSelectionPort,
@@ -29,7 +29,7 @@ interface Widget {
 }
 
 // Any decision feature record will do here: `runAiSelection` only forwards
-// it to `runJevChoice`, whose own contract is covered in `jev.unit.test.ts`.
+// it to `runDecisionChoice`, whose own contract is covered in `decision-model.unit.test.ts`.
 const spec: AiSelectionSpec<Widget> = {
   feature: FIELD_SUGGESTION_FEATURE,
   rules: "Pick the widget that best matches the subject.",
@@ -44,8 +44,11 @@ const widgets: Widget[] = [
   { id: "c", label: "green" },
 ];
 
-function jevFor(choice: string, probabilities: Record<string, number>) {
-  const port: JevPort = vi.fn(async () => ({
+function decisionPortFor(
+  choice: string,
+  probabilities: Record<string, number>,
+) {
+  const port: DecisionPort = vi.fn(async () => ({
     answers: {
       selection: {
         type: "choice" as const,
@@ -59,17 +62,21 @@ function jevFor(choice: string, probabilities: Record<string, number>) {
 }
 
 describe("runAiSelection", () => {
-  it("asks Jev over the rendered shortlist plus a none choice, and resolves the index", async () => {
-    const jev = jevFor("c0", { c0: 0.9, c1: 0.05, none: 0.05 });
+  it("asks the decision model over the rendered shortlist plus a none choice, and resolves the index", async () => {
+    const decisionPort = decisionPortFor("c0", {
+      c0: 0.9,
+      c1: 0.05,
+      none: 0.05,
+    });
 
     const outcome = await runAiSelection(spec, {
       subject: "find the red one",
       candidates: widgets.slice(0, 2),
       usage,
-      jev,
+      decisionPort,
     });
 
-    expect(jev).toHaveBeenCalledWith({
+    expect(decisionPort).toHaveBeenCalledWith({
       state: "find the red one",
       questions: {
         selection: {
@@ -99,28 +106,28 @@ describe("runAiSelection", () => {
     });
   });
 
-  it("resolves a none answer to null while keeping Jev's confidence", async () => {
+  it("resolves a none answer to null while keeping the decision model's confidence", async () => {
     const outcome = await runAiSelection(spec, {
       subject: "x",
       candidates: widgets.slice(0, 2),
       usage,
-      jev: jevFor("none", { c0: 0.2, c1: 0.1, none: 0.7 }),
+      decisionPort: decisionPortFor("none", { c0: 0.2, c1: 0.1, none: 0.7 }),
     });
 
     expect(outcome).toMatchObject({ selected: null, confidence: "medium" });
   });
 
   it("returns null without calling the model when there are no candidates", async () => {
-    const jev: JevPort = vi.fn();
+    const decisionPort: DecisionPort = vi.fn();
 
     const outcome = await runAiSelection(spec, {
       subject: "x",
       candidates: [],
       usage,
-      jev,
+      decisionPort,
     });
 
-    expect(jev).not.toHaveBeenCalled();
+    expect(decisionPort).not.toHaveBeenCalled();
     expect(outcome.selected).toBeNull();
     expect(outcome.confidence).toBe("low");
     expect(outcome.alternatives).toEqual([]);
@@ -128,17 +135,17 @@ describe("runAiSelection", () => {
   });
 
   it("truncates candidates to maxCandidates before choosing", async () => {
-    const jev = jevFor("c1", { c0: 0.1, c1: 0.8, none: 0.1 });
+    const decisionPort = decisionPortFor("c1", { c0: 0.1, c1: 0.8, none: 0.1 });
 
     const outcome = await runAiSelection(spec, {
       subject: "x",
       candidates: widgets,
       usage,
-      jev,
+      decisionPort,
     });
 
-    // "c" was truncated away before Jev ever saw it.
-    expect(jev).toHaveBeenCalledWith(
+    // "c" was truncated away before the decision model ever saw it.
+    expect(decisionPort).toHaveBeenCalledWith(
       expect.objectContaining({
         questions: {
           selection: expect.objectContaining({
@@ -153,13 +160,16 @@ describe("runAiSelection", () => {
 
 // A consumer declares its prompt-size bound in its own terms (location
 // suggestion allows 400) and never learns the decision tier's; a roster
-// larger than Jev takes in one choice overflows to the fast chat tier and
+// larger than the decision model takes in one choice overflows to the fast chat tier and
 // its id-echo answer, rather than throwing or being silently truncated.
 describe("runAiSelection overflow", () => {
-  const roster = Array.from({ length: JEV_MAX_CANDIDATES + 1 }, (_, i) => ({
-    id: `w${i}`,
-    label: `widget ${i}`,
-  }));
+  const roster = Array.from(
+    { length: DECISION_MAX_CANDIDATES + 1 },
+    (_, i) => ({
+      id: `w${i}`,
+      label: `widget ${i}`,
+    }),
+  );
   const bigSpec = { ...spec, maxCandidates: 400 };
 
   it("shows candidate identities when a positional choice renderer overflows", async () => {
@@ -183,7 +193,7 @@ describe("runAiSelection overflow", () => {
   });
 
   it("sends the shared frame, the rules, and the full rendered shortlist to the overflow model", async () => {
-    const jev: JevPort = vi.fn();
+    const decisionPort: DecisionPort = vi.fn();
     const select = vi.fn(async () => ({
       selectedId: "  W7 ",
       confidence: "medium" as const,
@@ -194,11 +204,11 @@ describe("runAiSelection overflow", () => {
       subject: "find the seventh",
       candidates: roster,
       usage,
-      jev,
+      decisionPort,
       ai: { select },
     });
 
-    expect(jev).not.toHaveBeenCalled();
+    expect(decisionPort).not.toHaveBeenCalled();
     expect(select).toHaveBeenCalledWith({
       rules: spec.rules,
       subject: "find the seventh",
@@ -228,7 +238,7 @@ describe("runAiSelection overflow", () => {
         { id: "a", label: "red" },
         { id: "b", label },
       ];
-      const jev: JevPort = vi.fn();
+      const decisionPort: DecisionPort = vi.fn();
       const select = vi.fn(async () => ({
         selectedId: "b",
         confidence: "high" as const,
@@ -241,14 +251,14 @@ describe("runAiSelection overflow", () => {
           subject,
           candidates,
           usage,
-          jev,
+          decisionPort,
           ai: { select },
         },
       );
 
       expect(outcome.selected).toEqual(candidates[1]);
       expect(outcome.probability).toBeNull();
-      expect(jev).not.toHaveBeenCalled();
+      expect(decisionPort).not.toHaveBeenCalled();
       expect(select).toHaveBeenCalledWith({
         subject,
         rules,

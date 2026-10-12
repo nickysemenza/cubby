@@ -102,7 +102,7 @@ describe("listRuns", () => {
   const ctx = withTestDb();
 
   // Regression: the list once hid ephemeral runs unless a special flag was
-  // set, so every Jev pass and AI action was missing from `/runs`.
+  // set, so every decision pass and AI action was missing from `/runs`.
   it("lists ephemeral AI runs unfiltered and by trigger", async () => {
     await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const page = { pageIndex: 0, pageSize: 50 };

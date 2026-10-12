@@ -44,7 +44,7 @@ describe("describeOutcome headline copy", () => {
         currentValue: "materials",
         currentLabel: "Materials",
       }),
-    ).toBe("Agrees with Materials · 91%");
+    ).toBe("Agrees with Materials · 91% · high");
   });
 
   it("reads 'Filled in' when auto-filled rather than 'Agrees with'", () => {
@@ -55,7 +55,7 @@ describe("describeOutcome headline copy", () => {
         currentValue: "materials",
         autoFilled: true,
       }),
-    ).toBe("Filled in · 91%");
+    ).toBe("Filled in · 91% · high");
   });
 
   it("reads 'Suggested' for an actionable pick", () => {
@@ -66,7 +66,7 @@ describe("describeOutcome headline copy", () => {
         currentValue: null,
         actionable: true,
       }),
-    ).toBe("Suggested Materials · 91%");
+    ).toBe("Suggested Materials · 91% · high");
   });
 
   it("reads 'Leaning' with the fill threshold on an empty field below the bar", () => {
@@ -78,7 +78,7 @@ describe("describeOutcome headline copy", () => {
         actionable: false,
         alternative: false,
       }),
-    ).toBe("Leaning Other · 64% — needs 85%");
+    ).toBe("Leaning Other · 64% · medium — needs 85%");
   });
 
   it("reads 'Would pick' with the alternative threshold when the field already has a value", () => {
@@ -89,7 +89,7 @@ describe("describeOutcome headline copy", () => {
         currentValue: "tools",
         actionable: false,
       }),
-    ).toBe("Would pick Materials · 62% — needs 95% to change");
+    ).toBe("Would pick Materials · 62% · medium — needs 95% to change");
   });
 
   it("reads 'Would pick' at the alternative threshold for a provided alternative on an empty field", () => {
@@ -101,7 +101,7 @@ describe("describeOutcome headline copy", () => {
         alternative: true,
         actionable: false,
       }),
-    ).toBe("Would pick Materials · 62% — needs 95% to change");
+    ).toBe("Would pick Materials · 62% · medium — needs 95% to change");
   });
 
   it("reads 'No good fit' for a declined fill target", () => {
@@ -116,7 +116,7 @@ describe("describeOutcome headline copy", () => {
         },
         prune: false,
       }),
-    ).toBe("No good fit · 78%");
+    ).toBe("No good fit · 78% · medium");
   });
 
   it("reads 'Nothing to remove · closest' for a declined prune target with an alternative", () => {
@@ -174,10 +174,10 @@ describe("describeOutcome headline copy", () => {
         currentValue: "materials",
         currentLabel: "Materials",
       }),
-    ).toBe("Agrees with Materials · 94%");
+    ).toBe("Agrees with Materials · 94% · high");
   });
 
-  it("says 'confidence high' instead of a percent when probability is null (chat-tier roster overflow)", () => {
+  it("says the bucket alone instead of a percent when probability is null (chat-tier roster overflow)", () => {
     expect(
       describeOutcome({
         outcome: {
@@ -191,7 +191,7 @@ describe("describeOutcome headline copy", () => {
         currentValue: null,
         actionable: true,
       }),
-    ).toBe("Suggested Materials · confidence high");
+    ).toBe("Suggested Materials · high");
   });
 
   it("returns an empty string with no outcome", () => {
@@ -214,7 +214,7 @@ describe("SuggestionOutcomeMark", () => {
       />,
     );
     expect(
-      screen.getByRole("button", { name: "Suggested Materials · 91%" }),
+      screen.getByRole("button", { name: "Suggested Materials · 91% · high" }),
     ).toBeInTheDocument();
   });
 
@@ -228,7 +228,9 @@ describe("SuggestionOutcomeMark", () => {
         surface="line"
       />,
     );
-    expect(screen.getByText("Agrees with Materials · 91%")).toBeInTheDocument();
+    expect(
+      screen.getByText("Agrees with Materials · 91% · high"),
+    ).toBeInTheDocument();
   });
 
   it("stops a cell trigger's click/mousedown from reaching the row/cell selection handlers", () => {

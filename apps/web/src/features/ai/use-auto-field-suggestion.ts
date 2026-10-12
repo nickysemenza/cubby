@@ -38,7 +38,7 @@ export interface UseAutoFieldSuggestionResult {
   /** The winner plus every alternative, each carrying a pinned "Suggested"
    * `presentation.group` (order -1, ahead of every other group) and a
    * rounded-percent `status` — a picker merges these ahead of its own
-   * roster so a `suggestField` reference picker always shows Jev's ranking,
+   * roster so a `suggestField` reference picker always shows the decision model's ranking,
    * not just the single value it silently wrote. Empty with no suggestion. */
   seedItems: readonly ComboboxItem[];
 }
@@ -65,7 +65,7 @@ const NO_SUGGESTION: UseAutoFieldSuggestionResult = {
 const SUGGESTED_GROUP = { id: "suggested", label: "Suggested", order: -1 };
 
 /** A runner-up that rounds to "0%" is a distribution artifact, not a
- * candidate worth pinning; Jev always returns the full map, so the floor is
+ * candidate worth pinning; the decision model always returns the full map, so the floor is
  * what keeps a confident winner from dragging three noise rows with it. */
 const MIN_SEED_PROBABILITY = 0.05;
 
@@ -107,7 +107,7 @@ function suggestionSeedItem(suggestion: FieldSuggestion): ComboboxItem | null {
   };
 }
 
-/** The winner plus every alternative, in Jev's ranked order, each pinned
+/** The winner plus every alternative, in the decision model's ranked order, each pinned
  * into the "Suggested" group. `[]` when there is no winner to seed from —
  * `alternatives` alone (a stale winner, an unresolved target) is never
  * seeded on its own. */

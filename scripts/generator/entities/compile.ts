@@ -209,7 +209,7 @@ const compileEditIntents = (
 };
 
 /**
- * `control.suggest` fields are decision-tier (Jev) auto-fill targets: the
+ * `control.suggest` fields are decision-tier auto-fill targets: the
  * target's shape must be something the field-suggest registry can resolve,
  * every `basis` key must be a real model field on the same entity (not an
  * `editorFields` pseudo-field, since detail/table/bulk surfaces only have

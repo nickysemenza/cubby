@@ -46,6 +46,16 @@ describe("Run detail slots", () => {
       ["import-timeline", "import-debug-log", "ai-usage", "changes"],
     ],
     [
+      "suggestion_sweep",
+      [
+        "import-timeline",
+        "import-debug-log",
+        "suggestions",
+        "ai-usage",
+        "changes",
+      ],
+    ],
+    [
       "photo_inventory",
       [
         "import-timeline",

@@ -185,11 +185,11 @@ export function ProductUnitMappingsField({
 
 /**
  * `product.externalIds`: the array-of-object grid (PR 2's `ArrayFieldManager
- * columns` mode) plus PR 1's Jev kind suggestion under the Kind select. Row
+ * columns` mode) plus PR 1's the decision model kind suggestion under the Kind select. Row
  * controls keep associated labels visually hidden because the grid supplies
  * visible column headings. Placeholders are examples, never field names.
  */
-/** A freshly added row has no kind until the operator or Jev picks one; the
+/** A freshly added row has no kind until the operator or the decision model picks one; the
  * form schema rejects the blank select on save. */
 type ExternalIdDraft = Omit<ExternalIdInput, "kind"> & {
   kind: ExternalIdKind | "";

@@ -205,7 +205,7 @@ describe("mail routing at the paid transport boundary", () => {
     { policy: "import", purpose: "mail_discovery" },
     { policy: "import", purpose: "mail_import" },
   ] as const)(
-    "classifies with Jev beyond the dollar allowance in $purpose/$policy while paid research stays bounded",
+    "classifies with the decision model beyond the dollar allowance in $purpose/$policy while paid research stays bounded",
     async ({ policy, purpose }) => {
       const { classify, transmit, runId } = await routing(
         "exhausted",

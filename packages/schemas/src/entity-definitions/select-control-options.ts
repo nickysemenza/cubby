@@ -67,7 +67,8 @@ const tradeDescriptions = {
   flooring: "Subfloor, tile, hardwood, carpet, and floor finishing",
   millwork: "Trim, molding, doors, casing, and finish carpentry",
   finishes: "Paint, stain, caulk, and other surface finishing",
-  appliances: "Major appliances and furniture selection, delivery, and install",
+  appliances:
+    "Major appliances (refrigerator, range, washer, dishwasher): selection, delivery, and install",
   landscaping: "Yard work, planting, hardscape, irrigation, fencing",
   logistics: "Moving, hauling, storage, and job-site coordination",
   metalworking: "Welding, fabrication, and metal machining",

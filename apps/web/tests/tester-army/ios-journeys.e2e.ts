@@ -154,7 +154,7 @@ for (const journey of selectedJourneys(journeys, "ios"))
         if (await confirmation.isVisible()) await device.alert("accept");
         if (target) await expect(target).toBeVisible({ timeout: 60_000 });
         // Structured-entry journeys isolate fields; rename covers editor navigation.
-        // The SDK offers offscreen native buttons to Jev, so establish a reachable start.
+        // The SDK offers offscreen native buttons to the decision model, so establish a reachable start.
         const setup =
           journey.id === "field-external-ids"
             ? { entity: "product", field: "externalIds" }

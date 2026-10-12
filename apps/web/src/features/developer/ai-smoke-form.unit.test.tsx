@@ -30,7 +30,7 @@ describe("AI smoke form", () => {
     }
   });
 
-  it("lets Jev targets drive basis controls without a JSON editor", () => {
+  it("lets decision targets drive basis controls without a JSON editor", () => {
     const scenario: AiSmokeScenario = "fieldSuggestions";
     const schema = smokeCatalog().find(
       (item) => item.id === scenario,

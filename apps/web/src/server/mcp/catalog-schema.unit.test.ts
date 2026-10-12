@@ -568,11 +568,9 @@ describe("MCP catalog schemas", () => {
       "entity.entityId",
       // suggest_fields' entityId and suggestion_queue's recordIds are
       // shortcodes of the kind `entity` names, so no single prefix pattern
-      // fits. suggestion_queue's runId is the internal Run id its rows echo
-      // (not a RUN- code).
+      // fits.
       "entity_read.entityId",
       "entity_read.recordIds",
-      "entity_read.runId",
       "spending_classification_write.entityId",
       // run.lifecycle settles a Run's pending operation or approval by its
       // handle; commit_prepared carries the same opaque import keys as

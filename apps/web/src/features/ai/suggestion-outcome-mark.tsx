@@ -1,8 +1,9 @@
-import type {
-  FieldSuggestion,
-  FieldSuggestionAlternative,
-  FieldSuggestionOutcome,
-  FieldSuggestionRemoval,
+import {
+  formatConfidence,
+  type FieldSuggestion,
+  type FieldSuggestionAlternative,
+  type FieldSuggestionOutcome,
+  type FieldSuggestionRemoval,
 } from "@cubby/schemas/ai";
 import { getErrorMessage } from "@cubby/shared";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
@@ -63,9 +64,7 @@ function percentOrConfidence(outcome: {
   probability: number | null;
   confidence: FieldSuggestion["confidence"];
 }): string {
-  return outcome.probability != null
-    ? formatProbability(outcome.probability)
-    : `confidence ${outcome.confidence}`;
+  return formatConfidence(outcome.probability, outcome.confidence);
 }
 
 export interface DescribeOutcomeArgs {
@@ -233,9 +232,15 @@ function OutcomePopoverBody({
   removals: readonly FieldSuggestionRemoval[];
   review?: ReactNode;
 }) {
-  const listed = alternatives
-    .filter((alternative) => alternative.probability >= MIN_LISTED_ALTERNATIVE)
-    .slice(0, MAX_LISTED_ALTERNATIVES);
+  // A review body states its own runner-up and removals.
+  const listed = review
+    ? []
+    : alternatives
+        .filter(
+          (alternative) => alternative.probability >= MIN_LISTED_ALTERNATIVE,
+        )
+        .slice(0, MAX_LISTED_ALTERNATIVES);
+  const shownRemovals = review ? [] : removals;
   return (
     <Stack gap="xs">
       {surface !== "line" ? <p>{segmentsToNode(segments)}</p> : null}
@@ -252,9 +257,9 @@ function OutcomePopoverBody({
           ))}
         </Stack>
       ) : null}
-      {removals.length > 0 ? (
+      {shownRemovals.length > 0 ? (
         <Stack gap="xs">
-          {removals.map((removal) => (
+          {shownRemovals.map((removal) => (
             <Description
               key={removal.value}
               size="xs"
@@ -409,7 +414,7 @@ export function SuggestionOutcomeMark({
   /** The outcome is still in flight. The glyph shows from the start rather
    * than on arrival: on a phone the 44px glyph wraps onto its own line, so
    * mounting it late pushed every later fact down mid-tap (a reset button
-   * tapped as Jev settled received the tap on empty space). */
+   * tapped as the decision model settled received the tap on empty space). */
   pending?: boolean;
   /** The field's query failed; shown instead of silently omitting the mark. */
   error?: unknown;

@@ -58,7 +58,7 @@ JSONL routes    →  cancellable workflow streams
   local authorization, the read-only account model catalog, limitations, and
   how each `AiUsage` row records its transport.
 
-The interactive `/ai-smoke-test` catalog covers every active AI feature. Mailbox
+The interactive `/ai` Smoke tests tab covers every active AI feature. Mailbox
 triage and relevance probes use synthetic original mail; research source support
 compares a proposed fact with a synthetic retained catalog observation. These
 probes share production request builders and feature/subscription settings;

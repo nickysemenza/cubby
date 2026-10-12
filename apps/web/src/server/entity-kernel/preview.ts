@@ -24,7 +24,7 @@ export const entityPreviewInputSchema = z
       .object({
         /** Values inherited from a relation, route, or source record. */
         seeds: previewObjectSchema.default({}),
-        /** Jev is opt-out for deterministic or privacy-sensitive callers. */
+        /** The decision model is opt-out for deterministic or privacy-sensitive callers. */
         suggest: z.boolean().default(true),
         /** Defaults to every manifest-declared suggestion target. */
         targets: z.array(z.string().min(1)).optional(),
@@ -269,7 +269,7 @@ async function resolveDraftInheritance(
 
 /**
  * Preview parses the generated create schema, resolves inherited draft fields
- * through the same authoritative readers used by writes, then asks Jev only
+ * through the same authoritative readers used by writes, then asks the decision model only
  * for unresolved manifest-declared targets.
  */
 export async function previewEntity(
@@ -342,7 +342,7 @@ export async function previewEntity(
     }
   }
 
-  // Jev suggestions are still untrusted input. Re-parse the final proposal so
+  // Decision suggestions are still untrusted input. Re-parse the final proposal so
   // defaults, refinements, and reference brands are applied after inference.
   const finalParsed = binding.createInput?.safeParse(proposed);
   if (finalParsed?.success) {

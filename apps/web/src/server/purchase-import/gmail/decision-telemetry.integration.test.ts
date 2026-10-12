@@ -6,11 +6,11 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import * as choices from "~/server/ai/decision-model";
 import {
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
 } from "~/server/ai/features";
-import * as choices from "~/server/ai/jev";
 import * as structured from "~/server/ai/run-feature";
 import {
   emailClassificationObservation,
@@ -88,7 +88,7 @@ describe("persisted production Gmail decision telemetry", () => {
       const f = await fixture();
       vi.spyOn(models, "selectDecisionModel").mockReturnValue(model);
       const runner = vi
-        .spyOn(choices, "runJevChoice")
+        .spyOn(choices, "runDecisionChoice")
         .mockResolvedValue(result(1));
       await ingestGmailMessages(ctx.db, f.provider, {
         ...f.input,
@@ -102,7 +102,7 @@ describe("persisted production Gmail decision telemetry", () => {
         promptVersion: MAILBOX_TRIAGE_FEATURE.promptVersion,
         operation: "mailbox-triage",
         runId: f.runId,
-        stage: "jev",
+        stage: "decision",
         classification: "unrelated",
         usageId: null,
       });
@@ -122,7 +122,7 @@ describe("persisted production Gmail decision telemetry", () => {
     vi.spyOn(models, "selectDecisionModel").mockReturnValue(
       "@cf/cloudflare/clef",
     );
-    vi.spyOn(choices, "runJevChoice").mockResolvedValue(result(2));
+    vi.spyOn(choices, "runDecisionChoice").mockResolvedValue(result(2));
     const relevance = vi
       .spyOn(structured, "runStructuredFeature")
       .mockResolvedValue({
@@ -155,7 +155,7 @@ describe("persisted production Gmail decision telemetry", () => {
   });
   it("keeps incomplete-original rules and no-Run caller judgment telemetry unknown without model calls", async () => {
     const f = await fixture();
-    const runner = vi.spyOn(choices, "runJevChoice");
+    const runner = vi.spyOn(choices, "runDecisionChoice");
     const relevance = vi.spyOn(structured, "runStructuredFeature");
     const provider = {
       ...f.provider,
@@ -201,7 +201,7 @@ describe("persisted production Gmail decision telemetry", () => {
       release = resolve;
     });
     const runner = vi
-      .spyOn(choices, "runJevChoice")
+      .spyOn(choices, "runDecisionChoice")
       .mockImplementation(async (args) => {
         if (args.subject.includes("first-message")) await delayed;
         else release();
@@ -250,7 +250,7 @@ describe("persisted production Gmail decision telemetry", () => {
       runId: f.runId,
       checksum: email.checksum,
       classification: "unrelated" as const,
-      stage: "jev" as const,
+      stage: "decision" as const,
       reason: "Synthetic unchanged verdict",
       classificationVersion: "synthetic-version",
     };

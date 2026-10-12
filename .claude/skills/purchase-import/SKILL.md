@@ -68,7 +68,7 @@ checksums, replay, money conservation and unresolved-identity review still apply
 
 1. Connect Google with read-only Gmail access. Prioritize known Vendors and
    unmatched financial transactions, then paginate all retained history,
-   including archives and unfamiliar vendors, excluding Spam and Trash. Jev
+   including archives and unfamiliar vendors, excluding Spam and Trash. The decision model
    routes relevant mail and escalates uncertainty to the relevance model; each
    message records which stage decided and why. An
    unrelated message retains only its provider identity and scan/classification
@@ -111,7 +111,7 @@ checksums, replay, money conservation and unresolved-identity review still apply
 
 Pi's host coordinates Mail import steps, progress and review stops.
 Frontier AI can propose a mapping for an unfamiliar layout; a person verifies
-the columns and sign before saving. Jev can rank a bounded set of ambiguous
+the columns and sign before saving. The decision model can rank a bounded set of ambiguous
 account, transaction, or Purchase candidates using evidence. A choice is a
 proposal for review, not a settlement write or an inferred transaction.
 The [human journey](../../../docs/guide/product-identity-journey.md) describes the

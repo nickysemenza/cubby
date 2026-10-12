@@ -2,7 +2,7 @@
  * DiscardLineFields — the trade/date/reason trio shared by `ProductDiscardDialog`
  * and `BulkDiscardInventoryDialog`.
  *
- * Both dialogs write a $0 expense line, and `expense.trade` is Jev-enabled in
+ * Both dialogs write a $0 expense line, and `expense.trade` is decision-model-enabled in
  * the manifest — but neither ever mounted a `FieldSuggestionProvider`, so
  * nothing ever asked. Owning the provider here (rather than in each dialog)
  * is what makes that gap impossible to reintroduce: `FieldSuggestionProvider`

@@ -11,6 +11,7 @@ import {
   isLiveRunStatus,
   liveProgressBlocks,
   runLogBlocks,
+  suggestionBlocks,
 } from "./run";
 
 const RUN_ID = shortcode("RUN-4K7M");
@@ -644,7 +645,7 @@ describe("prepared orders", () => {
       "expense_only",
     ]);
     expect(choice?.options[0]?.pick).toEqual({
-      entity: "product",
+      entity: "product" as const,
       label: "Product for Item l1",
     });
     expect(choice?.options[2]?.text?.label).toBe(
@@ -653,7 +654,7 @@ describe("prepared orders", () => {
     expect(choice?.suggestions).toEqual([
       {
         optionId: "existing",
-        entity: "product",
+        entity: "product" as const,
         id: "PRD-4K7M",
         name: "Exact thing",
         label: "Use Exact thing",
@@ -1077,6 +1078,31 @@ describe("changesBlocks", () => {
       entity: "purchase",
       id: "PUR-ABCDE12345",
       lines: [{ text: "orderId: a → b", tone: "muted" }],
+    });
+  });
+});
+
+// Native draws a sweep's outcomes from this report, so the counts must sum
+// across every (entity, field) row rather than show the first.
+describe("suggestionBlocks", () => {
+  it("totals each outcome across fields", () => {
+    const row = (pending: number, applied: number) => ({
+      entity: "product" as const,
+      field: "trade",
+      pending,
+      applied,
+      rejected: 1,
+      superseded: 0,
+    });
+    const [stats] = suggestionBlocks([row(2, 3), row(4, 0)]);
+    expect(stats).toMatchObject({
+      kind: "stats",
+      figures: [
+        { label: "Pending", value: 6 },
+        { label: "Accepted", value: 3 },
+        { label: "Rejected", value: 2 },
+        { label: "Superseded", value: 0 },
+      ],
     });
   });
 });

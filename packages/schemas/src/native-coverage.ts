@@ -277,6 +277,7 @@ export const nativeCoverage = {
       // after the confirmation each declares. Web keeps its corrections review (targets) and
       // audit diffs (changes) as richer fills of the same slots.
       "run.ai-usage",
+      "run.suggestions",
       "run.changes",
       "run.import-approvals",
       "run.import-debug-log",

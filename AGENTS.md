@@ -115,7 +115,8 @@ owns a distinct concern.
   relevant Axiom skill for accessibility, performance, UIKit, media, data,
   networking, security, or platform-specific work.
 - **Cubby workflows:** Use `cubby-adversarial-plan-review` for implementation
-  plans, `cubby-pr-ci-maintenance` for PR or CI work, and the focused meal,
+  plans, `cubby-pr-ci-maintenance` for PR or CI work, `decision-grading` for
+  measuring Jev/Clef decisions or Email relevance, and the focused meal,
   garden-plan, product-enrichment, or purchase-import skill for those
   household workflows.
 - **Engineering diagnosis:** Use `diagnosing-bugs` for hard regressions,

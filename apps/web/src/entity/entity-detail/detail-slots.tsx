@@ -300,6 +300,13 @@ export const detailSlots = {
     ),
     "import-timeline": runReportSlot("import-timeline"),
     "import-debug-log": runReportSlot("import-debug-log"),
+    suggestions: slot(
+      () =>
+        import("~/app/runs/slots").then((m) => ({
+          default: m.RunSuggestions,
+        })),
+      (run) => run.purpose === "suggestion_sweep",
+    ),
     "photo-batch": slot(
       () =>
         import("~/app/purchases/purchase-import-run-detail").then((m) => ({

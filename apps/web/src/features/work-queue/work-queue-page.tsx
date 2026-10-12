@@ -241,7 +241,20 @@ function entityTypeOption(entity: Entity) {
   };
 }
 
+/** A suggested field opens the AI Review list filtered to it. */
+function suggestionReviewHref(row: QueueTableRow) {
+  if (row.entity === null || row.suggestionField === undefined) return null;
+  const search = new URLSearchParams({
+    tab: "review",
+    entity: row.entity,
+    field: row.suggestionField,
+  });
+  return `/ai?${search.toString()}`;
+}
+
 function queueHref(row: QueueTableRow) {
+  const review = suggestionReviewHref(row);
+  if (review) return review;
   // Run detail recovers pending execution on read (#1905); use passive Problems.
   if (row.entity === null || row.recordId === null || row.entity === "run")
     return "/problems";
@@ -251,6 +264,20 @@ function queueHref(row: QueueTableRow) {
 }
 
 function WorkRecordLink({ row }: { row: QueueTableRow }) {
+  if (row.entity !== null && row.suggestionField !== undefined)
+    return (
+      <Link
+        to="/ai"
+        search={{
+          tab: "review",
+          entity: row.entity,
+          field: row.suggestionField,
+        }}
+        className="block truncate font-medium"
+      >
+        {row.name}
+      </Link>
+    );
   if (row.entity === null || row.recordId === null || row.entity === "run") {
     return (
       <Link
@@ -541,7 +568,13 @@ function WorkQueueTable() {
   }, [list.infiniteScroll, list.totalCount, queryScope, table]);
   const onRowClick = useCallback(
     (row: CubbyRow<QueueTableRow>) => {
+      const { entity, suggestionField } = row.original;
       if (canPreview(row)) previewClick(previewRow(row));
+      else if (entity !== null && suggestionField !== undefined)
+        void navigate({
+          to: "/ai",
+          search: { tab: "review", entity, field: suggestionField },
+        });
       else if (queueHref(row.original) === "/problems")
         void navigate({ to: "/problems" });
     },

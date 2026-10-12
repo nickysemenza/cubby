@@ -1,6 +1,11 @@
 import { type FieldSuggestion, fieldSuggestionsOut } from "@cubby/schemas/ai";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import type { RunId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityRef,
+  runShortcode,
+  type RunId,
+} from "@cubby/schemas/identifiers";
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fields";
 import {
   type SupportedDecisionModel,
@@ -13,8 +18,8 @@ import {
 } from "tooling/product-category-fixtures";
 import type { TestDbContext } from "tooling/test-setup";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import type { ReferenceSuggestSpec } from "~/server/ai/field-suggest/registry";
-import type { JevPort } from "~/server/ai/jev";
 import type { Database } from "~/server/db";
 import {
   expense as expenseTable,
@@ -25,7 +30,10 @@ import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { getDb } from "~/server/repo/database-helpers";
 import { createProduct } from "~/server/repo/product/crud";
 import { makeProductInput } from "~/server/repo/repo.fixtures";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  lookupShortcodes,
+  resolveLiveShortcode,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -78,6 +86,14 @@ export async function recordId<E extends ShortcodeEntity>(
   const id = await resolveLiveShortcode(db, shortcode, entity);
   if (!id) throw new Error(`Synthetic ${entity} record is missing`);
   return id;
+}
+
+/** The review queue filters by a Run's public shortcode. */
+export async function runCode(db: Database, id: string) {
+  const codes = await lookupShortcodes(db, [parseEntityRef("run", id)]);
+  const code = codes.get(entityRefKey("run", id));
+  if (!code) throw new Error("Synthetic Run is missing");
+  return runShortcode.parse(code);
 }
 
 export const productFixture = (
@@ -195,7 +211,7 @@ export const noProposal = (field: string) =>
     },
   });
 
-/** The single category the Jev roster offers, so every decision proposes it. */
+/** The single category the decision roster offers, so every decision proposes it. */
 export const SUGGESTED_CATEGORY: ProductCategoryFeature = "food";
 
 type CategoryCandidate = { id: string; title: string };
@@ -214,7 +230,7 @@ const categorySpec: ReferenceSuggestSpec<CategoryCandidate> = {
 };
 
 const decisionAt =
-  (confidence: number): JevPort =>
+  (confidence: number): DecisionPort =>
   async (input) => {
     const keys = Object.keys(input.questions.selection.criteria);
     const choice = keys[0]!;
@@ -237,10 +253,10 @@ const decisionAt =
     };
   };
 
-/** Real field-suggest path for `product.categoryId` with a scripted Jev. */
+/** Real field-suggest path for `product.categoryId` with a scripted the decision model. */
 export const categoryPorts = (confidence = 0.97) => ({
   suggestPorts: {
-    jev: decisionAt(confidence),
+    decisionPort: decisionAt(confidence),
     registry: { "product.categoryId": categorySpec },
   },
 });

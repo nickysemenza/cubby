@@ -39,7 +39,7 @@ export type EnsureRunInput = {
   purpose: RunPurpose;
   /** `ephemeral` (the default) creates the run already `completed`. */
   trigger?: RunTrigger;
-  /** Groups repeat calls into one run, e.g. one Jev pass per page mount. */
+  /** Groups repeat calls into one run, e.g. one decision pass per page mount. */
   clientKey?: string;
   /**
    * A non-ephemeral run is `running` until its owner completes it. Pass
@@ -72,7 +72,7 @@ export async function ensureRun(
   const database = getDb(db);
   const now = new Date();
   // A keyed run usually exists already (every row a page suggests for shares
-  // its `jev:` key), so touch-and-return it in one statement. The actor
+  // its `decisionPort:` key), so touch-and-return it in one statement. The actor
   // snapshot and insert below cost three more round trips per call, which a
   // table's per-row suggestions multiplied into Hyperdrive pool starvation.
   if (input.clientKey) {
@@ -97,7 +97,7 @@ export async function ensureRun(
   const values = {
     id: runEntityId.parse(crypto.randomUUID()),
     // Only import runs carry a member scope. Ephemeral runs have none, so
-    // thousands of Jev passes never block a member's delete or merge
+    // thousands of decision passes never block a member's delete or merge
     // (`LEDGER_PARTY_*_EDGE_POLICY`); the actor snapshot still names who
     // started them.
     ledgerPartyId: trigger === "ephemeral" ? null : snapshot.ledgerPartyId,
@@ -184,7 +184,10 @@ export function aiCallRunInput(
   options: { runKey?: string; now?: Date } = {},
 ): EnsureRunInput {
   if (options.runKey)
-    return { purpose: "ai_suggest", clientKey: `jev:${options.runKey}` };
+    return {
+      purpose: "ai_suggest",
+      clientKey: `decisionPort:${options.runKey}`,
+    };
   const hour = (options.now ?? new Date()).toISOString().slice(0, 13);
   // The system user is one actor by definition; the MCP session id is not on
   // `ActorContext`, so an MCP actor's calls group by user instead.

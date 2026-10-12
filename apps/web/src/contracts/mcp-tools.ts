@@ -102,7 +102,7 @@ export const MCP_TOOLS = defineMcpTools({
         op: aiContract.ops.suggestFields,
         modelBacked: true,
         description:
-          "Jev's field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint spending_classification_write.apply_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss.",
+          "Decision-model field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint spending_classification_write.apply_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss. decisionModel pins Jev (typesafe/jev) or Clef (@cf/cloudflare/clef) to replay one record through each trial model.",
       }),
       suggestion_queue: mcpAction({
         op: aiContract.ops.listSuggestionReviewQueue,
@@ -111,7 +111,7 @@ export const MCP_TOOLS = defineMcpTools({
           items: aiContract.ops.listSuggestionReviewQueue.output,
         }),
         description:
-          "Pending field suggestions to review, filtered by entity, field, kind, confidence or recordIds; each id feeds entity.accept_suggestion(s) or reject_suggestion.",
+          "Stored field suggestions filtered by entity, field, kind, confidence or recordIds. status defaults to pending (the review queue; each id feeds entity.accept_suggestion(s) or reject_suggestion); applied, rejected and superseded read reviewed history with correctValue — the decision-eval label set. Paired trial rows never appear.",
       }),
       inventory_ownership_context: mcpAction({
         op: expenseContract.ops.inventoryOwnershipContext,
@@ -136,10 +136,10 @@ export const MCP_TOOLS = defineMcpTools({
       preview: mcpAction({
         op: kernelAction("preview", "query"),
         readPolicy: "strong",
-        // A create preview asks Jev for manifest-declared field suggestions.
+        // A create preview asks the decision model for manifest-declared field suggestions.
         modelBacked: true,
         description:
-          'Preview without writing. `{entity, data, context?}` previews one create: contextual seeds merge first, explicit data wins, and manifest-declared Jev suggestions come back with confidence and provenance. `{items: [...]}` previews up to 50 creates independently. `{operation: {action: "attach"|"detach", entity, relation, id, items}}` dry-runs a link change, returning `blockers`, `changes` and `sideEffects` with per-target breakdowns and `canProceed`; it is advisory, since the mutation re-validates in its own transaction.',
+          'Preview without writing. `{entity, data, context?}` previews one create: contextual seeds merge first, explicit data wins, and manifest-declared decision suggestions come back with confidence and provenance. `{items: [...]}` previews up to 50 creates independently. `{operation: {action: "attach"|"detach", entity, relation, id, items}}` dry-runs a link change, returning `blockers`, `changes` and `sideEffects` with per-target breakdowns and `canProceed`; it is advisory, since the mutation re-validates in its own transaction.',
       }),
       relations: mcpAction({
         op: entityGraphContract.ops.relation,
@@ -253,12 +253,20 @@ export const MCP_TOOLS = defineMcpTools({
         op: aiContract.ops.acceptSuggestions,
         project: (results) => ({ results }),
         output: z.object({ results: suggestionReviewBatchOut }),
-        description: "Apply several pending field suggestions by id.",
+        description:
+          "Apply several pending field suggestions by id; each result is ok with its status or carries its own error.",
       }),
       reject_suggestion: mcpAction({
         op: aiContract.ops.rejectSuggestion,
         description:
-          "Reject one pending field suggestion, optionally recording correctValue.",
+          "Reject one pending field suggestion, optionally recording correctValue (written to the record and kept as the Miss label).",
+      }),
+      reject_suggestions: mcpAction({
+        op: aiContract.ops.rejectSuggestions,
+        project: (results) => ({ results }),
+        output: z.object({ results: suggestionReviewBatchOut }),
+        description:
+          "Reject several pending field suggestions by id as Misses without a correction; each result is ok or carries its own error.",
       }),
       record_suggestion_miss: mcpAction({
         op: aiContract.ops.recordFieldSuggestionMiss,
@@ -570,7 +578,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   imports_read: {
     description:
-      "Import reads: one retained Email, purchase-import operation status, one run's live status and target outcomes, vendor coverage, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
+      "Import reads: one retained Email and its Mail triage preview, purchase-import operation status, one run's live status and target outcomes, vendor coverage, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
     actions: {
       email_accuracy_blind: mcpAction({
         op: purchaseImportContract.ops.emailAccuracyBlind,
@@ -592,6 +600,11 @@ export const MCP_TOOLS = defineMcpTools({
         op: purchaseImportContract.ops.mailRead,
         description:
           "Read one retained Email: headers, body, links, attachments and checksum. acceptedSourceOrders supplies owned accepted-order handles and source identities for prepare_reconciliation, separately from lifecycle Purchase links. Pass attachmentId for original PDF/image bytes (at most 3 MiB). Start research from this original and its links.",
+      }),
+      mail_triage_preview: mcpAction({
+        op: purchaseImportContract.ops.mailTriagePreview,
+        description:
+          "Run the deployed Mail triage on one retained Email's Gmail original, refetched as Reclassify does, without recording an observation or changing Relevance (its Run holds only model usage). Pass decisionModel to pin Jev or Clef; omitted samples the live split. Returns the routed classification, stage, reason and model, and the bounded view's bytes, completeness and incompleteReasons.",
       }),
       purchase_status: mcpAction({
         op: purchaseImportContract.ops.operationStatus,
@@ -745,7 +758,7 @@ export const MCP_TOOLS = defineMcpTools({
       reclassify: mcpAction({
         op: purchaseImportContract.ops.emailReclassify,
         description:
-          "Rerun Relevance for at most 200 owned Emails (one Run per mailbox): rule, Jev and the relevance model, refetching each original from Gmail. The result is recorded as history. It replaces Relevance only when no retained content or import would be dropped (`awaiting_acceptance` otherwise; accept with `mail.resolve` unrelated), never overrides a member resolution, and reports `conflict` when it disagrees with the member's review.",
+          "Rerun Relevance for at most 200 owned Emails (one Run per mailbox): rule, the decision model and the relevance model, refetching each original from Gmail. The result is recorded as history. It replaces Relevance only when no retained content or import would be dropped (`awaiting_acceptance` otherwise; accept with `mail.resolve` unrelated), never overrides a member resolution, and reports `conflict` when it disagrees with the member's review.",
       }),
       rerun_preview: mcpAction({
         op: purchaseImportContract.ops.emailPreviewRerun,

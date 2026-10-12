@@ -1,4 +1,5 @@
 import { vendorSpendingProfile } from "./spending-classification";
+import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 import { fieldResolutionsSchema } from "./field-resolution";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
@@ -29,6 +30,28 @@ export const confidenceValues = ["high", "medium", "low"] as const;
 export const confidence = z.enum(confidenceValues);
 
 export type Confidence = z.infer<typeof confidence>;
+
+/** The calibrated probability a decision needs to count as "high". */
+export const HIGH_CONFIDENCE_PROBABILITY = 0.85;
+const MEDIUM_CONFIDENCE_PROBABILITY = 0.6;
+
+/** Buckets a decision model's calibrated probability into the public
+ * `confidence`; the server's decisions and every client label share it. */
+export function decisionConfidence(probability: number): Confidence {
+  if (probability >= HIGH_CONFIDENCE_PROBABILITY) return "high";
+  if (probability >= MEDIUM_CONFIDENCE_PROBABILITY) return "medium";
+  return "low";
+}
+
+/** Every suggestion surface states confidence one way: "92% · high". A
+ * chat-tier answer carries no calibrated probability and shows its bucket. */
+export function formatConfidence(
+  probability: number | null,
+  bucket: Confidence = "low",
+): string {
+  if (probability === null) return bucket;
+  return `${Math.floor(probability * 100)}% · ${decisionConfidence(probability)}`;
+}
 
 // One shared result shape for the generic "AI selection" helper
 // (`server/ai/selection.ts`): given a subject and a rendered shortlist, the
@@ -468,6 +491,9 @@ export const fieldSuggestionsInput = z.object({
    * UTC hour.
    */
   runKey: z.string().uuid().optional(),
+  /** Pins the decision model so a session can replay one record through
+   * each trial model; omitted samples the live traffic split. */
+  decisionModel: supportedDecisionModelSchema.optional(),
 });
 export type FieldSuggestionsInput = z.infer<typeof fieldSuggestionsInput>;
 
@@ -482,7 +508,11 @@ export const suggestionReviewListInput = z.object({
   field: z.string().optional(),
   kind: z.enum(["correction", "addition"]).optional(),
   minConfidence: z.number().min(0).max(1).default(0.5),
-  runId: z.string().uuid().optional(),
+  runId: runShortcode.optional(),
+  /** Reviewed history (applied, rejected, superseded) is the decision-eval
+   * label set; the review queue reads `pending`. */
+  status: suggestionStatus.default("pending"),
+  limit: z.number().int().min(1).max(1000).default(500),
   /** Bounded list-page read; both are supplied together by generic entity lists. */
   recordIds: z.array(z.string().min(1)).max(250).optional(),
   fields: z.array(z.string()).max(100).optional(),
@@ -496,7 +526,8 @@ const suggestionRecordId = anyShortcodeSchema([
 ]);
 export const suggestionReviewRowSchema = z.object({
   id: z.string().uuid(),
-  runId: z.string().uuid(),
+  /** The sweep or page Run that produced it, opened from its provenance. */
+  runId: runShortcode,
   entity: z.enum(shortcodeEntities),
   recordId: suggestionRecordId,
   field: z.string(),
@@ -505,7 +536,11 @@ export const suggestionReviewRowSchema = z.object({
   confidence: z.number(),
   model: z.string(),
   kind: z.enum(["correction", "addition"]),
+  status: suggestionStatus,
+  runnerUpValue: z.json().nullable(),
+  runnerUpConfidence: z.number().nullable(),
   correctValue: z.json().nullable(),
+  createdAt: z.string(),
 });
 export const suggestionReviewListOut = z.array(suggestionReviewRowSchema);
 export type SuggestionReviewRow = z.infer<typeof suggestionReviewRowSchema>;
@@ -520,7 +555,80 @@ export const suggestionReviewActionOut = z.object({
   id: z.string().uuid(),
   status: z.enum(["applied", "rejected"]),
 });
-export const suggestionReviewBatchOut = z.array(suggestionReviewActionOut);
+/** Each id settles independently: one failure never rolls back or hides the
+ * others, and carries its raw diagnostic. */
+export const suggestionReviewBatchOut = z.array(
+  z.discriminatedUnion("ok", [
+    suggestionReviewActionOut.extend({ ok: z.literal(true) }),
+    z.object({
+      id: z.string().uuid(),
+      ok: z.literal(false),
+      error: z.string(),
+    }),
+  ]),
+);
+export type SuggestionReviewBatchOut = z.infer<typeof suggestionReviewBatchOut>;
+
+/** Pending, applied, rejected and superseded counts per (entity, field),
+ * optionally for one Run; paired trial rows never count. */
+export const suggestionCountsInput = z.object({
+  runId: runShortcode.optional(),
+});
+export const suggestionCountRowSchema = z.object({
+  entity: z.enum(shortcodeEntities),
+  field: z.string(),
+  pending: z.number().int().nonnegative(),
+  applied: z.number().int().nonnegative(),
+  rejected: z.number().int().nonnegative(),
+  superseded: z.number().int().nonnegative(),
+});
+export const suggestionCountsOut = z.array(suggestionCountRowSchema);
+export type SuggestionCountRow = z.infer<typeof suggestionCountRowSchema>;
+
+/**
+ * `ai.decisionCatalog`: one row per manifest suggest field plus every
+ * non-field decision feature. `prompt` is rendered by the code the live call
+ * runs (subject renderer + choice envelope) over a synthetic subject, so it
+ * cannot drift from what the model sees; a live roster's choices come from
+ * household records and are shown by Try instead.
+ */
+export const decisionCatalogRowSchema = z.object({
+  /** `entity.field` for a suggest field, the feature id otherwise. */
+  key: z.string(),
+  entity: z.enum(shortcodeEntities).nullable(),
+  field: z.string().nullable(),
+  label: z.string(),
+  description: z.string().nullable(),
+  feature: z.string(),
+  model: z.string(),
+  promptVersion: z.string(),
+  mode: z.enum(["fill", "prune", "choice"]),
+  choiceKind: z.enum(["enum", "reference", "text", "prune", "choice"]),
+  basis: z.array(z.object({ key: z.string(), label: z.string() })),
+  options: z.array(
+    z.object({
+      value: z.string(),
+      label: z.string(),
+      description: z.string().nullable(),
+    }),
+  ),
+  /** Reference and text targets choose from a live household roster. */
+  roster: z
+    .object({
+      entity: z.string().nullable(),
+      maxCandidates: z.number().int().positive(),
+    })
+    .nullable(),
+  rules: z.string(),
+  reviewRequired: z.boolean(),
+  prompt: z.object({ subject: z.string(), input: z.json() }),
+  /** Stored Suggestion outcomes; null for decisions that store none. */
+  counts: suggestionCountRowSchema
+    .pick({ pending: true, applied: true, rejected: true, superseded: true })
+    .nullable(),
+});
+export const decisionCatalogOut = z.array(decisionCatalogRowSchema);
+export type DecisionCatalogRow = z.infer<typeof decisionCatalogRowSchema>;
 export const fieldSuggestionMissInput = z.object({
   entity: z.enum(shortcodeEntities),
   entityId: z.string().min(1),
@@ -558,7 +666,7 @@ export const suggestionSweepStatusOut = z.object({
  * `null` means no suggestion could be made — see `outcomes` for why.
  */
 /**
- * A runner-up from Jev's calibrated distribution over every choice, so a
+ * A runner-up from the decision model's calibrated distribution over every choice, so a
  * picker can pin the top few candidates instead of only the winner. Empty on
  * the roster-overflow path (a chat-tier pick has no distribution).
  */
@@ -589,7 +697,7 @@ export const fieldSuggestionSchema = z.object({
   label: z.string().nullable(),
   detail: z.string().nullable(),
   confidence,
-  /** Calibrated Jev probability; null for non-Jev/absent suggestions. */
+  /** Calibrated decision-model probability; null for chat-overflow or absent suggestions. */
   probability: z.number().min(0).max(1).nullable().default(null),
   reasoning: z.string(),
   alternatives: z.array(fieldSuggestionAlternativeSchema).default([]),
@@ -660,7 +768,7 @@ export const fieldSuggestionsOut = z.object({
   suggestions: z.record(z.string(), fieldSuggestionSchema.nullable()),
   /** Authoritative inheritance state for this exact draft snapshot. */
   fieldResolutions: fieldResolutionsSchema.optional(),
-  /** Requested targets the server allowed Jev to evaluate. */
+  /** Requested targets the server allowed the decision model to evaluate. */
   eligibleTargets: z.array(z.string()).optional(),
   /** One entry per requested target; why `suggestions[target]` is or isn't a
    * proposal. */

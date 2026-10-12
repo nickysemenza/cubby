@@ -2,7 +2,7 @@
  * The one registry and evaluator for classification-declared field policies:
  * whether a classification expects a field of the record it classifies, and
  * whether it allows one at all (`field-policy-fields.ts`). Data-quality gaps,
- * write admission, and Jev suggestion targets all read these answers.
+ * write admission, and decision suggestion targets all read these answers.
  *
  * Two storage shapes share it. A fixed classification declares its policy in
  * the entity manifest (`capabilities.classificationPolicies`, compiled to

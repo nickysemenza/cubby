@@ -8,8 +8,8 @@
  * docs/entities.md) instead of re-implementing the call, and never learns
  * which model answered:
  *
- * - A roster the decision tier can take in one choice goes to Jev
- *   (`jev.ts`), which answers over positional `c0…cn` choices — the
+ * - A roster the decision tier can take in one choice goes to the decision model
+ *   (`decision-model.ts`), which answers over positional `c0…cn` choices — the
  *   winner's index resolves straight back to the shown roster.
  * - A roster exceeding the choice or byte budget overflows to the fast chat tier
  *   ({@link SELECTION_OVERFLOW_FEATURE}): the model names the chosen
@@ -20,14 +20,15 @@ import type { AiSelectionResult, Confidence } from "@cubby/schemas/ai";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 
 import {
+  decisionChoiceFitsContext,
+  type DecisionChoicePrompt,
+  type DecisionPort,
+  runDecisionChoice,
+} from "~/server/ai/decision-model";
+import {
   type AiDecisionFeature,
   SELECTION_OVERFLOW_FEATURE,
 } from "~/server/ai/features";
-import {
-  jevChoiceFitsContext,
-  type JevPort,
-  runJevChoice,
-} from "~/server/ai/jev";
 import {
   type AiRunContext,
   runStructuredFeature,
@@ -88,15 +89,15 @@ const productionAiSelectionPort: AiSelectionPort = {
 export interface AiSelectionOutcome<C> {
   selected: C | null;
   confidence: Confidence;
-  /** Jev's calibrated probability, unavailable for overflow chat picks. */
+  /** The decision model's calibrated probability, unavailable for overflow chat picks. */
   probability: number | null;
   /** Empty for a decision-tier pick, which writes no prose. */
   reasoning: string;
-  /** Top-3 runners-up (after `selected`), from Jev's ranked distribution.
+  /** Top-3 runners-up (after `selected`), from the decision model's ranked distribution.
    * Always `[]` on the overflow/chat-tier path — a prose pick has no
    * distribution to rank — and when there were no candidates to choose from. */
   alternatives: { candidate: C; probability: number }[];
-  /** Jev's full ranked distribution over the shown candidates (winner
+  /** The decision model's full ranked distribution over the shown candidates (winner
    * included, `none` excluded). `[]` wherever `alternatives` is. */
   distribution: { candidate: C; probability: number }[];
   /** False only when there were no candidates to show, so no model was asked. */
@@ -107,6 +108,16 @@ export interface AiSelectionOutcome<C> {
  * whitespace/case noise that introduces rather than reject an
  * otherwise-correct answer. */
 const normalizeId = (id: string): string => id.trim().toLowerCase();
+
+/** The roster choice a selection asks the decision tier; the Decisions
+ * catalog renders the same prompt. */
+export function selectionPrompt<C>(
+  spec: Pick<AiSelectionSpec<C>, "rules" | "renderLine">,
+  subject: string,
+  shown: readonly C[],
+): DecisionChoicePrompt & { choices: string[] } {
+  return { subject, rules: spec.rules, choices: shown.map(spec.renderLine) };
+}
 
 /**
  * Truncate `candidates` to `spec.maxCandidates` and ask the model to pick
@@ -120,7 +131,7 @@ export async function runAiSelection<C>(
     subject: string;
     candidates: readonly C[];
     usage: AiSelectionUsage;
-    jev?: JevPort;
+    decisionPort?: DecisionPort;
     decisionModel?: SupportedDecisionModel;
     ai?: AiSelectionPort;
   },
@@ -138,10 +149,9 @@ export async function runAiSelection<C>(
     };
   }
 
-  const choices = shown.map(spec.renderLine);
-  if (
-    !jevChoiceFitsContext({ subject: args.subject, rules: spec.rules, choices })
-  ) {
+  const prompt = selectionPrompt(spec, args.subject, shown);
+  const { choices } = prompt;
+  if (!decisionChoiceFitsContext(prompt)) {
     const port = args.ai ?? productionAiSelectionPort;
     const result = await port.select({
       rules: spec.rules,
@@ -167,13 +177,11 @@ export async function runAiSelection<C>(
     };
   }
 
-  const result = await runJevChoice({
+  const result = await runDecisionChoice({
     feature: spec.feature,
-    subject: args.subject,
-    rules: spec.rules,
-    choices,
+    ...prompt,
     usage: args.usage,
-    port: args.jev,
+    port: args.decisionPort,
     decisionModel: args.decisionModel,
   });
   const distribution = result.ranked.flatMap((entry) => {

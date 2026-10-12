@@ -1,9 +1,11 @@
 import type { ReportSlot } from "@cubby/schemas/entity-report";
 import type { RunOut } from "@cubby/schemas/run";
+import { Link } from "@tanstack/react-router";
 
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { AuditLogList } from "~/features/audit-log/audit-log-list";
+import { Stack } from "~/ui/layout";
 
 /**
  * A Run detail slot that is nothing but its server-composed report (`run.<id>` in
@@ -30,6 +32,26 @@ export const runReportSlots = {
   "import-debug-log": runReport("run.import-debug-log"),
   "ai-usage": runReport("run.ai-usage"),
 } as const;
+
+/** A sweep Run's stored outcomes (the shared report) and the way into reviewing them. */
+export function RunSuggestions({ record }: { record: RunOut }) {
+  return (
+    <Stack gap="sm">
+      <EntityReportSlot
+        slot="run.suggestions"
+        id={record.id}
+        status={record.status}
+      />
+      <Link
+        to="/ai"
+        search={{ tab: "review", runId: record.id }}
+        className="text-sm font-medium text-primary underline-offset-2 hover:underline"
+      >
+        Review this sweep's Suggestions
+      </Link>
+    </Stack>
+  );
+}
 
 /** Run detail slot: every audit entry the run wrote, with the full field diffs. */
 export function RunChanges({ record }: { record: RunOut }) {

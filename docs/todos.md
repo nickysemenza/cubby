@@ -240,13 +240,14 @@ historical Runs stay readable through generic reports.
   caps. It cannot reach logged-in order pages; those stay Burn-down work.
   Compare filled-at-import quality against Burn-down cost before adopting.
 
-- 🤔 🛠️ **Tune Jev/Luna prompts from review conflicts.** The Emails Accuracy view
-  counts rule, Jev and model results that disagree with a member's review, by
-  stage and model, and Purchase link proposals a member dismissed, by
-  proposer. Use those conflicts to revise the triage, relevance and
-  `mail.resolve` linking prompts (or tighten the suggestion heuristic when its
-  dismissals dominate), and measure with an accuracy sample before and after
-  each change.
+- ⏳ 🧪 **Tune decision and relevance prompts from measured conflicts.**
+  Promote once the decision-model Email triage has deployed and 0042 has run.
+  Follow `.claude/skills/decision-grading`: grade a stratified sample over
+  MCP, preview it with `imports_read.mail_triage_preview`, reclassify the
+  existing uncertain backlog in batches of 200, and revise the triage,
+  relevance and `mail.resolve` linking prompts (or tighten the link-suggestion
+  heuristic when Purchase link proposals a member dismissed, by proposer,
+  dominate) only when a held-out sample improves.
 
 - ⏳ 🧪 **Finish client acceptance of historical prepared-candidate review.**
   [PR #1892](https://github.com/nickysemenza/cubby/pull/1892) preserves missing
@@ -810,6 +811,20 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   image hard delete stays on `IMAGE_HARD_DELETE` on purpose
   (`repo/removal/core.unit.test.ts`).
 
+- ⏳ 🛠️ **Generic child-table review lists.** Several Run/import child tables
+  carry a review lifecycle but no manifest identity, so each has a
+  hand-written list: `Suggestion` (pending → applied/rejected/superseded; the
+  `/ai` Review tab), `RunFinding` (open → applied/dismissed; Problems),
+  `RunApproval` (pending operations), `PhotoGroupProposal` and
+  `PhotoRunImage` (photo review), `OrderMailCandidateDecision`, and
+  `StatementRow` (open disposition; overlaps the item above). Extend the
+  entity compiler with a child-backed read adapter, an identity/navigation
+  contract for uuid-keyed rows, and workflow actions that delegate to the
+  existing handlers (not field updates; the compiler rejects update
+  capabilities on read-only entities), so these render through
+  `GenericEntityList`. Promote when a second review list is about to be
+  rewritten; move `Suggestion` first.
+
 ---
 
 ## Classification in the manifest
@@ -825,25 +840,12 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   classification preview hand-writes. Generated SQL must match hand-tuned
   performance; #1712's preview equivalence and scale tests are the guard.
   Decide the declaration shape first.
-- 🤔 🧪 **Calibrate Email relevance and reduce false uncertainty.** The bounded
-  HTML path marks every HTML message incomplete, so an unrelated Jev decision
-  becomes uncertain even when the readable evidence clearly establishes a
-  newsletter or promotion. Distinguish semantic evidence coverage from omitted
-  markup; retain purchase-bearing table, amount, order and attachment evidence.
-  Escalate only a material omitted-evidence risk, without sender-wide exclusions
-  that could hide subscription receipts. Evaluate broader evidence or a second
-  bounded pass on ambiguous cases; preserve original predictions and member
-  decisions. Grade an independent stratified sample including unrelated and
-  clipped messages, measure false negatives, false positives, abstention and
-  cost, and compare changes before enabling automatic disposal or import.
-  Separately audit Purchase Problems and Work queue receipt checks against the
-  effective evidence expectation and reviewed itemization: optional paperwork
-  must not create a missing-document task. Show the policy source so inherited
-  requirements and stale queue entries can be distinguished from real gaps.
-
-- 🤔 🧪 **Re-evaluate categories and Jev-backed dropdown options.** Review the
+- ⏳ 🧪 **Re-evaluate categories and decision-backed dropdown options.**
+  Promote once reviewed Suggestion history is readable over MCP (deployed
+  `entity_read.suggestion_queue` with `status`). Review the
   category hierarchies and declared classification choices against actual usage
-  and per-field decision misses. Identify overlapping, ambiguous, stale or
+  and per-field decision misses, one serial read at a time (effective-value
+  filters on large lists exhaust the production pool when run in parallel). Identify overlapping, ambiguous, stale or
   missing options; check that meanings and suggestion rules distinguish them.
   Carry existing assignments through any consolidation, update the declarations
   and generated consumers together, and compare decision quality before and
@@ -857,10 +859,12 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 - 🟢 🛠️ **Move the image backfill onto the paced batch Run.**
   `backfillImageProcessing` keeps its own settings-row pause and progress;
   move it onto `runs/paced-batch.ts` beside the Suggestion sweep.
-- 🤔 🧪 **Re-weight the decision trial from paired data.** Normal decision
-  traffic stays 50/50 Jev/Clef (`CLEF_TRAFFIC_SHARE`). Once sweeps have
-  produced paired rows and Misses, run `eval:decisions` and retier on its
-  per-field results.
+- ⏳ 🧪 **Re-weight the decision trial from paired data.** Every decision
+  feature, Mail triage included, samples 50/50 Jev/Clef (`CLEF_TRAFFIC_SHARE`).
+  Once reviewed history is readable over MCP, replay labeled Suggestions
+  through both models (`suggest_fields` with `decisionModel`, per the
+  decision-grading skill). Keep one global share unless a per-field gap
+  exceeds the sample's noise.
 
 Per-row household policies (SpendingCategory `productExpectation`) stay
 columns; algorithms (allocation, reconciliation, fingerprints) stay code and
@@ -1178,7 +1182,7 @@ related active work can find its deferred follow-ups.
 - 🧪 **Evaluate trade affinity in expense project suggestions.** Once the
   `expense.projectId` roster's per-project trade tallies
   (`server/ai/field-suggest/registry.ts`) have served real suggestions, compare
-  accept/override rates on `/ai-usage` and drop the tallies if they do not help.
+  accept/override rates on the `/ai` Usage tab and drop the tallies if they do not help.
 
 - 🐛 **Shared-expense export re-import dedupe.** A Splitwise-style CSV has no
   row id, so provider ids derive from date + description + amount; promote if

@@ -26,7 +26,7 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
 /**
  * One run: a purchase-agent account sync, validation or enrichment, a
  * photo-inventory batch a member uploads for an agent to work, a Gmail
- * search or scheduled mailbox discovery, or a group of AI calls (Jev suggestions on a page, an hour of MCP
+ * search or scheduled mailbox discovery, or a group of AI calls (decision suggestions on a page, an hour of MCP
  * previews, background work). The record is
  * written only by the run service and the writers; the manifest
  * exposes it read-only so the generic list, detail, inspector and MCP get/list
@@ -125,6 +125,12 @@ export default defineEntity({
         },
         {
           kind: "slot",
+          id: "suggestions",
+          workspace: "work",
+          title: "Suggestions",
+        },
+        {
+          kind: "slot",
           id: "photo-batch",
           workspace: "work",
           title: "Photos",
@@ -190,7 +196,7 @@ export default defineEntity({
           id: "ai-work",
           label: "AI work",
           description:
-            "Jev suggestion passes, hourly AI groups and background AI work",
+            "Decision-model suggestion passes, hourly AI groups and background AI work",
           filters: [{ id: "purpose", value: ["ai_suggest", "background"] }],
         },
       ],
@@ -733,7 +739,7 @@ export default defineEntity({
         kind: "identifier",
         type: { module: "@cubby/schemas/identifiers", export: "DeviceId" },
       },
-      // Client-minted grouping key, e.g. one Jev pass per page mount.
+      // Client-minted grouping key, e.g. one decision pass per page mount.
       { key: "clientKey", kind: "text" },
       // What the run was asked to do; the shape belongs to its purpose.
       {

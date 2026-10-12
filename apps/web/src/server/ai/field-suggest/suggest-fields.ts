@@ -1,4 +1,8 @@
-import { financeCategoryReviewSchema } from "@cubby/schemas/ai";
+import {
+  decisionConfidence,
+  financeCategoryReviewSchema,
+  HIGH_CONFIDENCE_PROBABILITY,
+} from "@cubby/schemas/ai";
 import type {
   FieldSuggestion,
   FieldSuggestionAlternative,
@@ -10,7 +14,7 @@ import type {
 /**
  * `ai.suggestFields`: resolve every requested target of one entity's basis in
  * one round trip. Each target runs through {@link FIELD_SUGGEST_REGISTRY}'s
- * matching spec — enum targets classify with Jev, reference/text targets pick
+ * matching spec — enum targets classify with the decision model, reference/text targets pick
  * from a roster with `runAiSelection`. In suggested-basis mode, a target
  * whose own basis names another requested target (`expense.trade`'s basis
  * includes `projectId`, itself a target when the caller asks for both) sees
@@ -32,7 +36,13 @@ import type { RunId } from "@cubby/schemas/identifiers";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
-import { classifyWithJev } from "~/server/ai/classify";
+import { classifyWithDecisionModel } from "~/server/ai/classify";
+import {
+  runDecisionChoice,
+  type DecisionChoicePrompt,
+  type DecisionChoiceResult,
+  type DecisionPort,
+} from "~/server/ai/decision-model";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
 import { placeByBranch } from "~/server/ai/field-suggest/branch-confidence";
 import {
@@ -41,13 +51,6 @@ import {
   type RawBasis,
   type ResolvedBasis,
 } from "~/server/ai/field-suggest/registry";
-import {
-  decisionConfidence,
-  HIGH_CONFIDENCE_PROBABILITY,
-  runJevChoice,
-  type JevChoiceResult,
-  type JevPort,
-} from "~/server/ai/jev";
 import {
   type AiSelectionSpec,
   type AiSelectionUsage,
@@ -94,7 +97,7 @@ const defaultResolveLabels: LabelResolverPort = async (db, codes) => {
 };
 
 export interface SuggestFieldsPorts {
-  jev?: JevPort;
+  decisionPort?: DecisionPort;
   resolveLabels?: LabelResolverPort;
   force?: boolean;
   /** Pins the decision model (a Suggestion sweep or eval); otherwise routing samples. */
@@ -353,7 +356,7 @@ async function resolveEnumTarget(
   subject: string,
   rawBasis: RawBasis,
   usage: AiSelectionUsage,
-  jev: JevPort | undefined,
+  decisionPort: DecisionPort | undefined,
   decisionModel?: SupportedDecisionModel,
   onTokenUsage?: (usage: {
     inputTokens: number | null;
@@ -364,14 +367,14 @@ async function resolveEnumTarget(
     ? await spec.candidates(db, rawBasis)
     : spec.values;
   if (values.length === 0) return skipped("no_candidates");
-  const result = await classifyWithJev({
+  const result = await classifyWithDecisionModel({
     feature: FIELD_SUGGESTION_FEATURE,
     subject,
     rules: spec.rules,
     values,
     describe: spec.describe,
     usage,
-    port: jev,
+    port: decisionPort,
     decisionModel,
     onTokenUsage,
   });
@@ -412,7 +415,7 @@ async function resolveReferenceTarget(
   rawBasis: RawBasis,
   currentValue: string | null,
   usage: AiSelectionUsage,
-  jev: JevPort | undefined,
+  decisionPort: DecisionPort | undefined,
   decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   const candidates = await spec.roster(db, resolvedBasis, rawBasis);
@@ -427,7 +430,7 @@ async function resolveReferenceTarget(
     subject,
     candidates,
     usage,
-    jev,
+    decisionPort,
     decisionModel,
   });
   if (!outcome.evaluated) return skipped("no_candidates");
@@ -464,7 +467,7 @@ async function resolveReferenceTarget(
       ? currentAncestorIds(candidates, currentValue, spec.idOf, spec.parentIdOf)
       : new Set<string>();
   const suppressed = ancestorIds.has(spec.idOf(selected));
-  // A rolled-up pick keeps Jev's more specific guess as the first runner-up,
+  // A rolled-up pick keeps the decision model's more specific guess as the first runner-up,
   // so the picker still offers it. Ancestors of the current value are not
   // useful offers, whether selected directly, rolled up to, or ranked as an
   // alternative.
@@ -542,7 +545,7 @@ async function resolveTextTarget(
   subject: string,
   resolvedBasis: ResolvedBasis,
   usage: AiSelectionUsage,
-  jev: JevPort | undefined,
+  decisionPort: DecisionPort | undefined,
   decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   const candidates = await spec.roster(db, resolvedBasis);
@@ -557,7 +560,7 @@ async function resolveTextTarget(
     subject,
     candidates,
     usage,
-    jev,
+    decisionPort,
     decisionModel,
   });
   if (!outcome.evaluated) return skipped("no_candidates");
@@ -607,7 +610,7 @@ async function resolveSpec(
   rawBasis: RawBasis,
   currentValue: string | null,
   usage: AiSelectionUsage,
-  jev: JevPort | undefined,
+  decisionPort: DecisionPort | undefined,
   linkedSubject?: string,
   decisionModel?: SupportedDecisionModel,
   onTokenUsage?: (usage: {
@@ -622,7 +625,7 @@ async function resolveSpec(
       resolvedBasis,
       rawBasis,
       usage,
-      jev,
+      decisionPort,
       decisionModel,
     );
   }
@@ -638,7 +641,7 @@ async function resolveSpec(
     rawBasis,
     currentValue,
     usage,
-    jev,
+    decisionPort,
     decisionModel,
     onTokenUsage,
   );
@@ -652,7 +655,7 @@ async function resolveOneTarget(
   rawBasis: RawBasis,
   currentValue: string | null,
   usage: AiSelectionUsage,
-  jev: JevPort | undefined,
+  decisionPort: DecisionPort | undefined,
   decisionModel?: SupportedDecisionModel,
   onTokenUsage?: (usage: {
     inputTokens: number | null;
@@ -666,7 +669,7 @@ async function resolveOneTarget(
       subject,
       rawBasis,
       usage,
-      jev,
+      decisionPort,
       decisionModel,
       onTokenUsage,
     );
@@ -680,7 +683,7 @@ async function resolveOneTarget(
       rawBasis,
       currentValue,
       usage,
-      jev,
+      decisionPort,
       decisionModel,
     );
   }
@@ -690,16 +693,16 @@ async function resolveOneTarget(
     subject,
     resolvedBasis,
     usage,
-    jev,
+    decisionPort,
     decisionModel,
   );
 }
 
-/** A tag's stored removal reason for a Jev-classified (not deterministic)
- * hit — deliberately terser than the Jev choice label below, which is the
+/** A tag's stored removal reason for a decision-model-classified (not deterministic)
+ * hit — deliberately terser than the decision choice label below, which is the
  * full instruction text the model sees. */
-const JEV_TAG_REMOVAL_REASON = "a sibling field";
-/** `runJevChoice`'s two per-tag criteria: index 0 is "redundant", index 1 is
+const DECISION_TAG_REMOVAL_REASON = "a sibling field";
+/** `runDecisionChoice`'s two per-tag criteria: index 0 is "redundant", index 1 is
  * "genuine". A removal only ever acts on index 0; the `evaluated/none`
  * outcome (every entry survived) also reports index 1, the probability the
  * survivor is genuinely worth keeping. */
@@ -707,15 +710,28 @@ const TAG_PRUNE_CHOICES = [
   "Restates the manufacturer, the classification, or a generic category word already recorded elsewhere on the product.",
   "A genuine compatibility or ecosystem token (a battery platform, mount, thread, or size standard) worth keeping.",
 ] as const;
+/** One survivor tag's binary judgment; the Decisions catalog renders it. */
+export function prunePrompt(
+  spec: Extract<FieldSuggestSpec, { kind: "prune" }>,
+  basis: ResolvedBasis,
+  value: string,
+): DecisionChoicePrompt {
+  return {
+    subject: spec.subject(basis, value),
+    rules: spec.rules,
+    choices: [...TAG_PRUNE_CHOICES],
+    allowNone: false,
+  };
+}
 /** A removal needs at least this calibrated probability to surface — the
  * same "high confidence" floor a `set` suggestion auto-applies at. */
 const PRUNE_INCLUDE_THRESHOLD = 0.85;
 
-/** One Jev-judged survivor's P(redundant) and P(genuine), read off the
+/** One decision-model-judged survivor's P(redundant) and P(genuine), read off the
  * ranked distribution (`allowNone: false` keeps both criteria in `ranked`)
  * rather than derived from each other, so a future third criterion can't
  * silently make `1 - p` wrong. */
-function pruneJudgment(result: JevChoiceResult) {
+function pruneJudgment(result: DecisionChoiceResult) {
   const at = (index: number): number =>
     result.ranked.find((entry) => entry.index === index)?.probability ?? 0;
   return { redundant: at(0), genuine: at(1) };
@@ -723,8 +739,8 @@ function pruneJudgment(result: JevChoiceResult) {
 
 /**
  * Resolves a `mode: "prune"` target: every current entry `redundantTokens`
- * already flags (probability 1, no Jev call) plus every surviving entry a
- * per-tag Jev binary call flags at `PRUNE_INCLUDE_THRESHOLD` or above.
+ * already flags (probability 1, no decision call) plus every surviving entry a
+ * per-tag decision binary call flags at `PRUNE_INCLUDE_THRESHOLD` or above.
  * `skipped("no_candidates")` for an empty array; `evaluated/none` when every
  * entry survives (a prune target has nothing left to write to `suggestions`
  * either way, but the two outcomes are asked and unasked respectively).
@@ -735,7 +751,7 @@ async function resolvePruneTarget(
   resolvedBasis: ResolvedBasis,
   rawBasis: RawBasis,
   usage: AiSelectionUsage,
-  jev: JevPort | undefined,
+  decisionPort: DecisionPort | undefined,
   decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   const candidates = spec.candidates(resolvedBasis, rawBasis);
@@ -753,17 +769,14 @@ async function resolvePruneTarget(
 
   const survivors = candidates
     .filter((value) => !deterministicValues.has(value))
-    .slice(0, spec.maxJevCandidates);
+    .slice(0, spec.maxDecisionCandidates);
   const judged: { value: string; redundant: number; genuine: number }[] = [];
   for (const value of survivors) {
-    const result = await runJevChoice({
+    const result = await runDecisionChoice({
       feature: FIELD_SUGGESTION_FEATURE,
-      subject: spec.subject(resolvedBasis, value),
-      rules: spec.rules,
-      choices: [...TAG_PRUNE_CHOICES],
+      ...prunePrompt(spec, resolvedBasis, value),
       usage,
-      allowNone: false,
-      port: jev,
+      port: decisionPort,
       decisionModel,
     });
     const { redundant, genuine } = pruneJudgment(result);
@@ -775,7 +788,7 @@ async function resolvePruneTarget(
       removals.push({
         value,
         probability: result.probability,
-        reason: `restates ${JEV_TAG_REMOVAL_REASON}`,
+        reason: `restates ${DECISION_TAG_REMOVAL_REASON}`,
       });
     }
   }
@@ -991,7 +1004,7 @@ export async function suggestFields(
   const model =
     entityFieldModels[input.entity as keyof typeof entityFieldModels];
 
-  // Production calls have no injected ports. Tests inject their Jev/database
+  // Production calls have no injected ports. Tests inject their the decision model/database
   // seams and deliberately exercise suggestion mechanics in isolation.
   const fieldResolutions = ports?.resolveInheritance
     ? await ports.resolveInheritance(db, input)
@@ -1134,7 +1147,7 @@ export async function suggestFields(
           basisValueLimitFor(input.entity, target),
         ),
         usage,
-        ports?.jev,
+        ports?.decisionPort,
         linkedContext?.subject,
         ports?.decisionModel,
         ports?.onTokenUsage,

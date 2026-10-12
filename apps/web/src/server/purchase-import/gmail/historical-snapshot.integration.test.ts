@@ -5,7 +5,7 @@ import { asc, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import * as choices from "~/server/ai/jev";
+import * as choices from "~/server/ai/decision-model";
 import { emailClassificationObservation } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -48,7 +48,7 @@ describe("historical Gmail prediction preservation", () => {
     vi.spyOn(models, "selectDecisionModel").mockReturnValue(
       "@cf/cloudflare/clef",
     );
-    vi.spyOn(choices, "runJevChoice").mockResolvedValue({
+    vi.spyOn(choices, "runDecisionChoice").mockResolvedValue({
       selectedIndex: 1,
       confidence: "high",
       probability: 0.95,
@@ -102,7 +102,7 @@ describe("historical Gmail prediction preservation", () => {
     });
     expect(rows[1]).toMatchObject({
       classification: "unrelated",
-      stage: "jev",
+      stage: "decision",
       model: "@cf/cloudflare/clef",
       operation: "mailbox-triage",
     });

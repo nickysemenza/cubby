@@ -40,7 +40,7 @@ describe("paced batch Runs", () => {
 
 import { makeSweepSuggestion } from "./suggestion-sweep";
 
-const jev = "typesafe/jev" as const;
+const decisionPort = "typesafe/jev" as const;
 const clef = "@cf/cloudflare/clef" as const;
 describe("sweep decision policy", () => {
   it("queues Corrections at any confidence and applies only high-confidence Additions from the pinned model", () => {
@@ -48,24 +48,24 @@ describe("sweep decision policy", () => {
       makeSweepSuggestion({
         currentValue: "wrong",
         decision: { value: "right", confidence: 0.99 },
-        model: jev,
-        pinnedModel: jev,
+        model: decisionPort,
+        pinnedModel: decisionPort,
       })?.status,
     ).toBe("pending");
     expect(
       makeSweepSuggestion({
         currentValue: null,
         decision: { value: "new", confidence: 0.85 },
-        model: jev,
-        pinnedModel: jev,
+        model: decisionPort,
+        pinnedModel: decisionPort,
       })?.status,
     ).toBe("applied");
     expect(
       makeSweepSuggestion({
         currentValue: "",
         decision: { value: "new", confidence: 0.6 },
-        model: jev,
-        pinnedModel: jev,
+        model: decisionPort,
+        pinnedModel: decisionPort,
       })?.status,
     ).toBe("pending");
   });
@@ -75,15 +75,15 @@ describe("sweep decision policy", () => {
     const pinned = makeSweepSuggestion({
       currentValue: null,
       decision: { value: "new", confidence: 0.9 },
-      model: jev,
-      pinnedModel: jev,
+      model: decisionPort,
+      pinnedModel: decisionPort,
       pairKey,
     });
     const paired = makeSweepSuggestion({
       currentValue: null,
       decision: { value: "other", confidence: 0.99 },
       model: clef,
-      pinnedModel: jev,
+      pinnedModel: decisionPort,
       pairKey,
     });
     expect([pinned?.pairKey, paired?.pairKey]).toEqual([pairKey, pairKey]);

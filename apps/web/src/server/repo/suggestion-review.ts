@@ -1,12 +1,19 @@
 import {
   fieldSuggestionsInput,
   financeCategoryApplyInput,
+  suggestionCountsInput,
+  suggestionCountsOut,
+  suggestionReviewBatchInput,
+  suggestionReviewListInput,
+  suggestionStatus,
+  type SuggestionReviewBatchOut,
 } from "@cubby/schemas/ai";
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
+import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { getErrorMessage } from "@cubby/shared";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -28,12 +35,9 @@ import {
 } from "~/server/repo/shortcode-resolver";
 
 const rowIdInput = z.object({ id: z.string().uuid() });
-const filtersSchema = z.object({
-  entity: fieldSuggestionsInput.shape.entity.optional(),
-  field: z.string().optional(),
-  kind: z.enum(["correction", "addition"]).optional(),
-  minConfidence: z.number().min(0).max(1).default(0.5),
-  runId: z.string().uuid().optional(),
+const filtersSchema = suggestionReviewListInput.omit({
+  recordIds: true,
+  fields: true,
 });
 const jsonSchema = z.json();
 const pageSuggestionsInput = z.object({
@@ -51,44 +55,71 @@ const suggestionRowSchema = z.object({
   currentValue: jsonSchema.nullable(),
   suggestedValue: jsonSchema,
   confidence: z.number(),
+  runnerUpValue: jsonSchema.nullable(),
+  runnerUpConfidence: z.number().nullable(),
   model: z.string(),
   kind: z.enum(["correction", "addition"]),
-  status: z.enum(["pending", "applied", "rejected"]),
+  status: suggestionStatus,
   correctValue: jsonSchema.nullable(),
   pairKey: z.string().uuid().nullable(),
+  createdAt: z.date().transform((value) => value.toISOString()),
 });
 
-export async function listPendingSuggestions(
+const runDecisionModel = (runInput: unknown) =>
+  z
+    .object({ decisionModel: z.string().optional() })
+    .passthrough()
+    .safeParse(runInput).data?.decisionModel;
+
+/** A paired trial row is reviewable only when it is the model its Run
+ * served; public rows name their Run by shortcode. */
+function reviewableRow(
+  suggestion: typeof suggestionTable.$inferSelect,
+  runInput: unknown,
+  runCode: string,
+) {
+  return !suggestion.pairKey || runDecisionModel(runInput) === suggestion.model
+    ? [{ ...suggestionRowSchema.parse(suggestion), runId: runCode }]
+    : [];
+}
+
+/** Paired trial rows count only for the model their Run served (the
+ * `reviewableRow` rule in SQL). */
+export const reviewableSuggestionSql = sql`(${suggestionTable.pairKey} IS NULL OR ${suggestionTable.model} = ${runTable.input}->>'decisionModel')`;
+
+/** Pending review queue, or reviewed history by `status` (the label set a
+ * decision eval replays). Paired evaluation candidates never appear. */
+export async function listSuggestions(
   db: Database,
   rawInput: z.input<typeof filtersSchema> = {},
 ) {
   const input = filtersSchema.parse(rawInput);
   const conditions = [
-    eq(suggestionTable.status, "pending"),
+    eq(suggestionTable.status, input.status),
     gte(suggestionTable.confidence, input.minConfidence),
   ];
   if (input.entity) conditions.push(eq(suggestionTable.entity, input.entity));
   if (input.field) conditions.push(eq(suggestionTable.field, input.field));
   if (input.kind) conditions.push(eq(suggestionTable.kind, input.kind));
-  if (input.runId)
-    conditions.push(
-      eq(suggestionTable.runId, parseEntityId("run", input.runId)),
-    );
+  if (input.runId) conditions.push(eq(runTable.shortcode, input.runId));
   const rows = await getDb(db)
-    .select({ suggestion: suggestionTable, runInput: runTable.input })
+    .select({
+      suggestion: suggestionTable,
+      runInput: runTable.input,
+      runCode: runTable.shortcode,
+    })
     .from(suggestionTable)
     .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(and(...conditions))
-    .orderBy(desc(suggestionTable.confidence));
-  const reviewable = rows.flatMap(({ suggestion, runInput }) => {
-    const decisionModel = z
-      .object({ decisionModel: z.string().optional() })
-      .passthrough()
-      .safeParse(runInput).data?.decisionModel;
-    return !suggestion.pairKey || decisionModel === suggestion.model
-      ? [suggestionRowSchema.parse(suggestion)]
-      : [];
-  });
+    .orderBy(
+      input.status === "pending"
+        ? desc(suggestionTable.confidence)
+        : desc(suggestionTable.updatedAt),
+    )
+    .limit(input.limit);
+  const reviewable = rows.flatMap(({ suggestion, runInput, runCode }) =>
+    reviewableRow(suggestion, runInput, runCode),
+  );
   // Stored rows key records by uuid; the public queue names them by shortcode.
   const refs = reviewable.map((row) =>
     parseEntityRef(row.entity, row.recordId),
@@ -121,7 +152,11 @@ export async function listPagePendingSuggestions(
   const recordUuids = [...new Set(uuidByPublicId.values())];
   if (recordUuids.length === 0) return [];
   const rows = await getDb(db)
-    .select({ suggestion: suggestionTable, runInput: runTable.input })
+    .select({
+      suggestion: suggestionTable,
+      runInput: runTable.input,
+      runCode: runTable.shortcode,
+    })
     .from(suggestionTable)
     .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(
@@ -132,22 +167,45 @@ export async function listPagePendingSuggestions(
         inArray(suggestionTable.field, input.fields),
       ),
     );
-  return rows.flatMap(({ suggestion, runInput }) => {
-    const decisionModel = z
-      .object({ decisionModel: z.string().optional() })
-      .passthrough()
-      .safeParse(runInput).data?.decisionModel;
+  return rows.flatMap(({ suggestion, runInput, runCode }) => {
     const publicRecordId = publicIdByUuid.get(suggestion.recordId);
-    return (!suggestion.pairKey || decisionModel === suggestion.model) &&
-      publicRecordId
-      ? [
-          {
-            ...suggestionRowSchema.parse(suggestion),
-            recordId: publicRecordId,
-          },
-        ]
+    return publicRecordId
+      ? reviewableRow(suggestion, runInput, runCode).map((row) => ({
+          ...row,
+          recordId: publicRecordId,
+        }))
       : [];
   });
+}
+
+/** Outcome counts per (entity, field), optionally for one Run. */
+export async function suggestionCounts(
+  db: Database,
+  input: z.input<typeof suggestionCountsInput> = {},
+) {
+  const { runId } = suggestionCountsInput.parse(input);
+  const count = (status: z.infer<typeof suggestionStatus>) =>
+    sql<number>`count(*) FILTER (WHERE ${suggestionTable.status} = ${status})::int`;
+  const rows = await getDb(db)
+    .select({
+      entity: suggestionTable.entity,
+      field: suggestionTable.field,
+      pending: count(suggestionStatus.enum.pending),
+      applied: count(suggestionStatus.enum.applied),
+      rejected: count(suggestionStatus.enum.rejected),
+      superseded: count(suggestionStatus.enum.superseded),
+    })
+    .from(suggestionTable)
+    .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
+    .where(
+      and(
+        reviewableSuggestionSql,
+        runId ? eq(runTable.shortcode, runId) : undefined,
+      ),
+    )
+    .groupBy(suggestionTable.entity, suggestionTable.field)
+    .orderBy(suggestionTable.entity, suggestionTable.field);
+  return suggestionCountsOut.parse(rows);
 }
 
 export async function applySuggestionValue(
@@ -249,10 +307,35 @@ export async function acceptSuggestions(
   context: EntityKernelContext,
   input: { ids: string[] },
 ) {
-  const ids = z.array(z.string().uuid()).min(1).parse(input.ids);
-  const results = [];
-  for (const id of ids)
-    results.push(await acceptSuggestion(db, context, { id }));
+  return settleEach(input, (id) => acceptSuggestion(db, context, { id }));
+}
+
+/** Rejects each pending id as a Miss with no correction. */
+export async function rejectSuggestions(
+  db: Database,
+  context: EntityKernelContext,
+  input: { ids: string[] },
+) {
+  return settleEach(input, (id) => rejectSuggestion(db, context, { id }));
+}
+
+/** Sequential on purpose: accepting one Suggestion can supersede a sibling
+ * later in the batch, which then reports its own failure. */
+async function settleEach(
+  input: { ids: string[] },
+  settle: (
+    id: string,
+  ) => Promise<{ id: string; status: "applied" | "rejected" }>,
+): Promise<SuggestionReviewBatchOut> {
+  const { ids } = suggestionReviewBatchInput.parse(input);
+  const results: SuggestionReviewBatchOut = [];
+  for (const id of ids) {
+    try {
+      results.push({ ...(await settle(id)), ok: true });
+    } catch (error) {
+      results.push({ id, ok: false, error: getErrorMessage(error) });
+    }
+  }
   return results;
 }
 

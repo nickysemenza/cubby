@@ -13,7 +13,7 @@ import { loadFinanceSuggestionContext } from "~/server/repo/finance-suggestion-c
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   listPagePendingSuggestions,
-  listPendingSuggestions,
+  listSuggestions,
 } from "~/server/repo/suggestion-review";
 
 import { pauseSuggestionSweep } from "./suggestion-sweep";
@@ -27,6 +27,7 @@ import {
   noProposal,
   productCategoryId,
   productFixture,
+  runCode,
   resumeSuggestionSweep,
   runSuggestions,
   startSuggestionSweep,
@@ -208,8 +209,8 @@ describe("persisted Suggestion sweeps", () => {
       "superseded",
     );
     expect(
-      await listPendingSuggestions(ctx.db, {
-        runId: started.id,
+      await listSuggestions(ctx.db, {
+        runId: await runCode(ctx.db, started.id),
         minConfidence: 0,
       }),
     ).toHaveLength(0);

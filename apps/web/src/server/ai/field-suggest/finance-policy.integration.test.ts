@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import type { JevPort } from "~/server/ai/jev";
+import type { DecisionPort } from "~/server/ai/decision-model";
 import { spendingCategory, vendor } from "~/server/db/schema";
 import {
   entityKernelContextSchema,
@@ -21,7 +21,7 @@ import { suggestFields } from "./suggest-fields";
 // proposals overwriting explicit decisions before a separate reviewed update.
 // Only the external model response is supplied; roster/read/write paths are real.
 function modelPicking(...needles: string[]) {
-  return vi.fn<JevPort>(async (input) => {
+  return vi.fn<DecisionPort>(async (input) => {
     const entries = Object.entries(input.questions.selection.criteria);
     const winner = entries.find(([, label]) =>
       needles.some((needle) => label.includes(needle)),
@@ -47,9 +47,12 @@ function modelPicking(...needles: string[]) {
 
 describe("reviewed finance suggestions", () => {
   const ctx = withTestDb();
-  async function suggest(input: FieldSuggestionsInput, jev: JevPort) {
+  async function suggest(
+    input: FieldSuggestionsInput,
+    decisionPort: DecisionPort,
+  ) {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
-    return suggestFields(ctx.db, runId, input, { jev });
+    return suggestFields(ctx.db, runId, input, { decisionPort });
   }
 
   it.each(["purchase", "expense"] as const)(
@@ -73,7 +76,7 @@ describe("reviewed finance suggestions", () => {
         productExpectation: "unknown",
       });
       const before = await getDb(ctx.db).select().from(spendingCategory);
-      const jev = modelPicking(child.shortcode);
+      const decisionPort = modelPicking(child.shortcode);
       const result = await suggest(
         {
           entity,
@@ -88,13 +91,13 @@ describe("reviewed finance suggestions", () => {
             vendor: "Fixture restaurant",
           },
         },
-        jev,
+        decisionPort,
       );
       expect(result.suggestions.spendingCategoryId).toMatchObject({
         value: child.shortcode,
         operation: "set",
       });
-      const request = jev.mock.calls[0]![0];
+      const request = decisionPort.mock.calls[0]![0];
       expect(request.state).toContain("Restaurants");
       const roster = Object.values(request.questions.selection.criteria).join(
         "\n",
@@ -224,7 +227,7 @@ describe("reviewed finance suggestions", () => {
       evidenceExpectation: "unknown",
       productExpectation: "unknown",
     });
-    const jev = modelPicking("invented");
+    const decisionPort = modelPicking("invented");
     const result = await suggest(
       {
         entity: "purchase",
@@ -232,14 +235,14 @@ describe("reviewed finance suggestions", () => {
         targets: ["spendingCategoryId"],
         basis: { displayLabel: "Fixture dinner", notes: "Restaurant meal" },
       },
-      jev,
+      decisionPort,
     );
     expect(result.suggestions.spendingCategoryId).toBeNull();
     expect(result.outcomes?.spendingCategoryId).toEqual({
       kind: "skipped",
       reason: "no_candidates",
     });
-    expect(jev).not.toHaveBeenCalled();
+    expect(decisionPort).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -281,7 +284,7 @@ describe("reviewed finance suggestions", () => {
         name: "Home Depot",
         evidenceExpectation: "not_expected",
       });
-      const jev = modelPicking("required:");
+      const decisionPort = modelPicking("required:");
       const result = await suggest(
         {
           entity,
@@ -294,10 +297,10 @@ describe("reviewed finance suggestions", () => {
             notes: "Fixture hardware purchase",
           },
         },
-        jev,
+        decisionPort,
       );
       expect(result.suggestions.evidenceExpectation?.value).toBe("required");
-      expect(jev.mock.calls[0]![0].state).toContain("Home Depot");
+      expect(decisionPort.mock.calls[0]![0].state).toContain("Home Depot");
       expect(
         (
           await getDb(ctx.db).select().from(vendor).where(eq(vendor.id, row.id))

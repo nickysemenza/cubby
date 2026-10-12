@@ -28,6 +28,9 @@ import {
   suggestionReviewListInput,
   suggestionReviewListOut,
   suggestionReviewRejectInput,
+  suggestionCountsInput,
+  suggestionCountsOut,
+  decisionCatalogOut,
   suggestionSweepControlInput,
   suggestionSweepStartInput,
   suggestionSweepStartOut,
@@ -178,6 +181,30 @@ export const aiContract = defineContract("ai", {
     input: suggestionReviewRejectInput,
     output: suggestionReviewActionOut,
     invalidates: ["product", "expense", "purchase", "vendor"],
+  }),
+  rejectSuggestions: mutation({
+    input: suggestionReviewBatchInput,
+    output: suggestionReviewBatchOut,
+    invalidates: ["product", "expense", "purchase", "vendor"],
+  }),
+  suggestionCounts: query({
+    mcp: {
+      omit: "client_view",
+      note: "Review and Run counts; agents read rows through suggestion_queue",
+    },
+    input: suggestionCountsInput,
+    output: suggestionCountsOut,
+    readPolicy: "strong",
+    cache: { profile: "stable" },
+  }),
+  decisionCatalog: query({
+    mcp: {
+      omit: "client_view",
+      note: "The /ai Decisions tab; agents replay decisions through suggest_fields",
+    },
+    input: zod.undefined(),
+    output: decisionCatalogOut,
+    cache: { profile: "stable" },
   }),
   recordFieldSuggestionMiss: mutation({
     input: fieldSuggestionMissInput,

@@ -298,7 +298,7 @@ export function BulkEditDialogBody({
     }
   };
 
-  // Multi-row basis is ambiguous (which row's `name`/`vendor`/... would Jev
+  // Multi-row basis is ambiguous (which row's `name`/`vendor`/... would the decision model
   // read?) — suggestions are offered only when exactly one row is staged, and
   // the basis is a fixed snapshot of that row rather than a live RHF watch
   // (bulk edit's fields start untouched, not tied to any one row's value).

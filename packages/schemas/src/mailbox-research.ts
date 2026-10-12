@@ -1,3 +1,4 @@
+import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 import {
   emailShortcode,
@@ -17,10 +18,10 @@ export const mailboxClassification = z.enum([
   "uncertain",
 ]);
 export type MailboxClassification = z.infer<typeof mailboxClassification>;
-/** Which step decided a classification: a deterministic rule, Jev, the relevance model, or an Email resolution. */
+/** Which step decided a classification: a deterministic rule, the decision model (Jev or Clef), the relevance model, or an Email resolution. */
 export const mailboxClassificationStage = z.enum([
   "rule",
-  "jev",
+  "decision",
   "model",
   "resolution",
 ]);
@@ -34,8 +35,8 @@ export const MAILBOX_CLASSIFICATION_LABEL = {
 } as const satisfies Record<MailboxClassification, string>;
 export const MAILBOX_CLASSIFICATION_STAGE_LABEL = {
   rule: "Rule",
-  jev: "Jev",
-  model: "Model",
+  decision: "Decision model",
+  model: "Relevance model",
   resolution: "Member resolution",
 } as const satisfies Record<MailboxClassificationStage, string>;
 /** The Email list cell: Relevance and the stage that decided it. */
@@ -176,6 +177,53 @@ export const mailMessageRef = z.object({
   messageId: z.string().trim().min(1).max(200),
 });
 export type MailMessageRef = z.infer<typeof mailMessageRef>;
+
+/**
+ * Why Mail triage's bounded view cannot prove a message unrelated; any one
+ * turns the decision model's `unrelated` into `uncertain`.
+ */
+export const mailTriageIncompleteReason = z.enum([
+  /** An amount, order/invoice number or receipt phrase fell outside the view. */
+  "purchase_cue_clipped",
+  "attachments",
+  /** Images carry the content and no readable text accompanies them. */
+  "image_only",
+  /** A cue-bearing link or image, or a structured-data block, was clipped. */
+  "links_clipped",
+  "images_clipped",
+  "structured_data_clipped",
+  /** The HTML compactor hit its own text bound. */
+  "compactor_truncated",
+  /** The normalizer keeps one text and one HTML body; this message had more. */
+  "mime_parts_dropped",
+  "headers_clipped",
+]);
+export type MailTriageIncompleteReason = z.infer<
+  typeof mailTriageIncompleteReason
+>;
+
+export const mailTriagePreviewInput = mailMessageRef.extend({
+  /** Pins the decision model; omitted samples the live traffic split. */
+  decisionModel: supportedDecisionModelSchema.optional(),
+});
+export type MailTriagePreviewInput = z.infer<typeof mailTriagePreviewInput>;
+
+export const mailTriagePreviewOut = z.object({
+  classification: mailboxClassification,
+  stage: mailboxClassificationStage,
+  reason: z.string(),
+  /** The decision model asked, or null when a rule decided before the decision model. */
+  model: supportedDecisionModelSchema.nullable(),
+  /** Null when the original had no readable body and no view was built. */
+  view: z
+    .object({
+      bytes: z.number().int().nonnegative(),
+      complete: z.boolean(),
+      incompleteReasons: z.array(mailTriageIncompleteReason),
+    })
+    .nullable(),
+});
+export type MailTriagePreviewOut = z.infer<typeof mailTriagePreviewOut>;
 
 export const mailReadInput = mailMessageRef.extend({
   attachmentId: z

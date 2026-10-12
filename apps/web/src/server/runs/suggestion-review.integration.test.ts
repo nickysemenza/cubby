@@ -18,10 +18,13 @@ import { loadFinanceSuggestionContext } from "~/server/repo/finance-suggestion-c
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   acceptSuggestion,
+  acceptSuggestions,
   listPagePendingSuggestions,
-  listPendingSuggestions,
+  listSuggestions,
   recordFieldSuggestionMiss,
   rejectSuggestion,
+  rejectSuggestions,
+  suggestionCounts,
 } from "~/server/repo/suggestion-review";
 import { loadVendorSuggestionContext } from "~/server/repo/vendor-suggestion-context";
 
@@ -36,6 +39,7 @@ import {
   productCategoryId,
   productFixture,
   recordId,
+  runCode,
   runSuggestions,
   startSuggestionSweep,
   suggestion,
@@ -68,8 +72,8 @@ describe("Suggestion review", () => {
       categoryId: taxonomyId("tools"),
     });
     const runId = await sweepCategories([product.id]);
-    const [row] = await listPendingSuggestions(ctx.db, {
-      runId,
+    const [row] = await listSuggestions(ctx.db, {
+      runId: await runCode(ctx.db, runId),
       minConfidence: 0,
     });
     if (!row) throw new Error("Synthetic Suggestion was not persisted");
@@ -127,8 +131,8 @@ describe("Suggestion review", () => {
       categoryId: taxonomyId("tools"),
     });
     const runId = await sweepCategories([dismissed.id, corrected.id]);
-    const pending = await listPendingSuggestions(ctx.db, {
-      runId,
+    const pending = await listSuggestions(ctx.db, {
+      runId: await runCode(ctx.db, runId),
       minConfidence: 0,
     });
     expect(pending).toHaveLength(2);
@@ -165,8 +169,20 @@ describe("Suggestion review", () => {
       taxonomyId("household"),
     );
     expect(
-      await listPendingSuggestions(ctx.db, { runId, minConfidence: 0 }),
+      await listSuggestions(ctx.db, {
+        runId: await runCode(ctx.db, runId),
+        minConfidence: 0,
+      }),
     ).toHaveLength(0);
+    // Reviewed history is the decision-eval label set read over MCP.
+    const history = await listSuggestions(ctx.db, {
+      runId: await runCode(ctx.db, runId),
+      minConfidence: 0,
+      status: "rejected",
+    });
+    expect(history.map(({ correctValue }) => correctValue).sort()).toEqual(
+      [null, taxonomyShortcode("household")].sort(),
+    );
     expect(
       await listPagePendingSuggestions(ctx.db, {
         entity: "product",
@@ -174,6 +190,53 @@ describe("Suggestion review", () => {
         fields: ["categoryId"],
       }),
     ).toHaveLength(0);
+  });
+
+  it("settles batch accept and reject per id, reporting a settled id's failure without rolling back the rest", async () => {
+    const context = kernelCtx(ctx);
+    const accepted = await productFixture(ctx, "Synthetic batch accepted", {
+      categoryId: taxonomyId("tools"),
+    });
+    const rejected = await productFixture(ctx, "Synthetic batch rejected", {
+      categoryId: taxonomyId("tools"),
+    });
+    const runId = await sweepCategories([accepted.id, rejected.id]);
+    const code = await runCode(ctx.db, runId);
+    const pending = await listSuggestions(ctx.db, {
+      runId: code,
+      minConfidence: 0,
+    });
+    const idFor = (recordId: string) =>
+      pending.find((row) => row.recordId === recordId)?.id ?? "";
+    const accept = await acceptSuggestions(ctx.db, context, {
+      ids: [idFor(accepted.id)],
+    });
+    expect(accept).toEqual([
+      { id: idFor(accepted.id), ok: true, status: "applied" },
+    ]);
+    // The already-applied id fails on its own; the pending one still rejects.
+    const reject = await rejectSuggestions(ctx.db, context, {
+      ids: [idFor(accepted.id), idFor(rejected.id)],
+    });
+    expect(reject).toEqual([
+      expect.objectContaining({ id: idFor(accepted.id), ok: false }),
+      { id: idFor(rejected.id), ok: true, status: "rejected" },
+    ]);
+    expect(await productCategoryId(ctx.db, accepted.id)).toBe(
+      taxonomyId(SUGGESTED_CATEGORY),
+    );
+    expect(await productCategoryId(ctx.db, rejected.id)).toBe(
+      taxonomyId("tools"),
+    );
+    expect(await suggestionCounts(ctx.db, { runId: code })).toEqual([
+      expect.objectContaining({
+        entity: "product",
+        field: "categoryId",
+        pending: 0,
+        applied: 1,
+        rejected: 1,
+      }),
+    ]);
   });
 
   it("records a per-record dismissal as a Miss on its ai_suggest Run", async () => {
@@ -238,8 +301,8 @@ describe("Suggestion review", () => {
       },
       { context, suggest },
     );
-    const [row] = await listPendingSuggestions(ctx.db, {
-      runId: started.id,
+    const [row] = await listSuggestions(ctx.db, {
+      runId: await runCode(ctx.db, started.id),
       minConfidence: 0,
     });
     if (!row) throw new Error("Synthetic finance suggestion was not persisted");
@@ -313,8 +376,8 @@ describe("Suggestion review", () => {
     expect(await vendorCategory(autoVendor.id)).toBe(category.id);
     expect(await vendorCategory(reviewedVendor.id)).toBeNull();
 
-    const pending = await listPendingSuggestions(ctx.db, {
-      runId: started.id,
+    const pending = await listSuggestions(ctx.db, {
+      runId: await runCode(ctx.db, started.id),
       minConfidence: 0,
     });
     expect(pending).toEqual([

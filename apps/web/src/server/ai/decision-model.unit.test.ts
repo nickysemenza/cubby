@@ -1,13 +1,13 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FIELD_SUGGESTION_FEATURE } from "./features";
 import {
-  JEV_MAX_CANDIDATES,
-  type JevChoiceResponse,
-  type JevPort,
-  runJevChoice,
-} from "./jev";
+  DECISION_MAX_CANDIDATES,
+  type DecisionChoiceResponse,
+  type DecisionPort,
+  runDecisionChoice,
+} from "./decision-model";
+import { FIELD_SUGGESTION_FEATURE } from "./features";
 
 const base = {
   feature: { ...FIELD_SUGGESTION_FEATURE, cache: false },
@@ -23,7 +23,7 @@ const base = {
 function answerFor(
   choice: string,
   probabilities: Record<string, number>,
-): JevChoiceResponse {
+): DecisionChoiceResponse {
   return {
     answers: {
       selection: { type: "choice", choice, confidence: 0.7, probabilities },
@@ -36,8 +36,13 @@ function sentModel(init: RequestInit | undefined): string {
   return JSON.parse(String(init?.body)).model;
 }
 
-function jevFor(choice: string, probabilities: Record<string, number>) {
-  const port: JevPort = vi.fn(async () => answerFor(choice, probabilities));
+function decisionPortFor(
+  choice: string,
+  probabilities: Record<string, number>,
+) {
+  const port: DecisionPort = vi.fn(async () =>
+    answerFor(choice, probabilities),
+  );
   return port;
 }
 
@@ -53,7 +58,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe("runJevChoice", () => {
+describe("runDecisionChoice", () => {
   it.each(["2", "Tue, 01 Sep 2026 00:00:02 GMT"])(
     "recovers after Retry-After %s without changing the choice request",
     async (retryAfter) => {
@@ -61,7 +66,7 @@ describe("runJevChoice", () => {
       vi.setSystemTime(new Date("2026-09-01T00:00:00Z"));
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
       vi.resetModules();
-      const { runJevChoice: request } = await import("./jev");
+      const { runDecisionChoice: request } = await import("./decision-model");
       const fetch = vi
         .fn()
         .mockResolvedValueOnce(
@@ -95,11 +100,11 @@ describe("runJevChoice", () => {
     },
   );
 
-  it("keeps a declared routing model pinned when trial sampling would choose Clef", async () => {
+  it("keeps a caller-pinned model and omits payload logging when trial sampling would choose Clef", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     vi.spyOn(Math, "random").mockReturnValue(0.75);
     vi.resetModules();
-    const { runJevChoice: route } = await import("./jev");
+    const { runDecisionChoice: route } = await import("./decision-model");
     const sent: RequestInit[] = [];
     vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
       sent.push(init);
@@ -114,7 +119,8 @@ describe("runJevChoice", () => {
     });
     await route({
       ...base,
-      feature: { ...base.feature, sample: false, collectPayload: false },
+      feature: { ...base.feature, collectPayload: false },
+      decisionModel: "typesafe/jev",
       choices: ["purchase-related"],
     });
     expect(sentModel(sent[0])).toBe("typesafe/jev");
@@ -135,7 +141,7 @@ describe("runJevChoice", () => {
       vi.useFakeTimers();
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
       vi.resetModules();
-      const { runJevChoice: request } = await import("./jev");
+      const { runDecisionChoice: request } = await import("./decision-model");
       const fetch = vi.fn(
         async () =>
           new Response("Provider unavailable", {
@@ -159,20 +165,20 @@ describe("runJevChoice", () => {
   it("preserves the complete provider rejection body", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     vi.resetModules();
-    const { runJevChoice: request } = await import("./jev");
+    const { runDecisionChoice: request } = await import("./decision-model");
     const body = "synthetic provider diagnostic ".repeat(20);
     vi.stubGlobal("fetch", async () => new Response(body, { status: 401 }));
     await expect(request({ ...base, choices: ["one"] })).rejects.toThrow(body);
   });
 
   // Regression: the gateway-scoped `/ai/run` (REST, and the binding's
-  // `AI.run` with `gateway.id`) wraps Jev's answer in a completed-run layer
+  // `AI.run` with `gateway.id`) wraps the decision model's answer in a completed-run layer
   // the old `/workers-ai/run/<model>` route did not; an unrecognized wrapper
   // failed every decision as "invalid choice response".
   it("unwraps the gateway run route's completed-run envelope", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     vi.resetModules();
-    const { runJevChoice: request } = await import("./jev");
+    const { runDecisionChoice: request } = await import("./decision-model");
     vi.stubGlobal(
       "fetch",
       async () =>
@@ -202,7 +208,7 @@ describe("runJevChoice", () => {
   it("asks the gateway to skip its cache for an uncacheable decision", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     vi.resetModules();
-    const { runJevChoice: request } = await import("./jev");
+    const { runDecisionChoice: request } = await import("./decision-model");
     const fetch = vi.fn(
       async (_url: string, _init?: RequestInit) =>
         new Response(
@@ -218,7 +224,7 @@ describe("runJevChoice", () => {
   it("surfaces an unfinished run's state and errors instead of a generic parse failure", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     vi.resetModules();
-    const { runJevChoice: request } = await import("./jev");
+    const { runDecisionChoice: request } = await import("./decision-model");
     vi.stubGlobal(
       "fetch",
       async () =>
@@ -240,7 +246,7 @@ describe("runJevChoice", () => {
     vi.useFakeTimers();
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     vi.resetModules();
-    const { runJevChoice: request } = await import("./jev");
+    const { runDecisionChoice: request } = await import("./decision-model");
     const fetch = vi.fn(
       (_url: string, init: RequestInit) =>
         new Promise((_resolve, reject) => {
@@ -264,23 +270,23 @@ describe("runJevChoice", () => {
 
   it("throws on a roster beyond the choice limit instead of truncating it", async () => {
     const choices = Array.from(
-      { length: JEV_MAX_CANDIDATES + 1 },
+      { length: DECISION_MAX_CANDIDATES + 1 },
       (_, i) => `candidate-${i}`,
     );
-    const port: JevPort = vi.fn();
+    const port: DecisionPort = vi.fn();
 
-    await expect(runJevChoice({ ...base, choices, port })).rejects.toThrow(
+    await expect(runDecisionChoice({ ...base, choices, port })).rejects.toThrow(
       /at most 254/,
     );
     expect(port).not.toHaveBeenCalled();
   });
 
   it("bounds the input by UTF-8 bytes, not characters", async () => {
-    const port: JevPort = vi.fn();
+    const port: DecisionPort = vi.fn();
 
     // 10k four-byte emoji is 10k characters but 40k bytes.
     await expect(
-      runJevChoice({
+      runDecisionChoice({
         ...base,
         subject: "🙂".repeat(10_000),
         choices: ["one"],
@@ -291,9 +297,9 @@ describe("runJevChoice", () => {
   });
 
   it("offers none by default and resolves it to a null index with its confidence", async () => {
-    const port = jevFor("none", { c0: 0.2, none: 0.8 });
+    const port = decisionPortFor("none", { c0: 0.2, none: 0.8 });
 
-    const result = await runJevChoice({
+    const result = await runDecisionChoice({
       ...base,
       choices: ["a product"],
       port,
@@ -317,9 +323,9 @@ describe("runJevChoice", () => {
   });
 
   it("omits none for an exhaustive vocabulary and rejects a none answer", async () => {
-    const port = jevFor("c1", { c0: 0.1, c1: 0.9 });
+    const port = decisionPortFor("c1", { c0: 0.1, c1: 0.9 });
 
-    const result = await runJevChoice({
+    const result = await runDecisionChoice({
       ...base,
       choices: ["red", "blue"],
       allowNone: false,
@@ -346,24 +352,24 @@ describe("runJevChoice", () => {
     });
 
     await expect(
-      runJevChoice({
+      runDecisionChoice({
         ...base,
         choices: ["red"],
         allowNone: false,
-        port: jevFor("none", { c0: 0.1, none: 0.9 }),
+        port: decisionPortFor("none", { c0: 0.1, none: 0.9 }),
       }),
     ).rejects.toThrow(/probability key set/);
   });
 
   it("ranks every candidate desc by probability, excluding none", async () => {
-    const port = jevFor("c2", {
+    const port = decisionPortFor("c2", {
       c0: 0.1,
       c1: 0.25,
       c2: 0.5,
       none: 0.15,
     });
 
-    const result = await runJevChoice({
+    const result = await runDecisionChoice({
       ...base,
       choices: ["a", "b", "c"],
       port,
@@ -376,19 +382,19 @@ describe("runJevChoice", () => {
     ]);
   });
 
-  it("throws Jev failures and invalid distributions instead of answering elsewhere", async () => {
-    const failing: JevPort = vi.fn(async () => {
+  it("throws decision failures and invalid distributions instead of answering elsewhere", async () => {
+    const failing: DecisionPort = vi.fn(async () => {
       throw new Error("gateway timeout");
     });
     await expect(
-      runJevChoice({ ...base, choices: ["one"], port: failing }),
+      runDecisionChoice({ ...base, choices: ["one"], port: failing }),
     ).rejects.toThrow("gateway timeout");
 
     await expect(
-      runJevChoice({
+      runDecisionChoice({
         ...base,
         choices: ["one"],
-        port: jevFor("c0", { c0: 0.6, none: 0.1 }),
+        port: decisionPortFor("c0", { c0: 0.6, none: 0.1 }),
       }),
     ).rejects.toThrow("do not normalize");
   });
@@ -403,7 +409,8 @@ describe("runJevChoice", () => {
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
       vi.spyOn(Math, "random").mockReturnValue(random);
       vi.resetModules();
-      const { runJevChoice: devRunJevChoice } = await import("./jev");
+      const { runDecisionChoice: devRunDecisionChoice } =
+        await import("./decision-model");
       const sent: { url: string; init: RequestInit | undefined }[] = [];
       vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
         sent.push({ url: String(url), init });
@@ -421,7 +428,7 @@ describe("runJevChoice", () => {
         );
       });
 
-      const result = await devRunJevChoice({
+      const result = await devRunDecisionChoice({
         ...base,
         subject: "pick red",
         choices: ["red", "blue"],
@@ -458,7 +465,7 @@ describe("runJevChoice", () => {
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
       vi.spyOn(Math, "random").mockReturnValue(0.75);
       vi.resetModules();
-      const { runJevChoice: request } = await import("./jev");
+      const { runDecisionChoice: request } = await import("./decision-model");
       vi.stubGlobal("fetch", async () => Response.json(response));
       await expect(request({ ...base, choices: ["one"] })).rejects.toThrow(
         "Decision model returned an invalid choice response.",
@@ -471,7 +478,7 @@ describe("runJevChoice", () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     const random = vi.spyOn(Math, "random").mockReturnValue(0.75);
     vi.resetModules();
-    const { runJevChoice: request } = await import("./jev");
+    const { runDecisionChoice: request } = await import("./decision-model");
     const sent: string[] = [];
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
       sent.push(sentModel(init));
@@ -494,7 +501,7 @@ describe("runJevChoice", () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     const random = vi.spyOn(Math, "random").mockReturnValue(0.25);
     vi.resetModules();
-    const { runJevChoice: request } = await import("./jev");
+    const { runDecisionChoice: request } = await import("./decision-model");
     const sent: string[] = [];
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
       sent.push(sentModel(init));

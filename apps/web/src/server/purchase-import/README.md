@@ -21,7 +21,7 @@ pending: nothing here starts Product research.
 1. **Discovery** (`gmail/discovery.ts`, the `MAIL_DISCOVERY` Workflow) pages a
    connected mailbox (`-in:spam -in:trash`), freezes each provider page in
    `Run.progress`, and replays it until its page commits. `gmail/ingest.ts`
-   classifies each message (`gmail/triage.ts` rule/Jev, then
+   classifies each message (`gmail/triage.ts` rule/decision model, then
    `gmail/relevance.ts` for uncertain mail) and records the deciding stage and
    reason on `Email`. Related originals become `OrderMail`; unrelated
    mail keeps only its provider identity. Coverage is checkpointed with a

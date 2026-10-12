@@ -22,7 +22,7 @@ const pricing = createAiModelPricing({
   },
   onError: (error) => {
     // Never fail the caller: pricing is telemetry, and an unpriced row is
-    // already a visible state on /ai-usage.
+    // already a visible state on the /ai Usage tab.
     log.error("models.dev pricing catalog unavailable", { error });
   },
 });
