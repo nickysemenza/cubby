@@ -104,6 +104,7 @@ const columns = {
   notes: ledgerTransfer.notes,
   createdAt: ledgerTransfer.createdAt,
   updatedAt: ledgerTransfer.updatedAt,
+  // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- source, reconciliation and note are JSON property names, not vocabulary values.
   sourceClaims: sql<LedgerSourceClaimRow[]>`COALESCE((
     SELECT jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
       'source', c.source,

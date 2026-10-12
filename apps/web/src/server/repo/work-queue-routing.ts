@@ -46,7 +46,7 @@ export const workPurchaseSourceOwners = (id: SQL): SQL => sql`ARRAY(
   WHERE p.id = ${id} AND p."deletedAt" IS NULL
 )`;
 
-export const workPurchaseTenderOwners = (id: SQL): SQL => sql`ARRAY(
+const workPurchaseTenderOwners = (id: SQL): SQL => sql`ARRAY(
   SELECT DISTINCT account."ledgerPartyId"
   FROM "FinancialTransactionAllocation" allocation
   JOIN "FinancialTransaction" transaction ON transaction.id = allocation."transactionId" AND transaction."deletedAt" IS NULL

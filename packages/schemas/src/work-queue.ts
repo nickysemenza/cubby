@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { ledgerPartyShortcode } from "./identifiers";
+import { mcpPaginationFields } from "./pagination";
 import { problemRowSchema } from "./problems";
 
 export const workQueueMemberSchema = z.object({
@@ -54,8 +55,7 @@ export const workQueueRowSchema = problemRowSchema
   );
 
 export const workQueuePageInput = z.object({
-  pageIndex: z.number().int().nonnegative().default(0),
-  pageSize: z.number().int().min(1).max(100).default(25),
+  ...mcpPaginationFields({ defaultPageSize: 25, maxPageSize: 100 }),
   query: z.string().max(500).optional(),
   kind: workQueueKindSchema.optional(),
   source: workQueueSourceSchema.optional(),
