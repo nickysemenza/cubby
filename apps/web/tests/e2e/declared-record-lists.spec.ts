@@ -411,22 +411,26 @@ test("record dates retain their calendar label with present and future context",
     page,
     `/tasks?view=next&q=${encodeURIComponent(prefix)}`,
   );
-  await expect(
-    page.getByRole("row").filter({ hasText: `${prefix} current` }),
-  ).toContainText(currentLabel);
-  await expect(
-    page.getByRole("row").filter({ hasText: `${prefix} future` }),
-  ).toContainText(futureLabel);
-  await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
-  await expect(
-    page.locator('[data-cell-col="dueDate"]').filter({ hasText: "(today)" }),
-  ).toHaveText(currentLabel);
+  // Table cells stack the day over its compact distance; the full calendar
+  // label stays the cell's title in every layout.
   await expect(
     page
-      .locator('[data-cell-col="dueDate"]')
-      .filter({ hasText: "(in a few weeks)" }),
-  ).toHaveText(futureLabel);
-  const futureTaskLabel = page.getByText(futureLabel, { exact: true });
+      .getByRole("row")
+      .filter({ hasText: `${prefix} current` })
+      .getByTitle(currentLabel, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("row")
+      .filter({ hasText: `${prefix} future` })
+      .getByTitle(futureLabel, { exact: true }),
+  ).toBeVisible();
+  await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
+  const dueDates = page.locator('[data-cell-col="dueDate"]');
+  await expect(
+    dueDates.getByTitle(currentLabel, { exact: true }).first(),
+  ).toBeVisible();
+  const futureTaskLabel = dueDates.getByTitle(futureLabel, { exact: true });
   const unclipped = async (label: typeof futureTaskLabel) => {
     await expect(label).toBeVisible();
     expect(
@@ -466,12 +470,11 @@ test("record dates retain their calendar label with present and future context",
     page,
     `/expenses?q=${encodeURIComponent(`${prefix} expense`)}`,
   );
-  await expect(
+  await unclipped(
     page
       .locator('[data-cell-col="date"]')
-      .filter({ hasText: "(in a few weeks)" }),
-  ).toHaveText(futureLabel);
-  await unclipped(page.getByText(futureLabel, { exact: true }));
+      .getByTitle(futureLabel, { exact: true }),
+  );
   await gotoAuthenticatedPage(page, "/projects?view=overview");
   const ongoing = page.getByRole("link", {
     name: `${prefix} ongoing`,
