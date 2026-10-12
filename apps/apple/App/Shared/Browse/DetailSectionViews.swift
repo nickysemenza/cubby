@@ -1092,7 +1092,7 @@ struct EntityJournalSectionView: View {
                 if list.rows.isEmpty { Text("No entries yet.").foregroundStyle(.secondary) }
                 ForEach(list.rows) { row in
                     VStack(alignment: .leading, spacing: 5) {
-                        EntityJournalEntryRow(descriptor: model.target, row: row)
+                        EntityJournalEntryRow(descriptor: model.target, row: row, columns: model.spec.columns)
                         if let evidence = model.connectionEvidence[row.id] {
                             RecordPathView(paths: evidence.paths)
                         }
@@ -1135,6 +1135,7 @@ struct EntityJournalSectionView: View {
 struct EntityJournalEntryRow: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
+    var columns: [String]? = nil
 
     private var images: [URL] {
         row.raw["displayImages"]?.arrayValue?.compactMap { image in
@@ -1148,7 +1149,7 @@ struct EntityJournalEntryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             NavigationLink(value: Route.entityDetail(descriptor.key, id: row.id)) {
-                EntityRowView(key: descriptor.key, row: row)
+                EntityRowView(key: descriptor.key, row: row, columns: columns)
             }
 
             if let note = row.raw["notes"]?.stringValue, !note.isEmpty {

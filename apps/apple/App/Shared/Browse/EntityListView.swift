@@ -857,7 +857,7 @@ struct EntityListView: View {
                 if field.explanation != nil {
                     FieldExplanationLabel(
                         field: field, subject: EntityRef(entity: key, id: row.id),
-                        labelOverride: fact.value, surface: "list", iconOnly: true)
+                        labelOverride: "About \(field.label)", surface: "list")
                 }
             }
         } else if row.pendingFields.contains(field.key) {
@@ -1076,7 +1076,7 @@ struct EntityRowView: View {
             if let field, field.explanation != nil, fact.id != "dataQuality" {
                 FieldExplanationLabel(
                     field: field, subject: EntityRef(entity: key, id: row.id),
-                    labelOverride: "About \(field.label)", surface: "list")
+                    labelOverride: fact.value, surface: "list", iconOnly: true)
             }
         }
         .fixedSize(horizontal: false, vertical: true)

@@ -667,7 +667,7 @@ struct TodayContent: View {
         } rail: {
             Text(task.status == .inProgress ? "In progress" : "Not started")
                 .foregroundStyle(task.status == .inProgress ? FieldGuideTokens.interaction : Color.secondary)
-            if let dueDate = task.dueDate { Text(formattedDueDate(dueDate)).monospacedDigit() }
+            if let dueDate = task.dueDate { Text("Due \(formattedDueDate(dueDate))").monospacedDigit() }
         } supplement: {
             EmptyView()
         }
