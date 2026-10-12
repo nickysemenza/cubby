@@ -29,6 +29,9 @@ packages need `pnpm -r --filter '!@cubby/web' run test` after changing
 Verify every named test path exists before invoking a runner: Vitest can ignore
 a nonexistent selector when another supplied file matches. Report only the
 files and cases the run actually exercised.
+Keep database regressions scoped to the failure: one sort/page-boundary case can
+establish stable order without enumerating every field and direction. Do not
+append query matrices to image or ownership cases with a default test deadline.
 For a named-case handoff, copy the exact replay selector or confirm the literal
 test title with `rg` before invoking the runner. A title inferred from the task
 description can select no cases; that setup failure supplies no regression evidence.

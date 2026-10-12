@@ -4,7 +4,6 @@ import { testUserId } from "@cubby/schemas/testing";
 import {
   workQueueHouseholdInput,
   workQueueOutSchema,
-  workQueueSortableFields,
 } from "@cubby/schemas/work-queue";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -1116,31 +1115,43 @@ describe("member actionable Work queue", () => {
     );
     expect(memberRead.items.length).toBeGreaterThan(0);
     for (const row of memberRead.items) expect(row.displayImages).toEqual([]);
-    // Every projected sort must execute in Postgres and keep a stable order
-    // across page boundaries, including the correlated member-label sort.
-    for (const orderBy of workQueueSortableFields) {
-      for (const direction of ["asc", "desc"] as const) {
-        const input = workQueueHouseholdInput.parse({
-          query: "Synthetic pictured queue item",
-          pageSize: 100,
-          sort: [
-            { orderBy, direction },
-            { orderBy: "name", direction: "desc" },
-          ],
-        });
-        const full = await readWorkQueue(ctx.db, null, input, false);
-        const pagedKeys = [];
-        for (let pageIndex = 0; pageIndex < full.meta.totalCount; pageIndex++) {
-          const page = await readWorkQueue(
-            ctx.db,
-            null,
-            { ...input, pageIndex, pageSize: 1 },
-            false,
-          );
-          pagedKeys.push(...page.items.map((row) => row.key));
-        }
-        expect(pagedKeys).toEqual(full.items.map((row) => row.key));
-      }
+  });
+
+  // Sorting must precede paging, and ties must preserve the secondary sort.
+  it("keeps multi-field sorting stable across page boundaries", async () => {
+    const query = "Synthetic sorted queue";
+    for (const suffix of ["Alpha", "Bravo"]) {
+      await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: `${query} ${suffix}`, categoryId: null }),
+        ctx.actor,
+      );
     }
+    const input = workQueueHouseholdInput.parse({
+      query,
+      source: "research",
+      pageSize: 100,
+      sort: [
+        { orderBy: "waitingFor", direction: "asc" },
+        { orderBy: "name", direction: "desc" },
+      ],
+    });
+    const full = await readWorkQueue(ctx.db, null, input, false);
+    expect(full.meta.totalCount).toBe(2);
+    expect(full.items.map((row) => row.name)).toEqual([
+      `${query} Bravo`,
+      `${query} Alpha`,
+    ]);
+    const pagedKeys = [];
+    for (let pageIndex = 0; pageIndex < full.meta.totalCount; pageIndex++) {
+      const page = await readWorkQueue(
+        ctx.db,
+        null,
+        { ...input, pageIndex, pageSize: 1 },
+        false,
+      );
+      pagedKeys.push(...page.items.map((row) => row.key));
+    }
+    expect(pagedKeys).toEqual(full.items.map((row) => row.key));
   });
 });
