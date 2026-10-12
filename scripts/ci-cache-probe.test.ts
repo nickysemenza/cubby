@@ -60,11 +60,13 @@ test("CI probe requires a passing archive for the exact inputs, shard and depend
     NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN: "synthetic-token",
     NX_SKIP_NX_CACHE: "false",
     GITHUB_OUTPUT: output,
+    PROBE_ARTIFACTS: path.join(root, ".nx/artifacts"),
     LANES: JSON.stringify({
       first: {
         projects: ["synthetic"],
         targets: ["test"],
         env: { SHARD: "1/2" },
+        artifact: { path: "playwright-report", slug: "synthetic-report" },
       },
       second: {
         projects: ["synthetic"],
@@ -113,7 +115,7 @@ test("CI probe requires a passing archive for the exact inputs, shard and depend
     );
     writeFileSync(
       path.join(root, ".gitignore"),
-      "node_modules\n.nx\ngithub-output\nran\nwasm\n",
+      "node_modules\n.nx\ngithub-output\nran\nwasm\nplaywright-report\n",
     );
     writeFileSync(
       path.join(root, "nx.json"),
@@ -134,8 +136,10 @@ test("CI probe requires a passing archive for the exact inputs, shard and depend
             outputs: ["{workspaceRoot}/wasm"],
           },
           test: {
-            command: "echo ran >> ran",
+            command:
+              "mkdir -p playwright-report && printf synthetic-report > playwright-report/index.html && printf synthetic-trace > playwright-report/trace.zip && echo ran >> ran",
             cache: true,
+            outputs: ["{workspaceRoot}/playwright-report"],
             dependsOn: ["wasm"],
             inputs: [
               "gate",
@@ -155,6 +159,32 @@ test("CI probe requires a passing archive for the exact inputs, shard and depend
     assert.ok(archives.size > 0, "Nx must publish a real archive");
     const ran = readFileSync(path.join(root, "ran"), "utf8");
     assert.deepEqual(await probe(), ["first"]);
+    assert.equal(
+      readFileSync(
+        path.join(env.PROBE_ARTIFACTS, "synthetic-report/index.html"),
+        "utf8",
+      ),
+      "synthetic-report",
+    );
+    assert.equal(
+      readFileSync(
+        path.join(env.PROBE_ARTIFACTS, "synthetic-report/trace.zip"),
+        "utf8",
+      ),
+      "synthetic-trace",
+    );
+    assert.deepEqual(
+      await probe({
+        LANES: JSON.stringify({
+          first: {
+            ...JSON.parse(env.LANES).first,
+            artifact: { path: "missing-report", slug: "synthetic-report" },
+          },
+        }),
+      }),
+      [],
+      "missing cached artifacts must run the lane",
+    );
     writeFileSync(path.join(root, "README.md"), "Documentation-only change\n");
     assert.deepEqual(await probe(), ["first"]);
     writeFileSync(path.join(root, "source.ts"), "export const value = 2;\n");

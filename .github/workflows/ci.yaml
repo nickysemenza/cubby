@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      hits: ${{ steps.probe.outcome == 'success' && steps.probe.outputs.hits || '[]' }}
+      hits: ${{ steps.publish.outputs.hits }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: env.NX_CACHE_URL != '' && env.NX_CACHE_TOKEN != ''
@@ -59,6 +59,7 @@ jobs:
         env:
           NX_DAEMON: "false"
           NX_LOAD_DOT_ENV_FILES: "true"
+          PROBE_ARTIFACTS: ${{ runner.temp }}/nx-probe-artifacts
           LANES: >-
             {
               "aux": {"targets": ["test"], "exclude": ["cubby-checks"]},
@@ -66,11 +67,11 @@ jobs:
               "worker": {"projects": ["@cubby/web"], "targets": ["db-check", "workerd-tests"]},
               "postgres-1/2": {"projects": ["@cubby/web"], "targets": ["postgres"], "env": {"CUBBY_POSTGRES_SHARD": "1/2"}},
               "postgres-2/2": {"projects": ["@cubby/web"], "targets": ["postgres"], "env": {"CUBBY_POSTGRES_SHARD": "2/2"}},
-              "e2e-1/4": {"projects": ["@cubby/web"], "targets": ["e2e"], "env": {"CUBBY_E2E_SHARD": "1/4"}},
-              "e2e-2/4": {"projects": ["@cubby/web"], "targets": ["e2e"], "env": {"CUBBY_E2E_SHARD": "2/4"}},
-              "e2e-3/4": {"projects": ["@cubby/web"], "targets": ["e2e"], "env": {"CUBBY_E2E_SHARD": "3/4"}},
-              "e2e-4/4": {"projects": ["@cubby/web"], "targets": ["e2e"], "env": {"CUBBY_E2E_SHARD": "4/4"}},
-              "purchase": {"projects": ["@cubby/web"], "targets": ["e2e-purchase-import"]},
+              "e2e-1/4": {"projects": ["@cubby/web"], "targets": ["e2e"], "env": {"CUBBY_E2E_SHARD": "1/4"}, "artifact": {"path": "apps/web/playwright-report", "slug": "desktop-1"}},
+              "e2e-2/4": {"projects": ["@cubby/web"], "targets": ["e2e"], "env": {"CUBBY_E2E_SHARD": "2/4"}, "artifact": {"path": "apps/web/playwright-report", "slug": "desktop-2"}},
+              "e2e-3/4": {"projects": ["@cubby/web"], "targets": ["e2e"], "env": {"CUBBY_E2E_SHARD": "3/4"}, "artifact": {"path": "apps/web/playwright-report", "slug": "desktop-3"}},
+              "e2e-4/4": {"projects": ["@cubby/web"], "targets": ["e2e"], "env": {"CUBBY_E2E_SHARD": "4/4"}, "artifact": {"path": "apps/web/playwright-report", "slug": "desktop-4"}},
+              "purchase": {"projects": ["@cubby/web"], "targets": ["e2e-purchase-import"], "artifact": {"path": "apps/web/playwright-report", "slug": "purchase-import"}},
               "apple-host": {"projects": ["apple"], "targets": ["host-tests"]},
               "apple-simulator": {"projects": ["apple"], "targets": ["simulator-build"]}
             }
@@ -81,7 +82,8 @@ jobs:
         # back into the workspace while inspecting cached results.
         run: |
           node <<'NODE'
-          const { appendFileSync } = require('node:fs');
+          const { appendFileSync, cpSync } = require('node:fs');
+          const { join } = require('node:path');
           const timer = setTimeout(() => process.exit(1), 120_000);
           timer.unref();
           async function probe() {
@@ -115,6 +117,10 @@ jobs:
                   await hashTask(hasher, graph, tasks, task, { ...getTaskSpecificEnv(task, graph), ...spec.env });
                   const result = await cache.retrieve(task.hash, cacheDir);
                   const passed = result?.code === 0;
+                  if (passed && spec.artifact) {
+                    cpSync(join(result.outputsPath, spec.artifact.path),
+                      join(process.env.PROBE_ARTIFACTS, spec.artifact.slug), { recursive: true });
+                  }
                   console.log(`${lane}: ${task.id} ${task.hash}: ${passed ? 'cached pass' : 'run lane'}`);
                   return passed;
                 }));
@@ -134,6 +140,78 @@ jobs:
             clearTimeout(timer);
           });
           NODE
+      - name: Upload cached Playwright report (desktop-1)
+        if: contains(fromJSON(steps.probe.outputs.hits || '[]'), 'e2e-1/4')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-${{ github.sha }}-desktop-1
+          path: |
+            ${{ runner.temp }}/nx-probe-artifacts/desktop-1/**
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-1/run-manifest.json
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-1/run-results.json
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-1/SHA256SUMS
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-1/workerd-logs/**
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload cached Playwright report (desktop-2)
+        if: contains(fromJSON(steps.probe.outputs.hits || '[]'), 'e2e-2/4')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-${{ github.sha }}-desktop-2
+          path: |
+            ${{ runner.temp }}/nx-probe-artifacts/desktop-2/**
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-2/run-manifest.json
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-2/run-results.json
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-2/SHA256SUMS
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-2/workerd-logs/**
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload cached Playwright report (desktop-3)
+        if: contains(fromJSON(steps.probe.outputs.hits || '[]'), 'e2e-3/4')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-${{ github.sha }}-desktop-3
+          path: |
+            ${{ runner.temp }}/nx-probe-artifacts/desktop-3/**
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-3/run-manifest.json
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-3/run-results.json
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-3/SHA256SUMS
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-3/workerd-logs/**
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload cached Playwright report (desktop-4)
+        if: contains(fromJSON(steps.probe.outputs.hits || '[]'), 'e2e-4/4')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-${{ github.sha }}-desktop-4
+          path: |
+            ${{ runner.temp }}/nx-probe-artifacts/desktop-4/**
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-4/run-manifest.json
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-4/run-results.json
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-4/SHA256SUMS
+            !${{ runner.temp }}/nx-probe-artifacts/desktop-4/workerd-logs/**
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload cached Playwright report (purchase-import)
+        if: contains(fromJSON(steps.probe.outputs.hits || '[]'), 'purchase')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-${{ github.sha }}-purchase-import
+          path: |
+            ${{ runner.temp }}/nx-probe-artifacts/purchase-import/**
+            !${{ runner.temp }}/nx-probe-artifacts/purchase-import/run-manifest.json
+            !${{ runner.temp }}/nx-probe-artifacts/purchase-import/run-results.json
+            !${{ runner.temp }}/nx-probe-artifacts/purchase-import/SHA256SUMS
+            !${{ runner.temp }}/nx-probe-artifacts/purchase-import/workerd-logs/**
+          if-no-files-found: error
+          retention-days: 7
+      # Failed setup, probing, staging or uploads skip this publication;
+      # even with an advisory job failure, downstream lanes then run normally.
+      - name: Publish verified lane passes
+        id: publish
+        env:
+          HITS: ${{ steps.probe.outputs.hits || '[]' }}
+        run: echo "hits=$HITS" >> "$GITHUB_OUTPUT"
 
   # A stable required check that also keeps live entity codes out of PR text.
   scope:

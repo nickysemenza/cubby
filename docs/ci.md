@@ -82,7 +82,11 @@ E2E shards are probed separately with their exact shard environment. The
 optional purchase-import lane follows the same rule.
 
 A verified Linux hit runs a single success step and omits checkout, dependency
-installation, WASM/Rust/Playwright cache work, and artifact uploads. Database
+installation and WASM/Rust/Playwright cache work. The probe stages cached
+Playwright HTML reports (including attached traces) and uploads them with the
+existing per-shard artifact names, exclusions and retention. A missing report
+or failed upload prevents publication of the probe outputs, so lanes execute
+and publish their reports normally. Database
 service images are empty on a hit, which prevents GitHub from starting those
 containers. Auxiliary and Rust hits use `ubuntu-slim`; misses retain their
 original runners. The existing six required names and the Web aggregate's
@@ -92,7 +96,8 @@ documentation edit can change its formatting or generation inputs.
 
 Missing credentials, a failed probe workspace, an empty or failed hash,
 HTTP errors, corrupt archives and the probe's two-minute deadline all fall
-back to lane execution. Outputs from a failed probe job never authorize a
+back to lane execution. Outputs are published only after successful probing and artifact uploads;
+a failed probe job never authorizes a
 bypass. Forks omit the probe workspace because they have no cache credentials.
 The scheduled nightly run skips the entire probe job, retains every lane's
 setup, and sets `NX_SKIP_NX_CACHE=true` for all commands, including nested Nx
