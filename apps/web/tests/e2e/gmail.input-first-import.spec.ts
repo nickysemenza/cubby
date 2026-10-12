@@ -513,20 +513,13 @@ for (const statementFirst of [true, false]) {
     await researchMail(purchaseCode);
 
     await gotoAuthenticatedPage(page, `/vendors/${prerequisites.vendor.id}`);
-    const mailReport = page.locator("#order-mail");
-    await expect(
-      mailReport.getByText(`Order ${names.orderId}`, { exact: true }),
-    ).toBeVisible();
-    // The caller's `mail.resolve` link is separate from original mail and its
-    // processing state.
-    const linkedEvent = mailReport
-      .getByRole("listitem")
+    // The caller's `mail.resolve` link shows as the Email's per-Purchase
+    // state, separate from its Relevance and processing.
+    const vendorEmails = page.locator("#emails");
+    const purchaseLink = vendorEmails
+      .getByRole("row")
       .filter({ has: page.getByText("Linked", { exact: true }) })
-      .filter({ has: page.locator(`a[href="/purchases/${purchaseCode}"]`) });
-    const purchaseLink = linkedEvent.getByRole("link", {
-      name: purchaseCode,
-      exact: true,
-    });
+      .getByRole("link", { name: purchaseCode, exact: true });
     await expect(purchaseLink).toBeVisible();
     await expect(purchaseLink).toHaveAttribute(
       "href",
@@ -538,12 +531,18 @@ for (const statementFirst of [true, false]) {
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(
       documentOrigin,
     );
+    const linkedEmail = page
+      .locator("#emails")
+      .getByRole("row")
+      .filter({ has: page.getByText("Linked", { exact: true }) });
+    await expect(linkedEmail).toHaveCount(1);
+    await linkedEmail.getByRole("link").first().click();
     const originalMailUrl = `https://mail.google.com/mail/u/0/#all/synthetic-thread-${token}`;
     const originalMail = page
-      .getByRole("link", { name: "Open Gmail original", exact: true })
+      .getByRole("link", { name: "Open in Gmail", exact: true })
       .and(page.locator(`a[href="${originalMailUrl}"]`));
     await expect(originalMail).toBeVisible();
-    await expect(originalMail).toHaveAttribute("href", originalMailUrl);
+    await page.goBack();
     await expect(
       page
         .locator("#products")

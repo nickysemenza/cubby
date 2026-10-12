@@ -37,12 +37,16 @@ final purchase email may separately list **items to return**; exclude those
 specific lines even if they remain visible on the original order-detail page
 and the email reports a real total for other retained items.
 
-`imports_read.mail` returns the complete persisted accepted `purchaseIds` and
-`purchaseAssociations` with `purchaseDeleted` status. These combine accepted
-source claims and active explicit lifecycle decisions; thread context and
+`imports_read.mail` returns the Email's `id` (`EML-` code), checksum and the
+complete persisted `purchaseIds` and `purchaseAssociations`, each with
+`purchaseDeleted` and `kind`: `accepted` (an import accepted this Email as the
+Purchase's source) or `linked` (a reviewed lifecycle link). Thread context and
 dismissed candidates are excluded. Deleted Purchase identities remain readable
-as history, with disabled links in the shared Email report. Compare this
-readback with a multi-Purchase resolution; it creates no ledger or stock changes.
+as history, with disabled links in the Email report. Relevance, Purchase links
+and import outcome are separate facts: a linked Email can still be `uncertain`
+until a member links it, and processing `completed` never means imported —
+read `importOutcome` on the Email. Compare this readback with a multi-Purchase
+resolution; it creates no ledger or stock changes.
 
 The same read's `acceptedSourceOrders` separates accepted source orders from
 lifecycle-only links. Each carries its `sourceOrderId` review handle, Purchase

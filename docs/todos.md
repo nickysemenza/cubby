@@ -242,8 +242,11 @@ historical Runs stay readable through generic reports.
 
 - 🤔 🛠️ **Tune Jev/Luna prompts from review conflicts.** The Emails Accuracy view
   counts rule, Jev and model results that disagree with a member's review, by
-  stage and model. Use those conflicts to revise the triage and relevance
-  prompts, and measure with an accuracy sample before and after each change.
+  stage and model, and Purchase link proposals a member dismissed, by
+  proposer. Use those conflicts to revise the triage, relevance and
+  `mail.resolve` linking prompts (or tighten the suggestion heuristic when its
+  dismissals dominate), and measure with an accuracy sample before and after
+  each change.
 
 - ⏳ 🧪 **Finish client acceptance of historical prepared-candidate review.**
   [PR #1892](https://github.com/nickysemenza/cubby/pull/1892) preserves missing
@@ -369,8 +372,9 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   so Burn-down happens; no notifications or scheduling.
 
 - ⏳ 🧪 **Accept research root grouping and record-level history in the
-  clients.** The grouped Activity reads and the Vendor/VendorAccount/Purchase
-  Email reports ship on web and native; installed-household acceptance remains.
+  clients.** The grouped Activity reads and the Purchase/Vendor/Vendor Account
+  Emails sections ship on web and native; installed-household acceptance
+  remains.
 
 - 🤔 ✨ **Link enriched seed Products to Plants.** `growsPlantId` is supported,
   but which growing facts belong on Plant versus a purchased seed Product is a
@@ -686,6 +690,35 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   Inherited classifications (Vendor → Purchase → Expense) resolve through
   their existing effective-value SQL before a refusal applies.
 
+- 🟢 🛠️ **Move the Email report's inferred lists onto derived relations.**
+  Purchase, Vendor and Vendor Account `emails` are `derived` relationships read
+  through Email list filters. The Email page still hand-composes Purchase
+  Expenses, Purchase Products and Same-Purchase Emails; declare each as a
+  `derived` relationship over a list filter and render it as a relation
+  section, then add Product → Emails and Expense → Emails through their
+  Purchases so those pages show their backing Emails.
+
+- 🤔 ✨ **Row commands declared in the manifest.** Email Link/Dismiss is a
+  registry row action whose eligibility the server decides (`ownedByViewer`,
+  `accepted`) and whose scope comes from the relation section. Run fixes,
+  meal recipe Remove and reconciliation Attach are still per-report commands.
+  Decide a manifest declaration for a scoped row command with a server-owned
+  disabled reason, then move those onto it on web and native (native Emails
+  sections link and dismiss only from the Email page today).
+
+- 🤔 ✨ **Segmented quick filters on lists and embedded tables.** An enum
+  facet or the declared `savedViews` (Email: Needs attention, Review
+  conflicts) could render as a segmented control on a list page and inside a
+  relation section, e.g. an Emails section's Linked · Suggested · Dismissed.
+  `ViewSwitcher`/`ChoiceSwitcher` and `DataTableViews` exist; decide the
+  declaration (facet or saved view) and wire it generically on web and native.
+
+- 🤔 🧪 **Record who proposed other reviewed decisions.** Email Purchase links
+  keep `proposedBy` (member, agent, import, heuristic) so the Accuracy view can
+  count dismissed agent proposals. Run fix decisions, photo-group review and
+  Product label review cannot tell an agent's proposal from a member's; record
+  the proposer on each and surface dismissal rates per proposer.
+
 - 🤔 ✨ **Declarative "many, clamped to one" cardinality.** Image provenance
   chose a many-row `ImageSighting` child plus derived `one` Image fields over
   array relations with a runtime clamp. Revisit only when a second entity needs
@@ -841,7 +874,6 @@ consume the declarations.
   `pnpm generate` requires it to be named here
   ([MCP exposure](agents/mcp.md#exposure)). Decide per group whether and how
   to expose it, then drop the group when it ships:
-  - Order mail: `vendor.importOrderMail`, `vendor.importSelectedOrderMail`.
   - Inventory receiving: `inventory.receiveExpense`,
     `inventory.receivingContext`, `problems.resolveArrivedFindings`.
   - Discarding units: `inventory.bulkDiscard`, `product.discard`.

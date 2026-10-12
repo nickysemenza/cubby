@@ -311,21 +311,29 @@ A report may say the record is `live` (clients poll; there is no realtime transp
 shows several slots of one record (a Run) polls one `entityReport.getMany`, so the server loads the
 record once per poll.
 
-**Email evidence.** Vendor, Vendor Account, and Purchase detail use the same
-server-composed records report. Accepted source associations and explicit
-member decisions establish relationships; a nullable mail Vendor hint or
-matching order number alone does not link a Purchase. One original may support
-several Vendors. Reports preserve the original Gmail link, known date, accepted
-source checksums, reviewed decisions, and the actual research Run outcome.
-Changed originals remain distinguishable from previously reviewed evidence;
-missing timestamps stay unknown. Research command results show Run links only
-while their event and reviewed checksum still match the current operand; earlier
-Run links come from retained source provenance. Shared commands carry the current checksum,
-and the write rechecks source ownership and retention before changing a link.
-Declared command inputs are collected by the same generic form on web and
-native. Vendor purchase research starts the shared Run objective without a
-website, sender, Vendor Account, or Mac prerequisite; progress belongs to that
-Run rather than a separate mail workbench.
+**Derived relationships.** A relationship whose provenance is `derived` is
+inferred from stored evidence rather than one FK path and stores nothing of its
+own (ADR 0011). It names the target's list filter descriptor that answers
+"records related to this one"; a relation section, HTTP, MCP and native read it
+through that filter, and the graph walker, delete policy and FK manifest test
+skip it. Purchase, Vendor and Vendor Account declare `emails` this way.
+
+**Emails sections.** Purchase, Vendor and Vendor Account detail embed the Email
+list scoped by its `purchaseId`, `vendorId` or `vendorAccountId` filter, one
+row per Email. Each row carries `purchaseLinks` (every related Purchase in
+scope with its state) and the scope-relative `linkState`: accepted import
+sources and reviewed links are Linked, then live suggestions (an exact order
+id, or a matching total within 45 household days when either side lacks an
+order id — never a nearby date alone), then Dismissed; a Vendor's sender-proof
+mail with no Purchase reads "No Purchase match". The section sorts by that
+state, newest first. Inside a Purchase's section, the row menu's Link and
+Dismiss review the pair; only the Email's owner (`ownedByViewer`) may, and an
+import-accepted source cannot be dismissed. A Link that replaces another
+Purchase's link on the same order events asks first. Each decision keeps who
+proposed the link (member, agent, import or the suggestion heuristic), and the
+Emails Accuracy view counts dismissed proposals per proposer. The Email page
+holds the Gmail original, per-Purchase links with Link/Dismiss, and changed-
+since-review warnings; another member's Email reads as metadata only.
 
 **Report choices.** A `records` row may carry a `choice` (a decision the person makes) and the block
 a `form` (its own choices, the progress wording, a `disabledReason` and the one command the answers

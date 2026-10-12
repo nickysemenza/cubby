@@ -1,3 +1,4 @@
+import { emailPurchaseLinkState } from "@cubby/schemas/email-fields";
 import {
   mailboxClassificationStage,
   type MailboxClassification,
@@ -49,10 +50,8 @@ export const emailAcceptedEvidenceSql = (includeDeleted = false): SQL => sql`
     )
 `;
 
-export const emailLifecyclePurchasesSql = (
-  decision: "linked" | "dismissed",
-  includeDeleted = false,
-): SQL => sql`
+/** Purchases an active order event of the Email is linked to by review. */
+const emailLinkedDecisionPurchasesSql = (includeDeleted = false): SQL => sql`
   SELECT decision."purchaseId"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
@@ -61,7 +60,7 @@ export const emailLifecyclePurchasesSql = (
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
   WHERE original."id" = "Email"."orderMailId"
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
-    AND event."supersededAt" IS NULL AND decision."decision" = ${decision}
+    AND event."supersededAt" IS NULL AND decision."decision" = ${emailPurchaseLinkState.enum.linked}
     AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
 `;
 
@@ -70,7 +69,7 @@ export const emailPurchaseAssociationsSql = (
   includeDeleted = false,
 ): SQL => sql`
   SELECT evidence."purchaseId" FROM (${emailAcceptedEvidenceSql(includeDeleted)}) evidence
-  UNION ${emailLifecyclePurchasesSql("linked", includeDeleted)}
+  UNION ${emailLinkedDecisionPurchasesSql(includeDeleted)}
 `;
 
 /**

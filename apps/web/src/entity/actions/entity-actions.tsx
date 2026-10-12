@@ -33,6 +33,8 @@ import { declaredEntityActionDefinitions } from "./declared-entity-actions";
 import { deleteEntityActionDefinition } from "./delete-entity-action";
 import {
   reclassifyEmailsAvailability,
+  useDismissEmailForPurchaseAction,
+  useLinkEmailToPurchaseAction,
   useReclassifyEmailsAction,
 } from "./email-entity-actions";
 import {
@@ -379,6 +381,27 @@ const entityActions: readonly EntityActionDefinition[] = [
     priority: 500,
     availability: reclassifyEmailsAvailability,
     use: useReclassifyEmailsAction,
+  }),
+  // Pair actions: they appear only inside a Purchase's Emails section.
+  defineEntityAction({
+    id: "link-email-purchase",
+    verb: "linkToPurchase",
+    entities: ["email"],
+    arity: "single",
+    surfaces: ["row"],
+    group: "primary",
+    priority: 10,
+    use: useLinkEmailToPurchaseAction,
+  }),
+  defineEntityAction({
+    id: "dismiss-email-purchase",
+    verb: "dismissForPurchase",
+    entities: ["email"],
+    arity: "single",
+    surfaces: ["row"],
+    group: "primary",
+    priority: 11,
+    use: useDismissEmailForPurchaseAction,
   }),
 ];
 

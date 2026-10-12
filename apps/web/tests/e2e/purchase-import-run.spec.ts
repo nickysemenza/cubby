@@ -1,6 +1,6 @@
 import { readRetainedMail } from "~/server/repo/retained-mail";
 import { loadRunDetail } from "~/server/purchase-import/run-service";
-import { orderMailImportOut } from "@cubby/schemas/order-mail-review";
+import { emailImportOut } from "@cubby/schemas/email-actions";
 import { sha256Hex } from "@cubby/shared/sha256";
 import superjson from "superjson";
 import { z } from "zod";
@@ -354,12 +354,12 @@ test("imports saved order mail from the generic Vendor report and follows the li
   );
   await expect(page.getByText("SYN-CONFIRM-1").first()).toBeVisible();
   await expect(page.getByText("$5.00").first()).toBeVisible();
+  // The imported confirmation is the Purchase's linked Email.
+  const emails = page.locator("#emails");
   await expect(
-    page.getByRole("link", { name: "Open Gmail original" }),
+    emails.getByRole("link", { name: "Synthetic itemized confirmation" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: `Research ${runShortcode}` }),
-  ).toHaveAttribute("href", `/runs/${runShortcode}`);
+  await expect(emails.getByText("Linked", { exact: true })).toBeVisible();
 });
 
 test("admits several retained confirmations as separate tasks in the same Run", async ({
@@ -393,18 +393,18 @@ test("admits several retained confirmations as separate tasks in the same Run", 
   const response = await page.request.post(BROWSER_OPERATION_PATH, {
     headers: { Origin: e2eRuntime.baseURL },
     data: superjson.serialize({
-      operation: "vendor.importSelectedOrderMail",
+      operation: "purchaseImport.emailImport",
       input: {
-        orders: seed.events.map(({ eventId, checksum }) => ({
-          eventId,
-          evidenceChecksum: checksum,
+        items: seed.events.map(({ emailId, checksum }) => ({
+          id: emailId,
+          expectedChecksum: checksum,
         })),
       },
     }),
   });
   expect(response.status(), await response.text()).toBe(200);
   const { runIds } = z
-    .object({ ok: z.literal(true), data: orderMailImportOut })
+    .object({ ok: z.literal(true), data: emailImportOut })
     .parse(superjson.deserialize(await response.json())).data;
   expect(runIds).toHaveLength(1);
   const runShortcode = runIds[0]!;

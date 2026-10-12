@@ -1,3 +1,4 @@
+import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import type { EmailId } from "@cubby/schemas/identifiers";
 import { asc, eq, sql } from "drizzle-orm";
 
@@ -12,6 +13,8 @@ import {
   emailAcceptedEvidenceSql,
   emailPurchaseAssociationsSql,
 } from "~/server/repo/email-sql";
+
+const KIND = emailLinkEvidenceKind.enum;
 
 /** Review handles follow the same owned accepted-family policy as Purchase history. */
 export async function readEmailAcceptedSourceOrders(
@@ -57,6 +60,12 @@ export async function readEmailPurchaseAssociations(
       orderId: purchase.orderId,
       date: purchase.date,
       purchaseDeleted: sql<boolean>`${purchase.deletedAt} IS NOT NULL`,
+      // An accepted import source outranks a reviewed lifecycle link.
+      kind: sql<"accepted" | "linked">`CASE WHEN "Purchase"."id" IN (
+        SELECT accepted."purchaseId" FROM "Email"
+        CROSS JOIN LATERAL (${emailAcceptedEvidenceSql(true)}) accepted
+        WHERE "Email"."id" = ${emailId}
+      ) THEN ${KIND.accepted}::text ELSE ${KIND.linked}::text END`,
     })
     .from(purchase)
     .where(sql`"Purchase"."id" IN (

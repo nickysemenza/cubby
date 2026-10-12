@@ -1,0 +1,2 @@
+ALTER TABLE "OrderMailCandidateDecision" ADD COLUMN "proposedBy" text;--> statement-breakpoint
+ALTER TABLE "OrderMailCandidateDecision" ADD CONSTRAINT "OrderMailCandidateDecision_proposedBy_check" CHECK ("OrderMailCandidateDecision"."proposedBy" IS NULL OR "OrderMailCandidateDecision"."proposedBy" IN ('member', 'agent', 'import', 'heuristic'));

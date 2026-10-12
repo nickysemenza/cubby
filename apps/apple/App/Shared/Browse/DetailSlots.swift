@@ -48,14 +48,11 @@ enum DetailSlotRegistry {
         .purchaseFinancialSettlement: { reportSlot(.purchase_financialSettlement, $0) },
         .expenseSettlement: { reportSlot(.expense_settlement, $0) },
         .ledgerPartyWardrobe: { AnyView(WardrobeDetailSlot(ownerID: $0.id, ownerName: $0.title)) },
-        .vendorOrderMail: { reportSlot(.vendor_orderMail, $0) },
         .vendorSpendingClassification: { AnyView(SpendingClassificationView(key: .vendor, row: $0)) },
         .productCategorySpendingClassification: {
             AnyView(SpendingClassificationView(key: .productCategory, row: $0))
         },
-        .vendorAccountOrderMail: { reportSlot(.vendorAccount_orderMail, $0) },
         .purchaseReceiving: { AnyView(PurchaseReceivingSlot(purchaseID: $0.id)) },
-        .purchaseOrderMail: { reportSlot(.purchase_orderMail, $0) },
         .runLiveProgress: { runReportSlot(.run_liveProgress, $0, imports: false) },
         .runImportStats: { runReportSlot(.run_importStats, $0) },
         .runImportProgressLive: { runReportSlot(.run_importProgressLive, $0, liveness: true) },

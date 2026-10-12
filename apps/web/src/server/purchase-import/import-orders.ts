@@ -47,6 +47,7 @@ import {
   notDeleted,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
+import { readEmailPurchaseAssociations } from "~/server/repo/email-purchase-associations";
 import { resolveProductIdentifierSource } from "~/server/repo/product-identifier-source";
 import {
   externalIdKey,
@@ -279,6 +280,48 @@ async function retainedMailSource(
   if (scope.purpose === "mail_import")
     await assertMailRunMembership(database, scope.runId, retained.mail.id);
   return retained.mail;
+}
+
+/**
+ * The one live Purchase of this Vendor a retained Email is already linked
+ * to. An order with no order id cannot converge on an existing Purchase by
+ * (Vendor, order id), so importing it without a target would book its lines
+ * a second time; the reviewed link is the target instead. An Email linked to
+ * several Purchases stays ambiguous and keeps no default.
+ */
+async function soleLinkedPurchase(
+  db: Database,
+  mail: RetainedMailSource | null,
+  vendorId: VendorId,
+) {
+  if (!mail) return null;
+  const [message] = await getDb(db)
+    .select({ id: emailTable.id })
+    .from(emailTable)
+    .where(
+      and(
+        eq(emailTable.ledgerPartyId, mail.ledgerPartyId),
+        eq(emailTable.provider, "gmail"),
+        eq(emailTable.mailboxId, mail.mailboxId),
+        eq(emailTable.messageId, mail.messageId),
+        notDeleted(emailTable),
+      ),
+    )
+    .limit(1);
+  if (!message) return null;
+  const linked = (
+    await readEmailPurchaseAssociations(db, parseEntityId("email", message.id))
+  ).filter((row) => !row.purchaseDeleted);
+  const [only] = linked;
+  if (!only || linked.length !== 1) return null;
+  const [target] = await getDb(db)
+    .select({ vendorId: purchase.vendorId })
+    .from(purchase)
+    .where(eq(purchase.id, only.id))
+    .limit(1);
+  return target?.vendorId === vendorId
+    ? { id: only.id, shortcode: only.shortcode }
+    : null;
 }
 
 /** Each order's verified retained Email, checked before any write. */
@@ -624,13 +667,21 @@ export async function preparePurchaseImport(
             throw new Error(
               "Unreadable imports cannot be prepared without a candidate",
             );
+          const linkedTarget =
+            order.targetPurchaseId || candidate.orderId !== null
+              ? null
+              : await soleLinkedPurchase(
+                  transactionDb,
+                  retainedMail.get(order) ?? null,
+                  vendorId,
+                );
           const targetPurchaseId = order.targetPurchaseId
             ? await resolveOrThrow(
                 transactionDb,
                 "purchase",
                 order.targetPurchaseId,
               )
-            : null;
+            : (linkedTarget?.id ?? null);
           const targetFingerprint = await computeTargetFingerprint(
             transactionDb,
             {
@@ -725,7 +776,8 @@ export async function preparePurchaseImport(
             });
           }
           outputOrders.push({
-            targetPurchaseId: order.targetPurchaseId ?? null,
+            targetPurchaseId:
+              order.targetPurchaseId ?? linkedTarget?.shortcode ?? null,
             stableOrderId: order.stableOrderId,
             itemOperationId: order.itemOperationId,
             source: order.source,

@@ -35,6 +35,8 @@ function resolveConnectedView(source: Entity, viewKey: string) {
       (candidate) => candidate.key === key && candidate.cardinality === "many",
     );
     if (!relation) throw new Error(`Unknown relation view ${source}.${key}`);
+    if (relation.provenance.kind === "derived")
+      return { target: relation.target, routes: [], derived: true as const };
     return {
       target: relation.target,
       routes: [[key]],
@@ -117,6 +119,15 @@ export async function getConnectedRecords(
 ): Promise<ConnectedRecordsOutput> {
   const { source, viewKey } = input;
   const view = resolveConnectedView(source.entityKind, viewKey);
+  // A derived relation has no edge path to witness; its list filter is the
+  // whole answer, so there is no per-record route evidence to return.
+  if ("derived" in view)
+    return {
+      targetEntity: view.target,
+      totalCount: 0,
+      items: [],
+      routeHopRange: { min: 1, max: 1 },
+    };
   const routes = compiledConnectedRoutes(source.entityKind, viewKey);
   if (routes.length === 0)
     throw new Error(`No routes for ${source.entityKind}.${viewKey}`);

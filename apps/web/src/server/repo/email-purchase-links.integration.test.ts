@@ -1,11 +1,20 @@
-import { purchaseId } from "@cubby/schemas/identifiers";
+import type { EmailFilters } from "@cubby/schemas/email";
+import {
+  parseShortcodeFor,
+  purchaseId,
+  type EmailShortcode,
+} from "@cubby/schemas/identifiers";
 import { purchaseShortcode, SHORTCODE_CHARS } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 /**
- * Mail matching failure modes: an exact order can be dismissed, the dismissal
- * survives rereads, and a later explicit link replaces it without creating a
- * Purchase or changing spend.
+ * Email↔Purchase failure modes (ADR 0011: links are derived, never stored as
+ * a second graph): accepted sources, reviewed links and live suggestions must
+ * each place an Email on its Purchase, Vendor and account; a dismissal must
+ * survive rereads and lose to a later Link; a member's Link must win a race
+ * with an automatic link; an import-accepted source cannot be dismissed; a
+ * Link that replaces another Purchase's link keeps who proposed that link;
+ * only the Email's owner decides; and none of it changes spend.
  */
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -21,23 +30,65 @@ import {
   purchase as purchaseTable,
   vendorAccount,
 } from "~/server/db/schema";
+import { decideEmailPurchase } from "~/server/purchase-import/email-purchase-decision";
+import { syntheticRetainedMail } from "~/server/purchase-import/gmail/retained-mail.fixtures";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import { listEmailsRead } from "~/server/repo/email";
 import { buildEntityReport } from "~/server/repo/entity-report";
 import { mergePurchases } from "~/server/repo/purchase";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { syntheticRetainedMail } from "./retained-mail.fixtures";
-import {
-  decideOrderMailCandidate,
-  listPurchaseOrderMail,
-  listVendorOrderMail,
-} from "./review";
-
-describe("Vendor order mail review", () => {
+describe("Email Purchase links", () => {
   const ctx = withTestDb();
 
+  const list = async (filters: EmailFilters) =>
+    (
+      await listEmailsRead(
+        ctx.db,
+        filters,
+        [{ orderBy: "linkState", direction: "asc" }],
+        { pageIndex: 0, pageSize: 50 },
+      )
+    ).data;
+
+  async function emailCode(orderMailId: string) {
+    const [row] = await getDb(ctx.db)
+      .select({ shortcode: emailTable.shortcode })
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, orderMailId));
+    if (!row) throw new Error("Synthetic Email missing");
+    return parseShortcodeFor("email", row.shortcode);
+  }
+
+  const decide = async (
+    id: EmailShortcode,
+    purchase: { shortcode: string },
+    checksum: string,
+    decision: "linked" | "dismissed",
+  ) =>
+    decideEmailPurchase(
+      ctx.db,
+      {
+        id,
+        expectedChecksum: checksum,
+        purchaseId: parseShortcodeFor("purchase", purchase.shortcode),
+        decision,
+      },
+      ctx.actor,
+    );
+
+  async function reviewSourceState() {
+    return {
+      emails: await getDb(ctx.db).select().from(emailTable),
+      originals: await getDb(ctx.db).select().from(orderMail),
+      attachments: await getDb(ctx.db).select().from(orderMailAttachment),
+      claims: await getDb(ctx.db).select().from(importSourceClaim),
+      accepted: await getDb(ctx.db).select().from(importSourceOrder),
+    };
+  }
+
   it.each(["accepted_alias", "accepted_attachment"] as const)(
-    "shows owned content-cleared %s evidence in both Vendor and Purchase views",
+    "places owned content-cleared %s evidence on its Vendor and Purchase",
     async (sourceKind) => {
       const party = await insertWithShortcode(ctx.db, "ledgerParty", {
         name: "Synthetic accepted evidence member",
@@ -136,15 +187,15 @@ describe("Vendor order mail review", () => {
           : [root];
       if (!acceptedClaim)
         throw new Error("Synthetic accepted family claim missing");
-      const acceptedAt = new Date("2026-10-02T12:00:00Z");
       await getDb(ctx.db).insert(importSourceOrder).values({
         sourceClaimId: acceptedClaim.id,
         orderKey: "synthetic-accepted-review-order",
         purchaseId: purchase.id,
         checksum,
         outputFingerprint: "synthetic-accepted-review-fingerprint",
-        createdAt: acceptedAt,
       });
+      // Another member's copy of the same message, accepted onto this
+      // member's account Purchase, never relates.
       const foreignParty = await insertWithShortcode(ctx.db, "ledgerParty", {
         name: "Synthetic foreign evidence member",
         kind: "member",
@@ -177,12 +228,6 @@ describe("Vendor order mail review", () => {
           outputFingerprint: "synthetic-foreign-review-fingerprint",
         });
       const before = await reviewSourceState();
-      const vendorMail = await listVendorOrderMail(ctx.db, {
-        vendorId: vendor.shortcode,
-      });
-      const purchaseMail = await listPurchaseOrderMail(ctx.db, {
-        purchaseId: purchase.shortcode,
-      });
       const expected = [
         expect.objectContaining({
           messageId: original.messageId,
@@ -190,288 +235,46 @@ describe("Vendor order mail review", () => {
           sender: null,
           subject: null,
           receivedAt: null,
-          associations: [
+          linkState: "linked",
+          importOutcome: "imported",
+          purchaseLinks: [
             {
               purchaseId: purchase.shortcode,
-              evidenceChecksum: checksum,
-              acceptedAt: acceptedAt.toISOString(),
+              state: "linked",
+              accepted: true,
+              changedSinceReview: false,
+              replacesPurchaseIds: [],
+              proposedBy: "import",
             },
           ],
-          events: [],
         }),
       ];
-      expect(vendorMail.items).toEqual(expected);
-      expect(purchaseMail.items).toEqual(expected);
+      const code = parseShortcodeFor("vendor", vendor.shortcode);
+      expect(await list({ vendorId: code })).toEqual(expected);
       expect(
-        (
-          await listVendorOrderMail(ctx.db, {
-            vendorId: vendor.shortcode,
-            ledgerPartyId: foreignParty.shortcode,
-          })
-        ).items,
+        await list({
+          purchaseId: parseShortcodeFor("purchase", purchase.shortcode),
+        }),
+      ).toEqual(expected);
+      expect(
+        await list({
+          vendorAccountId: parseShortcodeFor(
+            "vendorAccount",
+            account.shortcode,
+          ),
+        }),
+      ).toEqual(expected);
+      expect(
+        await list({
+          vendorId: code,
+          ledgerPartyId: [
+            parseShortcodeFor("ledgerParty", foreignParty.shortcode),
+          ],
+        }),
       ).toEqual([]);
       expect(await reviewSourceState()).toEqual(before);
     },
   );
-
-  async function reviewSourceState() {
-    return {
-      emails: await getDb(ctx.db).select().from(emailTable),
-      originals: await getDb(ctx.db).select().from(orderMail),
-      attachments: await getDb(ctx.db).select().from(orderMailAttachment),
-      claims: await getDb(ctx.db).select().from(importSourceClaim),
-      accepted: await getDb(ctx.db).select().from(importSourceOrder),
-    };
-  }
-
-  it.each(["deleted", "excluded"] as const)(
-    "retains owned %s processing history and shell identity after content disposal",
-    async (status) => {
-      const f = await retainedReviewFixture();
-      const updatedAt = new Date("2026-10-02T13:00:00Z");
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({
-          classification: "related",
-          classificationVersion: "synthetic-classifier/v1",
-          status,
-          runId: f.runId,
-          updatedAt,
-          contentClearedAt: updatedAt,
-        })
-        .where(eq(emailTable.orderMailId, f.source.id));
-      const result = await listVendorOrderMail(ctx.db, {
-        vendorId: f.vendor.shortcode,
-      });
-      const item = result.items.find(
-        (row) => row.messageId === f.source.messageId,
-      );
-      expect(item?.processing).toMatchObject({
-        status,
-        updatedAt: updatedAt.toISOString(),
-      });
-      expect(item?.researchRun).toMatchObject({
-        status: "needs_review",
-        sourceStatus: status,
-      });
-    },
-  );
-
-  // Mail processing is not Purchase linking or Product verification. Its clock
-  // comes from the exact owned mailbox ledger, never email receipt time.
-  it("shows owned mail processing separately from accepted sources and reviewed links", async () => {
-    const f = await retainedReviewFixture();
-    const updatedAt = new Date("2026-10-02T13:00:00Z");
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
-        classification: "uncertain",
-        classificationVersion: "synthetic-classifier/v1",
-        status: "blocked",
-        runId: f.runId,
-        updatedAt,
-      })
-      .where(eq(emailTable.orderMailId, f.source.id));
-    const other = await syntheticRetainedMail(ctx.db, {
-      ...f.source,
-      id: undefined,
-      mailboxId: "synthetic-other-mailbox",
-      vendorId: null,
-    });
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
-        classification: "related",
-        classificationVersion: "synthetic-wrong-ledger/v1",
-        status: "completed",
-        updatedAt: new Date("2026-10-03T13:00:00Z"),
-      })
-      .where(eq(emailTable.orderMailId, other.id));
-    const decidedAt = new Date("2026-10-02T14:00:00Z");
-    await getDb(ctx.db).insert(orderMailCandidateDecision).values({
-      eventId: f.event.id,
-      purchaseId: f.purchase.id,
-      decision: "linked",
-      evidenceChecksum: f.source.rawChecksum,
-      decidedByUserId: ctx.actor.userId,
-      updatedAt: decidedAt,
-    });
-    const [claim] = await getDb(ctx.db)
-      .insert(importSourceClaim)
-      .values({
-        ledgerPartyId: f.source.ledgerPartyId,
-        kind: "mail_message",
-        externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
-        checksum: f.source.rawChecksum,
-        firstRunId: f.runId,
-        lastRunId: f.runId,
-      })
-      .returning();
-    if (!claim) throw new Error("Synthetic accepted mail claim missing");
-    const acceptedAt = new Date("2026-10-02T15:00:00Z");
-    await getDb(ctx.db).insert(importSourceOrder).values({
-      sourceClaimId: claim.id,
-      orderKey: "synthetic-accepted-order",
-      purchaseId: f.purchase.id,
-      checksum: f.source.rawChecksum,
-      outputFingerprint: "synthetic-accepted-mail",
-      createdAt: acceptedAt,
-    });
-    const report = await buildEntityReport(
-      ctx.db,
-      { slot: "purchase.order-mail", id: f.purchase.shortcode },
-      async () => null,
-      ctx.actor,
-    );
-    const rows = report.blocks.flatMap((block) =>
-      block.kind === "records" ? block.rows : [],
-    );
-    const original = rows.find((row) => row.title === f.source.subject);
-    expect(original?.at).toBe(f.source.receivedAt?.toISOString());
-    expect(original?.statuses).toEqual(
-      expect.arrayContaining([
-        { label: "Classification: uncertain" },
-        { label: "Processing: blocked" },
-      ]),
-    );
-    expect(original?.detail?.text).toContain(updatedAt.toISOString());
-    expect(original?.detail?.text).toContain("synthetic-classifier/v1");
-    expect(original?.detail?.text).not.toContain("synthetic-wrong-ledger/v1");
-    const linked = rows.find((row) =>
-      row.statuses?.some((status) => status.label === "Linked"),
-    );
-    expect(linked?.at).toBe(decidedAt.toISOString());
-    expect(linked?.id).toBe(f.purchase.shortcode);
-    const accepted = rows.find((row) =>
-      row.statuses?.some((status) => status.label === "Accepted source"),
-    );
-    expect(accepted?.at).toBe(acceptedAt.toISOString());
-    expect(accepted?.id).toBe(f.purchase.shortcode);
-    expect(
-      rows.some((row) =>
-        row.statuses?.some((status) => status.label === "Verified"),
-      ),
-    ).toBe(false);
-  });
-
-  // Accepted source associations, not a nullable sender hint or order-id coincidence,
-  // must make a multi-merchant original readable on every supported Purchase.
-  it("shows accepted multiVendor mail with no vendor hint on each related Vendor and Purchase", async () => {
-    const f = await retainedReviewFixture();
-    const secondVendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic second receipt merchant",
-    });
-    const secondPurchase = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: secondVendor.id,
-      orderId: null,
-    });
-    await getDb(ctx.db)
-      .update(orderMail)
-      .set({ vendorId: null })
-      .where(eq(orderMail.id, f.source.id));
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ receivedAt: null })
-      .where(eq(emailTable.orderMailId, f.source.id));
-    const [secondEvent] = await getDb(ctx.db)
-      .insert(orderMailEvent)
-      .values({
-        orderMailId: f.source.id,
-        event: "cancelled",
-        sourceKey: "synthetic-second-merchant-event",
-      })
-      .returning();
-    if (!secondEvent) throw new Error("Synthetic second event missing");
-    await getDb(ctx.db)
-      .insert(orderMailCandidateDecision)
-      .values([
-        {
-          eventId: f.event.id,
-          purchaseId: f.purchase.id,
-          decision: "linked",
-          evidenceChecksum: f.source.rawChecksum,
-          decidedByUserId: ctx.actor.userId,
-        },
-        {
-          eventId: secondEvent.id,
-          purchaseId: secondPurchase.id,
-          decision: "linked",
-          evidenceChecksum: f.source.rawChecksum,
-          decidedByUserId: ctx.actor.userId,
-        },
-      ]);
-    const [claim] = await getDb(ctx.db)
-      .insert(importSourceClaim)
-      .values({
-        ledgerPartyId: f.source.ledgerPartyId,
-        kind: "mail_message",
-        externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
-        checksum: f.source.rawChecksum,
-        firstRunId: f.runId,
-        lastRunId: f.runId,
-      })
-      .returning();
-    if (!claim) throw new Error("Synthetic multi-merchant source missing");
-    await getDb(ctx.db)
-      .insert(importSourceOrder)
-      .values(
-        [f.purchase, secondPurchase].map((p) => ({
-          sourceClaimId: claim.id,
-          orderKey: p.id,
-          purchaseId: p.id,
-          checksum: f.source.rawChecksum,
-          outputFingerprint: `synthetic-accepted-${p.id}`,
-        })),
-      );
-    for (const p of [f.purchase, secondPurchase]) {
-      const relatedVendor = p === f.purchase ? f.vendor : secondVendor;
-      const vendorMail = await listVendorOrderMail(ctx.db, {
-        vendorId: relatedVendor.shortcode,
-      });
-      const purchaseMail = await listPurchaseOrderMail(ctx.db, {
-        purchaseId: p.shortcode,
-      });
-      expect(vendorMail.items.map((mail) => mail.messageId)).toEqual([
-        f.source.messageId,
-      ]);
-      expect(
-        purchaseMail.items[0]?.events.flatMap((event) => event.candidates),
-      ).toEqual([
-        expect.objectContaining({
-          purchaseId: p.shortcode,
-          decision: "linked",
-        }),
-      ]);
-      const report = await buildEntityReport(
-        ctx.db,
-        { slot: "purchase.order-mail", id: p.shortcode },
-        async () => null,
-        ctx.actor,
-      );
-      const rows = report.blocks.flatMap((block) =>
-        block.kind === "records" ? block.rows : [],
-      );
-      expect(rows).toContainEqual(
-        expect.objectContaining({
-          title: f.source.subject,
-          trailing: "Unknown date",
-          externalLink: expect.objectContaining({
-            url: expect.stringContaining(
-              encodeURIComponent(f.source.messageId),
-            ),
-          }),
-        }),
-      );
-      const originalRow = rows.find((row) => row.title === f.source.subject);
-      expect(originalRow?.at).toBeUndefined();
-      expect(JSON.stringify(report)).not.toContain("1970");
-    }
-    const [unchanged] = await getDb(ctx.db)
-      .select()
-      .from(orderMail)
-      .where(eq(orderMail.id, f.source.id));
-    expect(unchanged?.vendorId).toBeNull();
-  });
 
   async function retainedReviewFixture() {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -504,6 +307,7 @@ describe("Vendor order mail review", () => {
       mailboxId: "synthetic-retention-mailbox",
       vendorId: vendor.id,
       messageId: "synthetic-retention-message",
+      threadId: "synthetic-retention-thread",
       sender: "receipts@retention.example.test",
       subject: "Synthetic retained receipt",
       receivedAt: new Date("2026-10-01T12:00:00Z"),
@@ -514,7 +318,6 @@ describe("Vendor order mail review", () => {
         snippet: null,
       },
     });
-    if (!source) throw new Error("Synthetic retained source missing");
     const [event] = await getDb(ctx.db)
       .insert(orderMailEvent)
       .values({
@@ -525,31 +328,226 @@ describe("Vendor order mail review", () => {
       })
       .returning();
     if (!event) throw new Error("Synthetic retained event missing");
-    const decision = {
-      eventId: event.id,
-      purchaseId: purchase.shortcode,
-      decision: "linked" as const,
-      evidenceChecksum: checksum,
+    return {
+      party,
+      source,
+      event,
+      purchase,
+      vendor,
+      checksum,
+      runId: scope.id,
+      email: await emailCode(source.id),
     };
-    return { source, event, purchase, vendor, decision, runId: scope.id };
   }
 
-  it("links a member reviewed retained original without requiring a vendor hint", async () => {
+  it.each(["deleted", "excluded"] as const)(
+    "keeps owned %s processing history and the import Run's state after content disposal",
+    async (status) => {
+      const f = await retainedReviewFixture();
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({
+          classification: "related",
+          status,
+          runId: f.runId,
+          contentClearedAt: new Date("2026-10-02T13:00:00Z"),
+        })
+        .where(eq(emailTable.orderMailId, f.source.id));
+      const [row] = await list({
+        vendorId: parseShortcodeFor("vendor", f.vendor.shortcode),
+      });
+      expect(row).toMatchObject({
+        messageId: f.source.messageId,
+        status,
+        importOutcome: "importing",
+        linkState: "suggested",
+      });
+    },
+  );
+
+  // Processing, accepted sources and reviewed links are separate facts; none
+  // establishes Product verification.
+  it("shows processing separately from accepted sources and reviewed links", async () => {
+    const f = await retainedReviewFixture();
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ classification: "uncertain", status: "blocked", runId: f.runId })
+      .where(eq(emailTable.orderMailId, f.source.id));
+    // The same message in another mailbox is a different Email.
+    await syntheticRetainedMail(ctx.db, {
+      ...f.source,
+      id: undefined,
+      mailboxId: "synthetic-other-mailbox",
+      vendorId: null,
+    });
+    await getDb(ctx.db).insert(orderMailCandidateDecision).values({
+      eventId: f.event.id,
+      purchaseId: f.purchase.id,
+      decision: "linked",
+      evidenceChecksum: f.checksum,
+      decidedByUserId: ctx.actor.userId,
+      proposedBy: "agent",
+    });
+    const [claim] = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: f.source.ledgerPartyId,
+        kind: "mail_message",
+        externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
+        checksum: f.checksum,
+        firstRunId: f.runId,
+        lastRunId: f.runId,
+      })
+      .returning();
+    if (!claim) throw new Error("Synthetic accepted mail claim missing");
+    await getDb(ctx.db).insert(importSourceOrder).values({
+      sourceClaimId: claim.id,
+      orderKey: "synthetic-accepted-order",
+      purchaseId: f.purchase.id,
+      checksum: f.checksum,
+      outputFingerprint: "synthetic-accepted-mail",
+    });
+    expect(
+      await list({
+        purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode),
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        id: f.email,
+        classification: "uncertain",
+        status: "blocked",
+        importOutcome: "imported",
+        purchaseLinks: [
+          expect.objectContaining({ state: "linked", accepted: true }),
+        ],
+      }),
+    ]);
+    const report = await buildEntityReport(
+      ctx.db,
+      { slot: "email.review", id: f.email },
+      async () => null,
+      ctx.actor,
+    );
+    const rows = report.blocks.flatMap((block) =>
+      block.kind === "records" ? block.rows : [],
+    );
+    const linksBlock = report.blocks.find(
+      (block) => block.kind === "records" && block.title === "Purchase links",
+    );
+    const linked =
+      linksBlock?.kind === "records"
+        ? linksBlock.rows.find((row) => row.id === f.purchase.shortcode)
+        : undefined;
+    expect(linked?.statuses).toEqual(
+      expect.arrayContaining([
+        { label: "Linked" },
+        { label: "Imported from this Email", tone: "muted" },
+      ]),
+    );
+    // An import-accepted source offers no Dismiss.
+    expect(linked?.commands ?? []).toEqual([]);
+    expect(JSON.stringify(report)).not.toContain("Verified");
+    expect(rows.find((row) => row.title === "Retrieved")?.externalLink).toEqual(
+      {
+        label: "Open in Gmail",
+        url: "https://mail.google.com/mail/u/0/#all/synthetic-retention-thread",
+      },
+    );
+  });
+
+  // Accepted sources, not a nullable sender hint, make a multi-merchant
+  // original readable on every supported Purchase.
+  it("places accepted multi-Vendor mail with no sender proof on each related Vendor and Purchase", async () => {
+    const f = await retainedReviewFixture();
+    const secondVendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic second receipt merchant",
+    });
+    const secondPurchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: secondVendor.id,
+      orderId: null,
+    });
+    await getDb(ctx.db)
+      .update(orderMail)
+      .set({ vendorId: null })
+      .where(eq(orderMail.id, f.source.id));
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ receivedAt: null })
+      .where(eq(emailTable.orderMailId, f.source.id));
+    const [claim] = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: f.source.ledgerPartyId,
+        kind: "mail_message",
+        externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
+        checksum: f.checksum,
+        firstRunId: f.runId,
+        lastRunId: f.runId,
+      })
+      .returning();
+    if (!claim) throw new Error("Synthetic multi-merchant source missing");
+    await getDb(ctx.db)
+      .insert(importSourceOrder)
+      .values(
+        [f.purchase, secondPurchase].map((p) => ({
+          sourceClaimId: claim.id,
+          orderKey: p.id,
+          purchaseId: p.id,
+          checksum: f.checksum,
+          outputFingerprint: `synthetic-accepted-${p.id}`,
+        })),
+      );
+    for (const [p, v] of [
+      [f.purchase, f.vendor],
+      [secondPurchase, secondVendor],
+    ] as const) {
+      expect(
+        (
+          await list({ vendorId: parseShortcodeFor("vendor", v.shortcode) })
+        ).map((row) => row.messageId),
+      ).toEqual([f.source.messageId]);
+      expect(
+        (
+          await list({
+            purchaseId: parseShortcodeFor("purchase", p.shortcode),
+          })
+        ).flatMap((row) => row.purchaseLinks),
+      ).toEqual([
+        expect.objectContaining({ purchaseId: p.shortcode, state: "linked" }),
+      ]);
+    }
+    const report = await buildEntityReport(
+      ctx.db,
+      { slot: "email.review", id: f.email },
+      async () => null,
+      ctx.actor,
+    );
+    expect(JSON.stringify(report)).not.toContain("1970");
+    const [unchanged] = await getDb(ctx.db)
+      .select()
+      .from(orderMail)
+      .where(eq(orderMail.id, f.source.id));
+    expect(unchanged?.vendorId).toBeNull();
+  });
+
+  it("links a reviewed retained original by its exact order id without sender proof", async () => {
     const f = await retainedReviewFixture();
     await getDb(ctx.db)
       .update(orderMail)
       .set({ vendorId: null })
       .where(eq(orderMail.id, f.source.id));
-    await decideOrderMailCandidate(ctx.db, f.decision, ctx.actor);
-    const decisions = await getDb(ctx.db)
-      .select()
-      .from(orderMailCandidateDecision)
-      .where(eq(orderMailCandidateDecision.eventId, f.event.id));
-    expect(decisions).toEqual([
+    await decide(f.email, f.purchase, f.checksum, "linked");
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(orderMailCandidateDecision)
+        .where(eq(orderMailCandidateDecision.eventId, f.event.id)),
+    ).toEqual([
       expect.objectContaining({
         purchaseId: f.purchase.id,
         decision: "linked",
-        evidenceChecksum: f.source.rawChecksum,
+        evidenceChecksum: f.checksum,
+        proposedBy: "heuristic",
       }),
     ]);
     const [unchanged] = await getDb(ctx.db)
@@ -559,7 +557,7 @@ describe("Vendor order mail review", () => {
     expect(unchanged?.vendorId).toBeNull();
   });
 
-  it("keeps exact matches reviewable and honors a durable dismiss or link", async () => {
+  it("suggests an exact order, honors a durable dismissal, and lets Link replace it", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic mail reviewer",
       kind: "member",
@@ -572,6 +570,13 @@ describe("Vendor order mail review", () => {
       vendorId: vendor.id,
       orderId: "TS-SYN-1001",
       date: "2026-09-10",
+      statedTotal: 48,
+    });
+    // Same total, another order number: never a suggestion.
+    await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "TS-SYN-3003",
+      date: "2026-09-08",
       statedTotal: 48,
     });
     const bodyText =
@@ -589,8 +594,7 @@ describe("Vendor order mail review", () => {
       receivedAt: new Date("2026-09-10T15:00:00.000Z"),
       rawChecksum: checksum,
     });
-    if (!mail) throw new Error("test setup: mail missing");
-    const [event] = await getDb(ctx.db)
+    await getDb(ctx.db)
       .insert(orderMailEvent)
       .values({
         orderMailId: mail.id,
@@ -599,63 +603,28 @@ describe("Vendor order mail review", () => {
         amount: 48,
         currency: "USD",
         sourceKey: `classified:${checksum}:0`,
-      })
-      .returning({ id: orderMailEvent.id });
-    if (!event) throw new Error("test setup: event missing");
-
-    const input = {
-      vendorId: vendor.shortcode,
-      ledgerPartyId: party.shortcode,
+      });
+    const email = await emailCode(mail.id);
+    const vendorScope = {
+      vendorId: parseShortcodeFor("vendor", vendor.shortcode),
     };
-    expect(
-      (
-        await listVendorOrderMail(ctx.db, input, {
-          messageIds: ["review-mail-1"],
-        })
-      ).items,
-    ).toHaveLength(1);
-    expect(
-      (await listVendorOrderMail(ctx.db, input)).items[0]?.events[0]
-        ?.candidates[0],
-    ).toMatchObject({
-      purchaseId: purchase.shortcode,
-      reason: "exact_order_id",
-      decision: null,
-    });
-
-    await decideOrderMailCandidate(
-      ctx.db,
-      {
-        eventId: event.id,
+    const links = async () =>
+      (await list(vendorScope)).flatMap((row) => row.purchaseLinks);
+    expect(await links()).toEqual([
+      expect.objectContaining({
         purchaseId: purchase.shortcode,
-        decision: "dismissed",
-        evidenceChecksum: checksum,
-      },
-      ctx.actor,
-    );
-    expect(
-      (await listVendorOrderMail(ctx.db, input)).items[0]?.events[0]
-        ?.candidates[0]?.decision,
-    ).toBe("dismissed");
+        state: "suggested",
+        proposedBy: "heuristic",
+      }),
+    ]);
 
-    await decideOrderMailCandidate(
-      ctx.db,
-      {
-        eventId: event.id,
-        purchaseId: purchase.shortcode,
-        decision: "linked",
-        evidenceChecksum: checksum,
-      },
-      ctx.actor,
-    );
-    expect(
-      (await listVendorOrderMail(ctx.db, input)).items[0]?.events[0]
-        ?.candidates[0]?.decision,
-    ).toBe("linked");
+    await decide(email, purchase, checksum, "dismissed");
+    expect((await links())[0]?.state).toBe("dismissed");
+
+    await decide(email, purchase, checksum, "linked");
+    expect((await links())[0]?.state).toBe("linked");
     const [account] = await getDb(ctx.db)
-      .select({
-        id: vendorAccount.id,
-      })
+      .select({ id: vendorAccount.id })
       .from(vendorAccount)
       .where(eq(vendorAccount.vendorId, vendor.id));
     const [linkedPurchase] = await getDb(ctx.db)
@@ -664,9 +633,21 @@ describe("Vendor order mail review", () => {
       .where(eq(purchaseTable.id, purchase.id));
     expect(account).toBeDefined();
     expect(linkedPurchase?.vendorAccountId).toBeNull();
+    // A member's Link is relevance evidence.
+    const [reviewed] = await getDb(ctx.db)
+      .select({
+        classification: emailTable.classification,
+        stage: emailTable.classificationStage,
+      })
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, mail.id));
+    expect(reviewed).toEqual({
+      classification: "related",
+      stage: "resolution",
+    });
   });
 
-  it("offers Purchases within 45 household days of the mail as nearby candidates", async () => {
+  it("suggests a matching total only within 45 household days, never a nearby date alone", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic window reviewer",
       kind: "member",
@@ -680,10 +661,17 @@ describe("Vendor order mail review", () => {
     const edge = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-08-03",
+      statedTotal: 12,
     });
     await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-08-02",
+      statedTotal: 12,
+    });
+    await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-09-17",
+      statedTotal: 99,
     });
     const bodyText =
       "Order WS-SYN-2001. Example Window Shop. Printed total 12 USD.";
@@ -699,7 +687,6 @@ describe("Vendor order mail review", () => {
       receivedAt: new Date("2026-09-18T02:00:00.000Z"),
       rawChecksum: checksum,
     });
-    if (!mail) throw new Error("test setup: mail missing");
     await getDb(ctx.db)
       .insert(orderMailEvent)
       .values({
@@ -710,17 +697,11 @@ describe("Vendor order mail review", () => {
         currency: "USD",
         sourceKey: `classified:${checksum}:0`,
       });
-
-    const candidates = (
-      await listVendorOrderMail(ctx.db, {
-        vendorId: vendor.shortcode,
-        ledgerPartyId: party.shortcode,
-      })
-    ).items[0]?.events[0]?.candidates;
-    expect(candidates?.map((candidate) => candidate.purchaseId)).toEqual([
-      edge.shortcode,
-    ]);
-    expect(candidates?.[0]?.reason).toBe("nearby_date");
+    expect(
+      (await list({ vendorId: parseShortcodeFor("vendor", vendor.shortcode) }))
+        .flatMap((row) => row.purchaseLinks)
+        .map((link) => link.purchaseId),
+    ).toEqual([edge.shortcode]);
   });
 
   it("lets a member's link win over an automatic link committed mid-decision", async () => {
@@ -758,13 +739,14 @@ describe("Vendor order mail review", () => {
     const [event] = await getDb(ctx.db)
       .insert(orderMailEvent)
       .values({
-        orderMailId: mail!.id,
+        orderMailId: mail.id,
         event: "placed",
         orderId: "RACE-1",
         currency: "USD",
         sourceKey: `classified:${checksum}:0`,
       })
       .returning({ id: orderMailEvent.id });
+    const email = await emailCode(mail.id);
 
     // An automatic link sits uncommitted while the member links elsewhere.
     let commitAutomatic = () => {};
@@ -781,20 +763,11 @@ describe("Vendor order mail review", () => {
       });
       await held;
     });
-    const memberLink = decideOrderMailCandidate(
-      ctx.db,
-      {
-        eventId: event!.id,
-        purchaseId: chosen!.shortcode,
-        decision: "linked",
-        evidenceChecksum: checksum,
-      },
-      ctx.actor,
-    );
+    const memberLink = decide(email, chosen!, checksum, "linked");
     await new Promise((resolve) => setTimeout(resolve, 300));
     commitAutomatic();
     await automaticLink;
-    await expect(memberLink).resolves.toMatchObject({ decision: "linked" });
+    await expect(memberLink).resolves.toMatchObject({ state: "linked" });
 
     const links = await getDb(ctx.db)
       .select({ purchaseId: orderMailCandidateDecision.purchaseId })
@@ -803,7 +776,7 @@ describe("Vendor order mail review", () => {
     expect(links).toEqual([{ purchaseId: chosen!.id }]);
   });
 
-  it("retains an older exact order candidate beyond the newest 500 Purchases", async () => {
+  it("suggests an older exact order beyond the newest 500 Purchases", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic mail reviewer",
       kind: "member",
@@ -857,7 +830,6 @@ describe("Vendor order mail review", () => {
       receivedAt: new Date("2026-09-10T15:00:00.000Z"),
       rawChecksum: checksum,
     });
-    if (!mail) throw new Error("test setup: mail missing");
     await getDb(ctx.db)
       .insert(orderMailEvent)
       .values({
@@ -866,16 +838,24 @@ describe("Vendor order mail review", () => {
         orderId: "TS-OLDER-1001",
         sourceKey: `classified:${checksum}:0`,
       });
-    const worklist = await listVendorOrderMail(ctx.db, {
-      vendorId: vendor.shortcode,
-    });
-    expect(worklist.items[0]?.events[0]?.candidates[0]).toMatchObject({
-      purchaseId: older.shortcode,
-      reason: "exact_order_id",
-    });
+    expect(
+      await list({
+        purchaseId: parseShortcodeFor("purchase", older.shortcode),
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        linkState: "suggested",
+        purchaseLinks: [
+          expect.objectContaining({
+            purchaseId: older.shortcode,
+            state: "suggested",
+          }),
+        ],
+      }),
+    ]);
   });
 
-  it("carries a reviewed mail link to the surviving Purchase on merge", async () => {
+  it("carries a reviewed link to the surviving Purchase on merge", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic mail reviewer",
       kind: "member",
@@ -907,38 +887,200 @@ describe("Vendor order mail review", () => {
       receivedAt: new Date("2026-09-10T15:00:00.000Z"),
       rawChecksum: checksum,
     });
-    if (!mail) throw new Error("test setup: mail missing");
-    const [event] = await getDb(ctx.db)
+    await getDb(ctx.db)
       .insert(orderMailEvent)
       .values({
         orderMailId: mail.id,
         event: "placed",
         orderId: "TS-MERGE-1001",
         sourceKey: `classified:${checksum}:0`,
-      })
-      .returning({ id: orderMailEvent.id });
-    if (!event) throw new Error("test setup: event missing");
-    await decideOrderMailCandidate(
-      ctx.db,
-      {
-        eventId: event.id,
-        purchaseId: loser.shortcode,
-        decision: "linked",
-        evidenceChecksum: checksum,
-      },
-      ctx.actor,
-    );
+      });
+    await decide(await emailCode(mail.id), loser, checksum, "linked");
     await mergePurchases(
       ctx.db,
       { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
       ctx.actor,
     );
-    const timeline = await listPurchaseOrderMail(ctx.db, {
-      purchaseId: keeper.shortcode,
+    expect(
+      (
+        await list({
+          purchaseId: parseShortcodeFor("purchase", keeper.shortcode),
+        })
+      ).flatMap((row) => row.purchaseLinks),
+    ).toEqual([
+      expect.objectContaining({
+        purchaseId: keeper.shortcode,
+        state: "linked",
+        proposedBy: "heuristic",
+      }),
+    ]);
+  });
+
+  it("refuses to dismiss an import-accepted source", async () => {
+    const f = await retainedReviewFixture();
+    const [claim] = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: f.source.ledgerPartyId,
+        kind: "mail_message",
+        externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
+        checksum: f.checksum,
+        firstRunId: f.runId,
+        lastRunId: f.runId,
+      })
+      .returning();
+    await getDb(ctx.db).insert(importSourceOrder).values({
+      sourceClaimId: claim!.id,
+      orderKey: "synthetic-accepted-order",
+      purchaseId: f.purchase.id,
+      checksum: f.checksum,
+      outputFingerprint: "synthetic-accepted-mail",
     });
-    expect(timeline.items[0]?.events[0]?.candidates[0]).toMatchObject({
-      purchaseId: keeper.shortcode,
+    await expect(
+      decide(f.email, f.purchase, f.checksum, "dismissed"),
+    ).rejects.toThrow(/reconciliation/u);
+  });
+
+  it("replaces another Purchase's agent link on the same event and keeps its proposer", async () => {
+    const f = await retainedReviewFixture();
+    const other = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: f.vendor.id,
+      orderId: "SYNTHETIC-OTHER",
+    });
+    await getDb(ctx.db).insert(orderMailCandidateDecision).values({
+      eventId: f.event.id,
+      purchaseId: other.id,
       decision: "linked",
+      evidenceChecksum: f.checksum,
+      decidedByUserId: ctx.actor.userId,
+      proposedBy: "agent",
     });
+    expect(
+      (
+        await list({
+          purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode),
+        })
+      ).flatMap((row) => row.purchaseLinks),
+    ).toEqual([
+      expect.objectContaining({
+        purchaseId: f.purchase.shortcode,
+        state: "suggested",
+        replacesPurchaseIds: [other.shortcode],
+      }),
+    ]);
+    await decide(f.email, f.purchase, f.checksum, "linked");
+    const decisions = await getDb(ctx.db)
+      .select({
+        purchaseId: orderMailCandidateDecision.purchaseId,
+        decision: orderMailCandidateDecision.decision,
+        proposedBy: orderMailCandidateDecision.proposedBy,
+      })
+      .from(orderMailCandidateDecision)
+      .where(eq(orderMailCandidateDecision.eventId, f.event.id));
+    expect(decisions).toEqual(
+      expect.arrayContaining([
+        { purchaseId: other.id, decision: "dismissed", proposedBy: "agent" },
+        {
+          purchaseId: f.purchase.id,
+          decision: "linked",
+          proposedBy: "heuristic",
+        },
+      ]),
+    );
+  });
+
+  it("lets only the Email's owner decide, and reads another member's Email as metadata", async () => {
+    const f = await retainedReviewFixture();
+    const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic other member",
+      kind: "member",
+    });
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ ledgerPartyId: owner.id })
+      .where(eq(emailTable.orderMailId, f.source.id));
+    await getDb(ctx.db)
+      .update(orderMail)
+      .set({ ledgerPartyId: owner.id })
+      .where(eq(orderMail.id, f.source.id));
+    await expect(
+      decide(f.email, f.purchase, f.checksum, "linked"),
+    ).rejects.toThrow(/owner/u);
+    const report = await buildEntityReport(
+      ctx.db,
+      { slot: "email.review", id: f.email },
+      async () => null,
+      ctx.actor,
+    );
+    const rows = report.blocks.flatMap((block) =>
+      block.kind === "records" ? block.rows : [],
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({ id: f.purchase.shortcode }),
+    ]);
+    expect(rows[0]?.commands).toBeUndefined();
+    expect(JSON.stringify(report)).not.toContain("Email pipeline");
+  });
+
+  it("orders an Emails section linked, then suggested, then dismissed", async () => {
+    const f = await retainedReviewFixture();
+    const seed = async (messageId: string, orderId: string) => {
+      const mail = await syntheticRetainedMail(ctx.db, {
+        ledgerPartyId: f.party.id,
+        mailboxId: "synthetic-retention-mailbox",
+        vendorId: f.vendor.id,
+        messageId,
+        sender: "receipts@retention.example.test",
+        subject: messageId,
+        receivedAt: new Date("2026-10-01T12:00:00Z"),
+        rawChecksum: await sha256Hex(messageId),
+        content: { bodyText: messageId, bodyHtml: null, snippet: null },
+      });
+      await getDb(ctx.db)
+        .insert(orderMailEvent)
+        .values({
+          orderMailId: mail.id,
+          event: "shipped",
+          orderId,
+          sourceKey: `synthetic-${messageId}`,
+        });
+      return {
+        email: await emailCode(mail.id),
+        checksum: await sha256Hex(messageId),
+      };
+    };
+    const dismissed = await seed("synthetic-dismissed", "SYNTHETIC-RETAINED");
+    const linked = await seed("synthetic-linked", "SYNTHETIC-RETAINED");
+    await decide(dismissed.email, f.purchase, dismissed.checksum, "dismissed");
+    await decide(linked.email, f.purchase, linked.checksum, "linked");
+    expect(
+      (
+        await list({
+          purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode),
+        })
+      ).map((row) => [row.id, row.linkState]),
+    ).toEqual([
+      [linked.email, "linked"],
+      [f.email, "suggested"],
+      [dismissed.email, "dismissed"],
+    ]);
+    expect(
+      (
+        await list({
+          purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode),
+          linkState: ["dismissed"],
+        })
+      ).map((row) => row.id),
+    ).toEqual([dismissed.email]);
+    const [stored] = await getDb(ctx.db)
+      .select({ id: orderMailCandidateDecision.id })
+      .from(orderMailCandidateDecision)
+      .where(
+        and(
+          eq(orderMailCandidateDecision.purchaseId, f.purchase.id),
+          eq(orderMailCandidateDecision.decision, "dismissed"),
+        ),
+      );
+    expect(stored).toBeDefined();
   });
 });

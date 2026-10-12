@@ -206,7 +206,7 @@ describe("Email review report", () => {
         block.kind === "records" && block.title === title ? block.rows : [],
       );
     const blocks = await report(selected.email.shortcode);
-    expect(rows(blocks, "Accepted Purchases")).toContainEqual(
+    expect(rows(blocks, "Purchase links")).toContainEqual(
       expect.objectContaining({ entity: "purchase", id: purchase.shortcode }),
     );
     expect(rows(blocks, "Purchase Expenses")).toContainEqual(
@@ -243,33 +243,42 @@ describe("Email review report", () => {
       ),
     ).toBe(false);
     expect(
-      rows(await report(attachment.email.shortcode), "Accepted Purchases").map(
+      rows(await report(attachment.email.shortcode), "Purchase links").map(
         (row) => row.id,
       ),
     ).toContain(purchase.shortcode);
     expect(
-      rows(await report(lifecycle.email.shortcode), "Accepted Purchases").map(
+      rows(await report(lifecycle.email.shortcode), "Purchase links").map(
         (row) => row.id,
       ),
     ).toContain(purchase.shortcode);
     const dismissedBlocks = await report(dismissed.email.shortcode);
-    expect(rows(dismissedBlocks, "Accepted Purchases")).toEqual([]);
+    // A dismissal is a reviewed pair, never a link to the Purchase's money.
     expect(rows(dismissedBlocks, "Purchase Expenses")).toEqual([]);
     expect(rows(dismissedBlocks, "Purchase Products")).toEqual([]);
+    expect(rows(dismissedBlocks, "Purchase links")).toEqual([
+      expect.objectContaining({
+        entity: "purchase",
+        id: purchase.shortcode,
+        statuses: [{ label: "Dismissed", tone: "muted" }],
+      }),
+    ]);
+    // Another member's Email reads as metadata: no pipeline, no review.
+    const foreignBlocks = await report(foreign.email.shortcode);
+    expect(rows(foreignBlocks, "Email pipeline")).toEqual([]);
     expect(
-      rows(dismissedBlocks, "Dismissed Purchase candidates"),
-    ).toContainEqual(
-      expect.objectContaining({ entity: "purchase", id: purchase.shortcode }),
-    );
-    await expect(report(foreign.email.shortcode)).rejects.toThrow(
-      "Email was not found for this member",
-    );
+      foreignBlocks.flatMap((block) =>
+        block.kind === "records"
+          ? block.rows.flatMap((row) => row.commands ?? [])
+          : [],
+      ),
+    ).toEqual([]);
     await getDb(ctx.db)
       .update(purchaseTable)
       .set({ deletedAt: new Date() })
       .where(eq(purchaseTable.id, purchase.id));
     const historical = await report(selected.email.shortcode);
-    expect(rows(historical, "Accepted Purchases")).toContainEqual(
+    expect(rows(historical, "Purchase links")).toContainEqual(
       expect.objectContaining({
         entity: null,
         id: null,
@@ -334,8 +343,7 @@ describe("Email review report", () => {
     expect(commandsOf(blocks).map((command) => command.request)).toContainEqual(
       {
         kind: "import-email",
-        id: email.shortcode,
-        expectedChecksum: "a".repeat(64),
+        items: [{ id: email.shortcode, expectedChecksum: "a".repeat(64) }],
       },
     );
     // An absent estimate never reads as free.

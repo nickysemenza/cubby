@@ -351,6 +351,11 @@ export const modulesChildren = [
       },
       { key: "evidenceChecksum", kind: "text", notNull: true },
       { key: "decidedByUserId", kind: "text", notNull: true },
+      /**
+       * Who proposed this link (`emailLinkProposer`); a dismissal keeps it so
+       * a dismissed agent link stays measurable. Null before it was recorded.
+       */
+      { key: "proposedBy", kind: "text", type: "EmailLinkProposer" },
       {
         key: "createdAt",
         kind: "timestamp",
@@ -365,7 +370,10 @@ export const modulesChildren = [
         onUpdateNow: true,
       },
     ],
-    types: [{ module: "@cubby/schemas/identifiers", exports: ["PurchaseId"] }],
+    types: [
+      { module: "@cubby/schemas/identifiers", exports: ["PurchaseId"] },
+      { module: "@cubby/schemas/email-fields", exports: ["EmailLinkProposer"] },
+    ],
     indexes: [
       {
         name: "OrderMailCandidateDecision_event_purchase_key",
@@ -384,6 +392,10 @@ export const modulesChildren = [
       {
         name: "OrderMailCandidateDecision_decision_check",
         sql: "{decision} IN ('linked', 'dismissed')",
+      },
+      {
+        name: "OrderMailCandidateDecision_proposedBy_check",
+        sql: "{proposedBy} IS NULL OR {proposedBy} IN ('member', 'agent', 'import', 'heuristic')",
       },
     ],
   }),

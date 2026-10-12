@@ -582,11 +582,6 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Weighted pipeline and known Jev/Clef-only confusion matrices, conditional precision/recall, sampling probabilities and excluded/unknown denominators for an independently graded frozen Email sample.",
       }),
-      order_mail: mcpAction({
-        op: vendorContract.ops.orderMail,
-        description:
-          "A Vendor's order Email events with suggested Purchase matches; each event's id and evidenceChecksum feed mail.decide_order_mail.",
-      }),
       execution_mailboxes: mcpAction({
         op: runContract.ops.executionMailboxes,
         description:
@@ -760,7 +755,7 @@ export const MCP_TOOLS = defineMcpTools({
       import: mcpAction({
         op: purchaseImportContract.ops.emailImport,
         description:
-          "Start Luna import for this selected Email and exact checksum without a dollar allowance. Ownership, evidence and review gates still apply. An existing automatic admission retains its original authority. Automatic discovery remains classification-only; no other Email is admitted. Other paid models need their own authorization.",
+          "Start Luna import for up to 50 selected Emails, each by its `id` (EML- code) and exact checksum as mail.search and imports_read.mail return them, without a dollar allowance. An Email already linked to exactly one Purchase imports into that Purchase. Ownership, evidence and review gates still apply. An existing automatic admission retains its original authority. Automatic discovery remains classification-only; no other Email is admitted. Other paid models need their own authorization.",
       }),
       search: mcpAction({
         op: purchaseImportContract.ops.mailSearch,
@@ -772,10 +767,10 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Resolve one retained Email at its checksum: `linked` names every supported Purchase in purchaseIds for a lifecycle event; optional settlement records a member-reviewed mapping to existing posted refunds and their accounts. Writes no money or stock. `unresolved` names the gap; `unrelated` clears unaccepted content while preserving metadata and provenance. Matching reviews replay while evidence remains current; conflicting reviews refuse.",
       }),
-      decide_order_mail: mcpAction({
-        op: vendorContract.ops.decideOrderMail,
+      decide_purchase: mcpAction({
+        op: purchaseImportContract.ops.emailPurchaseDecide,
         description:
-          "Confirm (`linked`) or dismiss an order Email event's suggested Purchase match, with the event's evidenceChecksum.",
+          "A member's review of one Email for one Purchase at the Email's checksum (`id` EML- code and checksum from mail.search or imports_read.mail). `linked` links every order event of the Email that suggests or was decided for that Purchase, replacing another Purchase's link on those events, and marks the Email related; `dismissed` dismisses them. An import-accepted source cannot be dismissed. List an Email's pairs with entity_read on email (`purchaseLinks`) or the Email list filtered by purchaseId/vendorId.",
       }),
     },
   },

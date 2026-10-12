@@ -3,12 +3,17 @@ import type {
   EmailAccuracyReport,
   EmailAccuracyBinaryMetrics,
 } from "@cubby/schemas/email-accuracy";
+import {
+  EMAIL_LINK_STATE_LABEL,
+  type EmailPurchaseLink,
+} from "@cubby/schemas/email-fields";
 import type {
   ReportBlock,
   ReportCommand,
   ReportRecordRow,
 } from "@cubby/schemas/entity-report";
 import {
+  parseEntityId,
   parseShortcodeFor,
   runEntityId,
   type ShortcodeFor,
@@ -18,7 +23,7 @@ import {
   mailboxClassification,
 } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput, runWorkLabel } from "@cubby/schemas/run-fields";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
 import { formatPercent, formatSmallCurrency } from "~/lib/number-format";
@@ -33,12 +38,16 @@ import {
   ledgerParty,
   email as emailTable,
   orderMail,
+  orderMailCandidateDecision,
+  orderMailEvent,
+  purchase,
   run,
 } from "~/server/db/schema";
 import { hasRetainedEmailImportContent } from "~/server/purchase-import/email-content";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { readEmailAssociations } from "~/server/repo/email";
 import { getEmailAccuracyReport } from "~/server/repo/email-accuracy";
+import { readEmailPurchaseLinks } from "~/server/repo/email-purchase-links";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import type { ReportViewer } from "./records";
@@ -47,29 +56,11 @@ type StatsBlock = Extract<ReportBlock, { kind: "stats" }>;
 
 /**
  * One count per association, then a ledger for each non-empty one; an empty association is only
- * its zero. Thread context and dismissed candidates never associate a Purchase.
+ * its zero. Thread context never associates a Purchase; Purchase links have their own ledger.
  */
 function emailAssociationBlocks(
   associations: Awaited<ReturnType<typeof readEmailAssociations>>,
 ): ReportBlock[] {
-  const purchases = (
-    rows:
-      | typeof associations.purchases
-      | typeof associations.dismissedCandidates,
-  ) =>
-    rows.map((row): ReportRecordRow => {
-      const deleted = "purchaseDeleted" in row && row.purchaseDeleted === true;
-      return {
-        entity: deleted ? null : "purchase",
-        id: deleted ? null : row.shortcode,
-        title: row.orderId ?? "Purchase",
-        subtitle: row.date,
-        trailing: null,
-        statuses: deleted
-          ? [{ label: "Purchase deleted", tone: "warning" }]
-          : [],
-      };
-    });
   const emails = (rows: typeof associations.samePurchaseEmails) =>
     rows.map((row): ReportRecordRow => ({
       entity: "email",
@@ -80,11 +71,6 @@ function emailAssociationBlocks(
       at: row.receivedAt?.toISOString(),
     }));
   const sets: [label: string, title: string, rows: ReportRecordRow[]][] = [
-    [
-      "Accepted Purchases",
-      "Accepted Purchases",
-      purchases(associations.purchases),
-    ],
     [
       "Reviewed refunds",
       "Reviewed refunds",
@@ -183,14 +169,6 @@ function emailAssociationBlocks(
       emails(associations.threadEmails).map((row) => ({
         ...row,
         statuses: [{ label: "Thread context only", tone: "muted" }],
-      })),
-    ],
-    [
-      "Dismissed candidates",
-      "Dismissed Purchase candidates",
-      purchases(associations.dismissedCandidates).map((row) => ({
-        ...row,
-        statuses: [{ label: "Dismissed candidate", tone: "muted" }],
       })),
     ],
   ];
@@ -816,8 +794,7 @@ function importRow(
           "Authorize paid Pi import for this Email? Automatic discovery remains classification-only.",
         request: {
           kind: "import-email",
-          id: shortcode,
-          expectedChecksum: email.checksum,
+          items: [{ id: shortcode, expectedChecksum: email.checksum }],
         },
       },
     ],
@@ -885,6 +862,172 @@ async function runMembership(
     .join(", ")}`;
 }
 
+/** The Gmail original, by thread when Gmail grouped it. */
+const gmailOriginal = (email: EmailRow) => ({
+  label: "Open in Gmail",
+  url: `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(email.threadId ?? email.messageId)}`,
+});
+
+const LINK_TONE = {
+  linked: undefined,
+  suggested: "warning",
+  dismissed: "muted",
+} as const;
+
+/** Link and Dismiss for one pair, offered only to the Email's owner. */
+function linkCommands(
+  email: EmailRow,
+  shortcode: EmailShortcode,
+  link: EmailPurchaseLink,
+): ReportCommand[] {
+  const request = (decision: "linked" | "dismissed") => ({
+    kind: "decide-email-purchase" as const,
+    id: shortcode,
+    expectedChecksum: email.checksum,
+    purchaseId: link.purchaseId,
+    decision,
+  });
+  const replaces = link.replacesPurchaseIds.join(", ");
+  const link_: ReportCommand = {
+    id: `link:${shortcode}:${link.purchaseId}`,
+    label: "Link",
+    prominent: link.state === "suggested",
+    // Only a link that takes another Purchase's place asks first.
+    confirm: replaces
+      ? `Link this Email to ${link.purchaseId}? This replaces its link to ${replaces}.`
+      : null,
+    request: request("linked"),
+  };
+  const dismiss: ReportCommand = {
+    id: `dismiss:${shortcode}:${link.purchaseId}`,
+    label: "Dismiss",
+    prominent: false,
+    confirm: null,
+    request: request("dismissed"),
+  };
+  if (link.state === "suggested") return [link_, dismiss];
+  if (link.state === "dismissed") return [link_];
+  // An import-accepted source is corrected through reconciliation instead.
+  return link.accepted ? [] : [dismiss];
+}
+
+/**
+ * Every Purchase this Email relates to, strongest first, with who proposed
+ * the link and whether the original changed after it was reviewed.
+ */
+async function purchaseLinksBlock(
+  client: ReportClient,
+  email: EmailRow,
+  links: readonly EmailPurchaseLink[],
+  owned: boolean,
+  /** Accepted or linked Purchases since deleted: history, never a link. */
+  deleted: readonly {
+    shortcode: string;
+    orderId: string | null;
+    date: string | null;
+  }[] = [],
+): Promise<ReportBlock> {
+  const purchases = links.length
+    ? await client
+        .select({
+          shortcode: purchase.shortcode,
+          orderId: purchase.orderId,
+          date: purchase.date,
+          statedTotal: purchase.statedTotal,
+        })
+        .from(purchase)
+        .where(
+          inArray(
+            purchase.shortcode,
+            links.map((link) => link.purchaseId),
+          ),
+        )
+    : [];
+  const shortcode = parseShortcodeFor("email", email.shortcode);
+  return {
+    kind: "records",
+    presentation: "ledger",
+    title: "Purchase links",
+    rows: links
+      .map((link): ReportRecordRow => {
+        const target = purchases.find(
+          (row) => row.shortcode === link.purchaseId,
+        );
+        const row: ReportRecordRow = {
+          entity: "purchase",
+          id: link.purchaseId,
+          title: target?.orderId ? `Order ${target.orderId}` : link.purchaseId,
+          subtitle: target?.date ?? null,
+          trailing: null,
+          statuses: [
+            {
+              label: EMAIL_LINK_STATE_LABEL[link.state],
+              tone: LINK_TONE[link.state],
+            },
+            ...(link.accepted
+              ? [{ label: "Imported from this Email", tone: "muted" as const }]
+              : []),
+            ...(link.changedSinceReview
+              ? [{ label: "Changed since review", tone: "warning" as const }]
+              : []),
+          ],
+          lines: [
+            ...(link.proposedBy
+              ? [{ text: `Proposed by ${PROPOSER_LABEL[link.proposedBy]}` }]
+              : []),
+            ...(link.changedSinceReview
+              ? [
+                  {
+                    text: "The original changed after this was reviewed; the earlier decision stands until you decide again.",
+                    tone: "warning" as const,
+                  },
+                ]
+              : []),
+          ],
+        };
+        if (owned) row.commands = linkCommands(email, shortcode, link);
+        return row;
+      })
+      .concat(
+        deleted.map((row) => ({
+          entity: null,
+          id: null,
+          title: row.orderId ? `Order ${row.orderId}` : row.shortcode,
+          subtitle: row.date,
+          trailing: null,
+          statuses: [{ label: "Purchase deleted", tone: "warning" }],
+        })),
+      ),
+    empty: "No Purchase relates to this Email.",
+  };
+}
+
+const PROPOSER_LABEL = {
+  member: "a member",
+  agent: "an agent session or Pi",
+  import: "an import",
+  heuristic: "an order-number or amount match",
+} as const;
+
+/**
+ * Another member's Email: its metadata and Purchase links stay readable,
+ * while its content and review belong to its owner.
+ */
+async function foreignEmailReport(
+  client: ReportClient,
+  email: EmailRow,
+  ownerName: string,
+  links: readonly EmailPurchaseLink[],
+): Promise<ReportBlock[]> {
+  return [
+    {
+      kind: "note",
+      text: `${ownerName}'s Email. Its content, Relevance review and import belong to ${ownerName}; only they can link or dismiss it.`,
+    },
+    await purchaseLinksBlock(client, email, links, false),
+  ];
+}
+
 export async function emailReviewReport(
   db: Database,
   code: string,
@@ -898,21 +1041,22 @@ export async function emailReviewReport(
       email: emailTable,
       content: orderMail.content,
       rawChecksum: orderMail.rawChecksum,
+      ownerUserId: ledgerParty.userId,
+      ownerName: ledgerParty.name,
     })
     .from(emailTable)
-    .innerJoin(
-      ledgerParty,
-      and(
-        eq(ledgerParty.id, emailTable.ledgerPartyId),
-        eq(ledgerParty.userId, actor.userId),
-        notDeleted(ledgerParty),
-      ),
-    )
+    .innerJoin(ledgerParty, eq(ledgerParty.id, emailTable.ledgerPartyId))
     .leftJoin(orderMail, eq(orderMail.id, emailTable.orderMailId))
     .where(eq(emailTable.id, id))
     .limit(1);
-  if (!selected) throw new Error("Email was not found for this member.");
+  if (!selected) throw new Error(`${code} was not found.`);
   const { email } = selected;
+  const links =
+    (
+      await readEmailPurchaseLinks(db, [parseEntityId("email", email.id)], null)
+    ).get(email.id) ?? [];
+  if (selected.ownerUserId !== actor.userId)
+    return foreignEmailReport(client, email, selected.ownerName, links);
   const shortcode = parseShortcodeFor("email", email.shortcode);
   const costs = await loadImportCosts(client, email);
   const [predictions, candidates, failures, reviews] = await Promise.all([
@@ -997,7 +1141,10 @@ export async function emailReviewReport(
       title: "Email pipeline",
       presentation: "ledger",
       rows: [
-        retrievedRow(email, retained, failures[0], predictions[0]),
+        {
+          ...retrievedRow(email, retained, failures[0], predictions[0]),
+          externalLink: gmailOriginal(email),
+        },
         ...automatedStages.map((stage) =>
           stageRow(
             stage,
@@ -1048,6 +1195,13 @@ export async function emailReviewReport(
       kind: "note",
       text: "Member-wide accuracy and review conflicts by stage and model are in the Emails list's Accuracy view.",
     },
+    await purchaseLinksBlock(
+      client,
+      email,
+      links,
+      true,
+      associations.purchases.filter((row) => row.purchaseDeleted),
+    ),
     ...emailAssociationBlocks(associations),
     {
       kind: "table",
@@ -1106,7 +1260,7 @@ export async function emailAccuracyViewReport(
   actor: ActorContext,
 ): Promise<{ blocks: ReportBlock[] }> {
   const client = getDb(db);
-  const [[latestEvaluation], conflicts] = await Promise.all([
+  const [[latestEvaluation], conflicts, proposals] = await Promise.all([
     client
       .select({ id: emailAccuracyEvaluation.id })
       .from(emailAccuracyEvaluation)
@@ -1149,6 +1303,31 @@ export async function emailAccuracyViewReport(
         emailClassificationObservation.stage,
         emailClassificationObservation.model,
       ),
+    // A dismissed proposal is a review conflict for whoever proposed it; the
+    // proposer survives the dismissal so agent links stay measurable.
+    client
+      .select({
+        proposedBy: orderMailCandidateDecision.proposedBy,
+        linked: sql<number>`count(*) FILTER (WHERE ${eq(orderMailCandidateDecision.decision, "linked")})::int`,
+        dismissed: sql<number>`count(*) FILTER (WHERE ${eq(orderMailCandidateDecision.decision, "dismissed")})::int`,
+      })
+      .from(orderMailCandidateDecision)
+      .innerJoin(
+        orderMailEvent,
+        eq(orderMailEvent.id, orderMailCandidateDecision.eventId),
+      )
+      .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
+      .innerJoin(
+        ledgerParty,
+        and(
+          eq(ledgerParty.id, orderMail.ledgerPartyId),
+          eq(ledgerParty.userId, actor.userId),
+          notDeleted(ledgerParty),
+        ),
+      )
+      .where(isNull(orderMailEvent.supersededAt))
+      .groupBy(orderMailCandidateDecision.proposedBy)
+      .orderBy(orderMailCandidateDecision.proposedBy),
   ]);
   const accuracyBlocks: ReportBlock[] = latestEvaluation
     ? emailAccuracyReviewBlocks(
@@ -1196,6 +1375,22 @@ export async function emailAccuracyViewReport(
         })),
         empty:
           "No recorded rule, Jev or model result disagrees with a member's review.",
+      },
+      {
+        kind: "table",
+        title: "Purchase link proposals",
+        columns: ["Proposed by", "Linked", "Dismissed"],
+        rows: proposals.map((item) => ({
+          id: item.proposedBy ?? "unknown",
+          cells: [
+            item.proposedBy
+              ? PROPOSER_LABEL[item.proposedBy]
+              : "Unknown (before proposers were recorded)",
+            String(item.linked),
+            String(item.dismissed),
+          ],
+        })),
+        empty: "No Email has been linked or dismissed for a Purchase.",
       },
       ...accuracyBlocks,
     ],

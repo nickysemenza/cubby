@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   MAIL_ATTACHMENT_MAX_BYTES,
   mailAttachmentOriginal,
@@ -218,6 +219,7 @@ export async function readEmailOriginalTransient(
   await exactMemberEmail(db, input, actor);
   return mailReadOut.parse({
     ...input,
+    id: parseShortcodeFor("email", email.shortcode),
     threadId: normalized.mail.threadId,
     checksum: await originalChecksum(normalized),
     sender: normalized.mail.headers.from ?? null,

@@ -457,21 +457,6 @@ public actor CubbyClient {
         }
     }
 
-    public func decideOrderMail(
-        eventID: String, purchaseID: PurchaseShortcode, link: Bool,
-        evidenceChecksum: String
-    ) async throws {
-        _ = try await perform {
-            try await api.vendor_decideOrderMail(
-                body: .json(
-                    .init(
-                        eventId: eventID, purchaseId: purchaseID, decision: link ? .linked : .dismissed,
-                        evidenceChecksum: evidenceChecksum
-                    ))
-            ).ok.body.json
-        }
-    }
-
     public func approvePhotoGroups(
         runID: RunShortcode, groups: [PhotoGroupProposal]
     ) async throws -> ReviewPhotoGroupsOutput {

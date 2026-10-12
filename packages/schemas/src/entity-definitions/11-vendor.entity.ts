@@ -55,7 +55,16 @@ export default defineEntity({
           id: "spending-classification",
           title: "Spending classification",
         },
-        { kind: "slot", id: "order-mail", title: "Email evidence" },
+        {
+          kind: "relation",
+          id: "emails",
+          title: "Emails",
+          relation: "emails",
+          filter: { descriptor: "vendorId" },
+          columns: ["receivedAt", "sender", "linkState", "purchaseLinks"],
+          // Linked, then suggestions to act on, then dismissals, newest first.
+          sort: { field: "linkState", direction: "asc" },
+        },
         {
           kind: "relation",
           id: "purchased-products",
@@ -962,6 +971,22 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "emails",
+      label: "Emails",
+      target: "email",
+      cardinality: "many",
+      // Its Purchases' Emails plus its sender-proof mail (ADR 0011).
+      provenance: {
+        kind: "derived",
+        filter: "vendorId",
+        evidence: [
+          "ImportSourceOrder",
+          "OrderMailCandidateDecision",
+          "OrderMailEvent",
+        ],
+      },
+    },
     {
       key: "defaultSpendingCategory",
       label: "Default spending category",

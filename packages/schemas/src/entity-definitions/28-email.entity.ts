@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 import {
+  EMAIL_LINK_STATE_LABEL,
+  emailImportOutcome,
+  emailLinkState,
+  emailPurchaseLink,
+} from "../email-fields.js";
+import {
   ledgerPartyShortcode,
   runShortcode,
   shortcodeSchema,
@@ -32,6 +38,26 @@ const statusOptions = emailStatus.options.map((value) => ({
   value,
   label: value[0]!.toUpperCase() + value.slice(1),
 }));
+const linkStateColors = {
+  linked: "var(--positive)",
+  suggested: "var(--warning)",
+  dismissed: "var(--muted-foreground)",
+  none: "var(--muted-foreground)",
+} as const;
+const linkStateOptions = emailLinkState.options.map((value) => ({
+  value,
+  label: EMAIL_LINK_STATE_LABEL[value],
+  color: linkStateColors[value],
+}));
+const importOutcomeOptions = [
+  { value: "imported", label: "Imported" },
+  { value: "importing", label: "Importing" },
+  { value: "failed", label: "Import failed" },
+  { value: "not_imported", label: "Not imported" },
+] as const satisfies readonly {
+  value: (typeof emailImportOutcome.options)[number];
+  label: string;
+}[];
 
 /** The promoted processing ledger owns identity and headers; retained content is optional. */
 export default defineEntity({
@@ -289,6 +315,72 @@ export default defineEntity({
         validation: readOnly(z.boolean()),
       },
       {
+        key: "linkState",
+        kind: "enum",
+        labelOverride: "Link",
+        control: { kind: "select", options: linkStateOptions },
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              label:
+                "Strongest Purchase pair in the list's scope: accepted import sources and reviewed links, then live suggestions, then dismissals",
+            },
+          ],
+        },
+        display: { list: true, listHidden: true, width: "sm" },
+        validation: readOnly(emailLinkState),
+      },
+      {
+        key: "purchaseLinks",
+        kind: "json",
+        labelOverride: "Purchases",
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              label:
+                "Each related Purchase in the list's scope with its link state",
+            },
+          ],
+        },
+        display: {
+          list: true,
+          listHidden: true,
+          detail: true,
+          renderer: { list: "purchase-links" },
+        },
+        validation: readOnly(z.array(emailPurchaseLink)),
+      },
+      {
+        key: "ownedByViewer",
+        kind: "boolean",
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              label:
+                "The signed-in member owns this Email; only the owner reviews, links or imports it",
+            },
+          ],
+        },
+        validation: readOnly(z.boolean()),
+      },
+      {
+        key: "importOutcome",
+        kind: "enum",
+        labelOverride: "Import",
+        control: { kind: "select", options: [...importOutcomeOptions] },
+        provenance: {
+          kind: "derived",
+          sources: [
+            { label: "Accepted import sources and the Email's import Run" },
+          ],
+        },
+        display: { list: true, listHidden: true, detail: true },
+        validation: readOnly(emailImportOutcome),
+      },
+      {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
@@ -351,6 +443,10 @@ export default defineEntity({
       "classificationVersion",
       "runId",
       "linked",
+      "linkState",
+      "purchaseLinks",
+      "ownedByViewer",
+      "importOutcome",
       "createdAt",
       "updatedAt",
     ],
@@ -367,6 +463,7 @@ export default defineEntity({
         "classificationStage",
         "status",
         "mailboxId",
+        "linkState",
         "createdAt",
         "updatedAt",
       ],
@@ -532,6 +629,33 @@ export default defineEntity({
           { value: "true", label: "Linked" },
           { value: "false", label: "Unlinked" },
         ],
+      },
+      {
+        columnId: "linkState",
+        kind: "multiselect",
+        placeholder: "Filter by link...",
+        options: linkStateOptions,
+      },
+      {
+        columnId: "purchaseId",
+        kind: "id",
+        placeholder: "Emails for Purchase...",
+        brandRef: { entity: "purchase" },
+        urlOnly: true,
+      },
+      {
+        columnId: "vendorId",
+        kind: "id",
+        placeholder: "Emails for Vendor...",
+        brandRef: { entity: "vendor" },
+        urlOnly: true,
+      },
+      {
+        columnId: "vendorAccountId",
+        kind: "id",
+        placeholder: "Emails for Vendor account...",
+        brandRef: { entity: "vendorAccount" },
+        urlOnly: true,
       },
       {
         columnId: "reviewConflict",

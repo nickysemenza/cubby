@@ -2,18 +2,9 @@ import type { fetchVendorLogoInput } from "@cubby/schemas/vendor";
 import { mergeVendorsOut } from "@cubby/schemas/vendor";
 
 import { vendorContract } from "~/contracts/vendor.contract";
-import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import {
-  startOrderMailImport,
-  startSelectedOrderMailImport,
-} from "~/server/purchase-import/gmail/import";
-import {
-  decideOrderMailCandidate,
-  listVendorOrderMail,
-} from "~/server/purchase-import/gmail/review";
 import { getVendorCoverage } from "~/server/repo/vendor";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { fetchAndAttachVendorLogo } from "~/server/services/vendor-logo.service";
@@ -39,24 +30,6 @@ const fetchVendorLogoWorkflow = bindWorkflow(
 );
 
 export const vendorHandlers = implementOperationDomain(vendorContract, {
-  orderMail: (context, input) => listVendorOrderMail(context.db, input),
-  importOrderMail: (context, input) => {
-    const queue = getPurchaseAgentQueue();
-    if (!queue) throw new Error("Purchase Agent queue is unavailable");
-    return startOrderMailImport(context.db, input, context.actorContext, queue);
-  },
-  importSelectedOrderMail: (context, input) => {
-    const queue = getPurchaseAgentQueue();
-    if (!queue) throw new Error("Purchase Agent queue is unavailable");
-    return startSelectedOrderMailImport(
-      context.db,
-      input,
-      context.actorContext,
-      queue,
-    );
-  },
-  decideOrderMail: (context, input) =>
-    decideOrderMailCandidate(context.db, input, context.actorContext),
   merge: async (context, input) => {
     const merge = await executeEntityAs(context, "merge", {
       entity: "vendor",

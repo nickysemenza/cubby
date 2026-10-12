@@ -1,6 +1,7 @@
 import { purchaseImportContract } from "~/contracts/purchase-import.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { startEmailImport } from "~/server/purchase-import/email-actions";
+import { decideEmailPurchase } from "~/server/purchase-import/email-purchase-decision";
 import {
   reclassifyEmails,
   rerunEmailPreview,
@@ -50,6 +51,8 @@ export const purchaseImportHandlers = implementOperationDomain(
       ),
     emailImport: (context, input) =>
       startEmailImport(context.db, input, context.actorContext),
+    emailPurchaseDecide: (context, input) =>
+      decideEmailPurchase(context.db, input, context.actorContext),
     emailReclassify: (context, input) =>
       reclassifyEmails(context.db, input, context.actorContext),
     emailPreviewRerun: (context, input) =>

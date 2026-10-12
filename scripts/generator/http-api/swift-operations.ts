@@ -927,7 +927,6 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "photoImport.startGrouping": { method: "startPhotoGrouping", doc: null },
   "photoImport.updateDraft": { method: "updatePhotoGroupDraft", doc: null },
   "problems.getCounts": { method: "problemCounts", doc: null },
-  "purchase.orderMail": { method: "purchaseOrderMail", doc: null },
   "run.aiUsage": { method: "runAiUsage", doc: null },
   "run.workSnapshot": { method: "runWorkSnapshot", doc: null },
   "run.control": { method: "controlRun", doc: null },
@@ -938,7 +937,6 @@ const CLIENT_PASSTHROUGH_METHODS = {
     method: "todayBriefing",
     doc: "The complete ranked task briefing, including summary counts outside the visible prefix.",
   },
-  "vendor.orderMail": { method: "vendorOrderMail", doc: null },
 } as const satisfies Readonly<
   Record<string, Readonly<{ method: string; doc: string | null }>>
 >;

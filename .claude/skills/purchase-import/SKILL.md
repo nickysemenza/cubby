@@ -53,9 +53,11 @@ never infer one. Respect an explicit member pause: do
 not retry or restart until imports are resumed. Follow the returned successor;
 the preceding attempt remains immutable.
 
-An explicit `mail.import` selection at its current checksum starts Luna without
-a dollar allowance or an inherited historical budget. Member-selected Vendor
-order Emails share this policy, within their existing selection limit.
+An explicit `mail.import` selection — up to 50 Emails, each by its `id`
+(`EML-` code) and current checksum as `mail.search` and `imports_read.mail`
+return them — starts Luna without a dollar allowance or an inherited
+historical budget. An Email with no order id that is already linked to exactly
+one Purchase imports into that Purchase rather than booking a second one.
 Member-controlled retries
 keep their frozen source scope. These selected Luna calls have no dollar ceiling;
 this does not authorize another paid model, historical discovery, unattended bulk admission,
@@ -273,8 +275,9 @@ relevance gates. A new Vendor or member-owned VendorAccount may be created from
 sufficient retained purchase evidence. This records a vendor relationship,
 not proof of a login.
 Related mail can converge on the same Purchase in either arrival order. Preserve
-explicit member link and dismissal decisions. Competing supported matches stay
-unresolved. A cancellation or refund can attach evidence and record its event;
+explicit member link and dismissal decisions (`mail.decide_purchase`, per Email
+and Purchase); an import-accepted source cannot be dismissed. Competing
+supported matches stay unresolved. A cancellation or refund can attach evidence and record its event;
 changing existing Expenses or writing refund Expenses requires review.
 Imported Products with identity, image or category gaps appear in the Research
 queue (the `research-queue` saved views); nothing starts research automatically.

@@ -30,7 +30,7 @@ import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
  *   the hand-written module extends with its own extras.
  */
 const WRAPPERS = {
-  email: "out+ filters+",
+  email: "out+ filtersBase",
   device: "create+ update+ updateInput out+ filters+",
   expense: "update+ updateInput+ out+ listItem+ filtersBase",
   financialAccount: "create+ update+ updateInput+ out+ filtersBase",

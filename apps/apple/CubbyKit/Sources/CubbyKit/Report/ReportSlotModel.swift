@@ -27,22 +27,25 @@ public protocol ReportServing: Sendable {
     func saveMealPreparation(_ input: SaveMealRecipePreparationInput) async throws
     /// `run.commitPrepared`: approve and import one prepared batch.
     func commitPrepared(_ input: RunCommitPreparedInput) async throws
-    func decideMail(_ input: OrderMailDecisionInput) async throws
+    /// `purchaseImport.emailPurchaseDecide`: link or dismiss one Email for one Purchase.
+    func decideEmailPurchase(_ input: EmailPurchaseDecisionInput) async throws
+        -> EmailPurchaseDecisionOut
     func createEmailAccuracy(_ input: CreateEmailAccuracyEvaluationInput) async throws
         -> CreateEmailAccuracyEvaluationOut
     func importEmail(_ input: EmailImportInput) async throws -> EmailImportOut
     /// `purchaseImport.emailReclassify`: classify the selected Emails again from their originals.
     func reclassifyEmails(_ input: ReclassifyEmailsInput) async throws -> ReclassifyEmailsOut
     /// `purchaseImport.emailPreviewRerun`: run one Email's extraction preview again.
-    func rerunEmailPreview(_ input: EmailImportInput) async throws -> RerunEmailPreviewOut
+    func rerunEmailPreview(_ input: EmailAtChecksumInput) async throws -> RerunEmailPreviewOut
     func correctEmailRelevance(_ input: CorrectEmailRelevanceInput) async throws
         -> CorrectEmailRelevanceOut
-    func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut
 }
 
 /// Commands a read-only fake need not implement; `CubbyClient` always does.
 extension ReportServing {
-    public func decideMail(_ input: OrderMailDecisionInput) async throws {
+    public func decideEmailPurchase(_ input: EmailPurchaseDecisionInput) async throws
+        -> EmailPurchaseDecisionOut
+    {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
     public func createEmailAccuracy(_ input: CreateEmailAccuracyEvaluationInput) async throws
@@ -56,15 +59,12 @@ extension ReportServing {
     public func reclassifyEmails(_ input: ReclassifyEmailsInput) async throws -> ReclassifyEmailsOut {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
-    public func rerunEmailPreview(_ input: EmailImportInput) async throws -> RerunEmailPreviewOut {
+    public func rerunEmailPreview(_ input: EmailAtChecksumInput) async throws -> RerunEmailPreviewOut {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
     public func correctEmailRelevance(_ input: CorrectEmailRelevanceInput) async throws
         -> CorrectEmailRelevanceOut
     {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
-    public func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
     public func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput {
@@ -98,10 +98,12 @@ extension ReportServing {
 }
 
 extension CubbyClient: ReportServing {
-    public func decideMail(_ input: OrderMailDecisionInput) async throws {
-        try await decideOrderMail(
-            eventID: input.eventId, purchaseID: input.purchaseId,
-            link: input.decision == .linked, evidenceChecksum: input.evidenceChecksum)
+    public func decideEmailPurchase(_ input: EmailPurchaseDecisionInput) async throws
+        -> EmailPurchaseDecisionOut
+    {
+        try await perform {
+            try await api.purchaseImport_emailPurchaseDecide(body: .json(input)).ok.body.json
+        }
     }
     public func createEmailAccuracy(_ input: CreateEmailAccuracyEvaluationInput) async throws
         -> CreateEmailAccuracyEvaluationOut
@@ -118,7 +120,7 @@ extension CubbyClient: ReportServing {
             try await api.purchaseImport_emailReclassify(body: .json(input)).ok.body.json
         }
     }
-    public func rerunEmailPreview(_ input: EmailImportInput) async throws -> RerunEmailPreviewOut {
+    public func rerunEmailPreview(_ input: EmailAtChecksumInput) async throws -> RerunEmailPreviewOut {
         try await perform {
             try await api.purchaseImport_emailPreviewRerun(body: .json(input)).ok.body.json
         }
@@ -129,9 +131,6 @@ extension CubbyClient: ReportServing {
         try await perform {
             try await api.purchaseImport_correctEmailRelevance(body: .json(input)).ok.body.json
         }
-    }
-    public func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut {
-        try await perform { try await api.vendor_importOrderMail(body: .json(input)).ok.body.json }
     }
     public func report(slot: ReportSlot, id: String, cursor: String?) async throws -> EntityReportOut {
         try await entityReport(slot: slot, id: id, cursor: cursor)
@@ -496,22 +495,24 @@ public final class ReportSlotModel {
         progress: @MainActor (String) -> Void = { _ in }
     ) async throws -> ReportActionOutcome {
         switch request {
-        case .decideOrderMail(let decision):
-            guard let purchaseID = form?.text("purchaseId") ?? decision.purchaseId else {
-                throw ReportActionError.incompleteAnswers
-            }
-            try await service.decideMail(
+        case .decideEmailPurchase(let decision):
+            let linking = decision.decision == .linked
+            let result = try await service.decideEmailPurchase(
                 .init(
-                    eventId: decision.eventId, purchaseId: purchaseID,
-                    decision: decision.decision == .linked ? .linked : .dismissed,
-                    evidenceChecksum: decision.evidenceChecksum))
-            return .done("Updated the email relationship")
+                    id: decision.id, expectedChecksum: decision.expectedChecksum,
+                    purchaseId: decision.purchaseId,
+                    decision: linking ? .linked : .dismissed))
+            return .done(
+                linking ? "Linked to \(result.purchaseId)" : "Dismissed for \(result.purchaseId)")
         case .createEmailAccuracy(let review):
             let result = try await service.createEmailAccuracy(.init(sampleSize: review.sampleSize))
             return .done("Independent review sample: \(result.sampleSize) Emails")
         case .importEmail(let original):
             let result = try await service.importEmail(
-                .init(id: original.id, expectedChecksum: original.expectedChecksum))
+                .init(
+                    items: original.items.map {
+                        .init(id: $0.id, expectedChecksum: $0.expectedChecksum)
+                    }))
             if result.runIds.count == 1, let runID = result.runIds.first { return .openedRun(runID) }
             return .done("Import Runs: " + result.runIds.joined(separator: ", "))
         case .reclassifyEmail(let selection):
@@ -536,13 +537,6 @@ public final class ReportSlotModel {
                     reviewedChecksum: correction.reviewedChecksum,
                     classification: try Self.option(classification), reason: reason))
             return .done("Relevance corrected: \(result.classification.rawValue)")
-        case .researchOrderMail(let original):
-            let result = try await service.researchMail(
-                .init(
-                    eventId: original.eventId,
-                    evidenceChecksum: original.evidenceChecksum))
-            if result.runIds.count == 1, let runID = result.runIds.first { return .openedRun(runID) }
-            return .done("Research Runs: " + result.runIds.joined(separator: ", "))
         case .runControl(let control):
             let successor = try await service.controlRun(
                 .init(

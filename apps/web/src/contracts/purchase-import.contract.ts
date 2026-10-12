@@ -9,7 +9,10 @@ import {
   emailAccuracyReport,
 } from "@cubby/schemas/email-accuracy";
 import {
+  emailAtChecksum,
   emailImportInput,
+  emailPurchaseDecisionInput,
+  emailPurchaseDecisionOut,
   emailImportOut,
   correctEmailRelevanceInput,
   correctEmailRelevanceOut,
@@ -92,6 +95,15 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     native: "Explicit selected Email import",
     invalidates: ["email", "runOnly"],
   }),
+  /** Link or dismiss one Email for one Purchase (Purchase, Vendor and Email pages). */
+  emailPurchaseDecide: mutation({
+    input: emailPurchaseDecisionInput,
+    output: emailPurchaseDecisionOut,
+    native: "Link or dismiss an Email for a Purchase",
+    // Every Emails section reads the Email list, so the list tag refreshes
+    // the Purchase, Vendor and account sections together.
+    invalidates: ["email"],
+  }),
   emailReclassify: mutation({
     input: reclassifyEmailsInput,
     output: reclassifyEmailsOut,
@@ -99,7 +111,7 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     invalidates: ["email", "runOnly"],
   }),
   emailPreviewRerun: mutation({
-    input: emailImportInput,
+    input: emailAtChecksum,
     output: rerunEmailPreviewOut,
     native: "Rerun one Email's extraction preview",
     invalidates: ["email", "runOnly"],

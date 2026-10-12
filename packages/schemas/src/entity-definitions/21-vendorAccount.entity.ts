@@ -43,7 +43,16 @@ export default defineEntity({
     icons: { phosphor: "Key", sfSymbol: "person.badge.key", emoji: "🔑" },
     detail: {
       additionalSections: [
-        { kind: "slot", id: "order-mail", title: "Email evidence" },
+        {
+          kind: "relation",
+          id: "emails",
+          title: "Emails",
+          relation: "emails",
+          filter: { descriptor: "vendorAccountId" },
+          columns: ["receivedAt", "sender", "linkState", "purchaseLinks"],
+          // Linked, then suggestions to act on, then dismissals, newest first.
+          sort: { field: "linkState", direction: "asc" },
+        },
       ],
     },
   },
@@ -354,6 +363,22 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "emails",
+      label: "Emails",
+      target: "email",
+      cardinality: "many",
+      // Its Vendor's Emails owned by the account's member (ADR 0011).
+      provenance: {
+        kind: "derived",
+        filter: "vendorAccountId",
+        evidence: [
+          "ImportSourceOrder",
+          "OrderMailCandidateDecision",
+          "OrderMailEvent",
+        ],
+      },
+    },
     {
       key: "vendor",
       label: "Vendor",

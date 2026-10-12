@@ -1,15 +1,38 @@
 import { z } from "zod";
-import { emailShortcode, runShortcode } from "./identifier-fields.js";
+import { emailLinkState } from "./email-fields.js";
+import {
+  emailShortcode,
+  purchaseShortcode,
+  runShortcode,
+} from "./identifier-fields.js";
 import {
   EMAIL_RECLASSIFY_LIMIT,
   mailboxClassification,
   mailboxClassificationStage,
 } from "./mailbox-research.js";
 
+const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
+
+/** One Email at the checksum the member reviewed. */
+export const emailAtChecksum = z
+  .object({ id: emailShortcode, expectedChecksum: sha256 })
+  .strict();
+export type EmailAtChecksum = z.infer<typeof emailAtChecksum>;
+
+export const EMAIL_IMPORT_LIMIT = 50;
+/**
+ * An explicit member authorization to import selected Emails, all owned by
+ * the member. Search and read results carry each Email's `id` and checksum.
+ */
 export const emailImportInput = z
   .object({
-    id: emailShortcode,
-    expectedChecksum: z.string().regex(/^[a-f0-9]{64}$/),
+    items: z
+      .array(emailAtChecksum)
+      .min(1)
+      .max(
+        EMAIL_IMPORT_LIMIT,
+        `Import at most ${EMAIL_IMPORT_LIMIT} Emails at a time.`,
+      ),
   })
   .strict();
 export const emailImportOut = z
@@ -17,11 +40,35 @@ export const emailImportOut = z
   .strict();
 export type EmailImportInput = z.infer<typeof emailImportInput>;
 
+/**
+ * A member's review of one (Email, Purchase) pair. Link records a reviewed
+ * link on every order event of the Email that suggests or was decided for the
+ * Purchase, replacing another Purchase's link on those events, and marks the
+ * Email related. Dismiss records a dismissal on the same events; it cannot
+ * undo an import that accepted the Email as the Purchase's source.
+ */
+export const emailPurchaseDecisionInput = emailAtChecksum
+  .extend({
+    purchaseId: purchaseShortcode,
+    decision: z.enum(["linked", "dismissed"]),
+  })
+  .strict();
+export type EmailPurchaseDecisionInput = z.infer<
+  typeof emailPurchaseDecisionInput
+>;
+export const emailPurchaseDecisionOut = z
+  .object({
+    id: emailShortcode,
+    purchaseId: purchaseShortcode,
+    state: emailLinkState,
+  })
+  .strict();
+
 export const correctEmailRelevanceInput = z
   .object({
     id: emailShortcode,
-    expectedChecksum: z.string().regex(/^[a-f0-9]{64}$/),
-    reviewedChecksum: z.string().regex(/^[a-f0-9]{64}$/),
+    expectedChecksum: sha256,
+    reviewedChecksum: sha256,
     classification: z.enum(["related", "uncertain"]),
     reason: z.string().trim().min(1),
   })
@@ -29,7 +76,7 @@ export const correctEmailRelevanceInput = z
 export const correctEmailRelevanceOut = z
   .object({
     id: emailShortcode,
-    checksum: z.string().regex(/^[a-f0-9]{64}$/),
+    checksum: sha256,
     classification: z.enum(["related", "uncertain"]),
     originalAvailable: z.literal(true),
   })

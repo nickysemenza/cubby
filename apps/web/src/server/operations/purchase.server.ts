@@ -15,7 +15,6 @@ import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { listPurchaseOrderMail } from "~/server/purchase-import/gmail/review";
 import {
   getPurchaseByShortcode,
   linkExpensesToPurchase,
@@ -208,7 +207,6 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
       }),
     });
   },
-  orderMail: (context, input) => listPurchaseOrderMail(context.db, input),
   products: (context, input) => purchaseProductsWorkflow(context, input),
   link: (context, input) => linkExpensesToPurchaseWorkflow(context, input),
   split: (context, input) => splitExpenseWorkflow(context, input),

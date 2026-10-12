@@ -8,6 +8,8 @@ import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { FolderSimplePlusIcon } from "@phosphor-icons/react/dist/csr/FolderSimplePlus";
 import { HandCoinsIcon } from "@phosphor-icons/react/dist/csr/HandCoins";
 import { ImagesIcon } from "@phosphor-icons/react/dist/csr/Images";
+import { LinkSimpleIcon } from "@phosphor-icons/react/dist/csr/LinkSimple";
+import { LinkSimpleBreakIcon } from "@phosphor-icons/react/dist/csr/LinkSimpleBreak";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { NotePencilIcon } from "@phosphor-icons/react/dist/csr/NotePencil";
 import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
@@ -94,6 +96,11 @@ export const actionVerbs = {
   setProjectUses: { label: "Set project uses...", icon: WrenchIcon },
   setTradeCost: { label: "Set trade cost...", icon: HandCoinsIcon },
   reclassify: { label: "Reclassify selected...", icon: ArrowsClockwiseIcon },
+  linkToPurchase: { label: "Link to this Purchase", icon: LinkSimpleIcon },
+  dismissForPurchase: {
+    label: "Dismiss for this Purchase",
+    icon: LinkSimpleBreakIcon,
+  },
 
   // — AI ——————————————————————————————————————————————————————————————
   //
