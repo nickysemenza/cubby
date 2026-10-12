@@ -3,6 +3,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
+import { normalizeSorts } from "@cubby/schemas/pagination";
 import { photoGroupProposalState } from "@cubby/schemas/photo-import-run";
 import { productFiltersSchema } from "@cubby/schemas/product";
 import { expenseFiltersSchema } from "@cubby/schemas/project";
@@ -13,6 +14,7 @@ import {
   workQueueHouseholdInput,
   workQueueKindSchema,
   workQueueSourceSchema,
+  workQueueSortSchema,
   workWaitingForSchema,
   workQueueOutSchema,
   type WorkQueueRow,
@@ -334,6 +336,33 @@ export async function readWorkQueue(
     conditions.push(
       sql`concat_ws(' ', name, reason, id, "nextAction") ILIKE ${ilikeContains(input.query)}`,
     );
+  const sortExpressions = {
+    name: sql`name`,
+    entity: sql`CASE entity ${sql.join(
+      Object.entries(entitySummary).map(
+        ([entity, summary]) => sql`WHEN ${entity} THEN ${summary.singular}`,
+      ),
+      sql` `,
+    )} ELSE 'Problem' END`,
+    kind: sql`kind`,
+    source: sql`source`,
+    nextAction: sql`"nextAction"`,
+    waitingFor: sql`CASE waiting_kind WHEN ${either} THEN 'Either' WHEN ${unresolved} THEN 'Unresolved' ELSE (SELECT string_agg(member.name, ', ' ORDER BY member.name, member.shortcode) FROM members member WHERE member.id = ANY(eligible.owners)) END`,
+  };
+  const sorts = workQueueSortSchema.parse(
+    normalizeSorts(input.sort ?? [{ orderBy: "kind", direction: "asc" }]),
+  );
+  const orderBy = sql.join(
+    [
+      ...sorts.map(
+        (sort) =>
+          sql`${sortExpressions[sort.orderBy]} ${sort.direction === "desc" ? sql`DESC` : sql`ASC`} NULLS LAST`,
+      ),
+      sql`name ASC`,
+      sql`key ASC`,
+    ],
+    sql`, `,
+  );
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
   const result = await getDb(db).execute(sql`
     WITH members AS (
@@ -345,8 +374,10 @@ export async function readWorkQueue(
           SELECT 1 FROM unnest(owners) owner WHERE owner IS NULL OR NOT EXISTS (SELECT 1 FROM members member WHERE member.id = owner)
         ) THEN ${members} ELSE ${unresolved} END AS waiting_kind
       FROM candidates
-    ), eligible AS (SELECT * FROM routed WHERE ${sql.join(conditions, sql` AND `)}), page AS (
-      SELECT * FROM eligible ORDER BY kind, name, key LIMIT ${input.pageSize} OFFSET ${input.pageIndex * input.pageSize}
+    ), eligible AS (SELECT * FROM routed WHERE ${sql.join(conditions, sql` AND `)}), ordered AS (
+      SELECT *, row_number() OVER (ORDER BY ${orderBy}) AS position FROM eligible
+    ), page AS (
+      SELECT * FROM ordered ORDER BY position LIMIT ${input.pageSize} OFFSET ${input.pageIndex * input.pageSize}
     ) SELECT
       (SELECT count(*)::int FROM eligible) AS total,
       coalesce((SELECT jsonb_agg(jsonb_build_object('id', shortcode, 'name', name) ORDER BY name, shortcode) FROM members), '[]'::jsonb) AS members,
@@ -356,7 +387,7 @@ export async function readWorkQueue(
           WHEN ${either} THEN jsonb_build_object('kind', ${either}::text)
           WHEN ${members} THEN jsonb_build_object('kind', ${members}::text, 'members', (SELECT jsonb_agg(jsonb_build_object('id', member.shortcode, 'name', member.name) ORDER BY member.name, member.shortcode) FROM members member WHERE member.id = ANY(page.owners)))
           ELSE jsonb_build_object('kind', ${unresolved}::text, 'reason', 'Current private source ownership is not established.') END
-      ) || CASE WHEN "problemKey" IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('problemKey', "problemKey") END ORDER BY kind, name, key) FROM page), '[]'::jsonb) AS items
+      ) || CASE WHEN "problemKey" IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('problemKey', "problemKey") END ORDER BY position) FROM page), '[]'::jsonb) AS items
   `);
   const row = z
     .object({

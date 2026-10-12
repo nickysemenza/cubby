@@ -1049,6 +1049,18 @@ projection, not a new entity or assignment ledger. MCP `activity.work_queue`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
 
+The browser reuses shared infinite loading, column controls, checkbox selection,
+Copy codes and responsive source-record inspection. Queue keys identify work
+reasons; source shortcodes identify records and are deduplicated when copied.
+Rows without source codes are not selectable. Filters clear selection, scrolling
+preserves it, and refetched rows reconcile it with the loaded result set.
+Select-all-matching uses the shared bounded pager. Projected fields sort before
+paging with stable name/key ties; the enriched Reason column stays unsortable.
+Filters and sorting are URL state; browser pagination keys are removed and
+unsupported sort fields fall back to the default. Column controls are session
+state. MCP retains its paged read contract. Run rows open passive Problems until
+Run detail reads stop recovering execution.
+
 The compiler (`scripts/generator/entities/data-quality.ts`) synthesizes two
 model fields (`dataQuality`, `dataGaps`) with the `data-quality` list
 renderer, the `dataStatus`/`dataGap` filter descriptors, and a `dataQuality`

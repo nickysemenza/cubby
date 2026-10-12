@@ -32,10 +32,13 @@ export interface ListQueryResponse<TData> {
  * The row type therefore travels with both the key and the executor instead of
  * being represented by a phantom result field beside an untyped callback.
  */
-export interface ListQueryPlan<TData> {
+export interface ListQueryPlan<
+  TData,
+  TPage extends ListQueryResponse<TData> = ListQueryResponse<TData>,
+> {
   queryKey: QueryKey;
   meta?: QueryMeta;
-  execute: (signal: AbortSignal) => Promise<ListQueryResponse<TData>>;
+  execute: (signal: AbortSignal) => Promise<TPage>;
   progressive?: {
     enrich: LoadListEnrichment;
     summary: (signal: AbortSignal) => Promise<ListTotals>;
@@ -51,27 +54,36 @@ export interface ListQueryPlan<TData> {
 export type ListQueryOptionsFn<
   TFilters,
   TData extends { id: string } = { id: string },
+  TPage extends ListQueryResponse<TData> = ListQueryResponse<TData>,
 > = (params: {
   /** Sort stack, primary first. */
   sort?: Array<{ orderBy: string; direction: "asc" | "desc" }>;
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;
   groupBy?: string;
-}) => ListQueryPlan<TData>;
+}) => ListQueryPlan<TData, TPage>;
 
-interface UsePaginatedTableCoreOptions<TFilters, TData extends { id: string }> {
-  queryOptions: ListQueryOptionsFn<TFilters, TData>;
+interface UsePaginatedTableCoreOptions<
+  TFilters,
+  TData extends { id: string },
+  TPage extends ListQueryResponse<TData>,
+> {
+  queryOptions: ListQueryOptionsFn<TFilters, TData, TPage>;
   buildFilters: (tableState: TableStateReturn) => TFilters;
   tableState: TableStateReturn;
   groupBy?: string;
 }
 
-export function usePaginatedTableCore<TFilters, TData extends { id: string }>({
+export function usePaginatedTableCore<
+  TFilters,
+  TData extends { id: string },
+  TPage extends ListQueryResponse<TData> = ListQueryResponse<TData>,
+>({
   queryOptions,
   buildFilters,
   tableState,
   groupBy,
-}: UsePaginatedTableCoreOptions<TFilters, TData>) {
+}: UsePaginatedTableCoreOptions<TFilters, TData, TPage>) {
   const filters = useMemo(
     () => buildFilters(tableState),
     [buildFilters, tableState],
@@ -82,9 +94,9 @@ export function usePaginatedTableCore<TFilters, TData extends { id: string }>({
   const { pagination } = tableState;
 
   const queryParams = useMemo((): Parameters<
-    ListQueryOptionsFn<TFilters, TData>
+    ListQueryOptionsFn<TFilters, TData, TPage>
   >[0] => {
-    const params: Parameters<ListQueryOptionsFn<TFilters, TData>>[0] = {
+    const params: Parameters<ListQueryOptionsFn<TFilters, TData, TPage>>[0] = {
       pagination,
       filters,
     };

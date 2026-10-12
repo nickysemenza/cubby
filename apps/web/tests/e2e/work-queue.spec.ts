@@ -23,11 +23,13 @@ import { seedImagePrerequisite } from "./fixtures-photos";
 
 // Failure modes: a member filter widens to shared work, filtering runs only on
 // the loaded page, URL state is lost on reload, a queue row loses its source,
-// or the shared pager offers a size rejected by the queue contract.
+// or changing routing keeps a selection from the previous result set.
 test("Work queue filters routing before paging and opens its source record", async ({
   page,
+  context,
 }, testInfo) => {
   test.setTimeout(60_000);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.setViewportSize({ width: 1280, height: 900 });
   const prefix = uniqueName(testInfo, "Queue routing");
   const member = await ensureMemberParty(page, prefix);
@@ -52,11 +54,29 @@ test("Work queue filters routing before paging and opens its source record", asy
     page,
     `/work-queue?query=${encodeURIComponent(prefix)}&pageSize=1&waitingFor=either`,
   );
-  const product = page.getByRole("link", {
-    name: `${prefix} shared product`,
-    exact: true,
-  });
+  const product = page
+    .getByRole("link", {
+      name: `${prefix} shared product`,
+      exact: true,
+    })
+    .first();
   await expect(product).toHaveAttribute("href", `/products/${shared.id}`);
+  // One record can need both repair and research. Keep both work rows but
+  // copy the canonical code once.
+  await expect(
+    page.getByRole("table").getByRole("link", {
+      name: `${prefix} shared product`,
+      exact: true,
+    }),
+  ).toHaveCount(2);
+  await page.getByRole("checkbox", { name: "Select all", exact: true }).check();
+  await page.getByRole("button", { name: "Copy codes", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(shared.id);
+  await page
+    .getByRole("button", { name: "Clear selection", exact: true })
+    .click();
   const chooseWaitingFor = async (current: string, next: string) => {
     await page
       .getByRole("button", { name: `Waiting for: ${current}`, exact: true })
@@ -71,6 +91,9 @@ test("Work queue filters routing before paging and opens its source record", asy
   };
   await chooseWaitingFor("Either", member.name);
   await expect(product).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Copy codes", exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: `${prefix} owned mail`, exact: true }),
   ).toHaveAttribute("href", `/emails/${owned.shortcode}`);
@@ -93,16 +116,9 @@ test("Work queue filters routing before paging and opens its source record", asy
     page.getByRole("link", { name: `${prefix} owned mail`, exact: true }),
   ).toHaveCount(0);
   await chooseWaitingFor("Unresolved", "Either");
-  await page
-    .getByRole("combobox", { name: "Rows per page", exact: true })
-    .click();
   await expect(
-    page.getByRole("option", { name: "100", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("option", { name: "250", exact: true }),
+    page.getByRole("combobox", { name: "Rows per page", exact: true }),
   ).toHaveCount(0);
-  await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 402, height: 874 });
   await expect(product).toHaveAttribute("href", `/products/${shared.id}`);
   expect(
@@ -112,6 +128,104 @@ test("Work queue filters routing before paging and opens its source record", asy
   ).toBe(true);
   await product.click();
   await expect(page).toHaveURL(`/products/${shared.id}`);
+});
+
+// Failure modes: later pages replace earlier rows, sorting orders only loaded
+// rows, a checkbox opens the inspector, copied codes are queue keys, or changing
+// filters leaves an executable selection from the previous result set.
+test("Work queue scrolls, sorts, copies source codes and inspects independently", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const prefix = uniqueName(testInfo, "Queue table parity");
+  const names = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"];
+  names.push(...Array.from({ length: 24 }, (_, i) => `Between ${i}`));
+  const records = [];
+  for (const suffix of names) {
+    records.push(
+      await seedProductPrerequisite(page, { name: `${prefix} ${suffix}` }),
+    );
+  }
+  await gotoAuthenticatedPage(
+    page,
+    `/work-queue?query=${encodeURIComponent(prefix)}&source=research&sort=-name`,
+  );
+  const table = page.getByRole("table");
+  const first = table.getByRole("row").filter({
+    has: page.getByRole("link", { name: `${prefix} Foxtrot`, exact: true }),
+  });
+  await first
+    .getByRole("checkbox", { name: "Select row", exact: true })
+    .check();
+  await expect(
+    page.getByRole("complementary", { name: "Product inspector" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Copy codes", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(records[5]?.id);
+  await expect(
+    first.getByRole("checkbox", { name: "Select row", exact: true }),
+  ).toBeChecked();
+  await first.getByRole("cell", { name: "Product", exact: true }).click();
+  await expect(
+    page.getByRole("complementary", { name: "Product inspector" }),
+  ).toBeVisible();
+  await expect(
+    first.getByRole("checkbox", { name: "Select row", exact: true }),
+  ).toBeChecked();
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  await page
+    .getByRole("region", { name: "Work queue keyboard navigation" })
+    .evaluate((pane) => {
+      pane.scrollTop = pane.scrollHeight;
+    });
+  await expect(
+    table.getByRole("link", { name: `${prefix} Alpha`, exact: true }),
+  ).toBeVisible();
+  await expect(
+    table.getByRole("link", { name: `${prefix} Foxtrot`, exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(table.getByRole("link").first()).toHaveText(`${prefix} Foxtrot`);
+  await table
+    .getByRole("button", { name: "Sort by Record", exact: true })
+    .click();
+  await table
+    .getByRole("button", { name: "Sort by Record", exact: true })
+    .click();
+  await expect(table.getByRole("link").first()).toHaveText(`${prefix} Alpha`);
+  await expect(page).toHaveURL(/sort=name/);
+  await table
+    .getByRole("row")
+    .filter({
+      has: page.getByRole("link", { name: `${prefix} Alpha`, exact: true }),
+    })
+    .getByRole("checkbox", { name: "Select row", exact: true })
+    .check();
+  // Shared tables replace filter controls with the selection bar. A bookmarked
+  // filter navigation must still clear the selection from its prior scope.
+  await gotoAuthenticatedPage(
+    page,
+    `/work-queue?query=${encodeURIComponent(`${prefix} Alpha`)}&source=research&sort=name`,
+  );
+  await expect(
+    table.getByRole("link", { name: `${prefix} Bravo`, exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Copy codes", exact: true }),
+  ).toHaveCount(0);
+  await gotoAuthenticatedPage(
+    page,
+    `/work-queue?query=${encodeURIComponent(prefix)}&source=research&sort=reason&page=4&pageSize=2`,
+  );
+  await expect(table.getByRole("link").first()).toBeVisible();
+  await expect(page).not.toHaveURL(/[?&]page(?:Size)?=/);
 });
 
 // Run detail currently recovers pending execution on a read. Queue navigation

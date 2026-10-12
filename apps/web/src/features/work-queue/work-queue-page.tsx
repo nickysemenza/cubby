@@ -4,6 +4,8 @@ import {
   workQueueHouseholdInput,
   workQueueKindSchema,
   workQueueSourceSchema,
+  workQueueSortSchema,
+  type workQueueOutSchema,
   type WorkQueueKind,
   type WorkQueueMember,
   type WorkQueueRow,
@@ -13,16 +15,19 @@ import { humanize } from "@cubby/shared";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
-  functionalUpdate,
-  type ColumnFiltersState,
-  type PaginationState,
-} from "@tanstack/react-table";
-import { useCallback, useMemo, type ReactNode } from "react";
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { toast } from "sonner";
 import type { z } from "zod";
 
+import { verbBulkAction } from "~/entity/actions/action-verb-ui";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   EntityIcon,
@@ -30,22 +35,42 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { type FilterSpecCore } from "~/entity/filters";
 import { workQueue } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { copyShortcodes } from "~/lib/clipboard";
 import { colorizeSelectOptions } from "~/lib/select-options";
+import { formatCount } from "~/lib/utils";
+import {
+  bulkActionPreview,
+  type BulkActionsConfig,
+} from "~/ui/data-table/bulk-actions.types";
+import { BulkActionBar } from "~/ui/data-table/BulkActionBar";
 import { selectCellData, textCellData } from "~/ui/data-table/cell-data";
-import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import {
   createImageColumn,
   renderOptionCell,
 } from "~/ui/data-table/columnHelpers";
+import {
+  buildSelectColumn,
+  reconcileRowSelection,
+} from "~/ui/data-table/row-selection";
 import RTable from "~/ui/data-table/Table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-  useCubbyTable,
+  type CubbyRow,
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
+import { useBulkActions } from "~/ui/data-table/useBulkActions";
+import { useTableConfig } from "~/ui/data-table/useTableConfig";
+import {
+  useTableState,
+  type TableStateReturn,
+} from "~/ui/data-table/useTableState";
+import { useEntityPreview } from "~/ui/hooks/useEntityPreview";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
+import { useInfiniteTableList } from "~/ui/hooks/useInfiniteTableList";
+import { type ListQueryOptionsFn } from "~/ui/hooks/usePaginatedTableCore";
 import {
   domainForEntity,
   domainWayfinding,
@@ -54,12 +79,100 @@ import { Page, usePageCount } from "~/ui/page/Page";
 import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
-const PAGE_SIZES = [25, 50, 100];
-const EMPTY_ROWS: WorkQueueRow[] = [];
 const EMPTY_MEMBERS: WorkQueueMember[] = [];
 const INITIAL_VISIBILITY = { nextAction: false };
-const helper = createCubbyColumnHelper<WorkQueueRow>();
 type QueueInput = z.infer<typeof workQueueHouseholdInput>;
+type QueueFilters = Pick<
+  QueueInput,
+  "query" | "waitingFor" | "source" | "kind"
+>;
+// A work row is identified by its reason, independently of its source record.
+type QueueTableRow = Omit<WorkQueueRow, "id"> & {
+  id: string;
+  recordId: WorkQueueRow["id"];
+};
+type QueueTablePage = Omit<z.infer<typeof workQueueOutSchema>, "items"> & {
+  items: QueueTableRow[];
+};
+const helper = createCubbyColumnHelper<QueueTableRow>();
+const INITIAL_PAGINATION = { pageIndex: 0, pageSize: 25 };
+const PREVIEW_OPTIONS = { responsiveInspector: true };
+const FILTER_SPECS: readonly FilterSpecCore[] = [
+  { columnId: "name", urlKey: "query", kind: "text" },
+  { columnId: "waitingFor", kind: "select" },
+  { columnId: "source", kind: "select" },
+  { columnId: "kind", kind: "select" },
+];
+const COPY_ACTIONS: BulkActionsConfig<QueueTableRow> = {
+  actions: [
+    verbBulkAction<QueueTableRow>("copyCodes", {
+      id: "copy-shortcodes",
+      preserveSelection: true,
+      onExecute: async (rows) => ({
+        success: await copyShortcodes([
+          ...new Set(
+            rows.flatMap(({ original }) =>
+              original.recordId ? [original.recordId] : [],
+            ),
+          ),
+        ]),
+      }),
+    }),
+  ],
+};
+const buildQueueFilters = (state: TableStateReturn): QueueFilters => {
+  const parsed = workQueueHouseholdInput.parse({
+    query: state.getColumnFilter("name"),
+    waitingFor: state.getColumnFilter("waitingFor"),
+    source: state.getColumnFilter("source"),
+    kind: state.getColumnFilter("kind"),
+  });
+  return {
+    query: parsed.query,
+    waitingFor: parsed.waitingFor,
+    source: parsed.source,
+    kind: parsed.kind,
+  };
+};
+const queueQueryPlan: ListQueryOptionsFn<
+  QueueFilters,
+  QueueTableRow,
+  QueueTablePage
+> = ({ filters, pagination, sort }) => {
+  const input = workQueueHouseholdInput.parse({
+    ...filters,
+    ...pagination,
+    sort: workQueueSortSchema.safeParse(sort).data,
+  });
+  const options = workQueue.list.queryOptions(input);
+  return {
+    queryKey: options.queryKey,
+    meta: options.meta,
+    execute: async (signal) => {
+      const result = await workQueue.list.call(input, { signal });
+      return {
+        ...result,
+        items: result.items.map((row) => ({
+          ...row,
+          recordId: row.id,
+          id: row.key,
+        })),
+      };
+    },
+  };
+};
+const queueRowId = (row: QueueTableRow) => row.id;
+const canSelect = (row: CubbyRow<QueueTableRow>) =>
+  row.original.recordId !== null;
+const previewRow = (row: CubbyRow<QueueTableRow>) => ({
+  id: row.id,
+  original: { id: row.original.recordId, entityKind: row.original.entity },
+});
+const canPreview = (row: CubbyRow<QueueTableRow>) =>
+  row.original.recordId !== null &&
+  row.original.entity !== null &&
+  row.original.entity !== "run" &&
+  isBrowserRoutedEntity(row.original.entity);
 
 const KIND_ICONS = {
   research: <MagnifyingGlassIcon />,
@@ -128,17 +241,17 @@ function entityTypeOption(entity: Entity) {
   };
 }
 
-function queueHref(row: WorkQueueRow) {
+function queueHref(row: QueueTableRow) {
   // Run detail recovers pending execution on read (#1905); use passive Problems.
-  if (row.entity === null || row.id === null || row.entity === "run")
+  if (row.entity === null || row.recordId === null || row.entity === "run")
     return "/problems";
   return isBrowserRoutedEntity(row.entity)
-    ? `/${entities[row.entity].basePath}/${row.id}`
+    ? `/${entities[row.entity].basePath}/${row.recordId}`
     : undefined;
 }
 
-function WorkRecordLink({ row }: { row: WorkQueueRow }) {
-  if (row.entity === null || row.id === null || row.entity === "run") {
+function WorkRecordLink({ row }: { row: QueueTableRow }) {
+  if (row.entity === null || row.recordId === null || row.entity === "run") {
     return (
       <Link
         to="/problems"
@@ -154,7 +267,7 @@ function WorkRecordLink({ row }: { row: WorkQueueRow }) {
       variant="table"
       tone="identity"
       to={entities[row.entity].routes.detail}
-      params={entityDetailParams(row.id)}
+      params={entityDetailParams(row.recordId)}
       title={row.name}
     >
       {row.name}
@@ -168,7 +281,8 @@ function queueColumns(members: WorkQueueMember[]) {
   const memberOptions = colorizeSelectOptions(
     members.map((member) => ({ value: member.id, label: member.name })),
   );
-  return createCubbyColumnCollection<WorkQueueRow>((add) => {
+  return createCubbyColumnCollection<QueueTableRow>((add) => {
+    add(buildSelectColumn<QueueTableRow>());
     add(
       createImageColumn(helper, {
         rowEntity: (row) => row.entity ?? undefined,
@@ -179,10 +293,10 @@ function queueColumns(members: WorkQueueMember[]) {
         id: "name",
         header: "Record",
         size: 320,
-        meta: attachCubbyColumnMeta<WorkQueueRow>({
+        meta: attachCubbyColumnMeta<QueueTableRow>({
           entityColumnRole: "identity",
           mobile: { slot: "title" },
-          cellData: textCellData<WorkQueueRow>("text", (row) => row.name),
+          cellData: textCellData<QueueTableRow>("text", (row) => row.name),
           filterConfig: { placeholder: "Search work", filterType: "text" },
         }),
         cell: ({ row }) => <WorkRecordLink row={row.original} />,
@@ -193,7 +307,7 @@ function queueColumns(members: WorkQueueMember[]) {
         id: "entity",
         header: "Type",
         size: 128,
-        meta: attachCubbyColumnMeta<WorkQueueRow>({
+        meta: attachCubbyColumnMeta<QueueTableRow>({
           // Diagnostics have no entity but still render their Problem pill.
           mobile: {
             slot: "meta",
@@ -201,7 +315,7 @@ function queueColumns(members: WorkQueueMember[]) {
             label: "Type",
             showWhenEmpty: true,
           },
-          cellData: textCellData<WorkQueueRow>("text", (row) =>
+          cellData: textCellData<QueueTableRow>("text", (row) =>
             row.entity ? entitySummary[row.entity].singular : "Problem",
           ),
         }),
@@ -220,9 +334,9 @@ function queueColumns(members: WorkQueueMember[]) {
         id: "kind",
         header: "Kind",
         size: 112,
-        meta: attachCubbyColumnMeta<WorkQueueRow>({
+        meta: attachCubbyColumnMeta<QueueTableRow>({
           mobile: { slot: "meta", priority: 0, label: "Kind" },
-          cellData: selectCellData<WorkQueueRow>(
+          cellData: selectCellData<QueueTableRow>(
             (row) => row.kind,
             KIND_OPTIONS,
           ),
@@ -238,11 +352,12 @@ function queueColumns(members: WorkQueueMember[]) {
     add(
       helper.accessor((row) => row.reason, {
         id: "reason",
+        enableSorting: false,
         header: "Reason",
         size: 320,
-        meta: attachCubbyColumnMeta<WorkQueueRow>({
+        meta: attachCubbyColumnMeta<QueueTableRow>({
           mobile: { slot: "subtitle", priority: 0, label: "Reason" },
-          cellData: textCellData<WorkQueueRow>("text", (row) => row.reason),
+          cellData: textCellData<QueueTableRow>("text", (row) => row.reason),
         }),
         // The rule's next action is the reason's description; its own column
         // starts hidden because it repeats for every row of one rule.
@@ -258,9 +373,12 @@ function queueColumns(members: WorkQueueMember[]) {
         id: "nextAction",
         header: "Next action",
         size: 320,
-        meta: attachCubbyColumnMeta<WorkQueueRow>({
+        meta: attachCubbyColumnMeta<QueueTableRow>({
           mobile: { slot: "subtitle", priority: 1, label: "Next action" },
-          cellData: textCellData<WorkQueueRow>("text", (row) => row.nextAction),
+          cellData: textCellData<QueueTableRow>(
+            "text",
+            (row) => row.nextAction,
+          ),
         }),
         cell: ({ row }) => (
           <span title={row.original.nextAction}>{row.original.nextAction}</span>
@@ -272,9 +390,9 @@ function queueColumns(members: WorkQueueMember[]) {
         id: "waitingFor",
         header: "Waiting for",
         size: 136,
-        meta: attachCubbyColumnMeta<WorkQueueRow>({
+        meta: attachCubbyColumnMeta<QueueTableRow>({
           mobile: { slot: "meta", priority: 2, label: "Waiting for" },
-          cellData: textCellData<WorkQueueRow>("text", (row) =>
+          cellData: textCellData<QueueTableRow>("text", (row) =>
             waitingForLabel(row.waitingFor),
           ),
           filterConfig: {
@@ -301,9 +419,9 @@ function queueColumns(members: WorkQueueMember[]) {
         id: "source",
         header: "Source",
         size: 144,
-        meta: attachCubbyColumnMeta<WorkQueueRow>({
+        meta: attachCubbyColumnMeta<QueueTableRow>({
           mobile: { slot: "meta", priority: 3, label: "Source" },
-          cellData: selectCellData<WorkQueueRow>(
+          cellData: selectCellData<QueueTableRow>(
             (row) => row.source,
             SOURCE_OPTIONS,
           ),
@@ -321,12 +439,7 @@ function queueColumns(members: WorkQueueMember[]) {
 }
 
 /** The queue projects canonical work; filters never write assignment or source state. */
-type WorkQueuePageProps = {
-  search: QueueInput;
-  onChange: (patch: Partial<QueueInput>) => void;
-};
-
-export function WorkQueuePage(props: WorkQueuePageProps) {
+export function WorkQueuePage() {
   return (
     <Page
       variant="list"
@@ -335,93 +448,160 @@ export function WorkQueuePage(props: WorkQueuePageProps) {
       layout="full"
       bodyGutter="none"
     >
-      <WorkQueueTable {...props} />
+      <WorkQueueTable />
     </Page>
   );
 }
 
-function WorkQueueTable({ search, onChange }: WorkQueuePageProps) {
-  const query = useQuery({
-    ...workQueue.list.queryOptions(search),
-    placeholderData: keepPreviousData,
+function WorkQueueTable() {
+  const navigate = useNavigate();
+  const inspection = useEntityPreview(undefined, PREVIEW_OPTIONS);
+  const tableState = useTableState({
+    initialSort: "kind",
+    initialSortDesc: false,
+    initialPagination: INITIAL_PAGINATION,
+    filterSpecs: FILTER_SPECS,
+    urlSync: true,
+    syncPaginationToUrl: false,
   });
-  usePageCount(query.data?.meta.totalCount);
-  const members = query.data?.members ?? EMPTY_MEMBERS;
+  const list = useInfiniteTableList({
+    queryOptions: queueQueryPlan,
+    buildFilters: buildQueueFilters,
+    tableState,
+  });
+  const members = list.pages?.[0]?.members ?? EMPTY_MEMBERS;
   const columns = useMemo(() => queueColumns(members), [members]);
-  const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
+  usePageCount(list.isLoading ? undefined : list.totalCount);
+  const selection = useBulkActions({ config: COPY_ACTIONS });
+  const { clearSelection, onRowSelectionChange } = selection;
+  const {
+    onRowClick: previewClick,
+    onRowHover: previewHover,
+    onRowHoverEnd: previewHoverEnd,
+  } = inspection;
+  const scope = JSON.stringify(buildQueueFilters(tableState));
+  const queryScope = JSON.stringify([scope, tableState.sorting]);
+  const activeQueryScope = useRef(queryScope);
+  activeQueryScope.current = queryScope;
+  const previousScope = useRef(scope);
+  useEffect(() => {
+    if (previousScope.current === scope) return;
+    previousScope.current = scope;
+    clearSelection();
+  }, [scope, clearSelection]);
+  const availableRowIds = useMemo(
+    () =>
+      new Set(
+        list.data.filter((row) => row.recordId !== null).map((row) => row.id),
+      ),
+    [list.data],
+  );
+  useEffect(() => {
+    if (list.infiniteScroll.isTransitioning) return;
+    onRowSelectionChange((current) =>
+      reconcileRowSelection(current, availableRowIds),
+    );
+  }, [
+    availableRowIds,
+    list.infiniteScroll.isTransitioning,
+    onRowSelectionChange,
+  ]);
+  const table = useTableConfig({
+    data: list.data,
     columns,
+    tableState,
+    totalCount: list.data.length,
+    getRowId: queueRowId,
+    enableRowSelection: canSelect,
+    rowSelection: selection.rowSelection,
+    onRowSelectionChange: selection.onRowSelectionChange,
     initialColumnVisibility: INITIAL_VISIBILITY,
+    scrollRestorationId: "work-queue",
   });
-  const pagination = useMemo<PaginationState>(
-    () => ({ pageIndex: search.pageIndex, pageSize: search.pageSize }),
-    [search.pageIndex, search.pageSize],
-  );
-  const columnFilters = useMemo<ColumnFiltersState>(
-    () => [
-      ...(search.query ? [{ id: "name", value: search.query }] : []),
-      ...(search.waitingFor !== "all"
-        ? [{ id: "waitingFor", value: search.waitingFor }]
-        : []),
-      ...(search.source ? [{ id: "source", value: search.source }] : []),
-      ...(search.kind ? [{ id: "kind", value: search.kind }] : []),
-    ],
-    [search.query, search.waitingFor, search.source, search.kind],
-  );
-  const onColumnFiltersChange = useCallback(
-    (updater: Parameters<typeof functionalUpdate<ColumnFiltersState>>[0]) => {
-      const values = new Map(
-        functionalUpdate(updater, columnFilters).map((filter) => [
-          filter.id,
-          filter.value,
-        ]),
+  const [isSelectingAll, setIsSelectingAll] = useState(false);
+  const selectAllMatching = useCallback(async () => {
+    setIsSelectingAll(true);
+    try {
+      const rows = await list.infiniteScroll.loadAllPages();
+      if (activeQueryScope.current !== queryScope) return;
+      table.setRowSelection(
+        Object.fromEntries(
+          rows
+            .filter((row) => row.recordId !== null)
+            .map((row) => [row.id, true]),
+        ),
       );
-      const next = workQueueHouseholdInput.parse({
-        ...search,
-        query: values.get("name") || undefined,
-        waitingFor: values.get("waitingFor") || "all",
-        source: values.get("source") || undefined,
-        kind: values.get("kind") || undefined,
-        pageIndex: 0,
-      });
-      onChange(next);
+      if (rows.length < list.totalCount)
+        toast.warning(
+          `Selected the first ${formatCount(rows.length)} of ${formatCount(list.totalCount)} — too many to select at once. Narrow the filters to cover the rest.`,
+        );
+    } finally {
+      setIsSelectingAll(false);
+    }
+  }, [list.infiniteScroll, list.totalCount, queryScope, table]);
+  const onRowClick = useCallback(
+    (row: CubbyRow<QueueTableRow>) => {
+      if (canPreview(row)) previewClick(previewRow(row));
+      else if (queueHref(row.original) === "/problems")
+        void navigate({ to: "/problems" });
     },
-    [columnFilters, onChange, search],
+    [previewClick, navigate],
   );
-  const onPaginationChange = useCallback(
-    (updater: Parameters<typeof functionalUpdate<PaginationState>>[0]) => {
-      const next = functionalUpdate(updater, pagination);
-      onChange({
-        ...next,
-        pageIndex: next.pageSize === pagination.pageSize ? next.pageIndex : 0,
-      });
+  const onRowHover = useCallback(
+    (row: CubbyRow<QueueTableRow>) => {
+      if (canPreview(row)) previewHover(previewRow(row));
     },
-    [onChange, pagination],
+    [previewHover],
   );
-  const table = useCubbyTable({
-    data: query.data?.items ?? EMPTY_ROWS,
-    columns: tableColumns,
-    getRowId: (row) => row.key,
-    initialState: { ...defaultLayout },
-    state: { columnFilters, pagination },
-    onColumnFiltersChange,
-    onPaginationChange,
-    rowCount: query.data?.meta.totalCount ?? 0,
-    manualFiltering: true,
-    manualPagination: true,
-    enableSorting: false,
-    enableRowSelection: false,
-    meta: { defaultLayout, pageSizeOptions: PAGE_SIZES },
-  });
-  const isLoading = useHydratedLoading(query.isPending);
+  const onRowHoverEnd = useCallback(
+    (row: CubbyRow<QueueTableRow>) => {
+      if (canPreview(row)) previewHoverEnd(previewRow(row));
+    },
+    [previewHoverEnd],
+  );
+  const PreviewSheet = inspection.PreviewSheet;
+  const isLoading = useHydratedLoading(list.isLoading);
   return (
-    <RTable
-      table={table}
-      ariaLabel="Work queue"
-      isLoading={isLoading}
-      error={query.error}
-      showColumnMenu
-      getMobileDetailsHref={queueHref}
-      emptyState="No work matches these filters."
-    />
+    <>
+      <RTable
+        table={table}
+        ariaLabel="Work queue"
+        isLoading={isLoading}
+        error={list.error}
+        infiniteScroll={list.infiniteScroll}
+        refreshControls={list.refreshControls}
+        bulkActionPreview={bulkActionPreview(COPY_ACTIONS)}
+        bulkActionBar={
+          <BulkActionBar
+            selectedCount={selection.selectedCount}
+            selectedRows={table.getFilteredSelectedRowModel().rows}
+            actions={selection.getAvailableActions(
+              table.getFilteredSelectedRowModel().rows,
+            )}
+            onExecute={selection.executeAction}
+            onClearSelection={selection.clearSelection}
+            isExecuting={selection.isExecuting}
+            currentAction={selection.currentAction}
+            disabled={list.infiniteScroll.isTransitioning}
+            selectAllMatching={{
+              totalCount: list.totalCount,
+              loadedCount: list.data.length,
+              onSelectAll: selectAllMatching,
+              isSelectingAll,
+            }}
+          />
+        }
+        onRowClick={onRowClick}
+        onRowHover={onRowHover}
+        onRowHoverEnd={onRowHoverEnd}
+        currentRowId={inspection.preview?.rowKey}
+        desktopInspector={inspection.dockedInspector}
+        inspectorToggle={inspection.inspectorToggle}
+        showColumnMenu
+        getMobileDetailsHref={queueHref}
+        emptyState="No work matches these filters."
+      />
+      <PreviewSheet />
+    </>
   );
 }

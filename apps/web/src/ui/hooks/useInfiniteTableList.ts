@@ -28,8 +28,9 @@ import { useProgressiveList } from "./useProgressiveList";
 interface UseInfiniteTableListOptions<
   TFilters,
   TData extends IdentifiedListRow,
+  TPage extends ListQueryResponse<TData> = ListQueryResponse<TData>,
 > {
-  queryOptions: ListQueryOptionsFn<TFilters, TData>;
+  queryOptions: ListQueryOptionsFn<TFilters, TData, TPage>;
   buildFilters: (tableState: TableStateReturn) => TFilters;
   /** Shared table state, owned by the caller (one instance per page). */
   tableState: TableStateReturn;
@@ -55,7 +56,12 @@ export interface InfiniteScrollControls<
   loadAllPages: (cap?: number) => Promise<TData[]>;
 }
 
-interface UseInfiniteTableListReturn<TData extends IdentifiedListRow> {
+interface UseInfiniteTableListReturn<
+  TData extends IdentifiedListRow,
+  TPage extends ListQueryResponse<TData>,
+> {
+  /** Full page responses retain source-owned metadata, even for empty pages. */
+  pages: readonly TPage[] | undefined;
   data: TData[];
   totalCount: number;
   /** Server-computed full-filtered-set column sums (footer totals). */
@@ -90,6 +96,7 @@ interface UseInfiniteTableListReturn<TData extends IdentifiedListRow> {
 export function useInfiniteTableList<
   TFilters,
   TData extends IdentifiedListRow,
+  TPage extends ListQueryResponse<TData> = ListQueryResponse<TData>,
 >({
   queryOptions,
   buildFilters,
@@ -98,10 +105,11 @@ export function useInfiniteTableList<
   visibleFields,
 }: UseInfiniteTableListOptions<
   TFilters,
-  TData
->): UseInfiniteTableListReturn<TData> {
+  TData,
+  TPage
+>): UseInfiniteTableListReturn<TData, TPage> {
   const { filters, sortParams, pagination, queryParams } =
-    usePaginatedTableCore<TFilters, TData>({
+    usePaginatedTableCore<TFilters, TData, TPage>({
       queryOptions,
       buildFilters,
       tableState,
@@ -109,11 +117,14 @@ export function useInfiniteTableList<
     });
 
   const pageInputFor = useCallback(
-    (pageIndex: number): Parameters<ListQueryOptionsFn<TFilters, TData>>[0] => {
-      const params: Parameters<ListQueryOptionsFn<TFilters, TData>>[0] = {
-        pagination: { pageIndex, pageSize: pagination.pageSize },
-        filters,
-      };
+    (
+      pageIndex: number,
+    ): Parameters<ListQueryOptionsFn<TFilters, TData, TPage>>[0] => {
+      const params: Parameters<ListQueryOptionsFn<TFilters, TData, TPage>>[0] =
+        {
+          pagination: { pageIndex, pageSize: pagination.pageSize },
+          filters,
+        };
       if (queryParams.sort !== undefined) params.sort = sortParams;
       if (groupBy) params.groupBy = groupBy;
       return params;
@@ -170,7 +181,7 @@ export function useInfiniteTableList<
       return options.execute(signal);
     },
     initialPageParam: 0,
-    getNextPageParam: (lastPage: ListQueryResponse<TData>) => {
+    getNextPageParam: (lastPage: TPage) => {
       const meta = lastPage.meta;
       if (!meta.totalCount || !meta.pageSize) return undefined;
       const pageIndex = meta.pageIndex;
@@ -295,6 +306,7 @@ export function useInfiniteTableList<
   );
 
   return {
+    pages: infiniteData?.pages,
     data,
     totalCount,
     sums: firstPageOptions.progressive
