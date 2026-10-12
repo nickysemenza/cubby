@@ -699,7 +699,7 @@ function renderResponsiveLayout({
         className={cn(
           "grid items-start gap-3 md:gap-3",
           primary.length > 0 && hasSupportingRail
-            ? "@min-[50rem]/detail-body:grid-cols-[minmax(0,1fr)_20rem]"
+            ? "@min-[60rem]/detail-body:grid-cols-[minmax(0,1fr)_20rem]"
             : "grid-cols-1",
         )}
       >

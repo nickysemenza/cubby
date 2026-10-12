@@ -451,151 +451,153 @@ function ServerListBody({
   const body = (
     <>
       {parts.above?.(list)}
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-2 py-1 text-xs md:px-4">
-        <ListTotalSummary
-          totals={entitySummary[entity].list.totals}
-          sums={list.sums}
-          state={list.summaryState}
-          onRetry={list.retrySummary}
-        />
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          {sweepAction}
-          <div data-workbench-status className="min-w-0" />
-          {contextualStatus}
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-2 py-1 text-xs md:px-4">
+          <ListTotalSummary
+            totals={entitySummary[entity].list.totals}
+            sums={list.sums}
+            state={list.summaryState}
+            onRetry={list.retrySummary}
+          />
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            {sweepAction}
+            <div data-workbench-status className="min-w-0" />
+            {contextualStatus}
+          </div>
         </div>
-      </div>
-      {list.enrichmentFailures?.map(({ pageIndex, group, state }) => (
-        <div key={`${pageIndex}:${group}`} className="min-w-0 text-sm">
-          <p role="alert" className="text-destructive">
-            {state.error}
-          </p>
-          {getAppErrorDetails(state.cause).code && (
-            <p className="font-mono text-xs">
-              {getAppErrorDetails(state.cause).code}
+        {list.enrichmentFailures?.map(({ pageIndex, group, state }) => (
+          <div key={`${pageIndex}:${group}`} className="min-w-0 text-sm">
+            <p role="alert" className="text-destructive">
+              {state.error}
             </p>
-          )}
-          <ErrorDetails error={state.cause} />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void list.retryEnrichment?.(pageIndex, group)}
-          >
-            Retry {group}
-          </Button>
-        </div>
-      ))}
-      <Stack gap="sm">
-        {renderedView !== "table" && (
-          <DataTableToolbar
-            table={list.workbench.table}
-            entity={entity}
-            portalWorkbenchUtilities
-          />
-        )}
-        {renderedView === "table" && (
-          <ListWorkbench
-            model={list.workbench}
-            ariaLabel={`${entities[entity].pluralLabel} table`}
-            onRowClick={onRowClick}
-            onRowHover={onRowHover}
-            onRowHoverEnd={onRowHoverEnd}
-            currentRowId={preview?.rowKey ?? preview?.id}
-            desktopInspector={dockedInspector}
-            inspectorToggle={inspectorToggle}
-            {...workbenchProps}
-            contextualStatus={null}
-          />
-        )}
-        {renderedView === "shelf" && (
-          <>
-            {inspectorToggle}
-            <div
-              className={
-                dockedInspector
-                  ? "grid min-w-0 grid-cols-[minmax(0,1fr)_25rem]"
-                  : "min-w-0"
-              }
+            {getAppErrorDetails(state.cause).code && (
+              <p className="font-mono text-xs">
+                {getAppErrorDetails(state.cause).code}
+              </p>
+            )}
+            <ErrorDetails error={state.cause} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void list.retryEnrichment?.(pageIndex, group)}
             >
-              <div className="min-w-0">
-                <EntityShelf
-                  emptyState={
-                    <TableEmptyState
-                      entity={entity}
-                      table={list.workbench.table}
-                    />
-                  }
-                  entity={entity}
-                  // `data` is the canonical flat server projection before
-                  // tree nesting and synthetic grouping rows reach the table.
-                  // A shelf must never turn either into cards.
-                  items={list.data}
-                  enrichmentState={list.enrichmentState}
-                  isLoading={list.workbench.isLoading}
-                  error={list.workbench.error}
-                  infiniteScroll={list.workbench.infiniteScroll}
-                  compact={density === "compact"}
-                  groupConfig={
-                    list.workbench.grouped
-                      ? list.workbench.groupConfig
-                      : undefined
-                  }
-                  onRetry={() =>
-                    void list.workbench.refreshControls.onRefresh()
-                  }
-                  onInspect={(record) =>
-                    inspectRow({
-                      id: record.id,
-                      original:
-                        entity === "wish"
-                          ? {
-                              ...record,
-                              entityKind: entity,
-                              previewId: record.id,
-                            }
-                          : record,
-                    })
-                  }
-                  onRowHover={(record) =>
-                    onRowHover({
-                      id: record.id,
-                      original:
-                        entity === "wish"
-                          ? {
-                              ...record,
-                              entityKind: entity,
-                              previewId: record.id,
-                            }
-                          : record,
-                    })
-                  }
-                  onRowHoverEnd={(record) =>
-                    onRowHoverEnd({ id: record.id, original: record })
-                  }
-                  currentRowId={preview?.rowKey ?? preview?.id}
-                />
+              Retry {group}
+            </Button>
+          </div>
+        ))}
+        <Stack gap="sm">
+          {renderedView !== "table" && (
+            <DataTableToolbar
+              table={list.workbench.table}
+              entity={entity}
+              portalWorkbenchUtilities
+            />
+          )}
+          {renderedView === "table" && (
+            <ListWorkbench
+              model={list.workbench}
+              ariaLabel={`${entities[entity].pluralLabel} table`}
+              onRowClick={onRowClick}
+              onRowHover={onRowHover}
+              onRowHoverEnd={onRowHoverEnd}
+              currentRowId={preview?.rowKey ?? preview?.id}
+              desktopInspector={dockedInspector}
+              inspectorToggle={inspectorToggle}
+              {...workbenchProps}
+              contextualStatus={null}
+            />
+          )}
+          {renderedView === "shelf" && (
+            <>
+              {inspectorToggle}
+              <div
+                className={
+                  dockedInspector
+                    ? "grid min-w-0 grid-cols-[minmax(0,1fr)_25rem]"
+                    : "min-w-0"
+                }
+              >
+                <div className="min-w-0">
+                  <EntityShelf
+                    emptyState={
+                      <TableEmptyState
+                        entity={entity}
+                        table={list.workbench.table}
+                      />
+                    }
+                    entity={entity}
+                    // `data` is the canonical flat server projection before
+                    // tree nesting and synthetic grouping rows reach the table.
+                    // A shelf must never turn either into cards.
+                    items={list.data}
+                    enrichmentState={list.enrichmentState}
+                    isLoading={list.workbench.isLoading}
+                    error={list.workbench.error}
+                    infiniteScroll={list.workbench.infiniteScroll}
+                    compact={density === "compact"}
+                    groupConfig={
+                      list.workbench.grouped
+                        ? list.workbench.groupConfig
+                        : undefined
+                    }
+                    onRetry={() =>
+                      void list.workbench.refreshControls.onRefresh()
+                    }
+                    onInspect={(record) =>
+                      inspectRow({
+                        id: record.id,
+                        original:
+                          entity === "wish"
+                            ? {
+                                ...record,
+                                entityKind: entity,
+                                previewId: record.id,
+                              }
+                            : record,
+                      })
+                    }
+                    onRowHover={(record) =>
+                      onRowHover({
+                        id: record.id,
+                        original:
+                          entity === "wish"
+                            ? {
+                                ...record,
+                                entityKind: entity,
+                                previewId: record.id,
+                              }
+                            : record,
+                      })
+                    }
+                    onRowHoverEnd={(record) =>
+                      onRowHoverEnd({ id: record.id, original: record })
+                    }
+                    currentRowId={preview?.rowKey ?? preview?.id}
+                  />
+                </div>
+                {dockedInspector && (
+                  <aside className="max-h-[calc(100vh-10rem)] overflow-y-auto border-l border-[var(--border)]">
+                    {dockedInspector}
+                  </aside>
+                )}
               </div>
-              {dockedInspector && (
-                <aside className="max-h-[calc(100vh-10rem)] overflow-y-auto border-l border-[var(--border)]">
-                  {dockedInspector}
-                </aside>
-              )}
-            </div>
-          </>
-        )}
-        {renderedView === "shelf" && !list.workbench.infiniteScroll && (
-          <DataTablePagination
-            table={list.workbench.table}
-            timing={list.workbench.timing}
-          />
-        )}
-        {renderedView === "timeline" && isTimelineEntity(entity) && (
-          <ListTimeline
-            entity={entity}
-            filters={list.currentFilters}
-            context={context}
-          />
-        )}
-      </Stack>
+            </>
+          )}
+          {renderedView === "shelf" && !list.workbench.infiniteScroll && (
+            <DataTablePagination
+              table={list.workbench.table}
+              timing={list.workbench.timing}
+            />
+          )}
+          {renderedView === "timeline" && isTimelineEntity(entity) && (
+            <ListTimeline
+              entity={entity}
+              filters={list.currentFilters}
+              context={context}
+            />
+          )}
+        </Stack>
+      </div>
       <PreviewSheet />
       {renderedView !== "table" && list.workbench.deleteDialog}
       {parts.below?.(list)}

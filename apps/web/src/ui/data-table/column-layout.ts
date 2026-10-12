@@ -280,6 +280,20 @@ export function columnWidthValue(id: string) {
   return `var(${columnWidthVariable(id)})`;
 }
 
+/** Sticky insets share the same painted widths as cells. */
+export function columnOffsetValue(
+  columns: readonly { id: string; getSize: () => number }[],
+  id: string,
+  side: "start" | "end",
+) {
+  const index = columns.findIndex((column) => column.id === id);
+  const preceding =
+    side === "start" ? columns.slice(0, index) : columns.slice(index + 1);
+  return preceding.length === 0
+    ? "0px"
+    : `calc(${preceding.map((column) => columnWidthValue(column.id)).join(" + ")})`;
+}
+
 type TableWidthColumn = {
   id: string;
   getSize: () => number;
@@ -378,17 +392,26 @@ export function resolvedTableColumnWidths(
   columns: readonly TableWidthColumn[],
   availableWidth: number,
   userSized: ReadonlySet<string> = new Set(),
+  measured: Readonly<Record<string, number>> = {},
 ) {
   const widths: Record<string, number> = {};
   for (const column of columns) {
-    widths[column.id] = column.getSize();
+    widths[column.id] =
+      !isLockedColumn(column) && !userSized.has(column.id)
+        ? (measured[column.id] ?? column.getSize())
+        : column.getSize();
   }
   const configuredWidth = Object.values(widths).reduce(
     (total, width) => total + width,
     0,
   );
   const flexible = columns.filter(
-    (column) => isFlexibleColumn(column) && !userSized.has(column.id),
+    (column) =>
+      isFlexibleColumn(column) &&
+      !userSized.has(column.id) &&
+      (measured[column.id] === undefined ||
+        column.columnDef.meta?.entityColumnRole === "identity" ||
+        column.columnDef.meta?.surplus),
   );
   const isIdentity = (column: TableWidthColumn) =>
     column.columnDef.meta?.entityColumnRole === "identity";
@@ -409,11 +432,13 @@ export function columnWidthVariables(
   columns: readonly TableWidthColumn[],
   availableWidth = 0,
   userSized?: ReadonlySet<string>,
+  measured?: Readonly<Record<string, number>>,
 ): CSSProperties {
   const { widths, spacer } = resolvedTableColumnWidths(
     columns,
     availableWidth,
     userSized,
+    measured,
   );
   const variables: CSSProperties &
     Partial<Record<ColumnWidthVariable, string>> = {};
@@ -489,8 +514,8 @@ function defaultColumnSize(meta: CubbyColumnMeta | undefined) {
   // `formatDateSpan` keeps its relative context unclipped: the longest
   // single-day label, "Sep 30, 2024 (about 2 years ago)", paints 209px.
   if (kind === "date") return DATE_COLUMN_WIDTH;
-  if (meta?.numeric || kind === "number" || kind === "currency") return 88;
-  if (kind === "amount") return 104;
+  if (meta?.numeric || kind === "number" || kind === "currency") return 72;
+  if (kind === "amount") return 72;
   if (kind === "select") return 104;
   if (kind?.startsWith("entity:")) return 184;
   return 160;
@@ -504,7 +529,7 @@ function defaultColumnSize(meta: CubbyColumnMeta | undefined) {
  */
 function headerFitWidth(label: string, meta: CubbyColumnMeta | undefined) {
   const icon = meta?.provenance ? 18 : 0;
-  return Math.min(Math.ceil(label.length * 6.5) + 32 + icon, HEADER_FIT_MAX);
+  return Math.min(Math.ceil(label.length * 6.5) + 24 + icon, HEADER_FIT_MAX);
 }
 
 /**
@@ -529,21 +554,30 @@ function normalizedColumnSize<TData extends RowData>(
   definition: MaterializedColumnDef<TData>,
   className: string,
 ) {
-  const declared = definition.size ?? tailwindWidth(className, "w");
+  // Symbolic manifest width buckets describe text, while measurements retain
+  // their natural width. Explicit numeric definitions and user resizing win.
+  const kind = definition.meta?.cellData?.kind;
+  const measurement = kind === "amount" || kind === "currency";
+  const declared =
+    definition.size ??
+    (measurement ? undefined : tailwindWidth(className, "w"));
   const role = definition.meta?.entityColumnRole;
   if (role === "image") {
-    const fixed = declared ?? 64;
+    // Image preview owns provenance work; only the explanation occupies a rail.
+    const fixed =
+      (declared ?? 32) + (definition.meta?.explanation ? CELL_RAIL_SLOT_PX : 0);
     return { size: fixed, minSize: fixed, maxSize: fixed };
   }
   const rail = isLockedRole(role) ? 0 : columnRailWidth(definition.meta);
   const size =
-    (declared ??
-      Math.max(
-        defaultColumnSize(definition.meta),
-        isNonEmptyColumnHeader(definition.header)
-          ? headerFitWidth(definition.header, definition.meta)
-          : 0,
-      )) + rail;
+    declared !== undefined
+      ? declared + rail
+      : Math.max(
+          defaultColumnSize(definition.meta) + rail,
+          isNonEmptyColumnHeader(definition.header)
+            ? headerFitWidth(definition.header, definition.meta)
+            : 0,
+        );
   const minSize =
     definition.minSize ??
     tailwindWidth(className, "min-w") ??

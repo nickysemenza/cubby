@@ -16,7 +16,7 @@ afterEach(() => {
   harness.dispose();
 });
 
-for (const width of [560, 1000]) {
+for (const width of [560, 900, 1100]) {
   it(`fits the primary and supporting sections to a ${width}px work surface`, async () => {
     await page.viewport(1280, 900);
     render(
@@ -51,8 +51,8 @@ for (const width of [560, 1000]) {
     const rail = screen
       .getByTestId("detail-supporting-rail")
       .getBoundingClientRect();
-    expect(rail.left > primary.left).toBe(width >= 800);
-    expect(primary.width).toBeGreaterThanOrEqual(width < 800 ? width - 2 : 600);
+    expect(rail.left > primary.left).toBe(width >= 960);
+    expect(primary.width).toBeGreaterThanOrEqual(width < 960 ? width - 2 : 600);
     const section = document.getElementById("facts")!;
     expect(section.scrollWidth).toBeLessThanOrEqual(section.clientWidth);
     expect(getComputedStyle(section.parentElement!).overflow).toBe("visible");

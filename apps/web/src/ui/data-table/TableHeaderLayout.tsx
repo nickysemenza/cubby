@@ -21,6 +21,7 @@ import { TableHead, TableRow } from "~/ui/primitives/table";
 
 import {
   columnWidthValue,
+  columnOffsetValue,
   isLockedColumn,
   moveColumn,
   spacerWidthValue,
@@ -149,6 +150,7 @@ function SortableHeader<TData extends RowData>({
       className={cn(
         "group/th relative",
         styles.header,
+        "px-1",
         numeric && "text-right",
         header.column.columnDef.meta?.className,
         // meta.className styles the column's cells (e.g. mono for codes);
@@ -166,9 +168,21 @@ function SortableHeader<TData extends RowData>({
         transform: CSS.Translate.toString(transform),
         transition,
         ...(pinned === "start"
-          ? { insetInlineStart: header.column.getStart("start") }
+          ? {
+              insetInlineStart: columnOffsetValue(
+                table.getStartVisibleLeafColumns(),
+                header.column.id,
+                "start",
+              ),
+            }
           : pinned === "end"
-            ? { insetInlineEnd: header.column.getAfter("end") }
+            ? {
+                insetInlineEnd: columnOffsetValue(
+                  table.getEndVisibleLeafColumns(),
+                  header.column.id,
+                  "end",
+                ),
+              }
             : {}),
       }}
     >

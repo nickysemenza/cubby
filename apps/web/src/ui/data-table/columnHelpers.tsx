@@ -83,6 +83,7 @@ import {
   textCellData,
   timestampCellData,
 } from "./cell-data";
+import { ROW_DENSITY } from "./density";
 import {
   EditableAmountCell,
   EditableCell,
@@ -95,6 +96,7 @@ import type {
   CubbyColumnDef,
   CubbyColumnHelper as ColumnHelper,
 } from "./table-features";
+import { declaredColumnExplanation } from "./table-meta";
 import {
   attachCubbyColumnMeta,
   type FilterConfig,
@@ -507,19 +509,21 @@ export function createImageColumn<T extends BaseRow>(
 
   return columnHelper.accessor((row) => getImages(row), {
     id: options.id ?? "image",
+    // The structural divider occupies one pixel beside the full-height cover.
+    size: ROW_DENSITY.rowHeight + 1,
     header: () => <ImageIcon className="size-3 text-muted-foreground" />,
     enableSorting: false,
     enableHiding: false,
     enablePinning: false,
     enableCellSelection: false,
     // h-px trick: setting height:1px on td makes h-full work on children
-    // overflow-hidden prevents image from expanding the row. The 40px lane
-    // holds a 24px cover with breathing room while remaining subordinate to
-    // the adjacent identity link.
+    // overflow-hidden prevents image from expanding the row. The cover fills
+    // the 32px row; layout normalization adds any explanation rail beside it.
     meta: {
       provenance: options.provenance,
+      explanation: declaredColumnExplanation(entity, options.id ?? "image"),
       entityColumnRole: "image",
-      className: cn("h-px w-10 overflow-hidden px-0 py-0", options?.className),
+      className: cn("h-px w-8 overflow-hidden px-0 py-0", options?.className),
       mobile: options?.mobile ?? { slot: "image", priority: -10 },
     },
     // Reads `row.original` rather than `info.getValue()` — deliberately, and it

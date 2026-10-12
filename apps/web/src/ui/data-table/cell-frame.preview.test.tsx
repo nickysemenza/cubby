@@ -18,12 +18,14 @@ import { page } from "vitest/browser";
 import { Button } from "~/ui/primitives/button";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { Table, TableBody, TableCell, TableRow } from "~/ui/primitives/table";
+import { ImageThumbnail } from "~/ui/table/ImageThumbnail";
 
 import { CellEditTrigger } from "./cell-edit-trigger";
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";
+import { ROW_DENSITY } from "./density";
 
 const DESKTOP = { width: 1440, height: 900 } as const;
-const CELL = "h-8 overflow-hidden text-ellipsis px-2 py-0 text-[0.8125rem]";
+const CELL = ROW_DENSITY.cellClass;
 
 function Grid({ cells }: { cells: ReactNode[] }) {
   return (
@@ -66,6 +68,37 @@ const rect = (element: Element | null) => {
 };
 
 describe("cell frame layout", () => {
+  it("keeps the explanation beside a short value rather than at the far cell edge", async () => {
+    await page.viewport(DESKTOP.width, DESKTOP.height);
+    const { getByTestId } = render(
+      <Grid
+        cells={[
+          <CellFrame key="quality" trailing={rail()}>
+            <span data-short-value>Good</span>
+          </CellFrame>,
+        ]}
+      />,
+    );
+    const cell = getByTestId("cell-0");
+    const gap =
+      rect(cell.querySelector("button")).left -
+      rect(cell.querySelector("[data-short-value]")).right;
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThanOrEqual(2);
+  });
+
+  it("makes the thumbnail frame exactly as tall as the data row", async () => {
+    await page.viewport(DESKTOP.width, DESKTOP.height);
+    const { getByTestId } = render(
+      <Grid
+        cells={[<ImageThumbnail key="image" images={[]} entity="product" />]}
+      />,
+    );
+    const cell = getByTestId("cell-0");
+    expect(rect(cell.querySelector(".thumbnail-ring")).height).toBe(
+      rect(cell).height,
+    );
+  });
   it("clips a long value with an ellipsis before its rail, never under it", async () => {
     await page.viewport(DESKTOP.width, DESKTOP.height);
     const { getByTestId } = render(
@@ -82,6 +115,10 @@ describe("cell frame layout", () => {
     const button = cell.querySelector("button");
     expect(rect(value).right).toBeLessThanOrEqual(rect(button).left);
     expect(rect(button).right).toBeLessThanOrEqual(rect(cell).right);
+    // The always-visible explanation should leave most of a narrow cell for its value.
+    expect(rect(button).width).toBeLessThanOrEqual(18);
+    expect(rect(button).width).toBeGreaterThanOrEqual(16);
+    expect(rect(cell).height).toBe(32);
     if (!(value instanceof HTMLElement)) throw new Error("missing value");
     expect(value.scrollWidth).toBeGreaterThan(value.clientWidth);
     expect(getComputedStyle(value).textOverflow).toBe("ellipsis");
@@ -109,7 +146,7 @@ describe("cell frame layout", () => {
       );
       return Math.round(rect(dash ?? null).left - rect(cell).left);
     });
-    expect(offsets).toEqual([8, 8, 8]);
+    expect(offsets).toEqual([4, 4, 4]);
   });
 
   it("keeps the hover pencil from taking width in a narrow editable cell", async () => {

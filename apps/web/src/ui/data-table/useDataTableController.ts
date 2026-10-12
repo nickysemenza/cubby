@@ -16,6 +16,10 @@ import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 import { useCellSelection } from "./useCellSelection";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
+import {
+  renderedColumnFitScope,
+  useRenderedColumnWidths,
+} from "./useRenderedColumnWidths";
 
 export function useDataTableController<TItem extends RowData>({
   table,
@@ -168,15 +172,23 @@ export function useDataTableController<TItem extends RowData>({
   const userSizedKey = Object.keys(table.state.columnSizing ?? {})
     .sort()
     .join(",");
+  const fitScope = renderedColumnFitScope(table);
+  const renderedWidths = useRenderedColumnWidths(
+    table,
+    tableContainerRef,
+    fitScope,
+    !isMobile && hydrated,
+  );
   const columnSizeVars = useMemo(
     () =>
       columnWidthVariables(
         table.getVisibleLeafColumns(),
         tableContainerWidth,
         new Set(userSizedKey ? userSizedKey.split(",") : []),
+        renderedWidths,
       ),
     // oxlint-disable-next-line react/exhaustive-deps -- scalar signature stands in for TanStack's fresh column array
-    [columnSizesKey, tableContainerWidth, userSizedKey],
+    [columnSizesKey, tableContainerWidth, userSizedKey, renderedWidths],
   );
 
   // Columns the table actually renders. Use VISIBLE leaves: getAllColumns()

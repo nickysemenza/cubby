@@ -24,7 +24,7 @@ import { TableCell, TableRow } from "~/ui/primitives/table";
 
 import { CellFrame } from "./cell-frame";
 import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
-import { columnWidthValue } from "./column-layout";
+import { columnOffsetValue, columnWidthValue } from "./column-layout";
 import { DebugDialog } from "./DebugDialog";
 import { ROW_DENSITY } from "./density";
 import { RelationFieldWorkbench } from "./relation-field-workbench";
@@ -91,7 +91,10 @@ function cellPresentation<TItem extends RowData>(
         ? "table-pinned-boundary-end"
         : undefined;
   const width = columnWidthValue(cell.column.id);
-  return { selectable, selected, anchor, pinned, boundary, width };
+  const offset = pinned
+    ? columnOffsetValue(columns, cell.column.id, pinned)
+    : undefined;
+  return { selectable, selected, anchor, pinned, boundary, width, offset };
 }
 
 function explainedCellContent<TItem extends RowData>(
@@ -149,13 +152,13 @@ function DesktopDataCell<TItem extends RowData>({
   cellClassName: string;
 }) {
   const presentation = cellPresentation(cell);
-  const { selectable, selected, anchor, pinned, boundary, width } =
+  const { selectable, selected, anchor, pinned, boundary, width, offset } =
     presentation;
   const inset =
     pinned === "start"
-      ? { insetInlineStart: cell.column.getStart("start") }
+      ? { insetInlineStart: offset }
       : pinned === "end"
-        ? { insetInlineEnd: cell.column.getAfter("end") }
+        ? { insetInlineEnd: offset }
         : {};
   const rendered = flexRender(cell.column.columnDef.cell, cell.getContext());
   const content = relationWorkbenchContent(
@@ -167,6 +170,7 @@ function DesktopDataCell<TItem extends RowData>({
   return (
     <TableCell
       key={cell.id}
+      data-column-id={cell.column.id}
       data-cell-col={selectable ? cell.column.id : undefined}
       data-cell-selected={selected ? "" : undefined}
       data-cell-anchor={anchor ? "" : undefined}
@@ -178,11 +182,11 @@ function DesktopDataCell<TItem extends RowData>({
         cell.column.columnDef.meta?.numeric && NUMERIC_CELL,
         cell.column.columnDef.meta?.mono && MONO_CELL,
         cell.column.columnDef.meta?.className,
-        selected && "bg-primary/10",
+        selected && !pinned && "bg-primary/10",
         anchor && "ring-2 ring-ring ring-inset",
         // Pinned cells need an opaque surface to cover scrolled content, and
         // must still take the row's hover wash like their neighbours.
-        pinned && "sticky z-10 bg-card [tr:hover>&]:bg-muted",
+        pinned && "table-pinned-cell sticky z-10",
         boundary,
       )}
       style={{ width, minWidth: width, maxWidth: width, ...inset }}
@@ -300,17 +304,14 @@ function DesktopDataRowInner<TItem extends RowData>({
     <TableRow
       data-cell-row={rowIndex}
       data-state={isSelected && "selected"}
+      // Inspection is independent of batch selection.
       data-current={isCurrent ? "true" : undefined}
       aria-current={isCurrent ? "true" : undefined}
       className={cn(
         rowClassName,
+        "table-record-row",
         onRowClick && "cursor-pointer",
         isFocused && "ring-2 ring-primary/30 ring-inset",
-        // Current record is presentation state for the inspector, not TanStack
-        // row selection. Keep the two attributes separate so bulk actions and
-        // row-selection semantics never change when inspection changes.
-        isCurrent &&
-          "bg-primary/[0.035] [&>td:first-child]:shadow-[inset_2px_0_0_var(--row-accent,var(--primary))]",
       )}
       onClick={handleRowClick}
       onPointerEnter={(event: PointerEvent<HTMLTableRowElement>) => {

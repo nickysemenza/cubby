@@ -11,7 +11,7 @@
 // single line rather than rely on the clip.
 export const ROW_DENSITY = {
   rowHeight: 32,
-  cellClass: "h-8 px-2 py-0 text-[0.8125rem] leading-5",
+  cellClass: "h-8 px-1 py-0 text-[0.8125rem] leading-5",
   rowClass: "h-8",
   cellContentClass: "flex h-8 flex-col justify-center overflow-hidden",
 } as const;

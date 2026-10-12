@@ -61,6 +61,20 @@ export type RowColumnExplanation<TData> = {
   resolve: (row: TData) => ColumnExplanation | undefined;
 };
 
+/** Declare the same explanation before sizing that the row fallback renders. */
+export function declaredColumnExplanation(
+  entity: EntityRef["entityKind"],
+  columnId: string,
+): ColumnExplanation | undefined {
+  const field = entityFieldModels[entity].fields.find(
+    (candidate) =>
+      candidate.key === columnId || candidate.key === `${columnId}Id`,
+  );
+  return field?.explanation
+    ? { entity, field: field.key, label: field.label }
+    : undefined;
+}
+
 export const resolveColumnExplanation = <TData>(
   explanation: ColumnExplanation | RowColumnExplanation<TData> | undefined,
   row: TData,
@@ -71,13 +85,7 @@ export const resolveColumnExplanation = <TData>(
   const identity = z.object({ id: z.string() }).safeParse(row);
   const parsed = identity.success ? parseShortcode(identity.data.id) : null;
   if (!parsed || !columnId) return undefined;
-  const field = entityFieldModels[parsed.type].fields.find(
-    (candidate) =>
-      candidate.key === columnId || candidate.key === `${columnId}Id`,
-  );
-  return field?.explanation
-    ? { entity: parsed.type, field: field.key, label: field.label }
-    : undefined;
+  return declaredColumnExplanation(parsed.type, columnId);
 };
 
 /** Per-column Cubby rendering and editing conventions, bound through v9's meta slot. */
