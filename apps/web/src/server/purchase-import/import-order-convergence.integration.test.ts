@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
 import type { ActorContext } from "@cubby/schemas/context";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -82,16 +79,6 @@ function sourcePermutations(
     ),
   );
 }
-
-const photoFixture = (kind: "shirt" | "label") =>
-  readFileSync(
-    fileURLToPath(
-      new URL(
-        `../../../tests/e2e/fixtures/synthetic-wardrobe-${kind}.png`,
-        import.meta.url,
-      ),
-    ),
-  );
 
 async function ensureMember(db: Database, actor: ActorContext) {
   const existing = await currentMemberLedgerParty(db, actor);
@@ -229,7 +216,7 @@ async function createConvergenceHarness(
       notes: `Synthetic occurrence ${token}`,
     });
     const runId = run.publicId;
-    const photos = wardrobePhotos(token, photoFixture);
+    const photos = wardrobePhotos(token);
     const staged = await stagePhotoImport(db, {
       runId,
       items: photos.map(({ bytes: _bytes, position: _position, ...item }) => ({

@@ -32,6 +32,7 @@ import {
   memberImport,
   prepareMemberImport,
   type MemberImportOrder,
+  memberImportWorld,
 } from "./order-import.fixtures";
 import { lockPartySettlement } from "./retained-settlement";
 
@@ -50,15 +51,12 @@ describe("purchase import identifier collisions", () => {
   }
 
   it("keeps the reviewed Product, leaves the identifier with its owner, and proposes the pair for review", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Collision import member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Collision import Amazon fixture",
-      website: "https://www.amazon.com/orders",
-      browserDomains: ["amazon.com", "www.amazon.com"],
+    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
+      vendor: {
+        name: "Collision import Amazon fixture",
+        website: "https://www.amazon.com/orders",
+        browserDomains: ["amazon.com", "www.amazon.com"],
+      },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
       label: "Collision fixture account",
@@ -228,14 +226,15 @@ describe("purchase import identifier collisions", () => {
   // identifier written while an import waits must survive it, and two sources
   // naming the same Products in opposite order must both commit.
   async function reuseScope() {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic reuse member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const seller = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic instrument seller",
-    });
+    const { party, vendor: seller } = await memberImportWorld(
+      ctx.db,
+      ctx.actor,
+      {
+        vendor: {
+          name: "Synthetic instrument seller",
+        },
+      },
+    );
     const copper = await createProductFixture(
       ctx.db,
       makeProductInput({

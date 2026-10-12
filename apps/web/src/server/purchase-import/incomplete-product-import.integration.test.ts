@@ -28,7 +28,11 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
-import { memberImport, type MemberImportOrder } from "./order-import.fixtures";
+import {
+  memberImport,
+  memberImportWorld,
+  type MemberImportOrder,
+} from "./order-import.fixtures";
 import { importVendorOrder } from "./writer";
 
 // Missing money/date must not suppress supported Product identity or manufacture
@@ -41,13 +45,8 @@ import { importVendorOrder } from "./writer";
 describe("incomplete itemized purchase identity", () => {
   const ctx = withTestDb();
   async function scope() {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Incomplete source owner",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Example variant maker",
+    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
+      vendor: { name: "Example variant maker" },
     });
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "file_import",

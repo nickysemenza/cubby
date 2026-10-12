@@ -28,6 +28,7 @@ import {
   memberImport,
   retainedMailFixture,
   type MemberImportOrder,
+  memberImportWorld,
 } from "./order-import.fixtures";
 
 // A consolidated message must expose each order separately. Raw source keys,
@@ -59,13 +60,10 @@ describe("retained mail source associations", () => {
   }
 
   it("authorizes several orders from retained mail without accepting an unassigned source or altered bytes", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Source association member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Source association vendor",
+    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
+      vendor: {
+        name: "Source association vendor",
+      },
     });
     const purchases = [
       await insertWithShortcode(ctx.db, "purchase", {
@@ -191,17 +189,10 @@ describe("retained mail source associations", () => {
     allShipmentsDelivered: false,
   });
 
-  async function member() {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Source association member",
-      kind: "member",
-      userId: ctx.actor.userId,
+  const member = () =>
+    memberImportWorld(ctx.db, ctx.actor, {
+      vendor: { name: "Source association vendor" },
     });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Source association vendor",
-    });
-    return { party, vendor };
-  }
 
   it("retains two orders from one source and replays both without duplicate Expenses", async () => {
     const { vendor } = await member();

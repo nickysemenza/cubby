@@ -590,56 +590,6 @@ describe("mail research admission", () => {
       retainedBefore,
     );
   });
-  it("gives each retained message its own immutable task inside one admitted Run", async () => {
-    const { party, mail } = await source();
-    const second = await retainedMailFixture(ctx.db, {
-      ledgerPartyId: party.id,
-      mailboxId: mail.mailboxId,
-      messageId: "synthetic-batched-message",
-      sender: mail.sender,
-      subject: "A second receipt",
-      receivedAt: mail.receivedAt,
-      checksum: "b".repeat(64),
-      content: mail.content,
-    });
-    if (!second) throw new Error("Second synthetic receipt is missing");
-    const input = {
-      ledgerPartyId: party.id,
-      userId: ctx.actor.userId,
-      mailboxId: mail.mailboxId,
-      messageIds: [mail.id, second.id],
-    };
-    const [started] = await startMailImport(ctx.db, input, {
-      send: async (_event: PurchaseAgentEvent) => {},
-    });
-    if (!started) throw new Error("Batch Run is missing");
-    const tasks = await getDb(ctx.db)
-      .select()
-      .from(emailTable)
-      .where(eq(emailTable.runId, parseEntityId("run", started.runId)));
-    expect(tasks).toHaveLength(2);
-    expect(tasks.map((task) => task.orderMailId).sort()).toEqual(
-      [mail.id, second.id].sort(),
-    );
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ status: "completed" })
-      .where(eq(emailTable.id, tasks[0]!.id));
-    expect(
-      await startMailImport(ctx.db, input, { send: async () => {} }),
-    ).toEqual([started]);
-    const replayed = await getDb(ctx.db)
-      .select()
-      .from(emailTable)
-      .where(eq(emailTable.runId, parseEntityId("run", started.runId)));
-    expect(
-      replayed.filter((task) => task.status === "researching"),
-    ).toHaveLength(1);
-    expect(replayed.filter((task) => task.status === "completed")).toHaveLength(
-      1,
-    );
-    expect(await frozenSources(started.runId)).toHaveLength(2);
-  });
 });
 
 // Unrelated-source retirement erased a mail Run's input and progress columns

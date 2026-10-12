@@ -18,6 +18,7 @@ import {
   product,
   purchase,
   sourceOrderObservation,
+  type vendor,
 } from "~/server/db/schema";
 import {
   getDb,
@@ -37,6 +38,31 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { startImportRunFixture } from "./import-run.fixtures";
 import { recordSourceOrderObservation } from "./reconciliation-observations";
+
+/**
+ * The live member LedgerParty bound to `actor.userId` that a member's import
+ * runs as, and the Vendor its orders name. Vendor fields are passed through
+ * because merchant-name, sender and domain matching read them.
+ */
+export async function memberImportWorld(
+  db: Database,
+  actor: ActorContext,
+  input: {
+    memberName?: string;
+    vendor?: Partial<Omit<typeof vendor.$inferInsert, "shortcode">>;
+  } = {},
+) {
+  const party = await insertWithShortcode(db, "ledgerParty", {
+    name: input.memberName ?? "Synthetic import member",
+    kind: "member",
+    userId: actor.userId,
+  });
+  const seller = await insertWithShortcode(db, "vendor", {
+    name: "Synthetic service merchant",
+    ...input.vendor,
+  });
+  return { party, vendor: seller };
+}
 
 type HistoryLine = {
   title: string;

@@ -1,6 +1,7 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
+import { promoteHistoricalAcceptedOrders } from "tooling/historical-accepted-orders";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -21,13 +22,16 @@ import {
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { mergePurchases } from "~/server/repo/purchase";
 import {
+  createInventoryFixture,
+  createLocationFixture,
   createProductFixture,
+  makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { mergeVendors } from "~/server/repo/vendor";
 
-import { memberImport } from "./order-import.fixtures";
+import { memberImport, memberImportWorld } from "./order-import.fixtures";
 import {
   commitAcceptedSourceOrderReconciliation,
   prepareSourceOrderReconciliation,
@@ -39,13 +43,8 @@ import { promoteHistoricalAcceptedObservation } from "./reconciliation-observati
 describe("reviewed accepted source Product association", () => {
   const ctx = withTestDb();
   async function world(linked = false, multi = false) {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic photo member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic photo retailer",
+    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
+      vendor: { name: "Synthetic photo retailer" },
     });
     const retainedProduct = multi
       ? await createProductFixture(
@@ -168,21 +167,50 @@ describe("reviewed accepted source Product association", () => {
     };
   }
 
-  it.each(["unrelated reassignment", "invalid historical Vendor"] as const)(
-    "historical Vendor promotion refuses %s without stamping accepted evidence",
-    async (change) => {
-      const w = await world();
-      await w.db
-        .update(importSourceOrder)
-        .set({ acceptedObservationId: null })
-        .where(eq(importSourceOrder.id, w.association.id));
-      if (change === "invalid historical Vendor")
-        await w.db
-          .update(importSourceOrder)
-          .set({ orderKey: "unknown-vendor/order/SYNTHETIC-ACCEPTED-1" })
-          .where(eq(importSourceOrder.id, w.association.id));
-      await w.db.delete(sourceOrderObservation);
-      if (change === "unrelated reassignment") {
+  type World = Awaited<ReturnType<typeof world>>;
+  /** Make the accepted source's claim a historical alias of a new canonical root. */
+  const linkCanonicalRoot = async (
+    w: World,
+    externalKey: string,
+    checksum?: string,
+  ) => {
+    const alias = await w.db.query.importSourceClaim.findFirst();
+    if (!alias) throw new Error("Synthetic source alias missing");
+    const [root] = await w.db
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: w.party.id,
+        kind: alias.kind,
+        externalKey,
+        checksum: checksum ?? alias.checksum,
+        firstRunId: alias.firstRunId,
+        lastRunId: alias.lastRunId,
+      })
+      .returning();
+    if (!root) throw new Error("Synthetic canonical source missing");
+    await w.db
+      .update(importSourceClaim)
+      .set({ canonicalClaimId: root.id })
+      .where(eq(importSourceClaim.id, alias.id));
+    return { alias, root };
+  };
+  const unknownEvidence = /unknown|immutable|evidence|Vendor|owner|member/i;
+
+  // Historical snapshots promote only from checksum-matching stored extraction
+  // under a live member and a provable Vendor; an alias reaching two accepted
+  // orders is ambiguous. Each refusal stamps nothing and changes no evidence.
+  it.each<{
+    change: string;
+    /** Clear the accepted observation so promotion must reconstruct it. */
+    unaccepted: boolean;
+    refusal: RegExp;
+    arrange: (w: World) => Promise<void>;
+  }>([
+    {
+      change: "an unrelated Vendor reassignment",
+      unaccepted: true,
+      refusal: unknownEvidence,
+      arrange: async (w) => {
         const unrelated = await insertWithShortcode(ctx.db, "vendor", {
           name: "Synthetic unrelated retailer",
         });
@@ -190,22 +218,136 @@ describe("reviewed accepted source Product association", () => {
           .update(purchase)
           .set({ vendorId: unrelated.id })
           .where(eq(purchase.id, w.association.purchaseId));
+      },
+    },
+    {
+      change: "an invalid historical Vendor",
+      unaccepted: true,
+      refusal: unknownEvidence,
+      arrange: async (w) => {
+        await w.db
+          .update(importSourceOrder)
+          .set({ orderKey: "unknown-vendor/order/SYNTHETIC-ACCEPTED-1" })
+          .where(eq(importSourceOrder.id, w.association.id));
+      },
+    },
+    {
+      change: "a missing historical extraction",
+      unaccepted: true,
+      refusal: /unknown|immutable|evidence/i,
+      arrange: async (w) => {
+        await w.db
+          .update(importSourceOrder)
+          .set({ originalOrder: null })
+          .where(eq(importSourceOrder.id, w.association.id));
+      },
+    },
+    {
+      change: "a checksum-mismatched historical extraction",
+      unaccepted: true,
+      refusal: /unknown|immutable|evidence/i,
+      arrange: async (w) => {
+        await w.db
+          .update(importSourceOrder)
+          .set({
+            originalOrder: {
+              ...w.association.originalOrder!,
+              checksum: "b".repeat(64),
+            },
+          })
+          .where(eq(importSourceOrder.id, w.association.id));
+      },
+    },
+    {
+      change: "a deleted member owner",
+      unaccepted: true,
+      refusal: unknownEvidence,
+      arrange: async (w) => {
+        await w.db
+          .update(ledgerParty)
+          .set({ deletedAt: new Date() })
+          .where(eq(ledgerParty.id, w.party.id));
+      },
+    },
+    {
+      change: "a guest owner",
+      unaccepted: true,
+      refusal: unknownEvidence,
+      arrange: async (w) => {
+        const guest = await insertWithShortcode(ctx.db, "ledgerParty", {
+          name: "Synthetic non-member source owner",
+          kind: "guest",
+        });
+        await w.db
+          .update(importSourceClaim)
+          .set({ ledgerPartyId: guest.id })
+          .where(eq(importSourceClaim.id, w.association.sourceClaimId));
+      },
+    },
+    {
+      change: "a deleted Vendor",
+      unaccepted: true,
+      refusal: unknownEvidence,
+      arrange: async (w) => {
+        await w.db
+          .update(vendorTable)
+          .set({ deletedAt: new Date() })
+          .where(eq(vendorTable.id, w.vendor.id));
+      },
+    },
+    {
+      change: "an alias whose canonical root also holds the order",
+      unaccepted: false,
+      refusal: /duplicate|ambiguous|review|read-only/i,
+      arrange: async (w) => {
+        const { root } = await linkCanonicalRoot(
+          w,
+          "synthetic:ambiguous-canonical-photo",
+        );
+        await w.db.insert(importSourceOrder).values({
+          sourceClaimId: root.id,
+          orderKey: w.association.orderKey,
+          purchaseId: w.association.purchaseId,
+          checksum: w.association.checksum,
+          outputFingerprint: w.association.outputFingerprint,
+          originalOrder: w.association.originalOrder,
+        });
+      },
+    },
+  ])(
+    "refuses historical accepted evidence with $change without stamping it",
+    async ({ unaccepted, refusal, arrange }) => {
+      const w = await world();
+      if (unaccepted) {
+        await w.db
+          .update(importSourceOrder)
+          .set({ acceptedObservationId: null })
+          .where(eq(importSourceOrder.id, w.association.id));
+        await w.db.delete(sourceOrderObservation);
       }
+      await arrange(w);
       const snapshot = async () => ({
         ledger: await w.snapshot(),
         orders: await w.db.select().from(importSourceOrder),
+        claims: await w.db.select().from(importSourceClaim),
         purchases: await w.db.select().from(purchase),
       });
       const before = await snapshot();
-      expect(
-        await withTransaction(ctx.db, (tx) =>
-          promoteHistoricalAcceptedObservation(tx, w.association.id),
-        ),
-      ).toBeNull();
-      await expect(w.prepare()).rejects.toThrow(
-        /unknown|immutable|evidence|Vendor/i,
-      );
+      const promoted = unaccepted
+        ? await withTransaction(ctx.db, (tx) =>
+            promoteHistoricalAcceptedObservation(tx, w.association.id),
+          )
+        : null;
+      expect(promoted).toBeNull();
+      await expect(w.prepare()).rejects.toThrow(refusal);
       expect(await snapshot()).toEqual(before);
+      expect(
+        (
+          await w.db.query.importSourceOrder.findFirst({
+            where: eq(importSourceOrder.id, w.association.id),
+          })
+        )?.acceptedObservationId,
+      ).toBe(unaccepted ? null : w.association.acceptedObservationId);
     },
   );
 
@@ -322,30 +464,6 @@ describe("reviewed accepted source Product association", () => {
     ).toBe(true);
     expect(await w.snapshot()).toEqual(after);
   });
-
-  it.each(["missing", "mismatched"] as const)(
-    "leaves %s historical accepted extraction unknown",
-    async (kind) => {
-      const w = await world();
-      await w.db
-        .update(importSourceOrder)
-        .set({
-          acceptedObservationId: null,
-          originalOrder:
-            kind === "missing"
-              ? null
-              : { ...w.association.originalOrder!, checksum: "b".repeat(64) },
-        })
-        .where(eq(importSourceOrder.id, w.association.id));
-      await w.db.delete(sourceOrderObservation);
-      const before = await w.snapshot();
-      await expect(w.prepare()).rejects.toThrow(/unknown|immutable|evidence/i);
-      expect(await w.snapshot()).toEqual(before);
-      expect(
-        (await w.db.query.importSourceOrder.findFirst())?.acceptedObservationId,
-      ).toBeNull();
-    },
-  );
 
   // Merges retain immutable source identity while durable Entity redirects
   // prove which live association owns that original identity now.
@@ -489,24 +607,10 @@ describe("reviewed accepted source Product association", () => {
 
   it("prepares a canonical family's historical alias without rewriting the observation or alias identity", async () => {
     const w = await world();
-    const alias = await w.db.query.importSourceClaim.findFirst();
-    if (!alias) throw new Error("Synthetic source alias missing");
-    const [root] = await w.db
-      .insert(importSourceClaim)
-      .values({
-        ledgerPartyId: w.party.id,
-        kind: alias.kind,
-        externalKey: "synthetic:canonical-photo-source",
-        checksum: alias.checksum,
-        firstRunId: alias.firstRunId,
-        lastRunId: alias.lastRunId,
-      })
-      .returning();
-    if (!root) throw new Error("Synthetic canonical source missing");
-    await w.db
-      .update(importSourceClaim)
-      .set({ canonicalClaimId: root.id })
-      .where(eq(importSourceClaim.id, alias.id));
+    const { alias, root } = await linkCanonicalRoot(
+      w,
+      "synthetic:canonical-photo-source",
+    );
     const before = await w.snapshot();
     const aliasedClaim = await w.db.query.importSourceClaim.findFirst({
       where: eq(importSourceClaim.id, alias.id),
@@ -554,26 +658,14 @@ describe("reviewed accepted source Product association", () => {
     "canonical %s replay preserves the historical alias and conserves money and stock",
     async (revision) => {
       const w = await world();
-      const alias = await w.db.query.importSourceClaim.findFirst();
       const original = w.association.originalOrder;
-      if (!alias || !original?.extraction.candidate)
+      if (!original?.extraction.candidate)
         throw new Error("Synthetic historical source missing");
-      const [root] = await w.db
-        .insert(importSourceClaim)
-        .values({
-          ledgerPartyId: w.party.id,
-          kind: alias.kind,
-          externalKey: "synthetic:canonical-replay-source",
-          checksum: "c".repeat(64),
-          firstRunId: alias.firstRunId,
-          lastRunId: alias.lastRunId,
-        })
-        .returning();
-      if (!root) throw new Error("Synthetic canonical source missing");
-      await w.db
-        .update(importSourceClaim)
-        .set({ canonicalClaimId: root.id })
-        .where(eq(importSourceClaim.id, alias.id));
+      const { alias, root } = await linkCanonicalRoot(
+        w,
+        "synthetic:canonical-replay-source",
+        "c".repeat(64),
+      );
       const historical = await w.db.query.importSourceClaim.findFirst({
         where: eq(importSourceClaim.id, alias.id),
       });
@@ -643,83 +735,6 @@ describe("reviewed accepted source Product association", () => {
           checksum,
         }),
       ]);
-    },
-  );
-
-  it("refuses ambiguous historical alias associations without changing accepted evidence", async () => {
-    const w = await world();
-    const alias = await w.db.query.importSourceClaim.findFirst();
-    if (!alias) throw new Error("Synthetic source alias missing");
-    const [root] = await w.db
-      .insert(importSourceClaim)
-      .values({
-        ledgerPartyId: w.party.id,
-        kind: alias.kind,
-        externalKey: "synthetic:ambiguous-canonical-photo",
-        checksum: alias.checksum,
-        firstRunId: alias.firstRunId,
-        lastRunId: alias.lastRunId,
-      })
-      .returning();
-    if (!root) throw new Error("Synthetic canonical source missing");
-    await w.db
-      .update(importSourceClaim)
-      .set({ canonicalClaimId: root.id })
-      .where(eq(importSourceClaim.id, alias.id));
-    await w.db.insert(importSourceOrder).values({
-      sourceClaimId: root.id,
-      orderKey: w.association.orderKey,
-      purchaseId: w.association.purchaseId,
-      checksum: w.association.checksum,
-      outputFingerprint: w.association.outputFingerprint,
-      originalOrder: w.association.originalOrder,
-    });
-    const before = await w.snapshot();
-    await expect(w.prepare()).rejects.toThrow(
-      /duplicate|ambiguous|review|read-only/i,
-    );
-    expect(await w.snapshot()).toEqual(before);
-  });
-
-  it.each(["deleted member", "guest owner", "deleted vendor"] as const)(
-    "offline promotion leaves a %s's historical evidence unknown",
-    async (change) => {
-      const w = await world();
-      await w.db
-        .update(importSourceOrder)
-        .set({ acceptedObservationId: null })
-        .where(eq(importSourceOrder.id, w.association.id));
-      await w.db.delete(sourceOrderObservation);
-      if (change === "deleted member")
-        await w.db
-          .update(ledgerParty)
-          .set({ deletedAt: new Date() })
-          .where(eq(ledgerParty.id, w.party.id));
-      if (change === "guest owner") {
-        const guest = await insertWithShortcode(ctx.db, "ledgerParty", {
-          name: "Synthetic non-member source owner",
-          kind: "guest",
-        });
-        await w.db
-          .update(importSourceClaim)
-          .set({ ledgerPartyId: guest.id })
-          .where(eq(importSourceClaim.id, w.association.sourceClaimId));
-      }
-      if (change === "deleted vendor")
-        await w.db
-          .update(vendorTable)
-          .set({ deletedAt: new Date() })
-          .where(eq(vendorTable.id, w.vendor.id));
-      const before = await w.snapshot();
-      expect(
-        await withTransaction(ctx.db, (tx) =>
-          promoteHistoricalAcceptedObservation(tx, w.association.id),
-        ),
-      ).toBeNull();
-      expect(await w.snapshot()).toEqual(before);
-      expect(
-        (await w.db.query.importSourceOrder.findFirst())?.acceptedObservationId,
-      ).toBeNull();
     },
   );
 
@@ -948,5 +963,104 @@ describe("reviewed accepted source Product association", () => {
     expect((await w.snapshot()).expenses[0]?.productId).toBe(
       w.photographed.entityId,
     );
+  });
+
+  // The deployment transform preserves the real ledger and stock, skips
+  // unverifiable originals and converges without changing accepted snapshots.
+  it("deployment transform promotes only verifiable originals without changing money or stock and repeats with zero promotions", async () => {
+    const { vendor: seller } = await memberImportWorld(ctx.db, ctx.actor, {
+      vendor: { name: "Synthetic historical workshop" },
+    });
+    await memberImport(ctx.db, ctx.actor, {
+      key: "synthetic-historical-transform",
+      orders: ["known", "unknown"].map((key) => ({
+        stableOrderId: key,
+        vendorId: seller.shortcode,
+        source: {
+          kind: "vendor_export",
+          externalKey: `synthetic:historical:${key}`,
+          checksum: (key === "known" ? "a" : "b").repeat(64),
+        },
+        extraction: {
+          status: "ready",
+          candidate: {
+            orderId: `SYNTHETIC-${key}`,
+            orderedAt: "2026-09-01T18:00:00Z",
+            merchant: seller.name,
+            currency: "USD",
+            printedGrandTotal: 40,
+            lines: [
+              {
+                title: "Workshop admission",
+                amount: 40,
+                lineKind: "principal",
+              },
+            ],
+            payments: [{ amount: 40, chargedAt: "2026-09-01T18:00:00Z" }],
+            allShipmentsDelivered: false,
+          },
+        },
+      })),
+    });
+    const database = getDb(ctx.db);
+    const orders = await database.select().from(importSourceOrder);
+    const known = orders.find((row) => row.checksum === "a".repeat(64));
+    const unknown = orders.find((row) => row.checksum === "b".repeat(64));
+    if (!known || !unknown)
+      throw new Error("Synthetic accepted orders unavailable");
+    await database
+      .update(importSourceOrder)
+      .set({ acceptedObservationId: null })
+      .where(eq(importSourceOrder.id, known.id));
+    await database
+      .update(importSourceOrder)
+      .set({ acceptedObservationId: null, originalOrder: null })
+      .where(eq(importSourceOrder.id, unknown.id));
+    const sku = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic retained stock" }),
+      ctx.actor,
+    );
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic shelf", type: "shelf" }),
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: sku.id,
+        locationId: shelf.id,
+        amount: { value: 3, unit: "each" },
+      },
+      ctx.actor,
+    );
+    const stock = await database.select().from(inventoryEntry);
+    expect(await promoteHistoricalAcceptedOrders(ctx.db)).toMatchObject({
+      scanned: 2,
+      promoted: 1,
+      alreadyKnown: 0,
+      unknown: 1,
+      refused: 0,
+      financialUnchanged: true,
+    });
+    const [accepted] = await database
+      .select()
+      .from(importSourceOrder)
+      .where(eq(importSourceOrder.id, known.id));
+    expect(accepted).toMatchObject({
+      originalOrder: known.originalOrder,
+      checksum: known.checksum,
+      outputFingerprint: known.outputFingerprint,
+      acceptedObservationId: known.acceptedObservationId,
+    });
+    expect(await database.select().from(inventoryEntry)).toEqual(stock);
+    expect(await promoteHistoricalAcceptedOrders(ctx.db)).toMatchObject({
+      scanned: 2,
+      promoted: 0,
+      alreadyKnown: 1,
+      unknown: 1,
+      financialUnchanged: true,
+    });
   });
 });
