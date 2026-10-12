@@ -184,6 +184,10 @@ existing block. Extend the generic path when it almost fits. See
   `golden-vectors/display-format.json`. Declared list totals arrive as
   server-worded `totalLabels` (`server/repo/list-display-labels.ts`); clients
   print them.
+- Plurals: `countLabel(count, noun)` from `@cubby/shared/pluralize` for
+  "3 nouns", `pluralize(noun, count)` for the noun alone. The
+  `cubby/no-hand-rolled-plural` lint rule flags `n === 1 ? "" : "s"` and its
+  suffix variants.
 - Search results: `features/search/search-utils.tsx` (routes, media, match
   text) and `features/search/product-family.tsx`, the one Product-family
   model (summary, child rows, destinations, keys, disclosure) behind both the
