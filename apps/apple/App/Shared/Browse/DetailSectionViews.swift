@@ -190,7 +190,6 @@ struct FieldsSectionView<Inline: View>: View {
     @ViewBuilder let inline: Inline
     @Environment(AppModel.self) private var appModel
     @State private var resetReview: ResetReview?
-    @State private var destination: Route?
 
     private struct ResetReview: Identifiable {
         let field: String
@@ -208,6 +207,7 @@ struct FieldsSectionView<Inline: View>: View {
                     }
                 }
                 .font(.subheadline)
+                .navigationLinkIndicatorVisibility(.hidden)
                 .listRowInsets(
                     EdgeInsets(
                         top: 0, leading: FieldGuideTokens.Space.md,
@@ -219,7 +219,6 @@ struct FieldsSectionView<Inline: View>: View {
                 }
             }
         }
-        .navigationDestination(item: $destination) { RouteDestinationView(route: $0) }
         .sheet(item: $resetReview) { review in
             EntityEditorSheet(
                 key: descriptor.key, mode: .update(id: row.id), original: row.raw,
@@ -346,9 +345,7 @@ struct FieldsSectionView<Inline: View>: View {
                     field: field,
                     subject: EntityRef(entity: descriptor.key, id: row.id))
                 Spacer(minLength: FieldGuideTokens.Space.sm)
-                Button {
-                    destination = .entityDetail(reference.entity, id: reference.id)
-                } label: {
+                NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
                     HStack(spacing: FieldGuideTokens.Space.xs) {
                         if let emoji = reference.emoji { Text(emoji).accessibilityHidden(true) }
                         Text(value).fixedSize(horizontal: false, vertical: true)
@@ -1324,7 +1321,6 @@ private struct RecordReferenceList: View {
     let field: FieldDescriptor
     let row: EntityRow
     let subject: EntityRef
-    @State private var destination: Route?
     @State private var expanded = false
     private var items: [JSONValue] { row.raw[field.readKey ?? field.key]?.arrayValue ?? [] }
     private var target: EntityKey? { field.reference?.entity }
@@ -1352,9 +1348,7 @@ private struct RecordReferenceList: View {
                             .enumerated()), id: \.offset
                 ) { _, item in
                     if let id = item["id"]?.stringValue ?? item.stringValue {
-                        Button {
-                            destination = .entityDetail(target, id: id)
-                        } label: {
+                        NavigationLink(value: Route.entityDetail(target, id: id)) {
                             HStack {
                                 if let emoji = item["emoji"]?.stringValue {
                                     Text(emoji).accessibilityHidden(true)
@@ -1379,16 +1373,13 @@ private struct RecordReferenceList: View {
                     .buttonStyle(.plain)
                 }
                 if !filters.isEmpty {
-                    Button {
-                        destination = .entityList(target, filters: filters)
-                    } label: {
+                    NavigationLink(value: Route.entityList(target, filters: filters)) {
                         Label("View all", systemImage: "chevron.right")
                             .frame(minHeight: FieldGuideTokens.touchTarget)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .navigationDestination(item: $destination) { RouteDestinationView(route: $0) }
         }
     }
 }
@@ -1429,6 +1420,7 @@ struct EntitySourceRow: View {
             if let runID {
                 NavigationLink(runID, value: Route.entityDetail(.run, id: runID)).font(.caption)
             }
+            .navigationLinkIndicatorVisibility(.hidden)
         }
     }
 }

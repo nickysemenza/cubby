@@ -4,7 +4,6 @@ import SwiftUI
 /// Server provenance is shown as a link only when the response supplies one concrete source entity.
 struct EntityFieldResolutionLabel: View {
     let resolved: FieldResolutionPresentation
-    @State private var destination: Route?
 
     var body: some View {
         if let source = resolved.sourceEntity,
@@ -14,9 +13,7 @@ struct EntityFieldResolutionLabel: View {
                 Text(resolved.sourceText).font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: FieldGuideTokens.Space.sm)
-                Button {
-                    destination = .entityDetail(entity, id: source.entityId)
-                } label: {
+                NavigationLink(value: Route.entityDetail(entity, id: source.entityId)) {
                     Label(source.name ?? source.entityId, systemImage: "chevron.right")
                         .font(.caption)
                         .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .trailing)
@@ -25,7 +22,7 @@ struct EntityFieldResolutionLabel: View {
                 .buttonStyle(.plain)
             }
             .frame(maxWidth: .infinity)
-            .navigationDestination(item: $destination) { RouteDestinationView(route: $0) }
+            .navigationLinkIndicatorVisibility(.hidden)
         } else {
             Text(resolved.sourceText).font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
