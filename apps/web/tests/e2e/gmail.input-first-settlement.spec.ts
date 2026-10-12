@@ -248,7 +248,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
     });
   expect(await allocationRows()).toHaveLength(0);
   const firstCode = purchaseCodes[0]!;
-  await gotoAuthenticatedPage(page, `/purchases/${firstCode}`);
+  await gotoAuthenticatedPage(page, `/purchases/${firstCode}#work`);
   await page
     .getByRole("button", { name: "Match statement activity", exact: true })
     .click();
@@ -276,7 +276,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
   expect((await allocationRows()).map((row) => row.amount)).toEqual([
     42.5, 42.5,
   ]);
-  await gotoAuthenticatedPage(page, `/purchases/${firstCode}`);
+  await gotoAuthenticatedPage(page, `/purchases/${firstCode}#work`);
   await page
     .getByRole("button", { name: "Match statement activity", exact: true })
     .click();
