@@ -41,6 +41,9 @@ tool inputs, results and errors. Follow `nextCursor` until null; this read does
 not authorize or start execution. An absent conversation may have been retired
 and is not proof that the Run never executed. Running snapshots can change
 between pages; live generation partials, credentials and binary bodies are omitted.
+Retired coordinators return an absent transcript without reopening storage or
+execution; their retained Run status, operations and source associations remain
+separate evidence.
 `run.lifecycle` takes every Run `controlAction` (cancel, retry, restart,
 approve, reject …) through the shared member-owned controls. Paid grants and
 review decisions (`run.approve_execution`, `run.discover_mail`,

@@ -16,9 +16,10 @@ Burn-down and acceptance remain in progress.
 - Reconcile the evidence-backed financial and findings worklist through public
   writers, preserving signed refunds, claims, party cents and stock. A healthy
   detector count does not establish source acceptance of an older audit.
-- Finish the remaining packaging-brand evidence gaps in the approved Product
-  scope. Retailer identity does not prove packet manufacturer; retain uncertain
-  facts explicitly rather than treating complete declared fields as acceptance.
+- The approved Product scope completed evidence-backed acceptance, including
+  the member's remaining packaging-label confirmations. Keep its source-specific
+  acceptance and preservation artifacts private. Further Product research is
+  outside that completed scope unless separately approved.
 - Reconcile open findings from authentic retained sources. A legacy finding
   without its original message roster cannot be dismissed from sender identity
   or today's Expenses. Receiving remains a member decision.
