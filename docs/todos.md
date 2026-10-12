@@ -146,6 +146,9 @@ See also the image operational passes at the end of this file.
   persisted regressions before relaxing these safe refusals: preserve original
   identity and candidate-review fingerprints, accept only equivalent snapshots,
   and keep unknown historical originals unrepairable without authentic evidence.
+  Compare canonical Product-association retention between import and reviewed
+  reconciliation when the same source family uses a new order key; both paths
+  must preserve complete observation bindings without duplicating canonical rows.
 
 - 🤔 🧪 **Complete durable historical discovery coverage and transport evidence.**
   Owned discovery reads expose the frozen scope, current cursor/checkpoint,
