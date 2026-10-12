@@ -16,6 +16,7 @@ struct Thumb: View {
     var emoji: String? = nil
 
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorScheme) private var colorScheme
     @State private var useCanonicalURL = false
 
     var body: some View {
@@ -41,7 +42,11 @@ struct Thumb: View {
             }
             .overlay(
                 RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
-                    .strokeBorder(FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
+                    .strokeBorder(
+                        url == nil
+                            ? FieldGuideTokens.hairline
+                            : (colorScheme == .dark ? Color.white : Color.black).opacity(0.1),
+                        lineWidth: 1 / displayScale)
             )
             .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
             .frame(width: size, height: size)
