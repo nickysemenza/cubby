@@ -20,7 +20,7 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   });
   await expect(guest.getByText(fixture.manualFoodName)).toBeVisible();
   await expect(guest.getByLabel(/^Carbs: 0 g\./)).toHaveCount(2);
-  await expect(guest.getByLabel(/^Fat: — g\./)).toHaveCount(2);
+  await expect(guest.getByLabel(/^Fat: —\./)).toHaveCount(2);
 
   await page.getByRole("button", { name: "Add food", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add food" });
@@ -247,7 +247,7 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await expect(inlineSummary.getByLabel(/^Calories: 90 kcal\./)).toHaveCount(3);
   await expect(inlineSummary.getByLabel(/^Protein: 7 g\./)).toHaveCount(3);
   await expect(inlineSummary.getByLabel(/^Carbs: 0 g\./)).toHaveCount(3);
-  await expect(inlineSummary.getByLabel(/^Fat: — g\./)).toHaveCount(3);
+  await expect(inlineSummary.getByLabel(/^Fat: —\./)).toHaveCount(3);
   await expect(
     page.getByText(`${name} snack break`, { exact: true }),
   ).toBeVisible();
