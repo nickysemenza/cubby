@@ -70,7 +70,7 @@ struct AuditHistoryView: View {
                     await history.load(client: appModel.client, reset: true)
                 }
             }
-            ForEach(history.entries, id: \.entryKey) { AuditEntryRow(entry: $0) }
+            ForEach(AuditEntryFolding.fold(history.entries)) { AuditEntryRow(group: $0) }
             if history.entries.isEmpty && !history.loading && history.error == nil {
                 ContentUnavailableView("No changes yet", systemImage: "clock")
             }
@@ -90,9 +90,13 @@ struct AuditHistoryView: View {
     }
 }
 
+/// One audit event: a single entry, or a folded burst of updates to one record by one writer
+/// ("3 updates · 2 fields") that expands to each update's changes.
 struct AuditEntryRow: View {
-    let entry: AuditLogEntryOut
+    let group: AuditEntryGroup
     @Environment(AppModel.self) private var appModel
+
+    private var entry: AuditLogEntryOut { group.lead }
 
     private var record: RecordSelection? {
         guard entry.action != .delete,
@@ -103,16 +107,32 @@ struct AuditEntryRow: View {
     }
 
     var body: some View {
-        Group {
-            if let record {
-                Button {
-                    appModel.navigator.openRecord(record)
-                } label: {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            Group {
+                if let record {
+                    Button {
+                        appModel.navigator.openRecord(record)
+                    } label: {
+                        content
+                    }
+                    .buttonStyle(.borderless)
+                    .tint(.primary)
+                } else {
                     content
                 }
-                .buttonStyle(.plain)
-            } else {
-                content
+            }
+            .accessibilityElement(children: .combine)
+            if group.isFolded {
+                DisclosureGroup("Show \(group.entries.count) updates") {
+                    ForEach(group.entries, id: \.entryKey) { update in
+                        VStack(alignment: .leading, spacing: 2) {
+                            RecordRowTimestamp(date: update.createdAt)
+                                .font(.caption2).foregroundStyle(.secondary)
+                            AuditChangeLines(changes: update.fieldChanges)
+                        }
+                    }
+                }
+                .font(.caption)
             }
         }
         .listRowInsets(
@@ -120,7 +140,6 @@ struct AuditEntryRow: View {
                 top: 0, leading: FieldGuideTokens.Space.md,
                 bottom: 0, trailing: FieldGuideTokens.Space.md)
         )
-        .accessibilityElement(children: .combine)
     }
 
     private var content: some View {
@@ -134,11 +153,32 @@ struct AuditEntryRow: View {
                 EntityKey(rawValue: entry.entityKind.rawValue).map { EntityCatalog[$0].singular }
                     ?? entry.entityKind.rawValue)
         } rail: {
-            Text(entry.action.rawValue.capitalized)
+            Text(group.foldSummary ?? entry.action.rawValue.capitalized)
             RecordRowTimestamp(date: entry.createdAt)
         } supplement: {
-            EmptyView()
+            if !group.isFolded, entry.action == .update {
+                AuditChangeLines(changes: entry.fieldChanges)
+            }
         }
+    }
+}
+
+/// An update's diff at a glance: the first two changed fields inline, the rest counted.
+struct AuditChangeLines: View {
+    let changes: [AuditFieldChange]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(changes.prefix(2), id: \.field) { change in
+                Text("\(change.label): \(change.from ?? "(empty)") → \(change.to ?? "(empty)")")
+                    .lineLimit(1)
+            }
+            if changes.count > 2 {
+                Text("\(changes.count - 2) more \(changes.count == 3 ? "field" : "fields")")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.caption)
     }
 }
 
@@ -307,8 +347,8 @@ struct TodayContent: View {
                 }
                 .accessibilityIdentifier("work.activityInbox")
                 Section("Recent changes") {
-                    ForEach(highlights?.entries ?? [], id: \.entryKey) { entry in
-                        AuditEntryRow(entry: entry)
+                    ForEach(AuditEntryFolding.fold(highlights?.entries ?? [])) { group in
+                        AuditEntryRow(group: group)
                     }
                     NavigationLink(value: Route.auditHistory) {
                         Label("All changes", systemImage: "clock")
@@ -507,7 +547,7 @@ struct TodayContent: View {
 
         private func workAuditPanel(_ highlights: WorkHighlightsModel) -> some View {
             dashboardPanel("Recent changes", systemImage: "clock") {
-                ForEach(highlights.entries, id: \.entryKey) { AuditEntryRow(entry: $0) }
+                ForEach(AuditEntryFolding.fold(highlights.entries)) { AuditEntryRow(group: $0) }
                 NavigationLink(value: Route.auditHistory) { Text("All changes") }
                 if let error = highlights.error { Text(error).foregroundStyle(FieldGuideTokens.warning) }
             }

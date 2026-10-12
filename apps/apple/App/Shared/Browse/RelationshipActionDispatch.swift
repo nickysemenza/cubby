@@ -14,15 +14,3 @@ func requestRelationshipAcceptance(
         }
     }
 }
-
-@MainActor
-func requestRelationshipFocus(
-    model: EntityRelationshipsModel,
-    on reference: EntityRef,
-    onFocused: @escaping () -> Void
-) {
-    Task {
-        await model.focus(on: reference)
-        if model.graph?.root == reference { onFocused() }
-    }
-}

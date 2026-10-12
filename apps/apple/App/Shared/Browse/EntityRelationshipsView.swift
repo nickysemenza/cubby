@@ -1,17 +1,12 @@
 import CubbyKit
 import SwiftUI
 
+/// A detail page's Relationships section: its relationship suggestions and the graph explorer.
+/// The record's own relations and connected records already list as their own sections, so no
+/// branch lists repeat them here.
 struct EntityRelationshipsSection: View {
-    enum Presentation: String, CaseIterable, Identifiable {
-        case list, graph
-        var id: String { rawValue }
-        var title: String { rawValue.capitalized }
-    }
-
     let model: EntityRelationshipsModel
     let onAccepted: (RelationshipAcceptance) -> Void
-    @State private var presentation: Presentation = .list
-    @State private var inspectedNode: EntityGraphNode?
 
     var body: some View {
         Group {
@@ -21,30 +16,9 @@ struct EntityRelationshipsSection: View {
                 LoadingIndicator(label: "Loading relationships")
             } else {
                 recommendations
-                if model.graph != nil {
-                    Picker("Relationship view", selection: $presentation) {
-                        ForEach(Presentation.allCases) { mode in Text(mode.title).tag(mode) }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
+                if let graph = model.graph {
                     RelationshipDepthPicker(model: model)
-                    if model.hasEmptyBranches {
-                        Toggle(
-                            "Show empty relationships",
-                            isOn: Binding(
-                                get: { model.showsEmptyBranches },
-                                set: { model.setShowsEmptyBranches($0) }
-                            )
-                        )
-                        .frame(minHeight: FieldGuideTokens.touchTarget)
-                    }
-
-                    switch presentation {
-                    case .list:
-                        RelationshipBranchList(model: model, onInspect: inspect)
-                    case .graph:
-                        if let graph = model.graph { EmbeddedGraphExplorer(graph: graph).id(graph.root) }
-                    }
+                    EmbeddedGraphExplorer(graph: graph).id(graph.root)
                     completion
                 }
             }
@@ -71,20 +45,6 @@ struct EntityRelationshipsSection: View {
                 Diagnostics.report(RelationshipDisplayError(error), context: "relationships.accept")
             }
         }
-        .sheet(item: $inspectedNode) { node in
-            #if os(iOS)
-                RelationshipNodeDetailsSheet(node: node, model: model)
-                    .presentationDetents([.medium, .large])
-            #else
-                RelationshipNodeDetailsSheet(node: node, model: model)
-                    .frame(minWidth: 440, minHeight: 420)
-            #endif
-        }
-    }
-
-    private func inspect(_ node: EntityGraphNode) {
-        model.select(node.reference)
-        inspectedNode = node
     }
 
     @ViewBuilder
@@ -160,11 +120,9 @@ private struct RelationshipRecommendationGroupView: View {
                     accept: { accept(.inventoryPlacement(proposal)) }
                 )
             }
-        case .productRelated(let group):
-            recommendationHeader("Related products", status: group.status, current: nil)
-            ForEach(group.proposals) { proposal in
-                ProductRelationshipProposalView(proposal: proposal)
-            }
+        case .productRelated:
+            // Similar products have their own detail slot (`ProductSimilarityDetailSlot`).
+            EmptyView()
         }
     }
 
@@ -398,46 +356,6 @@ private struct InventoryPlacementProposalView: View {
     }
 }
 
-private struct ProductRelationshipProposalView: View {
-    let proposal: ProductRelatedProposal
-    @Environment(AppModel.self) private var appModel
-    @Environment(\.openURL) private var openURL
-
-    var body: some View {
-        Button {
-            open(EntityRef(entity: .product, id: proposal.target.id.rawValue))
-        } label: {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                HStack {
-                    DomainMark(.product)
-                    Text(proposal.target.name)
-                        .font(.fieldGuideTitle)
-                    Spacer()
-                    Text(proposal.score, format: .number.precision(.fractionLength(2)))
-                        .font(.fieldGuideData)
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(proposal.evidence, id: \.self) { evidence in
-                    Text(evidence.detail ?? evidence.signal)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(minHeight: FieldGuideTokens.touchTarget)
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Opens the related product")
-    }
-
-    private func open(_ reference: EntityRef) {
-        if reference.entity.nativeActions.contains(.get) {
-            appModel.navigator.openRecord(.init(key: reference.entity, id: reference.id))
-        } else {
-            openURL(appModel.webURL(for: reference.entity, id: reference.id))
-        }
-    }
-}
-
 private struct RelationshipAcceptButton: View {
     let title: String
     let isAccepting: Bool
@@ -494,93 +412,6 @@ private func proposalReasons(_ reasons: [String]) -> some View {
     }
 }
 
-private struct RelationshipBranchList: View {
-    let model: EntityRelationshipsModel
-    let onInspect: (EntityGraphNode) -> Void
-    private var nodesByID: [String: EntityGraphNode] {
-        Dictionary(
-            (model.graph?.nodes ?? []).map { ($0.reference.stableKey, $0) },
-            uniquingKeysWith: { first, _ in first })
-    }
-
-    var body: some View {
-        if model.graph != nil, model.displayedBranches.isEmpty {
-            Text("No related records")
-                .foregroundStyle(.secondary)
-        } else if let graph = model.graph {
-            ForEach(model.displayedBranches) { branch in
-                DisclosureGroup(
-                    isExpanded: Binding(
-                        get: { !model.collapsedBranchIDs.contains(branch.id) },
-                        set: { expanded in
-                            if expanded == model.collapsedBranchIDs.contains(branch.id) {
-                                model.toggle(branch)
-                            }
-                        }
-                    )
-                ) {
-                    ForEach(branch.items) { reference in
-                        let node =
-                            nodesByID[reference.stableKey]
-                            ?? EntityGraphNode(reference: reference, label: reference.id)
-                        HStack(spacing: FieldGuideTokens.Space.sm) {
-                            RelationshipRecordButton(node: node)
-                            Button {
-                                onInspect(node)
-                            } label: {
-                                Label("Show connection", systemImage: "info.circle")
-                                    .frame(
-                                        minWidth: FieldGuideTokens.touchTarget,
-                                        minHeight: FieldGuideTokens.touchTarget
-                                    )
-                            }
-                            .labelStyle(.iconOnly)
-                            .buttonStyle(.borderless)
-                            .accessibilityHint("Shows paths and graph focus actions")
-                        }
-                    }
-                    if let nextOffset = branch.nextOffset {
-                        Button {
-                            model.requestNextPage(for: branch)
-                        } label: {
-                            if model.pagingBranchIDs.contains(branch.id) {
-                                LoadingIndicator(label: "Loading more \(branch.label.lowercased())")
-                            } else {
-                                Label(
-                                    "Show more (\(max(0, branch.totalCount - nextOffset)) remaining)",
-                                    systemImage: "ellipsis"
-                                )
-                            }
-                        }
-                        .disabled(model.pagingBranchIDs.contains(branch.id))
-                        .frame(minHeight: FieldGuideTokens.touchTarget)
-                    }
-                    if let error = model.pageErrors[branch.id] {
-                        InlineLoadFailure(message: error) {
-                            model.requestNextPage(for: branch)
-                        }
-                    }
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                            Text(branch.label)
-                            if branch.root != graph.root {
-                                Text("From \(nodesByID[branch.root.stableKey]?.label ?? branch.root.id)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
-                        Text(branch.totalCount, format: .number)
-                            .font(.fieldGuideData)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-    }
-}
-
 private struct RelationshipRecordButton: View {
     let node: EntityGraphNode
     var onOpen: () -> Void = {}
@@ -623,113 +454,6 @@ private struct RelationshipRecordButton: View {
 private struct RelationshipDisplayError: LocalizedError {
     let errorDescription: String?
     init(_ message: String) { errorDescription = message }
-}
-
-private struct RelationshipNodeDetailsSheet: View {
-    let node: EntityGraphNode
-    let model: EntityRelationshipsModel
-    @Environment(\.dismiss) private var dismiss
-
-    private var graph: EntityGraph? { model.visibleGraph ?? model.graph }
-    private var paths: [EntityGraphPath] { model.paths(to: node.reference) }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    RelationshipRecordButton(node: node, onOpen: { dismiss() })
-                }
-                if paths.count > 1 {
-                    Section("Connection") {
-                        Picker(
-                            "Path",
-                            selection: Binding(
-                                get: { model.selectedPathIndex },
-                                set: { model.selectPath(at: $0) }
-                            )
-                        ) {
-                            ForEach(paths.indices, id: \.self) { index in
-                                Text("Path \(index + 1)").tag(index)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                }
-                Section("Path evidence") {
-                    if let path = model.selectedPath, let graph {
-                        Text(pathDescription(path, graph: graph))
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        RelationshipPathSteps(path: path, graph: graph)
-                    } else if graph?.root == node.reference {
-                        Text("This is the starting record for the current graph.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("No explanatory path is available in the loaded graph.")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Section {
-                    Button {
-                        requestRelationshipFocus(model: model, on: node.reference) { dismiss() }
-                    } label: {
-                        Label("Focus graph here", systemImage: "scope")
-                            .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
-                    }
-                    .disabled(model.graph?.root == node.reference || model.activity != .idle)
-                } footer: {
-                    Text("Uses this record as the starting point for the selected depth.")
-                }
-            }
-            .formStyle(.grouped)
-            .navigationTitle("Relationship")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
-
-    private func pathDescription(_ path: EntityGraphPath, graph: EntityGraph) -> String {
-        let labels = Dictionary(uniqueKeysWithValues: graph.nodes.map { ($0.reference, $0.label) })
-        return path.nodeRefs.map { labels[$0] ?? $0.id }.joined(separator: " → ")
-    }
-}
-
-private struct RelationshipPathSteps: View {
-    let path: EntityGraphPath
-    let graph: EntityGraph
-
-    var body: some View {
-        let labels = Dictionary(uniqueKeysWithValues: graph.nodes.map { ($0.reference, $0.label) })
-        let edges = Dictionary(uniqueKeysWithValues: graph.edges.map { ($0.id, $0) })
-        ForEach(path.edgeIds.indices, id: \.self) { index in
-            if let edge = edges[path.edgeIds[index]] {
-                let source =
-                    path.nodeRefs.indices.contains(index)
-                    ? path.nodeRefs[index] : edge.source
-                let target =
-                    path.nodeRefs.indices.contains(index + 1)
-                    ? path.nodeRefs[index + 1] : edge.target
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    Label(edge.label, systemImage: "arrow.right")
-                        .font(.fieldGuideLabel)
-                    Text("\(labels[source] ?? source.id) → \(labels[target] ?? target.id)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if !edge.provenance.isEmpty {
-                        Text("Evidence: \(edge.provenance.joined(separator: ", "))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-                }
-                .accessibilityElement(children: .combine)
-            }
-        }
-    }
 }
 
 struct RelationshipGraphNode: View {

@@ -1,6 +1,7 @@
 import Observation
 
-/// One curated connection view. The server counts the full result and pages records with path evidence.
+/// One curated connection view's complete list, opened from the detail page's "N more" row. The
+/// server counts the full result and pages records with path evidence.
 @MainActor
 @Observable
 public final class ConnectedSectionModel: Identifiable {
@@ -9,10 +10,8 @@ public final class ConnectedSectionModel: Identifiable {
     public nonisolated let id: String
     public private(set) var items: [ConnectedRecord] = []
     public private(set) var totalCount = 0
-    public private(set) var hopRange: ConnectedRecordsOutput.RouteHopRangePayload?
     public private(set) var loading = false
     public private(set) var loaded = false
-    public private(set) var expanded = false
     public private(set) var error: String?
     public var hasMore: Bool { items.count < totalCount }
 
@@ -35,7 +34,6 @@ public final class ConnectedSectionModel: Identifiable {
 
     public func loadNextPage() async {
         guard hasMore else { return }
-        expanded = true
         await load(reset: false)
     }
 
@@ -50,11 +48,62 @@ public final class ConnectedSectionModel: Identifiable {
             )
             items = reset ? result.items : items + result.items
             totalCount = result.totalCount
-            hopRange = result.routeHopRange
             error = nil
             loaded = true
         } catch {
             self.error = String(describing: error)
         }
     }
+}
+
+/// The detail page's one Connected records section: every curated view's count and first rows
+/// from a single `entity.connectedRecordsPreview` read.
+@MainActor
+@Observable
+public final class ConnectedRecordsPreviewModel {
+    public let source: EntityRef
+    public private(set) var preview: ConnectedRecordsPreviewOutput?
+    public private(set) var loading = false
+    public private(set) var error: String?
+
+    private let client: CubbyClient
+
+    public init(source: EntityRef, client: CubbyClient) {
+        self.source = source
+        self.client = client
+    }
+
+    public func loadInitial() async {
+        guard preview == nil else { return }
+        await refresh()
+    }
+
+    public func refresh() async {
+        guard !loading else { return }
+        loading = true
+        defer { loading = false }
+        do {
+            preview = try await client.connectedRecordsPreview(source: source)
+            error = nil
+        } catch {
+            self.error = String(describing: error)
+        }
+    }
+}
+
+extension ConnectedRecordsPreviewOutput {
+    /// Views with no connected records, folded into one line instead of one empty group each.
+    public var emptyViewTitles: [String] { views.filter { $0.totalCount == 0 }.map(\.title) }
+    public var hasConnections: Bool { views.contains { $0.totalCount > 0 } }
+}
+
+/// How a connected row's path and hop count read on every client.
+public enum ConnectedPathPresentation {
+    /// The records strictly between source and target; empty for a direct connection. They read
+    /// by entity kind because paths repeat names (an Expense is named after its Product).
+    public static func intermediates(_ path: [ConnectedPathNode]) -> [ConnectedPathNode] {
+        path.count > 2 ? Array(path.dropFirst().dropLast()) : []
+    }
+
+    public static func hopLabel(_ hops: Int) -> String { hops == 1 ? "1 hop" : "\(hops) hops" }
 }

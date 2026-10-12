@@ -88,30 +88,6 @@ struct EntityRelationshipsTests {
         #expect(first.height >= 404)
     }
 
-    @Test @MainActor func collapsingABranchHidesOnlyNodesNoLongerReachable() async throws {
-        let root = ref(.product, "PRD-1001")
-        let expense = ref(.expense, "EXP-1001")
-        let project = ref(.project, "PRJ-1001")
-        let expenseBranch = branch(root: root, items: [expense], edgeIds: ["edge-1"], nextOffset: nil)
-        let graph = EntityGraph(
-            root: root,
-            nodes: [node(root, "Drill"), node(expense, "Receipt"), node(project, "Workshop")],
-            edges: [edge("edge-1", root, expense), edge("edge-2", expense, project)],
-            branches: [expenseBranch],
-            paths: [],
-            completion: .init(status: .exhausted, requestedDepth: 2, reachedDepth: 2),
-            truncated: false
-        )
-        let client = RelationshipClientStub(graphs: [root: graph])
-        let model = EntityRelationshipsModel(client: client)
-        await model.loadInitial(source: root)
-
-        model.toggle(expenseBranch)
-
-        #expect(model.visibleGraph?.nodes.map(\.reference) == [root])
-        #expect(model.visibleGraph?.edges.isEmpty == true)
-    }
-
     @Test @MainActor func newerSourceWinsWhenAnEarlierRequestFinishesLater() async throws {
         let first = ref(.product, "PRD-1001")
         let second = ref(.location, "LOC-1001")
@@ -186,74 +162,18 @@ struct EntityRelationshipsTests {
         #expect(model.acceptError == nil)
     }
 
-    @Test @MainActor func focusAndDepthKeepRecommendationsScopedToTheDetailSource() async {
+    @Test @MainActor func depthKeepsRecommendationsScopedToTheDetailSource() async {
         let detailSource = ref(.product, "PRD-1001")
-        let focused = ref(.expense, "EXP-1001")
-        let detailGraph = EntityGraph(
-            root: detailSource,
-            nodes: [node(detailSource, "Drill"), node(focused, "Receipt")],
-            edges: [edge("edge-1", detailSource, focused)],
-            branches: [],
-            paths: [.init(nodeRefs: [detailSource, focused], edgeIds: ["edge-1"])],
-            completion: .init(status: .depthLimit, requestedDepth: 1, reachedDepth: 1),
-            truncated: false
-        )
-        let client = RelationshipClientStub(graphs: [
-            detailSource: detailGraph,
-            focused: singleNodeGraph(focused),
-        ])
+        let client = RelationshipClientStub(graphs: [detailSource: singleNodeGraph(detailSource)])
         let model = EntityRelationshipsModel(client: client)
         await model.loadInitial(source: detailSource)
 
-        await model.focus(on: focused)
         await model.setDepth(3)
 
         #expect(model.source == detailSource)
-        #expect(model.graph?.root == focused)
+        #expect(model.graph?.root == detailSource)
         #expect(model.recommendationDocument?.source == EntityGraphRoot(detailSource))
         #expect(model.depth == 3)
-        #expect(model.selectedNode == focused)
-    }
-
-    @Test @MainActor func emptyBranchesAreHiddenUntilExplicitlyShown() {
-        let root = ref(.product, "PRD-1001")
-        let related = ref(.expense, "EXP-1001")
-        let populated = branch(
-            root: root,
-            items: [related],
-            edgeIds: ["edge-1"],
-            nextOffset: nil
-        )
-        let empty = EntityGraphBranch(
-            root: root,
-            relationshipKey: "tasks",
-            label: "Tasks",
-            target: .task,
-            totalCount: 0,
-            nextOffset: nil,
-            items: [],
-            edgeIds: []
-        )
-        let graph = EntityGraph(
-            root: root,
-            nodes: [node(root, "Drill"), node(related, "Receipt")],
-            edges: [edge("edge-1", root, related)],
-            branches: [empty, populated],
-            paths: [],
-            completion: .init(status: .exhausted, requestedDepth: 1, reachedDepth: 1),
-            truncated: false
-        )
-        let model = EntityRelationshipsModel(
-            client: RelationshipClientStub(graphs: [root: graph]),
-            initialGraph: graph
-        )
-
-        #expect(model.hasEmptyBranches)
-        #expect(model.displayedBranches == [populated])
-
-        model.setShowsEmptyBranches(true)
-
-        #expect(model.displayedBranches == [empty, populated])
     }
 
     @Test @MainActor func failedExpenseAcceptanceRetainsProposalAndRetryDispatchesUpdate() async {

@@ -18,6 +18,8 @@ enum Route: Hashable {
     /// A generic list, optionally opened with filters already applied (keyed by wire name).
     case entityList(EntityKey, filters: EntityFilterState = EntityFilterState())
     case entityDetail(EntityKey, id: String)
+    /// One curated connected view's complete list for a record (the detail page shows three rows).
+    case connectedRecords(EntityRef, viewKey: String)
     /// Apparel owned by one household member or guest.
     case wardrobe(ownerID: String, ownerName: String)
     /// A walk-the-shelf recount, optionally pre-scoped to a location.

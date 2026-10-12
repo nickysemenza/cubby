@@ -15,12 +15,10 @@ struct EntityDetailView: View {
     @State private var model: GenericEntityDetailModel?
     @State private var relationshipsModel: EntityRelationshipsModel?
     @State private var relationSections: [RelationSectionModel] = []
-    @State private var connectedSections: [ConnectedSectionModel] = []
+    @State private var connectedRecords: ConnectedRecordsPreviewModel?
     @State private var photoCapture: PhotoCaptureModel?
     @State private var editing = false
     @State private var creatingRelation: RelationSectionModel?
-    @State private var physicalConnections: EntityConnectionsOut?
-    @State private var physicalError: String?
     @State private var heroAction: HeroActionModel?
     @State private var heroEditor: HeroEditorRequest?
     @State private var heroNotice: String?
@@ -187,10 +185,8 @@ struct EntityDetailView: View {
                 EntityDetailContent(
                     descriptor: descriptor, row: row,
                     relationSections: relationSections,
-                    connectedSections: connectedSections,
+                    connectedRecords: connectedRecords,
                     relationshipsModel: relationshipsModel,
-                    physicalConnections: physicalConnections,
-                    physicalError: physicalError,
                     fetchedAt: model.fetchedAt,
                     onRelationshipAccepted: appModel.recordRelationshipMutation,
                     onCreateRelation: { creatingRelation = $0 },
@@ -233,16 +229,11 @@ struct EntityDetailView: View {
             relationSections = RelationSectionModel.sections(
                 of: descriptor, recordID: survivorID, client: appModel.client)
         }
-        if connectedSections.isEmpty {
-            connectedSections = descriptor.presentation.connectedViews.map {
-                ConnectedSectionModel(
-                    spec: $0, source: EntityRef(entity: key, id: survivorID), client: appModel.client)
-            }
+        if connectedRecords == nil, !descriptor.presentation.connectedViews.isEmpty {
+            connectedRecords = ConnectedRecordsPreviewModel(
+                source: EntityRef(entity: key, id: survivorID), client: appModel.client)
         }
-        async let relationshipLoad: Void = relationshipsModel.loadInitial(
-            source: EntityRef(entity: key, id: survivorID))
-        async let physicalLoad: Void = loadPhysicalConnections(id: survivorID)
-        _ = await (relationshipLoad, physicalLoad)
+        await relationshipsModel.loadInitial(source: EntityRef(entity: key, id: survivorID))
     }
 
     private func refresh() async {
@@ -250,22 +241,12 @@ struct EntityDetailView: View {
         let survivorID = model.row?.id ?? id
         async let detailRefresh: Void = model.refresh(id: survivorID)
         async let relationshipRefresh: Void = relationshipsModel.refresh()
-        async let physicalRefresh: Void = loadPhysicalConnections(id: survivorID)
-        _ = await (detailRefresh, relationshipRefresh, physicalRefresh)
+        _ = await (detailRefresh, relationshipRefresh)
         for section in relationSections {
             await section.list.refresh()
             await section.loadConnectionEvidence()
         }
-        for section in connectedSections { await section.refresh() }
-    }
-
-    private func loadPhysicalConnections(id: String) async {
-        do {
-            physicalConnections = try await appModel.client.physicalConnections(id: id)
-            physicalError = nil
-        } catch {
-            physicalError = String(describing: error)
-        }
+        await connectedRecords?.refresh()
     }
 
     /// The manifest's hero actions this entity declares and native implements, from the one
@@ -348,10 +329,8 @@ struct EntityDetailContent: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
     var relationSections: [RelationSectionModel] = []
-    var connectedSections: [ConnectedSectionModel] = []
+    var connectedRecords: ConnectedRecordsPreviewModel? = nil
     var relationshipsModel: EntityRelationshipsModel? = nil
-    var physicalConnections: EntityConnectionsOut? = nil
-    var physicalError: String? = nil
     /// Developer overlays layer 4: when this row was fetched. `nil` in previews/fixtures that
     /// never went through `GenericEntityDetailModel`.
     var fetchedAt: Date? = nil
@@ -444,41 +423,8 @@ struct EntityDetailContent: View {
                     Link("Open on web", destination: appModel.webURL(for: descriptor.key, id: row.id))
                 }
             }
-            ForEach(connectedSections) { section in
-                ConnectedSectionView(model: section).detailContentsAnchor(section.id)
-            }
-            if let physicalConnections {
-                ContinuousDetailSection(title: "Physical connections") {
-                    if physicalConnections.groups.isEmpty {
-                        Text("No physical connections").foregroundStyle(.secondary)
-                            .preference(key: DetailSectionEmpty.self, value: true)
-                    }
-                    ForEach(Array(physicalConnections.groups.enumerated()), id: \.offset) { indexed in
-                        let group = indexed.element
-                        VStack(alignment: .leading) {
-                            Text("\(group.label) · \(group.count)").font(.subheadline)
-                            ForEach(group.items, id: \.id) { item in
-                                if let key = EntityKey(rawValue: item.kind.rawValue) {
-                                    NavigationLink(
-                                        value: Route.entityDetail(key, id: item.id)
-                                    ) {
-                                        Text(item.name ?? item.id)
-                                    }
-                                } else {
-                                    Text(item.name ?? item.id)
-                                }
-                            }
-                        }
-                    }
-                }.detailContentsAnchor("physical-connections")
-            } else if let physicalError {
-                ContinuousDetailSection(title: "Physical connections") {
-                    Text(physicalError).foregroundStyle(.secondary)
-                }.detailContentsAnchor("physical-connections")
-            } else {
-                ContinuousDetailSection(title: "Physical connections") {
-                    LoadingIndicator(label: "Loading physical connections")
-                }.detailContentsAnchor("physical-connections")
+            if let connectedRecords {
+                ConnectedRecordsSection(model: connectedRecords).detailContentsAnchor("connected-records")
             }
             if let relationshipsModel {
                 ContinuousDetailSection(title: "Relationships") {
@@ -599,12 +545,12 @@ struct EntityDetailContent: View {
             DetailContentsEntry(
                 id: $0.id, title: $0.title ?? $0.id, group: "Record")
         }
-            + connectedSections.map {
-                DetailContentsEntry(id: $0.id, title: $0.spec.title, group: "Relations")
-            } + [
-                DetailContentsEntry(
-                    id: "physical-connections", title: "Physical connections", group: "Relations")
-            ]
+            + (connectedRecords == nil
+                ? []
+                : [
+                    DetailContentsEntry(
+                        id: "connected-records", title: "Connected records", group: "Relations")
+                ])
             + (relationshipsModel == nil
                 ? [] : [DetailContentsEntry(id: "relationships", title: "Relationships", group: "Relations")])
             + [

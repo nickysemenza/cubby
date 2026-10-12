@@ -18,7 +18,6 @@ public final class RelationSectionModel: Identifiable {
     private let prefillIsMany: Bool?
     public let list: GenericEntityListModel
     public private(set) var connectionEvidence: [String: ConnectedRecord] = [:]
-    public private(set) var hopRange: ConnectedRecordsOutput.RouteHopRangePayload?
     public private(set) var connectionError: String?
     private let client: CubbyClient
 
@@ -94,7 +93,6 @@ public final class RelationSectionModel: Identifiable {
                     viewKey: "relation:\(spec.relation)", limit: 50,
                     targetIDs: Array(ids[start..<min(start + 50, ids.count)])
                 )
-                hopRange = page.routeHopRange
                 for item in page.items { evidence[item.target.entityId] = item }
             }
             connectionEvidence = evidence

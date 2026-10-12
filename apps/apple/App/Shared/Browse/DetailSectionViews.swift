@@ -946,10 +946,6 @@ struct RelationSectionView: View {
                     if model.list.phase == .loaded && model.list.rows.isEmpty {
                         Text("Empty").font(.caption).foregroundStyle(.secondary)
                     }
-                    if let range = model.hopRange {
-                        Text(recordHopLabel(min: range.min, max: range.max))
-                            .font(.caption.monospaced()).foregroundStyle(.secondary)
-                    }
                     Spacer()
                     if let onCreate, model.target.key.nativeActions.contains(.create) {
                         Button("New \(model.target.singular)", systemImage: "plus", action: onCreate)
@@ -1121,10 +1117,6 @@ struct EntityJournalSectionView: View {
                         model.list.phase == .loaded && model.list.rows.isEmpty ? .secondary : .primary)
                 if model.list.phase == .loaded && model.list.rows.isEmpty {
                     Text("Empty").font(.caption).foregroundStyle(.secondary)
-                }
-                if let range = model.hopRange {
-                    Text(recordHopLabel(min: range.min, max: range.max))
-                        .font(.caption.monospaced()).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if model.target.key.nativeActions.contains(.create) {
