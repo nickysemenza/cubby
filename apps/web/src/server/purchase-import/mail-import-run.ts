@@ -11,7 +11,10 @@ import {
   runEntityId,
   type RunId,
 } from "@cubby/schemas/identifiers";
-import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
+import {
+  coordinatorModelFor,
+  importRunAgentIdentity,
+} from "@cubby/schemas/import-run-agent";
 import {
   mailboxDiscoveryInput,
   MAILBOX_RESEARCH_VERSION,
@@ -249,6 +252,7 @@ export async function admitMailImport(
       actorLedgerPartyKind: snapshot.ledgerPartyKind,
       parentRunId: input.parentRunId ?? null,
       cause: "source_discovered",
+      coordinatorModel: coordinatorModelFor("mail_import"),
       input: authorized,
       clientKey,
       startedAt: new Date(),
