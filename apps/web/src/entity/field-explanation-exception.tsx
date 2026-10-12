@@ -51,7 +51,10 @@ export function ExceptionControls({
 
   if (check.exception) {
     return (
-      <div className="flex basis-full flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground">
+      <div
+        data-ledger-expanded
+        className="flex basis-full flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground"
+      >
         <span className="min-w-0 flex-1 leading-5">
           {check.exception.state === "stale"
             ? "Evidence changed since this exception was recorded: "

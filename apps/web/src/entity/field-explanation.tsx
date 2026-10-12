@@ -407,7 +407,7 @@ function QualityCheckRow({
           {check.description}
         </LedgerCell>
       ) : null}
-      <LedgerCell slot="actions">
+      <LedgerCell as="div" slot="actions">
         <ExceptionControls entityId={entityId} check={check} />
       </LedgerCell>
     </LedgerRow>

@@ -145,6 +145,8 @@ Use `ui/common/ledger.tsx` for repeated read-only facts and detail record rows. 
 
 Expanded action forms and full-width exception prose span a lower ledger row rather than widening the action rail. Phone-card explanation controls retain their own positioned stacking layer above the stretched record link; a larger touch target must remain clickable. Tests select the semantic facts ledger and assert actual labels before checking declaration order. Offscreen column fitting preserves resolved cell typography. Browser readability checks compare painted text against clipping bounds, excluding intentional edit-control hover padding; timestamp checks follow the hovered trigger's accessible tooltip relation rather than requiring a page-wide singleton.
 
+Only a form or `data-ledger-expanded` content moves actions below the record; compact controls remain in the rail. Expanded action cells use a block container, and the trailing status spans the released action track so it stays at the row edge.
+
 Fact labels and controls center against the whole value block, including wrapped values; full-width prose keeps its separate row. A failed photo retains the same evidence layout through its semantic image fallback; SVG identity icons do not select that photo layout. Interior column rules exclude the pinned start boundary so its full-strength hairline remains visible.
 
 ## Entity names are always readable and always clickable

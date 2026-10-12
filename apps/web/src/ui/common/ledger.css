@@ -183,17 +183,28 @@
 /* Expanded controls and recorded exception prose cannot occupy an icon rail. */
 .ledger[data-ledger="records"]
   > .ledger-row
-  > [data-ledger-slot="actions"]:has(
-    form,
-    input,
-    select,
-    textarea,
-    [role="combobox"],
-    .basis-full
-  ) {
+  > [data-ledger-slot="actions"]:has(form, [data-ledger-expanded]) {
   grid-column: 1 / -1;
   grid-row: auto;
   justify-self: stretch;
+}
+
+.ledger[data-ledger="records"]
+  > .ledger-row:has(
+    > [data-ledger-slot="actions"] :is(form, [data-ledger-expanded])
+  )
+  > [data-ledger-slot="trailing"] {
+  grid-column: 3 / -1;
+}
+
+@container ledger (min-width: 32rem) {
+  .ledger[data-ledger="records"]
+    > .ledger-row:has(
+      > [data-ledger-slot="actions"] :is(form, [data-ledger-expanded])
+    )
+    > [data-ledger-slot="trailing"] {
+    grid-column: 4 / -1;
+  }
 }
 
 @media (max-width: 767px) {

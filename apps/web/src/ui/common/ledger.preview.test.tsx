@@ -97,18 +97,23 @@ it("keeps expanded action forms beneath the check in a popover", async () => {
         <LedgerRow>
           <LedgerCell slot="primary">Manufacturer identity</LedgerCell>
           <LedgerCell slot="secondary">Missing data</LedgerCell>
+          <LedgerCell slot="trailing" data-testid="exception-state">
+            Ready
+          </LedgerCell>
           <LedgerCell slot="actions" as="div" data-testid="exception-form">
-            <label htmlFor="exception-reason">
-              Reason
-              <NativeSelect id="exception-reason">
-                <option>Not applicable</option>
-              </NativeSelect>
-            </label>
-            <label htmlFor="exception-note">
-              Note
-              <input id="exception-note" aria-label="Note" />
-            </label>
-            <button type="button">Accept exception</button>
+            <form>
+              <label htmlFor="exception-reason">
+                Reason
+                <NativeSelect id="exception-reason">
+                  <option>Not applicable</option>
+                </NativeSelect>
+              </label>
+              <label htmlFor="exception-note">
+                Note
+                <input id="exception-note" aria-label="Note" />
+              </label>
+              <button type="button">Accept exception</button>
+            </form>
           </LedgerCell>
         </LedgerRow>
       </Ledger>
@@ -122,4 +127,31 @@ it("keeps expanded action forms beneath the check in a popover", async () => {
   expect(form.top).toBeGreaterThanOrEqual(check.bottom);
   expect(form.width).toBeGreaterThanOrEqual(320);
   expect(report.scrollWidth).toBeLessThanOrEqual(report.clientWidth);
+  const state = screen.getByTestId("exception-state").getBoundingClientRect();
+  expect(
+    report.getBoundingClientRect().right - state.right,
+  ).toBeLessThanOrEqual(1);
+});
+
+it("keeps compact action controls beside their record", async () => {
+  await page.viewport(1440, 900);
+  render(
+    <div style={{ width: 540 }}>
+      <Ledger>
+        <LedgerRow>
+          <LedgerCell slot="primary">Synthetic record</LedgerCell>
+          <LedgerCell slot="trailing">Ready</LedgerCell>
+          <LedgerCell as="div" slot="actions">
+            <NativeSelect aria-label="Compact action">
+              <option>Review</option>
+            </NativeSelect>
+          </LedgerCell>
+        </LedgerRow>
+      </Ledger>
+    </div>,
+  );
+  const action = screen.getByRole("combobox").getBoundingClientRect();
+  const record = screen.getByText("Synthetic record").getBoundingClientRect();
+  expect(action.top).toBeLessThan(record.bottom);
+  expect(action.bottom).toBeGreaterThan(record.top);
 });
