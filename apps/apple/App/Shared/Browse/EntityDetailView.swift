@@ -510,8 +510,6 @@ struct EntityDetailContent: View {
         }
         .formStyle(.grouped)
         .fieldGuideDetailDensity()
-        .scrollContentBackground(.hidden)
-        .background(FieldGuideTokens.canvas)
         .frame(maxWidth: 900)
         .frame(maxWidth: .infinity, alignment: .top)
         .accessibilityIdentifier("detail.\(descriptor.key.rawValue)")

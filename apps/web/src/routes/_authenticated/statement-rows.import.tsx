@@ -262,7 +262,6 @@ function StatementImportPage() {
       title="Import statement"
       eyebrow="Finance"
       compact
-      decoration="none"
       actions={
         <Button
           variant="outline"

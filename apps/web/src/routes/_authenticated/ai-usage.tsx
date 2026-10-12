@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authenticated/ai-usage")({
 
 function AiUsageRoute() {
   return (
-    <Page variant="list" title="AI usage" compact decoration="none">
+    <Page variant="list" title="AI usage" compact>
       <AiUsagePage />
     </Page>
   );

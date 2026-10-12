@@ -210,13 +210,13 @@ function FlowPlan({
 
   return (
     <>
-      <header className="border-b-2 border-primary px-4 py-2">
+      <header className="border-b border-border px-4 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="my-0 font-heading text-xl font-semibold tracking-tight">
               {recipe.name}
             </h2>
-            <div className="font-mono text-2xs tracking-wider text-slate uppercase">
+            <div className="text-xs font-medium text-muted-foreground">
               {artifact.plan.sources.length} additions →{" "}
               {artifact.plan.operations.length} operations → {outputCount}{" "}
               {outputCount === 1 ? "output" : "outputs"}
@@ -445,7 +445,7 @@ function SelectedOperationDialog({
                   key={instruction.key}
                   className="border border-[var(--border)] px-2 py-2"
                 >
-                  <div className="mb-1 font-mono text-2xs tracking-wider text-slate uppercase">
+                  <div className="mb-1 text-xs font-medium text-muted-foreground">
                     {instruction.sectionName ?? "Method"} · step{" "}
                     {instruction.instructionIndex + 1}
                   </div>

@@ -3,7 +3,7 @@ import SwiftUI
 
 enum FieldGuideMetrics {
     static let radiusControl: CGFloat = 8
-    static let radiusPanel: CGFloat = 16
+    static let radiusPanel: CGFloat = 12
     static let radiusChip: CGFloat = 7
     static let space1: CGFloat = 4
     static let space2: CGFloat = 8

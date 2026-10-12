@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   gotoAuthenticatedPage,
+  expectViewportBounded,
   openProductFromPalette,
   waitForFormHydration,
 } from "./e2e-helpers";
@@ -16,7 +17,7 @@ const labelPhoto = fileURLToPath(
 
 test("a member creates a Product from own item and label photos without an import run", async ({
   page,
-}) => {
+}, testInfo) => {
   const name = `Photo-first crew shirt ${Date.now()}`;
   await gotoAuthenticatedPage(page, "/products?create=true");
   await waitForFormHydration(page);
@@ -60,4 +61,28 @@ test("a member creates a Product from own item and label photos without an impor
       .locator("#labels")
       .getByRole("img", { name: "synthetic-wardrobe-label.png" }),
   ).toBeVisible();
+  await page.setViewportSize({ width: 402, height: 874 });
+  const photo = page.getByRole("button", {
+    name: "View synthetic-wardrobe-shirt.png",
+    exact: true,
+  });
+  await expect(photo).toBeVisible();
+  const bounds = await photo.boundingBox();
+  const titleBounds = await page
+    .getByRole("heading", { name, exact: true })
+    .boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(titleBounds).not.toBeNull();
+  expect(bounds!.width).toBeLessThanOrEqual(320);
+  expect(bounds!.height).toBeLessThanOrEqual(176);
+  expect(bounds!.y + bounds!.height).toBeLessThan(titleBounds!.y);
+  await expectViewportBounded(page);
+  await page.screenshot({
+    path: testInfo.outputPath("phone-photo-dossier.png"),
+  });
+  await photo.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
 });

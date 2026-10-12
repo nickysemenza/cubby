@@ -31,11 +31,12 @@ export function renderBrandCss(roles, aliases, values) {
     ...Object.entries(aliases).map(
       ([name, target]) => `  --brand-${name}: var(--brand-${target});`,
     ),
-    ...Object.entries(values).map(([name, value]) =>
-      ["font-heading", "font-sans", "font-mono"].includes(name)
+    ...Object.entries(values).map(([name, value]) => {
+      const declaration = `  --brand-${name}: ${value};`;
+      return declaration.length > 80
         ? `  --brand-${name}:\n    ${value};`
-        : `  --brand-${name}: ${value};`,
-    ),
+        : declaration;
+    }),
     "  --positive: var(--brand-positive);",
     "  --warning: var(--brand-warning);",
     "  --warning-ink: var(--brand-warning-ink);",

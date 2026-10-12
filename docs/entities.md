@@ -17,6 +17,12 @@ For generic behavior shared across entities, follow
 generic renderer, declaration-to-renderer parity, then delete the per-entity
 twin.
 
+The compiled default Details section is primary: a record's own facts lead
+its dossier rather than being squeezed into a supporting rail behind workflow
+slots. An explicit section placement remains authoritative, and journal
+presentations keep their relation-first ordering. Real photos sit beside the
+primary facts on wide web surfaces and above identity on phones.
+
 `presentation.recordIconEntityField` names a read-only projection containing an
 entity key. Generic web and Apple record surfaces resolve that entity's declared
 icon, falling back to the record's own entity icon for missing or unknown keys.

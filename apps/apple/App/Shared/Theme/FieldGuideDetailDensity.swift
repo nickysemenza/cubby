@@ -12,7 +12,6 @@ extension View {
                     top: FieldGuideTokens.Space.xs, leading: FieldGuideTokens.Space.md,
                     bottom: FieldGuideTokens.Space.xs, trailing: FieldGuideTokens.Space.md)
             )
-            .listRowBackground(FieldGuideTokens.surface)
             .contentMargins(.horizontal, FieldGuideTokens.Space.md, for: .scrollContent)
             #if os(iOS)
                 .listSectionSpacing(.compact)

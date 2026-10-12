@@ -122,8 +122,6 @@ struct SettingsView: View {
             if model.phase == .signedIn, photosReady { photosSection }
         }
         .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .background(FieldGuideTokens.canvas)
         .font(.fieldGuideBody)
         .fieldGuideScreen()
         .navigationTitle("Settings")

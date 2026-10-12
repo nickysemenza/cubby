@@ -119,7 +119,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
       align="center"
       wrap
       gap="sm"
-      className="font-mono text-2xs text-muted-foreground md:gap-4"
+      className="text-xs text-muted-foreground md:gap-4"
     >
       <Row align="center" gap="sm">
         <UsersIcon size={12} />
@@ -168,7 +168,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
   // it — render a slim meta band instead of an empty hero block.
   if (!hasImage) {
     return (
-      <div className="page-header-accent border border-[var(--border)] bg-muted/60 px-3 py-3 sm:px-6 sm:py-4">
+      <div className="rounded-xl border border-border bg-card px-3 py-2">
         {metaInfo}
       </div>
     );

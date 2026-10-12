@@ -134,11 +134,11 @@
   }
 }
 
-/* The mono caption look — eyebrows, table column headers, stat-card labels.
+/* Compact captions — navigation, table column headers, supporting labels.
    One home for the class cluster that was inlined ~30× across components; the
    `EYEBROW_CLASS` constant and `<Eyebrow>` component both resolve to this. */
 @utility eyebrow {
-  @apply font-mono text-2xs text-slate uppercase tracking-wider;
+  @apply font-sans text-2xs font-medium text-muted-foreground;
 }
 
 /*
@@ -520,16 +520,6 @@
   }
   .thumbnail-ring:hover::after {
     @apply ring-2 ring-primary/30;
-  }
-
-  /* Page headers inherit the current domain's route line. */
-  .page-header-accent {
-    @apply relative;
-  }
-  .page-header-accent::after {
-    content: "";
-    @apply absolute -bottom-2 left-0 h-0.5 w-12 rounded-full;
-    background: var(--page-accent, var(--brand-ultramarine));
   }
 
   /* Print: the recipe spread is literally a cookbook page — let it print

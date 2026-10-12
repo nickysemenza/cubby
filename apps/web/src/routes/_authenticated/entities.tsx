@@ -154,7 +154,7 @@ function EntitiesRoute() {
   );
 
   return (
-    <Page variant="list" title="Entities" compact decoration="none">
+    <Page variant="list" title="Entities" compact>
       <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
         <TabsList
           variant="line"

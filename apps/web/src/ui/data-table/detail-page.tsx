@@ -273,7 +273,7 @@ function SectionCard({
       />
       {section.title}
       {open && count !== undefined ? (
-        <span className="font-mono text-2xs font-normal text-muted-foreground">
+        <span className="text-xs font-normal text-muted-foreground">
           {formatCount(count)}
         </span>
       ) : null}
@@ -342,7 +342,7 @@ function SectionCard({
 
 function SectionPlane({ children }: { children: ReactNode }) {
   return (
-    <div className="divide-y divide-border rounded-md border border-border bg-card max-md:rounded-none max-md:border-x-0">
+    <div className="divide-y divide-border rounded-xl border border-border bg-card">
       {children}
     </div>
   );
@@ -697,7 +697,7 @@ function renderResponsiveLayout({
       <div
         key={`run-${blocks.length}`}
         className={cn(
-          "grid items-start gap-4 md:gap-2",
+          "grid items-start gap-3 md:gap-3",
           primary.length > 0 && hasSupportingRail
             ? "@min-[50rem]/detail-body:grid-cols-[minmax(0,1fr)_20rem]"
             : "grid-cols-1",

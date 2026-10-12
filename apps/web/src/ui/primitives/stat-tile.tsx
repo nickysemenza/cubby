@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
+import { cn } from "~/lib/utils";
 import { Grid } from "~/ui/layout";
 
 export interface SummaryItem {
@@ -15,7 +15,7 @@ export interface SummaryItem {
 }
 
 /**
- * One ledger metric: a mono eyebrow label over a big tabular number, with an
+ * One compact fact: a sentence-case label and tabular value, with an
  * optional secondary line (e.g. "$0.42 / serving") and a muted caption (e.g.
  * coverage). This markup was duplicated across the summary card, the recipe
  * detail, and the nutrition charts — it lives here once now.
@@ -43,13 +43,13 @@ export function StatTile({
     : children;
 
   return (
-    <div className={className}>
-      {resolvedLabel && <Eyebrow as="div">{resolvedLabel}</Eyebrow>}
-      <div className="font-mono font-semibold text-foreground text-lg tabular-nums">
+    <div className={cn("min-w-0", className)}>
+      {resolvedLabel && <div className="text-xs text-muted-foreground">{resolvedLabel}</div>}
+      <div className="text-sm font-semibold text-foreground tabular-nums">
         {value}
       </div>
       {item?.subValue && (
-        <div className="font-mono text-2xs text-muted-foreground tabular-nums">
+        <div className="text-xs text-muted-foreground tabular-nums">
           {item.subValue}
         </div>
       )}
@@ -57,8 +57,8 @@ export function StatTile({
         <div
           className={
             item.captionTitle
-              ? "cursor-help font-mono text-2xs text-warning-ink decoration-dotted underline underline-offset-2"
-              : "font-mono text-2xs text-muted-foreground"
+              ? "cursor-help text-xs text-warning-ink decoration-dotted underline underline-offset-2"
+              : "text-xs text-muted-foreground"
           }
           title={item.captionTitle}
         >

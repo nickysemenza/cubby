@@ -31,7 +31,7 @@ export const EntityHero: FC<EntityHeroProps> = ({
       <Link
         to="/images/$shortcode"
         params={{ shortcode: activeImage.id }}
-        className="relative block aspect-[4/3] overflow-hidden rounded-md bg-card"
+        className="relative block aspect-[4/3] overflow-hidden rounded-xl bg-muted"
       >
         <Image
           src={activeImage.url}

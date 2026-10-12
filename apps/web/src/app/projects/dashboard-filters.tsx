@@ -144,7 +144,7 @@ function DashboardFilterControls({
         <Stack gap="xs">
           <label
             htmlFor={yearId}
-            className="font-mono text-2xs tracking-wider text-muted-foreground uppercase"
+            className="text-xs font-medium text-muted-foreground"
           >
             Calendar year
           </label>
@@ -169,7 +169,7 @@ function DashboardFilterControls({
         <Stack gap="xs">
           <label
             htmlFor={completionYearId}
-            className="font-mono text-2xs tracking-wider text-muted-foreground uppercase"
+            className="text-xs font-medium text-muted-foreground"
           >
             Completed
           </label>
