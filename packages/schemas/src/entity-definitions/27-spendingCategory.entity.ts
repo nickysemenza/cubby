@@ -144,7 +144,11 @@ export default defineEntity({
             },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Evidence",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: expectation,
           create: expectation.default("unknown"),
@@ -189,7 +193,11 @@ export default defineEntity({
             },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Products",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: productExpectation,
           create: productExpectation.default("unknown"),

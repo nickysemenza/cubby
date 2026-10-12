@@ -1,4 +1,4 @@
-import { dateSpanParts, formatDateSpan } from "~/lib/date-span";
+import { formatDateSpan, stackedDateSpan } from "~/lib/date-span";
 import { StackedValue, useStackedCell } from "~/ui/common/stacked-value";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 
@@ -22,13 +22,13 @@ export function CalendarDate({
   const stack = useStackedCell(stacked);
   const label = formatDateSpan(start, end, today);
   if (stack) {
-    const parts = dateSpanParts(start, end, today);
+    const parts = stackedDateSpan(start, end, today);
     return (
       <StackedValue
         className={className}
         title={label}
-        primary={parts.label}
-        secondary={parts.relative}
+        primary={parts.primary}
+        secondary={parts.secondary}
       />
     );
   }

@@ -19,7 +19,6 @@ import {
 } from "react";
 import { z } from "zod";
 
-import { isInspectableFieldProvenance } from "~/entity/field-provenance";
 import {
   createDndAnnouncements,
   cubbyDndScreenReaderInstructions,
@@ -40,7 +39,8 @@ type MaterializedColumnDef<TData extends RowData> = CubbyColumnDef<
   CellData
 >;
 
-const MIN_COLUMN_WIDTH = 48;
+/** A count's "#" header over "12" paints about 33px. */
+export const MIN_COLUMN_WIDTH = 32;
 
 /** Structural roles that always lead the desktop table in this order. */
 const LOCKED_START_COLUMN_ROLES: readonly EntityColumnRole[] = [
@@ -303,7 +303,6 @@ type TableWidthColumn = {
     maxSize?: number;
     meta?: {
       entityColumnRole?: EntityColumnRole;
-      surplus?: boolean;
       numeric?: boolean;
       mono?: boolean;
       cellData?: { kind: string };
@@ -323,35 +322,40 @@ const FIXED_WIDTH_KINDS = new Set([
 ]);
 
 /**
- * Columns that can use extra width: record identity and free text or
- * relation labels that otherwise truncate. Quantities, dates, and status
- * pills gain nothing from slack but distance from their neighbours.
+ * Only the record identity uses pane slack, up to its 240px fit. Widening a
+ * fact column only moves it away from its neighbours.
  */
 function isFlexibleColumn(column: TableWidthColumn) {
   if (isLockedColumn(column) || column.getIsPinned?.()) return false;
-  const meta = column.columnDef.meta;
-  if (meta?.surplus || meta?.entityColumnRole === "identity") return true;
-  if (meta?.numeric) return false;
-  const kind = meta?.cellData?.kind;
-  if (kind !== undefined && FIXED_WIDTH_KINDS.has(kind)) return false;
-  return isNonEmptyColumnHeader(column.columnDef.header);
+  return column.columnDef.meta?.entityColumnRole === "identity";
 }
 
 /**
- * The widest a fitted or slack-grown column paints: a record title stops at
- * 240px and a code column at 128px, and their clipped values spill over on
- * hover (`useCellSpill`). A person's resize still reaches `maxSize`.
+ * The widest a fitted column paints, by what it holds: a record title stops
+ * at 240px, free text and references at 160px, a status pill at 120px and a
+ * code at 96px; clipped values spill over on hover (`useCellSpill`).
+ * Quantities, money and dates keep their natural width. A person's resize
+ * still reaches `maxSize`.
  */
 const IDENTITY_FIT_MAX = 240;
-const CODE_FIT_MAX = 128;
+const TEXT_FIT_MAX = 160;
+const SELECT_FIT_MAX = 120;
+const CODE_FIT_MAX = 96;
+
+function kindFitMax(meta: TableWidthColumn["columnDef"]["meta"]) {
+  if (meta?.entityColumnRole === "identity") return IDENTITY_FIT_MAX;
+  const kind = meta?.cellData?.kind;
+  if (meta?.numeric || (kind !== undefined && FIXED_WIDTH_KINDS.has(kind)))
+    return kind === "select" ? SELECT_FIT_MAX : Number.POSITIVE_INFINITY;
+  if (meta?.mono) return CODE_FIT_MAX;
+  return TEXT_FIT_MAX;
+}
 
 function columnFitMax(column: TableWidthColumn) {
-  const max = column.columnDef.maxSize ?? Number.POSITIVE_INFINITY;
-  const meta = column.columnDef.meta;
-  if (meta?.entityColumnRole === "identity")
-    return Math.min(max, IDENTITY_FIT_MAX);
-  if (meta?.mono && !meta.numeric) return Math.min(max, CODE_FIT_MAX);
-  return max;
+  return Math.min(
+    column.columnDef.maxSize ?? Number.POSITIVE_INFINITY,
+    kindFitMax(column.columnDef.meta),
+  );
 }
 
 /** Trailing gutter width variable; it takes whatever the columns cannot use. */
@@ -395,16 +399,15 @@ function distributeSlack(
  * Resolves the widths the browser should paint without mutating TanStack's own
  * column-sizing state. A user's deliberate resize remains the source of truth
  * (`userSized` and pinned columns never receive slack). A measured width
- * stops at the column's fit maximum. Pane slack goes to the record identity
- * first, up to its 240px fit; the other flexible columns then share what is
- * left in proportion to their configured width, each capped at its fit
- * maximum; what no column can use goes to the trailing spacer.
+ * stops at the column's fit maximum. Pane slack goes only to the record
+ * identity, up to its 240px fit; the rest goes to the trailing spacer.
  *
  * Regressions: all slack used to go to one column past its maxSize, so a
  * three-column table (Product Categories) painted a 1200px name beside
  * crammed facts; spreading slack evenly then widened every free-text column
  * while the title it exists for stayed truncated; a 560px title then pushed
- * the facts beside it off the pane.
+ * the facts beside it off the pane; and a reference column grew to one long
+ * sampled name, painting a 290px column of dashes.
  */
 export function resolvedTableColumnWidths(
   columns: readonly TableWidthColumn[],
@@ -425,24 +428,12 @@ export function resolvedTableColumnWidths(
     0,
   );
   const flexible = columns.filter(
-    (column) =>
-      isFlexibleColumn(column) &&
-      !userSized.has(column.id) &&
-      (measured[column.id] === undefined ||
-        column.columnDef.meta?.entityColumnRole === "identity" ||
-        column.columnDef.meta?.surplus),
+    (column) => isFlexibleColumn(column) && !userSized.has(column.id),
   );
-  const isIdentity = (column: TableWidthColumn) =>
-    column.columnDef.meta?.entityColumnRole === "identity";
-  let remaining = distributeSlack(
+  const remaining = distributeSlack(
     widths,
-    flexible.filter(isIdentity),
+    flexible,
     Math.floor(availableWidth - configuredWidth),
-  );
-  remaining = distributeSlack(
-    widths,
-    flexible.filter((column) => !isIdentity(column)),
-    remaining,
   );
   return { widths, spacer: Math.max(0, remaining) };
 }
@@ -513,7 +504,7 @@ function tailwindWidth(className: string, prefix: "w" | "min-w" | "max-w") {
 }
 
 /** Every plain-date column that declares no width of its own. */
-const DATE_COLUMN_WIDTH = 96;
+const DATE_COLUMN_WIDTH = 72;
 
 /** Above this, a long header clamps rather than widening its column. */
 const HEADER_FIT_MAX = 160;
@@ -529,48 +520,39 @@ function defaultColumnSize(meta: CubbyColumnMeta | undefined) {
   const kind = meta?.cellData?.kind;
   if (kind === "boolean") return 56;
   // Dates and instants stack the day over its compact distance; the longest
-  // line, "Sep 30, 2024", paints about 80px.
+  // line, "’24 · 11mo ago", paints about 64px.
   if (kind === "timestamp") return 72;
   if (kind === "date") return DATE_COLUMN_WIDTH;
   if (meta?.numeric || kind === "number" || kind === "currency") return 72;
   if (kind === "amount") return 72;
   if (kind === "select") return 104;
-  if (kind?.startsWith("entity:")) return 184;
+  if (kind?.startsWith("entity:")) return TEXT_FIT_MAX;
   return 160;
 }
 
 /**
- * The width a header label needs beside its sort arrow (and source icon),
- * estimated from the 12px medium header face (~6.5px per character) plus cell
- * padding. Labels wrap to two lines, so the widest line is the longest word
- * or about half the label: "Itemization coverage" no longer sets the width
- * of its pill column.
+ * The width a header label needs, estimated from the 12px medium header face
+ * (~6.5px per character) plus cell padding; the sort arrow and source icon
+ * overlay the header until it is sorted or hovered. Labels wrap to two
+ * lines, so the widest line is the longest word or about half the label:
+ * "Itemization coverage" no longer sets the width of its pill column.
  */
-function headerFitWidth(label: string, meta: CubbyColumnMeta | undefined) {
-  const icon = meta?.provenance ? 18 : 0;
+function headerFitWidth(label: string) {
   const longestWord = Math.max(
     ...label.split(/\s+/).map((word) => word.length),
   );
   const line = Math.max(longestWord, Math.ceil(label.length * 0.55));
-  return Math.min(Math.ceil(line * 6.5) + 24 + icon, HEADER_FIT_MAX);
+  return Math.min(Math.ceil(line * 6.5) + 8, HEADER_FIT_MAX);
 }
 
 /**
- * Width the cell rail needs for this column's always-visible affordances
- * (explanation, relation workbench, suggestion mark). Added on top of the
- * value's width so a decorated column can never crush its value.
+ * Width the cell rail reserves for this column's always-visible affordance,
+ * an actionable suggestion mark, on top of the value's width. The
+ * explanation and relation-workbench controls overlay the active row's cell
+ * (`CellFrame overlay`) and reserve nothing.
  */
 export function columnRailWidth(meta: CubbyColumnMeta | undefined) {
-  let slots = 0;
-  if (meta?.explanation) slots += 1;
-  if (
-    !meta?.provenanceWorkbenchHandled &&
-    isInspectableFieldProvenance(meta?.provenance)
-  ) {
-    slots += 1;
-  }
-  if (meta?.suggest) slots += 1;
-  return slots * CELL_RAIL_SLOT_PX;
+  return meta?.suggest ? CELL_RAIL_SLOT_PX : 0;
 }
 
 function normalizedColumnSize<TData extends RowData>(
@@ -587,8 +569,7 @@ function normalizedColumnSize<TData extends RowData>(
   const role = definition.meta?.entityColumnRole;
   if (role === "image") {
     // Image preview owns provenance work; only the explanation occupies a rail.
-    const fixed =
-      (declared ?? 32) + (definition.meta?.explanation ? CELL_RAIL_SLOT_PX : 0);
+    const fixed = declared ?? 32;
     return { size: fixed, minSize: fixed, maxSize: fixed };
   }
   const rail = isLockedRole(role) ? 0 : columnRailWidth(definition.meta);
@@ -598,17 +579,20 @@ function normalizedColumnSize<TData extends RowData>(
       : Math.max(
           defaultColumnSize(definition.meta) + rail,
           isNonEmptyColumnHeader(definition.header)
-            ? headerFitWidth(definition.header, definition.meta)
+            ? headerFitWidth(definition.meta?.shortHeader ?? definition.header)
             : 0,
         );
   const minSize =
     definition.minSize ??
     tailwindWidth(className, "min-w") ??
     Math.min(size, MIN_COLUMN_WIDTH + rail);
+  // At least the identity fit, so a narrow default (a 72px stacked date)
+  // never clips the one-line form it paints outside a desktop row; each
+  // kind's fit cap still bounds what measurement may claim.
   const maxSize =
     definition.maxSize ??
     tailwindWidth(className, "max-w") ??
-    Math.max(size * 2, minSize);
+    Math.max(size * 2, minSize, IDENTITY_FIT_MAX);
   return { size, minSize, maxSize };
 }
 

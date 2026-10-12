@@ -120,7 +120,11 @@ export default defineEntity({
         key: "automaticWork",
         kind: "boolean",
         control: { kind: "checkbox" },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Automatic",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(true),
@@ -131,7 +135,11 @@ export default defineEntity({
         key: "remotePaused",
         kind: "boolean",
         control: { kind: "checkbox" },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Paused",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),

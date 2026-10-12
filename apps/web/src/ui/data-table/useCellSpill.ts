@@ -17,8 +17,25 @@ const TYPOGRAPHY = [
   "line-height",
 ];
 
+const RAIL_GAP_PX = 2;
+
 const isClipped = (element: Element) =>
   element.scrollWidth > element.clientWidth + 1;
+
+/** The active row's rail when it floats over the cell instead of in flow. */
+function floatingRail(cell: HTMLElement) {
+  const rail = cell.querySelector<HTMLElement>("[data-cell-rail]");
+  return rail && getComputedStyle(rail).position === "absolute" ? rail : null;
+}
+
+/** Whether a floating rail paints over the value's text. */
+function railCovers(value: HTMLElement, rail: HTMLElement) {
+  const range = document.createRange();
+  range.selectNodeContents(value);
+  const text = range.getBoundingClientRect();
+  const box = rail.getBoundingClientRect();
+  return text.width > 0 && text.left < box.right && text.right > box.left;
+}
 
 /**
  * The element whose full value a cell should spill, or null when nothing in
@@ -39,6 +56,11 @@ function clippedSource(cell: HTMLElement): HTMLElement | null {
     )
       return candidate;
   }
+  // A value that exactly fits still loses its tail (or a number its leading
+  // digits) under the active row's ⓘ.
+  const rail = floatingRail(cell);
+  const value = cell.querySelector<HTMLElement>("[data-cell-value]");
+  if (rail && value && railCovers(value, rail)) return value;
   // Plain text clipped by the cell's own content box.
   const content = cell.firstElementChild;
   if (content instanceof HTMLElement && isClipped(content)) {
@@ -67,11 +89,53 @@ function unclippedClone(source: HTMLElement) {
 }
 
 /**
+ * The active row's floating rail (its ⓘ) drawn at the spill-over's end, or
+ * its start beside a number, where padding keeps it clear of the full text.
+ * Regression: drawn at its own spot, it hid the characters it sat on. The
+ * copy forwards clicks to the real controls.
+ */
+function railCopy(
+  rail: HTMLElement,
+  start: boolean,
+  overlay: HTMLElement,
+  done: () => void,
+) {
+  const clone = rail.cloneNode(true);
+  if (!(clone instanceof HTMLElement)) return;
+  for (const element of [clone, ...clone.querySelectorAll<HTMLElement>("*")])
+    element.removeAttribute("id");
+  clone.removeAttribute("data-cell-rail");
+  clone.dataset.cellSpillRail = "";
+  Object.assign(clone.style, {
+    position: "absolute",
+    inset: "auto",
+    margin: "0",
+    top: "50%",
+    transform: "translateY(-50%)",
+    [start ? "left" : "right"]: `${EDGE_PX}px`,
+    background: "var(--popover, var(--card))",
+    boxShadow: "none",
+    pointerEvents: "auto",
+  });
+  const controls = [...rail.querySelectorAll<HTMLElement>("button, a")];
+  clone.querySelectorAll<HTMLElement>("button, a").forEach((copy, index) => {
+    copy.tabIndex = -1;
+    copy.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      done();
+      controls[index]?.click();
+    });
+  });
+  overlay.append(clone);
+}
+
+/**
  * Lifts a clipped table value over its neighbours at the same row height
  * while the pointer (after a short delay) or keyboard focus is on its cell,
- * so a narrow column never hides a value. The overlay is inert and
- * pointer-transparent: clicks still reach the cell beneath, and leaving the
- * cell removes it. Near the pane's end edge it grows toward the start.
+ * so a narrow column never hides a value. The overlay is pointer-transparent
+ * apart from its rail copy: clicks still reach the cell beneath, and leaving
+ * the cell removes it. Near the pane's end edge it grows toward the start.
  */
 export function useCellSpill(
   pane: RefObject<HTMLElement | null>,
@@ -101,7 +165,6 @@ export function useCellSpill(
       const element = document.createElement("div");
       element.dataset.cellSpillOverlay = "";
       element.setAttribute("aria-hidden", "true");
-      element.inert = true;
       for (const property of TYPOGRAPHY)
         element.style.setProperty(
           property,
@@ -126,6 +189,16 @@ export function useCellSpill(
         boxShadow:
           "0 2px 10px rgb(23 26 33 / 0.14), 0 0 0 1px rgb(23 26 33 / 0.08)",
       });
+      const rail = floatingRail(cell);
+      const railBox = rail?.getBoundingClientRect();
+      const start =
+        !!railBox &&
+        railBox.left - cellBox.left < cellBox.right - railBox.right;
+      const space = railBox ? railBox.width + RAIL_GAP_PX : 0;
+      if (railBox && start) {
+        element.style.left = `${sourceBox.left - EDGE_PX - space}px`;
+        element.style.paddingLeft = `${EDGE_PX + space}px`;
+      } else if (railBox) element.style.paddingRight = `${EDGE_PX + space}px`;
       element.append(clone);
       document.body.append(element);
       const limit =
@@ -134,6 +207,16 @@ export function useCellSpill(
       const box = element.getBoundingClientRect();
       if (box.right > limit)
         element.style.left = `${Math.max(EDGE_PX, limit - box.width)}px`;
+      if (rail) railCopy(rail, start, element, hide);
+      element.addEventListener("pointerleave", (event) => {
+        if (
+          !(
+            event.relatedTarget instanceof Node &&
+            cell.contains(event.relatedTarget)
+          )
+        )
+          hide();
+      });
       overlay = element;
     };
 
@@ -162,8 +245,18 @@ export function useCellSpill(
       if (cell) schedule(cell);
     };
 
+    // The rail copy sits outside the pane; reaching it keeps the overlay.
+    const onPointerLeave = (event: PointerEvent) => {
+      if (
+        event.relatedTarget instanceof Node &&
+        overlay?.contains(event.relatedTarget)
+      )
+        return;
+      hide();
+    };
+
     root.addEventListener("pointerover", onPointerOver);
-    root.addEventListener("pointerleave", hide);
+    root.addEventListener("pointerleave", onPointerLeave);
     root.addEventListener("focusin", onFocusIn);
     root.addEventListener("focusout", hide);
     root.addEventListener("pointerdown", hide);
@@ -172,7 +265,7 @@ export function useCellSpill(
     return () => {
       hide();
       root.removeEventListener("pointerover", onPointerOver);
-      root.removeEventListener("pointerleave", hide);
+      root.removeEventListener("pointerleave", onPointerLeave);
       root.removeEventListener("focusin", onFocusIn);
       root.removeEventListener("focusout", hide);
       root.removeEventListener("pointerdown", hide);

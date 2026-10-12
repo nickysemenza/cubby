@@ -1,43 +1,90 @@
-import type { ReactNode } from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { cn } from "~/lib/utils";
 
+import { useCoarsePointer, useRowActive } from "./row-activity";
+
 /**
  * One anatomy for every decorated table cell: a value slot that truncates
- * with an ellipsis, then an adjacent rail of fixed-size affordances
- * (explanation, relation workbench, resolution badge, suggestion mark).
+ * with an ellipsis, then a rail of fixed-size affordances (explanation,
+ * relation workbench, resolution badge, suggestion mark).
  *
  * Regression: decorations used to be appended as bare flex siblings of a
  * `min-w-0` value that never clipped, so in a narrow column the text spilled
- * out under the icon ("$2.ⓘ99"). The value slot owns the clip; the rail never
- * shrinks. The value slot takes the remaining width, so every row's rail
- * lines up at the column's end edge while the column itself hugs its widest
- * value plus rail; a right-aligned (numeric) cell ends its value against the
- * rail. Long values shrink before the rail, which never gives up its width.
+ * out under the icon ("$2.ⓘ99"). The value slot owns the clip; a reserved
+ * rail never shrinks, lines up at the column's end edge, and sizing adds its
+ * width to the column.
+ *
+ * An `overlay` rail reserves nothing: it mounts only on the active row and
+ * sits over the cell's free edge, the start of a right-aligned number or the
+ * end of text, where it covers a clipped tail that the hover spill-over then
+ * shows in full. Reserved rails put 18px in every cell of 100 list columns.
+ * Coarse pointers have no hover, so their rail stays in flow and visible.
+ *
+ * A floating frame nested in another (a relation workbench inside an
+ * explanation) portals its controls into the outer rail. Regression: both
+ * rails floated on the same spot and the ⓘ covered the workbench button.
  */
 export function CellFrame({
   children,
   trailing,
+  overlay = false,
   className,
 }: {
   children: ReactNode;
   trailing: ReactNode;
+  overlay?: boolean;
   className?: string;
 }) {
+  const active = useRowActive();
+  const coarse = useCoarsePointer();
+  const host = useContext(FloatingRail);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const floating = overlay && !coarse;
+  const nested = floating && host !== undefined;
+  const value = (
+    <span data-cell-value="" className="min-w-0 flex-1 truncate">
+      {children}
+    </span>
+  );
   return (
     <span
       data-cell-frame=""
-      className={cn("flex w-full min-w-0 items-center gap-0.5", className)}
+      className={cn(
+        "relative flex w-full min-w-0 items-center gap-0.5",
+        className,
+      )}
     >
-      <span data-cell-value="" className="min-w-0 flex-1 truncate">
-        {children}
-      </span>
-      <span data-cell-rail="" className="flex shrink-0 items-center">
-        {trailing}
-      </span>
+      {floating ? (
+        <FloatingRail.Provider value={slot}>{value}</FloatingRail.Provider>
+      ) : (
+        value
+      )}
+      {nested
+        ? host && createPortal(trailing, host)
+        : (!floating || active) && (
+            <span
+              data-cell-rail=""
+              className={cn(
+                "flex shrink-0 items-center",
+                floating &&
+                  "absolute inset-y-0 end-0 my-auto h-fit rounded-sm bg-(--table-row-surface) shadow-[-6px_0_6px_var(--table-row-surface)] [td.text-right_&]:start-0 [td.text-right_&]:end-auto [td.text-right_&]:shadow-[6px_0_6px_var(--table-row-surface)]",
+              )}
+            >
+              {floating && <span ref={setSlot} className="contents" />}
+              {trailing}
+            </span>
+          )}
     </span>
   );
 }
+
+/**
+ * The rail slot of the enclosing floating frame: undefined outside one, null
+ * while its row is inactive and the rail unmounted.
+ */
+const FloatingRail = createContext<HTMLElement | null | undefined>(undefined);
 
 /** Width of one rail affordance plus its gap; column sizing reserves this. */
 export const CELL_RAIL_SLOT_PX = 18;

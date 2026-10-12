@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
 import { householdDaysFromNow } from "~/lib/household-date";
+import { ChipCluster } from "~/ui/common/chip-cluster";
 import { Badge } from "~/ui/primitives/badge";
 import {
   Table,
@@ -59,6 +60,7 @@ function FitFixture({
   icon = false,
   total = "Total",
   qualityHeader = "Quality",
+  chips,
 }: {
   location?: string;
   scope?: string;
@@ -66,6 +68,7 @@ function FitFixture({
   icon?: boolean;
   total?: string;
   qualityHeader?: string;
+  chips?: string[];
 }) {
   const table = useCubbyTable({
     data: [{ id: "synthetic" }],
@@ -170,17 +173,27 @@ function FitFixture({
                 className={ROW_DENSITY.cellClass}
                 style={cellStyle("location")}
               >
-                <button
-                  data-cell-edit-trigger
-                  className="inline-flex items-center gap-1"
-                >
-                  {icon && (
-                    <span aria-hidden style={{ width: 32, flexShrink: 0 }}>
-                      ◆
-                    </span>
-                  )}
-                  <span>{location}</span>
-                </button>
+                {chips ? (
+                  <ChipCluster
+                    items={chips.map((chip) => ({
+                      key: chip,
+                      label: chip,
+                      node: <Badge>{chip}</Badge>,
+                    }))}
+                  />
+                ) : (
+                  <button
+                    data-cell-edit-trigger
+                    className="inline-flex items-center gap-1"
+                  >
+                    {icon && (
+                      <span aria-hidden style={{ width: 32, flexShrink: 0 }}>
+                        ◆
+                      </span>
+                    )}
+                    <span>{location}</span>
+                  </button>
+                )}
               </TableCell>
               <TableCell style={{ width: 400 }} />
             </TableRow>
@@ -346,6 +359,26 @@ describe("rendered column fit", () => {
     expect(label.scrollHeight).toBeLessThanOrEqual(label.clientHeight);
   });
 
+  // Regression: chip clusters were never measured, so a single related
+  // record's column shrank to its header and clipped the chip to "S…".
+  it("fits a chip cluster to its first chip", async () => {
+    await page.viewport(1440, 900);
+    const view = render(<FitFixture chips={["Synthetic workshop bench"]} />);
+    await waitFor(() =>
+      expect(width(view.getByTestId("location"))).toBeLessThan(184),
+    );
+    const chip = view.getByText("Synthetic workshop bench");
+    expect(width(view.getByTestId("location"))).toBeGreaterThanOrEqual(
+      chip.scrollWidth + 8,
+    );
+    expect(chip.scrollWidth).toBeLessThanOrEqual(chip.clientWidth);
+    view.rerender(
+      <FitFixture chips={["Synthetic workshop bench", "Garage", "Attic"]} />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(width(view.getByTestId("location"))).toBeLessThan(160);
+  });
+
   it("fits aggregate footer totals larger than individual values", async () => {
     await page.viewport(1440, 900);
     const view = render(<FitFixture total="$123,456.78" />);
@@ -403,11 +436,12 @@ describe("rendered column fit", () => {
     view.rerender(
       <FitFixture location="A much longer workshop location with several words" />,
     );
-    await waitFor(() => expect(width(view.getByTestId("location"))).toBe(200));
+    // A text column stops at its 160px fit cap, below its 200px maxSize.
+    await waitFor(() => expect(width(view.getByTestId("location"))).toBe(160));
     view.rerender(<FitFixture />);
-    expect(width(view.getByTestId("location"))).toBe(200);
+    expect(width(view.getByTestId("location"))).toBe(160);
     fireEvent.mouseEnter(view.getByTestId("quality"));
-    expect(width(view.getByTestId("location"))).toBe(200);
+    expect(width(view.getByTestId("location"))).toBe(160);
     fireEvent.click(view.getByRole("button", { name: "Resize location" }));
     await waitFor(() => expect(width(view.getByTestId("location"))).toBe(151));
     view.rerender(

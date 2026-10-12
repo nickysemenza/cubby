@@ -192,6 +192,7 @@ export default defineEntity({
         reference: { entity: "financialTransaction", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         display: {
+          columnLabel: "Evidence",
           list: true,
           detail: true,
           width: "sm",

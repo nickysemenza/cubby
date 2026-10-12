@@ -27,9 +27,10 @@ function headerIds(page: Page) {
 async function expectAuditTimestamps(page: Page, row: Locator) {
   for (const id of ["createdAt", "updatedAt"]) {
     const timestamp = row.locator(`[data-cell-col="${id}"]`);
-    // The household day stacked over its compact age: "Oct 12" / "3mo ago".
+    // The household day stacked over its compact age: "Oct 12" / "3mo ago",
+    // another year leading the age line ("’25 · 1y ago").
     await expect(timestamp).toHaveText(
-      /^[A-Z][a-z]{2} \d{1,2}(, \d{4})?(now|\d+(m|h|d|w|mo|y) ago)$/,
+      /^[A-Z][a-z]{2} \d{1,2}(’\d{2} · )?(now|\d+(m|h|d|w|mo|y) ago)$/,
     );
     const trigger = timestamp.getByRole("button");
     await trigger.hover();

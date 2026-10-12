@@ -171,7 +171,11 @@ export default defineEntity({
             { value: "unclassified", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Booked",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: financialTransactionCoverage.shape.booking,
           create: null,
@@ -195,7 +199,11 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Documented",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: financialTransactionCoverage.shape.document,
           create: null,
@@ -219,7 +227,11 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Itemized",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: financialTransactionCoverage.shape.itemization,
           create: null,
@@ -243,7 +255,11 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Products",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: financialTransactionCoverage.shape.products,
           create: null,
@@ -277,6 +293,7 @@ export default defineEntity({
           sources: [{ label: "Live Expense category allocations" }],
         },
         display: {
+          columnLabel: "Categories",
           list: true,
           detail: true,
           renderer: {
@@ -358,7 +375,11 @@ export default defineEntity({
             },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Evidence",
+          list: true,
+          detail: true,
+        },
         resolution: {
           reset: { evidenceExpectation: null },
           redundancy: "eligible",
@@ -551,6 +572,7 @@ export default defineEntity({
         nullable: true,
         control: { kind: "date" },
         display: {
+          columnLabel: "Date",
           list: true,
           format: "plainDate",
           mobile: { slot: "meta", priority: 25 },

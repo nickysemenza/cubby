@@ -182,6 +182,7 @@ export default defineEntity({
           "Assume I have enough for recipe planning. Recorded inventory stays separate.",
         control: { kind: "checkbox" },
         display: {
+          columnLabel: "On hand",
           list: true,
           detail: true,
           mobile: { slot: "meta", priority: 25 },

@@ -1,3 +1,4 @@
+import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { humanize } from "@cubby/shared";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
@@ -15,6 +16,7 @@ import type { Header, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 
+import { EntityIcon } from "~/entity/entities";
 import { FieldProvenance } from "~/entity/field-provenance";
 import { cn } from "~/lib/utils";
 import { Button } from "~/ui/primitives/button";
@@ -33,25 +35,12 @@ import type { cubbyTableFeatures, CubbyTable as Table } from "./table-features";
 
 type HeaderStyles = { header: string; sortIcon: string };
 
-const sortIcon = (
-  direction: false | "asc" | "desc",
-  canSort: boolean,
-  styles: HeaderStyles,
-) => {
-  if (direction === "desc")
-    return <ArrowDownIcon className={styles.sortIcon} aria-hidden="true" />;
-  if (direction === "asc")
-    return <ArrowUpIcon className={styles.sortIcon} aria-hidden="true" />;
-  return canSort ? (
-    <ArrowsDownUpIcon
-      className={cn(
-        styles.sortIcon,
-        "opacity-0 group-hover:opacity-60 group-focus-visible:opacity-60",
-      )}
-      aria-hidden="true"
-    />
+const sortIcon = (direction: false | "asc" | "desc", styles: HeaderStyles) =>
+  direction === "desc" ? (
+    <ArrowDownIcon className={styles.sortIcon} aria-hidden="true" />
+  ) : direction === "asc" ? (
+    <ArrowUpIcon className={styles.sortIcon} aria-hidden="true" />
   ) : null;
-};
 
 const ariaSort = (direction: false | "asc" | "desc") => {
   if (direction === "asc") return "ascending";
@@ -92,6 +81,39 @@ export function HeaderLabel({
   );
 }
 
+/**
+ * What a header paints for its label: the counted entity's icon and "#"
+ * when no other visible column counts the same entity, else its short label.
+ */
+function headerContent<TData extends RowData>(
+  header: Header<typeof cubbyTableFeatures, TData, unknown>,
+) {
+  if (header.isPlaceholder) return null;
+  const meta = header.column.columnDef.meta;
+  const countOf = meta?.countOf;
+  const unique =
+    countOf !== undefined &&
+    header
+      .getContext()
+      .table.getVisibleLeafColumns()
+      .every(
+        (column) =>
+          column.id === header.column.id ||
+          column.columnDef.meta?.countOf !== countOf,
+      );
+  if (unique)
+    return (
+      <span data-header-count="" className="inline-flex items-center gap-px">
+        <EntityIcon entity={countOf} aria-hidden="true" className="size-3.5" />
+        <span aria-hidden="true">#</span>
+      </span>
+    );
+  return (
+    meta?.shortHeader ??
+    flexRender(header.column.columnDef.header, header.getContext())
+  );
+}
+
 function pinBoundaryClass<TData extends RowData>(
   header: Header<typeof cubbyTableFeatures, TData, unknown>,
 ) {
@@ -107,6 +129,45 @@ function pinBoundaryClass<TData extends RowData>(
     : pinned === "end" && index === 0
       ? "table-pinned-boundary-end"
       : undefined;
+}
+
+/**
+ * The hover arrow and source icon, over the header's free edge while it is
+ * hovered or focused: the label's end, or a numeric label's start.
+ */
+function HeaderHoverChrome({
+  provenance,
+  sortable,
+  numeric,
+  styles,
+}: {
+  provenance: EntityFieldProvenance | null | undefined;
+  sortable: boolean;
+  numeric: boolean;
+  styles: HeaderStyles;
+}) {
+  if (!provenance && !sortable) return null;
+  return (
+    <span
+      data-header-chrome=""
+      className={cn(
+        // Pointer-transparent so a click still sorts; the source icon keeps
+        // its own pointer for its phrase.
+        "pointer-events-none invisible absolute inset-y-0 my-auto flex h-5 items-center gap-1 rounded-sm bg-card px-0.5 group-focus-within/th:visible group-hover/th:visible [&_[data-field-provenance]]:pointer-events-auto",
+        numeric
+          ? "left-1 shadow-[6px_0_6px_var(--card)]"
+          : "right-1.5 shadow-[-6px_0_6px_var(--card)]",
+      )}
+    >
+      <FieldProvenance compact provenance={provenance} />
+      {sortable && (
+        <ArrowsDownUpIcon
+          className={cn(styles.sortIcon, "opacity-60")}
+          aria-hidden="true"
+        />
+      )}
+    </span>
+  );
 }
 
 function SortableHeader<TData extends RowData>({
@@ -132,13 +193,14 @@ function SortableHeader<TData extends RowData>({
   const numeric = header.column.columnDef.meta?.numeric ?? false;
   const pinned = header.column.getIsPinned();
   const width = columnWidthValue(header.column.id);
-  const sortingArrows = sortIcon(sortDirection, canSort, styles);
   const provenance = header.column.columnDef.meta?.provenance;
   const headerLabel = sortableHeaderLabel(header);
 
   // The label wraps to at most two 14px lines inside the 32px header, so a
-  // long label no longer sets its column's width; the column's source
-  // collapses to an icon whose phrase is the tooltip.
+  // long label no longer sets its column's width. Only a sorted column's
+  // arrow takes width; the hover arrow and the source icon overlay the
+  // header's free edge while it is hovered or focused, so the column is as
+  // narrow as its label or values.
   const title = (
     <span
       className={cn(
@@ -148,19 +210,22 @@ function SortableHeader<TData extends RowData>({
         numeric && "flex-row-reverse",
       )}
     >
-      <HeaderLabel label={headerLabel}>
-        {header.isPlaceholder
-          ? null
-          : flexRender(header.column.columnDef.header, header.getContext())}
-      </HeaderLabel>
-      <FieldProvenance compact provenance={provenance} />
-      {sortingArrows}
+      <HeaderLabel label={headerLabel}>{headerContent(header)}</HeaderLabel>
+      {sortIcon(sortDirection, styles)}
       {sortDirection && table.state.sorting.length > 1 && (
         <span className="text-3xs text-muted-foreground tabular-nums">
           {header.column.getSortIndex() + 1}
         </span>
       )}
     </span>
+  );
+  const hoverChrome = (
+    <HeaderHoverChrome
+      provenance={provenance}
+      sortable={canSort && !sortDirection}
+      numeric={numeric}
+      styles={styles}
+    />
   );
 
   return (
@@ -242,6 +307,7 @@ function SortableHeader<TData extends RowData>({
             {title}
           </span>
         )}
+        {hoverChrome}
       </div>
       {header.column.getCanResize() && (
         <ColumnResizeHandle

@@ -647,7 +647,11 @@ export default defineEntity({
             },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Origin",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: z
             .enum(["unknown", "purchased", "gift", "previously_owned"])
@@ -1056,6 +1060,7 @@ Rules:
         labelOverride: "Valuation price",
         control: { kind: "number", renderer: "money", width: "half" },
         display: {
+          columnLabel: "Price",
           list: true,
           detail: true,
           format: "currency",
@@ -1560,6 +1565,7 @@ Rules:
         // Nested under `quantityLedger.locationCount` on the list row — no
         // flat readKey reaches it, so it reads by path.
         display: {
+          columnLabel: "As location",
           list: true,
           width: "sm",
           readPath: "quantityLedger.locationCount",
@@ -1667,6 +1673,7 @@ Rules:
         // Default label would be "Purchase Date"; the list column has
         // always headed this "Purchase date".
         display: {
+          columnLabel: "Purchased",
           list: true,
           format: "plainDate",
           mobile: { slot: "meta", priority: 55 },

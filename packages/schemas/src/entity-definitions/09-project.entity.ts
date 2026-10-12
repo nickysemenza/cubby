@@ -367,6 +367,7 @@ Rules:
         nullable: true,
         control: { kind: "number", renderer: "money", placeholder: "e.g. 500" },
         display: {
+          columnLabel: "Estimate",
           list: true,
           detail: true,
           preview: true,
@@ -386,6 +387,7 @@ Rules:
         reference: { entity: "project" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
+          columnLabel: "Parent",
           list: true,
           detail: true,
         },
@@ -455,6 +457,7 @@ Rules:
         },
         control: { kind: "text", renderer: "url" },
         display: {
+          columnLabel: "Drive folder",
           list: true,
           detail: true,
         },
@@ -475,6 +478,7 @@ Rules:
         },
         control: { kind: "text", renderer: "url" },
         display: {
+          columnLabel: "Notion page",
           list: true,
           detail: true,
         },
@@ -489,7 +493,11 @@ Rules:
         kind: "identifier",
         reference: { entity: "task", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Blocked by",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: z.array(projectShortcode),
           create: null,
@@ -536,7 +544,10 @@ Rules:
         key: "childProjectIds",
         kind: "identifier",
         reference: { entity: "project", multiple: true },
-        display: { list: true },
+        display: {
+          columnLabel: "Subprojects",
+          list: true,
+        },
         validation: {
           read: z.array(projectShortcode),
           create: null,

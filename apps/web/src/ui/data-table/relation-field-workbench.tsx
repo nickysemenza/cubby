@@ -19,7 +19,6 @@ import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
-import { useRowActive } from "./row-activity";
 import { TableCellWorkbench } from "./table-cell-workbench";
 
 type RelationWorkbenchOperations = Pick<typeof entityGraph, "graph">;
@@ -140,7 +139,6 @@ export function RelationFieldWorkbench({
   summary: ReactNode;
   operations?: RelationWorkbenchOperations;
 }) {
-  const rowActive = useRowActive();
   if (!isInspectableFieldProvenance(provenance)) return summary;
 
   const relationKeys = provenance.sources.flatMap((source) =>
@@ -154,8 +152,6 @@ export function RelationFieldWorkbench({
       description={description}
       summary={summary}
       trigger="icon"
-      // An idle table row keeps the rail slot, not the popover; see row-activity.
-      inactive={!rowActive}
     >
       <RelatedRecords
         sourceEntity={sourceEntity}

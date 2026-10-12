@@ -181,7 +181,6 @@ function queueColumns(members: WorkQueueMember[]) {
         size: 320,
         meta: attachCubbyColumnMeta<WorkQueueRow>({
           entityColumnRole: "identity",
-          surplus: true,
           mobile: { slot: "title" },
           cellData: textCellData<WorkQueueRow>("text", (row) => row.name),
           filterConfig: { placeholder: "Search work", filterType: "text" },

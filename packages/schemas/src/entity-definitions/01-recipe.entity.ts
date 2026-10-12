@@ -279,6 +279,7 @@ export default defineEntity({
         nullable: true,
         // Computed from `totals.nutrition.kcal` at read time; see costTotal.
         display: {
+          columnLabel: "Calories",
           list: true,
           labelPath: "caloriesTotalLabel",
           renderer: { list: "estimate-kcal" },
@@ -653,6 +654,7 @@ export default defineEntity({
         // count, so the server composes the text; sorting and the range filter
         // stay on the minute count.
         display: {
+          columnLabel: "Minutes",
           list: true,
           readPath: "meta.times.totalMinutes",
           labelPath: "totalMinutesLabel",

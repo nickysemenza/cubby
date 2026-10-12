@@ -81,7 +81,6 @@ export function TableCellWorkbench({
   summary,
   children,
   trigger = "summary",
-  inactive = false,
   open: controlledOpen,
   onOpenChange,
 }: {
@@ -90,12 +89,6 @@ export function TableCellWorkbench({
   summary: ReactNode;
   children: ReactNode;
   trigger?: "summary" | "icon";
-  /**
-   * Icon trigger only: render the rail slot without its control. The summary
-   * keeps the same parent either way, so toggling this never remounts it (or
-   * drops focus inside it) — see row-activity.
-   */
-  inactive?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -110,11 +103,13 @@ export function TableCellWorkbench({
   if (trigger === "icon") {
     const body = open ? children : null;
     return (
+      // The icon overlays the active row's cell (`CellFrame overlay`); the
+      // summary keeps the same parent either way, so a row becoming active
+      // never remounts it or drops focus inside it.
       <CellFrame
+        overlay
         trailing={
-          inactive ? (
-            <span aria-hidden className="size-5 shrink-0" />
-          ) : isMobile ? (
+          isMobile ? (
             <>
               <Button
                 {...iconTriggerProps(title)}

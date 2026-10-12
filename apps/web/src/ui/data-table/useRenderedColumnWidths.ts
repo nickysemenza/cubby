@@ -1,7 +1,7 @@
 import type { RowData } from "@tanstack/react-table";
 import { type RefObject, useEffect, useState } from "react";
 
-import { isLockedColumn } from "./column-layout";
+import { isLockedColumn, MIN_COLUMN_WIDTH } from "./column-layout";
 import type { CubbyTable } from "./table-features";
 
 const SAMPLE_ROWS = 12;
@@ -45,6 +45,11 @@ function naturalCell(cell: HTMLElement) {
     "[data-cell-edit-pencil], button[aria-label^='Reorder '], [title='Drag to resize · double-click to reset']",
   ))
     pencil.remove();
+  // Fits only grow, so a 48px loading bar would hold every lazily loaded
+  // column at 57px after its "0" arrives. Skipping the whole cell instead
+  // left a column with a lasting busy mark at its header's width.
+  for (const busy of clone.querySelectorAll("[aria-busy='true']"))
+    busy.remove();
   for (const element of clone.querySelectorAll<HTMLElement>("*")) {
     element.removeAttribute("id");
     element.style.maxWidth = "none";
@@ -95,11 +100,17 @@ type FitSample = {
 /** The offscreen clones that measure one cell, or none for unfit content. */
 function fitSample(id: string, cell: HTMLElement): FitSample | null {
   if (cell.querySelector("input,textarea,[contenteditable=true]")) return null;
-  // Wrapping chip clusters fill whatever width the column has; on one line
-  // they would claim the column's whole maximum.
-  if (cell.querySelector("[data-cell-wrap]")) return null;
   const clone = naturalCell(cell);
   if (!clone) return null;
+  // Wrapping chip clusters fill whatever width the column has; on one line
+  // they would claim the column's whole maximum. Fit their first chip, or a
+  // single relation column shrinks to its header and clips its only chip.
+  for (const wrap of clone.querySelectorAll("[data-cell-wrap]")) {
+    for (const chip of [...wrap.querySelectorAll("[data-chip]")].slice(1))
+      chip.remove();
+    for (const more of wrap.querySelectorAll("[data-chip-overflow]"))
+      more.remove();
+  }
   const header = cell.tagName === "TH";
   return {
     id,
@@ -208,7 +219,7 @@ export function useRenderedColumnWidths<TData extends RowData>(
         const column = table.getColumn(id);
         if (!column) continue;
         widths[id] = Math.max(
-          column.columnDef.minSize ?? 48,
+          column.columnDef.minSize ?? MIN_COLUMN_WIDTH,
           Math.min(width, column.columnDef.maxSize ?? 320),
         );
       }

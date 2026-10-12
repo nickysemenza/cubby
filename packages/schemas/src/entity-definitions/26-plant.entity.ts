@@ -102,7 +102,11 @@ export default defineEntity({
             label: gardenCropLabel(key),
           })),
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Guide",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: gardenCropKey.nullable(),
           create: gardenCropKey.nullable().default(null),

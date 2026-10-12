@@ -283,10 +283,13 @@ test("reviews historical item classification and preserves explicit purpose", as
     page.locator("#expenses"),
   );
   const principalLink = page.locator(`a[href="/expenses/${expense}"]`);
-  const tableExplanation = page
+  const expenseRow = page
     .locator("#expenses")
     .getByRole("row")
-    .filter({ has: principalLink })
+    .filter({ has: principalLink });
+  // A row's explanation appears once the row is hovered or focused.
+  await expenseRow.hover();
+  const tableExplanation = expenseRow
     .getByRole("button", {
       name: "How spending category is determined",
       exact: true,

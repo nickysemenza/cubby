@@ -204,7 +204,11 @@ export default defineEntity({
             },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Profile",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: vendorSpendingProfile.default("unspecified"),
           create: vendorSpendingProfile.default("unspecified"),
@@ -224,7 +228,11 @@ export default defineEntity({
             reviewRequired: true,
           },
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Category",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
@@ -263,7 +271,11 @@ export default defineEntity({
             },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Evidence",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: z
             .enum(["unknown", "required", "not_expected"])
@@ -515,6 +527,7 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         display: {
+          columnLabel: "Last purchase",
           list: true,
           detail: true,
           format: "plainDate",

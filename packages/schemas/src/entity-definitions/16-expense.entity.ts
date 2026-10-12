@@ -318,6 +318,7 @@ export default defineEntity({
           },
         },
         display: {
+          columnLabel: "Category",
           list: true,
           detail: true,
           renderer: { detail: "expense-spending-category" },
@@ -373,7 +374,11 @@ export default defineEntity({
             { value: "reimbursement", label: "Reimbursement" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Role",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: z.enum(["vendor", "reimbursement"]).default("vendor"),
           create: z.enum(["vendor", "reimbursement"]).default("vendor"),
@@ -738,6 +743,7 @@ Rules:
         nullable: true,
         control: { kind: "number" },
         display: {
+          columnLabel: "Quantity",
           list: true,
           detail: true,
           width: "sm",

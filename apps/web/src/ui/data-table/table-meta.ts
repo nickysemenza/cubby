@@ -1,4 +1,4 @@
-import type { EntityRef } from "@cubby/schemas/entity";
+import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { parseShortcode } from "@cubby/shared";
@@ -100,14 +100,19 @@ export interface CubbyColumnMeta<TData = CellData> {
   provenanceWorkbenchHandled?: boolean;
   mobile?: MobileColumnMeta;
   className?: string;
-  /**
-   * Receives the unused desktop table width after the visible fixed columns
-   * have been measured. Name-like record identity belongs here, not in a
-   * trailing empty gutter or spread across every measurement column.
-   */
-  surplus?: boolean;
   /** The field renders an AI suggestion mark in the cell rail. */
   suggest?: boolean;
+  /**
+   * The header's painted label when it is shorter than `header` ("Expenses"
+   * for "Expense count"). `header` stays the accessible name and tooltip.
+   */
+  shortHeader?: string;
+  /**
+   * The column counts one entity's records: its header paints that entity's
+   * icon and "#" instead of a label, unless another visible column counts
+   * the same entity.
+   */
+  countOf?: Entity;
   numeric?: boolean;
   mono?: boolean;
   filterConfig?: FilterConfig;

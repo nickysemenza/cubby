@@ -87,7 +87,11 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Spending",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: categoryMappingSchema.shape.category.optional(),
           create: null,
@@ -137,7 +141,11 @@ export default defineEntity({
             { value: "blocked", label: "Keep unresolved" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Spending mode",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: spendingCategoryMappingMode.default("inherit"),
           create: spendingCategoryMappingMode.default("inherit"),

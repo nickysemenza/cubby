@@ -187,13 +187,11 @@ export function createNameColumn<T extends BaseRow>(
   options?: {
     filterConfig?: FilterConfig;
     /**
-     * Override the column width class. Defaults to `w-64` (16rem). The fixed
-     * table layout IGNORES `min-width` on cells (only `width` counts), so a
-     * `min-w-*` floor does nothing — an explicit width is the only lever.
-     * `w-64` holds a readable 16rem on dense tables (many columns) instead of
-     * collapsing to a few characters. On a table with room to spare the
-     * shared layout contract gives this identity column the surplus, rather
-     * than proportionally inflating every measurement column.
+     * Override the column width class. Defaults to `w-60`, the identity's
+     * 240px fit. The fixed table layout IGNORES `min-width` on cells (only
+     * `width` counts), so a `min-w-*` floor does nothing — an explicit width
+     * is the only lever. On a table with room to spare the identity is the
+     * one column that takes the surplus, up to that fit.
      */
     className?: string;
     editable?: {
@@ -232,7 +230,6 @@ export function createNameColumn<T extends BaseRow>(
     meta: attachCubbyColumnMeta({
       className: options?.className ?? "w-60",
       entityColumnRole: "identity",
-      surplus: true,
       filterConfig: options?.filterConfig,
       mobile: options?.mobile ?? { slot: "title", priority: 0 },
       cellData,
