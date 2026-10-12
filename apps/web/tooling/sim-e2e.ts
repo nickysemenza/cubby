@@ -8,6 +8,10 @@ import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
 import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
 import { spawnToExit } from "../../../scripts/lib/run.ts";
+import {
+  holdLock,
+  NATIVE_DEVICE_LOCK,
+} from "../../../scripts/lib/harness-lock.ts";
 import { sharedDeviceCommand } from "../../../scripts/lib/shared-device-command.ts";
 import { createHash, randomBytes } from "node:crypto";
 import {
@@ -1796,6 +1800,7 @@ async function main(): Promise<void> {
       >
     | undefined;
   let productId = "";
+  let releaseDevice: (() => Promise<void>) | undefined;
   let disposableSimulatorID: string | undefined;
   let inputDriverSessionArgs: string[] | undefined;
   let failure: Error | undefined;
@@ -2010,6 +2015,9 @@ async function main(): Promise<void> {
         }
       } else await runHeadlessProductScenario(url, productId, userId);
     } else {
+      // Every worktree drives the same simulators; build and Worker startup
+      // above still run concurrently.
+      releaseDevice = await holdLock(NATIVE_DEVICE_LOCK);
       let device = await simulator();
       if (inputJourney) {
         const creation = path.join(artifacts, "disposable-simulator.txt");
@@ -2306,6 +2314,7 @@ async function main(): Promise<void> {
     console.error(`[${lane}] Failure artifacts: ${artifacts}`);
   } finally {
     const cleanupErrors = await cleanup();
+    await releaseDevice?.();
     if (cleanupErrors.length > 0) {
       phase = "cleanup";
       failure = new AggregateError(

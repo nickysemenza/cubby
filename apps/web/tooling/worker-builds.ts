@@ -34,8 +34,9 @@ const verified = new Set<string>();
 /**
  * Make each build match its current source: locally a stale build is rebuilt
  * in place; in CI, where the Worker artifact must already be current, it
- * fails with the exact rebuild command. Run under the harness lock so a
- * rebuild never overlaps another suite or rebuilds the same dist twice.
+ * fails with the exact rebuild command. Run under the worktree harness lock so a
+ * rebuild never overlaps another of this checkout's suites or rebuilds the
+ * same dist twice.
  */
 export function ensureWorkerBuilds(
   builds: readonly WorkerBuild[],

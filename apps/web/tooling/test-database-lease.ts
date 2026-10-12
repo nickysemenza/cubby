@@ -10,6 +10,7 @@ import {
   assertSimulatorDatabaseName,
 } from "./sim-db-guard";
 import { testServiceConfig } from "./test-service-config";
+import { worktreeRoot } from "../../../scripts/lib/harness-lock.ts";
 
 /**
  * Disposable databases for Vitest, browser E2E and native runners.
@@ -18,8 +19,8 @@ import { testServiceConfig } from "./test-service-config";
  * `tests/e2e/e2e-database.ts`) keep their own seeding and reset policies;
  * this module owns template preparation, checkout, and release.
  *
- * Browser acceptance and Vitest can share one IntegreSQL service (a warm local
- * service, or two terminals). Each namespace gets its own template, so one
+ * Browser acceptance and Vitest share one IntegreSQL service (every worktree's
+ * runs use one local pair). Each namespace gets its own template, so one
  * process's template initialization cannot invalidate a database the other
  * has checked out.
  */
@@ -41,7 +42,10 @@ const integreSQL = () =>
   (client ??= new IntegreSQLClient({ url: testServiceConfig().url }));
 
 /**
- * The template hash: the schema inputs plus the namespace. The hash is read
+ * The template hash: the schema inputs, the namespace, and the checkout. Every
+ * worktree shares one IntegreSQL service, so each gets its own templates and
+ * pools: another worktree's failed migration (which discards its template)
+ * or pool exhaustion never reaches this one. The hash is read
  * from disk on each call, and a lease releases under the hash it was checked
  * out with, so a migration edited mid-run cannot turn a release into a 404.
  */
@@ -50,6 +54,8 @@ function templateHash(namespace: TemplateNamespace): string {
     .update(hashSchemaTemplateInputs())
     .update("\0")
     .update(namespace)
+    .update("\0")
+    .update(worktreeRoot)
     .digest("hex");
 }
 

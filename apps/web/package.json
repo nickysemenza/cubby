@@ -16,7 +16,7 @@
     "eval:decisions": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/ai/decision-eval.live-eval.ts",
     "test:e2e:hmr": "playwright test --config=playwright.dev.config.ts",
     "test:e2e:affected": "pnpm build:cf --ensure && pnpm test:e2e --only-changed=origin/main",
-    "test:e2e:watch": "tsx tooling/build-cf.ts --ensure && NODE_ENV=test node ../../scripts/test-services.ts --warm -- concurrently -k -n build,test \"tsx tooling/build-cf.ts --watch\" \"playwright test --ui\"",
+    "test:e2e:watch": "tsx tooling/build-cf.ts --ensure && NODE_ENV=test node ../../scripts/test-services.ts -- concurrently -k -n build,test \"tsx tooling/build-cf.ts --watch\" \"playwright test --ui\"",
     "test:e2e:ci:desktop": "NODE_ENV=test node ../../scripts/test-services.ts -- playwright test --project='Gmail profile tests' --project='Authenticated tests'",
     "test:e2e:ci:purchase-import": "NODE_ENV=test node ../../scripts/test-services.ts -- playwright test --project='Purchase import agent'",
     "test:e2e:install-browser": "playwright install",

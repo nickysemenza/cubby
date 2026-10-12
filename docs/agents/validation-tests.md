@@ -69,14 +69,18 @@ count individual operation attempts separately from transport fallback.
 Compare related layout bounds in one browser evaluation so their rectangles
 come from the same render state.
 
-Playwright E2E and the coupled Workers harness share a machine-wide lock at
-`/tmp/cubby-harness.lock`, managed by `proper-lockfile`. It prevents concurrent
-suites on one machine from starving both of CPU; the library refreshes the lock
+Playwright E2E and the coupled Workers harness share a per-worktree lock at
+`/tmp/cubby-harness-<worktree hash>.lock` (`scripts/lib/harness-lock.ts`,
+managed by `proper-lockfile`). It keeps one checkout's suites from rebuilding
+its Worker under each other or starving each other of CPU; other worktrees run
+concurrently on the shared test services. The library refreshes the lock
 while held and reclaims it after an interrupted process. Child processes inherit
 the owner marker and pass through. `test:e2e:watch` (`--ui`) skips the lock, since
 its idle session would otherwise hold it indefinitely. Only the profiles marked
 "yes" below take it; a Playwright run and the `integration-workerd` project hold
-it from global setup, and their workers pass through.
+it from global setup, and their workers pass through. The only machine-wide
+lock, `/tmp/cubby-native-device.lock`, serializes simulator lanes
+(`sim-e2e.ts`); the Mac import lane keeps its own fixture lease.
 
 A spec's `test.use` of a
 worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
