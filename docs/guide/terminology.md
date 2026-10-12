@@ -502,6 +502,18 @@ _Avoid_: Product purchase, sale event
 A Product whose movements net to one or more units owned, with no live inventory entry placing it anywhere. Says where the record is silent, not that the thing is lost — a consumable that was used up reads the same way, because inventory never auto-decrements.
 _Avoid_: lost product, missing inventory, shrinkage
 
+**Stock tracking**:
+Whether a Product belongs on a shelf as Inventory. A Product's own decision wins; when it has none, it inherits the nearest Product Category's. Only a stock-tracked Product asks to be received when its order arrives, and only an undecided or stock-tracked one can be an Unlocated product worth triage.
+_Avoid_: inventoried, shelved, stocked item
+
+**Consumable**:
+A Product that is used up and bought again, as opposed to a durable one that is kept. It describes the Product and never decides Stock tracking: saw blades are consumable and tracked, groceries are consumable and untracked.
+_Avoid_: supplies, disposable
+
+**Backstock**:
+Inventory a member deliberately keeps of a Product that is not stock-tracked, such as a spare in the garage cabinet. It is recorded by hand where it sits; arriving orders never create it.
+_Avoid_: stash, reserve, pantry inventory
+
 **Ledger Party**:
 An economic participant in household contribution accounting, and the identity behind Device ownership and Image Sighting reports. Its kind is exactly member, guest, or household. A null attribution is unknown; unknown is not a party.
 _Avoid_: payer, account owner, beneficiary

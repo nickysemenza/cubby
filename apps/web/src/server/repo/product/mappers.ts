@@ -4,6 +4,7 @@ import {
   externalIdKind,
   GTIN_SOURCE,
 } from "@cubby/schemas/external-id";
+import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { ImageAnalysisSummary } from "@cubby/schemas/image";
@@ -40,6 +41,8 @@ import {
 } from "~/server/repo/database-helpers";
 import { mapLocationIdentityProduct } from "~/server/repo/location/identity-product";
 import { parseLocationType } from "~/server/repo/location/parse-type";
+import type { CategoryStockTracking } from "~/server/repo/product-category-sql";
+import { resolveStockTrackingField } from "~/server/repo/stock-tracking";
 
 import type { MappableProductExternalId } from "./external-id-types";
 import {
@@ -123,6 +126,8 @@ export const splitProductImages = (
 type ProductTopLevelDB = Omit<typeof product.$inferSelect, "growsPlantId"> & {
   classificationEvidence: string;
   category: ProductCategorySummary | null;
+  /** The category decision a Product without its own inherits (ADR 0013). */
+  categoryStockTracking: CategoryStockTracking | null;
   growsPlantId?: (typeof product.$inferSelect)["growsPlantId"];
   images?: ProductImageRow[] | null;
   externalIds?: MappableProductExternalId[] | null;
@@ -196,6 +201,22 @@ export const mapProductUnitMappings = (
       updatedAt: unitMapping.updatedAt,
     }));
 
+/** Every Product read derives its resolutions here, list and detail alike. */
+export const productFieldResolutions = (
+  productData: Pick<
+    ProductTopLevelDB,
+    "price" | "stockTracked" | "categoryStockTracking"
+  >,
+  pricing: ProductPricing,
+): FieldResolutions => ({
+  price: resolveProductPriceField(productData.price, pricing),
+  stockTracked: resolveStockTrackingField(
+    productData.stockTracked,
+    productData.categoryStockTracking,
+    "product decision",
+  ),
+});
+
 export const mapDbProductToTopLevel = (
   productData: ProductTopLevelDB,
 ): ProductTopLevelOut => {
@@ -221,9 +242,7 @@ export const mapDbProductToTopLevel = (
       : null,
     price: productData.price,
     pricing,
-    fieldResolutions: {
-      price: resolveProductPriceField(productData.price, pricing),
-    },
+    fieldResolutions: productFieldResolutions(productData, pricing),
     usdaUnavailable: productData.usdaUnavailable,
     stockTracked: productData.stockTracked,
     kind: productData.kind,
@@ -561,9 +580,7 @@ export const dbProductToAPI = (
       : null,
     price: productData.price,
     pricing,
-    fieldResolutions: {
-      price: resolveProductPriceField(productData.price, pricing),
-    },
+    fieldResolutions: productFieldResolutions(productData, pricing),
     usdaUnavailable: productData.usdaUnavailable,
     stockTracked: productData.stockTracked,
     kind: productData.kind,

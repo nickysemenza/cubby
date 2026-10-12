@@ -34,6 +34,7 @@ import {
   type MappableImageRecord,
   mapRelation,
 } from "~/server/repo/database-helpers";
+import type { CategoryStockTracking } from "~/server/repo/product-category-sql";
 import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
 import {
   dbProductToTopLevelAPI,
@@ -50,6 +51,7 @@ import { computeRecipeUsages, dbRecipeToTopLevel } from "../recipe/helpers";
 type IngredientSelect = typeof ingredient.$inferSelect;
 type ProductSelect = typeof product.$inferSelect & {
   category: ProductCategorySummary | null;
+  categoryStockTracking: CategoryStockTracking | null;
   classificationEvidence: string;
 };
 

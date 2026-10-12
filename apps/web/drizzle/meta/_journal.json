@@ -274,6 +274,13 @@
       "when": 1791816917217,
       "tag": "0038_email_financial_associations",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791836581963,
+      "tag": "0039_product_category_stock_tracked",
+      "breakpoints": true
     }
   ]
 }

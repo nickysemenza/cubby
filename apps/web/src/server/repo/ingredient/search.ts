@@ -66,7 +66,10 @@ import {
   loadProductPricingForIngredientIds,
 } from "~/server/repo/product/pricing";
 
-import { categorySummarySql } from "../product-category-sql";
+import {
+  categoryStockTrackingSql,
+  categorySummarySql,
+} from "../product-category-sql";
 import { productClassificationEvidenceSql } from "../product/classification-evidence";
 import { currentProductConversionCoverageCondition } from "../product/conversion-coverage";
 import {
@@ -229,6 +232,9 @@ export const getIngredientsByIDsLean = async (
             category: categorySummarySql(sql`${product.categoryId}`).as(
               "category",
             ),
+            categoryStockTracking: categoryStockTrackingSql(
+              sql`${product.categoryId}`,
+            ).as("categoryStockTracking"),
             classificationEvidence: productClassificationEvidenceSql(
               sql`${product.id}`,
             ).as("classificationEvidence"),
@@ -312,6 +318,9 @@ export const enrichmentWorkbenchIngredients = async (
           category: categorySummarySql(sql`${product.categoryId}`).as(
             "category",
           ),
+          categoryStockTracking: categoryStockTrackingSql(
+            sql`${product.categoryId}`,
+          ).as("categoryStockTracking"),
           classificationEvidence: productClassificationEvidenceSql(
             sql`${product.id}`,
           ).as("classificationEvidence"),

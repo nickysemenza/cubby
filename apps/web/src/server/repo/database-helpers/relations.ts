@@ -43,7 +43,10 @@ import {
 } from "~/server/repo/expense-aggregate-sql";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { locationAiDescriptionExtras } from "~/server/repo/location/ai-description";
-import { categorySummarySql } from "~/server/repo/product-category-sql";
+import {
+  categoryStockTrackingSql,
+  categorySummarySql,
+} from "~/server/repo/product-category-sql";
 import { productClassificationEvidenceSql } from "~/server/repo/product/classification-evidence";
 
 import { notDeleted } from "./query";
@@ -229,6 +232,9 @@ const productCategoryProjection = {
     sql`${product.id}`,
   ).as("classificationEvidence"),
   category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+  categoryStockTracking: categoryStockTrackingSql(
+    sql`${product.categoryId}`,
+  ).as("categoryStockTracking"),
 };
 
 const locationIdentityProduct = {

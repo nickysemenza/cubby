@@ -1517,6 +1517,9 @@ export function createBooleanColumn<
      * `—`, but the editor can only ever move away from it.
      */
     undecided?: { label: string };
+    /** The value the row shows when it differs from the stored column, such
+     * as an inherited decision; edits still save the stored column. */
+    value?: (row: T) => boolean | null | undefined;
     className?: string;
     mobile?: MobileColumnMeta;
     /** `null` opts out of a filter control entirely; omit to derive one. */
@@ -1526,6 +1529,7 @@ export function createBooleanColumn<
     };
   },
 ) {
+  const read = options.value ?? ((row: T) => row[accessor]);
   const selectOptions = options.trueFalseOptions;
   const filterPlaceholder = options.placeholder ?? "Set value...";
   // The editor's own empty state names the undecided state where there is one,
@@ -1541,7 +1545,7 @@ export function createBooleanColumn<
     ? (row: T, value: string | null) => editable.onSave(decode(value), row)
     : undefined;
   const cellData = selectCellData<T>(
-    (row) => encode(row[accessor]),
+    (row) => encode(read(row)),
     selectOptions,
     save,
   );
@@ -1556,7 +1560,7 @@ export function createBooleanColumn<
 
   return createEditableAccessorColumn(
     columnHelper,
-    (row: T) => encode(row[accessor]),
+    (row: T) => encode(read(row)),
     {
       id: String(accessor),
       header: options.header,

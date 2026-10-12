@@ -151,6 +151,7 @@ import {
 import {
   categorySummarySql,
   categoryFeatureSql,
+  productStockTrackedSql,
 } from "~/server/repo/product-category-sql";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import { relatedSortExpression } from "~/server/repo/related-view";
@@ -162,6 +163,7 @@ import {
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { loadCategoryStockTracking } from "~/server/repo/stock-tracking";
 import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inheritance";
 
 import { hydrateImageReadProjection } from "../image-read-projection";
@@ -203,6 +205,7 @@ import {
   dbProductToListAPI,
   dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
+  productFieldResolutions,
   productImageShortcodesOf,
 } from "./mappers";
 import { ownershipExitExpensePredicate } from "./ownership";
@@ -214,7 +217,6 @@ import {
   loadProductPriceSum,
   loadProductPricing,
   resolveProductPricing,
-  resolveProductPriceField,
 } from "./pricing";
 import {
   enrichProductRowsWithQuantityLedger,
@@ -1084,8 +1086,19 @@ export const buildProductWhere = async (
     filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
   ];
 
+  const effectiveStockTracked = productStockTrackedSql(
+    sql`${product.stockTracked}`,
+    sql`${product.categoryId}`,
+  );
   const qualityConditions = () => [
     presenceCondition(product.fdc_id, filters.usdaPresenceFilter, NO_USDA_KEY),
+    // ADR 0013: the undecided worklist reads the effective decision, so a
+    // category default takes its members out of it.
+    presenceCondition(
+      product.stockTracked,
+      filters.stockTrackedPresenceFilter,
+      sql`${effectiveStockTracked} IS NULL`,
+    ),
     filters.pricePresenceFilter === "none"
       ? and(
           isNull(product.price),
@@ -1101,8 +1114,8 @@ export const buildProductWhere = async (
 
   // name/model/notes/manufacturerFilter (text), category (multiselect +
   // presence), manufacturerExact (multiselect), tags (overlap + presence) and
-  // the model/notes/stockTracked presence filters are declared stored
-  // filters — applied by `productScaffold.where` before the conditions below.
+  // the model/notes presence filters are declared stored filters — applied by
+  // `productScaffold.where` before the conditions below.
   const whereClause = productScaffold.where(filters, [
     await categoryFilterCondition(db, filters),
     ...classificationConditions(),
@@ -1154,6 +1167,7 @@ type ProductSelectedPageRow = typeof product.$inferSelect &
     Pick<
       ProductListDB,
       | "category"
+      | "categoryStockTracking"
       | "classificationEvidence"
       | "ingredient"
       | "growsPlant"
@@ -1200,6 +1214,7 @@ const readProductListPage = async (
     selectedExtras.classificationEvidence = extras.classificationEvidence;
   if (derivedFields)
     Object.assign(selectedExtras, {
+      categoryStockTracking: extras.categoryStockTracking,
       expenseCount: extras.expenseCount,
       componentCount: extras.componentCount,
       expenseTotal: extras.expenseTotal,
@@ -1491,12 +1506,13 @@ export const listProductsRead = async (
         );
         Object.assign(patch, {
           pricing: pricingById.get(row.id),
-          fieldResolutions: {
-            price: resolveProductPriceField(
-              row.price,
-              pricingById.get(row.id) ?? resolveProductPricing(row.price),
-            ),
-          },
+          fieldResolutions: productFieldResolutions(
+            {
+              ...row,
+              categoryStockTracking: row.categoryStockTracking ?? null,
+            },
+            pricingById.get(row.id) ?? resolveProductPricing(row.price),
+          ),
           expenseCount: Number(row.expenseCount),
           expenseTotal: Number(row.expenseTotal),
           componentCount: Number(row.componentCount),
@@ -2113,6 +2129,10 @@ export const createProduct = async (
         ),
         category:
           (await loadCategorySummaries(tx)).get(newProduct.categoryId!) ?? null,
+        categoryStockTracking: await loadCategoryStockTracking(
+          tx,
+          newProduct.categoryId,
+        ),
         ...created,
         labelEvidenceRevision: await loadProductLabelEvidenceRevision(
           tx,
@@ -2412,6 +2432,10 @@ export const updateProduct = async (
         ),
         category:
           (await loadCategorySummaries(tx)).get(updated.categoryId!) ?? null,
+        categoryStockTracking: await loadCategoryStockTracking(
+          tx,
+          updated.categoryId,
+        ),
         ...updated,
         labelEvidenceRevision: await loadProductLabelEvidenceRevision(
           tx,
@@ -2838,6 +2862,10 @@ export const quickCreateProduct = async (
     ),
     category:
       (await loadCategorySummaries(db)).get(newProduct.categoryId!) ?? null,
+    categoryStockTracking: await loadCategoryStockTracking(
+      db,
+      newProduct.categoryId,
+    ),
     ...newProduct,
     labelEvidenceRevision: null,
     pricing: resolveProductPricing(newProduct.price),

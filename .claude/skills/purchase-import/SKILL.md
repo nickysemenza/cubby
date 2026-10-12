@@ -119,7 +119,11 @@ same outcome without prescribing an agent runtime.
 
 - `SUM(Expense.cost)` is the only spend ledger. A Purchase describes an order;
   a FinancialTransaction is settlement evidence.
-- Inventory never auto-increments. An `arrived` finding asks a human to receive.
+- Inventory never auto-increments. An `arrived` finding asks a human to receive,
+  and the writer files it only when a delivered line is unresolved or its
+  Product is stock-tracked or undecided — the Product's own decision, else
+  its Product Category's ([ADR 0013](../../../docs/adr/0013-stock-tracking-inherits-from-product-category.md)).
+  Stock tracking decides; whether a Product is consumable does not.
 - Use source totals and itemization exactly as printed. Never scale lines to
   `statedTotal`, infer tax, or fabricate a transaction to close a gap.
 - Unknown facts stay unknown. A missing cost, date, quantity, or order id is

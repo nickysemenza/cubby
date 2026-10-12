@@ -65,6 +65,7 @@ import { loadCategoryConnections } from "./category-connections";
 import { completeListReader } from "./list-read-adapters";
 import { categoryDescendantsSql } from "./product-category-sql";
 import { assertReviewedSpendingClassification } from "./spending-classification-review-authorization";
+import { resolveStockTrackingField } from "./stock-tracking";
 
 const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
   "ProductCategory.parentId": {
@@ -93,7 +94,12 @@ type CategoryRow = typeof productCategory.$inferSelect;
 
 type CategoryPathRow = {
   root: string;
-  path: Array<{ id: string; name: string; feature: string | null }>;
+  path: Array<{
+    id: string;
+    name: string;
+    feature: string | null;
+    stockTracked: boolean | null;
+  }>;
 };
 
 const scaffold = listScaffold("productCategory", productCategory);
@@ -157,7 +163,7 @@ const pathsFor = async (
   if (ids.length === 0) return new Map();
   const rows = await unwrapDb(db).execute<CategoryPathRow>(sql`
     WITH RECURSIVE ancestors AS (
-      SELECT c."id" AS root, c."id", c."parentId", c."shortcode", c."name", c."feature", 0 AS depth,
+      SELECT c."id" AS root, c."id", c."parentId", c."shortcode", c."name", c."feature", c."stockTracked", 0 AS depth,
              ARRAY[c."id"] AS visited
       FROM "ProductCategory" c
       WHERE c."id" IN (${sql.join(
@@ -166,7 +172,7 @@ const pathsFor = async (
       )})
         AND c."deletedAt" IS NULL
       UNION ALL
-      SELECT a.root, parent."id", parent."parentId", parent."shortcode", parent."name", parent."feature", a.depth + 1,
+      SELECT a.root, parent."id", parent."parentId", parent."shortcode", parent."name", parent."feature", parent."stockTracked", a.depth + 1,
              a.visited || parent."id"
       FROM ancestors a
       JOIN "ProductCategory" parent ON parent."id" = a."parentId"
@@ -174,7 +180,7 @@ const pathsFor = async (
         AND a.depth < ${MAX_PRODUCT_CATEGORY_DEPTH - 1}
         AND NOT parent."id" = ANY(a.visited)
     )
-    SELECT root, json_agg(json_build_object('id', shortcode, 'name', name, 'feature', feature) ORDER BY depth DESC) AS path
+    SELECT root, json_agg(json_build_object('id', shortcode, 'name', name, 'feature', feature, 'stockTracked', "stockTracked") ORDER BY depth DESC) AS path
     FROM ancestors
     GROUP BY root
   `);
@@ -216,8 +222,8 @@ const productCountsFor = async (
   return new Map(rows.rows.map((row) => [row.root, row.count]));
 };
 
-/** Keep permanent stored bindings separate from the live ancestor fallback. */
-const featureResolution = (
+/** Keep stored decisions separate from the live ancestor fallback. */
+const categoryResolutions = (
   row: CategoryRow,
   path: CategoryPathRow["path"],
 ): FieldResolutions => {
@@ -249,6 +255,16 @@ const featureResolution = (
       matchesFallback: value === fallbackValue,
       canReset: false,
     },
+    stockTracked: resolveStockTrackingField(
+      row.stockTracked,
+      path
+        .slice(0, -1)
+        .reverse()
+        .flatMap(({ id, name, stockTracked }) =>
+          stockTracked === null ? [] : [{ id, name, value: stockTracked }],
+        )[0] ?? null,
+      "category decision",
+    ),
   };
 };
 
@@ -310,7 +326,7 @@ const hydrateRead = async (
         });
       if (wantsListGroup(projection, "derived"))
         Object.assign(result, {
-          fieldResolutions: featureResolution(row, path),
+          fieldResolutions: categoryResolutions(row, path),
           productCount: productCounts?.get(row.id) ?? 0,
         });
       return result;
@@ -510,6 +526,7 @@ export async function createProductCategory(
       parentId,
       sortOrder: data.sortOrder,
       feature: data.feature,
+      stockTracked: data.stockTracked,
       spendingCategoryMode: data.spendingCategoryMode,
       spendingCategoryId,
     });
@@ -619,6 +636,7 @@ export async function updateProductCategory(
       parentId,
       sortOrder: data.sortOrder,
       feature: data.feature,
+      stockTracked: data.stockTracked,
     };
     const values = buildPartialUpdateValues(patch);
     if (Object.keys(values).length === 0) return;

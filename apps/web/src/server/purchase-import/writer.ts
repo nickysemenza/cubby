@@ -73,6 +73,7 @@ import {
 import { findExactProductNameMatches } from "~/server/repo/product/resolve-names";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { receivableProductIds } from "~/server/repo/stock-tracking";
 
 import {
   aggregateReplacementApprovalFingerprint,
@@ -1749,37 +1750,43 @@ export async function importVendorOrder(
     // A line's Product must be allowed by its effective spending category.
     await validateProductPolicy(tx, { purchaseId });
 
-    // Receiving is for stocked items: a line that carries or will carry a
-    // Product, or goods still unresolved. Expense-only lines (meals, tickets)
-    // and lines Jev judged not worth a Product have nothing to receive — the
-    // same rule delivery mail applies later (gmail/process.ts). A Product line
-    // already on the Purchase counts too (an aggregate awaiting replacement
-    // has none).
-    const stocksItems = identityDecisions.some(
-      (decision) =>
-        decision.lineKind === "principal" &&
-        Boolean(
-          decision.productId || decision.promote || decision.unresolvedReason,
+    // Receiving is for stock-tracked goods (ADR 0013): goods still unresolved,
+    // or a principal Product line whose Product is effectively tracked or
+    // undecided. Groceries and other untracked Products, expense-only lines
+    // (meals, tickets) and lines Jev judged not worth a Product have nothing
+    // to receive. A new Product starts uncategorized and undecided, so it
+    // asks. A Product line already on the Purchase counts too (an aggregate
+    // awaiting replacement has none).
+    const asksToReceive = async () => {
+      const principal = identityDecisions.filter(
+        (decision) => decision.lineKind === "principal",
+      );
+      if (principal.some((decision) => decision.unresolvedReason)) return true;
+      const existingLines = await tx
+        .select({ productId: expense.productId })
+        .from(expense)
+        .where(
+          and(
+            eq(expense.purchaseId, purchaseId),
+            eq(expense.lineKind, "principal"),
+            isNotNull(expense.productId),
+            notDeleted(expense),
+          ),
+        );
+      const productIds = [
+        ...productLines.map((line) => parseEntityId("product", line.productId)),
+        ...principal.flatMap((decision) =>
+          decision.productId
+            ? [parseEntityId("product", decision.productId)]
+            : [],
         ),
-    );
-    const [stockedLine] = stocksItems
-      ? []
-      : await tx
-          .select({ id: expense.id })
-          .from(expense)
-          .where(
-            and(
-              eq(expense.purchaseId, purchaseId),
-              eq(expense.lineKind, "principal"),
-              isNotNull(expense.productId),
-              notDeleted(expense),
-            ),
-          )
-          .limit(1);
-    if (
-      candidate.allShipmentsDelivered === true &&
-      (stocksItems || stockedLine)
-    ) {
+        ...existingLines.flatMap((line) =>
+          line.productId ? [line.productId] : [],
+        ),
+      ];
+      return (await receivableProductIds(tx, productIds)).size > 0;
+    };
+    if (candidate.allShipmentsDelivered === true && (await asksToReceive())) {
       findingIds.push(
         await fileFinding(
           tx,

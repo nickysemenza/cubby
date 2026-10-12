@@ -13,6 +13,7 @@ import type {
 } from "~/server/db/schema";
 import type { MappableImageRecord } from "~/server/repo/database-helpers";
 import type { LocationIdentityProductRow } from "~/server/repo/location/internal-types";
+import type { CategoryStockTracking } from "~/server/repo/product-category-sql";
 
 import type { MappableProductExternalId } from "./external-id-types";
 import type { ProductPricing } from "./pricing";
@@ -21,6 +22,7 @@ import type { QuantityLedger } from "./quantity-ledger";
 type ProductSelect = typeof product.$inferSelect & {
   classificationEvidence: string;
   category: ProductCategorySummary | null;
+  categoryStockTracking: CategoryStockTracking | null;
 };
 type LocationSelect = typeof location.$inferSelect;
 

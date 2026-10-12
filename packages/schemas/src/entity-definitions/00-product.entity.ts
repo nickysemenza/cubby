@@ -221,16 +221,14 @@ export default defineEntity({
           // on a shelf matches neither "mismatched" nor "matched". It needs no new
           // server predicate beyond `stockTracked`, only these filters combined.
           //
-          // Converges by decision, not by category guessing: `stockTracked: null`
-          // is the undecided worklist, so a product leaves this view the moment
-          // it's reviewed — marked `false` (no shelf claim wanted: bananas,
-          // software) or `true` (shelf records are kept). Without that filter
-          // every consumable ever bought stayed "owned" here forever, because
-          // inventory never auto-decrements (a tenet); with it, the view shrinks
-          // as the operator works through the backlog instead of refilling on
-          // every grocery purchase. Still sorted by price so the money surfaces
-          // first while the backlog is large; `unlocated-durables` below is the
-          // shortcut, not the answer.
+          // Converges by decision: `stockTracked: none` matches the
+          // EFFECTIVE value, so a product leaves this view once it or its
+          // category is decided either way (ADR 0013). A category default is a
+          // member's explicit decision, not a durability guess. Without that
+          // filter every consumable ever bought stayed "owned" here forever,
+          // because inventory never auto-decrements (a tenet). Still sorted by
+          // price so the money surfaces first; `unlocated-durables` below is
+          // the shortcut, not the answer.
           //
           // `servingAsLocations: none` is what keeps this DISJOINT from
           // `shelf-disagrees`. Presence has THREE forms — stock on a shelf, the bin
@@ -1195,6 +1193,37 @@ Rules:
         display: {
           list: true,
           listHidden: true,
+          detail: true,
+        },
+        resolution: {
+          reset: { stockTracked: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "product.effective-stock-tracking",
+          description:
+            "A Product's own stock-tracking decision wins; otherwise its Product Category's effective decision applies. With neither, the Product is undecided.",
+          resolver: "field",
+          projections: {
+            list: "fieldResolutions.stockTracked.value",
+            detail: "fieldResolutions.stockTracked.value",
+            summary: "fieldResolutions.stockTracked.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.stockTracked.storedValue",
+              label: "Product decision",
+            },
+            {
+              path: "fieldResolutions.stockTracked.fallbackValue",
+              label: "Category decision",
+            },
+            {
+              path: "fieldResolutions.stockTracked.sourceEntity",
+              label: "Source category",
+            },
+          ],
+          actions: ["editSource"],
         },
         validation: {
           read: z.boolean().nullable(),
@@ -2516,8 +2545,7 @@ Rules:
         placeholder: "Filter stock tracking...",
         deriveSchema: true,
         schemaDescription:
-          "Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).",
-        stored: true,
+          "Filter to products whose effective stock-tracking decision (the Product's own, else its category's) is undecided (none) or has been made either way (has).",
         options: [
           { value: "none", label: "Undecided" },
           { value: "has", label: "Reviewed" },

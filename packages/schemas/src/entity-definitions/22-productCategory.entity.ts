@@ -361,6 +361,51 @@ Rules:
         },
       },
       {
+        // ADR 0013: a default for the whole subtree; a Product's own decision
+        // still wins over it.
+        key: "stockTracked",
+        kind: "boolean",
+        nullable: true,
+        labelOverride: "Stock tracking",
+        control: { kind: "checkbox" },
+        display: { list: true, detail: true, listHidden: true },
+        resolution: {
+          reset: { stockTracked: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "productCategory.effective-stock-tracking",
+          description:
+            "A category's own stock-tracking decision wins; otherwise the nearest live ancestor with a decision supplies it. With neither, the category is undecided.",
+          resolver: "field",
+          projections: {
+            list: "fieldResolutions.stockTracked.value",
+            detail: "fieldResolutions.stockTracked.value",
+            summary: "fieldResolutions.stockTracked.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.stockTracked.storedValue",
+              label: "Category decision",
+            },
+            {
+              path: "fieldResolutions.stockTracked.fallbackValue",
+              label: "Ancestor decision",
+            },
+            {
+              path: "fieldResolutions.stockTracked.sourceEntity",
+              label: "Source category",
+            },
+          ],
+          actions: ["editSource"],
+        },
+        validation: {
+          read: z.boolean().nullable(),
+          create: z.boolean().nullable().optional(),
+          update: z.boolean().nullable().optional(),
+        },
+      },
+      {
         key: "parentName",
         kind: "text",
         nullable: true,
@@ -478,6 +523,7 @@ Rules:
       { key: "parentId", reference: "productCategory" },
       { key: "sortOrder", defaultValue: 0 },
       { key: "feature", specialized: "enum:feature" },
+      "stockTracked",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
@@ -492,6 +538,7 @@ Rules:
       "parentId",
       "sortOrder",
       "feature",
+      "stockTracked",
     ],
     update: [
       "emoji",
@@ -503,6 +550,7 @@ Rules:
       "parentId",
       "sortOrder",
       "feature",
+      "stockTracked",
     ],
     bulk: [],
     audit: [
@@ -514,6 +562,7 @@ Rules:
       "parentId",
       "sortOrder",
       "feature",
+      "stockTracked",
     ],
     sort: {
       fields: ["sortOrder", "name", "updatedAt"],
@@ -532,6 +581,7 @@ Rules:
           "parentId",
           "sortOrder",
           "feature",
+          "stockTracked",
         ],
         identity: ["emoji", "name", "parentId"],
       },
@@ -554,6 +604,7 @@ Rules:
       "parentId",
       "sortOrder",
       "feature",
+      "stockTracked",
       "parentName",
       "path",
       "pathLabel",

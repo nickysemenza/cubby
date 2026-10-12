@@ -47,6 +47,7 @@ import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { validateProductPolicy } from "~/server/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/repo/removal/core";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { receivableProductIds } from "~/server/repo/stock-tracking";
 
 import {
   aggregateReplacementApprovalFingerprint,
@@ -428,7 +429,7 @@ async function applyAggregateReplacement(
       );
     await validateExpenseInheritance(tx, row);
     // Goods left unresolved keep their finding, as the writer files it, so
-    // a later delivery still asks to receive them (gmail/process.ts).
+    // a later delivery still asks to receive them.
     if (identity.lineKind === "principal" && identity.unresolvedReason)
       await tx
         .insert(runFinding)
@@ -635,13 +636,16 @@ export async function resolveArrivedFindingsForPurchase(
           notDeleted(expense),
         ),
       );
-    // No product-bearing line at all: nothing to receive against, so leave
-    // the finding open rather than resolving it vacuously.
-    if (productLines.length === 0) return { resolved: 0 };
-
+    // Only lines the writer asked about need stock: an untracked Product is
+    // never received (ADR 0013). No such line at all: nothing to receive
+    // against, so leave the finding open rather than resolving it vacuously.
     const productIds = [
-      ...new Set(productLines.map(({ productId }) => productId!)),
+      ...(await receivableProductIds(
+        tx,
+        productLines.flatMap(({ productId }) => (productId ? [productId] : [])),
+      )),
     ];
+    if (productIds.length === 0) return { resolved: 0 };
     const stocked = await tx
       .select({ productId: inventoryEntry.productId })
       .from(inventoryEntry)

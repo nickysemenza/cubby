@@ -1,0 +1,1 @@
+ALTER TABLE "ProductCategory" ADD COLUMN "stockTracked" boolean;
