@@ -655,7 +655,7 @@ test("explanation evidence formats links and dates without exposing internal ent
   );
   const row = page.getByRole("row").filter({ hasText: productName });
   await expect(row.locator('[data-cell-col="purchaseDate"]')).toContainText(
-    /Mar 11, 2022 \(.+ ago\)/,
+    /Mar 11, 2022\s*\d+y ago/,
   );
   await row
     .locator('[data-cell-col="primaryGtin"]')

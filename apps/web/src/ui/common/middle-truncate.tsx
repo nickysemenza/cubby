@@ -6,7 +6,7 @@ import { cn } from "~/lib/utils";
  * from one host printed the same "https://media…." on every row, and a column
  * of one vendor's order numbers the same "113-21…".
  */
-export function splitTailLabel(
+function splitTailLabel(
   label: string,
 ): { head: string; tail: string; muted: boolean } | null {
   if (/\s/.test(label)) return null;

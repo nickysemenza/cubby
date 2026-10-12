@@ -345,7 +345,7 @@ function isFlexibleColumn(column: TableWidthColumn) {
 const IDENTITY_FIT_MAX = 240;
 const CODE_FIT_MAX = 128;
 
-export function columnFitMax(column: TableWidthColumn) {
+function columnFitMax(column: TableWidthColumn) {
   const max = column.columnDef.maxSize ?? Number.POSITIVE_INFINITY;
   const meta = column.columnDef.meta;
   if (meta?.entityColumnRole === "identity")
