@@ -1,0 +1,25 @@
+.github/workflows/ci.yaml
+  s_5844b4bd3bb15a::t_57aa9375d14793 34-35,37-136,196-198,200-201,203-205,207,209,213,217-219,221-222,224-226,228,230,232,236,247,253-254,256-258,262,280,288,292-294,296,298,302,306-307,313-315,317-318,320-322,324,326,330,336-337,346-349,351,358-360,362,364,368,373,380,383,389,394,413-414,416-418,421,427-429,431,433,437,442,449,452,455,489-490,494-495,553-554,604,613-614
+docs/adr/0009-content-hash-merge-gate.md
+  s_5844b4bd3bb15a::t_715a5bcffac8d8 34-37
+docs/ci.md
+  s_5844b4bd3bb15a::t_cbe6a147af69c1 3-7,36-38,58-62,74-102,206-212,226-228,250,495-496
+scripts/ci-cache-probe.test.ts
+  s_5844b4bd3bb15a::t_ccc84c66c3f1ee 1-215
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "975b10667510b3fbf8266431ef31ffc54bfec6e1",
+  "prompts": {},
+  "sessions": {
+    "s_5844b4bd3bb15a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a131f7-51c6-78c3-8228-3caf5125b599",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
