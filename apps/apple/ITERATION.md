@@ -47,7 +47,9 @@ ends it) for manual driving. Scroll to a target by counting from `scroll bottom`
 
 `pnpm test:e2e:sim -- --qa --journey qa-run-evidence` checks the sole hosted
 Run evidence sheet against the synthetic approval Run: enter from the native
-Runs catalog, load its durable operation, dismiss, reopen and load it again.
+Runs catalog, load its durable operation and structured log, confirm that the
+native loading/error overlays are absent, dismiss the sheet, reopen and load
+it again. Each Done must remove the hosted transcript from the accessibility tree.
 The return check uses the native evidence button, since Run has no edit action.
 This journey does not establish Retry, logout, host switching, auth/update gates,
 or record handoff and refresh acceptance.

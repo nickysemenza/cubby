@@ -20,11 +20,19 @@ wait "role=Button label=\"Transcript, logs and AI usage\"" 90000
 click "role=Button label=\"Transcript, logs and AI usage\""
 wait text "Durable transcript" 90000
 wait text "synthetic-approval-1" 90000
+wait absent "label=\"Loading Run evidence\"" 90000
+is absent "text=\"Couldn’t load Run evidence\""
+wait text "run.started" 90000
 wait text "System and agent log" 90000
 click "role=Button label=Done"
+wait absent "text=\"Durable transcript\"" 90000
 wait "role=Button label=\"Transcript, logs and AI usage\"" 90000
 click "role=Button label=\"Transcript, logs and AI usage\""
 wait text "Durable transcript" 90000
 wait text "synthetic-approval-1" 90000
+wait absent "label=\"Loading Run evidence\"" 90000
+is absent "text=\"Couldn’t load Run evidence\""
+wait text "run.started" 90000
 click "role=Button label=Done"
+wait absent "text=\"Durable transcript\"" 90000
 wait "role=Button label=\"Transcript, logs and AI usage\"" 90000
