@@ -2,7 +2,9 @@ import { createEmailAccuracyEvaluationInput } from "./email-accuracy.js";
 import { z } from "zod";
 import {
   correctEmailRelevanceInput,
+  emailAtChecksum,
   emailImportInput,
+  emailPurchaseDecisionInput,
   reclassifyEmailsInput,
 } from "./email-actions.js";
 
@@ -21,11 +23,6 @@ import {
 } from "./identifiers";
 import { mealScale, mealYieldGrams } from "./meal-shared";
 import { runControlAction } from "./run-fields";
-import {
-  orderMailDecisionInput,
-  orderMailImportInput,
-} from "./order-mail-review";
-import { purchaseShortcode } from "./identifier-fields";
 
 /**
  * The generic read a detail slot draws on every client. The server composes
@@ -55,9 +52,6 @@ export const reportSlots = [
   "cookbook.import-progress",
   "image.associations",
   "purchase.runs",
-  "purchase.order-mail",
-  "vendor.order-mail",
-  "vendorAccount.order-mail",
   "location.ai-description",
   "purchase.reconciliation",
   "purchase.project-allocation",
@@ -232,8 +226,10 @@ const reportNote = z.object({
 export const reportCommandRequest = z.discriminatedUnion("kind", [
   emailImportInput.extend({ kind: z.literal("import-email") }),
   reclassifyEmailsInput.extend({ kind: z.literal("reclassify-email") }),
-  // A preview rerun names the same exact Email and checksum as an import.
-  emailImportInput.extend({ kind: z.literal("rerun-email-preview") }),
+  emailAtChecksum.extend({ kind: z.literal("rerun-email-preview") }),
+  emailPurchaseDecisionInput.extend({
+    kind: z.literal("decide-email-purchase"),
+  }),
   correctEmailRelevanceInput.extend({
     kind: z.literal("correct-email-relevance"),
     // The template carries no reason; the member types it in the command's
@@ -243,11 +239,6 @@ export const reportCommandRequest = z.discriminatedUnion("kind", [
   createEmailAccuracyEvaluationInput.extend({
     kind: z.literal("create-email-accuracy"),
   }),
-  orderMailDecisionInput.extend({
-    kind: z.literal("decide-order-mail"),
-    purchaseId: purchaseShortcode.nullable(),
-  }),
-  orderMailImportInput.extend({ kind: z.literal("research-order-mail") }),
   z.object({
     kind: z.literal("run-control"),
     runId: runShortcode,

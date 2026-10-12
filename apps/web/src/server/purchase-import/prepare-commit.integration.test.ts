@@ -279,6 +279,109 @@ describe("caller-driven purchase import", () => {
     ).toEqual(expensesBefore);
   });
 
+  // An order with no order id cannot converge by (Vendor, order id); without
+  // a target, importing an Email already linked to its Purchase would book
+  // that order a second time.
+  it("imports a no-order-id Email into the one Purchase it is already linked to", async () => {
+    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
+      vendor: { name: "Synthetic seed shop", website: "https://seed.example" },
+    });
+    const existing = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: parseEntityId("vendor", vendor.id),
+      date: "2026-09-20",
+      statedTotal: 18.5,
+    });
+    const mail = await retainedMail(
+      party.id,
+      "orderless-receipt",
+      "Thanks for your order: Synthetic seed packet $18.50",
+      "e",
+    );
+    await resolveMail(
+      ctx.db,
+      {
+        mailboxId,
+        messageId: mail.messageId,
+        checksum: mail.rawChecksum,
+        disposition: {
+          kind: "linked",
+          purchaseIds: [parseShortcodeFor("purchase", existing.shortcode)],
+          event: "confirmation",
+        },
+      },
+      ctx.actor,
+    );
+    const prepared = await preparePurchaseImport(
+      ctx.db,
+      {
+        _runExecution: {
+          operationId: "prepare:orderless",
+          itemOperationIds: ["prepare-item:orderless"],
+        },
+        orders: [
+          {
+            vendorId: vendor.shortcode,
+            stableOrderId: "orderless",
+            itemOperationId: "prepare-item:orderless",
+            source: {
+              kind: "mail_message",
+              externalKey: `gmail:${mailboxId}:${mail.messageId}`,
+              checksum: mail.rawChecksum,
+            },
+            evidenceChecksum: mail.rawChecksum,
+            extractionRevision: "synthetic@1",
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId: null,
+                orderedAt: "2026-09-20",
+                merchant: "Synthetic seed shop",
+                currency: "USD",
+                printedGrandTotal: 18.5,
+                lines: [
+                  {
+                    title: "Synthetic seed packet",
+                    amount: 18.5,
+                    lineKind: "principal",
+                  },
+                ],
+                payments: [],
+                allShipmentsDelivered: false,
+              },
+            },
+            lineIds: ["orderless:line-1"],
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(prepared.orders[0]?.targetPurchaseId).toBe(existing.shortcode);
+    await commitPurchaseImport(
+      ctx.db,
+      {
+        _runExecution: { run: prepared.runId, operationId: "commit:orderless" },
+        prepareOperationId: "prepare:orderless",
+        defaultTrade: "other",
+        resolutions: [
+          {
+            stableOrderId: "orderless",
+            stableLineId: "orderless:line-1",
+            resolution: { kind: "new" },
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    const booked = await getDb(ctx.db)
+      .select({ purchase: purchase.shortcode, cost: expense.cost })
+      .from(purchase)
+      .leftJoin(expense, eq(expense.purchaseId, purchase.id))
+      .where(eq(purchase.vendorId, parseEntityId("vendor", vendor.id)));
+    expect(booked).toEqual([{ purchase: existing.shortcode, cost: 18.5 }]);
+  });
+
   it("refuses a changed Email and disposes of an unrelated one", async () => {
     const { party } = await memberImportWorld(ctx.db, ctx.actor, {
       vendor: {

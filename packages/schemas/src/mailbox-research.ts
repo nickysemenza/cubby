@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  emailShortcode,
   purchaseShortcode,
   financialTransactionShortcode,
   financialAccountShortcode,
@@ -295,12 +296,20 @@ export const mailAttachmentOriginal = z.strictObject({
 });
 export type MailAttachmentOriginal = z.infer<typeof mailAttachmentOriginal>;
 
+/**
+ * `accepted`: an import accepted the Email as the Purchase's source.
+ * `linked`: a reviewed link on one of its order events. Both are links;
+ * Relevance and import outcome are separate facts (`entity_read` on email).
+ */
 export const mailPurchaseAssociation = z.object({
   purchaseId: purchaseShortcode,
   purchaseDeleted: z.boolean(),
+  kind: z.enum(["accepted", "linked"]),
 });
 
 export const mailReadOut = mailMessageRef.extend({
+  /** The Email's EML- code: what mail.import and mail.decide_purchase take. */
+  id: emailShortcode,
   threadId: z.string().nullable(),
   checksum: sha256,
   sender: z.string().nullable(),
@@ -337,6 +346,9 @@ export const mailSearchOut = z.object({
   mailboxes: z.array(z.string()),
   messages: z.array(
     mailMessageRef.extend({
+      /** With `checksum`, the exact selection mail.import takes. */
+      id: emailShortcode,
+      checksum: sha256,
       threadId: z.string().nullable(),
       classification: mailboxClassification.nullable(),
       status: emailStatus,

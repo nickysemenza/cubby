@@ -103,7 +103,7 @@ const actionCapability = {
   "mail.rerun_preview": "start_run",
   "purchase_import.commit_accepted_reconciliation": "generic_mutation",
   "mail.resolve": "commit_purchase_import",
-  "mail.decide_order_mail": "member_decision",
+  "mail.decide_purchase": "member_decision",
   "purchase_import.prepare": "prepare",
   "purchase_import.prepare_reconciliation": "prepare",
   "purchase_import.commit": "commit_purchase_import",

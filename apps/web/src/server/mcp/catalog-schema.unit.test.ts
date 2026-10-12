@@ -561,8 +561,8 @@ describe("MCP catalog schemas", () => {
       "mail.messageId",
       "run.mailboxId",
       "run.scope.mailboxId",
-      // Field suggestions and order-Email events have no shortcode; their row
-      // id is the review handle. `entityId` beside an `entity` kind is that
+      // Field suggestions have no shortcode; their row id is the review
+      // handle. `entityId` beside an `entity` kind is that
       // kind's shortcode, resolved by the handler.
       "entity.id",
       "entity.entityId",
@@ -574,7 +574,6 @@ describe("MCP catalog schemas", () => {
       "entity_read.recordIds",
       "entity_read.runId",
       "spending_classification_write.entityId",
-      "mail.eventId",
       // run.lifecycle settles a Run's pending operation or approval by its
       // handle; commit_prepared carries the same opaque import keys as
       // purchase_import.commit; resolve_finding takes the finding row id.

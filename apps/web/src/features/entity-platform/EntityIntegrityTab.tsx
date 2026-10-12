@@ -326,6 +326,21 @@ function RelationshipProvenanceView({
       </Row>
     );
   }
+  if (provenance.kind === "derived") {
+    return (
+      <Row gap="xs" align="center" wrap>
+        <Badge variant="outline">derived · {provenance.filter}</Badge>
+        {provenance.evidence.map((source) => (
+          <span
+            key={source}
+            className="font-mono text-2xs text-muted-foreground"
+          >
+            {source}
+          </span>
+        ))}
+      </Row>
+    );
+  }
   return (
     <Row gap="xs" align="center" wrap>
       <Badge variant="outline">external · {provenance.system}</Badge>

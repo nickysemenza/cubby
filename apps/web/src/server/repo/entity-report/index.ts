@@ -19,11 +19,6 @@ import { emailReviewReport } from "./email";
 import { expenseSettlementReport } from "./expense-settlement";
 import { locationContentsValuationReport } from "./location";
 import {
-  vendorOrderMailReport,
-  vendorAccountOrderMailReport,
-  purchaseOrderMailReport,
-} from "./order-mail";
-import {
   projectAnalyticsReport,
   projectBudgetReport,
   projectContributionReport,
@@ -107,12 +102,6 @@ const BUILDERS = {
   "image.associations": imageAssociationsReport,
   "purchase.runs": recordRunsReport("purchase"),
   "product.runs": recordRunsReport("product"),
-  "purchase.order-mail": (db, id, _viewer, actor) =>
-    purchaseOrderMailReport(db, id, actor),
-  "vendor.order-mail": (db, id, _viewer, actor) =>
-    vendorOrderMailReport(db, id, actor),
-  "vendorAccount.order-mail": (db, id, _viewer, actor) =>
-    vendorAccountOrderMailReport(db, id, actor),
   "location.ai-description": locationAiDescriptionReport,
   "purchase.reconciliation": purchaseReconciliationReport,
   "purchase.project-allocation": purchaseProjectAllocationReport,

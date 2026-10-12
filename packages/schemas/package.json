@@ -147,7 +147,6 @@
     "./purchase": "./src/purchase.ts",
     "./purchase-agent-services": "./src/purchase-agent-services.ts",
     "./purchase-import": "./src/purchase-import.ts",
-    "./order-mail-review": "./src/order-mail-review.ts",
     "./purchase-fields": "./src/purchase-fields.ts",
     "./financial-account": "./src/financial-account.ts",
     "./financial-account-fields": "./src/financial-account-fields.ts",

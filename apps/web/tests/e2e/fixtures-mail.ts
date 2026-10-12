@@ -87,6 +87,8 @@ export async function seedUnimportedOrderMail(
   const events: Array<{
     eventId: string;
     orderMailId: typeof schema.orderMail.$inferSelect.id;
+    /** The Email's EML- code, the identity mail.import selects by. */
+    emailId: string;
     checksum: string;
     orderId: string;
   }> = [];
@@ -114,7 +116,7 @@ export async function seedUnimportedOrderMail(
       })
       .returning();
     if (!mail) throw new Error("Synthetic confirmation was not saved");
-    await insertWithShortcode(db, "email", {
+    const email = await insertWithShortcode(db, "email", {
       ledgerPartyId: member.id,
       ...metadata,
       checksum,
@@ -135,7 +137,13 @@ export async function seedUnimportedOrderMail(
       })
       .returning();
     if (!event) throw new Error("Synthetic event was not saved");
-    events.push({ eventId: event.id, orderMailId: mail.id, checksum, orderId });
+    events.push({
+      eventId: event.id,
+      orderMailId: mail.id,
+      emailId: email.shortcode,
+      checksum,
+      orderId,
+    });
   }
   const [first] = events;
   if (!first) throw new Error("Synthetic confirmation was not seeded");

@@ -10,39 +10,39 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { CommandButton, useReportCommands } from "./report-commands";
 
-const eventId = crypto.randomUUID();
+const original = "a".repeat(64);
+const revised = "b".repeat(64);
 const command = reportCommand.parse({
   id: "synthetic-shipment",
-  label: "Research original",
+  label: "Import this Email",
   prominent: false,
   confirm: null,
   request: {
-    kind: "research-order-mail",
-    eventId,
-    evidenceChecksum: "synthetic-original-checksum",
+    kind: "import-email",
+    items: [{ id: "EML-4K7M", expectedChecksum: original }],
   },
 });
 
-function ResearchOriginal({ command }: { command: ReportCommand }) {
+function ImportEmail({ command }: { command: ReportCommand }) {
   return <CommandButton command={command} commands={useReportCommands()} />;
 }
 
 // Preserves the no-order-ID shipment interaction through the shared command renderer.
-it("researches a shipment without an order ID and links every server-created Run", async () => {
+it("imports a shipment without an order ID and links every server-created Run", async () => {
   const harness = createBrowserTestHarness();
   const calls: unknown[] = [];
   const restore = overrideStartDispatch(async (operation, input) => {
-    if (operation !== "vendor.importOrderMail")
+    if (operation !== "purchaseImport.emailImport")
       throw new Error(`Unexpected operation: ${operation}`);
     calls.push(input);
     return { ok: true, data: { runIds: ["RUN-4K7M", "RUN-5K8N"] } };
   });
   try {
-    const view = render(<ResearchOriginal command={command} />, {
+    const view = render(<ImportEmail command={command} />, {
       wrapper: harness.wrapper,
     });
     fireEvent.click(
-      await screen.findByRole("button", { name: "Research original" }),
+      await screen.findByRole("button", { name: "Import this Email" }),
     );
     for (const ref of ["RUN-4K7M", "RUN-5K8N"])
       expect(await screen.findByRole("link", { name: ref })).toHaveAttribute(
@@ -50,20 +50,17 @@ it("researches a shipment without an order ID and links every server-created Run
         `/runs/${ref}`,
       );
     expect(calls).toEqual([
-      {
-        eventId,
-        evidenceChecksum: "synthetic-original-checksum",
-      },
+      { items: [{ id: "EML-4K7M", expectedChecksum: original }] },
     ]);
     // Refreshed source content keeps the row identity but changes the reviewed operand.
     // Historical Run links belong to the retained report, not this earlier mutation result.
     view.rerender(
-      <ResearchOriginal
+      <ImportEmail
         command={reportCommand.parse({
           ...command,
           request: {
-            ...command.request,
-            evidenceChecksum: "synthetic-revised-original-checksum",
+            kind: "import-email",
+            items: [{ id: "EML-4K7M", expectedChecksum: revised }],
           },
         })}
       />,

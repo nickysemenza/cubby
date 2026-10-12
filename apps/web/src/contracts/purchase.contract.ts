@@ -1,9 +1,5 @@
 import { relationMutationOut } from "@cubby/schemas/common";
 import {
-  purchaseOrderMailInput,
-  purchaseOrderMailOut,
-} from "@cubby/schemas/order-mail-review";
-import {
   linkExpensesToPurchaseInput,
   purchaseAttachProductsInput,
   purchaseLinkExpensesCandidatesInput,
@@ -98,13 +94,6 @@ export const purchaseContract = defineContract("purchase", {
     input: purchaseSettlementAllocationCheckInput,
     output: purchaseSettlementAllocationCheckOut,
     cache: { tags: [] },
-  }),
-  orderMail: query({
-    mcp: { omit: "client_view" },
-    native: "Show linked order email events on native Purchase detail",
-    input: purchaseOrderMailInput,
-    output: purchaseOrderMailOut,
-    cache: { tags: [["purchase"]] },
   }),
   products: query({
     mcp: {

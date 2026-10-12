@@ -117,8 +117,12 @@ describe("explicit member-search cache expiry", () => {
       const admission = await startEmailImport(
         ctx.db,
         {
-          id: parseShortcodeFor("email", selected.shortcode),
-          expectedChecksum: selected.checksum,
+          items: [
+            {
+              id: parseShortcodeFor("email", selected.shortcode),
+              expectedChecksum: selected.checksum,
+            },
+          ],
         },
         ctx.actor,
         { send: async () => {} },

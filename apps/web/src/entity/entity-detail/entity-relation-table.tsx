@@ -65,6 +65,7 @@ import {
   HopRange,
   RecordPaths,
 } from "./connected-records-table";
+import { RelationScopeContext } from "./relation-scope";
 import {
   relationshipMovementSource,
   RelationshipMovementBadges,
@@ -95,6 +96,8 @@ export interface RelationSectionPlan {
   columns: readonly string[] | null;
   sort: { field: string; direction: "asc" | "desc" };
   limit: number | null;
+  /** Inferred through the target's filter, with no edge path to show as evidence. */
+  derived: boolean;
 }
 
 const isListEntity = (value: string): value is ListEntity =>
@@ -200,6 +203,7 @@ export function planRelationSection(
       direction: defaultSortDirectionFor(target),
     },
     limit: section.limit,
+    derived: relation.provenance.kind === "derived",
   };
 }
 
@@ -481,9 +485,18 @@ function RelationStaticSkeleton({ rows }: { rows: number }) {
  */
 export function EntityRelationTable(props: EntityRelationTableProps) {
   const hydrated = useHydrated();
+  // Above the live table: its row-action hooks read the scope while it renders.
+  const scope = useMemo(
+    () => ({ source: props.plan.source, recordId: props.recordId }),
+    [props.plan.source, props.recordId],
+  );
   if (!hydrated)
     return <RelationStaticSkeleton rows={skeletonRowsFor(props.plan)} />;
-  return <LiveEntityRelationTable {...props} />;
+  return (
+    <RelationScopeContext.Provider value={scope}>
+      <LiveEntityRelationTable {...props} />
+    </RelationScopeContext.Provider>
+  );
 }
 
 function LiveEntityRelationTable({
@@ -539,18 +552,21 @@ function LiveEntityRelationTable({
               ),
             }),
           );
-        add(
-          helper.display({
-            id: "connection",
-            header: "Connected through",
-            size: 280,
-            minSize: 220,
-            maxSize: 380,
-            cell: ({ row }) => <ConnectionEvidenceCell id={row.original.id} />,
-          }),
-        );
+        if (!plan.derived)
+          add(
+            helper.display({
+              id: "connection",
+              header: "Connected through",
+              size: 280,
+              minSize: 220,
+              maxSize: 380,
+              cell: ({ row }) => (
+                <ConnectionEvidenceCell id={row.original.id} />
+              ),
+            }),
+          );
       }),
-    [helper, onSaveField, plan.columns, target, movementSource],
+    [helper, onSaveField, plan.columns, plan.derived, target, movementSource],
   );
   const tableStateOptions = useMemo(
     () => ({
@@ -579,14 +595,15 @@ function LiveEntityRelationTable({
     .getRowModel()
     .rows.map((row) => row.original.id)
     .slice(0, 50);
-  const evidenceQuery = useQuery(
-    entityGraph.connectedRecords.queryOptions({
+  const evidenceQuery = useQuery({
+    ...entityGraph.connectedRecords.queryOptions({
       source: { entityKind: plan.source, entityId: recordId },
       viewKey: `relation:${plan.relation}`,
       targetIds: visibleIds,
       limit: 50,
     }),
-  );
+    enabled: !plan.derived,
+  });
   const evidence = new Map(
     evidenceQuery.data?.items.map((item) => [item.target.entityId, item]),
   );

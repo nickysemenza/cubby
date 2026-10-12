@@ -8,6 +8,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { emailClassificationObservationInput } from "@cubby/schemas/email-observations";
 import {
   parseEntityId,
+  parseShortcodeFor,
   runEntityId,
   type RunId,
   type UserId,
@@ -182,7 +183,7 @@ async function associationsForMail(
   mail: Pick<RetainedMail, "ledgerPartyId" | "mailboxId" | "messageId">,
 ) {
   const [message] = await getDb(db)
-    .select({ id: emailTable.id })
+    .select({ id: emailTable.id, shortcode: emailTable.shortcode })
     .from(emailTable)
     .where(
       and(
@@ -194,18 +195,19 @@ async function associationsForMail(
       ),
     )
     .limit(1);
-  const id = message ? parseEntityId("email", message.id) : null;
-  const purchases = id ? await readEmailPurchaseAssociations(db, id) : [];
+  if (!message) throw new Error("The Email no longer exists.");
+  const id = parseEntityId("email", message.id);
+  const purchases = await readEmailPurchaseAssociations(db, id);
   return {
+    id: parseShortcodeFor("email", message.shortcode),
     purchaseIds: purchases.map((row) => row.shortcode),
     purchaseAssociations: purchases.map((row) => ({
       purchaseId: row.shortcode,
       purchaseDeleted: row.purchaseDeleted,
+      kind: row.kind,
     })),
-    acceptedSourceOrders: id ? await readEmailAcceptedSourceOrders(db, id) : [],
-    financialAssociations: id
-      ? await readEmailFinancialAssociations(db, id)
-      : [],
+    acceptedSourceOrders: await readEmailAcceptedSourceOrders(db, id),
+    financialAssociations: await readEmailFinancialAssociations(db, id),
   };
 }
 
@@ -352,6 +354,8 @@ export async function linkOrderMail(
     purchaseId: string;
     event: MailEvent;
     actorUserId: string;
+    /** `agent` for a `mail.resolve` session or Pi, `import` for a commit. */
+    proposedBy: "agent" | "import";
   },
 ) {
   const tx = getDb(db);
@@ -459,6 +463,7 @@ export async function linkOrderMail(
       decision: "linked",
       evidenceChecksum: input.mail.rawChecksum,
       decidedByUserId: input.actorUserId,
+      proposedBy: input.proposedBy,
     });
   await ensureMailVendorAccount(db, {
     vendorId: chosen.vendorId,
@@ -737,6 +742,7 @@ export async function resolveMail(
             purchaseId: id,
             event: disposition.event,
             actorUserId: actor.userId,
+            proposedBy: "agent",
           }),
         );
       if (disposition.settlement) {
@@ -841,6 +847,7 @@ export async function linkImportedMail(
     purchaseId: input.purchaseId,
     event: input.event,
     actorUserId: input.actorUserId,
+    proposedBy: "import",
   });
   await settleMail(db, {
     mail: { ...input.mail, ...mail },
@@ -949,6 +956,8 @@ export async function searchMail(
     const retained = messageIds.length
       ? await database
           .select({
+            id: emailTable.shortcode,
+            checksum: emailTable.checksum,
             messageId: emailTable.messageId,
             classification: emailTable.classification,
             status: emailTable.status,

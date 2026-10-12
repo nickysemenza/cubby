@@ -4,18 +4,23 @@ import {
   type EmailFilters,
   type EmailOut,
 } from "@cubby/schemas/email";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { emailImportOutcome } from "@cubby/schemas/email-fields";
+import {
+  parseEntityId,
+  parseShortcodeFor,
+  userId,
+} from "@cubby/schemas/identifiers";
 import {
   mailboxClassification,
   mailboxClassificationStage,
   relevanceLabel,
 } from "@cubby/schemas/mailbox-research";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, desc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { runStatus } from "@cubby/schemas/run-fields";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  purchase,
   expense,
   product,
   emailClassificationLabel,
@@ -23,7 +28,9 @@ import {
   ledgerParty,
   email as emailTable,
   emailFinancialAssociation,
+  vendorAccount,
 } from "~/server/db/schema";
+import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   householdDayRangeConditions,
   notDeleted,
@@ -32,7 +39,15 @@ import {
 import { readEmailFinancialAssociations } from "~/server/repo/email-financial-associations";
 import { readEmailPurchaseAssociations } from "~/server/repo/email-purchase-associations";
 import {
-  emailLifecyclePurchasesSql,
+  emailInScopeSql,
+  emailLinkRankSql,
+  emailLinkStateSql,
+  readEmailPurchaseLinks,
+  strongestLinkState,
+  type EmailPurchaseScope,
+} from "~/server/repo/email-purchase-links";
+import {
+  emailAcceptedEvidenceSql,
   emailLinkedSql,
   emailPurchaseAssociationsSql,
   emailReviewConflictSql,
@@ -43,13 +58,7 @@ import {
   type ListProjection,
 } from "~/server/repo/list-projection";
 import { completeListReader } from "~/server/repo/list-read-adapters";
-import {
-  createEntityReader,
-  defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
-} from "~/server/repo/repository";
+import { createEntityReader, defineRepository } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
 
@@ -75,28 +84,6 @@ export async function readEmailAssociations(
     .where(and(eq(emailTable.id, id), notDeleted(emailTable)))
     .limit(1);
   if (!selected) throw new Error("Email was not found for this member.");
-  const purchasesFor = (associations: SQL) =>
-    client
-      .select({
-        id: purchase.id,
-        shortcode: purchase.shortcode,
-        orderId: purchase.orderId,
-        date: purchase.date,
-      })
-      .from(purchase)
-      .where(
-        and(
-          notDeleted(purchase),
-          sql`
-    "Purchase"."id" IN (
-      SELECT association."purchaseId" FROM "Email"
-      CROSS JOIN LATERAL (${associations}) association
-      WHERE "Email"."id" = ${selected.email.id}
-    )
-  `,
-        ),
-      )
-      .orderBy(desc(purchase.date), purchase.id);
   const purchases = await readEmailPurchaseAssociations(
     db,
     parseEntityId("email", selected.email.id),
@@ -175,9 +162,6 @@ export async function readEmailAssociations(
         )
         .orderBy(desc(emailTable.receivedAt), emailTable.id)
     : [];
-  const dismissedCandidates = await purchasesFor(
-    emailLifecyclePurchasesSql("dismissed"),
-  );
   return {
     financialAssociations: await readEmailFinancialAssociations(
       db,
@@ -188,7 +172,6 @@ export async function readEmailAssociations(
     products,
     samePurchaseEmails,
     threadEmails,
-    dismissedCandidates,
   };
 }
 
@@ -226,7 +209,55 @@ export async function hasAcceptedEmailAssociation(
 
 const scaffold = listScaffold("email", emailTable);
 
-export const buildEmailWhere = (filters: EmailFilters) =>
+/**
+ * The record an Emails section is scoped to, resolved from the list's
+ * derived `purchaseId`/`vendorId`/`vendorAccountId` filter (one at a time).
+ */
+export async function resolveEmailScope(
+  db: Database | DrizzleTransaction,
+  filters: Pick<EmailFilters, "purchaseId" | "vendorId" | "vendorAccountId">,
+): Promise<EmailPurchaseScope | null> {
+  const named = [
+    filters.purchaseId,
+    filters.vendorId,
+    filters.vendorAccountId,
+  ].filter((value) => value !== undefined);
+  if (named.length > 1)
+    throw new Error(
+      "Scope an Email list by one of purchaseId, vendorId or vendorAccountId.",
+    );
+  if (filters.purchaseId)
+    return {
+      kind: "purchase",
+      purchaseId: await resolveOrThrow(db, "purchase", filters.purchaseId),
+    };
+  if (filters.vendorId)
+    return {
+      kind: "vendor",
+      vendorId: await resolveOrThrow(db, "vendor", filters.vendorId),
+    };
+  if (!filters.vendorAccountId) return null;
+  const accountId = await resolveOrThrow(
+    db,
+    "vendorAccount",
+    filters.vendorAccountId,
+  );
+  const [account] = await unwrapDb(db)
+    .select({
+      vendorId: vendorAccount.vendorId,
+      ownerId: vendorAccount.ledgerPartyId,
+    })
+    .from(vendorAccount)
+    .where(eq(vendorAccount.id, accountId))
+    .limit(1);
+  if (!account) throw new Error(`${filters.vendorAccountId} does not exist.`);
+  return { kind: "vendorAccount", ...account };
+}
+
+export const buildEmailWhere = (
+  filters: EmailFilters,
+  scope: EmailPurchaseScope | null = null,
+) =>
   scaffold.where(filters, [
     ...householdDayRangeConditions(
       emailTable.receivedAt,
@@ -239,96 +270,146 @@ export const buildEmailWhere = (filters: EmailFilters) =>
     filters.reviewConflict === undefined
       ? undefined
       : eq(emailReviewConflictSql(), filters.reviewConflict),
+    scope ? emailInScopeSql(scope) : undefined,
+    filters.linkState === undefined
+      ? undefined
+      : sql`${emailLinkStateSql(scope)} IN (${sql.join(
+          [filters.linkState].flat().map((state) => sql`${state}`),
+          sql`, `,
+        )})`,
   ]);
+
+/** Accepted import evidence, else the import Run's own status. */
+const OUTCOME = emailImportOutcome.enum;
+const importOutcomeSql = sql<string>`CASE
+  WHEN EXISTS (${emailAcceptedEvidenceSql()}) THEN ${OUTCOME.imported}::text
+  WHEN "Email"."runId" IS NULL THEN ${OUTCOME.not_imported}::text
+  ELSE (SELECT CASE
+    WHEN r."status" IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) THEN ${OUTCOME.failed}::text
+    WHEN r."status" = ${runStatus.enum.completed} THEN ${OUTCOME.not_imported}::text
+    ELSE ${OUTCOME.importing}::text END
+    FROM "Run" r WHERE r."id" = "Email"."runId")
+END`;
+
+/** Who reads the list, for `ownedByViewer`; null reads as nobody's. */
+type EmailViewer = { userId: string } | null;
 
 const hydrateRead = async (
   db: Database | DrizzleTransaction,
   rows: EmailRow[],
   projection: ListProjection,
+  viewer: EmailViewer,
+  scope: EmailPurchaseScope | null = null,
 ) =>
   hydrateListRead(db, "email", rows, projection, {
     media: true,
     load: async () => {
       // includes-deleted: immutable mail metadata keeps naming its owner and Run.
-      const [parties, runs, associations, reviews] = await Promise.all([
-        lookupEntityReferences(
-          db,
-          "ledgerParty",
-          rows.map((row) => row.ledgerPartyId),
-          { includeDeleted: true },
-        ),
-        lookupEntityReferences(
-          db,
-          "run",
-          rows.map((row) => row.runId),
-          { includeDeleted: true },
-        ),
-        rows.length === 0
-          ? []
-          : await unwrapDb(db)
-              .select({
-                id: emailTable.id,
-                linked: emailLinkedSql(),
-                reviewConflict: emailReviewConflictSql(),
-              })
-              .from(emailTable)
-              .where(
-                and(
-                  inArray(
-                    emailTable.id,
-                    rows.map((row) => row.id),
-                  ),
-                  notDeleted(emailTable),
-                ),
-              ),
-        rows.length === 0
-          ? []
-          : await unwrapDb(db)
-              .select({
-                emailId: emailTable.id,
-                classification: emailClassificationLabel.classification,
-                reason: emailClassificationLabel.reason,
-              })
-              .from(emailTable)
-              .innerJoin(
-                ledgerParty,
-                eq(ledgerParty.id, emailTable.ledgerPartyId),
-              )
-              .innerJoin(
-                emailClassificationObservation,
-                and(
-                  eq(emailClassificationObservation.emailId, emailTable.id),
-                  eq(
-                    emailClassificationObservation.checksum,
-                    emailTable.checksum,
+      const [parties, runs, associations, reviews, purchaseLinks, owners] =
+        await Promise.all([
+          lookupEntityReferences(
+            db,
+            "ledgerParty",
+            rows.map((row) => row.ledgerPartyId),
+            { includeDeleted: true },
+          ),
+          lookupEntityReferences(
+            db,
+            "run",
+            rows.map((row) => row.runId),
+            { includeDeleted: true },
+          ),
+          rows.length === 0
+            ? []
+            : await unwrapDb(db)
+                .select({
+                  id: emailTable.id,
+                  linked: emailLinkedSql(),
+                  reviewConflict: emailReviewConflictSql(),
+                  importOutcome: importOutcomeSql,
+                })
+                .from(emailTable)
+                .where(
+                  and(
+                    inArray(
+                      emailTable.id,
+                      rows.map((row) => row.id),
+                    ),
+                    notDeleted(emailTable),
                   ),
                 ),
-              )
-              .innerJoin(
-                emailClassificationLabel,
-                and(
-                  eq(
-                    emailClassificationLabel.predictionId,
-                    emailClassificationObservation.id,
+          rows.length === 0
+            ? []
+            : await unwrapDb(db)
+                .select({
+                  emailId: emailTable.id,
+                  classification: emailClassificationLabel.classification,
+                  reason: emailClassificationLabel.reason,
+                })
+                .from(emailTable)
+                .innerJoin(
+                  ledgerParty,
+                  eq(ledgerParty.id, emailTable.ledgerPartyId),
+                )
+                .innerJoin(
+                  emailClassificationObservation,
+                  and(
+                    eq(emailClassificationObservation.emailId, emailTable.id),
+                    eq(
+                      emailClassificationObservation.checksum,
+                      emailTable.checksum,
+                    ),
                   ),
-                  eq(emailClassificationLabel.actorUserId, ledgerParty.userId),
-                ),
-              )
-              .where(
-                and(
-                  inArray(
-                    emailTable.id,
-                    rows.map((row) => row.id),
+                )
+                .innerJoin(
+                  emailClassificationLabel,
+                  and(
+                    eq(
+                      emailClassificationLabel.predictionId,
+                      emailClassificationObservation.id,
+                    ),
+                    eq(
+                      emailClassificationLabel.actorUserId,
+                      ledgerParty.userId,
+                    ),
                   ),
-                  notDeleted(emailTable),
-                  notDeleted(ledgerParty),
+                )
+                .where(
+                  and(
+                    inArray(
+                      emailTable.id,
+                      rows.map((row) => row.id),
+                    ),
+                    notDeleted(emailTable),
+                    notDeleted(ledgerParty),
+                  ),
+                )
+                .orderBy(
+                  desc(emailClassificationLabel.createdAt),
+                  desc(emailClassificationLabel.id),
                 ),
-              )
-              .orderBy(
-                desc(emailClassificationLabel.createdAt),
-                desc(emailClassificationLabel.id),
-              ),
-      ]);
+          readEmailPurchaseLinks(
+            db,
+            rows.map((row) => parseEntityId("email", row.id)),
+            scope,
+          ),
+          viewer === null || rows.length === 0
+            ? []
+            : unwrapDb(db)
+                .select({ id: ledgerParty.id })
+                .from(ledgerParty)
+                .where(
+                  and(
+                    inArray(
+                      ledgerParty.id,
+                      rows.map((row) =>
+                        parseEntityId("ledgerParty", row.ledgerPartyId),
+                      ),
+                    ),
+                    eq(ledgerParty.userId, userId.parse(viewer.userId)),
+                  ),
+                ),
+        ]);
       const latestReviews = new Map<
         typeof emailTable.$inferSelect.id,
         (typeof reviews)[number]
@@ -344,6 +425,14 @@ const hydrateRead = async (
         reviewConflict: new Map(
           associations.map((row) => [row.id, row.reviewConflict]),
         ),
+        importOutcome: new Map(
+          associations.map((row) => [
+            row.id,
+            emailImportOutcome.parse(row.importOutcome),
+          ]),
+        ),
+        purchaseLinks,
+        viewerParties: new Set<string>(owners.map((row) => row.id)),
       };
     },
     mapRow: (row, { loaded }) => {
@@ -363,6 +452,10 @@ const hydrateRead = async (
           row.runId === null ? null : (loaded.runs.get(row.runId)?.id ?? null),
         linked: loaded.linked.get(row.id) ?? false,
         reviewConflict: loaded.reviewConflict.get(row.id) ?? false,
+        purchaseLinks: loaded.purchaseLinks.get(row.id) ?? [],
+        ownedByViewer: loaded.viewerParties.has(row.ledgerPartyId),
+        linkState: strongestLinkState(loaded.purchaseLinks.get(row.id) ?? []),
+        importOutcome: loaded.importOutcome.get(row.id) ?? "not_imported",
         reviewedClassification:
           loaded.reviews.get(row.id)?.classification ?? null,
         reviewedClassificationReason:
@@ -371,44 +464,88 @@ const hydrateRead = async (
     },
   });
 
-export const listEmailsRead = (
-  db: Database,
-  filters: EmailFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-) =>
-  scaffold.list(
-    db,
-    { filters, sorts, pagination, projection },
-    {
-      where: buildEmailWhere(filters),
-      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
-    },
-  );
+/** The Email list read for one viewer (`ownedByViewer` depends on who reads). */
+const emailListRead =
+  (viewer: EmailViewer) =>
+  async (
+    db: Database,
+    filters: EmailFilters,
+    sorts: SortParams[],
+    pagination: PaginationParams,
+    projection: ListProjection = { kind: "full" },
+  ) => {
+    const scope = await resolveEmailScope(db, filters);
+    return scaffold.list(
+      db,
+      { filters, sorts, pagination, projection },
+      {
+        where: buildEmailWhere(filters, scope),
+        // Link order is scope-relative; ties read newest first.
+        resolveSort: (sort) =>
+          sort.orderBy === "linkState"
+            ? [
+                sql`${emailLinkRankSql(scope)} ${sql.raw(sort.direction)}`,
+                sql`${emailTable.receivedAt} desc nulls last`,
+              ]
+            : null,
+        hydrate: (rows, selected) =>
+          hydrateRead(db, rows, selected, viewer, scope),
+      },
+    );
+  };
 
-export const listEmails = completeListReader(emailOut, listEmailsRead);
-const reader = createEntityReader<
-  EmailRow,
-  EmailOut,
-  "email",
-  Database | DrizzleTransaction
->({
-  entity: "email",
-  fetchById: async (db, id) => {
-    const [row] = await unwrapDb(db)
-      .select()
-      .from(emailTable)
-      .where(and(eq(emailTable.id, id), notDeleted(emailTable)))
-      .limit(1);
-    return row;
-  },
-  fromDB: async (db, row) =>
-    emailOut.parse((await hydrateRead(db, [row], { kind: "full" }))[0]),
-});
+/** Viewer-free reads (work queues, counts): `ownedByViewer` reads false. */
+export const listEmailsRead = emailListRead(null);
+
+const readerFor = (viewer: EmailViewer) =>
+  createEntityReader<
+    EmailRow,
+    EmailOut,
+    "email",
+    Database | DrizzleTransaction
+  >({
+    entity: "email",
+    fetchById: async (db, id) => {
+      const [row] = await unwrapDb(db)
+        .select()
+        .from(emailTable)
+        .where(and(eq(emailTable.id, id), notDeleted(emailTable)))
+        .limit(1);
+      return row;
+    },
+    fromDB: async (db, row) =>
+      emailOut.parse(
+        (await hydrateRead(db, [row], { kind: "full" }, viewer))[0],
+      ),
+  });
 
 export const emailRepository = defineRepository("email", {
-  get: onDb(reader.getByShortcode),
-  list: listOn(listEmails),
-  listRead: listReadOn(listEmailsRead),
+  get: (ctx: EntityKernelContext, code: string) =>
+    readerFor(ctx.actorContext).getByShortcode(ctx.db, code),
+  list: (
+    ctx: EntityKernelContext,
+    filters: EmailFilters,
+    sorts: SortParams[],
+    pagination: PaginationParams,
+  ) =>
+    completeListReader(emailOut, emailListRead(ctx.actorContext))(
+      ctx.db,
+      filters,
+      sorts,
+      pagination,
+    ),
+  listRead: (
+    ctx: EntityKernelContext,
+    filters: EmailFilters,
+    sorts: SortParams[],
+    pagination: PaginationParams,
+    projection: ListProjection,
+  ) =>
+    emailListRead(ctx.actorContext)(
+      ctx.db,
+      filters,
+      sorts,
+      pagination,
+      projection,
+    ),
 });

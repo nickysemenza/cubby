@@ -98,7 +98,16 @@ export default defineEntity({
         { kind: "slot", id: "project-allocation", title: "Project allocation" },
         { kind: "slot", id: "receiving", title: "Receive into Inventory" },
         { kind: "slot", id: "runs", title: "Import runs" },
-        { kind: "slot", id: "order-mail", title: "Email evidence" },
+        {
+          kind: "relation",
+          id: "emails",
+          title: "Emails",
+          relation: "emails",
+          filter: { descriptor: "purchaseId" },
+          columns: ["receivedAt", "sender", "linkState"],
+          // Linked, then suggestions to act on, then dismissals, newest first.
+          sort: { field: "linkState", direction: "asc" },
+        },
         {
           kind: "slot",
           id: "reconciliation",
@@ -1523,6 +1532,22 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "emails",
+      label: "Emails",
+      target: "email",
+      cardinality: "many",
+      // Accepted import sources, reviewed links and live suggestions (ADR 0011).
+      provenance: {
+        kind: "derived",
+        filter: "purchaseId",
+        evidence: [
+          "ImportSourceOrder",
+          "OrderMailCandidateDecision",
+          "OrderMailEvent",
+        ],
+      },
+    },
     {
       key: "spendingCategory",
       label: "Spending category",

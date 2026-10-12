@@ -1,6 +1,6 @@
 import { readRetainedMail } from "~/server/repo/retained-mail";
 import { loadRunDetail } from "~/server/purchase-import/run-service";
-import { orderMailImportOut } from "@cubby/schemas/order-mail-review";
+import { emailImportOut } from "@cubby/schemas/email-actions";
 import { sha256Hex } from "@cubby/shared/sha256";
 import superjson from "superjson";
 import { z } from "zod";
@@ -226,7 +226,7 @@ async function completedRun(shortcode: string) {
   return run.status;
 }
 
-test("imports saved order mail from the generic Vendor report and follows the live Run to the committed Purchase", async ({
+test("imports saved order mail from its Email page and follows the live Run to the committed Purchase", async ({
   page,
   e2eRuntime,
 }) => {
@@ -246,14 +246,23 @@ test("imports saved order mail from the generic Vendor report and follows the li
       ...finished("mail"),
     ],
   });
+  // The Vendor's Emails section leads to the Email, which owns its import.
   await gotoAuthenticatedPage(
     page,
     `/vendors/${seed.vendor.shortcode}`,
-    page.getByText("Synthetic itemized confirmation", { exact: true }),
+    page
+      .locator("#emails")
+      .getByText("Synthetic itemized confirmation", { exact: true }),
   );
-  const original = page
-    .getByRole("listitem")
-    .filter({ hasText: "Synthetic itemized confirmation" });
+  await page
+    .locator("#emails")
+    .getByRole("link", { name: "Synthetic itemized confirmation", exact: true })
+    .click();
+  const importEmail = page.getByRole("button", {
+    name: "Import this Email",
+    exact: true,
+  });
+  await expect(importEmail).toBeVisible();
   const db = getDb(getFixtureDb());
   const [source] = await readRetainedMail(getFixtureDb(), {
     ledgerPartyIds: [seed.member.id],
@@ -271,14 +280,9 @@ test("imports saved order mail from the generic Vendor report and follows the li
     .update(schema.email)
     .set({ checksum })
     .where(eq(schema.email.orderMailId, source.id));
-  await original
-    .getByRole("button", { name: "Research original", exact: true })
-    .click();
+  await importEmail.click();
   await expect(
-    page.getByText(
-      "Order email evidence changed; refresh before researching.",
-      { exact: false },
-    ),
+    page.getByText(/evidence changed; refresh before importing/u),
   ).toBeVisible();
   expect(
     await db
@@ -288,10 +292,8 @@ test("imports saved order mail from the generic Vendor report and follows the li
   ).toEqual([{ runId: null }]);
 
   await page.reload();
-  await original
-    .getByRole("button", { name: "Research original", exact: true })
-    .click();
-  const runLink = original.getByRole("link").filter({ hasText: /^RUN-/u });
+  await importEmail.click();
+  const runLink = page.getByRole("link", { name: /^RUN-/u }).first();
   await expect(runLink).toHaveAttribute("href", /^\/runs\/RUN-/u);
   const runShortcode = (await runLink.getAttribute("href"))?.replace(
     "/runs/",
@@ -354,12 +356,12 @@ test("imports saved order mail from the generic Vendor report and follows the li
   );
   await expect(page.getByText("SYN-CONFIRM-1").first()).toBeVisible();
   await expect(page.getByText("$5.00").first()).toBeVisible();
+  // The imported confirmation is the Purchase's linked Email.
+  const emails = page.locator("#emails");
   await expect(
-    page.getByRole("link", { name: "Open Gmail original" }),
+    emails.getByRole("link", { name: "Synthetic itemized confirmation" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: `Research ${runShortcode}` }),
-  ).toHaveAttribute("href", `/runs/${runShortcode}`);
+  await expect(emails.getByText("Linked", { exact: true })).toBeVisible();
 });
 
 test("admits several retained confirmations as separate tasks in the same Run", async ({
@@ -393,18 +395,18 @@ test("admits several retained confirmations as separate tasks in the same Run", 
   const response = await page.request.post(BROWSER_OPERATION_PATH, {
     headers: { Origin: e2eRuntime.baseURL },
     data: superjson.serialize({
-      operation: "vendor.importSelectedOrderMail",
+      operation: "purchaseImport.emailImport",
       input: {
-        orders: seed.events.map(({ eventId, checksum }) => ({
-          eventId,
-          evidenceChecksum: checksum,
+        items: seed.events.map(({ emailId, checksum }) => ({
+          id: emailId,
+          expectedChecksum: checksum,
         })),
       },
     }),
   });
   expect(response.status(), await response.text()).toBe(200);
   const { runIds } = z
-    .object({ ok: z.literal(true), data: orderMailImportOut })
+    .object({ ok: z.literal(true), data: emailImportOut })
     .parse(superjson.deserialize(await response.json())).data;
   expect(runIds).toHaveLength(1);
   const runShortcode = runIds[0]!;
@@ -430,15 +432,13 @@ test("admits several retained confirmations as separate tasks in the same Run", 
         ),
     ),
   );
+  // Each admitted Email's page names the Run importing it.
   await gotoAuthenticatedPage(
     page,
-    `/vendors/${seed.vendor.shortcode}`,
-    page.getByRole("link", { name: `Research ${runShortcode}` }).first(),
+    `/emails/${seed.events[0]!.emailId}`,
+    page.locator(`a[href="/runs/${runShortcode}"]`).first(),
   );
-  await page
-    .getByRole("link", { name: `Research ${runShortcode}` })
-    .first()
-    .click();
+  await page.locator(`a[href="/runs/${runShortcode}"]`).first().click();
   await expect(page).toHaveURL(new RegExp(`/runs/${runShortcode}$`, "u"));
   await agent.release("batch-admitted");
   await expect

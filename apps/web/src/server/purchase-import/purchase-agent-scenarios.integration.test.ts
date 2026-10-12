@@ -1043,7 +1043,9 @@ describe("current purchase-agent system boundaries", () => {
           origin,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ id: selectedEmail.shortcode, expectedChecksum }),
+        body: JSON.stringify({
+          items: [{ id: selectedEmail.shortcode, expectedChecksum }],
+        }),
       });
     const refusal = async (response: Response) => ({
       ok: response.ok,

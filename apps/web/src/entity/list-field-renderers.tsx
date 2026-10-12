@@ -24,6 +24,7 @@ import { NoneValue } from "~/ui/primitives/none-value";
 import { DataQualityValue } from "./data-quality-value";
 import { SpendingCategorySummaryValue } from "./detail-field-renderers/spending-category-summary";
 import type { ListRenderer, ListRowOf } from "./list-renderer-types";
+import { emailListRenderers } from "./list-renderers/email";
 import { financialTransactionListRenderers } from "./list-renderers/finance";
 import { locationListRenderers } from "./list-renderers/location";
 import { mealListRenderers } from "./list-renderers/meal";
@@ -268,7 +269,10 @@ export const listRendererCoverage = {
   device: scoredCoverage<"device">(),
   spendingCategory: scoredCoverage<"spendingCategory">(),
   vendorAccount: unscoredCoverage<"vendorAccount">(),
-  email: scoredCoverage<"email">(),
+  email: {
+    ...scoredCoverage<"email">(),
+    "purchase-links": implemented(emailListRenderers["purchase-links"]),
+  },
   run: scoredCoverage<"run">(),
   "usda-food": {
     "data-quality": implemented<

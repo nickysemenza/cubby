@@ -281,6 +281,13 @@
       "when": 1791836581963,
       "tag": "0039_product_category_stock_tracked",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791844078987,
+      "tag": "0040_email_link_proposer",
+      "breakpoints": true
     }
   ]
 }

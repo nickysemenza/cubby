@@ -33,6 +33,7 @@ import {
   proposePhotoGroups,
 } from "~/server/photo-import-run/proposals";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { listEmailsRead } from "~/server/repo/email";
 import {
   commitFinancialBooking,
   previewFinancialBooking,
@@ -49,7 +50,6 @@ import { commitStatementCsv } from "~/server/statement-csv-import";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import { resolveRunFinding } from "./findings";
-import { listVendorOrderMail } from "./gmail/review";
 import { startImportRunFixture } from "./import-run.fixtures";
 import {
   prepareSourceOrderReconciliation,
@@ -481,14 +481,16 @@ async function createConvergenceHarness(
     await researchMail(purchase.shortcode);
     // Exact-order mail links itself to the Purchase without a member click,
     // whichever of the mail and the Purchase arrived first.
-    const worklist = await listVendorOrderMail(db, { vendorId: vendor.id });
-    const event = worklist.items
-      .flatMap((item) => item.events)
-      .find((row) => row.orderId === orderId);
-    if (!event) throw new Error("Order mail event missing from worklist");
+    const emails = await listEmailsRead(
+      db,
+      { purchaseId: parseShortcodeFor("purchase", purchase.shortcode) },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
     expect(
-      event.candidates.find((row) => row.purchaseId === purchase.shortcode)
-        ?.decision,
+      emails.data
+        .flatMap((item) => item.purchaseLinks)
+        .find((row) => row.purchaseId === purchase.shortcode)?.state,
     ).toBe("linked");
     expect(purchase.shortcode).toBe(bookedPurchaseCode);
     return { purchase, productCode };

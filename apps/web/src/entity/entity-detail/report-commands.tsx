@@ -23,7 +23,6 @@ import {
   problems,
   recipe,
   run,
-  vendor,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
@@ -39,11 +38,27 @@ import { Input } from "~/ui/primitives/input";
 import { NativeSelect } from "~/ui/primitives/native-select";
 import { ChoiceSwitcher } from "~/ui/primitives/view-switcher";
 
+const sameSelection = (
+  sent: readonly { id: string; expectedChecksum: string }[] | undefined,
+  shown: readonly { id: string; expectedChecksum: string }[],
+) =>
+  sent !== undefined &&
+  sent.length === shown.length &&
+  sent.every(
+    (item, index) =>
+      item.id === shown[index]?.id &&
+      item.expectedChecksum === shown[index]?.expectedChecksum,
+  );
+
 /** Runs a row command through the operation it names; the server composed the exact body. */
 export function useReportCommands() {
-  const mailDecision = useActionMutation({
-    mutationFn: vendor.decideOrderMail.mutationOptions,
-    error: "Could not update the email relationship",
+  const emailDecision = useActionMutation({
+    mutationFn: purchaseImport.emailPurchaseDecide.mutationOptions,
+    error: "Could not update the Email's Purchase link",
+    success: ({ purchaseId, state }) =>
+      state === "linked"
+        ? `Linked to ${purchaseId}`
+        : `Dismissed for ${purchaseId}`,
   });
   const emailAccuracy = useActionMutation({
     mutationFn: purchaseImport.emailAccuracyCreate.mutationOptions,
@@ -70,11 +85,6 @@ export function useReportCommands() {
     mutationFn: purchaseImport.correctEmailRelevance.mutationOptions,
     error: "Could not correct the Relevance",
     success: "Relevance corrected",
-  });
-  const mailResearch = useActionMutation({
-    mutationFn: vendor.importOrderMail.mutationOptions,
-    error: "Could not research the original email",
-    success: ({ runIds }) => `Research Runs: ${runIds.join(", ")}`,
   });
   const control = useActionMutation({
     mutationFn: run.control.mutationOptions,
@@ -135,15 +145,8 @@ export function useReportCommands() {
   return {
     runsFor: (request: ReportCommandRequest): readonly string[] =>
       match(request)
-        .with({ kind: "research-order-mail" }, (r) =>
-          mailResearch.variables?.eventId === r.eventId &&
-          mailResearch.variables.evidenceChecksum === r.evidenceChecksum
-            ? (mailResearch.data?.runIds ?? [])
-            : [],
-        )
         .with({ kind: "import-email" }, (r) =>
-          emailImport.variables?.id === r.id &&
-          emailImport.variables.expectedChecksum === r.expectedChecksum
+          sameSelection(emailImport.variables?.items, r.items)
             ? (emailImport.data?.runIds ?? [])
             : [],
         )
@@ -161,8 +164,7 @@ export function useReportCommands() {
         )
         .otherwise(() => []),
     pending:
-      mailDecision.isPending ||
-      mailResearch.isPending ||
+      emailDecision.isPending ||
       emailImport.isPending ||
       emailReclassify.isPending ||
       emailPreview.isPending ||
@@ -195,10 +197,7 @@ export function useReportCommands() {
           emailAccuracy.mutate({ sampleSize: r.sampleSize }),
         )
         .with({ kind: "import-email" }, (r) =>
-          emailImport.mutate({
-            id: r.id,
-            expectedChecksum: r.expectedChecksum,
-          }),
+          emailImport.mutate({ items: r.items }),
         )
         .with({ kind: "reclassify-email" }, (r) =>
           emailReclassify.mutate({ ids: r.ids }),
@@ -218,19 +217,12 @@ export function useReportCommands() {
             reason: r.reason,
           }),
         )
-        .with({ kind: "decide-order-mail" }, (r) => {
-          if (r.purchaseId)
-            mailDecision.mutate({
-              eventId: r.eventId,
-              purchaseId: r.purchaseId,
-              decision: r.decision,
-              evidenceChecksum: r.evidenceChecksum,
-            });
-        })
-        .with({ kind: "research-order-mail" }, (r) =>
-          mailResearch.mutate({
-            eventId: r.eventId,
-            evidenceChecksum: r.evidenceChecksum,
+        .with({ kind: "decide-email-purchase" }, (r) =>
+          emailDecision.mutate({
+            id: r.id,
+            expectedChecksum: r.expectedChecksum,
+            purchaseId: r.purchaseId,
+            decision: r.decision,
           }),
         )
         .with({ kind: "run-control" }, (r) => {

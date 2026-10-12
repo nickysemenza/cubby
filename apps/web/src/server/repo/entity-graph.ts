@@ -72,7 +72,9 @@ const pathDescription = (provenance: RelationshipProvenance): string[] =>
     ? provenance.steps.map((step) => `${step.direction}:${step.edge}`)
     : provenance.kind === "unconstrained"
       ? [`unconstrained:${provenance.edge}`]
-      : provenance.sourceColumns.map((column) => `external:${column}`);
+      : provenance.kind === "derived"
+        ? [`derived:${provenance.filter}`]
+        : provenance.sourceColumns.map((column) => `external:${column}`);
 
 const localSources = (
   relationship: (typeof entityManifest)[Entity]["relationships"][number],

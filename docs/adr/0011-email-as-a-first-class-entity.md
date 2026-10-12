@@ -158,3 +158,10 @@ It never deletes a message in Gmail. Later retrieval remains on demand.
 Routine Runs with classification predictions, retrieval failures, candidate previews
 or RunOperation receipts retain their original Run reference, even when no model
 call was billed. Daily pruning never deletes that immutable history.
+
+Addendum (Emails sections): the derived links are declared as `derived`
+relationships (Purchase, Vendor and Vendor Account `emails`) over Email list
+filters, still storing nothing of their own. Reviewed decisions record who
+proposed each link (`proposedBy`); that column describes the existing decision
+rows and adds no relationship. A member's Link marks the Email related as a
+member resolution, since a reviewed Purchase link is relevance evidence.

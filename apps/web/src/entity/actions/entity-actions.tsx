@@ -32,7 +32,10 @@ import {
 import { declaredEntityActionDefinitions } from "./declared-entity-actions";
 import { deleteEntityActionDefinition } from "./delete-entity-action";
 import {
+  EMAIL_PAIR_READ_FIELDS,
   reclassifyEmailsAvailability,
+  useDismissEmailForPurchaseAction,
+  useLinkEmailToPurchaseAction,
   useReclassifyEmailsAction,
 } from "./email-entity-actions";
 import {
@@ -380,6 +383,41 @@ const entityActions: readonly EntityActionDefinition[] = [
     availability: reclassifyEmailsAvailability,
     use: useReclassifyEmailsAction,
   }),
+  // Pair actions: they appear only inside a Purchase's Emails section.
+  defineEntityAction({
+    id: "link-email-purchase",
+    verb: "linkToPurchase",
+    entities: ["email"],
+    arity: "single",
+    surfaces: ["row"],
+    readFields: EMAIL_PAIR_READ_FIELDS,
+    group: "primary",
+    priority: 10,
+    use: useLinkEmailToPurchaseAction,
+  }),
+  defineEntityAction({
+    id: "dismiss-email-purchase",
+    verb: "dismissForPurchase",
+    entities: ["email"],
+    arity: "single",
+    surfaces: ["row"],
+    readFields: EMAIL_PAIR_READ_FIELDS,
+    group: "primary",
+    priority: 11,
+    use: useDismissEmailForPurchaseAction,
+  }),
+];
+
+/** The row fields `entity`'s registered row actions read beyond its columns. */
+export const rowActionReadFields = (entity: Entity): readonly string[] => [
+  ...new Set(
+    entityActions.flatMap((definition) =>
+      definition.entities.includes(entity) &&
+      (definition.surfaces ?? DEFAULT_SURFACES).includes("row")
+        ? (definition.readFields ?? [])
+        : [],
+    ),
+  ),
 ];
 
 export interface EntityActionCatalogDescriptor extends Omit<

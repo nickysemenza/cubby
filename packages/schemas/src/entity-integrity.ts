@@ -114,6 +114,11 @@ export type RelationshipPathStep = z.infer<typeof relationshipPathStepSchema>;
  *   `INCOMING_EDGES`.
  * - `external` — a link to a system with no local table. Names the source
  *   columns that carry it.
+ * - `derived` — inferred from stored evidence rather than one FK path, and
+ *   stores nothing of its own (ADR 0011). Names the target's list filter
+ *   descriptor that answers "records related to this one"; the relation
+ *   section, HTTP, MCP and native lists all read through that filter. The
+ *   graph walker skips it: there is no edge to traverse or protect.
  */
 export const relationshipProvenanceSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -128,6 +133,12 @@ export const relationshipProvenanceSchema = z.discriminatedUnion("kind", [
     kind: z.literal("external"),
     system: z.string().min(1),
     sourceColumns: z.array(edgeKeySchema).min(1),
+  }),
+  z.object({
+    kind: z.literal("derived"),
+    filter: z.string().min(1),
+    /** The stored evidence the derivation reads, named for integrity views. */
+    evidence: z.array(z.string().min(1)).min(1),
   }),
 ]);
 export type RelationshipProvenance = z.infer<

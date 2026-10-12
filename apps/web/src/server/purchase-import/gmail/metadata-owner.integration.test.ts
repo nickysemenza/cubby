@@ -10,12 +10,12 @@ import {
   orderMailEvent,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { listEmailsRead } from "~/server/repo/email";
 import { readRetainedMail } from "~/server/repo/retained-mail";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { ingestGmailMessages } from "./ingest";
 import { clearUnrelatedOriginal } from "./persistence";
-import { listVendorOrderMail } from "./review";
 import type { GmailProvider } from "./types";
 
 const storage = {
@@ -87,16 +87,21 @@ describe("Gmail Email-owned metadata", () => {
         payload: {},
       })
       .returning();
-    const review = await listVendorOrderMail(ctx.db, {
-      vendorId: vendor.shortcode,
-    });
-    expect(review.items).toMatchObject([
+    // The Vendor's Emails section reads the sender-proof Email's own headers.
+    const review = await listEmailsRead(
+      ctx.db,
+      { vendorId: vendor.shortcode },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(review.data).toMatchObject([
       {
         messageId: identity.messageId,
         sender: null,
         subject: null,
         receivedAt: null,
         threadId: null,
+        linkState: "none",
       },
     ]);
     expect(await clearUnrelatedOriginal(ctx.db, identity, storage)).toBeNull();

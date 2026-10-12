@@ -221,13 +221,8 @@ export const detailSlots = {
         default: m.VendorClassification,
       })),
     ),
-    "order-mail": reportSlot<"vendor">("vendor.order-mail"),
-  },
-  vendorAccount: {
-    "order-mail": reportSlot<"vendorAccount">("vendorAccount.order-mail"),
   },
   purchase: {
-    "order-mail": reportSlot<"purchase">("purchase.order-mail"),
     runs: slot(() =>
       import("~/app/purchases/slots").then((m) => ({
         default: m.Runs,
