@@ -56,6 +56,14 @@ repository's general validation policy.
   `reviewedLegacyAccountDescriptor` requires a positionless retained identity,
   one extra identical complete trailing mask, and no competing stored or incoming
   canonical row. This never equates accounts or promotes unknown occurrences.
+- [PR #1907](https://github.com/nickysemenza/cubby/pull/1907) delivered the
+  member-routed Work queue for UI and MCP. Deployed checks verified the current
+  member's Email filter and account work; another member's private-only work
+  remains excluded from the connected member's MCP queue.
+- [PR #1908](https://github.com/nickysemenza/cubby/pull/1908) keeps retired
+  coordinator transcript reads available as absent snapshots. A deployed MCP
+  read of a retired Run succeeded without changing its retired review state.
+  Absence remains distinct from proof that the Run never executed.
 - The source-specific acceptance worklist remains private. Detector counts and
   completion of a terminal Run do not establish acceptance of historical source
   bindings, classification accuracy, continuous processing or a paid restart.

@@ -639,9 +639,12 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   library makes one-row-per-request writes measurably slow; mirror
   `entity.commands`'s independent-item semantics.
 
-- ⏳ ✨ **Budget-aware MCP pagination.** Promote when a real tool result hits an
-  output limit: stable keyset cursors, byte and result limits, and a
-  continuation preserving filters, sort, and budget.
+- ⏳ ✨ **Budget-aware MCP pagination.** Investigate the observed Problems
+  response where an item array is shorter than its declared page size while
+  pagination still advances by that larger size. Establish whether the bound
+  is applied by Cubby or the connector before changing the contract; a complete
+  traversal must not skip the omitted rows. Use stable keyset cursors, byte and
+  result limits, and a continuation preserving filters, sort, and budget.
 
 - ⏳ ✨ **Durable MCP transfer telemetry.** Persist call duration, response
   bytes, and per-item outcomes when repeated measurements justify it.

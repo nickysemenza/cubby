@@ -115,6 +115,12 @@ same outcome without prescribing an agent runtime.
   `statedTotal`, infer tax, or fabricate a transaction to close a gap.
 - Unknown facts stay unknown. A missing cost, date, quantity, or order id is
   recorded as absent, never as zero or a guessed value.
+- A warranty source that explicitly states free replacement hardware proves
+  zero cost for those parts. Resolve the replacement parts themselves; the
+  original tool's model identifies compatibility, not another whole tool
+  acquisition. Generic warranty codes shared across parts are not exact-variant
+  identifiers. Keep an unmatched part open for source-preserving reviewed
+  identity resolution; lack of a paid charge is not the remaining gap.
 - Imports are member-owned. The authenticated member owns the import Run, the
   retained Email (its mailbox) and any named VendorAccount through
   `LedgerParty.userId`.
