@@ -38,7 +38,20 @@ export default defineConfig({
       },
     }),
   ],
-  resolve: { tsconfigPaths: true },
+  resolve: {
+    tsconfigPaths: true,
+    // As the web app's SSR build does (recipebridgePlugin in
+    // apps/web/vite.config.ts): a bare wasm-bindgen import is never
+    // instantiated in workerd, so `__wbindgen_start is not a function`.
+    alias: [
+      {
+        find: /^@cubby\/recipebridge$/,
+        replacement: fileURLToPath(
+          new URL("recipebridge-workerd.ts", import.meta.url),
+        ),
+      },
+    ],
+  },
   test: {
     name: "calendar-worker",
     include: [

@@ -119,6 +119,10 @@
       "vite": { "config": [] },
       "playwright": { "config": "playwright.config.ts" }
     },
+    "apps/web-worker-tests": {
+      // Reached through vitest.config.ts's @cubby/recipebridge alias.
+      "entry": ["recipebridge-workerd.ts"]
+    },
     "packages/schemas": {
       "entry": [
         "src/index.ts!",
