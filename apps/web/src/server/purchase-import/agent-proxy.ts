@@ -1,3 +1,4 @@
+import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { runShortcode } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
@@ -19,6 +20,32 @@ const ACTIVE_STATUSES = new Set([
 ]);
 
 const allowedSuffix = /^(?:|abort|stream)$/u;
+
+/** Inspect retained evidence without prompting, waking or controlling the Run. */
+export async function readPurchaseAgentConversation(input: {
+  publicId: string;
+  context: AuthenticatedRequestContext;
+  party: CurrentParty;
+}) {
+  const scope = await loadRunScopeByShortcode(input.context.db, input.publicId);
+  if (
+    scope.actorUserId !== input.context.auth.userId ||
+    scope.ledgerPartyId !== input.party.id
+  )
+    throw new Error("Import Run does not belong to this member");
+  const agents = getPurchaseImportRunAgentNamespace();
+  if (!agents)
+    throw new Error("Purchase Agent conversation service is unavailable");
+  const response = await agents.getByName(scope.public.agentId).fetch(
+    new Request("https://purchase-agent.internal/transcript", {
+      method: "GET",
+    }),
+  );
+  if (!response.ok) throw new Error(await response.text());
+  return agentConversationSchema.parse(
+    redactAgentValue(z.json().parse(await response.json())),
+  );
+}
 
 export function purchaseAgentRequestIsWritable(input: {
   method: string;

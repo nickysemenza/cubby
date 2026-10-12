@@ -12,6 +12,7 @@ import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/purchase-import/agent-auth";
+import { readPurchaseAgentConversation } from "~/server/purchase-import/agent-proxy";
 import {
   dispatchRunEvent,
   dispatchStartedRun,
@@ -140,6 +141,24 @@ export const runHandlers = implementOperationDomain(runContract, {
         mailboxId: input.mailboxId,
       },
     }),
+  transcript: async (context, input) => {
+    const conversation = await readPurchaseAgentConversation({
+      publicId: input.runId,
+      context,
+      party: await memberParty(context),
+    });
+    const end = input.cursor + input.limit;
+    return {
+      status: conversation.status,
+      messages: conversation.messages.slice(input.cursor, end),
+      settlements: conversation.settlements.slice(input.cursor, end),
+      nextCursor:
+        end <
+        Math.max(conversation.messages.length, conversation.settlements.length)
+          ? end
+          : null,
+    };
+  },
   workSnapshot: async (context, input) => {
     const run = await loadRunDetail(context.db, input.runId);
     return {

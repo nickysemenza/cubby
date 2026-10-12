@@ -1,3 +1,4 @@
+import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import {
   executionAuthorizationApprovalInput,
@@ -273,6 +274,17 @@ export const runContract = defineContract("run", {
     input: executionAuthorizationRequestedScope.pick({ mailboxId: true }),
     output: mailboxDiscoveryStartOutput,
     invalidates: ["runOnly"],
+  }),
+  transcript: query({
+    input: z.object({
+      runId: runShortcode,
+      cursor: z.number().int().nonnegative().default(0),
+      limit: z.number().int().min(1).max(20).default(5),
+    }),
+    output: agentConversationSchema.extend({
+      nextCursor: z.number().int().nonnegative().nullable(),
+    }),
+    readPolicy: "strong",
   }),
   workSnapshot: query({
     native: "Show durable live import progress in Apple apps",

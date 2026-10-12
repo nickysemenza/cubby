@@ -272,6 +272,18 @@ historical Runs stay readable through generic reports.
 
 ## Runs, enrichment & browser capture
 
+- 🤔 **Fence the HTTP coordinator proxy by Run ownership.** Its route verifies
+  member identity, but `proxyPurchaseAgentRequest` receives a party without
+  checking it against the Run owner. Apply the owned transcript reader's
+  actor-and-party fence to GET, streaming and control requests, with a real
+  foreign-Run regression before dispatch.
+
+- 🤔 **Keep live conversation inspection from resuming Pi.** The existing
+  HTTP GET/stream path loads the Agent lifecycle, whose cold-start harness
+  recovery can resume pending work. Move UI inspection onto a storage-only
+  projection/subscription path while preserving committed history and live
+  updates; follow the MCP reader's cold-start regression in `agent-host.ts`.
+
 Run is the one unit of unattended work (Mail import, photo inventory, a member's
 import) and the attempt history the shared activity projection presents.
 Burn-down writes are not Runs: they are audited member writes with Sources.
