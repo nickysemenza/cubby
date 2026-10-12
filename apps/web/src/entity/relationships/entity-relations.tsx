@@ -165,6 +165,7 @@ export function EntityRelations({
           key={`${entity}:${sourceId}`}
           root={root}
           operations={operations}
+          embedded
           onRootChange={(value) =>
             void router.navigate({
               to: "/graph",

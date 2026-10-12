@@ -72,6 +72,7 @@ export function GraphExplorer({
   onRootChange,
   onNavigationChange,
   onList,
+  embedded = false,
   fill = false,
   operations = entityGraph,
 }: {
@@ -86,6 +87,8 @@ export function GraphExplorer({
     start?: string;
   }) => void;
   onList?: () => void;
+  /** Drawn inside a detail page: offers the full graph workspace. */
+  embedded?: boolean;
   fill?: boolean;
   operations?: GraphExplorerOperations;
 }) {
@@ -270,7 +273,7 @@ export function GraphExplorer({
         >
           {showList ? <NetworkIcon /> : <ListIcon />}
         </Button>
-        {onList ? (
+        {onList || embedded ? (
           <>
             <Link
               to="/graph"
@@ -283,9 +286,11 @@ export function GraphExplorer({
             >
               Open graph
             </Link>
-            <Button variant="ghost" onClick={onList}>
-              Relations list
-            </Button>
+            {onList ? (
+              <Button variant="ghost" onClick={onList}>
+                Relations list
+              </Button>
+            ) : null}
           </>
         ) : (
           <Link to="/entities" className="text-xs text-primary">
@@ -366,9 +371,16 @@ export function GraphExplorer({
                           }}
                         >
                           {node.label}
+                          {/* The kind stays in the button's name; the trailing copy is visual. */}
+                          <span className="sr-only">
+                            {" "}
+                            {entityLabel(node.entityKind)}
+                          </span>
                         </button>
                       }
-                      trailing={entityLabel(node.entityKind)}
+                      trailing={
+                        <span aria-hidden>{entityLabel(node.entityKind)}</span>
+                      }
                     />
                   ))}
                 </RecordList>
