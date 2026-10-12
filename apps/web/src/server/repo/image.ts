@@ -1392,12 +1392,17 @@ export const imageListRead = (
       hydrateListRead(db, "image", images, selected, {
         media: true,
         // Quality and media are the generic loader's deferred groups; the
-        // core facts must not depend on them.
+        // core facts must not depend on them, and an enrichment request
+        // projects only its groups, so it skips the core hydration.
         load: async () => {
+          if (selected.kind === "enrichment") return new Map();
           const hydrated = await hydrateImageCore(db, images);
           return new Map(images.map((row, index) => [row.id, hydrated[index]]));
         },
-        mapRow: (row, { loaded }) => ({ ...loaded.get(row.id) }),
+        mapRow: (row, { loaded }) =>
+          loaded.get(row.id) ?? {
+            id: parseShortcodeFor("image", row.shortcode),
+          },
       }),
   );
 

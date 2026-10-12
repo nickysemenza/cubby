@@ -445,8 +445,12 @@ export const cookbookListRead = (
         hydrateListRead(db, "cookbook", rows, selected, {
           media: true,
           // Quality and media are the generic loader's deferred groups; the
-          // core facts must not depend on them.
-          load: () => loadCookbookProductCovers(db, rows),
+          // core facts must not depend on them. An enrichment request projects
+          // only its groups and the id, so it skips the product covers.
+          load: () =>
+            selected.kind === "enrichment"
+              ? Promise.resolve(new Map())
+              : loadCookbookProductCovers(db, rows),
           mapRow: (row, { loaded }) => cookbookCore(row, loaded),
         }),
       resolveSort: resolveCookbookSort,
