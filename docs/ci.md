@@ -24,9 +24,10 @@ See [Tester Army](tester-army.md) for routing, replay, evidence and timing limit
 
 ## Cache keys and the remote cache
 
-`docs/todos.md` affects only the generation and type-check keys: generation
+`docs/todos.md` remains in the generation and type-check keys: generation
 validates deferred MCP capability references against its entries. It does not
-invalidate the PostgreSQL, browser, Worker, or auxiliary test keys. The generator's
+invalidate the broad test keys. Formatting and build targets may independently
+include Markdown. The generator's
 own fingerprint still includes it, so changing a referenced entry is checked.
 
 ```mermaid
