@@ -57,7 +57,7 @@ import {
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { ingredientList } from "~/server/repo/ingredient/search";
 
-/* oxlint-disable anti-slop/no-runtime-typeof, anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns -- the mock() walker trade-off in reference-universe.fixtures.ts */
+/* oxlint-disable anti-slop/no-unknown-returns -- the mock() walker trade-off in reference-universe.fixtures.ts */
 /**
  * Whole-number filters (e.g. `totalMinutesMin`) are backed by an `integer`
  * column, but their Zod schema is often a plain `z.number()` with no `.int()`
@@ -105,7 +105,7 @@ function unmatchedIdSample(
   });
   return Array.isArray(value) ? swapped : (swapped[0] ?? null);
 }
-/* oxlint-enable anti-slop/no-runtime-typeof, anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns */
+/* oxlint-enable anti-slop/no-unknown-returns */
 
 function filterFieldsOf(entity: EntityKernelEntity): Record<string, z.ZodType> {
   const schema = ENTITY_KERNEL_BINDINGS[entity].schemas.filters;

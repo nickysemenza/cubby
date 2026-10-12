@@ -17,8 +17,6 @@ const photo = (clientId: string, sha256: string) => ({
 });
 
 describe("photo import staging", () => {
-  // SAFETY: every database interaction is replaced by injected ports; the
-  // service only forwards this opaque value to those test functions.
   const database = {} as Database;
 
   it("reuses exact verified bytes and preserves independent staging failures", async () => {

@@ -79,8 +79,6 @@ function fakePort(
 }
 
 // The unit under test never touches the database; the port receives it.
-// SAFETY: the unit under test never dereferences the database; it only hands
-// it to the injected `recordUsage` port, which ignores it.
 const db = {} as Database;
 const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 

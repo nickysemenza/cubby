@@ -228,7 +228,6 @@ function getPriority(
 }
 
 // Slot routing stays centralized so desktop-only columns cannot leak into cards.
-// eslint-disable-next-line complexity
 function collectMobileSlots<TItem extends RowData>(
   row: Row<TItem>,
   entity: Entity | undefined,

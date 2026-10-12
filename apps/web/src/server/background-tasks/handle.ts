@@ -68,7 +68,6 @@ export const productionBackgroundTaskPorts: BackgroundTaskPorts = {
  * Handler modules are imported lazily so the request-time bundle never pulls
  * in the WASM costing engine or the vision client.
  */
-// eslint-disable-next-line complexity -- the switch IS the kind→handler dispatch table; one branch per BackgroundTaskKind, each already as small as its domain call allows.
 export async function handleBackgroundTask(
   db: Database,
   task: BackgroundTask,

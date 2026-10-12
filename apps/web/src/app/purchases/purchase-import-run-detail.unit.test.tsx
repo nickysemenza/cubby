@@ -114,7 +114,6 @@ beforeEach(() => {
       return {
         ok: true,
         data: {
-          // SAFETY: the test controls the input shape it sends.
           reports: (input as { slots: string[] }).slots.map((slot) => ({
             slot,
             report: {

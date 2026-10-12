@@ -17,8 +17,6 @@ const row = (name: string) => ({
 });
 
 describe("repairImageDimensions", () => {
-  // SAFETY: Every database interaction is replaced by the injected ports; the
-  // service only forwards this opaque value to them.
   const database = {} as Database;
 
   it("runs bounded full-verification batches and reports progress", async () => {

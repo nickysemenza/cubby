@@ -44,7 +44,6 @@ describe("combined entity records", () => {
       "Actual Loops": number;
       Plans?: Plan[];
     };
-    // SAFETY: EXPLAIN (ANALYZE, FORMAT JSON) returns a plan tree with loop counts.
     const document = result.rows[0]!["QUERY PLAN"] as { Plan: Plan }[];
     const loops: number[] = [];
     const visit = (plan: Plan) => {

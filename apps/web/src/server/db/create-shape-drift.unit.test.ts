@@ -20,8 +20,6 @@ import { z } from "zod";
 import * as schema from "~/server/db/schema";
 import { ENTITY_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
-// SAFETY: Drizzle's runtime `is` predicate has identified every retained
-// value as a PgTable; its generic predicate does not preserve that type here.
 const ALL_TABLES = Object.values(schema).filter((value) =>
   is(value, PgTable),
 ) as PgTable[];
@@ -146,8 +144,6 @@ for (const [key, binding] of Object.entries(ENTITY_BINDINGS)) {
   bound.push({
     entity,
     table,
-    // SAFETY: ZodObject guarantees each entry in this runtime shape is a
-    // parseable ZodType; the public generic exposes only the core base type.
     createFields: createInput.shape as Record<string, z.ZodType>,
   });
 }

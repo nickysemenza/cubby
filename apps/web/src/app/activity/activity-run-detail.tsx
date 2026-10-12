@@ -19,7 +19,6 @@ import {
 } from "~/ui/primitives/card";
 import { StatusText } from "~/ui/primitives/status-text";
 
-// oxlint-disable-next-line complexity -- one selected record owns paired attempt and event pagination with their diagnostics.
 export function ActivityRunDetail({
   id,
   onClose,

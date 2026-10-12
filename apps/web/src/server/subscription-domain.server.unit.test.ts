@@ -195,8 +195,6 @@ describe("implementSubscriptionDomain", () => {
         precomputeEnrichmentProposals: noEvents,
         backfillLocationDescriptions: async function* () {
           yield { n: 1 };
-          // SAFETY: deliberately malformed runtime data exercises the adapter's
-          // event-schema guard; the declared member type is not being widened.
           yield { n: "not-a-number" } as never;
           yield { n: 3 };
         },

@@ -11,4 +11,19 @@ export function parseAndLeak(value: unknown): unknown {
   return value;
 }
 
-type Consumer = (value: unknown) => void;
+export type Consumer = (value: unknown) => void;
+
+function exportedByList(value: unknown): boolean {
+  return value !== undefined;
+}
+export { exportedByList };
+
+export class Store {
+  put(value: unknown): boolean {
+    return value !== null;
+  }
+}
+
+export interface Sink {
+  write(value: unknown): void;
+}

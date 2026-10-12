@@ -31,7 +31,7 @@ function parseSteps(path: string): readonly Step[] {
 
 const recordSchema = z.record(z.string(), z.unknown());
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns -- A row path is untyped by construction; the caller parses the projected value.
+// oxlint-disable-next-line anti-slop/no-unknown-returns -- A row path is untyped by construction; the caller parses the projected value.
 function walk(value: unknown, steps: readonly Step[]): unknown {
   let current = value;
   for (const [position, step] of steps.entries()) {

@@ -169,14 +169,10 @@ const deletableEntities = ENTITY_KERNEL_ENTITIES.filter(
 );
 
 const edgeOf = (entity: EntityKernelEntity, edge: string): IncomingEdge =>
-  // SAFETY: policy keys are exhaustively checked against INCOMING_EDGES by
-  // each policy's `satisfies IncomingEdgePolicy<E, …>`.
   (INCOMING_EDGES[entity] as Record<string, IncomingEdge>)[edge]!;
 
 const physical = (edge: IncomingEdge) => {
-  // SAFETY: INCOMING_EDGES is built only from Postgres schema columns.
   const column = edge.column as PgColumn;
-  // SAFETY: as above — a Postgres column's table is a PgTable.
   const table = column.table as PgTable;
   const config = getTableConfig(table);
   const primary =
@@ -474,7 +470,6 @@ const pointEdgeAt = async (
   if (edge.scope) return insertLinkAt(db, edge, targetId);
   if (tableName === "EntityExternalId") return insertExternalIdAt(db, targetId);
 
-  // SAFETY: INCOMING_EDGES is built only from Postgres schema columns.
   const config = getTableConfig((edge.column as PgColumn).table as PgTable);
   const values = new Map<string, SQL>();
   for (const fk of config.foreignKeys) {
@@ -686,8 +681,6 @@ async function enrichUniverse(
         if (real) setAtPath(overrides, path, real);
       }
       Object.assign(overrides, ENRICH_EXTRAS.get(entity));
-      // SAFETY: seedEntity re-validates the merged sample through the real
-      // createInput schema before the kernel sees it.
       await seedEntity(db, entity, overrides as never);
     } catch {
       // A create that refuses this combination leaves its edges uncovered.

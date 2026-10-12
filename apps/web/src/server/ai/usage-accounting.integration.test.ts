@@ -260,8 +260,6 @@ describe("AiUsage accounting", () => {
         // shaped for the real model's API.
         complete: (context, options) => {
           call.onTransport?.("gateway");
-          // SAFETY: the faux provider takes the same API-shaped options
-          // produced by chatCompletionOptionsFor, with a loose model ID.
           return fauxModels.complete(
             faux.getModel(),
             context,
@@ -493,8 +491,6 @@ describe("AiUsage accounting", () => {
         model: faux.getModel(),
         complete: (context, options) => {
           call.onTransport?.("gateway");
-          // SAFETY: the faux provider takes the same API-shaped options
-          // produced by chatCompletionOptionsFor, with a loose model ID.
           return fauxModels.complete(
             faux.getModel(),
             context,

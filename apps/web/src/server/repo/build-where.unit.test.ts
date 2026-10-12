@@ -242,8 +242,6 @@ describe("buildVendorWhereClause", () => {
 });
 
 describe("buildLocationWhere", () => {
-  // SAFETY: test-only partial filter set; buildLocationWhere only reads the
-  // keys under test, so a partial object is safe to pass here.
   const where = (filters: Partial<LocationFilters>) =>
     buildLocationWhere(mockWhereDatabase(), filters as LocationFilters).then(
       renderWhereSql,

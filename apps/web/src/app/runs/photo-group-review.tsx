@@ -763,7 +763,6 @@ function PhotoProductSuggestions({
         </span>
       </div>
       <div className="divide-y divide-border border-y border-border">
-        {/* eslint-disable-next-line complexity -- Each evidence state stays next to its candidate in the comparison row. */}
         {suggestions.data.candidates.map((candidate, index) => {
           const q = candidate.quantity;
           const ledger = q?.quantityLedger;
@@ -1015,7 +1014,6 @@ function PhotoProductSuggestions({
   );
 }
 
-// eslint-disable-next-line complexity -- Inventory selection previews create and add paths in one review form.
 function InventoryFields({
   runId,
   proposal,
@@ -1148,7 +1146,6 @@ function InventoryFields({
   );
 }
 
-// eslint-disable-next-line complexity -- Approval and editing states remain visible together at the commit boundary.
 function ProposalCard({
   runId,
   runStatus,
@@ -1810,7 +1807,6 @@ function ExpenseLinkReview({
  * item groups (edit, approve, discard), photos no group claims yet, settled
  * groups, and every photo's processing state.
  */
-// eslint-disable-next-line complexity -- The workbench owns the selected group and its distinct review states.
 export function PhotoGroupReview({
   runId,
   runStatus,

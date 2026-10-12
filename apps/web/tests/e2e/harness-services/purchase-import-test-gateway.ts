@@ -1,4 +1,3 @@
-/* eslint-disable anti-slop/no-unknown-parameters, anti-slop/require-safety-comment-for-type-assertion -- This deterministic fake answers the external OpenAI Responses wire shape. */
 /**
  * The web Worker's AI Gateway in the coupled workerd harness, bound as
  * `CUBBY_TEST_AI_GATEWAY` (see `getTestAiGateway`). It answers Cubby's own

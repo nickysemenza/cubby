@@ -37,9 +37,6 @@ const message = (id: string, metadata?: MessageFixtureMetadata) =>
     id,
     role: "assistant",
     parts: [],
-    // SAFETY: fixtures deliberately send a wrong `contextBreakdown.v` (not
-    // the schema's literal `1`) to exercise the schema's own rejection path;
-    // `fromPartial`'s deep-partial type can't express "any number here".
     metadata: metadata as AgentConversationMessage["metadata"],
   });
 

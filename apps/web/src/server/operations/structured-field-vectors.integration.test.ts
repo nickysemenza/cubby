@@ -70,7 +70,6 @@ describe("structured field read-to-input vectors", () => {
           "ledgerParty",
         ])
         .parse(entity),
-      // SAFETY: each case passes the create input of the entity it names; the kernel parses it.
       data: data as never,
     });
     if (created.action !== "create") throw new Error("unreachable");

@@ -17,9 +17,6 @@ import {
  * dead documentation nobody would notice going stale.
  */
 describe("DISPLAY_NAME_COLUMN", () => {
-  // SAFETY: LABEL_COLUMN_OVERRIDES is a fixed object literal, so its own key
-  // set is exactly `keyof typeof LABEL_COLUMN_OVERRIDES` — `Object.keys` just
-  // can't say so at the type level.
   const overrideEntities = Object.keys(LABEL_COLUMN_OVERRIDES) as Array<
     keyof typeof LABEL_COLUMN_OVERRIDES
   >;

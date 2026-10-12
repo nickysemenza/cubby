@@ -166,9 +166,6 @@ describe("toWire mapping rules", () => {
       kind: "node";
       children: (Tree | { kind: "leaf"; at: Date })[];
     }
-    // SAFETY: `tree` is referenced inside its own lazy getter; the recursive
-    // type is declared explicitly on the binding so the cast only breaks the
-    // inference cycle Zod cannot resolve on its own.
     const tree: z.ZodType<Tree> = z.lazy(() =>
       z.object({
         kind: z.literal("node"),

@@ -26,12 +26,10 @@ beforeEach(() => {
   restoreDispatch = overrideStartDispatch(async (operation, input) => {
     calls.push({ operation, input });
     if (operation === "entityReport.get")
-      // SAFETY: the test controls the input it sends.
       return { ok: true, data: answer(input as { cursor?: string }) };
     if (operation === "entityReport.getMany")
       return {
         ok: true,
-        // SAFETY: the test controls the input it sends.
         data: {
           reports: (input as { slots: string[] }).slots.map((slot) => ({
             slot,

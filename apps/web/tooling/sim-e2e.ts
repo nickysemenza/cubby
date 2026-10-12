@@ -1796,7 +1796,6 @@ async function runNativeJourney(
     await assertNativeEdit(productId, undefined, null);
 }
 
-// eslint-disable-next-line complexity -- All disposable native lanes share one exception, artifact and cleanup boundary.
 async function main(): Promise<void> {
   let runtime: WorkerdRuntime | undefined;
   let suggestionPeer:

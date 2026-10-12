@@ -95,10 +95,6 @@ function fakePorts(responses: readonly AssistantMessage[]) {
       model: faux.getModel(),
       complete: async (context, options) => {
         calls.push({ model, call, context, options });
-        // SAFETY: the faux provider accepts any API's stream options as an
-        // untyped bag (`StreamOptions & Record<string, unknown>`); `options`
-        // already came from `chatCompletionOptionsFor`, shaped for the real
-        // model's API, which is all the production call site relies on.
         return models.complete(
           faux.getModel(),
           context,

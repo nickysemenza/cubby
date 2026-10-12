@@ -816,7 +816,6 @@ async function recordOriginalProductBindings(
 
 /** Source ownership and accepted order identity are shared by imports and lifecycle links. */
 // Accepted observation and original Product identity must be retained atomically.
-// eslint-disable-next-line complexity
 async function recordImportSourceAssociation(
   tx: Pick<DrizzleTransaction, "insert" | "select" | "update">,
   input: ImportSourceAssociationInput,
