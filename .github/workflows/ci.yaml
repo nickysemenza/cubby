@@ -129,6 +129,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
+        with:
+          workspace-filter: cubby
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
         with:
           cache: false
@@ -141,16 +143,6 @@ jobs:
           prefix-key: rust-gate-v3
           key: ${{ hashFiles('Cargo.toml') }}
           cache-on-failure: false
-      # Populate both check metadata and linked test dependencies even if Nx replays.
-      # Keep package and feature selection aligned with each project's Rust target.
-      - name: Populate Rust dependency cache
-        if: steps.rust-cache.outputs.cache-hit != 'true'
-        run: |
-          cargo clippy --manifest-path recipebridge/Cargo.toml --locked --profile ci --all-targets -- -D warnings
-          cargo clippy --manifest-path recipebridge/Cargo.toml --locked --profile ci --no-default-features -- -D warnings
-          cargo test --manifest-path recipebridge/Cargo.toml --locked --profile ci --no-run
-          cargo clippy --manifest-path cubby-ffi/Cargo.toml --locked --profile ci --all-targets -- -D warnings
-          cargo test --manifest-path cubby-ffi/Cargo.toml --locked --profile ci --no-run
       # One crate at a time: both share the workspace target directory.
       - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream
 
@@ -364,6 +356,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
+        with:
+          pnpm-store-cache: "false"
       - name: Reuse a cached pass
         id: cached
         if: github.event_name != 'schedule'
@@ -416,6 +410,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
+        with:
+          pnpm-store-cache: "false"
       - name: Reuse a cached pass
         id: cached
         if: github.event_name != 'schedule'

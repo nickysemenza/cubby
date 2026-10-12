@@ -70,6 +70,22 @@ reading something new must have it in its inputs. A change to ordinary
 documentation, a rebase that leaves the content unchanged, or a re-push of a
 tested tree hits; any code change misses.
 
+Use the documented Nx CLI and existing Actions for CI changes; do not build
+hashing or cache-archive probes with private Nx APIs. Nx 23.2.1 has no
+supported cache-only execution mode: a normal invocation restores a hit and
+executes a miss. `--graph` shows the task graph, not a verified cached pass;
+`--excludeTaskDependencies` skips prerequisites, not target execution.
+[`nx affected`](https://nx.dev/docs/features/ci-features/affected) selects work
+from changed inputs and does not prove a passing cache entry exists, so it
+cannot replace this merge gate. The
+[self-hosted cache API](https://nx.dev/docs/kb/self-hosted-caching) specifies
+archive transport, not a cache-probe CLI; its archive format can change.
+[`Nx Agents`](https://nx.dev/docs/features/ci-features/distribute-task-execution)
+provide managed task distribution through Nx Cloud, requiring a separate
+infrastructure decision. Linux lanes currently perform setup before Nx replay.
+The existing Apple probe uses the normal CLI and a guard in `apple-check.sh`
+that fails before native work on a miss.
+
 Known gaps the nightly run covers rather than the key: the Worker bundles all
 of `docs/**/*.md`, but only the Markdown listed above is in the web keys, so a
 documentation-only change replays the browser and workerd lanes; and the Apple
@@ -173,27 +189,22 @@ still keys the floating compiler.
 
 The Rust job uses an explicit, pinned `Swatinem/rust-cache` step with prefix
 `rust-gate-v3`; its key also hashes root `Cargo.toml`, because rust-cache hashes
-member manifests but omits the virtual workspace's profiles. When `cache-hit`
-is not `'true'` (a miss or partial match), the job runs Clippy and `cargo test
---no-run` under the `ci` profile for each Rust target's package and feature
-selection before Nx. This populates both check metadata and linked test
-dependencies even when Nx replays both targets. Exact hits skip population;
-only successful jobs save new entries.
+member manifests but omits the virtual workspace's profiles. The job installs
+only the root workspace (`workspace-filter: cubby`), which provides Nx without
+installing the web packages or running their generator. The Nx Rust targets
+compile their required dependencies when they run. CI does not run a
+separate Clippy/`cargo test --no-run` population pass before Nx: that repeated
+the targets' compilation and could spend time compiling even when Nx already
+had a passing result. Only successful jobs save new compiler-cache entries.
+A job that replays every target may save a small compiler cache; that affects
+later compilation speed, not the validity of Nx's cached pass.
 
-The old 39 MB entry was seeded by a
-[successful main run](https://github.com/nickysemenza/cubby/actions/runs/38073526350/job/114275644002)
-that replayed both Rust targets from Nx's remote cache, compiling nothing and
-saving no dependency artifacts. Success alone does not establish a populated
-cache. Those immutable exact-key entries cannot be repaired by later hits;
-the new prefix prevents restoring them, including through a fallback match.
 A [successful PR run](https://github.com/nickysemenza/cubby/actions/runs/38092783727/job/114332463103)
 on 2026-10-10 took 4:14 overall, including a 208s Nx step and about 34s of
 Node/dependency setup. Despite an exact 39 MB Rust-cache restore, recipebridge
-spent 96s + 12s in clippy and 52s compiling tests; FFI spent 19s + 26s.
-Tests themselves took under one second. The new profile and populated cache
-target a warm job under about 2.5 minutes; local compilation reuse cannot
-establish hosted timing. A cache miss explicitly pays the population cost even
-when Nx has a passing result; later exact hits reuse the saved dependencies.
+spent 96s + 12s in Clippy and 52s compiling tests; FFI spent 19s + 26s.
+Tests themselves took under one second. Those timings predate removal of the
+separate dependency-population pass; they do not measure the current workflow.
 
 `cubby-ffi` and the WASM packages share the `recipebridge` Rust core and Cargo
 lockfile, but each target needs its own compiled artifacts. EPUB extraction is
@@ -336,8 +347,16 @@ for it. `Validation` runs `pnpm check:all` (the cached generate, types, lint,
 format, knip, bindings, script, and Worker-test targets plus the uncached
 security audit), `pnpm dedupe:check`, and the offline relative-link check through
 the pinned Lychee action. Paths written as inline code are informational; link a
-repository file when its existence should be checked. Generated output is never
-committed; every job that installs dependencies generates it (`postinstall`), and
+repository file when its existence should be checked.
+
+Apple jobs disable the pnpm-store cache through the shared action's existing
+input: a [host-job setup](https://github.com/nickysemenza/cubby/actions/runs/38310595561/job/115015310842)
+on 2026-10-12 spent about 65 seconds extracting a 710 MB store before a
+6.4-second install. The uncached-install comparison is pending; retain the
+compiler and SwiftPM caches separately.
+
+Generated output is never committed; web and Apple jobs generate it during
+`postinstall`. The Rust job's root-only install skips web generation, and
 `Validation`'s `generate` gate checks that it generates cleanly and that the OpenAPI
 document lints.
 
