@@ -277,11 +277,14 @@ export function RecordTime({
   at,
   dayShown = false,
 }: {
-  at: string;
+  at: string | Date;
   dayShown?: boolean;
 }) {
   return (
-    <time dateTime={at} title={formatInstant(at, "dateShortTime")}>
+    <time
+      dateTime={typeof at === "string" ? at : at.toISOString()}
+      title={formatInstant(at, "dateShortTime")}
+    >
       {formatInstant(at, dayShown ? "time" : "monthDayTime")}
     </time>
   );

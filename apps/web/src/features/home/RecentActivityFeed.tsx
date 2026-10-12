@@ -93,7 +93,6 @@ export function RecentActivityFeed({
           <AuditLogList
             limit={limit}
             showEntityLink
-            variant="ledger"
             operations={operations?.auditLog}
             session={operations?.session}
           />

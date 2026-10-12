@@ -10,7 +10,6 @@ variant from:
 Copied registry items:
 
 - `event-calendar` → `components/reui/event-calendar/` (also carries its own license notice)
-- `timeline` → `components/reui/timeline.tsx` (now specialized as the audit timeline)
 
 Cubby-specific adaptations add strict TypeScript compatibility, event-class
 hooks, and first-party adapters for Cubby entities. The former copied filters and file
