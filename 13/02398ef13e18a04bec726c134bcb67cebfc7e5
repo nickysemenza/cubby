@@ -1,0 +1,19 @@
+scripts/ci-cache-probe.test.ts
+  s_5844b4bd3bb15a::t_bcff4043cfaa59 14,19,166-168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1302398ef13e18a04bec726c134bcb67cebfc7e5",
+  "prompts": {},
+  "sessions": {
+    "s_5844b4bd3bb15a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a131f7-51c6-78c3-8228-3caf5125b599",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
