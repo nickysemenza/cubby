@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 
 import { EntityCover } from "~/entity/components/entity-cover";
+import { ROW_DENSITY } from "~/ui/data-table/density";
 
 /**
  * Deliberately structural, not `DisplayImageSummary` — this renders both a
@@ -38,7 +39,8 @@ export const ImageThumbnail = ({
         entity={entity}
         preview
         lazyPreview={lazyPreview}
-        className="thumbnail-ring size-6"
+        size={ROW_DENSITY.rowHeight}
+        className="thumbnail-ring"
       />
     </div>
   );

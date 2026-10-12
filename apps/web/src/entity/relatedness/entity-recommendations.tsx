@@ -22,6 +22,7 @@ import {
   recommendations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
+import { Ledger } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
@@ -270,27 +271,29 @@ function RecommendationGroup({
       <Stack gap="xs">
         {!compact && <h3 className="text-sm font-medium">Similar products</h3>}
         {availability}
-        {group.proposals.map((proposal) => (
-          <RelatedProductRow
-            key={proposal.target.id}
-            product={proposal.target}
-            displayImage={
-              displayImages[
-                entityDisplayImageKey({
-                  entityKind: "product",
-                  entityId: proposal.target.id,
-                })
-              ] ?? null
-            }
-            action={
-              <span className="font-mono text-2xs text-slate">
-                {proposal.score > 0
-                  ? `${Math.round(proposal.score * 100)}% similar`
-                  : proposal.evidence.map((item) => item.signal).join(" · ")}
-              </span>
-            }
-          />
-        ))}
+        <Ledger>
+          {group.proposals.map((proposal) => (
+            <RelatedProductRow
+              key={proposal.target.id}
+              product={proposal.target}
+              displayImage={
+                displayImages[
+                  entityDisplayImageKey({
+                    entityKind: "product",
+                    entityId: proposal.target.id,
+                  })
+                ] ?? null
+              }
+              action={
+                <span className="font-mono text-2xs text-slate">
+                  {proposal.score > 0
+                    ? `${Math.round(proposal.score * 100)}% similar`
+                    : proposal.evidence.map((item) => item.signal).join(" · ")}
+                </span>
+              }
+            />
+          ))}
+        </Ledger>
       </Stack>
     );
   }

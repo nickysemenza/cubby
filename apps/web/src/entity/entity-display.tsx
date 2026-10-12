@@ -685,10 +685,8 @@ export function renderCompactFieldValue<TRecord extends object>(
   });
 }
 
-/** A ledger row's filter icon keeps its 40px phone target as a pseudo-element
- * so it doesn't wrap the value's other affordances onto a second line. */
-const LEDGER_FILTER_ACTION_CLASS =
-  "relative size-6 after:absolute after:-inset-2 sm:size-6 sm:after:hidden";
+/** Real phone targets keep adjacent filter and explanation hit areas disjoint. */
+const LEDGER_FILTER_ACTION_CLASS = "size-11 md:size-6";
 
 /** Filter kinds whose URL value is one option or one id. */
 const COHORT_FILTER_KINDS = new Set(["select", "multiselect", "id", "idMulti"]);

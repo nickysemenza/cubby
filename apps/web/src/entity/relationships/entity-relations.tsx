@@ -40,6 +40,7 @@ import {
   entityGraph,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
@@ -762,12 +763,16 @@ function RelationshipBranches({
         );
         const remaining = Math.max(0, branch.totalCount - visible);
         return (
-          <section key={key} className="border-b border-border pb-3">
+          <section
+            key={key}
+            className="border-b border-border pb-2 last:border-b-0"
+          >
             <Row wrap gap="sm" align="center">
               <h3 className="text-sm font-semibold">{branch.label}</h3>
               <span className="text-xs text-muted-foreground tabular-nums">
-                {visible} visible · {branch.totalCount} total · {remaining}{" "}
-                remaining
+                {visible === branch.totalCount
+                  ? branch.totalCount
+                  : `${visible} of ${branch.totalCount}`}
               </span>
               {remaining > 0 && (
                 <Button
@@ -808,19 +813,23 @@ function RelationshipBranches({
               />
             )}
             {current.view !== "graph" && (
-              <ul className="mt-1 divide-y divide-border">
+              <Ledger className="mt-1">
                 {nodes.map((node) => (
-                  <li key={graphRefKey(node)} className="py-2">
-                    <Row gap="sm" align="center">
+                  <LedgerRow key={graphRefKey(node)}>
+                    <LedgerCell slot="leading">
                       <EntityIcon
                         entity={node.entityKind}
                         colored
                         className="size-3.5"
                       />
+                    </LedgerCell>
+                    <LedgerCell slot="primary">
                       <GraphRecordLink
                         node={node}
                         href={hrefFor(node, router)}
                       />
+                    </LedgerCell>
+                    <LedgerCell slot="actions">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -829,10 +838,10 @@ function RelationshipBranches({
                       >
                         Explore
                       </Button>
-                    </Row>
-                  </li>
+                    </LedgerCell>
+                  </LedgerRow>
                 ))}
-              </ul>
+              </Ledger>
             )}
             {branch.totalCount === 0 && (
               <p className="text-sm text-muted-foreground">

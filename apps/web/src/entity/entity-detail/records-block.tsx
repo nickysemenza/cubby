@@ -8,6 +8,7 @@ import { FilterRefLink } from "~/entity/components/ref-link/leaf";
 import { entities } from "~/entity/entities";
 import { formatInstant } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
@@ -178,6 +179,20 @@ function RowChoice({
   );
 }
 
+function rowHasEvidence(row: ReportRecordRow, hasRecord: boolean) {
+  return [
+    row.subtitle,
+    row.choice,
+    row.detail,
+    row.externalLink,
+    row.statuses?.length,
+    row.lines?.length,
+    row.commands?.length,
+    row.badges?.length,
+    hasRecord ? row.actions?.length : 0,
+  ].some(Boolean);
+}
+
 function RecordRow({
   row,
   inDetailBar,
@@ -197,10 +212,11 @@ function RecordRow({
   large: boolean;
 }) {
   const listEntity = routedEntity(row.listLink?.entity ?? null);
+  const hasSecondary = rowHasEvidence(row, record !== undefined);
   return (
-    <li className="flex items-start justify-between gap-3 py-2">
-      <Row gap="sm" className="min-w-0 flex-1 items-start">
-        {row.imageUrl ? (
+    <LedgerRow className="items-start">
+      {row.imageUrl ? (
+        <LedgerCell slot="leading">
           <a
             href={row.imageUrl}
             target="_blank"
@@ -218,9 +234,13 @@ function RecordRow({
               }
             />
           </a>
-        ) : null}
-        <Stack gap="xs" className="min-w-0 flex-1">
-          <RowTitle row={row} />
+        </LedgerCell>
+      ) : null}
+      <LedgerCell slot="primary">
+        <RowTitle row={row} />
+      </LedgerCell>
+      {hasSecondary && (
+        <LedgerCell as="div" slot="secondary" className="grid gap-1">
           {row.subtitle ? (
             <span className="text-xs whitespace-pre-line text-muted-foreground">
               <ShortcodeProse>{row.subtitle}</ShortcodeProse>
@@ -247,30 +267,32 @@ function RecordRow({
                 />
               ))
             : null}
-        </Stack>
-      </Row>
-      <Stack gap="xs" className="shrink-0 items-end text-right text-xs">
-        {row.trailing && row.listLink && listEntity ? (
-          <FilterRefLink
-            variant="filter"
-            display="value"
-            to={entities[listEntity].routes.list}
-            // SAFETY: the server names the list's own URL keys.
-            search={row.listLink.filters as never}
-            label={`Show all ${row.trailing} from ${row.title}`}
-          >
-            {row.trailing}
-          </FilterRefLink>
-        ) : row.trailing ? (
-          <span>{row.trailing}</span>
-        ) : null}
-        {row.at ? (
-          <span className="text-muted-foreground">
-            {formatInstant(row.at, "dateTime")}
-          </span>
-        ) : null}
-      </Stack>
-    </li>
+        </LedgerCell>
+      )}
+      {(row.trailing || row.at) && (
+        <LedgerCell slot="trailing" className="grid gap-1 text-xs">
+          {row.trailing && row.listLink && listEntity ? (
+            <FilterRefLink
+              variant="filter"
+              display="value"
+              to={entities[listEntity].routes.list}
+              // SAFETY: the server names the list's own URL keys.
+              search={row.listLink.filters as never}
+              label={`Show all ${row.trailing} from ${row.title}`}
+            >
+              {row.trailing}
+            </FilterRefLink>
+          ) : row.trailing ? (
+            <span>{row.trailing}</span>
+          ) : null}
+          {row.at ? (
+            <span className="text-muted-foreground">
+              {formatInstant(row.at, "dateTime")}
+            </span>
+          ) : null}
+        </LedgerCell>
+      )}
+    </LedgerRow>
   );
 }
 
@@ -352,7 +374,7 @@ function RecordFilmstrip({
             />
           </a>
         ) : null}
-        <ul className="min-w-0">
+        <Ledger>
           <RecordRow
             row={{ ...selected, imageUrl: undefined }}
             commands={commands}
@@ -362,7 +384,7 @@ function RecordFilmstrip({
             record={undefined}
             large={false}
           />
-        </ul>
+        </Ledger>
       </section>
     </Stack>
   );
@@ -396,7 +418,7 @@ function RecordsRows({
     return <RecordLedger rows={block.rows} day={day} commands={commands} />;
   const keys = rowKeys(block.rows);
   return (
-    <ul className="w-full divide-y divide-border">
+    <Ledger>
       {block.rows.map((row, index) => (
         <RecordRow
           key={keys[index]}
@@ -411,7 +433,7 @@ function RecordsRows({
           large={block.thumbnail === "large"}
         />
       ))}
-    </ul>
+    </Ledger>
   );
 }
 

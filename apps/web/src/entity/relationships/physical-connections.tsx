@@ -10,6 +10,7 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 
@@ -74,20 +75,22 @@ function ConnectionDirectionList({
               {group.count}
             </span>
           </Row>
-          <ul className="mt-1 divide-y divide-border">
+          <Ledger className="mt-1">
             {group.items.map((item) => (
-              <li key={`${item.kind}:${item.id}`} className="py-1">
-                <Row gap="sm" align="center">
+              <LedgerRow key={`${item.kind}:${item.id}`}>
+                <LedgerCell slot="leading">
                   <EntityIcon entity={item.kind} colored className="size-3.5" />
+                </LedgerCell>
+                <LedgerCell slot="primary">
                   <ConnectionItemLink
                     kind={item.kind}
                     id={item.id}
                     name={item.name}
                   />
-                </Row>
-              </li>
+                </LedgerCell>
+              </LedgerRow>
             ))}
-          </ul>
+          </Ledger>
         </section>
       ))}
     </Stack>

@@ -134,7 +134,7 @@ describe("column sizing defaults", () => {
   // TanStack's blind 150px.
   it.each<{ meta: CubbyColumnMeta; size: number }>([
     { meta: {}, size: 160 },
-    { meta: { numeric: true }, size: 88 },
+    { meta: { numeric: true }, size: 72 },
     { meta: { cellData: dateCellData(() => null) }, size: 232 },
     { meta: { cellData: timestampCellData(() => null) }, size: 64 },
     {
@@ -142,9 +142,9 @@ describe("column sizing defaults", () => {
         numeric: true,
         explanation: { entity: "product", field: "price", label: "Price" },
       },
-      size: 88 + 22,
+      size: 72 + 20,
     },
-    { meta: { className: "w-20", suggest: true }, size: 80 + 22 },
+    { meta: { className: "w-20", suggest: true }, size: 80 + 20 },
   ])("sizes column $# to $size", ({ meta, size }) => {
     const columns = createCubbyColumnCollection<Row>((add) => {
       add(helper.accessor("cost", { header: "Cost", meta }));
@@ -157,7 +157,7 @@ describe("column sizing defaults", () => {
   // status" beside its pill); a long header truncates past a fixed cap.
   it.each([
     { header: "Kind", size: 104 },
-    { header: "Storage status", size: 14 * 6.5 + 32 },
+    { header: "Storage status", size: 14 * 6.5 + 24 },
     { header: "A very long header that would otherwise dominate", size: 160 },
   ])("fits the $header header", ({ header, size }) => {
     const columns = createCubbyColumnCollection<Row>((add) => {
@@ -179,7 +179,7 @@ describe("column sizing defaults", () => {
         suggest: true,
         explanation: { entity: "product", field: "price", label: "Price" },
       }),
-    ).toBe(44);
+    ).toBe(40);
   });
 });
 

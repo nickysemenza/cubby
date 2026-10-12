@@ -28,10 +28,15 @@ async function expectAuditTimestamps(page: Page, row: Locator) {
   for (const id of ["createdAt", "updatedAt"]) {
     const timestamp = row.locator(`[data-cell-col="${id}"]`);
     await expect(timestamp).toHaveText(/^(now|\d+(m|h|d|w|mo|y))$/);
-    await timestamp.getByRole("button").hover();
-    await expect(
-      page.locator('[data-slot="tooltip-content"][data-open]'),
-    ).toHaveText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    const trigger = timestamp.getByRole("button");
+    await trigger.hover();
+    await expect(trigger).toHaveAttribute("aria-describedby", /\S/);
+    const tooltipId = await trigger.getAttribute("aria-describedby");
+    const tooltip = page.locator(
+      `[data-slot="tooltip-content"][id="${tooltipId}"]`,
+    );
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toHaveText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
   }
 }
 

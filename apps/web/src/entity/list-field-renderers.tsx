@@ -136,7 +136,7 @@ const dataQualityRenderer = <TRow extends object>(
           (qualityOf(right.original)?.score ?? 0),
         meta: attachCubbyColumnMeta<TRow>({
           className: "w-20",
-          numeric: true,
+          // The score sorts numerically, but its status pill aligns with other values.
           cellData: numberCellData<TRow>(
             "number",
             (row) => qualityOf(row)?.score ?? null,

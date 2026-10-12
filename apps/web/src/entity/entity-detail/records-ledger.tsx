@@ -6,6 +6,11 @@ import { type ReactNode, useState } from "react";
 
 import { formatInstant } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
+import {
+  Ledger,
+  LedgerCell,
+  LedgerRow as AlignedRow,
+} from "~/ui/common/ledger";
 import { Badge } from "~/ui/primitives/badge";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
@@ -117,7 +122,7 @@ function RowText({
     <span
       className={cn(
         "block min-w-0 text-xs/5 break-words",
-        loud ? "whitespace-pre-line" : "sm:truncate",
+        loud ? "whitespace-pre-line" : "@min-[32rem]/ledger:truncate",
       )}
       title={loud ? undefined : parts.map((part) => part.text).join(" · ")}
     >
@@ -148,15 +153,11 @@ function LedgerRow({
   const extraStatuses = (row.statuses ?? []).slice(1);
   const parts = textParts(row);
   return (
-    <li className="col-span-full grid grid-cols-subgrid items-start gap-y-1 border-t border-border py-1 first:border-t-0">
-      <StateDot status={row.statuses} />
-      {/* A row with no text (a log line) lets its title use the text column too. */}
-      <span
-        className={cn(
-          "flex min-w-0 flex-wrap items-center gap-1 text-sm/5",
-          parts.length === 0 && "sm:col-span-2",
-        )}
-      >
+    <AlignedRow>
+      <LedgerCell slot="leading">
+        <StateDot status={row.statuses} />
+      </LedgerCell>
+      <LedgerCell slot="primary" className="flex flex-wrap items-center gap-1">
         <RowTitle row={row} />
         {extraStatuses.map((status) => (
           <Badge
@@ -171,45 +172,58 @@ function LedgerRow({
             {badge}
           </Badge>
         ))}
-      </span>
+      </LedgerCell>
       {parts.length > 0 ? (
-        <span className="col-start-2 col-end-[-1] row-start-2 min-w-0 sm:col-start-auto sm:col-end-auto sm:row-start-auto">
+        <LedgerCell slot="secondary">
           <RowText row={row} parts={parts} />
-        </span>
+        </LedgerCell>
       ) : null}
-      <span className="col-start-3 row-start-1 text-right text-xs/5 whitespace-nowrap text-muted-foreground tabular-nums sm:col-start-auto sm:row-start-auto">
+      <LedgerCell
+        slot="trailing"
+        className="text-xs/5 whitespace-nowrap text-muted-foreground"
+      >
         {row.trailing ? <span>{row.trailing} </span> : null}
         {row.at ? (
           <time dateTime={row.at}>
             {formatInstant(row.at, day ? "time" : "monthDayTime")}
           </time>
         ) : null}
-      </span>
-      <LedgerCommands
-        row={row}
-        commands={commands}
-        open={open}
-        onOpen={setOpen}
-      />
+      </LedgerCell>
+      {row.commands?.length || row.externalLink ? (
+        <LedgerCell slot="actions">
+          <LedgerCommands
+            row={row}
+            commands={commands}
+            open={open}
+            onOpen={setOpen}
+          />
+        </LedgerCell>
+      ) : null}
       {opened ? (
-        <div className="col-start-2 col-end-[-1] flex items-center gap-2">
+        <LedgerCell
+          as="div"
+          slot="detail"
+          className="flex flex-wrap items-center gap-2"
+        >
           <CommandButton command={opened} commands={commands} compact />
           <Button variant="ghost" size="sm" onClick={() => setOpen(null)}>
             Cancel
           </Button>
-        </div>
+        </LedgerCell>
       ) : null}
       {row.detail ? (
-        <details className="col-start-2 col-end-[-1] text-xs">
-          <summary className="cursor-pointer text-muted-foreground">
-            {row.detail.label}
-          </summary>
-          <pre className="mt-1 max-h-80 overflow-auto bg-muted/30 p-2 font-mono break-words whitespace-pre-wrap">
-            {row.detail.text}
-          </pre>
-        </details>
+        <LedgerCell as="div" slot="detail">
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted-foreground">
+              {row.detail.label}
+            </summary>
+            <pre className="mt-1 max-h-80 overflow-auto bg-muted/30 p-2 font-mono break-words whitespace-pre-wrap">
+              {row.detail.text}
+            </pre>
+          </details>
+        </LedgerCell>
       ) : null}
-    </li>
+    </AlignedRow>
   );
 }
 
@@ -253,11 +267,7 @@ function LedgerCommands({
       </a>,
     );
   if (items.length === 0) return null;
-  return (
-    <span className="col-start-2 col-end-[-1] flex flex-wrap gap-1 sm:col-start-auto sm:col-end-auto sm:justify-end">
-      {items}
-    </span>
-  );
+  return <span className="flex flex-wrap justify-end gap-1">{items}</span>;
 }
 
 /**
@@ -276,10 +286,10 @@ export function RecordLedger({
 }) {
   const keys = rowKeys(rows);
   return (
-    <ul className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 sm:grid-cols-[auto_fit-content(16rem)_minmax(0,1fr)_auto_auto]">
+    <Ledger>
       {rows.map((row, index) => (
         <LedgerRow key={keys[index]} row={row} day={day} commands={commands} />
       ))}
-    </ul>
+    </Ledger>
   );
 }

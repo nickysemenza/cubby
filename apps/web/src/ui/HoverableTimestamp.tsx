@@ -1,3 +1,5 @@
+import { useId, useState } from "react";
+
 import { formatInstant } from "~/lib/date-format";
 import {
   Tooltip,
@@ -28,17 +30,22 @@ export function formatCompactRelative(date: Date): string {
 }
 
 export function HoverableTimestamp({ timestamp }: HoverableTimestampProps) {
+  const tooltipId = useId();
+  const [open, setOpen] = useState(false);
   const date = new Date(timestamp);
   const formattedDate = formatInstant(date, "isoDateTimeSeconds");
   const relativeTime = formatCompactRelative(date);
 
   return (
     <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger className="inline-flex min-h-11 min-w-11 cursor-default items-center justify-center md:min-h-0 md:min-w-0">
+      <Tooltip open={open} onOpenChange={setOpen}>
+        <TooltipTrigger
+          aria-describedby={open ? tooltipId : undefined}
+          className="inline-flex min-h-11 min-w-11 cursor-default items-center justify-center md:min-h-0 md:min-w-0"
+        >
           <span className="font-mono text-2xs">{relativeTime}</span>
         </TooltipTrigger>
-        <TooltipContent>
+        <TooltipContent id={tooltipId} role="tooltip">
           <p>{formattedDate}</p>
         </TooltipContent>
       </Tooltip>

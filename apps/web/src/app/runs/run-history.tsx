@@ -27,6 +27,7 @@ import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-o
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import RTable from "~/ui/data-table/Table";
 import {
@@ -602,13 +603,20 @@ export function RunHistory({
         {attention.data?.total === 0 ? (
           <p className="text-sm">No matching attempts need attention.</p>
         ) : null}
-        <ul className="space-y-3">
+        <Ledger>
           {attention.data?.items.map((run) => (
-            <li key={run.id} className="space-y-1.5 text-sm">
-              <Row gap="sm" align="center" wrap>
+            <LedgerRow key={run.id}>
+              <LedgerCell slot="primary">
                 <RunSubject run={run} />
+              </LedgerCell>
+              <LedgerCell
+                slot="secondary"
+                className="flex flex-wrap items-center gap-2"
+              >
                 <Badge variant="secondary">{label(run.state)}</Badge>
                 <span className="text-muted-foreground">{run.workLabel}</span>
+              </LedgerCell>
+              <LedgerCell slot="actions">
                 <Button
                   type="button"
                   variant="outline"
@@ -617,25 +625,29 @@ export function RunHistory({
                 >
                   Open Run
                 </Button>
-              </Row>
-              <p className="break-words">
-                {run.currentStep ??
-                  (run.error
-                    ? "Failure details retained below."
-                    : "No reason recorded; inspect the Run for retained context.")}
-              </p>
-              {run.error ? (
-                <details>
-                  <summary className="cursor-pointer">Failure details</summary>
-                  <pre className="max-h-48 overflow-auto text-xs break-words whitespace-pre-wrap">
-                    {run.error}
-                  </pre>
-                </details>
-              ) : null}
-              <RunTargetChips run={run} wrap />
-            </li>
+              </LedgerCell>
+              <LedgerCell as="div" slot="detail">
+                <p className="text-xs break-words">
+                  {run.currentStep ??
+                    (run.error
+                      ? "Failure details retained below."
+                      : "No reason recorded; inspect the Run for retained context.")}
+                </p>
+                {run.error ? (
+                  <details>
+                    <summary className="cursor-pointer">
+                      Failure details
+                    </summary>
+                    <pre className="max-h-48 overflow-auto text-xs break-words whitespace-pre-wrap">
+                      {run.error}
+                    </pre>
+                  </details>
+                ) : null}
+                <RunTargetChips run={run} wrap />
+              </LedgerCell>
+            </LedgerRow>
           ))}
-        </ul>
+        </Ledger>
         {attention.data &&
         attention.data.total > attention.data.items.length ? (
           <p className="text-sm text-muted-foreground">

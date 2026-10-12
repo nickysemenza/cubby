@@ -463,12 +463,47 @@
     box-shadow: inset 1px 0 0 var(--row-accent, var(--brand-ultramarine));
   }
 
-  /* Analytical grids may opt into a quiet column rule. Ordinary record tables
-     stay open and use horizontal hairlines only. */
+  /* Record states stay distinct, including the opaque parked cells. */
+  .table-record-row {
+    --table-row-surface: var(--card);
+    background: var(--table-row-surface);
+  }
+  .table-record-row:hover {
+    --table-row-surface: var(--brand-paper-alt);
+    background: var(--table-row-surface);
+    box-shadow: none;
+  }
+  .table-record-row[data-current="true"] {
+    --table-row-surface: color-mix(in oklab, var(--primary) 5%, var(--card));
+    background: var(--table-row-surface);
+  }
+  .table-record-row[data-current="true"] > td:first-child {
+    box-shadow: inset 2px 0 0 var(--primary);
+  }
+  .table-record-row[data-state="selected"] {
+    --table-row-surface: var(--row-selected);
+    background: var(--table-row-surface);
+  }
+  .table-record-row .table-pinned-cell {
+    background: var(--table-row-surface);
+  }
+  .table-record-row .table-pinned-cell[data-cell-selected] {
+    background: color-mix(
+      in oklab,
+      var(--primary) 10%,
+      var(--table-row-surface)
+    );
+  }
+
+  .table-record-row td.text-right [data-cell-frame] {
+    justify-content: flex-end;
+  }
+
+  /* Full-height column rules stay quieter than the header boundary. */
   .table-grid-lines th:not(:last-child),
   .table-grid-lines td:not(:last-child) {
     border-right: 1px solid
-      color-mix(in oklab, var(--brand-hairline) 60%, transparent);
+      color-mix(in oklab, var(--brand-hairline) 40%, transparent);
   }
 
   /* Pinned boundaries are functional depth cues, not table dividers: a single

@@ -24,6 +24,7 @@ import {
   recommendations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { Ledger } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -441,19 +442,21 @@ function ProductRelatednessRecommendation({
           refs={productRefs}
           queryOptions={operations.displayImages}
         >
-          {items.map((item) => (
-            <WorkbenchRelatedProductRow
-              key={item.shortcode}
-              item={item}
-              pending={dismiss.isPending}
-              onDismiss={() =>
-                dismiss.mutate({
-                  sourceId,
-                  targetId: parseShortcodeFor("product", item.shortcode),
-                })
-              }
-            />
-          ))}
+          <Ledger>
+            {items.map((item) => (
+              <WorkbenchRelatedProductRow
+                key={item.shortcode}
+                item={item}
+                pending={dismiss.isPending}
+                onDismiss={() =>
+                  dismiss.mutate({
+                    sourceId,
+                    targetId: parseShortcodeFor("product", item.shortcode),
+                  })
+                }
+              />
+            ))}
+          </Ledger>
         </EntityDisplayImagesProvider>
       )}
     </Stack>

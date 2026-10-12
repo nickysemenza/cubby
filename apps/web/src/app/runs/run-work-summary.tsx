@@ -3,6 +3,7 @@ import { parseShortcode } from "@cubby/shared";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EntityIcon, isBrowserRoutedEntity } from "~/entity/entities";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { Row } from "~/ui/layout";
 
 /** The run's subject as a record link with its cover, or its bare name. */
@@ -71,38 +72,48 @@ export function RunTargetChips({
 export function RunWorkFacts({ run }: { run: ActivityRun }) {
   const outcome = run.targetSummary;
   return (
-    <dl className="mb-3 grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 text-sm">
-      <dt className="text-muted-foreground">Subject</dt>
-      <dd className="min-w-0">
-        <RunSubject run={run} />
-      </dd>
+    <Ledger as="dl" variant="facts" className="mb-3">
+      <LedgerRow as="div">
+        <LedgerCell as="dt" slot="primary" className="text-muted-foreground">
+          Subject
+        </LedgerCell>
+        <LedgerCell as="dd" slot="secondary">
+          <RunSubject run={run} />
+        </LedgerCell>
+      </LedgerRow>
       {run.currentStep ? (
-        <>
-          <dt className="text-muted-foreground">
+        <LedgerRow as="div">
+          <LedgerCell as="dt" slot="primary" className="text-muted-foreground">
             {run.active ? "Now" : "Last step"}
-          </dt>
-          <dd>{run.currentStep}</dd>
-        </>
+          </LedgerCell>
+          <LedgerCell as="dd" slot="secondary">
+            {run.currentStep}
+          </LedgerCell>
+        </LedgerRow>
       ) : null}
       {outcome ? (
-        <>
-          <dt className="text-muted-foreground">Targets</dt>
-          <dd className="grid gap-1">
+        <LedgerRow as="div">
+          <LedgerCell as="dt" slot="primary" className="text-muted-foreground">
+            Targets
+          </LedgerCell>
+          <LedgerCell as="dd" slot="secondary" className="grid gap-1">
             <span className="tabular-nums">{outcome}</span>
             <RunTargetChips run={run} wrap />
-          </dd>
-        </>
+          </LedgerCell>
+        </LedgerRow>
       ) : null}
       {run.recordType === "run" ? (
-        <>
-          <dt className="text-muted-foreground">Changed</dt>
-          <dd className="tabular-nums">
+        <LedgerRow as="div">
+          <LedgerCell as="dt" slot="primary" className="text-muted-foreground">
+            Changed
+          </LedgerCell>
+          <LedgerCell as="dd" slot="secondary" className="tabular-nums">
             {run.changedCount === 1
               ? "1 record"
               : `${run.changedCount} records`}
-          </dd>
-        </>
+          </LedgerCell>
+        </LedgerRow>
       ) : null}
-    </dl>
+    </Ledger>
   );
 }

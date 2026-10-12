@@ -137,7 +137,7 @@ export function CellEditTrigger<TSaved>({
         // In a table cell the value must start on the cell's own padding like
         // every plain cell, so "—" and text line up across columns; the hover
         // wash still bleeds into that padding.
-        "in-data-[slot=table-cell]:-mx-1.5 in-data-[slot=table-cell]:max-w-[calc(100%+0.75rem)] in-data-[slot=table-cell]:px-1.5 in-data-[slot=table-cell]:py-0.5",
+        "in-data-[slot=table-cell]:-mx-1 in-data-[slot=table-cell]:max-w-[calc(100%+0.5rem)] in-data-[slot=table-cell]:px-1 in-data-[slot=table-cell]:py-0.5",
         // Same in a detail facts ledger: text starts on the value column's
         // edge like links and "—" beside it.
         "in-data-[slot=basic-info-value]:-ms-2 in-data-[slot=basic-info-value]:max-w-[calc(100%+0.5rem)] in-data-[slot=basic-info-value]:py-0.5",
@@ -181,6 +181,7 @@ export function CellEditTrigger<TSaved>({
               width it only uses on hover; touch keeps it in flow. */}
           {rowActive && (
             <span
+              data-cell-edit-pencil
               aria-hidden
               className="pointer-events-none absolute inset-y-0 right-0.5 my-auto flex size-5 items-center justify-center rounded-sm bg-muted opacity-0 shadow-[-6px_0_6px_var(--muted)] transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 pointer-coarse:static pointer-coarse:bg-transparent pointer-coarse:opacity-100 pointer-coarse:shadow-none"
             >

@@ -28,6 +28,7 @@ import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
 import { CalendarDate } from "~/ui/common/calendar-date";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { CELL_RAIL_BUTTON_CLASS } from "~/ui/data-table/cell-frame";
 import { ExternalLinkText } from "~/ui/ExternalLink";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -282,11 +283,15 @@ function ExplanationSourceRow({ source }: { source: ExplanationSource }) {
   const record = explanationRecord.safeParse(source.value);
   const name = record.success ? z.string().safeParse(record.data.name) : null;
   return (
-    <div className="grid items-baseline gap-x-3 gap-y-1 border-b border-border py-2 last:border-0 sm:grid-cols-[minmax(5rem,0.35fr)_minmax(0,1fr)]">
-      <dt className="text-xs font-medium text-muted-foreground">
+    <LedgerRow as="div">
+      <LedgerCell
+        as="dt"
+        slot="primary"
+        className="text-xs font-medium text-muted-foreground"
+      >
         {source.label}
-      </dt>
-      <dd className="grid min-w-0 gap-1.5">
+      </LedgerCell>
+      <LedgerCell as="dd" slot="secondary" className="grid gap-1.5">
         {source.entity ? (
           <ExplanationEntityLink
             entity={source.entity.entityKind}
@@ -299,8 +304,8 @@ function ExplanationSourceRow({ source }: { source: ExplanationSource }) {
             value={source.entity ? sourceFacts(source) : source.value}
           />
         ) : null}
-      </dd>
-    </div>
+      </LedgerCell>
+    </LedgerRow>
   );
 }
 
@@ -369,13 +374,17 @@ function QualityCheckRow({
   entityId: string;
 }) {
   return (
-    <li
-      className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 py-2 first:pt-1"
+    <LedgerRow
       title={`${humanize(check.facet)} · ${check.check}`}
       data-quality-check={check.check}
     >
-      <div className="flex w-full min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="mr-auto text-sm font-medium">{check.label}</span>
+      <LedgerCell slot="primary" className="font-medium">
+        {check.label}
+      </LedgerCell>
+      <LedgerCell
+        slot="trailing"
+        className="flex flex-wrap items-center justify-end gap-2"
+      >
         <span className="text-[11px] text-muted-foreground tabular-nums">
           {check.weightLabel}
         </span>
@@ -392,12 +401,16 @@ function QualityCheckRow({
         >
           {check.stateLabel}
         </Badge>
-      </div>
+      </LedgerCell>
       {check.state === "gap" ? (
-        <p className="min-w-0 flex-1 text-xs leading-5">{check.description}</p>
+        <LedgerCell as="div" slot="detail" className="text-xs leading-5">
+          {check.description}
+        </LedgerCell>
       ) : null}
-      <ExceptionControls entityId={entityId} check={check} />
-    </li>
+      <LedgerCell slot="actions">
+        <ExceptionControls entityId={entityId} check={check} />
+      </LedgerCell>
+    </LedgerRow>
   );
 }
 
@@ -433,7 +446,7 @@ function QualityCalculation({
         </Badge>
       </div>
       <p className="text-xs leading-5 tabular-nums">{breakdown.summary}</p>
-      <ul className="grid divide-y divide-border">
+      <Ledger>
         {attention.map((check) => (
           <QualityCheckRow
             key={check.check}
@@ -441,13 +454,13 @@ function QualityCalculation({
             entityId={entityId}
           />
         ))}
-      </ul>
+      </Ledger>
       {satisfied.length > 0 ? (
         <details>
           <summary className="cursor-pointer text-xs font-medium text-positive">
             {satisfied.length} satisfied checks
           </summary>
-          <ul className="mt-1 grid divide-y divide-border">
+          <Ledger className="mt-1">
             {satisfied.map((check) => (
               <QualityCheckRow
                 key={check.check}
@@ -455,7 +468,7 @@ function QualityCalculation({
                 entityId={entityId}
               />
             ))}
-          </ul>
+          </Ledger>
         </details>
       ) : null}
     </section>
@@ -504,13 +517,11 @@ export function FieldExplanation({
           <Button
             size="icon-xs"
             variant="ghost"
-            // Off the list rail, the 44px phone target is an `::after`
-            // (24px + 2×10px) so a ledger row keeps its value on one line.
-            mobileSize={surface === "list" ? "touch" : "compact"}
+            mobileSize="touch"
             className={
               surface === "list"
                 ? CELL_RAIL_BUTTON_CLASS
-                : "relative after:absolute after:-inset-2.5 md:after:hidden"
+                : "relative z-[1] text-muted-foreground"
             }
             aria-label={`How ${label.toLowerCase()} is determined`}
           />
@@ -657,7 +668,7 @@ function FieldExplanationContents({
           {visibleSources(result.data).length > 0 ? (
             <section className="grid gap-2 border-t border-border pt-3">
               <h3 className={sectionLabelClassName}>Evidence</h3>
-              <dl className="grid">
+              <Ledger as="dl" variant="facts">
                 {visibleSources(result.data)
                   .slice(0, 6)
                   .map((source) => (
@@ -666,14 +677,14 @@ function FieldExplanationContents({
                       source={source}
                     />
                   ))}
-              </dl>
+              </Ledger>
               {visibleSources(result.data).length > 6 ? (
                 <details className="grid gap-2">
                   <summary className="cursor-pointer text-sm font-medium">
                     Show {visibleSources(result.data).length - 6} more evidence
                     entries
                   </summary>
-                  <dl className="grid pt-2">
+                  <Ledger as="dl" variant="facts" className="pt-2">
                     {visibleSources(result.data)
                       .slice(6)
                       .map((source) => (
@@ -682,7 +693,7 @@ function FieldExplanationContents({
                           source={source}
                         />
                       ))}
-                  </dl>
+                  </Ledger>
                 </details>
               ) : null}
               {result.data.truncated ? (

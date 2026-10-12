@@ -11,7 +11,7 @@ share this formatter through `CalendarDate`. Mounted labels subscribe to
 `useHouseholdToday`, whose shared clock refreshes at household midnight, on
 focus, and on visibility changes; cached records must not need a query refetch
 to update relative context. Calendar metadata passes the same reactive day to
-the pure formatter. Date columns reserve 232px and declared spans 320px so
+the pure formatter. Date columns start at 232px and declared spans at 320px; shared rendered-content fitting preserves the full current labels so
 relative context stays visible by default; full labels remain available in the
 title when a column is resized narrower. Task summaries pass the optional end
 so an ongoing window cannot collapse to a past start day. Browser checks verify
@@ -61,7 +61,7 @@ table order/pinning/visibility/sizing. Decorated cells render through
 readable: use `EntityRefLink` (all record links, one component with variants), a titled truncated link, or `createNameColumn`
 in RTable. Audit history can retain retired entity kinds; icon lookup tolerates
 absent metadata and leaves those references unlinked. Pages use the `Page`
-shell; detail bodies use `DetailSections`.
+shell; detail bodies use `DetailSections`. Repeated read-only fact and record rows use `ui/common/ledger.tsx`; preserve their native description/list semantics and keep interactions with the caller. Scalar captions wrap within the value slot and actions stay in the trailing rail. An empty portaled table toolbar leaves no border or spacing above the records.
 
 Column factories reuse module-level render components for selection controls:
 `flexRender` treats callbacks as React component types, so refreshing column

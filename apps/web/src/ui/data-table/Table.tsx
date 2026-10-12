@@ -42,7 +42,7 @@ import { EntityDisplayImagesProvider } from "../../entity/entity-media/entity-di
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import type { BulkActionPreview } from "./bulk-actions.types";
 import { CellSelectionContext } from "./cell-selection-context";
-import { columnWidthValue } from "./column-layout";
+import { columnOffsetValue, columnWidthValue } from "./column-layout";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { DesktopDataRow as DataRow } from "./DesktopDataRow";
@@ -492,12 +492,25 @@ function PinnedFooterCell<TItem extends RowData>({
         : undefined;
   const inset =
     pinned === "start"
-      ? { insetInlineStart: header.column.getStart("start") }
+      ? {
+          insetInlineStart: columnOffsetValue(
+            pinnedColumns,
+            header.column.id,
+            "start",
+          ),
+        }
       : pinned === "end"
-        ? { insetInlineEnd: header.column.getAfter("end") }
+        ? {
+            insetInlineEnd: columnOffsetValue(
+              pinnedColumns,
+              header.column.id,
+              "end",
+            ),
+          }
         : {};
   return (
     <TableCell
+      data-column-id={header.column.id}
       colSpan={header.colSpan}
       className={cn(
         "px-2 py-1",
@@ -769,7 +782,7 @@ function DesktopTableView<TItem extends RowData>({
   return (
     <>
       {externalToolbar && desktopToolbar ? (
-        <div className="hidden shrink-0 border-b border-border bg-background md:block">
+        <div className="hidden shrink-0 border-b border-border bg-background md:block [&:empty]:hidden">
           {desktopToolbar}
         </div>
       ) : null}
@@ -800,7 +813,7 @@ function DesktopTableView<TItem extends RowData>({
             <Table
               aria-label={ariaLabel}
               aria-busy={isTransitioning}
-              className={cn(styles.table)}
+              className={cn(styles.table, "table-grid-lines")}
               containerClassName="overflow-visible"
               style={columnSizeVars}
             >
