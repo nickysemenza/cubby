@@ -294,7 +294,7 @@ describe("caller-driven purchase import", () => {
       },
       ctx.actor,
     );
-    expect(resolved).toMatchObject({ status: "completed", purchaseId: null });
+    expect(resolved).toMatchObject({ status: "completed", purchaseIds: [] });
     // Content disposal preserves the original's identity and checksum.
     const [cleared] = await getDb(ctx.db)
       .select()
