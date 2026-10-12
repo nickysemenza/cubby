@@ -545,7 +545,13 @@ function resolveRelationshipDetail(
     title: "Relationships",
     icon: relationshipsSectionIcon,
     placement: "full",
-    content: <EntityRelations entity={pageDetail.entity} sourceId={sourceId} />,
+    content: (
+      <EntityRelations
+        entity={pageDetail.entity}
+        sourceId={sourceId}
+        placement="detail"
+      />
+    ),
   };
   return {
     ownSection,

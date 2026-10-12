@@ -60,7 +60,11 @@ interface EntityRecommendationsProps {
     proposal: InventoryPlacementProposal,
   ) => Promise<void>;
   pending?: boolean;
+  /** Groups the surrounding page already shows elsewhere. */
+  exclude?: readonly EntityRecommendationGroup["kind"][];
 }
+
+const NO_EXCLUSIONS: readonly EntityRecommendationGroup["kind"][] = [];
 
 type SelectedProposal = {
   key: string;
@@ -79,6 +83,7 @@ export function EntityRecommendations({
   onAcceptExpenseProject,
   onAcceptInventoryPlacement,
   pending = false,
+  exclude = NO_EXCLUSIONS,
 }: EntityRecommendationsProps) {
   const query = useQuery(
     operations.forEntity.queryOptions({
@@ -98,10 +103,12 @@ export function EntityRecommendations({
     () =>
       dataIsCurrent
         ? data.groups.filter(
-            (group) => group.proposals.length > 0 || group.status !== "ready",
+            (group) =>
+              !exclude.includes(group.kind) &&
+              (group.proposals.length > 0 || group.status !== "ready"),
           )
         : [],
-    [data, dataIsCurrent],
+    [data, dataIsCurrent, exclude],
   );
   const imageRefs = useMemo<EntityRef[]>(() => {
     const refs: EntityRef[] = [];
