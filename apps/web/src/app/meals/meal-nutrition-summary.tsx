@@ -6,6 +6,7 @@ import type {
 } from "@cubby/schemas/meal";
 import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
 import type { NutritionTotals } from "@cubby/schemas/nutrition";
+import { getErrorMessage } from "@cubby/shared";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -15,12 +16,11 @@ import { toast } from "sonner";
 
 import { entityDetailLink } from "~/entity/entities";
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import {
   compactEstimateText,
-  compactNumberText,
-} from "~/lib/nutrition-compact-format";
-import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
+  estimateStatusText,
+  formatEstimate,
+} from "~/lib/nutrition-format";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -35,7 +35,8 @@ const MACROS = [
   { key: "carbs", label: "Carbs", unit: "g" },
   { key: "fat", label: "Fat", unit: "g" },
 ] as const;
-const number = (value: number) => compactNumberText(value, "macro");
+const measureOf = (key: (typeof MACROS)[number]["key"]) =>
+  key === "kcal" ? "kcal" : "macro";
 
 function Macros({
   totals,
@@ -51,8 +52,8 @@ function Macros({
           <dt className="text-xs text-muted-foreground">{label}</dt>
           <dd
             className={`${prominent ? "text-xl font-semibold" : "text-sm"} tabular-nums`}
-            title={formatEstimate(totals.nutrition[key], number)}
-            aria-label={`${label}: ${formatEstimate(totals.nutrition[key], number)} ${unit}. ${estimateStatusText(totals.nutrition[key]) ?? ""}`}
+            title={formatEstimate(totals.nutrition[key], measureOf(key), unit)}
+            aria-label={`${label}: ${formatEstimate(totals.nutrition[key], measureOf(key), unit)}. ${estimateStatusText(totals.nutrition[key]) ?? ""}`}
           >
             {compactEstimateText(
               totals.nutrition[key],

@@ -22,6 +22,7 @@ import {
 } from "~/server/repo/product/mappers";
 import type { ProductPricing } from "~/server/repo/product/pricing";
 
+import { inventoryOwnershipBasis } from "./ownership";
 import type { InventoryEntryDeepDB, InventoryEntryListDB } from "./types";
 
 type InventoryEntryBaseDB = Pick<
@@ -39,16 +40,21 @@ type InventoryEntryBaseDB = Pick<
 
 const unresolvedOwnership = (
   entry: InventoryEntryBaseDB,
-): EffectiveInventoryOwnership => ({
-  mode: entry.ownershipMode,
-  explicitOwner: null,
-  effectiveOwner: null,
-  source: entry.ownershipMode === "unassigned" ? "unassigned" : "unresolved",
-  basis: null,
-  evidence: null,
-  evidenceFingerprint: "unresolved",
-  matchesInheritedOwner: false,
-});
+): EffectiveInventoryOwnership => {
+  const ownership: Omit<EffectiveInventoryOwnership, "basis" | "evidence"> = {
+    mode: entry.ownershipMode,
+    explicitOwner: null,
+    effectiveOwner: null,
+    source: entry.ownershipMode === "unassigned" ? "unassigned" : "unresolved",
+    evidenceFingerprint: "unresolved",
+    matchesInheritedOwner: false,
+  };
+  return {
+    ...ownership,
+    basis: inventoryOwnershipBasis(ownership),
+    evidence: null,
+  };
+};
 
 export const inventoryEntryBaseFields = <Q extends DataQuality | undefined>(
   entry: InventoryEntryBaseDB,

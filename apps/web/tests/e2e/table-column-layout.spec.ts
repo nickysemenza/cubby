@@ -342,7 +342,7 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
   await expect.poll(() => headerIds(page)).toEqual(defaults);
 });
 
-test("audit columns are visible on Inventory and client-backed Cookbook lists", async ({
+test("audit columns are visible on Inventory and read-only Cookbook lists", async ({
   page,
 }) => {
   test.setTimeout(60_000);

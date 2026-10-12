@@ -34,7 +34,7 @@ import {
 import { activityAttentionStatePredicate } from "~/server/repo/activity";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { gapCondition } from "~/server/repo/data-quality/sql";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, ilikeContains } from "~/server/repo/database-helpers";
 import { buildEmailWhere } from "~/server/repo/email";
 import { resolvePublicEntityDisplayImageLists } from "~/server/repo/entity-display-image";
 import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
@@ -332,7 +332,7 @@ export async function readWorkQueue(
   if (input.source) conditions.push(sql`source = ${input.source}`);
   if (input.query)
     conditions.push(
-      sql`concat_ws(' ', name, reason, id, "nextAction") ILIKE ${`%${input.query.replace(/[\\%_]/g, "\\$&")}%`}`,
+      sql`concat_ws(' ', name, reason, id, "nextAction") ILIKE ${ilikeContains(input.query)}`,
     );
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
   const result = await getDb(db).execute(sql`

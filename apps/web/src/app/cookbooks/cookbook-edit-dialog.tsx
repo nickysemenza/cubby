@@ -1,8 +1,8 @@
 import type { CookbookSummary } from "@cubby/schemas/recipe";
+import { getErrorMessage } from "@cubby/shared";
 import { useState } from "react";
 
 import { cookbook as cookbookOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { ChipsInput } from "~/ui/forms/chips-input";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";

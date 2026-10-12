@@ -1,4 +1,8 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  entitySummary,
+  type EntitySummary,
+} from "@cubby/schemas/entity-summary";
 import type { LocationValuation } from "@cubby/schemas/location";
 import type {
   MeasureEstimate,
@@ -8,7 +12,11 @@ import type { ProductQuantityLedgerOut } from "@cubby/schemas/product";
 import type { PurchaseReconciliation } from "@cubby/schemas/purchase";
 import type { RecipeTimes } from "@cubby/schemas/recipe";
 
-import { formatCurrency } from "~/lib/number-format";
+import {
+  formatCount,
+  formatCurrency,
+  formatCurrencyRange,
+} from "~/lib/number-format";
 import { formatEstimate } from "~/lib/nutrition-format";
 import type { PerUnitPrices } from "~/lib/price-mapping-utils";
 import { formatRecipeTime } from "~/lib/recipe-time";
@@ -51,17 +59,14 @@ export const quantityVarianceLabel = (
 ): string | null =>
   variance === null ? null : variance > 0 ? `+${variance}` : String(variance);
 
-const formatKcal = (value: number) => `${Math.round(value)} kcal`;
-
 /** A recipe or meal total, with its range and confidence language intact. */
 export const estimateLabel = (
   estimate: MeasureEstimate,
   metric: "cost" | "kcal",
 ): string =>
-  formatEstimate(
-    estimate,
-    metric === "cost" ? (value) => formatCurrency(value) : formatKcal,
-  );
+  metric === "cost"
+    ? formatEstimate(estimate, "cost")
+    : formatEstimate(estimate, "kcal", "kcal");
 
 export const mealCostLabel = (cost: MeasureEstimate): string =>
   estimateLabel(cost, "cost");
@@ -159,3 +164,45 @@ export const settlementLabel = (settlement: {
   transactionCount: number;
 }): string =>
   `${settlementOptions.find((option) => option.value === settlement.status)?.label ?? settlement.status} · ${settlement.transactionCount}`;
+
+type ListTotal = EntitySummary["list"]["totals"][number];
+
+const listTotalLabel = (
+  total: ListTotal,
+  sums: Readonly<Record<string, number>>,
+): string | null => {
+  const values: number[] = [];
+  for (const key of total.keys) {
+    const value = sums[key];
+    if (value === undefined || !Number.isFinite(value)) return null;
+    values.push(value);
+  }
+  const [first, second] = values;
+  if (first === undefined) return null;
+  switch (total.format) {
+    case "currency":
+      return formatCurrency(first);
+    case "currencyRange":
+      return formatCurrencyRange(first, second);
+    case "integer":
+      return formatCount(first);
+  }
+};
+
+/**
+ * The declared list totals as text, keyed by total id, over the server's
+ * full-filter sums. A total whose sums are missing or non-finite is absent, so
+ * a client shows "Unavailable" rather than a zero.
+ */
+export const listTotalLabels = (
+  entity: keyof typeof entitySummary,
+  sums: Readonly<Record<string, number>> | undefined,
+): Record<string, string> | undefined => {
+  if (!sums) return undefined;
+  const labels: Record<string, string> = {};
+  for (const total of entitySummary[entity].list.totals) {
+    const label = listTotalLabel(total, sums);
+    if (label !== null) labels[total.id] = label;
+  }
+  return labels;
+};

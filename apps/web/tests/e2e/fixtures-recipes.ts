@@ -10,6 +10,7 @@ import * as schema from "~/server/db/schema";
 import { saveMealFood } from "~/server/repo/meal/food";
 import { getDb } from "~/server/repo/database-helpers";
 import { requireActor } from "~/server/request-context";
+import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import {
@@ -45,6 +46,13 @@ export async function seedCookbookSourcePrerequisite(page: Page, name: string) {
     },
     context.actorContext,
   );
+  // The import workflow refreshes the search document after the write; the
+  // cookbook list's search filter reads it.
+  await runMutationSideEffects(db, {
+    action: "updated",
+    entity: { entity: "cookbook", id: result.entityId },
+    source: "cookbook.upsert",
+  });
   return result.output;
 }
 

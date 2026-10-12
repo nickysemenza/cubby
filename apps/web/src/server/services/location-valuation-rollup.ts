@@ -9,9 +9,7 @@
 
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { LocationValuation } from "@cubby/schemas/location";
-import { isMiscProduct } from "@cubby/shared";
-
-import { round2 } from "~/server/repo/money";
+import { isMiscProduct, round2 } from "@cubby/shared";
 
 // Inventory valuations are cents-precision reals; summing them can leave float
 // dust, so each persisted total is rounded to two decimals with `round2`.

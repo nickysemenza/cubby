@@ -1,4 +1,3 @@
-import { mcpAppResourceUriForTool } from "@cubby/mcp-apps/metadata";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { createLogger } from "@cubby/worker-tracing";
@@ -182,12 +181,6 @@ function remember<T>(
   const existing = map.get(server) ?? new Map<string, T>();
   existing.set(name, value);
   map.set(server, existing);
-}
-
-function uiToolMeta(toolName: string) {
-  const resourceUri = mcpAppResourceUriForTool(toolName);
-  if (!resourceUri) return undefined;
-  return { ui: { resourceUri } };
 }
 
 function annotationsFor(tool: McpToolBindings[string]): ToolAnnotations {
@@ -979,7 +972,6 @@ function registerCompiledTool(
       inputSchema: registeredInput,
       outputSchema: sdkOutputSchema(tool.output),
       annotations: tool.annotations,
-      _meta: uiToolMeta(tool.name),
     },
     // SAFETY: the SDK's conditional ToolCallback type does not reduce for a
     // loose object. This callback accepts that argument bag, parses each

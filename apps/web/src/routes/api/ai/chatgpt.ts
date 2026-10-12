@@ -1,11 +1,11 @@
 import { chatGptStatus, chatGptModel } from "@cubby/schemas/chatgpt";
 import { userId } from "@cubby/schemas/identifiers";
+import { getErrorMessage } from "@cubby/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { auth } from "~/lib/auth";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import { getErrorMessage } from "~/lib/error-utils";
 import { requireChatGptPlan } from "~/server/ai/chatgpt/client";
 import { verifyHttpApiKeyActor } from "~/server/http-api-handler";
 import { authenticateHttpSession } from "~/server/http-session-cache";

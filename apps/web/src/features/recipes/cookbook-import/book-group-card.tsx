@@ -3,12 +3,14 @@ import type {
   CookbookIngredientLine,
   CookbookRecipe,
 } from "@cubby/schemas/cookbook";
+import { countLabel } from "@cubby/shared/pluralize";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQueries } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import pluralize from "pluralize";
 import { useCallback, useId, useMemo, useRef } from "react";
 
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -335,9 +337,8 @@ function BookIdentity({ book }: { book: Book }) {
             <Description size="xs">{outline.authors.join(", ")}</Description>
           )}
           <Description size="xs">
-            {outline.chapters} chapter{outline.chapters === 1 ? "" : "s"} ·{" "}
-            {outline.navRecipeTitles} recipe
-            {outline.navRecipeTitles === 1 ? "" : "s"} in contents ·{" "}
+            {countLabel(outline.chapters, "chapter")} ·{" "}
+            {countLabel(outline.navRecipeTitles, "recipe")} in contents ·{" "}
             {outline.lines} lines
           </Description>
         </Stack>
@@ -597,8 +598,8 @@ function ChapterRow({
         <Collapsible>
           <CollapsibleTrigger className="flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground">
             <CaretDownIcon className="size-3" />
-            {context.length} technique{context.length === 1 ? "" : "s"} / essay
-            {context.length === 1 ? "" : "s"} — read, not importable
+            {countLabel(context.length, "technique")} /{" "}
+            {pluralize("essay", context.length)} — read, not importable
           </CollapsibleTrigger>
           <CollapsibleContent>
             <ul className="mt-1 space-y-0.5 pl-4 text-2xs text-muted-foreground">

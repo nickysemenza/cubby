@@ -30,37 +30,11 @@ describe("ListTotalSummary", () => {
     expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
   });
 
-  it("shows full-filter zero and signed totals, including a complete range", () => {
-    render(
-      <ListTotalSummary
-        totals={totals}
-        sums={{
-          expenseTotal: -12.5,
-          expenseCount: 0,
-          priceLow: 0,
-          priceHigh: 42,
-        }}
-      />,
-    );
+  it("prints the server's words and marks a missing total unavailable", () => {
+    render(<ListTotalSummary totals={totals} labels={{ spend: "-$12.50" }} />);
     expect(screen.getByText("Spend").nextElementSibling).toHaveTextContent(
       "-$12.50",
     );
-    expect(screen.getByText("Expenses").nextElementSibling).toHaveTextContent(
-      "0",
-    );
-    expect(
-      screen.getByText("Price range").nextElementSibling,
-    ).toHaveTextContent("$0.00 – $42.00");
-  });
-
-  it("does not present loaded rows or incomplete server totals as a full-filter sum", () => {
-    const { rerender } = render(
-      <ListTotalSummary totals={totals} sums={undefined} />,
-    );
-    expect(screen.getByText("Spend").nextElementSibling).toHaveTextContent(
-      "Unavailable",
-    );
-    rerender(<ListTotalSummary totals={totals} sums={{ priceLow: 10 }} />);
     expect(
       screen.getByText("Price range").nextElementSibling,
     ).toHaveTextContent("Unavailable");

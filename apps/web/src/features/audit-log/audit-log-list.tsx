@@ -1,5 +1,6 @@
 import type { AuditEntityKind } from "@cubby/schemas/audit";
 import type { AuditChannel } from "@cubby/schemas/context";
+import { getErrorMessage } from "@cubby/shared";
 import { PulseIcon } from "@phosphor-icons/react/dist/csr/Pulse";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -9,7 +10,6 @@ import { useMemo } from "react";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
-import { getErrorMessage } from "~/lib/error-utils";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Row } from "~/ui/layout";

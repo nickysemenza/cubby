@@ -9,7 +9,7 @@ appearance: light
 
 Cubby combines a native archive shell, a compact record dossier, and focused working context. Familiar navigation makes records easy to find; true photography leads their identity; aligned facts make them fast to inspect. Cooking, imports, reconciliation, and project work expose their real actions beside the data those actions use. An ordinary record stays calm rather than becoming an operations dashboard. Ink marks controls and current navigation. Citron marks focus or actionable attention sparingly. Domain colors identify where a record belongs. Positive, warning, and destructive colors describe condition. These roles never substitute for one another.
 
-`packages/design-tokens/tokens.json` owns the shared palette and geometry. `pnpm generate` writes `brand.css` for web and MCP apps, and adaptive Apple color assets and Swift metrics. Edit the source, not those outputs. Web is light-only; Apple follows system light and dark appearances.
+`packages/design-tokens/tokens.json` owns the shared palette and geometry. `pnpm generate` writes `brand.css` for web, and adaptive Apple color assets and Swift metrics. Edit the source, not those outputs. Web is light-only; Apple follows system light and dark appearances.
 
 ## Visual language
 

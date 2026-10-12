@@ -37,6 +37,7 @@ import {
 } from "@cubby/schemas/import-recipe";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
+  CookbookFilters,
   CookbookSummary,
   CookbookUpdateInput,
 } from "@cubby/schemas/recipe";
@@ -73,6 +74,10 @@ import {
 } from "~/server/repo/import-recipe-convert";
 import { type ListPage, listScaffold } from "~/server/repo/list";
 import { listAll } from "~/server/repo/list-all";
+import {
+  hydrateListRead,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import {
   deleteRecipesByCookbookTx,
@@ -340,18 +345,45 @@ type CookbookSummaryRow = Awaited<
   ReturnType<typeof selectCookbookSummaryRows>
 >[number];
 
+// The linked product's own cover, via the shared batched reader rather than a
+// third join — ProductImage carries the cover flag, so inlining it here would
+// mean duplicating that resolution.
+const loadCookbookProductCovers = (db: Database, rows: CookbookSummaryRow[]) =>
+  getProductCoverImageUrlsByProductIds(
+    db,
+    rows.flatMap((r) => (r.productId ? [r.productId] : [])),
+  );
+
+/** A cookbook row's own facts; quality and media are separate list groups. */
+const cookbookCore = (
+  {
+    productId,
+    productShortcode,
+    productName,
+    coverKey,
+    ...r
+  }: CookbookSummaryRow,
+  productCovers: ReadonlyMap<string, string>,
+) => ({
+  ...r,
+  id: parseShortcodeFor("cookbook", r.shortcode),
+  coverUrl: coverKey ? getR2PublicUrl(coverKey) : null,
+  product:
+    productId && productShortcode && productName
+      ? {
+          id: parseShortcodeFor("product", productShortcode),
+          name: productName,
+          coverUrl: productCovers.get(productId) ?? null,
+        }
+      : null,
+});
+
 const hydrateCookbookSummaries = async (
   db: Database,
   rows: CookbookSummaryRow[],
 ): Promise<CookbookSummary[]> => {
-  // The linked product's own cover, via the shared batched reader rather than a
-  // third join — ProductImage carries the cover flag, so inlining it here would
-  // mean duplicating that resolution.
   const [productCovers, dataQualities] = await Promise.all([
-    getProductCoverImageUrlsByProductIds(
-      db,
-      rows.flatMap((r) => (r.productId ? [r.productId] : [])),
-    ),
+    loadCookbookProductCovers(db, rows),
     loadDataQualities(
       db,
       "cookbook",
@@ -359,32 +391,22 @@ const hydrateCookbookSummaries = async (
     ),
   ]);
 
-  return withDisplayImages(
-    db,
-    "cookbook",
-    rows,
-    ({ productId, productShortcode, productName, coverKey, ...r }) => ({
-      ...r,
-      id: parseShortcodeFor("cookbook", r.shortcode),
-      coverUrl: coverKey ? getR2PublicUrl(coverKey) : null,
-      product:
-        productId && productShortcode && productName
-          ? {
-              id: parseShortcodeFor("product", productShortcode),
-              name: productName,
-              coverUrl: productCovers.get(productId) ?? null,
-            }
-          : null,
-      // SAFETY: `r` came from `rows`, which `dataQualities` was loaded for.
-      dataQuality: dataQualities.get(r.id)!,
-    }),
-  );
+  return withDisplayImages(db, "cookbook", rows, (row) => ({
+    ...cookbookCore(row, productCovers),
+    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+    dataQuality: dataQualities.get(row.id)!,
+  }));
 };
 
-/** Cookbook declares no list filters beyond the scaffold's own. */
-type CookbookFilters = Readonly<Record<string, never>>;
-
 const cookbookScaffold = listScaffold("cookbook", cookbook);
+
+// `recipeCount` is the grouped count, not a column.
+const resolveCookbookSort = (sort: SortParams) =>
+  sort.orderBy === "recipeCount"
+    ? sort.direction === "asc"
+      ? [asc(recipeCountSql)]
+      : [desc(recipeCountSql)]
+    : null;
 
 /** The kernel list: declared filters, the generated sort roster, paging. */
 export const cookbookList = (
@@ -399,13 +421,39 @@ export const cookbookList = (
     {
       select: (page) => selectCookbookSummaryRows(db, page),
       hydrate: (rows) => hydrateCookbookSummaries(db, rows),
-      // `recipeCount` is the grouped count, not a column.
-      resolveSort: (sort) =>
-        sort.orderBy === "recipeCount"
-          ? sort.direction === "asc"
-            ? [asc(recipeCountSql)]
-            : [desc(recipeCountSql)]
-          : null,
+      resolveSort: resolveCookbookSort,
+    },
+  );
+
+/**
+ * The progressive read every client browses: the same page as `cookbookList`,
+ * with the generic loader owning the deferred quality and media groups.
+ */
+export const cookbookListRead = (
+  db: Database,
+  filters: CookbookFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  projection: ListProjection,
+) =>
+  cookbookScaffold.list(
+    db,
+    { filters, sorts, pagination, projection },
+    {
+      select: (page) => selectCookbookSummaryRows(db, page),
+      hydrate: (rows, selected) =>
+        hydrateListRead(db, "cookbook", rows, selected, {
+          media: true,
+          // Quality and media are the generic loader's deferred groups; the
+          // core facts must not depend on them. An enrichment request projects
+          // only its groups and the id, so it skips the product covers.
+          load: () =>
+            selected.kind === "enrichment"
+              ? Promise.resolve(new Map())
+              : loadCookbookProductCovers(db, rows),
+          mapRow: (row, { loaded }) => cookbookCore(row, loaded),
+        }),
+      resolveSort: resolveCookbookSort,
     },
   );
 
@@ -423,10 +471,7 @@ export const getCookbookSummary = async (
   return (await hydrateCookbookSummaries(db, rows))[0] ?? null;
 };
 
-/**
- * Every cookbook, by title. Backs the `cookbook.list` contract until
- * read-only entities join the generic browser list roster.
- */
+/** Every cookbook, by title: the `cookbook.list` roster the recipe pickers read. */
 export const listCookbooks = async (db: Database): Promise<CookbookSummary[]> =>
   (
     await listAll((pagination) =>

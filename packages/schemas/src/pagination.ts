@@ -231,19 +231,24 @@ export function buildPaginatedResponse<T>(
   pagination: PaginationParams,
   data: T[],
   count: number,
-  /**
-   * Server-computed column aggregates over the FULL filtered set (not the
-   * page), keyed by column id — e.g. `{ price: 1234.5 }`. Surfaced so table
-   * footers can show truthful totals on server-paginated lists.
-   */
-  sums?: Record<string, number>,
-  groups?: ListGroupSummary[],
+  aggregates: {
+    /**
+     * Server-computed column aggregates over the FULL filtered set (not the
+     * page), keyed by column id — e.g. `{ price: 1234.5 }`. Surfaced so table
+     * footers can show truthful totals on server-paginated lists.
+     */
+    sums?: Record<string, number>;
+    /** The declared list totals as server-worded text, keyed by total id. */
+    totalLabels?: Record<string, string>;
+    groups?: ListGroupSummary[];
+  } = {},
 ) {
   type PaginatedMeta = {
     pageIndex: number;
     pageSize: number;
     totalCount: number;
     sums?: Record<string, number>;
+    totalLabels?: Record<string, string>;
     groups?: ListGroupSummary[];
   };
   const meta: PaginatedMeta = {
@@ -251,8 +256,9 @@ export function buildPaginatedResponse<T>(
     pageSize: pagination.pageSize,
     totalCount: count,
   };
-  if (sums) meta.sums = sums;
-  if (groups) meta.groups = groups;
+  if (aggregates.sums) meta.sums = aggregates.sums;
+  if (aggregates.totalLabels) meta.totalLabels = aggregates.totalLabels;
+  if (aggregates.groups) meta.groups = aggregates.groups;
   return {
     meta,
     items: data,
@@ -266,6 +272,7 @@ export const paginatedMetaSchema = z
     pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
     totalCount: z.number().int().nonnegative(),
     sums: z.record(z.string(), z.number()).optional(),
+    totalLabels: z.record(z.string(), z.string()).optional(),
     groups: z.array(listGroupSummarySchema).optional(),
   })
   .meta({ id: "ListPageMeta" });

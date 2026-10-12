@@ -23,14 +23,13 @@ import {
   productSearchInput,
 } from "@cubby/schemas/product-workflow";
 import type { productProjectUsesSetInput } from "@cubby/schemas/project";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { UNSPECIFIED_MANUFACTURER, getErrorMessage } from "@cubby/shared";
 import type { z } from "zod";
 
 import {
   productContract,
   productStreamsContract,
 } from "~/contracts/product.contract";
-import { getErrorMessage } from "~/lib/error-utils";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   listKitComponentRows,

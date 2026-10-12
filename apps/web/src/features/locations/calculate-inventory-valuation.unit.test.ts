@@ -38,7 +38,7 @@ function makeInventoryItem(params: {
       explicitOwner: null,
       effectiveOwner: null,
       source: "unresolved",
-      basis: null,
+      basis: "Inherited owner unresolved",
       evidence: null,
       evidenceFingerprint: "unresolved",
       matchesInheritedOwner: false,

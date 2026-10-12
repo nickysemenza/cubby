@@ -1,4 +1,5 @@
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
+import { cents } from "@cubby/shared";
 import { and, asc, desc, eq, ne, notExists, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -9,7 +10,6 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { cents } from "~/server/repo/money";
 import { getPurchaseByShortcode } from "~/server/repo/purchase";
 
 /** Eligibility and rank apply to the full live set before the advisory limit.

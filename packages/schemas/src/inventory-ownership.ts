@@ -49,7 +49,9 @@ export const effectiveInventoryOwnership = z.object({
   explicitOwner: inventoryOwner.nullable(),
   effectiveOwner: inventoryOwner.nullable(),
   source: inventoryOwnershipSource,
-  basis: z.literal("Inferred from the only recorded acquisition").nullable(),
+  /** The one human label for this ownership, e.g. "Inherited: Alex · purchase
+   * beneficiary". Clients render it verbatim instead of mapping mode/source. */
+  basis: z.string(),
   evidence: inventoryOwnershipEvidence.nullable(),
   evidenceFingerprint: z.string(),
   matchesInheritedOwner: z.boolean(),

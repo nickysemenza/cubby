@@ -1,10 +1,11 @@
+import { countLabel } from "@cubby/shared/pluralize";
 import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
 import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { memo, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
-import { formatCurrencyRange } from "~/lib/format-range";
+import { formatCurrencyRange } from "~/lib/number-format";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { formatCurrency } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
@@ -316,7 +317,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
           Prep sheet
           <span className="text-muted-foreground/50">
             {" · "}
-            {components.length} component{components.length === 1 ? "" : "s"}
+            {countLabel(components.length, "component")}
           </span>
         </span>
       </header>

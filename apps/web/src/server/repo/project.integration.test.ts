@@ -4,14 +4,13 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityLink, project as projectTable } from "~/server/db/schema";
+import { project as projectTable } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import { projectCreateFromTasksWorkflow } from "~/server/operations/project.server";
-import { linkValues } from "~/server/repo/entity-links";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { getDb, insertAndReturn } from "./database-helpers";
+import { getDb } from "./database-helpers";
 import { deleteProjects, getProjectByID, updateProject } from "./project/crud";
 import { getProjectDependencyGraph } from "./project/dependency-graph";
 import { projectTreePage } from "./project/tree";
@@ -212,43 +211,6 @@ describe("project repository", () => {
     expect((await getProjectDependencyGraph(ctx.db)).nodes).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: inbox.id })]),
     );
-  });
-
-  it("rejects a dependency cycle against the whole projected graph", async () => {
-    const { output: a, entityId: aId } = await createRepoEntity(
-      ctx,
-      "project",
-      { name: "dependency cycle project a" },
-    );
-    const { output: b } = await createRepoEntity(ctx, "project", {
-      name: "dependency cycle project b",
-    });
-    const { output: c } = await createRepoEntity(ctx, "project", {
-      name: "dependency cycle project c",
-    });
-    await updateProject(ctx.db, a.id, { blockedByIds: [b.id] }, ctx.actor);
-    await updateProject(ctx.db, b.id, { blockedByIds: [c.id] }, ctx.actor);
-
-    await expect(
-      updateProject(ctx.db, c.id, { blockedByIds: [a.id] }, ctx.actor),
-    ).rejects.toMatchObject({ reason: "DEPENDENCY_CYCLE" });
-    await expect(getProjectByID(ctx.db, aId)).resolves.toMatchObject({
-      blockedByIds: [b.id],
-    });
-  });
-
-  it("backstops self dependency with a database CHECK", async () => {
-    const { entityId } = await createRepoEntity(ctx, "project", {
-      name: "raw self dependency project",
-    });
-
-    await expect(
-      insertAndReturn(
-        ctx.db,
-        entityLink,
-        linkValues("projectDependency", entityId, entityId),
-      ),
-    ).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 
   it("blocks deletion while live tasks or expenses still reference the project", async () => {

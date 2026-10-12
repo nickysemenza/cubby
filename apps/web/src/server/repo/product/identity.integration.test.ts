@@ -6,7 +6,10 @@ import {
   getProductByID,
   updateProduct,
 } from "~/server/repo/product/crud";
-import { findProductByGtin } from "~/server/repo/product/lookup";
+import {
+  findProductByGtin,
+  findProductByNameFuzzyManufacturer,
+} from "~/server/repo/product/lookup";
 import {
   createProductFixture as createProduct,
   makeProductInput,
@@ -156,5 +159,32 @@ describe("product identity constraints", () => {
     const found = await findProductByGtin(ctx.db, "0077089850017");
     expect(found?.id).toBe(canonical.id);
     expect(found?.primaryGtin).toBe("00077089850017");
+  });
+});
+
+describe("product name lookup", () => {
+  const ctx = withTestDb();
+
+  it("matches a name containing LIKE wildcards literally", async () => {
+    await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Shelf AxB bracket" }),
+      ctx.actor,
+    );
+
+    expect(
+      await findProductByNameFuzzyManufacturer(
+        ctx.db,
+        "Shelf A_B bracket",
+        null,
+      ),
+    ).toBeNull();
+    expect(
+      await findProductByNameFuzzyManufacturer(
+        ctx.db,
+        "shelf axb BRACKET",
+        null,
+      ),
+    ).toMatchObject({ name: "Shelf AxB bracket" });
   });
 });

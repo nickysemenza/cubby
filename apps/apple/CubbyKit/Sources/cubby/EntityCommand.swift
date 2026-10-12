@@ -55,7 +55,7 @@ extension Entity {
                     print("Matching records: \(result.meta.totalCount.formatted())")
                     if let totals = ListTotalsSummary.line(
                         totals: descriptor.presentation.listTotals,
-                        sums: result.meta.sums?.additionalProperties)
+                        labels: result.meta.totalLabels?.additionalProperties)
                     {
                         print(totals)
                     }

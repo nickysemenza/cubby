@@ -14,7 +14,11 @@ import {
   type ListEnrichmentFailure,
   type ListReadGroup,
 } from "./progressive-list";
-import type { ListQueryPlan, ListQueryResponse } from "./usePaginatedTableCore";
+import type {
+  ListQueryPlan,
+  ListQueryResponse,
+  ListTotals,
+} from "./usePaginatedTableCore";
 
 const PENDING_STATE: ListGroupState = { state: "pending" };
 
@@ -82,7 +86,7 @@ export function useProgressiveList<T extends { id: string }>({
     scope: string;
     session: ProgressiveListSession<T>;
     state: ListGroupState;
-    sums?: Record<string, number>;
+    totals?: ListTotals;
   }>();
   const progressive = plan.progressive;
   const planRef = useRef(plan);
@@ -127,9 +131,9 @@ export function useProgressiveList<T extends { id: string }>({
     );
     void activePlan
       .summary(signal)
-      .then((sums) => {
+      .then((totals) => {
         if (!signal.aborted)
-          setSummary({ scope, session, state: { state: "ready" }, sums });
+          setSummary({ scope, session, state: { state: "ready" }, totals });
       })
       .catch((error) => {
         if (!signal.aborted)
@@ -197,7 +201,7 @@ export function useProgressiveList<T extends { id: string }>({
     deferredFields:
       firstPage?.deferredGroups?.flatMap((group) => group.fields) ?? [],
     data: session.rows(),
-    sums: summary?.scope === scope && !paused ? summary.sums : undefined,
+    totals: summary?.scope === scope && !paused ? summary.totals : undefined,
     summaryState:
       summary?.scope === scope && !paused ? summary.state : PENDING_STATE,
     enrichmentState,

@@ -12,11 +12,12 @@ import type {
   purchaseLinkExpensesCheckOut,
   purchaseLinkProductsCandidatesOut,
 } from "@cubby/schemas/purchase";
+import { cents, dollars } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import type { z } from "zod";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
-import { cents, dollars } from "~/server/repo/money";
 
 /**
  * The rules of the two attach dialogs, kept on the server so web and native offer the same
@@ -121,9 +122,6 @@ export function composeLinkExpenseCandidates(
 
 type CheckOut = z.output<typeof purchaseLinkExpensesCheckOut>;
 
-const countLabel = (count: number) =>
-  `${count} expense${count === 1 ? "" : "s"}`;
-
 /**
  * Whether a selection can be attached, and what attaching does to the purchase's expense total.
  * `lines` are the live expenses that exist among the requested ids.
@@ -183,7 +181,7 @@ export function checkLinkExpenses(
     resultingTotal: dollars(cents(purchase.expenseTotal) + totalCents),
     movedCount,
     reason: null,
-    note: `${countLabel(ids.length)} selected · ${formatCurrency(selectedTotal)}${
+    note: `${countLabel(ids.length, "expense")} selected · ${formatCurrency(selectedTotal)}${
       unpriced > 0 ? ` · ${unpriced} without a cost` : ""
     }${
       purchase.unpricedExpenseCount > 0
@@ -192,7 +190,7 @@ export function checkLinkExpenses(
     }. Purchase expense total would go to ${formatCurrency(dollars(cents(purchase.expenseTotal) + totalCents))}.`,
     confirm:
       movedCount > 0
-        ? `Attaching moves ${countLabel(movedCount)} off ${movedCount === 1 ? "its" : "their"} current purchase.`
+        ? `Attaching moves ${countLabel(movedCount, "expense")} off ${movedCount === 1 ? "its" : "their"} current purchase.`
         : null,
   };
 }

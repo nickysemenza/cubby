@@ -278,9 +278,6 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
     await phase("generator", () =>
       run(profile, process.execPath, ["scripts/generator/ensure.ts"]),
     );
-    await phase("mcpAssets", () =>
-      run(profile, "pnpm", ["exec", "nx", "run", "@cubby/mcp-apps:build"]),
-    );
     if (preview)
       await phase("build", async () => {
         await run(

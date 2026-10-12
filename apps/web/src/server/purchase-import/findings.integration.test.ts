@@ -20,7 +20,10 @@ import {
   resolveArrivedFindingsForPurchase,
   resolveRunFinding,
 } from "./findings";
-import { retainedMailFixture } from "./order-import.fixtures";
+import {
+  retainedMailFixture,
+  memberImportWorld,
+} from "./order-import.fixtures";
 import {
   importOrderHistory,
   liveExpenseCents,
@@ -213,16 +216,13 @@ describe("create_refund findings", () => {
   const ctx = withTestDb();
 
   async function seed() {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Refund findings member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "ForgeWear",
-      website: "https://shop.forgewear.example/orders",
-      browserDomains: ["shop.forgewear.example"],
-      orderEmailSenders: ["orders@forgewear.example"],
+    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
+      vendor: {
+        name: "ForgeWear",
+        website: "https://shop.forgewear.example/orders",
+        browserDomains: ["shop.forgewear.example"],
+        orderEmailSenders: ["orders@forgewear.example"],
+      },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
       label: "ForgeWear refunds account",

@@ -4,11 +4,11 @@ import {
   aiSmokeScenarioSchema,
   type AiSmokeScenario,
 } from "@cubby/schemas/ai-smoke";
+import { getErrorMessage } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import { formatDuration } from "~/lib/format-duration";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";

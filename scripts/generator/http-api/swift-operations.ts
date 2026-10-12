@@ -458,14 +458,7 @@ export const renderEntityOperations = (
     .filter(([, actions]) => actions.has("list"))
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([entity]) => {
-      const kind =
-        entity === "cookbook"
-          ? "cookbook"
-          : entity === "image"
-            ? "image"
-            : entity === "usda-food"
-              ? "usdaFood"
-              : "resource";
+      const kind = entity === "usda-food" ? "usdaFood" : "resource";
       return `        case .${swiftCase(entity)}: .${kind}`;
     })
     .join("\n");
@@ -605,7 +598,7 @@ public enum EntityOperationError: Error, Sendable, Hashable {
 /// declared exceptional RPC adapter. This stays separate from \`httpActions\`:
 /// native read support does not claim a resource capability the server lacks.
 public enum NativeReadKind: Sendable, Hashable {
-    case unavailable, resource, cookbook, image, usdaFood
+    case unavailable, resource, usdaFood
 }
 
 extension EntityKey {

@@ -23,7 +23,11 @@ import { uniq } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, householdDaySqlText } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  householdDaySqlText,
+  ilikeContains,
+} from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
@@ -538,7 +542,7 @@ export async function loadRelatedOptions(
     ${compiledRelatedJoins(input.relationKey)}
     WHERE s."deletedAt" IS NULL
       ${viewWhere(view)}
-      ${search ? sql`AND ${sql.raw(view.label)} ILIKE ${`%${search}%`}` : sql``}
+      ${search ? sql`AND ${sql.raw(view.label)} ILIKE ${ilikeContains(search)}` : sql``}
     GROUP BY t."shortcode", ${sql.raw(view.label)}
     ORDER BY "label", "id"
     LIMIT ${input.limit}
@@ -769,7 +773,7 @@ export async function loadRelatedSummary(
       ${sql.raw(definition.targetJoin)}
       ${sql.raw(imageJoin)}
       WHERE ${targetValid}
-        ${search ? sql`AND t."name" ILIKE ${`%${search}%`}` : sql``}
+        ${search ? sql`AND t."name" ILIKE ${ilikeContains(search)}` : sql``}
     ), grouped AS (
       SELECT
         "targetId", "targetLabel", "imageId", "imageKey", "imageFilename", "imageContentType",
@@ -952,7 +956,7 @@ export function relatedWhereConditions<TFilters extends object>(
           ? or(exact, presencePredicate)
           : (exact ?? presencePredicate);
       const name = search
-        ? exists(sql`${sql.raw(view.label)} ILIKE ${`%${search}%`}`)
+        ? exists(sql`${sql.raw(view.label)} ILIKE ${ilikeContains(search)}`)
         : undefined;
       const condition = and(identity, name);
       return condition ? [condition] : [];

@@ -34,7 +34,7 @@ import {
 } from "@cubby/schemas/purchase";
 import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode, cents } from "@cubby/shared";
 import {
   and,
   asc,
@@ -128,7 +128,6 @@ import {
   repointEdge,
   resolveMergeTargets,
 } from "~/server/repo/merge/core";
-import { cents } from "~/server/repo/money";
 import { syncChangedEffectivePrices } from "~/server/repo/product/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import {

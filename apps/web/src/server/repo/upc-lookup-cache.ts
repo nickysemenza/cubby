@@ -17,7 +17,7 @@ import {
 } from "~/contracts/upc.schemas";
 import type { Database } from "~/server/db";
 import { upcLookupCache } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, ilikeContains } from "~/server/repo/database-helpers";
 
 const log = createLogger("UPC cache");
 
@@ -156,7 +156,7 @@ export const searchCachedUpcs = async (
   query: string,
   limit: number,
 ): Promise<{ rows: CachedUpcLookup[]; total: number }> => {
-  const pattern = `%${query.replace(/[\\%_]/g, "\\$&")}%`;
+  const pattern = ilikeContains(query);
   const where = sql`${isNotNull(upcLookupCache.name)} AND (${or(
     ilike(upcLookupCache.name, pattern),
     ilike(upcLookupCache.brand, pattern),

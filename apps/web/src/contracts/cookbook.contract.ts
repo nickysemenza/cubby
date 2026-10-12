@@ -6,8 +6,9 @@ import { z } from "zod";
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const cookbookContract = defineContract("cookbook", {
+  // The full roster for the recipe cookbook pickers; browsing pages the
+  // kernel list (`resources.cookbook.list`).
   list: query({
-    native: "Native cookbook browse",
     input: z.null(),
     output: cookbookSummariesOut,
     cache: { tags: [["cookbook"]], profile: "browse" },

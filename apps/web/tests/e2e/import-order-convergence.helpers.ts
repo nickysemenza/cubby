@@ -1,7 +1,3 @@
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
 import {
   financialBookingPreview,
   financialBookingResult,
@@ -51,6 +47,7 @@ import {
   sha256Hex,
   shirtGroup,
   syntheticOrderIds,
+  wardrobePhotos,
 } from "../../tooling/convergence-harness";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
@@ -313,24 +310,7 @@ export async function createConvergenceHarness(
       photoImportContract.ops.createRun.output,
     );
     photoRunId = run.runId;
-    const photos = ["shirt", "label"].map((kind, index) => {
-      const bytes = readFileSync(
-        fileURLToPath(
-          new URL(`./fixtures/synthetic-wardrobe-${kind}.png`, import.meta.url),
-        ),
-      );
-      return {
-        bytes,
-        clientId: `${token}-${kind}`,
-        filename: `${token}-${kind}.png`,
-        contentType: "image/png" as const,
-        size: bytes.length,
-        width: 640,
-        height: 640,
-        sha256: createHash("sha256").update(bytes).digest("hex"),
-        position: index,
-      };
-    });
+    const photos = wardrobePhotos(token);
     const staged = await post(
       "photoImport/stage",
       {

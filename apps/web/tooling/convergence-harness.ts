@@ -1,5 +1,7 @@
 import { readRetainedMail } from "~/server/repo/retained-mail";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
 import {
@@ -521,12 +523,16 @@ export async function productPhotos(db: Database, productShortcode: string) {
 }
 
 /** The synthetic wardrobe photo pair a scenario uploads, with transport-neutral metadata. */
-export function wardrobePhotos(
-  token: string,
-  readFixture: (kind: "shirt" | "label") => Uint8Array,
-) {
+export function wardrobePhotos(token: string) {
   return (["shirt", "label"] as const).map((kind, index) => {
-    const bytes = readFixture(kind);
+    const bytes = readFileSync(
+      fileURLToPath(
+        new URL(
+          `../tests/e2e/fixtures/synthetic-wardrobe-${kind}.png`,
+          import.meta.url,
+        ),
+      ),
+    );
     return {
       bytes,
       clientId: `${token}-${kind}`,

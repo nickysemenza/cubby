@@ -102,6 +102,7 @@ import {
   mapImages,
   notDeleted,
   shortcodeSetCondition,
+  textArrayMatches,
   presenceCondition,
   rangeConditions,
   relations,
@@ -1717,7 +1718,7 @@ export const productSearch = async (
       ? or(
           formatSearchTerm(product.name, name),
           formatSearchTerm(product.notes, name),
-          sql`EXISTS (SELECT 1 FROM unnest(${product.aliases}) AS alias WHERE alias ILIKE ${`%${name}%`})`,
+          textArrayMatches(product.aliases, name),
         )
       : undefined,
     filters.categoryFeatureFilter?.length

@@ -9,7 +9,11 @@ import {
   product,
   purchase,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  ilikeContains,
+  notDeleted,
+} from "~/server/repo/database-helpers";
 import { loadPhotoAcceptedSourceLines } from "~/server/repo/photo-product-candidates";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
@@ -77,11 +81,7 @@ export async function linkablePhotoGroupExpenses(
         isNull(expense.productId),
         eq(expense.lineKind, "principal"),
         eq(expense.lineBasis, "item_line"),
-        or(
-          ...patterns.map((word) =>
-            ilike(expense.name, `%${word.replace(/[\\%_]/g, "\\$&")}%`),
-          ),
-        ),
+        or(...patterns.map((word) => ilike(expense.name, ilikeContains(word)))),
       ),
     )
     .orderBy(desc(expense.date), desc(expense.id))

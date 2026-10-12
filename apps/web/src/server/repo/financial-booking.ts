@@ -9,6 +9,7 @@ import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -21,7 +22,6 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { cents } from "~/server/repo/money";
 import { refreshDerivedSearchRefs } from "~/server/services/mutation-side-effects";
 
 import {

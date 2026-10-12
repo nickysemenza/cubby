@@ -70,8 +70,9 @@ Ctrl-C when done. Run `test:e2e:sim` for search/detail smoke; editing, view swit
   (`pnpm generate`). Look routes up
   by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. Every
   `resources.<entity>.{list,get,create,update,delete,timeline}` operation the OpenAPI document
-  exposes is generated (not every entity has every verb: `image` and `cookbook` read through
-  `get` but list through their own RPCs; `usda-food` has no resource verbs, per
+  exposes is generated (not every entity has every verb: read-only `image`, `cookbook` and
+  `run` have no `create`; `usda-food`, the external USDA catalog, has no resource verbs and
+  reads through its flagged `usdaFood.list`/`detail` RPCs, per
   `Generated/EntityOperations.swift`'s `httpActions`). `delete` is destructive: only `HeroActionRunner` calls it, after an explicit
   confirmation behind the connection-impact preview. The RPC operation ids CubbyKit calls are flagged
   `native: "<why>"` on their contract member (`apps/web/src/contracts/*.contract.ts`) — flagging
@@ -174,8 +175,10 @@ None is committed; edit the generator or its inputs, never the output. A missing
   implementations.
 - Value formatting is single-sourced in Rust (`recipebridge/src/display_format.rs` plus
   `format_amount_labeled`): `currency`, `signedCurrency`, bare numbers, `{value, unit}` amounts, and
-  the compact nutrition cell run the same code as web (WASM) and native (UniFFI `format_*` in
-  `cubby-ffi`, wrapped by `CubbyKit` `ValueFormat`). The Rust tests read `display-format.json`
+  nutrition/cost estimates (the compact cell and the long `DisplayFormat.estimate` form) run the
+  same code as web (WASM) and native (UniFFI `format_*` in `cubby-ffi`, wrapped by `CubbyKit`
+  `ValueFormat`). Declared list totals arrive worded by the server (`ListPageMeta.totalLabels`);
+  `ListTotalsSummary` only prints them. The Rust tests read `display-format.json`
   directly; `DisplayFormatTests` and the web `display-format.unit.test.ts` are binding checks. Only
   `plainDate` stays per platform (no timezone database in Rust; `DisplayFormat.plainDate` /
   `formatCalendarDay`) and timestamps stay locale-aware platform code. Never format a catalog value

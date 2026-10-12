@@ -48,8 +48,10 @@ const instance: WasmType = await import("@cubby/recipebridge");
 export const wasmFormat = {
   format_currency: instance.format_currency,
   format_number: instance.format_number,
-  format_compact_number: instance.format_compact_number,
   format_compact_estimate: instance.format_compact_estimate,
+  format_estimate: instance.format_estimate,
+  format_kcal: instance.format_kcal,
+  format_currency_range: instance.format_currency_range,
 };
 
 /**

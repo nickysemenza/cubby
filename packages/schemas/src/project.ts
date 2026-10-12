@@ -1,3 +1,4 @@
+import { countLabel } from "@cubby/shared/pluralize";
 import { z } from "zod";
 import { spendingCategoryShortcode } from "./identifiers";
 import {
@@ -1661,7 +1662,7 @@ export const describeAttentionItem = (
       return `${name} has no trade or cost recorded`;
     case "blocked_work": {
       const n = item.facts.blockedTasks;
-      return `${name} has ${n} blocked task${n === 1 ? "" : "s"} and no unblocked next action`;
+      return `${name} has ${countLabel(n, "blocked task")} and no unblocked next action`;
     }
     case "date_window_drift":
       return item.facts.side === "start"

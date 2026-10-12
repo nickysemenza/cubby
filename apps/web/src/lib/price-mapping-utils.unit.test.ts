@@ -9,7 +9,6 @@ import {
   computePerUnitPrices,
   isCanonicalPriceMapping,
   isMoneyUnit,
-  truncateToTwoDecimals,
 } from "./price-mapping-utils";
 import { getAllUnitMappingsFromProduct } from "./unit-mapping-utils";
 
@@ -27,28 +26,6 @@ describe("isMoneyUnit", () => {
 
   it.each(CASES)("$unit → $expected", ({ unit, expected }) => {
     expect(isMoneyUnit(unit)).toBe(expected);
-  });
-});
-
-describe("truncateToTwoDecimals", () => {
-  const CASES: { input: number; expected: number }[] = [
-    { input: 12.999, expected: 13.0 },
-    { input: 12.994, expected: 12.99 },
-    { input: 12.995, expected: 13.0 },
-    { input: 0.001, expected: 0.0 },
-    { input: 0.005, expected: 0.01 },
-    { input: 0.004, expected: 0.0 },
-    { input: 1000.0, expected: 1000.0 },
-    { input: 9740.6784, expected: 9740.68 },
-    { input: 1234567.895, expected: 1234567.9 },
-    { input: 12.5, expected: 12.5 },
-    { input: 99.99, expected: 99.99 },
-    { input: -12.999, expected: -13.0 },
-    { input: -12.994, expected: -12.99 },
-  ];
-
-  it.each(CASES)("$input → $expected", ({ input, expected }) => {
-    expect(truncateToTwoDecimals(input)).toBe(expected);
   });
 });
 

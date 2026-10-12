@@ -129,7 +129,7 @@ test("card density adapts to the work surface and stays temporary through filter
   await expect(grid).toHaveAttribute("data-compact", "false");
 });
 
-test("complete-list cookbooks keep local search across card and list presentations", async ({
+test("cookbooks keep server search across card and list presentations", async ({
   page,
 }) => {
   const name = `Cookbook cards ${Date.now()}`;
@@ -148,20 +148,25 @@ test("complete-list cookbooks keep local search across card and list presentatio
       exact: true,
     })
     .fill(`${name} Roasting`);
-  await expect(grid.locator(":scope > *")).toHaveCount(1);
+  // The shared lexical search ranks rather than filters by substring: the
+  // near-identical "Baking" title may still match, but below "Roasting".
   await expect(grid).toHaveAttribute("data-compact", "true");
   await expect(
-    grid.getByRole("link", { name: `${name} Roasting`, exact: true }),
+    grid
+      .locator(":scope > *")
+      .first()
+      .getByRole("link", { name: `${name} Roasting`, exact: true }),
   ).toHaveAttribute("href", `/cookbooks/${first.id}`);
   await chooseListView(page, "List");
   await expect(
     page.getByRole("table", { name: "Cookbooks table" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: `${name} Baking`, exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("link", { name: `${name} Roasting`, exact: true }),
+    page
+      .getByRole("table", { name: "Cookbooks table" })
+      .getByRole("row")
+      .nth(1)
+      .getByRole("link", { name: `${name} Roasting`, exact: true }),
   ).toBeVisible();
 });
 

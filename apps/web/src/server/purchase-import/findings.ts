@@ -12,6 +12,7 @@ import {
   type ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
+import { cents } from "@cubby/shared";
 import {
   and,
   desc,
@@ -44,7 +45,6 @@ import { assertClassificationPolicies } from "~/server/repo/classification-field
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { validateProductPolicy } from "~/server/repo/inheritance-validation";
-import { cents } from "~/server/repo/money";
 import { cascadeRemoval } from "~/server/repo/removal/core";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 

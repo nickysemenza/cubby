@@ -3,7 +3,8 @@ import type {
   productCreateManyInput,
   productMarkUsdaUnavailableManyInput,
 } from "@cubby/schemas/product";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { UNSPECIFIED_MANUFACTURER, getErrorMessage } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -26,7 +27,6 @@ import {
   ai,
   ingredient,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
@@ -334,7 +334,7 @@ export function EnrichmentWorkbench({
       createManyProductsStream(vars),
     success: (data) =>
       data.failed.length === 0
-        ? `Created ${data.created} product${data.created === 1 ? "" : "s"}.`
+        ? `Created ${countLabel(data.created, "product")}.`
         : `Created ${data.created}, ${data.failed.length} failed.`,
     invalidateTags: ripple.ingredientProduct,
     onSuccess: (data) => {
@@ -410,7 +410,7 @@ export function EnrichmentWorkbench({
           }
         }
         setMergeSuggestions((previous) => ({ ...previous, ...next }));
-        toast.success(`AI found ${matched} merge${matched === 1 ? "" : "s"}.`);
+        toast.success(`AI found ${countLabel(matched, "merge")}.`);
         return true;
       } catch (caught) {
         showErrorToast(caught, "Merge suggestion failed");

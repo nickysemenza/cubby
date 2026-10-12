@@ -3,14 +3,16 @@ import {
   costTypeValues,
   type ExpenseTradeCostAggregate,
   type Trade,
+  TRADE_LABELS,
 } from "@cubby/schemas/project";
+import { capitalize } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { useMemo } from "react";
 
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { HorizontalBarChart } from "~/app/projects/charts/horizontal-bar-chart";
-import { capitalize, TRADE_LABELS } from "~/app/projects/project-formatting";
 import {
   nivoBarChrome,
   nivoChartTheme,
@@ -141,7 +143,7 @@ export function TradeBarsAggregate({
       />
       {hiddenCount > 0 && (
         <p className="text-xs text-muted-foreground">
-          {hiddenCount} trade{hiddenCount === 1 ? "" : "s"} with net ≤ $0 hidden
+          {countLabel(hiddenCount, "trade")} with net ≤ $0 hidden
           (refunds/credits).
         </p>
       )}

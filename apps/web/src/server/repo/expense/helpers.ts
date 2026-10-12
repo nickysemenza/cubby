@@ -20,6 +20,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   resolveLiveJoinName,
   resolveLiveJoinShortcode,
+  brandJoinShortcode,
   singularAttachment,
 } from "~/server/repo/database-helpers";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
@@ -92,13 +93,6 @@ export const assertQuantitySignMatchesCost = (
  * linked `product`, and the vendor `purchase` event it belongs to — with that
  * charge's `vendor` in turn.
  */
-
-/** Brand a resolved join shortcode, preserving null for an absent/deleted parent. */
-const toProductShortcode = (code: string | null) =>
-  code === null ? null : parseShortcodeFor("product", code);
-
-const toProjectShortcode = (code: string | null) =>
-  code === null ? null : parseShortcodeFor("project", code);
 
 export type ExpenseRow = {
   id: ExpenseId;
@@ -471,7 +465,8 @@ const expenseProjectId = (
   row: ExpenseRow,
   effectiveProjectShortcode: string | null,
 ) =>
-  toProjectShortcode(
+  brandJoinShortcode(
+    "project",
     row.effectiveProjectShortcode === undefined
       ? resolveLiveJoinShortcode(row.project)
       : effectiveProjectShortcode,
@@ -525,7 +520,10 @@ export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
     future: row.future,
     projectId: expenseProjectId(row, effectiveProjectShortcode),
     projectName: expenseProjectName(row),
-    productId: toProductShortcode(resolveLiveJoinShortcode(row.product)),
+    productId: brandJoinShortcode(
+      "product",
+      resolveLiveJoinShortcode(row.product),
+    ),
     productName: resolveLiveJoinName(row.product),
     productQuantity: row.productQuantity,
     // `vendor` and `orderId` are no longer columns on `Expense` — the Purchase

@@ -9,6 +9,8 @@ import {
   MEAL_TYPE_LABELS,
 } from "@cubby/schemas/meal-classification";
 import { TRADE_LABELS } from "@cubby/schemas/project";
+import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
+import { capitalize } from "@cubby/shared";
 import type { Icon } from "@phosphor-icons/react/lib";
 
 import {
@@ -29,10 +31,6 @@ import {
   mealTypeIcon,
   mealTypeTimeLabel,
 } from "../meals/meal-options";
-import {
-  capitalize,
-  PROJECT_STATUS_LABELS,
-} from "../projects/project-formatting";
 import { TASK_STATUS_LABELS } from "../tasks/task-options";
 import { KIND_ICONS } from "./calendar-icons";
 import { itemSpanLabel } from "./calendar-span";

@@ -88,7 +88,7 @@ existing block. Extend the generic path when it almost fits. See
   `runMutationSideEffects(ForEntities)`, or `refreshDerivedSearchRefs` for
   refs captured before an edge is removed.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
-- Money: `cents`, `dollars`, `round2` (`server/repo/money.ts`); expense
+- Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
   rollups select `expenseAggregateFields` (`server/repo/expense-aggregate-sql.ts`);
   all money is `SUM(Expense.cost)`.
 - Postgres errors: `findPgError`, `isUniqueViolation`, `isStatementTimeout`
@@ -180,9 +180,17 @@ existing block. Extend the generic path when it almost fits. See
   paths use `MiddleTruncate`; `useCellSpill` already shows any clipped value.
 - Formatting: `lib/utils` formatters (`formatCurrency`, `formatCount`,
   `formatPercent`, `roundTo`, compact variants) and the WASM amount formatter.
-  Currency, bare numbers, amounts, and the compact nutrition cell are one Rust
-  implementation (`recipebridge/src/display_format.rs`) shared with native via
-  UniFFI; add a rule there and to `golden-vectors/display-format.json`.
+  Currency, bare numbers, amounts, kcal, and estimates (compact cell
+  `compactEstimateText`, long form `formatEstimate` in `lib/nutrition-format.ts`)
+  are one Rust implementation (`recipebridge/src/display_format.rs`) shared
+  with native via UniFFI; add a rule there and to
+  `golden-vectors/display-format.json`. Declared list totals arrive as
+  server-worded `totalLabels` (`server/repo/list-display-labels.ts`); clients
+  print them.
+- Plurals: `countLabel(count, noun)` from `@cubby/shared/pluralize` for
+  "3 nouns", `pluralize(noun, count)` for the noun alone. The
+  `cubby/no-hand-rolled-plural` lint rule flags `n === 1 ? "" : "s"` and its
+  suffix variants.
 - Search results: `features/search/search-utils.tsx` (routes, media, match
   text) and `features/search/product-family.tsx`, the one Product-family
   model (summary, child rows, destinations, keys, disclosure) behind both the
@@ -216,7 +224,8 @@ existing block. Extend the generic path when it almost fits. See
 
 ## Swift
 
-- `Error.userMessage`, `CubbyClient` list-all helper, `Double.usd`.
+- `Error.userMessage`, `CubbyClient` list-all helper, `Double.usd` / `Decimal.usd` (Rust
+  `ValueFormat.currency`; never a Foundation currency style).
   `Diagnostics.report` owns native cancellation filtering; callers pass errors unchanged.
   `CubbyAPIError.unwrapping` preserves transport cancellation identity through generated-client
   wrappers while retaining other transport diagnostics.

@@ -35,7 +35,7 @@ const inventoryitem = inventoryWithLocationAndProductOut.parse({
     explicitOwner: null,
     effectiveOwner: null,
     source: "unresolved",
-    basis: null,
+    basis: "Inherited owner unresolved",
     evidence: null,
     evidenceFingerprint: "fixture-unresolved",
     matchesInheritedOwner: false,

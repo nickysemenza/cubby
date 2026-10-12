@@ -195,6 +195,18 @@ test("removed query-key invalidation identifiers stay unavailable", () => {
   );
 });
 
+test("hand-written plural suffix ternaries are rejected", () => {
+  const diagnostics = lintFixture(
+    "no-hand-rolled-plural",
+    "no-hand-rolled-plural.txt",
+    "cubby",
+  );
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [1, 2, 3, 4, 5],
+  );
+});
+
 test("unsafe helper declarations are rejected everywhere", () => {
   const diagnostics = lintFixture(
     "no-unsafe-identifiers",

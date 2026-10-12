@@ -1,7 +1,7 @@
 # Local development
 
 `pnpm dev` starts Cubby with Vite HMR inside workerd. The supervisor prepares
-PostgreSQL, WASM, MCP App assets, and local auxiliary workers before starting the
+PostgreSQL, WASM, and local auxiliary workers before starting the
 app. It seeds the synthetic core corpus through the running Better Auth service
 and reports readiness only after the database, fixtures, and Worker agree.
 

@@ -7,7 +7,6 @@ import {
   type createFileUploadInput,
   type getImageByIdSchema,
   type imageAttachExistingInput,
-  type imageBrowserListInput,
   type importImageFromUrlSchema,
   type mcpAttachFileInput,
 } from "@cubby/schemas/image";
@@ -191,21 +190,6 @@ async function importImageFromUrlOperation(
   );
 }
 
-/** Image entity reads and writes go through the entity kernel. */
-async function listImages(
-  context: EntityKernelContext,
-  input: z.output<typeof imageBrowserListInput>,
-) {
-  const result = await executeEntityAs(context, "list", {
-    entity: "image",
-    filters: input.filters,
-    sort: input.sort,
-    pagination: input.pagination,
-    groupBy: input.groupBy,
-  });
-  return { items: result.items, meta: result.meta };
-}
-
 async function getImage(
   context: EntityKernelContext,
   id: string,
@@ -251,7 +235,6 @@ export function projectImageSummaries<TImage>(
 export const imageHandlers = implementOperationDomain(imageContract, {
   recordSightings: (context, input) =>
     recordImageSightings(context.db, input.items, context.actorContext),
-  list: (context, input) => listImages(context, input),
   analysis: (context, input) => readImageAnalysis(context, input.id),
   recordAnalysis: (context, input) =>
     recordImageAnalysis(context, input.id, input.analysis),

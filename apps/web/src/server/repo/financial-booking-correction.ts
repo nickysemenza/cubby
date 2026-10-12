@@ -7,13 +7,13 @@ import {
   type FinancialBookingCorrectionPreview,
 } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { cents } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { financialTransaction, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { cents } from "~/server/repo/money";
 
 import {
   getDb,

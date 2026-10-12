@@ -1,4 +1,5 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
@@ -104,7 +105,7 @@ export const CookbookActions: DetailSlotComponent<"cookbook"> = ({
             importableExtras.length > 0
               ? ` (${importableExtras.length} more in the source not yet imported)`
               : "";
-          return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${cookbook.name}${extra}`;
+          return `Reprocessed ${countLabel(reprocessed, "recipe")} from ${cookbook.name}${extra}`;
         },
         onDone: () => {
           void invalidateOperationTags(queryClient, ripple.recipeList);

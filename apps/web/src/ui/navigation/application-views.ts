@@ -237,11 +237,3 @@ export const recordViews: readonly RecordViewDefinition[] =
       .filter((entity) => recordDomain(entity) === domain)
       .map(recordView),
   );
-
-export function recordViewFor(
-  entity: BrowserRoutedEntity,
-): RecordViewDefinition {
-  const definition = recordViews.find((view) => view.entity === entity);
-  if (!definition) throw new Error(`Record view ${entity} is missing`);
-  return definition;
-}

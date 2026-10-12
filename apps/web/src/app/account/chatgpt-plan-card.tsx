@@ -3,12 +3,12 @@ import {
   chatGptModel,
   chatGptStatus,
 } from "@cubby/schemas/chatgpt";
+import { getErrorMessage } from "@cubby/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
 import { copyTextWithToast } from "~/lib/clipboard";
-import { getErrorMessage } from "~/lib/error-utils";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

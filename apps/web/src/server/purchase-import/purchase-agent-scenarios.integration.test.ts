@@ -15,6 +15,7 @@ import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { makeSignature } from "better-auth/crypto";
 import { and, asc, eq } from "drizzle-orm";
 import {
@@ -34,6 +35,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
+import { setCfEnv } from "~/server/cf-env";
 import { account as googleAccount } from "~/server/db/auth.schema";
 import {
   aiUsage,
@@ -61,10 +63,14 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
+import { requestCatchUp } from "~/server/services/catch-up.service";
 import { productionPhotoImportCommitPorts } from "~/server/services/photo-import-commit.service";
 
 import { startMailImport } from "./mail-import-run";
-import { retainedMailFixture } from "./order-import.fixtures";
+import {
+  retainedMailFixture,
+  memberImportWorld,
+} from "./order-import.fixtures";
 import {
   authorizePurchaseAgent,
   authorizeSyntheticBackfill,
@@ -441,14 +447,11 @@ describe("current purchase-agent system boundaries", () => {
   it("partial mail: retries only unresolved sources after a supported import without replacing prior money or results", async () => {
     const database = getDb(ctx.db);
     const mailboxId = "synthetic-partial-mailbox";
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic partial-source member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic service shop",
-      website: "https://service.example.test",
+    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
+      vendor: {
+        name: "Synthetic service shop",
+        website: "https://service.example.test",
+      },
     });
     const retain = async (
       messageId: string,
@@ -775,14 +778,11 @@ describe("current purchase-agent system boundaries", () => {
       "Example Works order SYNTHETIC-410 confirmed September 14 2026: Example Works F17SB desk fan, quantity 1, USD 24.00. Total USD 24.00.";
     const unrelatedText =
       "Synthetic picnic invitation with no acquisition or payment.";
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic discovery member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Example Works",
-      website: "https://maker.example.test",
+    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
+      vendor: {
+        name: "Example Works",
+        website: "https://maker.example.test",
+      },
     });
     await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
     await database.insert(googleAccount).values({
@@ -1032,22 +1032,49 @@ describe("current purchase-agent system boundaries", () => {
           eq(emailTable.messageId, original.id),
         ),
       );
-    if (!selectedEmail) throw new Error("Synthetic selected Email missing");
-    const manualResponse = await fetch(
-      `${scenario.origin}/api/v1/purchaseImport/emailImport`,
-      {
+    if (!selectedEmail?.orderMailId)
+      throw new Error("Synthetic selected Email missing");
+    const origin = scenario.origin;
+    const emailImport = (expectedChecksum: string) =>
+      fetch(`${origin}/api/v1/purchaseImport/emailImport`, {
         method: "POST",
         headers: {
           cookie: `better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`,
-          origin: scenario.origin,
+          origin,
           "content-type": "application/json",
         },
-        body: JSON.stringify({
-          id: selectedEmail.shortcode,
-          expectedChecksum: selectedEmail.checksum,
-        }),
-      },
-    );
+        body: JSON.stringify({ id: selectedEmail.shortcode, expectedChecksum }),
+      });
+    const refusal = async (response: Response) => ({
+      ok: response.ok,
+      body: await response.text(),
+    });
+    // A stale selection and an original whose content is gone are refused
+    // before any Run is admitted.
+    expect(await refusal(await emailImport("b".repeat(64)))).toEqual({
+      ok: false,
+      body: expect.stringMatching(/changed/iu),
+    });
+    const [retainedOriginal] = await database
+      .select({ content: orderMail.content })
+      .from(orderMail)
+      .where(eq(orderMail.id, selectedEmail.orderMailId));
+    if (!retainedOriginal)
+      throw new Error("Synthetic retained original missing");
+    await database
+      .update(orderMail)
+      .set({ content: { snippet: null, bodyText: null, bodyHtml: null } })
+      .where(eq(orderMail.id, selectedEmail.orderMailId));
+    expect(await refusal(await emailImport(selectedEmail.checksum))).toEqual({
+      ok: false,
+      body: expect.stringMatching(/content.*unavailable/iu),
+    });
+    await database
+      .update(orderMail)
+      .set({ content: retainedOriginal.content })
+      .where(eq(orderMail.id, selectedEmail.orderMailId));
+    expect(await mailRuns()).toEqual([]);
+    const manualResponse = await emailImport(selectedEmail.checksum);
     expect(manualResponse.status).toBe(200);
     await waitFor(
       async () => (await mailRuns()).length === 1,
@@ -1255,4 +1282,56 @@ describe("current purchase-agent system boundaries", () => {
       .filter((receipt) => receipt.kind === "metered_reservation");
     expect(reservations).toEqual([]);
   }, 120_000);
+});
+
+// The app-open catch-up claim admits one queue handoff; a rejected handoff
+// releases the claim so the next request retries instead of waiting an hour.
+describe("app-open catch-up queue handoff", () => {
+  const ctx = withTestDb();
+  afterEach(() => setCfEnv(undefined));
+
+  it("accepts one queue handoff across concurrent clients", async () => {
+    const batches: Array<Array<{ body: { task: { kind: string } } }>> = [];
+    setCfEnv(
+      fromPartial<Env>({
+        BACKGROUND_QUEUE: {
+          sendBatch: async (
+            messages: Iterable<{ body: { task: { kind: string } } }>,
+          ) => {
+            batches.push([...messages]);
+          },
+        },
+      }),
+    );
+
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () => requestCatchUp(ctx.db)),
+    );
+
+    expect(results.filter(({ status }) => status === "queued")).toHaveLength(1);
+    expect(results.filter(({ status }) => status === "recent")).toHaveLength(3);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.map(({ body }) => body.task.kind)).toEqual([
+      "maintenance.recover",
+      "maintenance.purchase-discovery",
+    ]);
+  });
+
+  it("releases a rejected queue handoff so the next request can retry", async () => {
+    let calls = 0;
+    setCfEnv(
+      fromPartial<Env>({
+        BACKGROUND_QUEUE: {
+          sendBatch: async () => {
+            calls += 1;
+            if (calls === 1) throw new Error("queue unavailable");
+          },
+        },
+      }),
+    );
+
+    await expect(requestCatchUp(ctx.db)).rejects.toThrow("queue unavailable");
+    await expect(requestCatchUp(ctx.db)).resolves.toEqual({ status: "queued" });
+    expect(calls).toBe(2);
+  });
 });

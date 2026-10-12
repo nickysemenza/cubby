@@ -1,3 +1,5 @@
+import { countLabel } from "@cubby/shared/pluralize";
+
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -33,8 +35,8 @@ export function OrphanedClientMaintenance({
   return (
     <Row align="center" gap="sm" wrap>
       <span className="text-xs text-muted-foreground">
-        {count} abandoned registration{count === 1 ? "" : "s"} — connect
-        attempts that never reached the consent screen.
+        {countLabel(count, "abandoned registration")} — connect attempts that
+        never reached the consent screen.
       </span>
       <Button
         variant="outline"

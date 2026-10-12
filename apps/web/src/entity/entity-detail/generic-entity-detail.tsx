@@ -8,6 +8,7 @@ import { isGalleryEntity } from "@cubby/schemas/entity-manifest";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
+import { getErrorMessage } from "@cubby/shared";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
@@ -49,7 +50,6 @@ import {
 import { heroChipLabel } from "~/entity/enum-field-display";
 import { FieldExplanation } from "~/entity/field-explanation";
 import { RecordSuggestionsProvider } from "~/features/ai/record-suggestions";
-import { getErrorMessage } from "~/lib/error-utils";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { DetailHeroActions, DetailHeroStat } from "~/ui/layouts/page-hero";

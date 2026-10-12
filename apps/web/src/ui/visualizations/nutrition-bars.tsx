@@ -6,11 +6,7 @@ import {
 import { useMemo } from "react";
 
 import { aggregateEstimates, scaleNutrition } from "~/lib/nutrition-estimates";
-import {
-  estimateStatusText,
-  formatEstimate,
-  trimAmount,
-} from "~/lib/nutrition-format";
+import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
 import { StatTile } from "~/ui/primitives/stat-tile";
 
@@ -37,10 +33,10 @@ const ingredientName = (ingredient: IngredientDataItem): string =>
     : ingredient.recipe.name;
 
 const formatKcal = (estimate: MeasureEstimate): string =>
-  formatEstimate(estimate, (value) => `${Math.round(value)} kcal`);
+  formatEstimate(estimate, "kcal", "kcal");
 
 const formatGrams = (estimate: MeasureEstimate): string =>
-  formatEstimate(estimate, (value) => `${trimAmount(value)} g`);
+  formatEstimate(estimate, "macro", "g");
 
 const estimateUsesKnownGeometry = (estimate: MeasureEstimate): boolean =>
   hasKnownEstimate(estimate) &&

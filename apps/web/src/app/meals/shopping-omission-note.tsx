@@ -1,5 +1,6 @@
 import type { ShoppingListOut, UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
+import { countLabel } from "@cubby/shared/pluralize";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
@@ -51,9 +52,9 @@ export function ShoppingOmissionNote({
           <Row gap="xs" align="center" className="text-warning-ink">
             <WarningIcon className="size-3" />
             <span className="font-medium">
-              {unique.length} sub-recipe{unique.length === 1 ? "" : "s"}{" "}
-              couldn't be broken down — {unique.length === 1 ? "its" : "their"}{" "}
-              ingredients aren't counted below.
+              {countLabel(unique.length, "sub-recipe")} couldn't be broken down
+              — {unique.length === 1 ? "its" : "their"} ingredients aren't
+              counted below.
             </span>
           </Row>
           {unique.map((u) => (
@@ -85,10 +86,9 @@ export function ShoppingOmissionNote({
           <Row gap="xs" align="center" className="text-muted-foreground">
             <InfoIcon className="size-3" />
             <span className="font-medium">
-              {omittedMeals.length} meal{omittedMeals.length === 1 ? "" : "s"}{" "}
-              in this range {omittedMeals.length === 1 ? "isn't" : "aren't"}{" "}
-              cooked, so nothing was added for{" "}
-              {omittedMeals.length === 1 ? "it" : "them"}.
+              {countLabel(omittedMeals.length, "meal")} in this range{" "}
+              {omittedMeals.length === 1 ? "isn't" : "aren't"} cooked, so
+              nothing was added for {omittedMeals.length === 1 ? "it" : "them"}.
             </span>
           </Row>
           {omittedMeals.map((m) => (

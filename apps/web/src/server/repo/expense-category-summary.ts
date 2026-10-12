@@ -8,6 +8,7 @@ import {
   spendingCategorySummarySchema,
   type SpendingCategorySummary,
 } from "@cubby/schemas/spending-classification";
+import { cents, dollars } from "@cubby/shared";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -17,7 +18,6 @@ import {
   financialTransactionAllocation,
   purchase,
 } from "~/server/db/schema";
-import { cents, dollars } from "~/server/repo/money";
 
 import { notDeleted, unwrapDb } from "./database-helpers";
 import {

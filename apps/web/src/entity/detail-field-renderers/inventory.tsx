@@ -49,19 +49,7 @@ function OwnershipControl({ record }: { record: DetailRecordOf<"inventory"> }) {
   const partial = quantity.trim() ? Number(quantity) : undefined;
   return (
     <Stack gap="sm">
-      <span>
-        {ownership.effectiveOwner?.name ??
-          (ownership.mode === "unassigned"
-            ? "No individual owner"
-            : "Unresolved")}
-      </span>
-      <span className="text-xs text-muted-foreground">
-        {ownership.matchesInheritedOwner
-          ? "Confirmed · matches inherited owner"
-          : ownership.mode === "person"
-            ? "Confirmed owner"
-            : ownership.basis}
-      </span>
+      <output aria-label="Current ownership">{ownership.basis}</output>
       <OverrideControl
         label="Ownership"
         options={modeOptions}

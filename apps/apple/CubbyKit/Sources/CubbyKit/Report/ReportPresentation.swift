@@ -486,10 +486,10 @@ public struct ReportPresentation: Hashable, Sendable {
             })
     }
 
-    /// Money is whole USD at the server's precision; a missing figure is a dash, never zero.
+    /// Money and counts print as the web prints them; a missing figure is a dash, never zero.
     private static func text(_ value: Double?, money: Bool) -> String {
         guard let value else { return "—" }
-        return money ? value.usd : String(Int(value.rounded()))
+        return money ? DisplayFormat.currency(value) : DisplayFormat.number(value)
     }
 
     private static func instant(_ text: String) -> Date? {

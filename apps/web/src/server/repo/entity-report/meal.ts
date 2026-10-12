@@ -6,10 +6,10 @@ import type {
 import { mealShortcode } from "@cubby/schemas/identifiers";
 import type { MealRecipePreparationOut } from "@cubby/schemas/meal";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
+import { countLabel } from "@cubby/shared/pluralize";
 import { and, asc, inArray } from "drizzle-orm";
 
 import { formatEstimate } from "~/lib/nutrition-format";
-import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";
 import { ledgerParty } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -32,7 +32,9 @@ const scaleInput = (initial: number): ReportCommandInput => ({
 
 /** "1 serving", "250 g": the amount as the person entered it. */
 const amountText = (amount: { value: number; unit: string }) =>
-  `${amount.value} ${amount.unit}${amount.unit === "serving" && amount.value !== 1 ? "s" : ""}`;
+  amount.unit === "serving"
+    ? countLabel(amount.value, "serving")
+    : `${amount.value} ${amount.unit}`;
 
 const targetLabel = (target: { name: string | null; date: string }) =>
   target.name ?? target.date;
@@ -86,7 +88,7 @@ export async function mealCompositionReport(
         entity: "recipe",
         id: entry.recipe.id,
         title: name,
-        subtitle: `×${entry.scale} · ${formatEstimate(entry.scaledTotals.cost, (value) => formatCurrency(value))}`,
+        subtitle: `×${entry.scale} · ${formatEstimate(entry.scaledTotals.cost, "cost")}`,
         trailing: null,
         key: entry.id,
         commands: [

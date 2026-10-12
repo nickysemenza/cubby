@@ -1,5 +1,6 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
+import { countLabel } from "@cubby/shared/pluralize";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
@@ -109,7 +110,7 @@ export function AddLabelsPopover({
     const skipped = children.length - eligible.length;
     mergeCodes(eligible.map((c) => c.id));
     toast.success(
-      `Added ${eligible.length} label${eligible.length !== 1 ? "s" : ""} from ${location.name}` +
+      `Added ${countLabel(eligible.length, "label")} from ${location.name}` +
         (skipped > 0 ? ` (skipped ${skipped} without QR support)` : ""),
     );
   }

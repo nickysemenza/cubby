@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
+  allocationSumViolation,
   type FinancialTransactionKind,
   financialTransactionSettlementViolation,
 } from "@cubby/schemas/financial-transaction";
@@ -9,6 +10,7 @@ import {
   type PurchaseShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -17,7 +19,6 @@ import { financialTransactionAllocation, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { notDeleted, touchUpdatedAt } from "~/server/repo/database-helpers";
-import { cents } from "~/server/repo/money";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
 /**
@@ -181,12 +182,11 @@ export function assertAllocationSetValid(value: {
   }
 
   if (next.length === 0) return;
-  const total = next.reduce((sum, row) => sum + cents(row.amount), 0);
-  if (total !== cents(transactionAmount))
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `Allocations must sum to the transaction amount: got ${(total / 100).toFixed(2)}, expected ${transactionAmount.toFixed(2)}.`,
-    );
+  const sumViolation = allocationSumViolation(
+    next.map((row) => row.amount),
+    transactionAmount,
+  );
+  if (sumViolation) throw createAppError("CONSTRAINT_VIOLATION", sumViolation);
 
   const violation = financialTransactionSettlementViolation({
     linked: next.length > 0,

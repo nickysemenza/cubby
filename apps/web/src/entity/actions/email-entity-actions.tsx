@@ -4,6 +4,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { EMAIL_RECLASSIFY_LIMIT } from "@cubby/schemas/mailbox-research";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useState } from "react";
 
 import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -78,7 +79,7 @@ export function useReclassifyEmailsAction(): EntityActionHandles {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Reclassify {ids.length} Email{ids.length === 1 ? "" : "s"}?
+              Reclassify {countLabel(ids.length, "Email")}?
             </AlertDialogTitle>
             <AlertDialogDescription>
               Reruns Relevance with the current classifier. A changed result

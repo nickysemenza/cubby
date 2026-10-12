@@ -5,8 +5,6 @@ import { createMcpServer } from "~/server/mcp/server";
 
 import type { KernelContext } from "./context";
 
-// Kept out of context.ts: the MCP server graph imports the built MCP App HTML,
-// which Playwright cannot load, and E2E fixtures import context.ts.
 /**
  * Call an MCP `tool.action` through the real server with the kernel context,
  * throwing on a tool error and returning the structured result for the caller

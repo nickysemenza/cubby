@@ -267,7 +267,6 @@ Better-Auth (`better-auth/tanstack-start`), with config in
   (`apps/web/src/lib/http-api/wire.ts`).
 
 The MCP endpoint `/api/mcp` is an OAuth 2.1 resource server; clients enrol
-through dynamic client registration. [apps/mcp-apps](../apps/mcp-apps) builds
-self-contained HTML UIs that the server inlines as `ui://` resources, currently
-only for `usda_food.search`. Run `pnpm --filter @cubby/mcp-apps dev` for a
-local host harness. MCP operating patterns are in [MCP](agents/mcp.md).
+through dynamic client registration. Tools return structured data only; the
+calling agent presents choices such as `usda_food.search` candidates in its own
+conversation. MCP operating patterns are in [MCP](agents/mcp.md).

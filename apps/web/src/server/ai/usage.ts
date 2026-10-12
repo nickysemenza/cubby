@@ -1,8 +1,8 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
+import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { emitTelemetry } from "~/server/telemetry";
 

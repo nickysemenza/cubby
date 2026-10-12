@@ -27,14 +27,9 @@ struct InventoryOwnershipControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            HStack(spacing: FieldGuideTokens.Space.sm) {
-                Label(model.summary, systemImage: "person.crop.circle")
-                    .font(.fieldGuideLabel)
-                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                if model.confirmedMatchesInheritedOwner {
-                    StatusChip(text: "Confirmed matches inherited owner", tone: .positive)
-                }
-            }
+            Label(model.basis, systemImage: "person.crop.circle")
+                .font(.fieldGuideLabel)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             Button("Manage ownership") { editing = true }
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("detail.inventory.ownership.manage")
@@ -50,14 +45,7 @@ struct InventoryOwnershipControl: View {
         return NavigationStack {
             Form {
                 Section("Current ownership") {
-                    LabeledContent("Stored choice", value: model.currentModeLabel)
-                    LabeledContent("Explicit owner", value: model.currentExplicitOwnerLabel)
-                    LabeledContent("Effective owner", value: model.currentEffectiveOwnerLabel)
-                    LabeledContent("Source", value: model.currentSourceLabel)
-                    if model.confirmedMatchesInheritedOwner {
-                        Label("Confirmed matches inherited owner", systemImage: "checkmark.seal.fill")
-                            .foregroundStyle(FieldGuideTokens.positive)
-                    }
+                    Text(model.basis)
                 }
 
                 Section("Change ownership") {
@@ -97,12 +85,10 @@ struct InventoryOwnershipControl: View {
                 } header: {
                     Text("Quantity")
                 } footer: {
-                    if let quantityMessage = model.quantityMessage {
-                        Text(quantityMessage)
-                            .foregroundStyle(
-                                model.hasValidQuantity
-                                    ? FieldGuideTokens.graphiteSecondary : FieldGuideTokens.destructive)
-                    }
+                    Text(model.quantityMessage)
+                        .foregroundStyle(
+                            model.hasValidQuantity
+                                ? FieldGuideTokens.graphiteSecondary : FieldGuideTokens.destructive)
                 }
 
                 if model.canConfirmInheritedOwner {
@@ -111,7 +97,7 @@ struct InventoryOwnershipControl: View {
                             Task { await perform(.confirm) }
                         } label: {
                             Label(
-                                "Confirm \(model.currentEffectiveOwnerLabel)",
+                                "Confirm \(model.currentEffectiveOwner?.name ?? "")",
                                 systemImage: "checkmark.seal")
                         }
                         .disabled(!model.canSubmit || model.isSaving)
@@ -193,12 +179,10 @@ final class InventoryOwnershipModel {
 
     private(set) var inventoryID: InventoryEntryCode
     private(set) var currentMode: InventoryOwnershipMode
-    private(set) var currentExplicitOwnerID: LedgerPartyShortcode?
-    private(set) var currentExplicitOwnerName: String?
     private(set) var currentEffectiveOwner: InventoryOwner?
-    private(set) var currentSource: InventoryOwnershipSource
+    /// Server-owned ownership wording; the client renders it verbatim.
+    private(set) var basis: String
     private(set) var evidenceFingerprint: String
-    private(set) var confirmedMatchesInheritedOwner: Bool
     private(set) var amount: Double
     private(set) var unit: String
 
@@ -213,12 +197,9 @@ final class InventoryOwnershipModel {
     init(detail: InventoryDetail) {
         inventoryID = detail.id
         currentMode = detail.ownershipMode
-        currentExplicitOwnerID = detail.ownerLedgerPartyId
-        currentExplicitOwnerName = detail.effectiveOwnership.explicitOwner?.name
         currentEffectiveOwner = detail.effectiveOwnership.effectiveOwner
-        currentSource = detail.effectiveOwnership.source
+        basis = detail.effectiveOwnership.basis
         evidenceFingerprint = detail.effectiveOwnership.evidenceFingerprint
-        confirmedMatchesInheritedOwner = detail.effectiveOwnership.matchesInheritedOwner
         amount = detail.amount.value
         unit = detail.amount.unit
         selectionMode = detail.ownershipMode
@@ -229,55 +210,18 @@ final class InventoryOwnershipModel {
     init(
         inventoryID: InventoryEntryCode, amount: Double, unit: String,
         mode: InventoryOwnershipMode, explicitOwner: InventoryOwner?,
-        effectiveOwner: InventoryOwner?, source: InventoryOwnershipSource,
-        evidenceFingerprint: String, matchesInheritedOwner: Bool
+        effectiveOwner: InventoryOwner?, basis: String, evidenceFingerprint: String
     ) {
         self.inventoryID = inventoryID
         self.amount = amount
         self.unit = unit
         currentMode = mode
-        currentExplicitOwnerID = explicitOwner?.id
-        currentExplicitOwnerName = explicitOwner?.name
         currentEffectiveOwner = effectiveOwner
-        currentSource = source
+        self.basis = basis
         self.evidenceFingerprint = evidenceFingerprint
-        confirmedMatchesInheritedOwner = matchesInheritedOwner
         selectionMode = mode
         selectedOwnerID = explicitOwner?.id
         selectedOwnerName = explicitOwner?.name
-    }
-
-    var summary: String {
-        switch currentMode {
-        case .person: currentExplicitOwnerLabel
-        case .inherit: currentEffectiveOwner.map { "Inherited: \($0.name)" } ?? "Inherited owner unresolved"
-        case .unassigned: "No individual owner"
-        }
-    }
-
-    var currentModeLabel: String {
-        switch currentMode {
-        case .inherit: "Use inherited owner"
-        case .person: "Person"
-        case .unassigned: "No individual owner"
-        }
-    }
-
-    var currentExplicitOwnerLabel: String {
-        currentExplicitOwnerName ?? currentExplicitOwnerID ?? "None"
-    }
-
-    var currentEffectiveOwnerLabel: String { currentEffectiveOwner?.name ?? "Unresolved" }
-
-    var currentSourceLabel: String {
-        switch currentSource {
-        case .explicit: "Explicit choice"
-        case .unassigned: "No individual owner"
-        case .inheritedBeneficiary: "Purchase beneficiary"
-        case .inheritedVendorAccount: "Vendor account default"
-        case .inheritedPaymentAccount: "Payment account default"
-        case .unresolved: "Unresolved"
-        }
     }
 
     var selectedOwnerLabel: String { selectedOwnerName ?? selectedOwnerID ?? "Choose a person" }
@@ -291,17 +235,15 @@ final class InventoryOwnershipModel {
         return AdjustmentQuantityDraft(text: quantityText).value
     }
 
+    /// Parsing only; the server command refuses a quantity larger than the row.
     var hasValidQuantity: Bool {
-        !appliesToPartialQuantity || partialQuantity.map { $0 <= amount } == true
+        !appliesToPartialQuantity || partialQuantity != nil
     }
 
-    var quantityMessage: String? {
+    var quantityMessage: String {
         guard appliesToPartialQuantity else { return "Changes the entire \(formatted(amount)) \(unit) row." }
-        guard let partialQuantity else { return "Enter an amount greater than zero." }
-        guard partialQuantity <= amount else {
-            return "Enter no more than \(formatted(amount)) \(unit)."
-        }
-        return "The remaining \(formatted(amount - partialQuantity)) \(unit) keeps its current ownership."
+        guard partialQuantity != nil else { return "Enter an amount greater than zero." }
+        return "Of \(formatted(amount)) \(unit); the rest keeps its current ownership."
     }
 
     var canSubmit: Bool { hasValidQuantity }
@@ -313,12 +255,9 @@ final class InventoryOwnershipModel {
     func apply(_ detail: InventoryDetail) {
         inventoryID = detail.id
         currentMode = detail.ownershipMode
-        currentExplicitOwnerID = detail.ownerLedgerPartyId
-        currentExplicitOwnerName = detail.effectiveOwnership.explicitOwner?.name
         currentEffectiveOwner = detail.effectiveOwnership.effectiveOwner
-        currentSource = detail.effectiveOwnership.source
+        basis = detail.effectiveOwnership.basis
         evidenceFingerprint = detail.effectiveOwnership.evidenceFingerprint
-        confirmedMatchesInheritedOwner = detail.effectiveOwnership.matchesInheritedOwner
         amount = detail.amount.value
         unit = detail.amount.unit
         selectionMode = detail.ownershipMode
@@ -394,8 +333,7 @@ final class InventoryOwnershipModel {
     let model = InventoryOwnershipModel(
         inventoryID: InventoryEntryCode("INV-1234"), amount: 3, unit: "each",
         mode: .inherit, explicitOwner: nil, effectiveOwner: owner,
-        source: .inheritedBeneficiary, evidenceFingerprint: "preview-evidence",
-        matchesInheritedOwner: false
+        basis: "Inherited: Alex · purchase beneficiary", evidenceFingerprint: "preview-evidence"
     )
     InventoryOwnershipControl(previewModel: model)
         .padding(FieldGuideTokens.Space.lg)

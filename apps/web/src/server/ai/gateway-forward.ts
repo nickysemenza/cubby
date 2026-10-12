@@ -4,6 +4,7 @@ import {
   gatewayForwardInput,
   gatewayForwardOut,
 } from "@cubby/schemas/import-recipe";
+import { getErrorMessage } from "@cubby/shared";
 import {
   gatewayBaseURL,
   type GatewayResponseInfo,
@@ -12,7 +13,7 @@ import {
 import { gatewayProviderSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
-import { getErrorMessage, type UnparsedError } from "~/lib/error-utils";
+import { type UnparsedError } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 import { gatewayFetch, type GatewayTransport } from "~/server/ai/gateway";
 import { recordAiUsage } from "~/server/ai/usage";

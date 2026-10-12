@@ -1,5 +1,6 @@
 import { galleryEntities } from "@cubby/schemas/entity-manifest";
 import type { ImageWithEntity } from "@cubby/schemas/image";
+import { getErrorMessage } from "@cubby/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -10,7 +11,6 @@ import {
   search,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { getErrorMessage } from "~/lib/error-utils";
 import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";

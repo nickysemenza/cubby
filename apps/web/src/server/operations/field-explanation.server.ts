@@ -665,7 +665,7 @@ function ownershipTrace(
       value: { mode: ownership.mode, owner: ownership.explicitOwner },
     },
     {
-      label: ownership.basis ?? ownership.source,
+      label: ownership.basis,
       entity: ownership.evidence?.purchaseId
         ? {
             entityKind: "purchase",

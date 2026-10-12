@@ -153,18 +153,6 @@ export const getVectorIndex = (): VectorizeIndexBinding | undefined => {
   return cfEnv?.VECTORIZE as VectorizeIndexBinding | undefined;
 };
 
-/** Static asset fetcher exposed by the Cloudflare Worker runtime. */
-export const getAssetsFetcher = (): typeof fetch | undefined => {
-  const binding = cfEnv?.ASSETS;
-  if (!binding) return undefined;
-  // Wrap in an arrow — Fetcher["fetch"] isn't directly assignable to the
-  // global fetch type. SAFETY: this is the single Cloudflare Fetcher/global
-  // fetch overload boundary; both accept the same runtime Request inputs and
-  // return a Promise<Response>.
-  return ((input, init) =>
-    binding.fetch(input as never, init as never)) as typeof fetch;
-};
-
 export const getDatabaseFreshnessNamespace = () => cfEnv?.DB_FRESHNESS;
 
 export const getAiResponseCacheNamespace = () => cfEnv?.AI_RESPONSE_CACHE;

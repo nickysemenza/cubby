@@ -1,4 +1,5 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
+import { getErrorMessage } from "@cubby/shared";
 import type { FoodLookupParam } from "@cubby/usda";
 import {
   foodSearchArgs,
@@ -12,8 +13,6 @@ import {
   type ReleaseManifest,
 } from "@cubby/usda/release";
 import { DurableObject } from "cloudflare:workers";
-
-import { getErrorMessage } from "~/lib/error-utils";
 
 import type { UsdaReleaseRpc } from "./rpc";
 

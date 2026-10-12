@@ -4,6 +4,7 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { canClearExpenseDate } from "@cubby/schemas/expense-fields";
 import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
+import { countLabel } from "@cubby/shared/pluralize";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -31,7 +32,6 @@ import {
   suggestTargetsFor,
 } from "~/features/ai/field-suggestion";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
-import { countLabel } from "~/lib/pluralize";
 import { requireReferenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { Row } from "~/ui/layout";

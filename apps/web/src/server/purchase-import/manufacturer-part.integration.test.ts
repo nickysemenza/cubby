@@ -28,6 +28,7 @@ import {
 } from "./external-id-learning";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { startImportRunFixture } from "./import-run.fixtures";
+import { memberImportWorld } from "./order-import.fixtures";
 
 const checksum = (digit: string) => digit.repeat(64);
 const MAKER = "ForgeWear Apparel";
@@ -87,15 +88,12 @@ describe("manufacturer_part identity", () => {
     ]);
     expect([...hits.values()].flat().map(({ id }) => id)).toEqual([black.id]);
 
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Manufacturer part member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "ForgeWear Outlet fixture",
-      website: "https://www.forgewear.example.test/orders",
-      browserDomains: ["forgewear.example.test"],
+    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
+      vendor: {
+        name: "ForgeWear Outlet fixture",
+        website: "https://www.forgewear.example.test/orders",
+        browserDomains: ["forgewear.example.test"],
+      },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
       label: "Manufacturer part fixture account",
@@ -212,13 +210,10 @@ describe("manufacturer_part identity", () => {
         entityId,
       })),
     );
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic matching member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic tools retailer",
+    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
+      vendor: {
+        name: "Synthetic tools retailer",
+      },
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
       label: "Synthetic tools account",

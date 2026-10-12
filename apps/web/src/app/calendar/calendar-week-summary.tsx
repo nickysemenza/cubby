@@ -73,7 +73,7 @@ function WeekSummaryGrid({
                 label="Calories"
                 value={formatEstimate(
                   summary.mealTotals.nutrition.kcal,
-                  (value) => Math.round(value).toLocaleString(),
+                  "kcal",
                 )}
               />
               <SummaryLine

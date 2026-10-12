@@ -37,10 +37,6 @@
         {
           "projects": ["cubby-checks"],
           "target": "generate"
-        },
-        {
-          "projects": ["@cubby/mcp-apps"],
-          "target": "build"
         }
       ],
       "inputs": ["webGate"],
@@ -119,7 +115,6 @@
       "inputs": [
         "default",
         "^default",
-        "{workspaceRoot}/apps/mcp-apps/**",
         "{workspaceRoot}/scripts/**",
         "{workspaceRoot}/packages/**",
         "{workspaceRoot}/*.{json,jsonc,yaml,yml,toml,lock}",
@@ -182,6 +177,17 @@
     },
     "workers-tests": {
       "command": "pnpm run test:calendar",
+      // The calendar worker formats through the recipebridge WASM.
+      "dependsOn": [
+        {
+          "projects": ["cubby-checks"],
+          "target": "wasm"
+        },
+        {
+          "projects": ["cubby-checks"],
+          "target": "generate"
+        }
+      ],
       "options": {
         "cwd": "apps/web"
       },

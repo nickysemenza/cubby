@@ -11,7 +11,7 @@ struct StatementCsvImportView: View {
     @State private var busy = false
     @State private var usesMapping = false
 
-    @State private var source = "bank-csv"
+    @State private var source = ""
     @State private var account = ""
     @State private var accountColumn = ""
     @State private var dateColumn = ""
@@ -25,7 +25,7 @@ struct StatementCsvImportView: View {
     @State private var chargeValue = "debit"
     @State private var creditValue = "credit"
     @State private var pendingValue = "pending"
-    @State private var sign = StatementCsvColumnMapping.SignPayload.chargesNegative
+    @State private var sign = StatementCsvColumnMappingInput.SignPayload.chargesNegative
 
     private var fileName: String { session.input?.fileName ?? "" }
 
@@ -153,9 +153,12 @@ struct StatementCsvImportView: View {
                 columnPicker("Direction", selection: $directionColumn, headers: headers)
                 columnPicker("Status", selection: $statusColumn, headers: headers)
                 Picker("Amount signs", selection: $sign) {
-                    Text("Charges are negative").tag(StatementCsvColumnMapping.SignPayload.chargesNegative)
-                    Text("Charges are positive").tag(StatementCsvColumnMapping.SignPayload.chargesPositive)
-                    Text("Use direction column").tag(StatementCsvColumnMapping.SignPayload.directionColumn)
+                    Text("Charges are negative").tag(
+                        StatementCsvColumnMappingInput.SignPayload.chargesNegative)
+                    Text("Charges are positive").tag(
+                        StatementCsvColumnMappingInput.SignPayload.chargesPositive)
+                    Text("Use direction column").tag(
+                        StatementCsvColumnMappingInput.SignPayload.directionColumn)
                 }
                 if sign == .directionColumn {
                     TextField("Charge value", text: $chargeValue)
@@ -165,7 +168,8 @@ struct StatementCsvImportView: View {
                 Button("Preview mapped rows") { Task { await prepare() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(
-                        busy || dateColumn.isEmpty || amountColumn.isEmpty || descriptionColumn.isEmpty
+                        busy || source.isEmpty || dateColumn.isEmpty || amountColumn.isEmpty
+                            || descriptionColumn.isEmpty
                             || (account.isEmpty && accountColumn.isEmpty))
             }
             .textFieldStyle(.roundedBorder)
@@ -212,7 +216,7 @@ struct StatementCsvImportView: View {
                                 .font(.fieldGuideTitle)
                                 .fixedSize(horizontal: false, vertical: true)
                             if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                            Text(row.proposed.amount, format: .usd)
+                            Text(row.proposed.amount.usd)
                                 .font(.fieldGuideData)
                                 .fixedSize()
                         }
@@ -365,21 +369,31 @@ struct StatementCsvImportView: View {
             let value = try await session.prepare(using: appModel.client)
             if value.needsMapping {
                 usesMapping = true
-                dateColumn = value.headers.first(where: { $0.localizedCaseInsensitiveContains("date") }) ?? ""
-                amountColumn =
-                    value.headers.first(where: { $0.localizedCaseInsensitiveContains("amount") }) ?? ""
-                descriptionColumn =
-                    value.headers.first(where: {
-                        $0.localizedCaseInsensitiveContains("description")
-                            || $0.localizedCaseInsensitiveContains("merchant")
-                    }) ?? ""
-                accountColumn =
-                    value.headers.first(where: { $0.localizedCaseInsensitiveContains("account") }) ?? ""
+                if let suggested = value.suggestedMapping { prefill(suggested) }
             }
         } catch {
             Diagnostics.report(error, context: "Preview statement CSV")
             self.error = error.localizedDescription
         }
+    }
+
+    /// The server owns the column guess for an unfamiliar file.
+    private func prefill(_ mapping: StatementCsvColumnMapping) {
+        source = mapping.source
+        account = mapping.account
+        accountColumn = mapping.accountColumn
+        dateColumn = mapping.date
+        amountColumn = mapping.amount
+        descriptionColumn = mapping.description
+        merchantColumn = mapping.merchant
+        categoryColumn = mapping.category
+        notesColumn = mapping.notes
+        directionColumn = mapping.direction
+        statusColumn = mapping.status
+        pendingValue = mapping.pendingValue
+        chargeValue = mapping.chargeValue
+        creditValue = mapping.creditValue
+        sign = .init(rawValue: mapping.sign.rawValue) ?? .chargesNegative
     }
 
     private func prepare() async {

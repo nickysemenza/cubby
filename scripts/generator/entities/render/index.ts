@@ -562,7 +562,7 @@ export const entityListBaseOutputSchema = z.discriminatedUnion("entity", [${list
 export const entityListEnrichmentInputSchema = z.object({entity:z.enum(listEntities),ids:z.array(z.string().min(1)).max(500),groups:z.array(z.enum(["media","quality","relations","derived"])).max(4)});
 export const entityListEnrichmentErrorSchema = z.object({id:z.enum(["media","quality","relations","derived"]),state:z.literal("error"),error:publicStartOperationErrorSchema});
 export const entityListEnrichmentOutputSchema = z.discriminatedUnion("entity",[${listEnrichmentVariants}]);
-export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntities),sums:z.record(z.string(),z.number()).optional()});
+export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntities),sums:z.record(z.string(),z.number()).optional(),totalLabels:z.record(z.string(),z.string()).optional()});
 `;
   const listOutputSchemas = listEntitySpecs
     .map(

@@ -3,8 +3,8 @@ import {
   type RecipeId,
   type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
+import { getErrorMessage } from "@cubby/shared";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import type { UpsertedRecipe } from "~/server/repo/recipe/crud";
 
 type CookbookImportEvent =

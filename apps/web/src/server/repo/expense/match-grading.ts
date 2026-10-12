@@ -1,6 +1,5 @@
 import type { ExpenseMatchRatioLabel } from "@cubby/schemas/project";
-
-import { cents } from "~/server/repo/money";
+import { cents } from "@cubby/shared";
 
 /**
  * Pure presentation-grade signals for reconciliation candidates. They must

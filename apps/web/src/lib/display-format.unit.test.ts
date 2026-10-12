@@ -1,13 +1,20 @@
 import { measureEstimate } from "@cubby/schemas/nutrition";
 import vectors from "@cubby/shared/golden-vectors/display-format.json";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { formatCalendarDay } from "~/lib/date-format";
-import { formatCurrency } from "~/lib/number-format";
-import { compactEstimateText } from "~/lib/nutrition-compact-format";
+import { formatCurrency, formatCurrencyRange } from "~/lib/number-format";
+import {
+  compactEstimateText,
+  formatEstimate,
+  formatKcal,
+} from "~/lib/nutrition-format";
 import { wasmFormat } from "~/lib/wasm";
 
-// Currency, number, and compact estimates are formatted by one Rust
+const estimateMeasure = z.enum(["cost", "kcal", "macro", "share"]);
+
+// Currency, number, kcal, and estimates are formatted by one Rust
 // implementation (recipebridge `display_format`, which also reads this file);
 // these cases check the web bindings. Native reads the file too (CubbyKit
 // DisplayFormatTests). Dates are platform code, pinned only by the vectors.
@@ -44,6 +51,30 @@ describe("display-format golden vectors", () => {
           unit === "kcal" ? "kcal" : "macro",
         ),
       ).toBe(out);
+    },
+  );
+
+  it.each(vectors.estimate)(
+    "estimate $measure $estimate.status -> $out",
+    ({ measure, estimate, out, ...rest }) => {
+      expect(
+        formatEstimate(
+          measureEstimate.parse(estimate),
+          estimateMeasure.parse(measure),
+          "unit" in rest ? rest.unit : undefined,
+        ),
+      ).toBe(out);
+    },
+  );
+
+  it.each(vectors.kcal)("kcal $value -> $out", ({ value, out }) => {
+    expect(formatKcal(value)).toBe(out);
+  });
+
+  it.each(vectors.currencyRange)(
+    "currencyRange $lower..$upper -> $out",
+    ({ lower, upper, out }) => {
+      expect(formatCurrencyRange(lower, upper ?? undefined)).toBe(out);
     },
   );
 });

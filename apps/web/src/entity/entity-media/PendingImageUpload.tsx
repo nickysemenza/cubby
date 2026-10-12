@@ -1,5 +1,6 @@
 import type { EntityImage } from "@cubby/schemas/entity";
 import { ALLOWED_IMAGE_TYPES } from "@cubby/schemas/image";
+import { getErrorMessage } from "@cubby/shared";
 import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
@@ -12,7 +13,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { cn } from "~/lib/utils";
 import { showErrorToast } from "~/ui/feedback/error-details";

@@ -129,16 +129,16 @@ describe("NutritionBars", () => {
     ).parentElement;
     if (headline == null) throw new Error("Missing calorie headline");
     expect(
-      within(headline).getByText("120 kcal–180 kcal known · partial"),
+      within(headline).getByText("120–180 kcal known · partial"),
     ).toBeVisible();
     expect(
-      screen.getByText("Flour · 100 kcal–140 kcal known · partial"),
+      screen.getByText("Flour · 100–140 kcal known · partial"),
     ).toBeVisible();
     expect(screen.getByRole("region", { name: "Fat" })).toHaveTextContent(
-      "10 g–15 g known · partial",
+      "10–15 g known · partial",
     );
     expect(screen.getByRole("region", { name: "Carbs" })).toHaveTextContent(
-      "20 g–24 g",
+      "20–24 g",
     );
     expect(
       screen.getByText(/Bar widths use known subtotals and lower range bounds/),

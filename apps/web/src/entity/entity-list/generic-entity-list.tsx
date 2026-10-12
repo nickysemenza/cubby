@@ -60,7 +60,6 @@ import {
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
 import { ErrorDetails } from "~/ui/feedback/error-details";
-import { useClientEntityList } from "~/ui/hooks/useClientEntityList";
 import { useDeferredReferenceFilterOptions } from "~/ui/hooks/useDeferredReferenceFilterOptions";
 import {
   type BaseListRow,
@@ -175,24 +174,18 @@ const isStandardEntity = (
 function useListColumns(
   entity: BrowserRoutedEntity,
   parts: EntityListOverrideResult<BaseListRow, object>,
-  allowAutoIdentityEditing: boolean,
 ) {
   const helper = useMemo(() => createCubbyColumnHelper<BaseListRow>(), []);
   const { overrides, compose } = parts;
-  // Cookbook has a custom client-backed list but no standard update command;
-  // `useEntityFieldSave` then hands back no writer at all.
+  // An entity with no standard update command (Run) gets no writer at all.
   const onSaveField = useEntityFieldSave(entity);
   const identity = useMemo(
     () =>
       identityListConfig(entity, {
         generatedCrud: isStandardEntity(entity),
-        flatRows:
-          allowAutoIdentityEditing &&
-          !parts.tree &&
-          !parts.source &&
-          !parts.client,
+        flatRows: !parts.tree,
       }),
-    [allowAutoIdentityEditing, entity, parts.client, parts.source, parts.tree],
+    [entity, parts.tree],
   );
   const identityEditable = useMemo(() => {
     if (!identity.canAutoEdit || parts.list?.nameEditable || !onSaveField)
@@ -234,8 +227,6 @@ function useListColumns(
       composed.visit(add);
     });
   }, [entity, helper, overrides, compose, onSaveField]);
-  // The generic column collection is kept separate from the identity adapter
-  // so client/custom-source lists can still share the same column compiler.
   return { columns, identityEditable };
 }
 
@@ -283,16 +274,6 @@ export function GenericEntityList({
     const Slot = listSlotFor(entity, view.id);
     return Slot ? <Slot search={search} navigate={navigate} /> : null;
   }
-  if (override.mode === "client") {
-    return (
-      <ClientListBody
-        entity={entity}
-        view={view}
-        override={override}
-        context={{ search, navigate }}
-      />
-    );
-  }
   return (
     <ServerListBody
       entity={entity}
@@ -332,18 +313,16 @@ function ServerListBody({
   // Cards and Compact keep the same query, filtering, ordering, and page as
   // List. A search changes the roster, never the chosen presentation.
   const renderedView = view;
-  const { columns, identityEditable } = useListColumns(entity, parts, true);
+  const { columns, identityEditable } = useListColumns(entity, parts);
   const listOptions = useMemo(() => {
     if (parts.list?.nameEditable || !identityEditable) return parts.list;
     return { ...parts.list, nameEditable: identityEditable };
   }, [identityEditable, parts.list]);
   const queryOptions = useMemo((): ListQueryOptionsFn<object, BaseListRow> => {
     if (operations?.list) return operations.list;
-    if (parts.source) return parts.source;
-    if (!isListEntity(entity))
-      throw new Error(`${entity} has no list read and no list override source`);
+    if (!isListEntity(entity)) throw new Error(`${entity} has no list read`);
     return entityListBaseFor(entity).listQueryPlan;
-  }, [entity, operations?.list, parts.source]);
+  }, [entity, operations?.list]);
 
   // `deletable` defaults ON: a top-level list page owns its entity's rows,
   // where an embedded relationship ledger does not.
@@ -454,7 +433,7 @@ function ServerListBody({
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-2 py-1 text-xs md:px-4">
           <ListTotalSummary
             totals={entitySummary[entity].list.totals}
-            sums={list.sums}
+            labels={list.totalLabels}
             state={list.summaryState}
             onRetry={list.retrySummary}
           />
@@ -659,133 +638,4 @@ function ListTimeline({
       }}
     />
   );
-}
-
-/** Client-paged rows (cookbook): same columns, workbench and preview seam. */
-function ClientListBody({
-  entity,
-  view,
-  override,
-  context,
-}: {
-  entity: BrowserRoutedEntity;
-  view: "table" | "shelf" | "timeline";
-  override: AnyEntityListOverride;
-  context: ListOverrideContext;
-}) {
-  const { density } = useEntityListCardDensity();
-  const parts = override.use(context);
-  const { columns } = useListColumns(entity, parts, false);
-  const initialColumnVisibility = useListInitialColumnVisibility(
-    entity,
-    parts.list?.initialColumnVisibility,
-  );
-  const client = parts.client;
-  if (!client)
-    throw new Error(`${entity} list override declares no client rows`);
-  const { workbench, inspection, emptyState } =
-    useClientEntityList<BaseListRow>({
-      entity,
-      data: client.data,
-      isLoading: client.isLoading,
-      error: client.error,
-      refetch: client.refetch,
-      isRefreshing: client.isRefreshing,
-      matchesSearch: client.matchesSearch,
-      columns,
-      preview: DEFAULT_PREVIEW,
-      ...parts.list,
-      initialColumnVisibility,
-    });
-  usePageCount(
-    client.isLoading
-      ? undefined
-      : workbench.table.getFilteredRowModel().rows.length,
-  );
-  const {
-    onRowClick,
-    onRowHover,
-    onRowHoverEnd,
-    inspectRow,
-    PreviewSheet,
-    preview,
-    dockedInspector,
-    inspectorToggle,
-  } = inspection;
-  useEffect(() => {
-    if (
-      view !== "table" &&
-      Object.keys(workbench.table.atoms.rowSelection?.get() ?? {}).length > 0
-    )
-      workbench.table.resetRowSelection();
-  }, [view, workbench.table]);
-  const body = (
-    <>
-      {view === "table" ? (
-        <ListWorkbench
-          model={workbench}
-          emptyState={emptyState}
-          ariaLabel={`${entities[entity].pluralLabel} table`}
-          onRowClick={onRowClick}
-          onRowHover={onRowHover}
-          onRowHoverEnd={onRowHoverEnd}
-          currentRowId={preview?.id}
-          desktopInspector={dockedInspector}
-          inspectorToggle={inspectorToggle}
-        />
-      ) : (
-        <Stack gap="sm">
-          <DataTableToolbar
-            table={workbench.table}
-            entity={entity}
-            portalWorkbenchUtilities
-          />
-          {inspectorToggle}
-          <div
-            className={
-              dockedInspector
-                ? "grid min-w-0 grid-cols-[minmax(0,1fr)_25rem]"
-                : "min-w-0"
-            }
-          >
-            <div className="min-w-0">
-              <EntityShelf
-                emptyState={emptyState}
-                entity={entity}
-                items={workbench.table
-                  .getRowModel()
-                  .rows.map((row) => row.original)}
-                isLoading={workbench.isLoading}
-                error={workbench.error}
-                compact={density === "compact"}
-                onRetry={
-                  workbench.refreshControls
-                    ? () => void workbench.refreshControls?.onRefresh()
-                    : undefined
-                }
-                onInspect={(record) =>
-                  inspectRow({ id: record.id, original: record })
-                }
-                onRowHover={(record) =>
-                  onRowHover({ id: record.id, original: record })
-                }
-                onRowHoverEnd={(record) =>
-                  onRowHoverEnd({ id: record.id, original: record })
-                }
-                currentRowId={preview?.rowKey ?? preview?.id}
-              />
-            </div>
-            {dockedInspector && (
-              <aside className="max-h-[calc(100vh-10rem)] overflow-y-auto border-l border-[var(--border)]">
-                {dockedInspector}
-              </aside>
-            )}
-          </div>
-          <DataTablePagination table={workbench.table} />
-        </Stack>
-      )}
-      <PreviewSheet />
-    </>
-  );
-  return <>{parts.wrap ? parts.wrap(body, { data: client.data }) : body}</>;
 }

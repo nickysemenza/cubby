@@ -1,4 +1,5 @@
 import type { CookbookRunReport } from "@cubby/schemas/cookbook";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
@@ -71,12 +72,12 @@ export function FailuresPanel({
         >
           <WarningCircleIcon className="size-3 shrink-0" />
           {failedCount > 0 &&
-            `${failedCount} chunk${failedCount === 1 ? "" : "s"} failed — recipes in ${failedCount === 1 ? "it" : "them"} were lost`}
+            `${countLabel(failedCount, "chunk")} failed — recipes in ${failedCount === 1 ? "it" : "them"} were lost`}
           {failedCount > 0 && troubled.length > failedCount && " · "}
           {troubled.length > failedCount &&
             `${troubled.length - failedCount} flagged`}
           {missing.length > 0 &&
-            `${troubled.length > 0 ? " · " : ""}${missing.length} title${missing.length === 1 ? "" : "s"} in the contents were not found`}
+            `${troubled.length > 0 ? " · " : ""}${countLabel(missing.length, "title")} in the contents were not found`}
         </Row>
         {canRetry && (
           <Button type="button" variant="outline" size="sm" onClick={onRetry}>
@@ -100,7 +101,7 @@ export function FailuresPanel({
                 : ""}
               {chunk.final_model ? ` · ${chunk.final_model}` : ""}
               {chunk.attempts !== undefined
-                ? ` · ${chunk.attempts} attempt${chunk.attempts === 1 ? "" : "s"}`
+                ? ` · ${countLabel(chunk.attempts, "attempt")}`
                 : ""}
               {chunk.flags.length > 0 ? ` · ${flagSummary(chunk)}` : ""}
               {chunk.status === "failed" ? " · failed" : ""}
@@ -132,7 +133,7 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
         <CaretDownIcon className="size-3" />
         Run report — {formatSmallCurrency(report.total_cost_usd)}
         {!report.cost_complete && "+"} · {formatMinutesSeconds(report.wall_ms)}{" "}
-        · {calls.length} call{calls.length === 1 ? "" : "s"}
+        · {countLabel(calls.length, "call")}
       </CollapsibleTrigger>
       <CollapsibleContent>
         <Stack gap="sm" className="mt-2 border border-border p-2">
@@ -151,7 +152,7 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
               {report.usage_by_model.map((usage) => (
                 <li key={usage.model}>
                   <span className="font-mono">{usage.model}</span> ·{" "}
-                  {usage.calls} call{usage.calls === 1 ? "" : "s"}
+                  {countLabel(usage.calls, "call")}
                   {usage.cost_usd != null &&
                     ` · ${formatSmallCurrency(usage.cost_usd)}`}
                 </li>
@@ -170,8 +171,7 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
 
           {unresolved.length > 0 && (
             <Description size="xs">
-              {unresolved.length} unresolved reference
-              {unresolved.length === 1 ? "" : "s"}:{" "}
+              {countLabel(unresolved.length, "unresolved reference")}:{" "}
               {unresolved
                 .slice(0, 8)
                 .map((ref) => ref.text)

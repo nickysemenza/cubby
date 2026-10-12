@@ -17,7 +17,12 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
 import { entityExternalId, inventoryEntry, product } from "~/server/db/schema";
 import { attachDataQuality } from "~/server/repo/data-quality/hydrate";
-import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
+import {
+  escapeLike,
+  getDb,
+  imageOrder,
+  notDeleted,
+} from "~/server/repo/database-helpers";
 import {
   attachInventoryValuations,
   loadInventoryValuations,
@@ -261,8 +266,8 @@ const findProductByNameAndManufacturer = (
   findProductToAPI(
     db,
     and(
-      ilike(product.name, name),
-      ilike(product.manufacturer, manufacturer),
+      ilike(product.name, escapeLike(name)),
+      ilike(product.manufacturer, escapeLike(manufacturer)),
       notDeleted(product),
     ),
   );
@@ -288,7 +293,7 @@ export const findProductByNameFuzzyManufacturer = async (
   if (isUnspecifiedManufacturer(manufacturer)) {
     return findProductToAPI(
       db,
-      and(ilike(product.name, name), notDeleted(product)),
+      and(ilike(product.name, escapeLike(name)), notDeleted(product)),
     );
   }
 
@@ -306,8 +311,8 @@ export const findProductByNameFuzzyManufacturer = async (
   return findProductToAPI(
     db,
     and(
-      ilike(product.name, name),
-      ilike(product.manufacturer, UNSPECIFIED_MANUFACTURER),
+      ilike(product.name, escapeLike(name)),
+      ilike(product.manufacturer, escapeLike(UNSPECIFIED_MANUFACTURER)),
       notDeleted(product),
     ),
   );

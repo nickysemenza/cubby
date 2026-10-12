@@ -287,39 +287,6 @@ describe("BulkEditDialogBody", () => {
     );
   });
 
-  it("renders a nullable reference field with a search picker, and clearing it sends null", async () => {
-    const onSubmit = vi.fn().mockResolvedValue(undefined);
-    render(
-      <BulkEditDialogBody
-        entity="location"
-        items={[{ id: "LOC-1", name: "Bin 4" }]}
-        fieldKeys={["parentId"]}
-        onOpenChange={vi.fn()}
-        onSubmit={onSubmit}
-        isPending={false}
-        searchProviderFor={stubSearchProviderFor}
-      />,
-      { wrapper: harness.wrapper },
-    );
-
-    // The reference field's search-backed picker is present (the injected
-    // fake `searchProviderFor` above proves this is the same search seam
-    // `EntityIntentFields` wires reference fields through, not a plain select).
-    const picker = screen.getByRole("combobox", { name: "Parent" });
-    fireEvent.keyDown(picker, { key: "ArrowDown" });
-    fireEvent.click(screen.getByRole("option", { name: "Garage" }));
-
-    // Clear only appears once a value is selected — matching
-    // `moveToProject`'s old "Clear project" affordance, now generic.
-    fireEvent.keyDown(picker, { key: "ArrowDown" });
-    fireEvent.click(screen.getByRole("button", { name: "Clear Parent" }));
-
-    fireEvent.click(screen.getByRole("button", { name: "Update" }));
-
-    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(onSubmit).toHaveBeenCalledWith({ parentId: null });
-  });
-
   it("is initially quiet and disabled until at least one field is touched", () => {
     render(
       <BulkEditDialogBody

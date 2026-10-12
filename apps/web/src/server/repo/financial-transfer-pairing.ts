@@ -4,6 +4,7 @@ import type {
   SuggestFinancialTransferPairsInput,
 } from "@cubby/schemas/household-contribution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { cents } from "@cubby/shared";
 import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
@@ -14,7 +15,6 @@ import {
   ledgerParty,
 } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
-import { cents } from "~/server/repo/money";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
 export type PairingRow = {

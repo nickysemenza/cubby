@@ -3,6 +3,7 @@ import type {
   InventoryItemForTree,
   LocationType,
 } from "@cubby/schemas/location";
+import { countLabel } from "@cubby/shared/pluralize";
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -636,8 +637,7 @@ function MobileGalleryDrillDown({
                 />
                 {hasChildren && (
                   <Description as="div" size="2xs" className="mt-1 text-center">
-                    {location.children!.length} sub-location
-                    {location.children!.length !== 1 ? "s" : ""}
+                    {countLabel(location.children!.length, "sub-location")}
                   </Description>
                 )}
               </button>

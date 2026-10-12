@@ -407,7 +407,7 @@ struct GenericEntityListModelTests {
                 },
                 summary: {
                     calls.withLock { $0.append("summary") }
-                    return ["price": 1]
+                    return ["price": "$1.00"]
                 })
             let source = EntityListPageSource(id: "shelf", enrichesRows: enrichesRows) { page in
                 ListPage(
@@ -428,7 +428,7 @@ struct GenericEntityListModelTests {
                 #expect(recorded.contains("enrich:PRD-row-2"))
             } else {
                 #expect(recorded.isEmpty)
-                #expect(model.enrichment.sums == nil)
+                #expect(model.enrichment.totalLabels == nil)
                 #expect(model.enrichment.isLoadingSummary == false)
             }
         }

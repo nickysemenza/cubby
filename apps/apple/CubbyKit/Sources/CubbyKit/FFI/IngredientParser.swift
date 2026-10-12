@@ -55,7 +55,7 @@ public enum ScanCodes {
 
 /// The value formats web and native print identically, from the Rust the web calls as WASM
 /// (`recipebridge/src/display_format.rs`; pinned by `golden-vectors/display-format.json`). Swift
-/// never formats a currency, bare number, amount, or nutrition cell itself.
+/// never formats a currency, bare number, amount, or nutrition estimate itself.
 public enum ValueFormat {
     public enum CompactUnit: Sendable {
         case kcal
@@ -87,22 +87,57 @@ public enum ValueFormat {
         CubbyFFI.formatAmount(unit: unit ?? "", value: value, upperValue: upperValue)
     }
 
-    /// A compact nutrition figure or range, without the partial marker.
-    public static func compactRange(lower: Double, upper: Double?, unit: CompactUnit) -> String {
-        CubbyFFI.formatCompactRange(lower: lower, upper: upper, unit: unit.ffi)
+    /// Which number rule a long-form estimate label uses.
+    public enum EstimateMeasure: Sendable {
+        /// USD with cents.
+        case cost
+        /// Whole and grouped.
+        case kcal
+        /// One decimal, grouped, a trailing `.0` dropped.
+        case macro
+        /// A fraction printed as a one-decimal percent.
+        case share
+
+        fileprivate var ffi: CubbyFFI.EstimateMeasure {
+            switch self {
+            case .cost: .cost
+            case .kcal: .kcal
+            case .macro: .macro
+            case .share: .share
+            }
+        }
     }
 
-    /// The compact cell for a known figure (`partial` appends `+`) or `nil` for an unknown one
-    /// (`—`).
-    public static func compactEstimate(
-        known: (lower: Double, upper: Double?)?, partial: Bool, unit: CompactUnit
-    ) -> String {
-        let figure: EstimateFigure =
-            switch known {
-            case .some(let known) where partial: .partial(lower: known.lower, upper: known.upper)
-            case .some(let known): .complete(lower: known.lower, upper: known.upper)
-            case .none: .unknown
+    /// A nutrition/cost estimate as the formatters read it: a known figure (complete or partial,
+    /// with how many contributors were inferred zero), unavailable, or pending.
+    public enum Estimate: Sendable {
+        case complete(lower: Double, upper: Double?, inferredZero: Int)
+        case partial(lower: Double, upper: Double?, inferredZero: Int)
+        case unavailable(notApplicable: Bool)
+        case pending
+
+        fileprivate var ffi: EstimateFigure {
+            switch self {
+            case .complete(let lower, let upper, let inferredZero):
+                .complete(lower: lower, upper: upper, inferredZero: UInt32(inferredZero))
+            case .partial(let lower, let upper, let inferredZero):
+                .partial(lower: lower, upper: upper, inferredZero: UInt32(inferredZero))
+            case .unavailable(let notApplicable): .unavailable(notApplicable: notApplicable)
+            case .pending: .pending
             }
-        return CubbyFFI.formatCompactEstimate(figure: figure, unit: unit.ffi)
+        }
+    }
+
+    /// The one-line cell: a partial figure ends in `+`; unavailable or pending is `—`.
+    public static func compactEstimate(_ estimate: Estimate, unit: CompactUnit) -> String {
+        CubbyFFI.formatCompactEstimate(figure: estimate.ffi, unit: unit.ffi)
+    }
+
+    /// The long form for detail text and accessibility (`1,500–2,250 kcal known · partial`,
+    /// `Pending`, `N/A`): `unit` prints once after the figure or range.
+    public static func estimate(_ estimate: Estimate, measure: EstimateMeasure, unit: String? = nil)
+        -> String
+    {
+        CubbyFFI.formatEstimate(figure: estimate.ffi, measure: measure.ffi, unit: unit)
     }
 }

@@ -5,7 +5,6 @@ import {
   getDefaultShoppingRange,
   mealSuggestionsSearchSchema,
   parseWeekStart,
-  shoppingListSearchDefaults,
   shoppingListSearchSchema,
 } from "./meal-search";
 
@@ -57,17 +56,6 @@ describe("meal route search", () => {
     expect(shoppingListSearchSchema.parse({ view: "grid" })).toMatchObject({
       view: undefined,
     });
-  });
-
-  /**
-   * `stripSearchParams` drops any key whose value equals its default, so a key
-   * missing from the defaults object is never stripped and leaks into every
-   * URL. Cheap to get wrong when adding a param, invisible when you do.
-   */
-  it("declares a default for every search key", () => {
-    expect(Object.keys(shoppingListSearchDefaults).sort()).toEqual(
-      Object.keys(shoppingListSearchSchema.shape).sort(),
-    );
   });
 
   it("derives the default shopping range from the current week", () => {

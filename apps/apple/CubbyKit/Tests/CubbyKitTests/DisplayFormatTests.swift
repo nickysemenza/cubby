@@ -20,12 +20,19 @@ struct DisplayFormatTests {
         let estimate: MeasureEstimate
         let out: String
     }
+    private struct LabelVector: Decodable {
+        let measure: String
+        let unit: String?
+        let estimate: MeasureEstimate
+        let out: String
+    }
     private struct File: Decodable {
         let currency: [MoneyVector]
         let signedCurrency: [MoneyVector]
         let plainDate: [DateVector]
         let number: [MoneyVector]
         let compactEstimate: [EstimateVector]
+        let estimate: [LabelVector]
     }
 
     private func vectors() throws -> File {
@@ -62,6 +69,18 @@ struct DisplayFormatTests {
             #expect(
                 DisplayFormat.compactEstimate(vector.estimate, unit: unit) == vector.out,
                 "\(vector.unit) \(vector.out)")
+        }
+    }
+
+    @Test func estimateMatchesTheSharedVectors() throws {
+        let measures: [String: ValueFormat.EstimateMeasure] = [
+            "cost": .cost, "kcal": .kcal, "macro": .macro, "share": .share,
+        ]
+        for vector in try vectors().estimate {
+            let measure = try #require(measures[vector.measure])
+            #expect(
+                DisplayFormat.estimate(vector.estimate, measure: measure, unit: vector.unit) == vector.out,
+                "\(vector.measure) \(vector.out)")
         }
     }
 }

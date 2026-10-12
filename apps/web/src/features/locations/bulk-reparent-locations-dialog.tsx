@@ -3,6 +3,7 @@ import {
   type LocationShortcode,
 } from "@cubby/schemas/identifiers";
 import type { LocationListItemOut } from "@cubby/schemas/location";
+import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
@@ -60,7 +61,7 @@ export function BulkReparentLocationsDialog({
     ...location.bulkUpdateParent.mutationOptions(),
     onSuccess: ({ updated }) => {
       toast.success(
-        `Moved ${updated} location${updated === 1 ? "" : "s"} to the new parent.`,
+        `Moved ${countLabel(updated, "location")} to the new parent.`,
       );
       form.reset();
       onSuccess();

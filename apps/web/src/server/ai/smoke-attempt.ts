@@ -1,6 +1,5 @@
+import { getErrorMessage } from "@cubby/shared";
 import { z } from "zod";
-
-import { getErrorMessage } from "~/lib/error-utils";
 
 type AttemptResult = { result: unknown; noModelCall?: boolean };
 type UsageSummary = {

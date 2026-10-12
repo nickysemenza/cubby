@@ -2,6 +2,7 @@ import type {
   ProjectAttentionItem,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
+import { countLabel } from "@cubby/shared/pluralize";
 import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
@@ -35,45 +36,44 @@ const ATTENTION_GROUPS: Array<{
     type: "overdue_task",
     icon: CalendarCheckIcon,
     iconClassName: "size-3.5 text-destructive",
-    title: (n) => `${n} overdue task${n !== 1 ? "s" : ""}`,
+    title: (n) => countLabel(n, "overdue task"),
   },
   {
     type: "blocked_work",
     icon: ProhibitIcon,
     iconClassName: "size-3.5 text-warning",
-    title: (n) =>
-      `${n} project${n !== 1 ? "s" : ""} blocked with no next action`,
+    title: (n) => `${countLabel(n, "project")} blocked with no next action`,
   },
   {
     type: "stalled_project",
     icon: WarningIcon,
     iconClassName: "size-3.5 text-warning",
     title: (n) =>
-      `${n} stalled project${n !== 1 ? "s" : ""} (no activity in 30 days)`,
+      `${countLabel(n, "stalled project")} (no activity in 30 days)`,
   },
   {
     type: "past_due_planned_expense",
     icon: ClockIcon,
     iconClassName: "size-3.5 text-warning",
-    title: (n) => `${n} planned expense${n !== 1 ? "s" : ""} past due`,
+    title: (n) => `${countLabel(n, "planned expense")} past due`,
   },
   {
     type: "missing_budget",
     icon: CurrencyDollarIcon,
     iconClassName: "size-3.5 text-warning",
-    title: (n) => `${n} project${n !== 1 ? "s" : ""} missing a cost estimate`,
+    title: (n) => `${countLabel(n, "project")} missing a cost estimate`,
   },
   {
     type: "unclassified_expense",
     icon: TagIcon,
     iconClassName: "size-3.5 text-muted-foreground",
-    title: (n) => `${n} unclassified expense${n !== 1 ? "s" : ""}`,
+    title: (n) => countLabel(n, "unclassified expense"),
   },
   {
     type: "date_window_drift",
     icon: RulerIcon,
     iconClassName: "size-3.5 text-muted-foreground",
-    title: (n) => `${n} project date window${n !== 1 ? "s" : ""} hiding work`,
+    title: (n) => `${countLabel(n, "project date window")} hiding work`,
   },
 ];
 

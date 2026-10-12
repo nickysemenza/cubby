@@ -301,7 +301,7 @@ export const MCP_TOOLS = defineMcpTools({
         }),
         output: usdaFoodMcpListOut,
         description:
-          'Use this when the user needs to choose among USDA records for Product nutrition mapping. The interactive picker shows the search, source type, macros, and existing Cubby links and lets the user refine before choosing — wait for their "Use this" choice instead of reproducing every result in prose. Do not invoke it when the Cubby Product already has a resolved USDA food or for a general nutrition question that does not require record selection.',
+          "Use this when the user needs to choose among USDA records for Product nutrition mapping. Returns ranked candidates, best match first, with source type, macros, and existing Cubby links. Present the top few (name, source type, key macros, fdc_id) and let the member pick one before linking; refine the query and search again if none fit. Do not invoke it when the Cubby Product already has a resolved USDA food or for a general nutrition question that does not require record selection.",
       }),
       get: mcpAction({
         op: usdaFoodContract.ops.byFdcId,

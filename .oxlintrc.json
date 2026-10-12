@@ -78,6 +78,7 @@
     ],
     "cubby/no-unsafe-identifiers": "error",
     "cubby/no-raw-enum-literal-in-sql": "error",
+    "cubby/no-hand-rolled-plural": "error",
     "eslint/no-shadow": "off",
     "eslint/no-underscore-dangle": "off",
     "typescript/no-explicit-any": "error",

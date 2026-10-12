@@ -8,11 +8,11 @@ import {
   searchHitSchema,
   searchableEntities,
 } from "@cubby/schemas/search";
+import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { findSemanticEntityCandidates } from "~/server/repo/entity-embedding-search";

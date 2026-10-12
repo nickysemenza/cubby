@@ -1,7 +1,6 @@
+import { getErrorMessage } from "@cubby/shared";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { getErrorMessage } from "~/lib/error-utils";
 
 import { inferChatGptPlan } from "./client";
 import { ChatGptInferenceRequests, type ChatGptPlanRpc } from "./rpc";

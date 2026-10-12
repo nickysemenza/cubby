@@ -137,7 +137,6 @@ describe("web build freshness", () => {
     "apps/web/vite.config.ts",
     "pnpm-lock.yaml",
     "scripts/generator/new.ts",
-    "apps/mcp-apps/new.ts",
     "packages/shared/new.ts",
     "apps/web/src/routeTree.gen.ts",
   ])("invalidates changed build input %s", (file) => {

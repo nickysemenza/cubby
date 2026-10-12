@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { HopRange, RecordPaths } from "./connected-records-table";
+import { RecordPaths } from "./connected-records-table";
 
 describe("record connection evidence", () => {
   let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -100,10 +100,5 @@ describe("record connection evidence", () => {
       "href",
       "/expenses/EXP-TEST",
     );
-  });
-
-  it("shows a range when a table has routes of different record lengths", () => {
-    render(<HopRange range={{ min: 2, max: 3 }} />);
-    expect(screen.getByText("2–3 record hops")).toBeVisible();
   });
 });

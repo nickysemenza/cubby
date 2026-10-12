@@ -2,8 +2,6 @@ import { dataQuality } from "@cubby/schemas/data-quality";
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ListRendererId } from "@cubby/schemas/entity-manifest";
-import type { ImageWithEntity } from "@cubby/schemas/image";
-import type { CookbookSummary } from "@cubby/schemas/recipe";
 import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { z } from "zod";
@@ -38,31 +36,19 @@ import {
 } from "./presentation-coverage";
 
 /**
- * Entities outside the kernel list roster whose index still builds columns
- * from the manifest through a client-mode override (`list-columns/*.tsx`),
- * keyed to the row type that override pages. Image has no kernel list
- * contract (`route.list: null`) but still runs through the generic list
- * page via its own override source (`entities/list-columns/image.tsx`), so
- * it needs a coverage entry here the same way cookbook does.
+ * Entities outside the kernel list roster whose renderers still meet a row
+ * the manifest list does not type: the external USDA catalog.
  */
 type ClientListRows = {
-  cookbook: CookbookSummary;
   "usda-food": FoodSummaryWithLinkedProducts;
-  // `dataQuality` is optional on `ImageWithEntity` at the schema level (it's
-  // a postprocessed field `imageWithRelationsToAPI`'s callers merge in, like
-  // `representations`/`processingIssue`), but `imageList` — the only
-  // producer this list renderer ever sees rows from — always attaches it.
-  image: ImageWithEntity & { dataQuality: DataQuality };
 };
 
 type ClientListRenderer<TRow extends object> = (
   helper: CubbyColumnHelper<TRow>,
 ) => CubbyColumnCollection<TRow>;
 
-// Ranges over every entity, not just `ListEntity`: a scored entity with no
-// generic list read (cookbook — bespoke browser, no pagination envelope, see
-// cookbook.ts) still gets the manifest's `dataQuality` list-renderer id and
-// must carry a disposition here.
+// Ranges over every entity, not just `ListEntity`: an entity with no generic
+// list read (usda-food) still carries a disposition for each renderer id.
 type ListRendererEntity = {
   [E in Entity]: ListRendererId<E> extends never ? never : E;
 }[Entity];
@@ -174,10 +160,8 @@ const scoredCoverage = <E extends ScoredListEntity>() => ({
  * The image entity's own thumbnail: a row IS an image, shown only once its
  * file has finished uploading (an upload in flight has nothing to render).
  */
-const uploadedImageRenderer = (
-  helper: CubbyColumnHelper<ClientListRows["image"]>,
-): CubbyColumnCollection<ClientListRows["image"]> =>
-  createCubbyColumnCollection<ClientListRows["image"]>((add) => {
+const uploadedImageRenderer: ListRenderer<"image"> = (helper) =>
+  createCubbyColumnCollection((add) => {
     add(
       createImageColumn(helper, {
         id: "images",
@@ -240,18 +224,12 @@ export const listRendererCoverage = {
   },
   // pantry and garden entities
   ingredient: scoredCoverage<"ingredient">(),
-  cookbook: {
-    "data-quality": implemented<ClientListRenderer<CookbookSummary>>((helper) =>
+  cookbook: scoredCoverage<"cookbook">(),
+  image: {
+    "data-quality": implemented<ListRenderer<"image">>((helper) =>
       dataQualityRenderer(helper),
     ),
-  },
-  image: {
-    "data-quality": implemented<ClientListRenderer<ClientListRows["image"]>>(
-      (helper) => dataQualityRenderer(helper),
-    ),
-    "uploaded-image": implemented<ClientListRenderer<ClientListRows["image"]>>(
-      (helper) => uploadedImageRenderer(helper),
-    ),
+    "uploaded-image": implemented(uploadedImageRenderer),
   },
   location: {
     ...scoredCoverage<"location">(),
@@ -316,7 +294,8 @@ export function listRendererColumns<TRecord extends object>(
   )?.[1];
   const disposition:
     | PresentationCoverage<
-        ListRenderer<ListEntity> | ClientListRenderer<CookbookSummary>
+        | ListRenderer<ListEntity>
+        | ClientListRenderer<FoodSummaryWithLinkedProducts>
       >
     | undefined =
     entry === undefined

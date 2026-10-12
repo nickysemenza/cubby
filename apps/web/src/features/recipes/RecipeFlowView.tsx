@@ -3,6 +3,7 @@ import type {
   RecipeFlowArtifact,
   RecipeFlowOperation,
 } from "@cubby/schemas/recipe-flow";
+import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
 import { GitBranchIcon } from "@phosphor-icons/react/dist/csr/GitBranch";
@@ -24,7 +25,6 @@ import { VerbButton } from "~/entity/actions/action-verb-ui";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
-import { getErrorMessage } from "~/lib/error-utils";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
 import { MarkdownText } from "~/ui/markdown";

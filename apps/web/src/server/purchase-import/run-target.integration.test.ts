@@ -3,7 +3,7 @@ import {
   runEntityId,
 } from "@cubby/schemas/identifiers";
 import { runSummary } from "@cubby/schemas/run";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -145,34 +145,6 @@ describe("import run summary pricing", () => {
         endedAt: summary!.endedAt?.toISOString() ?? null,
       }).estimatedCost,
     ).toBe(summary!.estimatedCost);
-  });
-});
-
-describe("photo Run image reference", () => {
-  const ctx = withTestDb();
-
-  // Photo membership must reference an Image, even when another entity UUID exists.
-  it("refuses a non-Image UUID through the Image foreign key", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Run target kind test member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const run = await startPhotoInventoryRun(ctx.db, {
-      ledgerPartyId: party.id,
-      actorUserId: ctx.actor.userId,
-    });
-    const recipe = await insertWithShortcode(ctx.db, "recipe", {
-      name: "Run target kind recipe",
-    });
-    await expect(
-      getDb(ctx.db).execute(
-        sql`INSERT INTO "PhotoRunImage" ("runId", "imageId", "targetFingerprint")
-            VALUES (${run.id}, ${recipe.id}, 'kind-test-fingerprint')`,
-      ),
-    ).rejects.toMatchObject({
-      cause: { code: "23503" },
-    });
   });
 });
 

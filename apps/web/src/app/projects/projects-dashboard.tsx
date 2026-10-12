@@ -3,6 +3,9 @@ import type {
   ProjectOut,
   TaskOut,
 } from "@cubby/schemas/project";
+import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
+import { capitalize } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
 import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
@@ -69,7 +72,7 @@ import {
 } from "./dashboard-filter-state";
 import { ActiveScopeSummary, DashboardFilters } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
-import { capitalize, PROJECT_STATUS_LABELS, StatusIcon } from "./shared";
+import { StatusIcon } from "./shared";
 
 // Portfolio analytics is one optional interaction: keep all of its Nivo/d3
 // charts in one lazy module so selecting Analytics has one predictable fetch.
@@ -365,8 +368,8 @@ function OverviewView({
             search={{ view: "table", statuses: "done" }}
             className="text-xs text-muted-foreground hover:text-foreground hover:underline"
           >
-            {data.completedCount} completed project
-            {data.completedCount !== 1 ? "s" : ""} — view completed →
+            {countLabel(data.completedCount, "completed project")} — view
+            completed →
           </Link>
         )}
       </Section>

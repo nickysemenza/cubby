@@ -1,4 +1,5 @@
 import { RECONCILIATION_TOLERANCE } from "@cubby/schemas/purchase";
+import { cents } from "@cubby/shared";
 import { getTableName, sql } from "drizzle-orm";
 
 import { purchase } from "~/server/db/schema";
@@ -13,7 +14,6 @@ import {
   vendorExpenseCountSql,
   vendorUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
-import { cents } from "~/server/repo/money";
 import {
   purchaseEvidenceExpectationSql,
   purchaseEvidenceFingerprintSql,

@@ -12,9 +12,6 @@ import {
   errorDiagnosticsSchema,
 } from "./error-diagnostics";
 
-// Re-export from shared for convenience (22+ consumers)
-export { getErrorMessage } from "@cubby/shared";
-
 export const SUPERSEDED_VIEW_TRANSITION_MESSAGE =
   "Old view transition aborted by new view transition.";
 

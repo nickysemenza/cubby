@@ -6,7 +6,10 @@ import type {
   VendorAccountId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
+import type {
+  EffectiveInventoryOwnership,
+  InventoryOwnershipSource,
+} from "@cubby/schemas/inventory-ownership";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 
@@ -621,6 +624,32 @@ const publicAcquisitionEvidence = (acquisition: Acquisition | null) =>
       }
     : null;
 
+const INHERITED_SOURCE_PHRASES = {
+  explicit: null,
+  unassigned: null,
+  inherited_beneficiary: "purchase beneficiary",
+  inherited_vendor_account: "vendor account default",
+  inherited_payment_account: "payment account default",
+  unresolved: null,
+} satisfies Record<InventoryOwnershipSource, string | null>;
+
+/** The server owns ownership wording; web and native render `basis` verbatim. */
+export const inventoryOwnershipBasis = (
+  ownership: Omit<EffectiveInventoryOwnership, "basis" | "evidence">,
+): string => {
+  if (ownership.mode === "unassigned") return "No individual owner";
+  const owner = ownership.effectiveOwner?.name;
+  if (ownership.mode === "person") {
+    if (!owner) return "Owner unresolved";
+    return ownership.matchesInheritedOwner
+      ? `Confirmed: ${owner} · matches inherited owner`
+      : `Confirmed: ${owner}`;
+  }
+  if (!owner) return "Inherited owner unresolved";
+  const phrase = INHERITED_SOURCE_PHRASES[ownership.source];
+  return phrase ? `Inherited: ${owner} · ${phrase}` : `Inherited: ${owner}`;
+};
+
 const resolveEntryOwnership = async (
   entry: OwnershipEntry,
   inherited: InheritedCandidate,
@@ -649,21 +678,21 @@ const resolveEntryOwnership = async (
       : entry.ownershipMode === "unassigned"
         ? "unassigned"
         : inherited.source;
-  return {
+  const resolved: Omit<EffectiveInventoryOwnership, "basis" | "evidence"> = {
     mode: entry.ownershipMode,
     explicitOwner: publicOwner(explicit),
     effectiveOwner: publicOwner(effective),
     source,
-    basis:
-      inherited.acquisition && inherited.owner
-        ? "Inferred from the only recorded acquisition"
-        : null,
-    evidence: publicAcquisitionEvidence(inherited.acquisition),
     evidenceFingerprint,
     matchesInheritedOwner:
       entry.ownershipMode === "person" &&
       explicit !== null &&
       inherited.owner?.id === explicit.id,
+  };
+  return {
+    ...resolved,
+    basis: inventoryOwnershipBasis(resolved),
+    evidence: publicAcquisitionEvidence(inherited.acquisition),
   };
 };
 

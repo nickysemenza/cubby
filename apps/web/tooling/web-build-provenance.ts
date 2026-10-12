@@ -106,7 +106,6 @@ const WEB_BUILD_SOURCE = {
     "apps/web/tooling/**",
     "apps/web/scripts/**",
     "apps/web/*.{ts,json,jsonc,toml,html}",
-    "apps/mcp-apps/**",
     "packages/**",
     "recipebridge/**",
     "scripts/**",
@@ -118,12 +117,7 @@ const WEB_BUILD_SOURCE = {
   // The in-app docs route bundles docs/guide/**/*.md (docs-registry.tsx); the
   // purchase agent bundles its skills (purchase-agent/import-run-workflows.ts).
   bundledMarkdown: ["docs/guide/**/*.md", AGENT_SKILLS],
-  generatedRoots: [
-    "apps/web/src",
-    "apps/web/public",
-    "apps/mcp-apps",
-    "packages",
-  ],
+  generatedRoots: ["apps/web/src", "apps/web/public", "packages"],
 } satisfies BuildSource;
 
 export function webBuildSourceFingerprint(repoRoot: string): string {

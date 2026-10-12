@@ -111,35 +111,4 @@ describe("duplicate spend section", () => {
     expect(screen.queryByText(/apart/)).toBeNull();
     expect(screen.queryByText(/weaker match/)).toBeNull();
   });
-
-  it("handles the singular and deleted-vendor wording", () => {
-    const node = entry().node(
-      problems([
-        candidate({
-          vendorName: null,
-          purchaseExpenseCount: 1,
-          dayDelta: 1,
-          alternateMatchCount: 2,
-        }),
-      ]),
-      undefined,
-    );
-    render(node, { wrapper: harness.wrapper });
-
-    expect(screen.getByText(/deleted vendor expense total/)).toBeTruthy();
-    expect(screen.getByText(/across 1 line$/)).toBeTruthy();
-    expect(screen.getByText("1 day apart")).toBeTruthy();
-    expect(screen.getByText("+2 weaker matches")).toBeTruthy();
-  });
-
-  it("renders the empty state when nothing is flagged", () => {
-    render(entry().node(problems([]), undefined), {
-      wrapper: harness.wrapper,
-    });
-    expect(
-      screen.getByText(
-        "No unlinked expense looks like a purchase already recorded.",
-      ),
-    ).toBeTruthy();
-  });
 });

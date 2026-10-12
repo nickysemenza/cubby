@@ -15,6 +15,7 @@ import type {
   RunShortcode,
 } from "@cubby/schemas/identifiers";
 import { purchaseShortcode } from "@cubby/schemas/identifiers";
+import { getErrorMessage } from "@cubby/shared";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useQuery } from "@tanstack/react-query";
@@ -31,7 +32,6 @@ import {
   useQueuePass,
 } from "~/features/queue-pass/useQueuePass";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";

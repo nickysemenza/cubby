@@ -22,7 +22,11 @@ import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { entityExternalId, product } from "~/server/db/schema";
-import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import {
+  ilikeContains,
+  notDeleted,
+  unwrapDb,
+} from "~/server/repo/database-helpers";
 
 const liveGtinRows = (db: Database | DrizzleTransaction, ids: ProductId[]) =>
   unwrapDb(db)
@@ -118,7 +122,8 @@ export const productMatchesGtinTerm = (term: string): SQL => {
       AND pei."deletedAt" IS NULL
       AND (${sql.join(
         terms.map(
-          (candidate) => sql`pei."externalId" ILIKE ${`%${candidate}%`}`,
+          (candidate) =>
+            sql`pei."externalId" ILIKE ${ilikeContains(candidate)}`,
         ),
         sql` OR `,
       )}))`;

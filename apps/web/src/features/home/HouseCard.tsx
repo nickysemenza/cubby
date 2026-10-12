@@ -2,6 +2,7 @@ import type {
   TaskTodayBriefingItemOut,
   TaskTodayBriefingOut,
 } from "@cubby/schemas/project";
+import { getErrorMessage } from "@cubby/shared";
 import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -13,7 +14,6 @@ import {
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { CalendarDate } from "~/ui/common/calendar-date";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";

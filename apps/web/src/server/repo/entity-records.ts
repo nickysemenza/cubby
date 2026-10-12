@@ -15,6 +15,7 @@ import type { Database } from "~/server/db";
 import { entryFor, scoreSql, statusSql } from "~/server/repo/data-quality/sql";
 import {
   householdDayRangeConditions,
+  ilikeContains,
   unwrapDb,
 } from "~/server/repo/database-helpers";
 import {
@@ -89,8 +90,7 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
   });
   const predicates: SQL[] = [];
   if (input.q) {
-    // Name/code search is literal; wildcard characters cannot widen the roster.
-    const pattern = `%${input.q.replace(/[\\%_]/g, "\\$&")}%`;
+    const pattern = ilikeContains(input.q);
     predicates.push(sql`(name ILIKE ${pattern} OR id ILIKE ${pattern})`);
   }
   if (input.image) predicates.push(sql`"hasImage" = ${input.image === "has"}`);

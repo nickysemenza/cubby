@@ -695,7 +695,8 @@ function CalendarDaySheet({
             label="Calories"
             value={formatEstimate(
               summary.mealTotals.nutrition.kcal,
-              (value) => `${Math.round(value).toLocaleString()} kcal`,
+              "kcal",
+              "kcal",
             )}
           />
         </div>

@@ -1,8 +1,6 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import type { ImageAssociation, ImageWithEntity } from "@cubby/schemas/image";
-import type { CookbookSummary } from "@cubby/schemas/recipe";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { dataTypeLabel } from "@cubby/usda";
 import { useQuery } from "@tanstack/react-query";
@@ -24,14 +22,13 @@ import {
   readDisplayReferenceField,
   readRecordField,
 } from "~/entity/entity-references";
-import { enumFieldLabel, heroChipLabel } from "~/entity/enum-field-display";
+import { heroChipLabel } from "~/entity/enum-field-display";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 
 import {
   type BodyBlock,
-  type CrossLink,
   ManifestCard,
   type ManifestCardProps,
 } from "../../ui/preview/manifest-card";
@@ -80,14 +77,10 @@ function ResolvedManifestCard({
 
 // The generic card: a record's manifest hero (chip → identity, breadcrumb →
 // cross-link, images → thumb) plus its declared preview facts
-// (`entityPreviewFacts`). usda-food, cookbook and image keep their own cards
-// because their fetch shape genuinely diverges (fdc_id coercion, list-backed
-// detail without a dedicated endpoint, association-bearing image read).
+// (`entityPreviewFacts`). usda-food keeps its own card: it is the external
+// USDA catalog read by fdc_id, not a kernel entity.
 
-type ManifestPreviewEntity = Exclude<
-  HoverPreviewEntity,
-  "usda-food" | "cookbook" | "image"
->;
+type ManifestPreviewEntity = Exclude<HoverPreviewEntity, "usda-food">;
 
 const titleValue = z.string().nullish();
 const recordId = z.string();
@@ -225,114 +218,6 @@ export function UsdaFoodPreviewContent({
   );
 }
 
-// ── Cookbook ────────────────────────────────────────────────────────────────
-
-export function toCookbookCard(data: CookbookSummary): ManifestCardProps {
-  const body: BodyBlock[] = [];
-  if (data.coverUrl) body.push({ kind: "thumb", url: data.coverUrl });
-  body.push({
-    kind: "stats",
-    stats: [
-      {
-        label: "Recipes",
-        value: data.recipeCount,
-        // How many of the book's extracted recipes are actually imported.
-        caption:
-          data.sourceRecipeCount > data.recipeCount
-            ? `of ${data.sourceRecipeCount}`
-            : undefined,
-      },
-      {
-        label: "Subjects",
-        value:
-          data.subjects.length > 0 ? data.subjects.slice(0, 2).join(", ") : "—",
-      },
-    ],
-  });
-
-  return {
-    entity: "cookbook",
-    routeParam: data.id,
-    icon: <EntityIcon entity="cookbook" size={14} colored />,
-    name: data.name,
-    tag: "cookbook",
-    identity: data.author.length > 0 ? data.author.join(", ") : undefined,
-    body,
-  };
-}
-
-export function CookbookPreviewContent({
-  cookbookId,
-  showOpenAction = true,
-  showIdentityHeader = true,
-  onNameResolved,
-  onRecordResolved,
-}: { cookbookId: string } & CompactPreviewPresentation) {
-  const query = useQuery(entityDetailFor("cookbook").queryOptions(cookbookId));
-
-  return (
-    <PreviewQuery
-      query={query}
-      label="Cookbook"
-      onUnavailable={onRecordResolved}
-    >
-      {(data) => (
-        <ResolvedManifestCard
-          card={toCookbookCard(data)}
-          record={data}
-          showOpenAction={showOpenAction}
-          showIdentityHeader={showIdentityHeader}
-          onNameResolved={onNameResolved}
-          onRecordResolved={onRecordResolved}
-        />
-      )}
-    </PreviewQuery>
-  );
-}
-
-// ── Images ─────────────────────────────────────────────────────────────────
-
-const imageAssociationCrossLink = (
-  association: ImageAssociation,
-): CrossLink => ({
-  to: entities[association.entityKind].routes.detail,
-  params: entityDetailParams(association.entityId),
-  icon: <EntityIcon entity={association.entityKind} size={12} colored />,
-  label: `${association.entityName} · ${association.role}`,
-});
-
-export function toImageCard(data: ImageWithEntity): ManifestCardProps {
-  const dimensions =
-    data.width !== null && data.height !== null
-      ? `${data.width} × ${data.height}`
-      : "—";
-
-  return {
-    entity: "image",
-    routeParam: data.id,
-    icon: <EntityIcon entity="image" size={14} colored />,
-    name: data.filename,
-    tag: "image",
-    identity: enumFieldLabel("image", "status", data.status),
-    crossLinks:
-      data.associations.length > 0
-        ? data.associations.map(imageAssociationCrossLink)
-        : undefined,
-    body: [
-      ...(data.status === "UPLOADED"
-        ? [{ kind: "thumb" as const, url: data.url }]
-        : []),
-      {
-        kind: "stats",
-        stats: [
-          { label: "Dimensions", value: dimensions },
-          { label: "Associations", value: data.associations.length },
-        ],
-      },
-    ],
-  };
-}
-
 // ── Generic dispatch ────────────────────────────────────────────────────────
 
 function ManifestPreviewContent<E extends ManifestPreviewEntity>({
@@ -364,33 +249,6 @@ function ManifestPreviewContent<E extends ManifestPreviewEntity>({
   );
 }
 
-function ImagePreviewContent({
-  id,
-  showOpenAction,
-  showIdentityHeader,
-  onNameResolved,
-  onRecordResolved,
-}: {
-  id: string;
-} & StandardPreviewPresentation) {
-  const query = useQuery(entityDetailFor("image").queryOptions(id));
-
-  return (
-    <PreviewQuery query={query} label="Image" onUnavailable={onRecordResolved}>
-      {(data) => (
-        <ResolvedManifestCard
-          card={toImageCard(data)}
-          record={data}
-          showOpenAction={showOpenAction}
-          showIdentityHeader={showIdentityHeader}
-          onNameResolved={onNameResolved}
-          onRecordResolved={onRecordResolved}
-        />
-      )}
-    </PreviewQuery>
-  );
-}
-
 export function EntityPreviewContent({
   entity,
   id,
@@ -399,34 +257,13 @@ export function EntityPreviewContent({
   onNameResolved,
   onRecordResolved,
 }: { entity: HoverPreviewEntity; id: string } & CompactPreviewPresentation) {
-  // usda-food and cookbook fetch differently enough (fdc_id coercion and
-  // specialized projections) to stay their own small components.
-  // Every other entity is a uniform detail fetch, keyed here so switching
-  // entities remounts rather than changing the query a single instance holds.
+  // usda-food is the external USDA catalog (fdc_id, no kernel get). Every
+  // other entity is a uniform detail fetch, keyed here so switching entities
+  // remounts rather than changing the query a single instance holds.
   if (entity === "usda-food")
     return (
       <UsdaFoodPreviewContent
         fdcId={fdcIdFromParam(id)}
-        showOpenAction={showOpenAction}
-        showIdentityHeader={showIdentityHeader}
-        onNameResolved={onNameResolved}
-        onRecordResolved={onRecordResolved}
-      />
-    );
-  if (entity === "cookbook")
-    return (
-      <CookbookPreviewContent
-        cookbookId={id}
-        showOpenAction={showOpenAction}
-        showIdentityHeader={showIdentityHeader}
-        onNameResolved={onNameResolved}
-        onRecordResolved={onRecordResolved}
-      />
-    );
-  if (entity === "image")
-    return (
-      <ImagePreviewContent
-        id={id}
         showOpenAction={showOpenAction}
         showIdentityHeader={showIdentityHeader}
         onNameResolved={onNameResolved}

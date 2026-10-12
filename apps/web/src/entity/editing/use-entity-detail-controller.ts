@@ -1,6 +1,5 @@
+import { getErrorMessage } from "@cubby/shared";
 import { useCallback, useEffect, useState } from "react";
-
-import { getErrorMessage } from "~/lib/error-utils";
 
 import type { EntityEditResultFor } from "./intent-types";
 import type { EditableEntity, EntityEditMutationData } from "./types";

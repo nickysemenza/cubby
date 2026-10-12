@@ -1,8 +1,8 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { findSemanticEntityCandidates } from "~/server/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";

@@ -1,4 +1,3 @@
-import { USDA_PICKER } from "@cubby/mcp-apps/metadata";
 import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
 import { mealOut, mealRecipeOut } from "@cubby/schemas/meal";
 import {
@@ -19,17 +18,14 @@ import {
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import { McpServer } from "@modelcontextprotocol/server";
-import { fromPartial } from "@total-typescript/shoehorn";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { projectEntityResult } from "~/contracts/mcp-projections";
 import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { mock } from "~/lib/test/mock-schema";
-import { setCfEnv } from "~/server/cf-env";
 import { entityMcpReadCommandSchema } from "~/server/entity-kernel/contracts";
 
-import { resetMcpAppAssetCacheForTests } from "./apps";
 import type { McpEntityExecutor } from "./kernel-actions";
 import { bindingsWithKernelExecutor, callMcpTool } from "./mcp-test-utils";
 import {
@@ -111,11 +107,6 @@ function httpClient(
 }
 
 describe("MCP protocol smoke", () => {
-  afterEach(() => {
-    resetMcpAppAssetCacheForTests();
-    setCfEnv(undefined);
-  });
-
   it("serves catalog, tool calls, and authenticated telemetry over modern MCP HTTP", async () => {
     const responseTypes: Array<string | null> = [];
     const { client, connect } = httpClient(
@@ -154,31 +145,6 @@ describe("MCP protocol smoke", () => {
           registeredAtCall: true,
         }),
       );
-    } finally {
-      await client.close();
-    }
-  });
-
-  it("serves MCP App resources over modern MCP HTTP", async () => {
-    setCfEnv(
-      fromPartial<Env>({
-        ASSETS: {
-          fetch: async () => new Response("<!doctype html><p>picker</p>"),
-        },
-      }),
-    );
-    const { client, connect } = httpClient({ mode: { pin: "2026-07-28" } });
-    try {
-      await connect();
-      const { resources } = await client.listResources();
-      expect(resources.map((resource) => resource.uri)).toContain(
-        USDA_PICKER.uri,
-      );
-      const { contents } = await client.readResource({ uri: USDA_PICKER.uri });
-      expect(contents[0]).toMatchObject({
-        mimeType: "text/html;profile=mcp-app",
-        text: expect.stringContaining("<p>picker</p>"),
-      });
     } finally {
       await client.close();
     }

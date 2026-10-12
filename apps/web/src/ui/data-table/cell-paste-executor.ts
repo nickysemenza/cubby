@@ -11,6 +11,7 @@
  */
 
 import type { getErrorMessage } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import pMap from "p-map";
 
 import type { CellJsonValue } from "./cell-clipboard";
@@ -205,7 +206,7 @@ export function summarizePasteResult(params: {
   if (failed === 0 && skippedCells === 0) {
     return {
       variant: "success",
-      message: `${updated} cell${updated === 1 ? "" : "s"} updated`,
+      message: `${countLabel(updated, "cell")} updated`,
     };
   }
 

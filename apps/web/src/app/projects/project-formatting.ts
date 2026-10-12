@@ -1,12 +1,8 @@
-import { TRADE_LABELS } from "@cubby/schemas/project";
 import { capitalize } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { plainDateDaysBetween } from "~/lib/household-date";
-
-export { capitalize } from "@cubby/shared";
-
-export { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 
 export function monthLabel(key: string): string {
   const [year, month] = key.split("-");
@@ -45,7 +41,7 @@ export function projectDateDelta(
   const days = plainDateDaysBetween(derived, effective);
   if (days === 0) return null;
   const magnitude = Math.abs(days);
-  const unit = `${magnitude} day${magnitude === 1 ? "" : "s"}`;
+  const unit = countLabel(magnitude, "day");
   const direction = days > 0 ? "after" : "before";
   const anchor = side === "start" ? "earliest dated work" : "latest dated work";
   // Narrowing = the override cuts into real dated work: a start set later
@@ -60,5 +56,3 @@ export function projectDateDelta(
       : `${capitalize(side)} is ${unit} ${direction} the ${anchor}`,
   };
 }
-
-export { TRADE_LABELS };

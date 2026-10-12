@@ -1,3 +1,4 @@
+import { cents, dollars } from "@cubby/shared";
 import { z } from "zod";
 import { productMovementKind } from "./product-movement-kind";
 import { financialTransactionOut } from "./financial-transaction";
@@ -318,9 +319,8 @@ export const reconcilePurchase = (p: {
   financialReconciliation?: { postedRefundTotal: number };
 }): PurchaseReconciliation => {
   if (p.statedTotal === null) return "unknown";
-  const toleranceInCents = Math.round(RECONCILIATION_TOLERANCE * 100);
-  const deltaInCents =
-    Math.round(p.expenseTotal * 100) - Math.round(p.statedTotal * 100);
+  const toleranceInCents = cents(RECONCILIATION_TOLERANCE);
+  const deltaInCents = cents(p.expenseTotal) - cents(p.statedTotal);
   if (Math.abs(deltaInCents) <= toleranceInCents) return "match";
 
   // A purchase with no expense lines at all has nothing to reconcile: the whole
@@ -422,16 +422,13 @@ export const splitExpenseDelta = (
   originalCost: number | null,
   partCosts: number[],
 ): SplitExpenseDelta => {
-  const partsSumCents = partCosts.reduce(
-    (sum, cost) => sum + Math.round(cost * 100),
-    0,
-  );
-  const partsSum = partsSumCents / 100;
+  const partsSumCents = partCosts.reduce((sum, cost) => sum + cents(cost), 0);
+  const partsSum = dollars(partsSumCents);
   if (originalCost === null) {
     return { originalCost: null, partsSum, delta: null };
   }
-  const deltaCents = partsSumCents - Math.round(originalCost * 100);
-  return { originalCost, partsSum, delta: deltaCents / 100 };
+  const deltaCents = partsSumCents - cents(originalCost);
+  return { originalCost, partsSum, delta: dollars(deltaCents) };
 };
 
 /**

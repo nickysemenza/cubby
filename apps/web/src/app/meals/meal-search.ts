@@ -25,12 +25,19 @@ export const shoppingListSearchSchema = z.object({
   excluded: urlStringParam,
 });
 
+/**
+ * `stripSearchParams` drops any key whose value equals its default, so a key
+ * missing here would leak into every URL; the `Record` makes that a type error.
+ */
 export const shoppingListSearchDefaults = {
   view: undefined,
   from: undefined,
   to: undefined,
   excluded: undefined,
-} as const;
+} as const satisfies Record<
+  keyof z.infer<typeof shoppingListSearchSchema>,
+  undefined
+>;
 
 /** `?excluded=` text ⇄ the set the renderers use. Empty means nothing hidden. */
 export const parseExcludedMeals = (value: string | undefined): string[] =>

@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@cubby/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
@@ -8,7 +9,7 @@ import {
 } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
-import { getErrorMessage, type UnparsedError } from "~/lib/error-utils";
+import { type UnparsedError } from "~/lib/error-utils";
 
 import { useBulkStream } from "./useBulkStream";
 

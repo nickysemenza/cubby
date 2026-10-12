@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { dataQuality } from "./data-quality";
 import { parseShortcode } from "@cubby/shared";
-import { imageShortcode, runEntityId } from "./identifiers";
+import { imageShortcode, runEntityId, runShortcode } from "./identifiers";
 import { entitySchema, type Entity } from "./entity";
 import { imageDescriptionAnalysis } from "./image-processing";
 import { imageUrlSummary } from "./image-summary";
@@ -55,10 +55,7 @@ export type ActivityExecutor = z.infer<typeof activityExecutor>;
 export const activityRun = z.object({
   id: activityRunId,
   recordType: z.enum(["run", "image_job"]),
-  parentRunId: z
-    .string()
-    .regex(/^RUN-[A-Z0-9]+$/u)
-    .nullable(),
+  parentRunId: runShortcode.nullable(),
   kind: activityKind,
   trigger: runTrigger.nullable(),
   vendorAccountId: z.string().nullable(),
@@ -114,10 +111,7 @@ export const activityRun = z.object({
 export type ActivityRun = z.infer<typeof activityRun>;
 export const activityListInput = z.object({
   recordType: z.enum(["run", "image_job"]).optional(),
-  parentRunId: z
-    .string()
-    .regex(/^RUN-[A-Z0-9]+$/u)
-    .optional(),
+  parentRunId: runShortcode.optional(),
   kind: activityKind.optional(),
   trigger: runTrigger.optional(),
   /**
@@ -187,7 +181,7 @@ export const activityGroupsOutput = z.object({
   nextCursor: z.string().nullable(),
 });
 export const activityGroupChildrenInput = activityListInput.extend({
-  rootId: z.string().regex(/^RUN-[A-Z0-9]+$/u),
+  rootId: runShortcode,
 });
 
 /** Attempt states across matching related work, separate from target verification. */

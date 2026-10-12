@@ -15,13 +15,11 @@ import { hasImportRunReports, runStatus } from "@cubby/schemas/run-fields";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
 import { AI_USAGE_TRANSPORT_LABELS } from "@cubby/schemas/telemetry";
 import { CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
-import {
-  ACTIVE_RUN_STATUSES,
-  HOUSEHOLD_TIMEZONE,
-} from "@cubby/shared/client-constants";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { z } from "zod";
 
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
+import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCurrency, formatPercent } from "~/lib/number-format";
 import type { Database } from "~/server/db";
@@ -151,13 +149,6 @@ const note = (text: string, tone?: Tone, strong?: boolean): Block<"note"> => ({
 
 const minutesSeconds = (seconds: number) =>
   `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-
-const dateTimeLabel = (iso: string) =>
-  new Intl.DateTimeFormat("en-US", {
-    timeZone: HOUSEHOLD_TIMEZONE,
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(iso));
 
 const memberName = (member: RunDetail["actor"]) =>
   member.name ?? member.ledgerParty?.name ?? "Household member";
@@ -490,7 +481,10 @@ const importFindings = (run: RunDetail): ReportBlock[] => [
         );
       if (finding.expiresAt)
         lines.push(
-          line(`Expires ${dateTimeLabel(finding.expiresAt)}`, "muted"),
+          line(
+            `Expires ${formatInstant(finding.expiresAt, "dateShortTime")}`,
+            "muted",
+          ),
         );
       return row(finding.id, {
         title: finding.kind,

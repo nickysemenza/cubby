@@ -5,17 +5,14 @@ import type {
   ProjectStatus,
   TaskStatus,
 } from "@cubby/schemas/project";
+import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 import type { ProductCategory } from "@cubby/shared";
-import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
+import { getMiscDisplayName, isMiscProduct, capitalize } from "@cubby/shared";
 import type { DataType } from "@cubby/usda";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 import { z } from "zod";
 
-import {
-  capitalize,
-  PROJECT_STATUS_LABELS,
-} from "~/app/projects/project-formatting";
 import { RecordMarkByReference } from "~/entity/components/record-mark";
 import { EntityIcon } from "~/entity/entities";
 import { usdaRouteId } from "~/entity/entity-query";

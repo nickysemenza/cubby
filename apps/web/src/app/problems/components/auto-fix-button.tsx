@@ -1,4 +1,5 @@
 import type { AllProblems } from "@cubby/schemas/problems";
+import { getErrorMessage } from "@cubby/shared";
 import { MagicWandIcon } from "@phosphor-icons/react/dist/csr/MagicWand";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -11,7 +12,6 @@ import {
 } from "~/integrations/tanstack-query/cache-tags";
 import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { getErrorMessage } from "~/lib/error-utils";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Progress } from "~/ui/primitives/progress";

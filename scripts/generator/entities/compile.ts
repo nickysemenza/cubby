@@ -1560,8 +1560,6 @@ const validateLifecycleAndResolve = (
  * A route defaults to generated list and detail pages over the generic
  * renderers. The detail page reads the kernel `get`, so every kernel entity
  * gets it, writable or not; only the allowlisted hand-written routes opt out.
- * A generated index needs rows: the kernel list, or a declared
- * `route.listRows: "custom"` source.
  */
 const validateRouteRosters = (
   key: string,

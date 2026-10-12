@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
+import pluralize from "pluralize";
 import { type ReactNode, useMemo } from "react";
 import { match } from "ts-pattern";
 
@@ -39,7 +40,7 @@ type CrossLinkSearchValue =
   | readonly string[]
   | readonly number[];
 
-export type CrossLink = {
+type CrossLink = {
   to: EntityDetailRoute;
   // `{ id }` covers usda-food — the one detail route that stays keyed on
   // something other than a shortcode (`String(fdc_id)`); every other entity's
@@ -232,7 +233,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
     ))
     .with({ kind: "products" }, (b) => (
       <div className="flex flex-col gap-1">
-        <SectionLabel>Product{b.products.length === 1 ? "" : "s"}</SectionLabel>
+        <SectionLabel>{pluralize("Product", b.products.length)}</SectionLabel>
         <div className="flex flex-col gap-1">
           {b.products.slice(0, 4).map((p) => (
             <EntityRefLink

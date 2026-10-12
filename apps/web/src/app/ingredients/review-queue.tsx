@@ -1,4 +1,5 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
+import { getErrorMessage } from "@cubby/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -6,7 +7,6 @@ import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { useQueuePass } from "~/features/queue-pass/useQueuePass";
 import { ingredient } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   useActionMutation,

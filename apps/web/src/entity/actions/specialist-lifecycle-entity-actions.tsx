@@ -1,4 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { getErrorMessage } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 
@@ -6,7 +8,6 @@ import {
   recipe,
   image,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import { useActionMutation } from "../../ui/hooks/useActionMutation";
@@ -117,7 +118,7 @@ export function useDeleteCookbookEntityAction(
   const mutation = useActionMutation({
     mutationFn: operations.deleteCookbook.mutationOptions,
     success: ({ deletedRecipes }) =>
-      `Deleted cookbook and ${deletedRecipes} recipe${deletedRecipes === 1 ? "" : "s"}`,
+      `Deleted cookbook and ${countLabel(deletedRecipes, "recipe")}`,
     error: (err) => getErrorMessage(err) || "Failed to delete cookbook",
   });
   const stageRow = useCallback((row: EntityActionRow): StagedDeleteRow => {
@@ -144,7 +145,7 @@ export function useDeleteCookbookEntityAction(
     renderItem: (row) =>
       row.recipeCount === undefined
         ? `"${row.name}" and its imported recipes`
-        : `"${row.name}" and its ${row.recipeCount} imported recipe${row.recipeCount === 1 ? "" : "s"}`,
+        : `"${row.name}" and its ${countLabel(row.recipeCount, "imported recipe")}`,
     submit,
     isPending: mutation.isPending,
     failureMessage: "Failed to delete cookbook",

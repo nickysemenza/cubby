@@ -32,15 +32,35 @@ test("wardrobe uses the selected owner's quantity and responds to explicit owner
     `/inventory/${entry.id}`,
     page.getByRole("button", { name: "Save ownership", exact: true }),
   );
+  const current = page.getByLabel("Current ownership", { exact: true });
+  await expect(current).toHaveText(`Confirmed: ${name} owner`);
   await page
     .getByRole("combobox", { name: "Ownership", exact: true })
     .selectOption("unassigned");
+  // The server owns the quantity bound; the client shows its refusal.
+  await page
+    .getByRole("spinbutton", {
+      name: "Quantity to assign; leave blank for entire entry",
+    })
+    .fill("4");
+  await page
+    .getByRole("button", { name: "Save ownership", exact: true })
+    .click();
+  await expect(
+    page.getByText(/Cannot reassign 4; only 3 is available/).first(),
+  ).toBeVisible();
+  await page
+    .getByRole("spinbutton", {
+      name: "Quantity to assign; leave blank for entire entry",
+    })
+    .fill("");
   await page
     .getByRole("button", { name: "Save ownership", exact: true })
     .click();
   await expect(
     page.getByText("Ownership saved", { exact: true }),
   ).toBeVisible();
+  await expect(current).toHaveText("No individual owner");
   await gotoAuthenticatedPage(
     page,
     `/collections/wardrobe/${owner.id}`,

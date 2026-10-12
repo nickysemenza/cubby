@@ -410,6 +410,26 @@ async function insertStatementEvidence(
 }
 
 /**
+ * Advisory only. An un-normalized Copilot or Apple Card export is almost
+ * entirely positive here, and every one of its rows will have hashed to a
+ * fresh identity that can never match. Warning after the write is still
+ * worth it: it surfaces the mistake at 500 rows instead of 15,000 — and a
+ * `dryRun` or CSV preview surfaces it before any of them.
+ */
+export function statementSignWarning(
+  rows: ReadonlyArray<{ providerAmount: number }>,
+): string | null {
+  const positive = rows.filter((row) => row.providerAmount > 0).length;
+  return rows.length >= 20 && positive / rows.length > 0.9
+    ? `${positive} of ${rows.length} rows have a positive providerAmount. ` +
+        "Charges must be submitted negative — if this export signs them " +
+        "positive (Copilot, Apple Card), the rows just recorded carry " +
+        "identities that can never match a transaction. Legitimate if this " +
+        "batch really is income or refunds."
+    : null;
+}
+
+/**
  * Record provider rows verbatim. Not an importer: it creates no account, no
  * transaction and no link, and makes no match. The server derives every
  * `externalId` so a client cannot mint an identity that disagrees with the one
@@ -485,20 +505,7 @@ export async function recordStatementRows(
       ? null
       : input.import.rowCountDeclared - rows.length;
 
-  // Advisory only. An un-normalized Copilot or Apple Card export is almost
-  // entirely positive here, and every one of its rows will have hashed to a
-  // fresh identity that can never match. Warning after the write is still
-  // worth it: it surfaces the mistake at 500 rows instead of 15,000 — and a
-  // `dryRun` surfaces it before any of them.
-  const positive = rows.filter((row) => row.providerAmount > 0).length;
-  const signWarning =
-    rows.length >= 20 && positive / rows.length > 0.9
-      ? `${positive} of ${rows.length} rows have a positive providerAmount. ` +
-        "Charges must be submitted negative — if this export signs them " +
-        "positive (Copilot, Apple Card), the rows just recorded carry " +
-        "identities that can never match a transaction. Legitimate if this " +
-        "batch really is income or refunds."
-      : null;
+  const signWarning = statementSignWarning(rows);
 
   return withTransaction(db, async (tx) => {
     const [existingBatch] = await unwrapDb(tx)

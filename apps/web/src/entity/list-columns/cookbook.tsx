@@ -1,6 +1,5 @@
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
@@ -11,8 +10,8 @@ import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-  type CubbyColumnCollection,
 } from "~/ui/data-table/table-features";
+import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
@@ -20,17 +19,6 @@ import { NoneValue } from "~/ui/primitives/none-value";
 import { defineListOverride } from "./types";
 
 const columnHelper = createCubbyColumnHelper<CookbookSummary>();
-
-const matchesCookbookSearch = (
-  row: CookbookSummary,
-  query: string,
-): boolean => {
-  const normalized = query.trim();
-  if (!normalized) return true;
-  return [row.id, row.name, ...row.author, ...row.subjects].some((value) =>
-    value.toLocaleLowerCase().includes(normalized.toLocaleLowerCase()),
-  );
-};
 
 function CookbookProductLink({
   product,
@@ -106,22 +94,7 @@ const overrides = createCubbyColumnCollection<CookbookSummary>((add) => {
   );
 });
 
-/**
- * `subjects` is a text array, so TanStack would resolve a filterFn from the
- * array row value and match nothing against a picked set; a book matches when
- * it carries any picked subject.
- */
-export const subjectsFilterFn = (
-  row: { getValue: (id: string) => readonly string[] },
-  columnId: string,
-  picked: readonly string[] | undefined,
-): boolean => {
-  if (!picked || picked.length === 0) return true;
-  const carried = row.getValue(columnId);
-  return picked.some((subject) => carried.includes(subject));
-};
-
-/** Every subject in the loaded books, most-used first, with its book count. */
+/** Every subject across the household's books, most-used first, with its book count. */
 export const subjectOptions = (
   rows: readonly Pick<CookbookSummary, "subjects">[],
 ) => {
@@ -138,62 +111,21 @@ export const subjectOptions = (
     }));
 };
 
-const composeWithSubjectFilter =
-  (options: ReturnType<typeof subjectOptions>) =>
-  (declared: CubbyColumnCollection<CookbookSummary>) =>
-    createCubbyColumnCollection<CookbookSummary>((add) => {
-      declared.visit((column) =>
-        add(
-          column.id === "subjects"
-            ? {
-                ...column,
-                filterFn: subjectsFilterFn,
-                meta: {
-                  ...column.meta,
-                  filterConfig: {
-                    placeholder: "Filter by subject...",
-                    filterType: "multiselect",
-                    options,
-                  },
-                },
-              }
-            : column,
-        ),
-      );
-    });
-
 /**
- * Browse-by-source index: every cookbook a recipe was imported from. Backed
- * by the Cookbook Start projection — one shot, no server pagination — so the
- * generic list pages it client-side.
+ * Browse-by-source index over the kernel list: search, sort, the subject
+ * filter and paging run on the server. The subject picklist reads the full
+ * cookbook roster the recipe pickers already share.
  */
 export const cookbookListOverride = defineListOverride<CookbookSummary, object>(
   {
-    mode: "client",
     use() {
-      const query = useQuery(cookbook.list.queryOptions(null));
-      const { data, error, isFetching, isLoading, refetch } = query;
-      const client = useMemo(
-        () => ({
-          data: data ?? EMPTY_COOKBOOKS,
-          isLoading,
-          error,
-          refetch: async () => {
-            await refetch();
-          },
-          isRefreshing: isFetching,
-          matchesSearch: matchesCookbookSearch,
-        }),
-        [data, error, isFetching, isLoading, refetch],
-      );
-      const compose = useMemo(
-        () => composeWithSubjectFilter(subjectOptions(data ?? EMPTY_COOKBOOKS)),
-        [data],
-      );
+      const { data } = useQuery(cookbook.list.queryOptions(null));
+      const filterOptions = useFilterOptions({
+        subjects: subjectOptions(data ?? EMPTY_COOKBOOKS),
+      });
       return {
         overrides,
-        compose,
-        client,
+        list: { filterOptions },
         wrap: (children, { data }) => (
           <EntityDisplayImagesProvider
             refs={data.flatMap((row) =>

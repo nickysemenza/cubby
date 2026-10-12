@@ -210,8 +210,9 @@ struct EntityFieldControl: View {
                 value: Binding(
                     get: { value.doubleValue },
                     set: { model.draft[key] = $0.map(JSONValue.number) ?? .null }),
-                format: .usd,
-                prompt: Text(field.placeholder ?? "0")
+                // Entry parses a plain amount; the stored dollars display through `ValueFormat`.
+                format: .number.precision(.fractionLength(0...2)).locale(Locale(identifier: "en_US")),
+                prompt: Text(field.placeholder ?? "$0.00")
             )
             .multilineTextAlignment(.trailing)
             .labelsHidden()
