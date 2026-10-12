@@ -139,6 +139,14 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
+- 🤔 🐛 **Generalize accepted-original Product repair preparation lookup.**
+  The reviewed mail repair requires one exact retained preparation. Non-mail
+  sources can legitimately use different source and evidence checksums, and
+  repeated identical preparations can leave several exact candidates. Add
+  persisted regressions before relaxing these safe refusals: preserve original
+  identity and candidate-review fingerprints, accept only equivalent snapshots,
+  and keep unknown historical originals unrepairable without authentic evidence.
+
 - 🤔 🧪 **Complete durable historical discovery coverage and transport evidence.**
   Owned discovery reads expose the frozen scope, current cursor/checkpoint,
   retained approval receipts and recorded AI usage. Historical readiness still
