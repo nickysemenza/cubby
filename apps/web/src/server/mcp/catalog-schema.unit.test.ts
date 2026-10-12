@@ -10,6 +10,7 @@ import { withErrorReporting } from "~/server/errors/report-error";
 import { callMcpTool, registerTestTool } from "./mcp-test-utils";
 import { McpOperationContext } from "./operation-context";
 import { listMcpToolCatalog } from "./server";
+import { mergeActionInputSchemas } from "./tools/action-schema";
 import {
   safeToJsonSchema,
   stripMockFromJsonSchema,
@@ -168,6 +169,46 @@ function concreteOutputSchema(value: JSONType): boolean {
 }
 
 describe("MCP catalog schemas", () => {
+  it("keeps repeated constrained workflow fields compact without weakening accepted inputs", () => {
+    const field = {
+      type: "string",
+      minLength: 3,
+      maxLength: 40,
+      description:
+        "Stable evidence key shared by each input field in the workflow.",
+    };
+    const schema = mergeActionInputSchemas([
+      {
+        name: "inspect",
+        description: "Inspect evidence",
+        schema: {
+          type: "object",
+          properties: {
+            first: field,
+            second: field,
+            third: field,
+            fourth: field,
+          },
+        },
+      },
+    ]);
+    const validate = new Ajv({ strict: false, validateFormats: false }).compile(
+      schema,
+    );
+    expect(
+      validate({
+        action: "inspect",
+        first: "valid",
+        second: "valid",
+        third: "valid",
+        fourth: "valid",
+      }),
+    ).toBe(true);
+    expect(validate({ action: "inspect", first: "x" })).toBe(false);
+    expect(validate({ action: "inspect", fourth: "x".repeat(41) })).toBe(false);
+    expect(JSON.stringify(schema).length).toBeLessThan(650);
+  });
+
   it("requires every output union branch to declare concrete fields", () => {
     const concrete = {
       type: "object",
