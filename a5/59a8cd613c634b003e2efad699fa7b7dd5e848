@@ -1,0 +1,25 @@
+apps/web/src/ui/common/middle-truncate.tsx
+  s_92f11563412ea0::t_8e308585e75502 9
+apps/web/src/ui/data-table/column-layout.ts
+  s_92f11563412ea0::t_5d7d7d009b3b92 348
+apps/web/tests/e2e/product-clarity.spec.ts
+  s_92f11563412ea0::t_2f8dae849d87a1 426-427
+apps/web/tests/e2e/quality-explanations.spec.ts
+  s_92f11563412ea0::t_730069a7f464af 658
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a559a8cd613c634b003e2efad699fa7b7dd5e848",
+  "prompts": {},
+  "sessions": {
+    "s_92f11563412ea0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de538b4e-46ae-4993-93b7-d4f3cbc1e035",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
