@@ -1,0 +1,23 @@
+.github/workflows/ci.yaml
+  s_5844b4bd3bb15a::t_1b2c6204809407 34-36,70-72,83-98,116,127,132-133,157,175,199,220-223,246,249,259,301,306,340-341,345-346,359-360,406-407,413-414,459,468-469
+docs/adr/0009-content-hash-merge-gate.md
+  s_5844b4bd3bb15a::t_131ee3de3b400d 34-35
+docs/ci.md
+  s_5844b4bd3bb15a::t_6ee1423d54839f 3-7,36-38,58-61,73-87,192-201,205-207,229,350-359,482-483
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4c618592492220b309481b37cf7bdac0dd7a1000",
+  "prompts": {},
+  "sessions": {
+    "s_5844b4bd3bb15a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a131f7-51c6-78c3-8228-3caf5125b599",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
