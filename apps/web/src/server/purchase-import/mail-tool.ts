@@ -52,6 +52,7 @@ import {
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { readEmailFinancialAssociations } from "~/server/repo/email-financial-associations";
+import { readEmailPurchaseAssociations } from "~/server/repo/email-purchase-associations";
 import {
   readRetainedMail,
   retainedMailJoin,
@@ -173,7 +174,7 @@ async function mailboxRow(db: Database, mail: RetainedMail) {
   return row;
 }
 
-async function financialReviewsForMail(
+async function associationsForMail(
   db: Database,
   mail: Pick<RetainedMail, "ledgerPartyId" | "mailboxId" | "messageId">,
 ) {
@@ -190,9 +191,18 @@ async function financialReviewsForMail(
       ),
     )
     .limit(1);
-  return message
-    ? readEmailFinancialAssociations(db, parseEntityId("email", message.id))
-    : [];
+  const id = message ? parseEntityId("email", message.id) : null;
+  const purchases = id ? await readEmailPurchaseAssociations(db, id) : [];
+  return {
+    purchaseIds: purchases.map((row) => row.shortcode),
+    purchaseAssociations: purchases.map((row) => ({
+      purchaseId: row.shortcode,
+      purchaseDeleted: row.purchaseDeleted,
+    })),
+    financialAssociations: id
+      ? await readEmailFinancialAssociations(db, id)
+      : [],
+  };
 }
 
 export async function readMail(
@@ -224,7 +234,10 @@ export async function readMail(
         source.email.contentClearedAt)
     ) {
       const { readEmailOriginalTransient } = await import("./gmail/real-time");
-      return readEmailOriginalTransient(db, input, actor);
+      return mailReadOut.parse({
+        ...(await readEmailOriginalTransient(db, input, actor)),
+        ...(await associationsForMail(db, source.email)),
+      });
     }
   }
   const { mail, attachments, importRunId } = await withTransactionDatabase(
@@ -276,7 +289,7 @@ export async function readMail(
     attachments: attachments.map(({ id: _id, ...row }) => row),
     originalAttachment: original,
     boundToRun: importRunId !== null,
-    financialAssociations: await financialReviewsForMail(db, mail),
+    ...(await associationsForMail(db, mail)),
   });
 }
 
@@ -785,7 +798,8 @@ export async function resolveMail(
     status: settled.status,
     disposition: disposition.kind,
     purchaseIds: settled.purchaseIds,
-    financialAssociations: await financialReviewsForMail(db, settled.mail),
+    financialAssociations: (await associationsForMail(db, settled.mail))
+      .financialAssociations,
   });
 }
 
