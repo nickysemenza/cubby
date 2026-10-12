@@ -34,7 +34,9 @@ automatic photo pass and bypass the failed photo's Retry action.
 Hydration: TanStack Start's SSR query stream lands in the client cache before
 React hydrates, so gate loading branches with `useHydratedLoading`/`useHydrated`,
 and gate auth-required queries on `useHydrated() && session`, never raw session
-state. Direct loads to protected routes are gated server-side at the root route
+state. Interactive controls in lazy detail slots stay disabled until their own
+`useHydrated()` is true; shell hydration alone does not establish their handlers
+are attached. Direct loads to protected routes are gated server-side at the root route
 (`getGuardSession`) before any protected markup ships; a client-only guard is
 bypassable. TanStack's `parseSearch` JSON-parses URL params, so a search field
 that must stay a string (numeric-looking ids) uses `urlStringParam`. A child

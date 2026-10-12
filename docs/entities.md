@@ -268,7 +268,7 @@ id/idMulti descriptor on the target whose `brandRef` points back here, with
 optional `columns`/`sort`/`limit`), `timeline` (the entity's timeline
 capability) and `slot` (the one per-platform hand-written fill, rendered
 only where a registry provides it — `DetailSlotId<E>` / `ListSlotId<E>` in
-`entity-manifest.ts` type those registries). Full record relation sections stay visible after an empty first read on web and Apple, with a secondary heading, explicit Empty cue and usable create action. The declaration's retired `hideWhenEmpty` and `collapseWhenEmpty` metadata still travels through the manifest pending the shrink-only cleanup in `docs/todos.md`; full detail pages ignore it. Pagination and show-more behavior remain declaration-owned.
+`entity-manifest.ts` type those registries). Full record relation sections stay visible after an empty first read on web and Apple, with a secondary heading, explicit Empty cue and usable create action. Full-detail visibility and folding flags are absent from the declaration and generated catalogs. Pagination and show-more behavior remain declaration-owned.
 
 Run import report eligibility comes from `IMPORT_REPORT_RUN_PURPOSES` in the
 shared Run schema, including `mail_import`. Web and server use its shared
@@ -418,7 +418,7 @@ A section or slot can declare `workspace: "overview" | "work" | "evidence"` for 
 Relation tables are opt-out. Every `many` relation on a generic detail page
 renders a table: a declared `relation` section, or one the compiler derives
 (`scripts/generator/entities/derive.ts`) with `derived: true`,
-`collapseWhenEmpty: true` and the target's default columns. The derived
+the target's default columns. Empty derived sections remain visible and open. The derived
 section finds its filter on the target: the only id/idMulti descriptor whose
 `brandRef` names this entity and that no other section on the page already
 uses, or, among several, the one over the relation's own FK column. A

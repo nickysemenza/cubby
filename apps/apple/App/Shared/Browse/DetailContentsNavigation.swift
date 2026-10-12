@@ -30,11 +30,19 @@ private struct DetailContentsJump: Equatable {
     let revision = UUID()
 }
 
+private struct DetailContentsCompletionKey: EnvironmentKey {
+    static let defaultValue: @MainActor @Sendable (UUID) -> Void = { _ in }
+}
+
 private struct DetailContentsDestinationKey: EnvironmentKey {
     static let defaultValue: DetailContentsJump? = nil
 }
 
 private extension EnvironmentValues {
+    var completeDetailContentsJump: @MainActor @Sendable (UUID) -> Void {
+        get { self[DetailContentsCompletionKey.self] }
+        set { self[DetailContentsCompletionKey.self] = newValue }
+    }
     var detailContentsDestination: DetailContentsJump? {
         get { self[DetailContentsDestinationKey.self] }
         set { self[DetailContentsDestinationKey.self] = newValue }
@@ -58,6 +66,7 @@ private struct DetailContentsHeader: ViewModifier {
     var empty: Bool
     @Environment(\.detailContentsSectionID) private var id
     @Environment(\.detailContentsDestination) private var destination
+    @Environment(\.completeDetailContentsJump) private var completeJump
     @AccessibilityFocusState private var accessibilityFocused: Bool
     @FocusState private var keyboardFocused: Bool
 
@@ -70,9 +79,10 @@ private struct DetailContentsHeader: ViewModifier {
                 .focusable()
                 .focused($keyboardFocused)
                 .onChange(of: destination, initial: true) { _, destination in
-                    guard destination?.id == id else { return }
+                    guard let destination, destination.id == id else { return }
                     accessibilityFocused = true
                     keyboardFocused = true
+                    completeJump(destination.revision)
                 }
                 .preference(key: DetailContentsEmptyStates.self, value: [id: empty])
                 .background {
@@ -118,6 +128,10 @@ struct DetailContentsNavigation: ViewModifier {
                     #endif
                     content
                         .environment(\.detailContentsDestination, destination)
+                        .environment(\.completeDetailContentsJump) { revision in
+                            guard destination?.revision == revision else { return }
+                            destination = nil
+                        }
                         .onPreferenceChange(DetailContentsEmptyStates.self) { emptyStates = $0 }
                         .coordinateSpace(name: "detail.contents")
                         .onPreferenceChange(DetailContentsPositions.self) { positions in

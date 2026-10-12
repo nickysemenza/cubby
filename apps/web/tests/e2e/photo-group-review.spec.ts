@@ -180,7 +180,11 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     .getByRole("textbox", { name: "New product name" })
     .fill(correctedName);
   await g1Card.getByRole("button", { name: "Approve item" }).click();
-  await expect(page.getByRole("link", { name: correctedName })).toBeVisible();
+  await expect(
+    page
+      .locator("#photo-batch")
+      .getByRole("link", { name: correctedName, exact: true }),
+  ).toBeVisible();
   await expect(
     page
       .getByRole("navigation", { name: "Photo item groups" })

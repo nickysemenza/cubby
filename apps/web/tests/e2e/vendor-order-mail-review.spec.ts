@@ -20,9 +20,12 @@ test("reviews a vendor email match through the generic report and shows the link
   await expect(
     page.getByText("Processing: blocked", { exact: true }),
   ).toBeVisible();
-  const exactRow = page.getByRole("listitem").filter({
-    has: page.locator(`a[href="/purchases/${seed.purchase.shortcode}"]`),
-  });
+  const exactRow = page
+    .locator("#order-mail")
+    .getByRole("listitem")
+    .filter({
+      has: page.locator(`a[href="/purchases/${seed.purchase.shortcode}"]`),
+    });
   await expect(
     exactRow.getByRole("link", {
       name: seed.purchase.shortcode,

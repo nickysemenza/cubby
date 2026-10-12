@@ -128,9 +128,12 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
 
   await gotoAuthenticatedPage(page, `/purchases/${purchase.id}#work`);
   const products = page.locator("#products");
-  await expect(products.getByRole("heading", { level: 3 })).toHaveText(
-    /Products\s*5/,
-  );
+  await expect(
+    products.getByRole("heading", { level: 3, name: "Products", exact: true }),
+  ).toBeVisible();
+  await expect(
+    recordRows(products).filter({ has: page.locator('a[href^="/products/"]') }),
+  ).toHaveCount(5);
   const mixedRow = recordRows(products).filter({ hasText: `${name} mixed` });
   for (const role of [
     "Acquired",
@@ -182,13 +185,19 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
   );
   await page.getByRole("link", { name: `${name} mixed`, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/products/${mixed.id}`));
-  await page
-    .getByRole("heading", { level: 2, name: "Work", exact: true })
-    .scrollIntoViewIfNeeded();
   const purchases = page.locator("#purchases");
-  await expect(purchases.getByRole("heading", { level: 3 })).toHaveText(
-    /Purchases\s*1/,
-  );
+  await expect(
+    purchases.getByRole("heading", {
+      level: 3,
+      name: "Purchases",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    recordRows(purchases).filter({
+      has: page.locator('a[href^="/purchases/"]'),
+    }),
+  ).toHaveCount(1);
   for (const role of [
     "Acquired",
     "Exited",

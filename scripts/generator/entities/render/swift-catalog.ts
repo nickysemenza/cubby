@@ -368,8 +368,6 @@ const detailSectionJSON = (entity: string, section: DetailSection) => {
                     },
               limit: section.limit ?? null,
               empty: section.empty ?? null,
-              hideWhenEmpty: section.hideWhenEmpty,
-              collapseWhenEmpty: section.collapseWhenEmpty,
             },
           },
         };
@@ -387,7 +385,6 @@ const detailSectionJSON = (entity: string, section: DetailSection) => {
     id: section.kind === "slot" ? `${entity}.${section.id}` : section.id,
     title: section.title ?? null,
     placement: section.placement,
-    collapsed: section.collapsed,
     overview: section.overview,
     explanationField:
       section.kind === "slot" ? (section.explanationField ?? null) : null,

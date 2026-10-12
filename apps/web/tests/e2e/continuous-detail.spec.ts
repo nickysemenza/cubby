@@ -35,6 +35,9 @@ for (const width of [1440, 390]) {
         .click();
     } else {
       await page.getByRole("button", { name: /Jump to:/ }).click();
+      await expect(
+        page.getByRole("menuitem", { name: "Plantings", exact: true }),
+      ).toHaveAccessibleDescription("Empty");
       await page
         .getByRole("menuitem", { name: "History", exact: true })
         .click();

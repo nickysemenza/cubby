@@ -44,11 +44,6 @@ import {
   SectionEmptyContext,
   SectionEmptyRegistryContext,
 } from "./detail-section-state";
-export {
-  useSectionCount,
-  useSectionEmpty,
-  useContinuousDetail,
-} from "./detail-section-state";
 
 /** Stable id every auto-appended Activity section uses — also the opt-out key: a
  * caller that already supplies a section with this id (e.g. a page composing its
@@ -102,8 +97,6 @@ export interface DetailSection {
   /** Specialized workflows can supply their own internal surface while retaining
    * the shared index, relationship, activity, and debug extensions. */
   surface?: "card" | "plain";
-  /** Retained declaration metadata; full record bodies always start open. */
-  collapsed?: boolean;
   /** Resolved emptiness for sections whose data is already in the detail record. */
   empty?: boolean;
 }
@@ -301,6 +294,7 @@ function DetailAnchorIndex({
       .find((entry) => entry.id === activeId)?.title ?? groups[0]?.title;
   const entryState = (id: string) => ({
     "aria-current": activeId === id ? ("location" as const) : undefined,
+    "aria-describedby": emptySections.get(id) ? `${id}-empty` : undefined,
   });
   return (
     <div
@@ -712,6 +706,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     | undefined
   >(undefined);
   const locationHash = useLocation({ select: (location) => location.hash });
+  const scrollIntentRef = useRef(false);
   const navigate = useNavigate();
   const targetForHash = useCallback((hash: string) => {
     const id = normalizedHash(hash);
@@ -733,6 +728,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     )
       positions.set(ancestor, ancestor.scrollTop);
     jumpTargetRef.current = { id, positions };
+    scrollIntentRef.current = false;
     setActiveId(id);
   }, []);
   const selectSection = (id: string) => {
@@ -797,6 +793,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       const prior = scroller && jumpTargetRef.current?.positions.get(scroller);
       if (
         event?.type === "scroll" &&
+        scrollIntentRef.current &&
         scroller &&
         prior != null &&
         Math.abs(scroller.scrollTop - prior) > 1
@@ -804,7 +801,43 @@ export const DetailSections: FC<DetailSectionsProps> = ({
         jumpTargetRef.current = undefined;
       if (!frame) frame = requestAnimationFrame(update);
     };
+    const onScrollIntent = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (event.type === "pointerdown") {
+        if (jumpTargetRef.current?.positions.has(target))
+          scrollIntentRef.current = true;
+        return;
+      }
+      if (
+        !body.contains(target) &&
+        !jumpTargetRef.current?.positions.has(target)
+      )
+        return;
+      if (event instanceof KeyboardEvent) {
+        if (
+          ![
+            "ArrowUp",
+            "ArrowDown",
+            "PageUp",
+            "PageDown",
+            "Home",
+            "End",
+            " ",
+          ].includes(event.key) ||
+          target.closest(
+            'input,textarea,select,[contenteditable],[role="menu"],[role="listbox"]',
+          )
+        )
+          return;
+      }
+      scrollIntentRef.current = true;
+    };
     update();
+    document.addEventListener("wheel", onScrollIntent, { passive: true });
+    document.addEventListener("touchmove", onScrollIntent, { passive: true });
+    document.addEventListener("pointerdown", onScrollIntent);
+    document.addEventListener("keydown", onScrollIntent);
     document.addEventListener("scroll", schedule, {
       capture: true,
       passive: true,
@@ -812,16 +845,29 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     window.addEventListener("resize", schedule);
     const observer =
       "ResizeObserver" in window
-        ? new ResizeObserver(() => schedule())
+        ? new ResizeObserver(() => {
+            const id = jumpTargetRef.current?.id;
+            if (
+              id &&
+              !scrollIntentRef.current &&
+              document.activeElement?.id === id
+            )
+              focusTarget(id);
+            schedule();
+          })
         : undefined;
     observer?.observe(body);
     return () => {
       document.removeEventListener("scroll", schedule, true);
+      document.removeEventListener("wheel", onScrollIntent);
+      document.removeEventListener("touchmove", onScrollIntent);
+      document.removeEventListener("pointerdown", onScrollIntent);
+      document.removeEventListener("keydown", onScrollIntent);
       window.removeEventListener("resize", schedule);
       observer?.disconnect();
       cancelAnimationFrame(frame);
     };
-  }, [hydrated, groups]);
+  }, [hydrated, groups, focusTarget]);
   const visual = heroVisual({
     heroImages,
     heroMedia: heroMedia ?? pageDetail?.heroMedia,

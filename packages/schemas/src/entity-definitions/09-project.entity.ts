@@ -106,7 +106,6 @@ export default defineEntity({
           id: "analytics",
           title: "Analytics",
           placement: "full",
-          collapsed: true,
         },
       ],
     },

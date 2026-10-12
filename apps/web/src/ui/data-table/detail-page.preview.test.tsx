@@ -96,7 +96,6 @@ it("keeps all record sections open while jumping between groups", async () => {
           icon: CircleIcon,
           placement: "full",
           workspace: "evidence",
-          collapsed: true,
           content: <p>Source evidence body</p>,
         },
       ]}

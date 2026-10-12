@@ -95,10 +95,6 @@ export interface RelationSectionPlan {
   columns: readonly string[] | null;
   sort: { field: string; direction: "asc" | "desc" };
   limit: number | null;
-  /** Historical manifest metadata; full detail sections remain visible. */
-  hideWhenEmpty: boolean;
-  /** Historical manifest metadata; full detail bodies remain open. */
-  collapseWhenEmpty: boolean;
 }
 
 const isListEntity = (value: string): value is ListEntity =>
@@ -146,14 +142,7 @@ export function planRelationSection(
   entity: BrowserRoutedEntity,
   section: Pick<
     RelationSection,
-    | "relation"
-    | "filter"
-    | "prefill"
-    | "columns"
-    | "sort"
-    | "limit"
-    | "hideWhenEmpty"
-    | "collapseWhenEmpty"
+    "relation" | "filter" | "prefill" | "columns" | "sort" | "limit"
   >,
 ): RelationSectionPlan {
   const relation = entityManifest[entity].relationships.find(
@@ -211,8 +200,6 @@ export function planRelationSection(
       direction: defaultSortDirectionFor(target),
     },
     limit: section.limit,
-    hideWhenEmpty: section.hideWhenEmpty,
-    collapseWhenEmpty: section.collapseWhenEmpty,
   };
 }
 

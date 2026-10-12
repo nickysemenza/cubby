@@ -14,11 +14,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { Page } from "~/ui/page/Page";
 
-import {
-  type DetailSection,
-  DetailSections,
-  useSectionEmpty,
-} from "./detail-page";
+import { type DetailSection, DetailSections } from "./detail-page";
+import { useSectionEmpty } from "./detail-section-state";
 
 const sections: DetailSection[] = [
   {
@@ -262,7 +259,6 @@ describe("continuous detail sections", () => {
           title: "Analytics",
           icon: CircleIcon,
           placement: "primary",
-          collapsed: true,
           content: <p>Analytics content</p>,
         },
         {

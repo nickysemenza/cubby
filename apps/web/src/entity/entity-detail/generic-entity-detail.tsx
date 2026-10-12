@@ -372,7 +372,6 @@ function declaredSections<E extends GenericDetailEntity>(
       id: section.id,
       placement: section.placement,
       icon: sectionIcon(section.kind),
-      collapsed: section.collapsed,
       overview: section.overview,
       workspace:
         section.workspace ??

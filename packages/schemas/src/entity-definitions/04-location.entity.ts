@@ -65,7 +65,6 @@ export default defineEntity({
           title: "Plantings",
           relation: "plantings",
           filter: { descriptor: "locationId" },
-          hideWhenEmpty: true,
           placement: "supporting",
         },
         {
@@ -75,7 +74,6 @@ export default defineEntity({
           relation: "garden-entries",
           filter: { descriptor: "locationId" },
           sort: { field: "observedOn", direction: "desc" },
-          hideWhenEmpty: true,
           placement: "supporting",
         },
       ],

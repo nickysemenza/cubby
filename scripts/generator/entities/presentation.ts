@@ -477,11 +477,10 @@ export const compilePresentation = (
           {
             kind: "fields" as const,
             id: "overview",
-            // Not "Overview": that is the detail page's mode tab, and the
-            // jump index sits beside it. The id stays the hash anchor.
+            // The group is already titled Overview; its fact section is Details.
+            // The section id remains the stable hash anchor.
             title: "Details",
             placement: "primary" as const,
-            collapsed: false,
             fields: overviewFields,
           },
         ]),
@@ -500,7 +499,6 @@ export const compilePresentation = (
             id: "record-identity",
             title: "Identity",
             placement: "supporting" as const,
-            collapsed: false,
             fields: [emojiField],
           },
         ]

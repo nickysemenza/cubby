@@ -44,6 +44,18 @@ struct ImageEntityDetailView: View {
                 }
                 Text("Diagnostics").font(.headline).accessibilityAddTraits(.isHeader)
                     .detailContentsHeader().detailContentsAnchor("diagnostics")
+                Section {
+                    if diagnostics.loading {
+                        Button("Cancel diagnostics") { diagnostics.cancel() }
+                    } else if diagnostics.server == nil, diagnostics.device == nil {
+                        Text("Run diagnostics to compare local Vision results with the stored analysis.")
+                            .foregroundStyle(.secondary)
+                        Button("Run diagnostics", systemImage: "viewfinder") {
+                            diagnostics.run(id: id, detail: detail, client: appModel.client)
+                        }
+                        .accessibilityIdentifier("image.diagnostics.run")
+                    }
+                }
                 ImageDiagnosticsCompareView(model: diagnostics)
             } else if let error {
                 LoadFailureView(title: "Couldn't load image", message: error) { await load() }
@@ -119,7 +131,6 @@ struct ImageEntityDetailView: View {
             async let analyses = processing.load(id: id, client: appModel.client)
             async let jobLoad = jobs.load(id: id, client: appModel.client)
             self.detail = try await detail
-            if let detail = self.detail { diagnostics.run(id: id, detail: detail, client: appModel.client) }
             await analyses
             await jobLoad
         } catch {

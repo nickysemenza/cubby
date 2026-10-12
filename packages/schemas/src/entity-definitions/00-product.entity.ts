@@ -110,7 +110,6 @@ export default defineEntity({
           title: "Plantings",
           relation: "plantings",
           filter: { descriptor: "sourceProductId" },
-          hideWhenEmpty: true,
         },
         {
           kind: "relation",

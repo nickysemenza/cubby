@@ -430,7 +430,7 @@ describe("EntityReportSlot records", () => {
     expect(table).toHaveTextContent("Showing the first rows only.");
   });
 
-  it("renders nothing for a report with no blocks", async () => {
+  it("keeps a completed empty report visible", async () => {
     answer = () => ({ live: false, status: "completed", blocks: [] });
     const { container } = render(
       <EntityReportSlot slot="run.import-findings" id={RUN_ID} />,
@@ -440,7 +440,7 @@ describe("EntityReportSlot records", () => {
     await waitFor(() =>
       expect(container.querySelector(".animate-pulse")).toBeNull(),
     );
-    expect(container).toHaveTextContent("");
+    expect(container).toHaveTextContent("No items.");
   });
 
   it("pages a report with the server's cursor and stacks the rows", async () => {

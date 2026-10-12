@@ -360,22 +360,32 @@ final class ImageDiagnosticsCompareModel {
     func run(id: ImageCode, detail: ImageWithEntity, client: CubbyClient) {
         guard server == nil, device == nil, !loading else { return }
         loading = true
+        error = nil
         task = Task { [weak self] in
-            guard let self else { return }
+            guard let self, !Task.isCancelled else { return }
+            defer {
+                // A cancelled request may finish after a replacement starts; only the active
+                // uncancelled task releases its loading state and handle.
+                if !Task.isCancelled {
+                    self.loading = false
+                    self.task = nil
+                }
+            }
             async let storedTask = Self.fetchStored(id: id, client: client)
             async let deviceTask = Self.analyzeDevice(detail: detail)
             let stored = await storedTask
             let deviceResult = await deviceTask
             guard !Task.isCancelled else { return }
-            self.loading = false
             if let stored,
                 let file = Self.syntheticFile(
                     contentType: stored.contentType, size: detail.size, width: stored.width,
                     height: stored.height, capturedAt: stored.capturedAt, filename: detail.filename)
             {
-                self.server = await PhotoDiagnostics.report(
+                let report = await PhotoDiagnostics.report(
                     analysis: PhotoLocalAnalysis(payload: stored), file: file,
                     includeFeaturePrintData: false, runSemantic: false)
+                guard !Task.isCancelled else { return }
+                self.server = report
             }
             guard let (deviceAnalysis, deviceReport) = deviceResult else {
                 if self.server == nil { self.error = "Could not download this photo's bytes." }
@@ -389,6 +399,8 @@ final class ImageDiagnosticsCompareModel {
 
     func cancel() {
         task?.cancel()
+        task = nil
+        loading = false
     }
 
     private static func fetchStored(id: ImageCode, client: CubbyClient) async -> ImageAnalysisOutput? {
@@ -465,12 +477,13 @@ final class ImageDiagnosticsCompareModel {
                 filename: deviceAnalysis.provenance.filename))
         do {
             let saved = try await client.recordImageAnalysis(id, payload)
-            guard saved else { return }
+            guard saved, !Task.isCancelled else { return }
             // The just-submitted payload is exactly what the device already analyzed — no need to
             // round-trip through a synthetic file to re-derive an identical report.
             self.server = self.device
             serverNote = .savedJustNow
         } catch {
+            guard !Task.isCancelled else { return }
             Diagnostics.report(error, context: "photos.diagnostics")
         }
     }
