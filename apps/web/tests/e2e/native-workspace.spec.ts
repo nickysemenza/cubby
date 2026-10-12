@@ -1,4 +1,8 @@
+import { eq } from "drizzle-orm";
+
+import { auditLog, product as productTable } from "~/server/db/schema";
 import type { NativeWorkspaceMessage } from "~/lib/native-workspace";
+import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { fixtureUserId, getFixtureDb } from "./fixtures-core";
 import { expect, test } from "./e2e-test";
@@ -49,6 +53,34 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
     startedAt: new Date("2026-09-01T10:00:00Z"),
     endedAt: new Date("2026-09-01T10:01:00Z"),
   });
+  const outdated = await authenticatedPage.request.post(
+    "/api/native-workspace/session",
+    { headers: { "User-Agent": "cubby-apple/1.0 (ios; fixture)" } },
+  );
+  expect(outdated.status()).toBe(426);
+  expect(await outdated.json()).toMatchObject({
+    code: "UPGRADE_REQUIRED",
+    reason: "CLIENT_UPDATE_REQUIRED",
+  });
+  const outdatedApi = await authenticatedPage.request.get(
+    `/api/v1/runs/${run.shortcode}`,
+    {
+      headers: { "User-Agent": "cubby-apple/1.0 (ios; fixture)" },
+    },
+  );
+  expect(outdatedApi.status()).toBe(426);
+  expect(await outdatedApi.json()).toEqual(await outdated.json());
+  const productRow = await getDb(getFixtureDb()).query.product.findFirst({
+    where: eq(productTable.shortcode, product.id),
+  });
+  if (!productRow) throw new Error("Synthetic Product missing");
+  await getDb(getFixtureDb()).insert(auditLog).values({
+    entityKind: "product",
+    entityId: productRow.id,
+    action: "create",
+    userId: actorUserId,
+    runId: run.id,
+  });
   const context = await browser.newContext({ baseURL });
   const page = await context.newPage();
   const response = await context.request.post("/api/native-workspace/session", {
@@ -91,8 +123,33 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const pilotURL = page.url();
   const runsLink = page.getByRole("link", { name: "Runs", exact: true });
-  await runsLink.click();
+  await expect(runsLink).toHaveCount(0);
+  const productLink = page.locator(`a[href^="/products/${product.id}"]`);
+  await expect(productLink).toContainText("Workspace drill");
+  await expect(productLink).toBeVisible();
+  await productLink.click();
+  await expect
+    .poll(() => page.evaluate(() => window.workspaceTestMessages))
+    .toContainEqual({
+      version: 1,
+      type: "navigate",
+      entity: "product",
+      id: product.id,
+      replace: false,
+    });
   await expect(page).toHaveURL(pilotURL);
+  const update = await authenticatedPage.request.patch(
+    `/api/v1/products/${product.id}`,
+    {
+      headers: { Origin: baseURL! },
+      data: { name: "Workspace drill refreshed" },
+    },
+  );
+  expect(update.ok(), await update.text()).toBeTruthy();
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("cubby-workspace-refresh")),
+  );
+  await expect(productLink).toContainText("Workspace drill refreshed");
   await expect(page.locator("[data-run-evidence]")).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("run-evidence-desktop.png"),
@@ -112,11 +169,20 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
     fullPage: true,
   });
   await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(
+    `/runs/${run.shortcode}?nativeWorkspace=run-evidence#unsupported-section`,
+  );
+  await expect(page).not.toHaveURL(/#unsupported-section$/u);
+  expect(new URL(page.url()).searchParams.get("nativeWorkspace")).toBe(
+    "run-evidence",
+  );
+  await expect(page.locator("[data-run-evidence]")).toBeVisible();
   // The pilot flag cannot turn an ordinary record into a hosted workspace.
   await page.goto(`/${product.id}?nativeWorkspace=run-evidence`);
   await expect(
-    page.getByRole("heading", { level: 1, name: "Workspace drill" }),
+    page.getByRole("heading", { level: 1, name: "Workspace drill refreshed" }),
   ).toBeVisible();
+  expect(new URL(page.url()).searchParams.has("nativeWorkspace")).toBe(false);
   await expect(page.locator("[data-native-workspace]")).toHaveCount(0);
   await expect(page.locator('[data-app-shell="authenticated"]')).toBeVisible();
   await page.screenshot({
@@ -140,5 +206,17 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
     path: testInfo.outputPath("product-workspace-phone.png"),
     fullPage: true,
   });
+  await context.clearCookies();
+  await page.goto(
+    `/runs/${run.shortcode}?nativeWorkspace=run-evidence#evidence`,
+  );
+  await expect
+    .poll(() => page.evaluate(() => window.workspaceTestMessages))
+    .toContainEqual({
+      version: 1,
+      type: "authRequired",
+    });
+  await expect(page.locator('[data-app-shell="authenticated"]')).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /sign in/i })).toHaveCount(0);
   await context.close();
 });

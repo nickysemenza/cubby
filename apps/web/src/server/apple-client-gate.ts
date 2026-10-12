@@ -42,3 +42,14 @@ export function appleClientUpdateRequired(
     return null;
   return { current, minimum: APPLE_CLIENT_COMPATIBILITY_VERSION };
 }
+
+/** The same upgrade response serves API calls, hosted documents and Start commands. */
+export function appleClientUpdateError(
+  outdated: NonNullable<ReturnType<typeof appleClientUpdateRequired>>,
+) {
+  return {
+    code: "UPGRADE_REQUIRED" as const,
+    reason: "CLIENT_UPDATE_REQUIRED" as const,
+    message: `Cubby ${outdated.current} is too old for this server (minimum ${outdated.minimum}). Update Cubby from TestFlight.`,
+  };
+}

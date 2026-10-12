@@ -151,7 +151,7 @@ interface PageListProps extends PageBaseProps {
 interface PageDetailProps extends PageBaseProps {
   variant: "detail";
   entity: Entity;
-  wayfinding?: DetailWayfinding;
+  wayfinding?: DetailWayfinding | false;
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
   heroStats?: DetailHeroStat[];
   heroNo?: string;
