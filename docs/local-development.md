@@ -207,13 +207,13 @@ focused file or the last failed selection:
 
 ```sh
 pnpm --dir apps/web build:cf
-CUBBY_TEST_SERVICES=warm pnpm --dir apps/web test:e2e tests/e2e/http-api.spec.ts --workers=2
-CUBBY_TEST_SERVICES=warm pnpm --dir apps/web test:e2e --last-failed
-CUBBY_TEST_SERVICES=warm pnpm --dir apps/web test:e2e:affected
+pnpm --dir apps/web test:e2e tests/e2e/http-api.spec.ts --workers=2
+pnpm --dir apps/web test:e2e --last-failed
+pnpm --dir apps/web test:e2e:affected
 pnpm --dir apps/web test:e2e:watch
 ```
 
-`warm` services are a macOS option. `test:e2e:affected` reuses the current
+`test:e2e:affected` reuses the current
 fingerprint-checked web build or rebuilds it, then runs Playwright's
 `--only-changed=origin/main`, which selects spec
 files that changed or import a changed file. It is a local heuristic: specs
@@ -227,4 +227,4 @@ iteration. HMR and watch results serve different validation boundaries.
 Read the failed scenario and artifact summary before rerunning. Use
 `--last-failed` after a relevant fix; do not repeat an unchanged failure merely
 to retrieve its diagnostics. Browser execution remains uncached even when a
-matching build and warm services are reused.
+matching build and the shared services are reused.
