@@ -26,9 +26,9 @@ describe("AiProposalCard keyboard handling", () => {
     expect(screen.getByRole("button", { name: "Accept" })).toHaveFocus();
   });
 
-  it("falls back to Dismiss when there is nothing to accept", () => {
+  it("falls back to Reject when there is nothing to accept", () => {
     render(<AiProposalCard {...base} onDismiss={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Dismiss" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Reject" })).toHaveFocus();
   });
 
   it("dismisses on Escape from either action", () => {
@@ -42,7 +42,7 @@ describe("AiProposalCard keyboard handling", () => {
     });
     expect(onDismiss).toHaveBeenCalledOnce();
 
-    fireEvent.keyDown(screen.getByRole("button", { name: "Dismiss" }), {
+    fireEvent.keyDown(screen.getByRole("button", { name: "Reject" }), {
       key: "Escape",
     });
     expect(onDismiss).toHaveBeenCalledTimes(2);

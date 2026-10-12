@@ -1,6 +1,7 @@
 import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
+  SuggestionReviewBatchOut,
   SuggestionReviewRow,
 } from "@cubby/schemas/ai";
 import type { Entity } from "@cubby/schemas/entity";
@@ -38,6 +39,7 @@ import { parseEntityEditUpdateInput } from "~/entity/editing/mutation-data";
 import type { EditableEntity } from "~/entity/editing/types";
 import type { EntityMutationPort } from "~/entity/editing/types";
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
+import type { EntityEditValueBag } from "~/entity/editing/value-schema";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { renderSuggestedListFieldValue } from "~/entity/entity-display";
@@ -53,15 +55,12 @@ import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
 import { Pill } from "~/ui/primitives/pill";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import {
@@ -76,6 +75,11 @@ import {
   type FieldSuggestionSource,
   type SuggestTargets,
 } from "./field-suggestion";
+import {
+  SuggestionBody,
+  suggestionBasisLabels,
+  type SuggestionProvenance,
+} from "./suggestion-body";
 import {
   actionableSuggestion,
   suggestionReviewKey,
@@ -165,6 +169,7 @@ const RecordSuggestionsContext = createContext<{
   ) => Promise<void>;
   stored: ReadonlyMap<string, SuggestionReviewRow>;
   acceptStored: (id: string) => Promise<void>;
+  acceptStoredMany: (ids: string[]) => Promise<SuggestionReviewBatchOut>;
   rejectStored: (id: string, correctValue?: JsonValue) => Promise<void>;
   storedCountFor: (records: readonly unknown[]) => number;
 } | null>(null);
@@ -178,6 +183,7 @@ export interface StoredSuggestionOperations {
   accept: (input: {
     id: string;
   }) => Promise<{ id: string; status: "applied" | "rejected" }>;
+  acceptMany: (input: { ids: string[] }) => Promise<SuggestionReviewBatchOut>;
   reject: (input: {
     id: string;
     correctValue?: JsonValue;
@@ -187,6 +193,7 @@ export interface StoredSuggestionOperations {
 const productionStoredSuggestionOperations: StoredSuggestionOperations = {
   list: (input) => ai.listSuggestionReviewQueue.call(input),
   accept: (input) => ai.acceptSuggestion.call(input),
+  acceptMany: (input) => ai.acceptSuggestions.call(input),
   reject: (input) => ai.rejectSuggestion.call(input),
 };
 
@@ -799,15 +806,17 @@ function BoundRecordSuggestions({
   const storedQueryResults = useQueries({ queries: storedQueryOptions });
   const storedQuery = storedQueryResults[0];
   const queryClient = useQueryClient();
-  const afterStoredReview = async (id: string) => {
+  const afterStoredReview = async (...ids: string[]) => {
+    if (ids.length === 0) return;
+    const settled = new Set(ids);
     queryClient.setQueryData<SuggestionReviewRow[]>(
       storedQueryKey,
-      (previous = []) => previous.filter((item) => item.id !== id),
+      (previous = []) => previous.filter((item) => !settled.has(item.id)),
     );
     await Promise.all([
       invalidateOperationTags(
         queryClient,
-        ai.acceptSuggestion.invalidates({ id }),
+        ai.acceptSuggestions.invalidates({ ids }),
       ),
       invalidateOperationTags(queryClient, entityRipple(entity)),
     ]);
@@ -871,6 +880,13 @@ function BoundRecordSuggestions({
     stored,
     acceptStored: async (id: string) => {
       await acceptStoredMutation.mutateAsync({ id });
+    },
+    acceptStoredMany: async (ids: string[]) => {
+      const results = await storedSuggestionOperations.acceptMany({ ids });
+      await afterStoredReview(
+        ...results.flatMap((result) => (result.ok ? [result.id] : [])),
+      );
+      return results;
     },
     rejectStored: async (id: string, correctValue?: JsonValue) => {
       await rejectStoredMutation.mutateAsync({ id, correctValue });
@@ -1111,6 +1127,7 @@ function ResolvedFieldSuggestion({
 }) {
   const snapshot = useRef({ row, field });
   snapshot.current = { row, field };
+  const [editOpen, setEditOpen] = useState(false);
   const current = recordValue(context.entity, row.record, field);
   const suggestion = row.suggestions[field] ?? null;
   const questionKey = JSON.stringify([
@@ -1198,7 +1215,13 @@ function ResolvedFieldSuggestion({
         error={row.error}
         onApply={apply}
         onDismiss={dismiss}
-        applyLabel={usesInheritedValue ? "Use inherited value" : undefined}
+        onUseDifferent={
+          suggestion?.operation === "remove" || suggestion?.financeReview
+            ? undefined
+            : () => setEditOpen(true)
+        }
+        basis={suggestionBasisLabels(context.entity, field)}
+        notice={usesInheritedValue ? "Uses the inherited value" : undefined}
         alternative={source.basisMode === "provided"}
         outcome={row.outcomes[field]}
         surface={surface}
@@ -1206,6 +1229,16 @@ function ResolvedFieldSuggestion({
       >
         {children}
       </SuggestionReview>
+      {editOpen ? (
+        <DifferentValueDialog
+          entity={context.entity}
+          record={row.record}
+          field={field}
+          open
+          onOpenChange={setEditOpen}
+          onSubmitted={() => void dismiss().catch(showErrorToast)}
+        />
+      ) : null}
     </RecordSuggestionScope>
   );
 }
@@ -1280,6 +1313,7 @@ function StoredSuggestionField({
   renderValue?: (value: JsonValue) => ReactNode;
   children: ReactNode;
 }) {
+  const runnerUp = suggestion.runnerUpValue;
   return (
     <GhostSuggestionCell
       context={context}
@@ -1287,7 +1321,27 @@ function StoredSuggestionField({
       field={field}
       kind={suggestion.kind}
       value={suggestion.suggestedValue}
-      confidence={suggestion.confidence}
+      probability={suggestion.confidence}
+      runnerUp={
+        runnerUp === null
+          ? null
+          : {
+              label:
+                renderValue?.(runnerUp) ??
+                renderSuggestedListFieldValue(
+                  context.entity,
+                  record,
+                  field,
+                  runnerUp,
+                ),
+              probability: suggestion.runnerUpConfidence,
+            }
+      }
+      provenance={{
+        model: suggestion.model,
+        runId: suggestion.runId,
+        at: suggestion.createdAt,
+      }}
       renderValue={renderValue}
       accept={() => context.acceptStored(suggestion.id)}
       reject={() => context.rejectStored(suggestion.id)}
@@ -1332,6 +1386,7 @@ function LiveSuggestionCell({
     dismiss,
   );
   if (actions.dismissed) return children;
+  const runnerUp = suggestion.alternatives[0];
   return (
     <GhostSuggestionCell
       context={context}
@@ -1339,10 +1394,15 @@ function LiveSuggestionCell({
       field={field}
       kind={currentValue?.trim() ? "correction" : "addition"}
       value={suggestion.value}
-      confidence={suggestion.probability}
+      probability={suggestion.probability}
       label={suggestion.detail ?? suggestion.label ?? undefined}
       reasoning={suggestion.reasoning}
-      alternatives={suggestion.alternatives}
+      runnerUp={
+        runnerUp
+          ? { label: runnerUp.label, probability: runnerUp.probability }
+          : null
+      }
+      provenance={{ model: null, runId: null, at: null }}
       inline={inline}
       pending={pending || actions.saving}
       accept={actions.apply}
@@ -1351,6 +1411,44 @@ function LiveSuggestionCell({
     >
       {children}
     </GhostSuggestionCell>
+  );
+}
+
+/** Edits one field in the full editor; its saved value answers a rejected
+ * suggestion ("Use a different value…"). */
+function DifferentValueDialog({
+  entity,
+  record,
+  field,
+  open,
+  onOpenChange,
+  onSubmitted,
+  onSubmitOverride,
+}: {
+  entity: StandardEntity;
+  record: SuggestionRecord;
+  field: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmitted?: () => void;
+  onSubmitOverride?: (values: EntityEditValueBag) => Promise<void>;
+}) {
+  return (
+    <EntityEditDialog<EditableEntity>
+      open={open}
+      onOpenChange={onOpenChange}
+      request={
+        // SAFETY: BoundRecordSuggestions only mounts for generated CRUD
+        // entities, and detailEditRequest builds that entity's update:full request.
+        detailEditRequest(
+          entity,
+          record as never,
+          field,
+        ) as EntityEditDialogRequest<EditableEntity>
+      }
+      onSubmitted={onSubmitted}
+      onSubmitOverride={onSubmitOverride}
+    />
   );
 }
 
@@ -1379,16 +1477,19 @@ function suggestionAcceptLabel(text: string) {
   return text ? `Accept suggested value: ${text}` : "Accept suggested value";
 }
 
+/** A stored or strong live suggestion beside its field: the ghost pill accepts
+ * in one tap, and its mark opens the shared suggestion body. */
 function GhostSuggestionCell({
   context,
   record,
   field,
   kind,
   value,
-  confidence,
+  probability,
   label,
   reasoning,
-  alternatives = [],
+  runnerUp = null,
+  provenance,
   inline = true,
   pending = false,
   renderValue,
@@ -1403,10 +1504,11 @@ function GhostSuggestionCell({
   field: string;
   kind: SuggestionReviewRow["kind"];
   value: JsonValue;
-  confidence: number;
+  probability: number;
   label?: string;
   reasoning?: string;
-  alternatives?: FieldSuggestion["alternatives"];
+  runnerUp?: { label: ReactNode; probability: number | null } | null;
+  provenance: SuggestionProvenance;
   inline?: boolean;
   pending?: boolean;
   renderValue?: (value: JsonValue) => ReactNode;
@@ -1419,6 +1521,7 @@ function GhostSuggestionCell({
   children: ReactNode;
 }) {
   const [editOpen, setEditOpen] = useState(false);
+  const [bodyOpen, setBodyOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const active = useRef(false);
   const busy = pending || saving;
@@ -1428,6 +1531,7 @@ function GhostSuggestionCell({
     setSaving(true);
     try {
       await action();
+      setBodyOpen(false);
     } catch (error) {
       showErrorToast(error);
     } finally {
@@ -1436,6 +1540,9 @@ function GhostSuggestionCell({
     }
   };
   const valueText = useRenderedText();
+  const proposed =
+    renderValue?.(value) ??
+    renderSuggestedListFieldValue(context.entity, record, field, value, label);
   // Inert: a reference value renders as a navigating link, which would
   // swallow the click meant to accept it (and nest a link in a button).
   // Inert content leaves the accessibility tree, so the button's name
@@ -1451,14 +1558,7 @@ function GhostSuggestionCell({
       ) : (
         <SparkleIcon aria-hidden className="size-3 shrink-0" />
       )}
-      {renderValue?.(value) ??
-        renderSuggestedListFieldValue(
-          context.entity,
-          record,
-          field,
-          value,
-          label,
-        )}
+      {proposed}
     </span>
   );
   return (
@@ -1489,89 +1589,46 @@ function GhostSuggestionCell({
             />
           }
           aria-busy={busy}
-          title={[
-            reasoning,
-            `${Math.floor(confidence * 100)}% model confidence`,
-          ]
-            .filter(Boolean)
-            .join("\n")}
           className="max-w-full min-w-0 cursor-pointer gap-1 overflow-hidden hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait max-md:min-h-11"
-          aria-label={suggestionAcceptLabel(valueText.text)}
         >
           {ghost}
         </Pill>
       ) : null}
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-6"
-              aria-label="Suggestion actions"
-              disabled={busy}
-            />
-          }
+      <Popover open={bodyOpen} onOpenChange={setBodyOpen}>
+        <PopoverTrigger
+          aria-label="Suggestion actions"
+          disabled={busy}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          className="relative inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none after:absolute after:-inset-3 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:after:hidden"
         >
           <span aria-hidden>···</span>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {reasoning || alternatives.length > 0 || !inline ? (
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Suggestions</DropdownMenuLabel>
-              {!inline && label ? (
-                <p className="px-2 py-1 text-xs">
-                  {label} · {Math.floor(confidence * 100)}% model confidence
-                </p>
-              ) : null}
-              {reasoning ? (
-                <p className="max-w-xs px-2 py-1 text-xs text-muted-foreground">
-                  {reasoning}
-                </p>
-              ) : null}
-              {alternatives.map((alternative) => (
-                <DropdownMenuItem
-                  key={alternative.value}
-                  onClick={() => setEditOpen(true)}
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span>{alternative.label}</span>
-                    <span className="text-2xs text-muted-foreground">
-                      {alternative.detail ? `${alternative.detail} · ` : ""}
-                      {Math.floor(alternative.probability * 100)}% · Review in
-                      editor
-                    </span>
-                  </span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          ) : null}
-          {inline ? (
-            <DropdownMenuItem disabled={busy} onClick={() => void run(accept)}>
-              Accept
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuItem disabled={busy} onClick={() => void run(reject)}>
-            Reject (Miss)
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setEditOpen(true)}>
-            Use a different value
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <EntityEditDialog<EditableEntity>
+        </PopoverTrigger>
+        <PopoverContent side="bottom" className="w-auto max-w-xs p-2">
+          <SuggestionBody
+            current={kind === "correction" ? children : null}
+            proposed={proposed}
+            probability={probability}
+            runnerUp={runnerUp}
+            reasoning={reasoning}
+            basis={suggestionBasisLabels(context.entity, field)}
+            provenance={provenance}
+            saving={busy}
+            onAccept={() => void run(accept)}
+            onReject={() => void run(reject)}
+            onUseDifferent={() => {
+              setBodyOpen(false);
+              setEditOpen(true);
+            }}
+          />
+        </PopoverContent>
+      </Popover>
+      <DifferentValueDialog
+        entity={context.entity}
+        record={record}
+        field={field}
         open={editOpen}
         onOpenChange={setEditOpen}
-        request={
-          // SAFETY: BoundRecordSuggestions only mounts for generated CRUD
-          // entities, and detailEditRequest builds that entity's update:full request.
-          detailEditRequest(
-            context.entity,
-            record as never,
-            field,
-          ) as EntityEditDialogRequest<EditableEntity>
-        }
         onSubmitted={() => void onCorrected?.()}
         onSubmitOverride={
           correct
@@ -1586,6 +1643,8 @@ function GhostSuggestionCell({
   );
 }
 
+/** Accepts every stored suggestion on the visible records in one batch; each
+ * failure names its record and keeps its raw diagnostic. */
 export function RecordSuggestionsBulkAction({
   records,
 }: {
@@ -1593,6 +1652,7 @@ export function RecordSuggestionsBulkAction({
 }) {
   const context = useContext(RecordSuggestionsContext);
   const [errors, setErrors] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
   if (!context) return null;
   const ids = new Set(
     records.map(recordPublicId).filter((id): id is string => id !== null),
@@ -1601,23 +1661,35 @@ export function RecordSuggestionsBulkAction({
     ids.has(item.recordId),
   );
   if (suggestions.length === 0) return null;
+  const recordById = new Map(suggestions.map((item) => [item.id, item]));
   return (
     <span className="inline-flex items-center gap-2">
       <Button
         size="sm"
+        disabled={saving}
         onClick={async () => {
-          const failures: string[] = [];
-          for (const item of suggestions) {
-            try {
-              await context.acceptStored(item.id);
-            } catch (error) {
-              failures.push(`${item.recordId}: ${String(error)}`);
-            }
+          setSaving(true);
+          try {
+            const results = await context.acceptStoredMany(
+              suggestions.map((item) => item.id),
+            );
+            setErrors(
+              results.flatMap((result) =>
+                result.ok
+                  ? []
+                  : [
+                      `${recordById.get(result.id)?.recordId ?? result.id}: ${result.error}`,
+                    ],
+              ),
+            );
+          } catch (error) {
+            showErrorToast(error);
+          } finally {
+            setSaving(false);
           }
-          setErrors(failures);
         }}
       >
-        Accept suggestions ({suggestions.length})
+        {saving ? "Accepting…" : `Accept suggestions (${suggestions.length})`}
       </Button>
       {errors.length ? <span role="alert">{errors.join(" · ")}</span> : null}
     </span>

@@ -125,6 +125,12 @@ export default defineEntity({
         },
         {
           kind: "slot",
+          id: "suggestions",
+          workspace: "work",
+          title: "Suggestions",
+        },
+        {
+          kind: "slot",
           id: "photo-batch",
           workspace: "work",
           title: "Photos",

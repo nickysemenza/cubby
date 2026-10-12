@@ -129,7 +129,8 @@ export function SearchDebugPage() {
             </h2>
           </Stack>
           <Link
-            to="/ai-usage"
+            to="/ai"
+            search={{ tab: "usage" }}
             className="border border-border bg-card px-2 py-1 text-xs hover:bg-muted"
           >
             Open AI usage

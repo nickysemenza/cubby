@@ -1,4 +1,8 @@
-import { financeCategoryReviewSchema } from "@cubby/schemas/ai";
+import {
+  decisionConfidence,
+  financeCategoryReviewSchema,
+  HIGH_CONFIDENCE_PROBABILITY,
+} from "@cubby/schemas/ai";
 import type {
   FieldSuggestion,
   FieldSuggestionAlternative,
@@ -42,9 +46,8 @@ import {
   type ResolvedBasis,
 } from "~/server/ai/field-suggest/registry";
 import {
-  decisionConfidence,
-  HIGH_CONFIDENCE_PROBABILITY,
   runJevChoice,
+  type JevChoicePrompt,
   type JevChoiceResult,
   type JevPort,
 } from "~/server/ai/jev";
@@ -707,6 +710,19 @@ const TAG_PRUNE_CHOICES = [
   "Restates the manufacturer, the classification, or a generic category word already recorded elsewhere on the product.",
   "A genuine compatibility or ecosystem token (a battery platform, mount, thread, or size standard) worth keeping.",
 ] as const;
+/** One survivor tag's binary judgment; the Decisions catalog renders it. */
+export function prunePrompt(
+  spec: Extract<FieldSuggestSpec, { kind: "prune" }>,
+  basis: ResolvedBasis,
+  value: string,
+): JevChoicePrompt {
+  return {
+    subject: spec.subject(basis, value),
+    rules: spec.rules,
+    choices: [...TAG_PRUNE_CHOICES],
+    allowNone: false,
+  };
+}
 /** A removal needs at least this calibrated probability to surface — the
  * same "high confidence" floor a `set` suggestion auto-applies at. */
 const PRUNE_INCLUDE_THRESHOLD = 0.85;
@@ -758,11 +774,8 @@ async function resolvePruneTarget(
   for (const value of survivors) {
     const result = await runJevChoice({
       feature: FIELD_SUGGESTION_FEATURE,
-      subject: spec.subject(resolvedBasis, value),
-      rules: spec.rules,
-      choices: [...TAG_PRUNE_CHOICES],
+      ...prunePrompt(spec, resolvedBasis, value),
       usage,
-      allowNone: false,
       port: jev,
       decisionModel,
     });

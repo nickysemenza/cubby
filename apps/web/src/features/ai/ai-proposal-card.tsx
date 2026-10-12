@@ -1,4 +1,8 @@
-import type { AiCacheStatus, Confidence } from "@cubby/schemas/ai";
+import {
+  formatConfidence,
+  type AiCacheStatus,
+  type Confidence,
+} from "@cubby/schemas/ai";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
 
@@ -121,11 +125,14 @@ export function AiProposalCard({
   onAccept,
   onDismiss,
   acceptLabel = "Accept",
-  dismissLabel = "Dismiss",
+  dismissLabel = "Reject",
   pending,
+  probability = null,
 }: {
   label?: string;
   confidence: Confidence;
+  /** A calibrated decision probability, when the answer has one. */
+  probability?: number | null;
   reasoning: string;
   /** `model · relative time · cache status`. Required — see the note above. */
   provenance: ReactNode;
@@ -167,8 +174,8 @@ export function AiProposalCard({
         <Row align="center" gap="sm" wrap>
           <SparkleIcon className="size-3 text-muted-foreground" />
           <span className="font-medium">{label}:</span>
-          <span className={confidenceColor[confidence]}>
-            {confidence} confidence
+          <span className={cn("tabular-nums", confidenceColor[confidence])}>
+            {formatConfidence(probability, confidence)}
           </span>
         </Row>
 

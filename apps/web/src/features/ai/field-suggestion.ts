@@ -16,7 +16,7 @@ import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
  * one `ai.suggestFields` request. Jev is the cheap decision tier and the
  * 30-day gateway cache makes repeated prefixes free, so a 20-character name
  * settling in is on the order of 5–15 requests, not one per keystroke.
- * Review `/ai-usage` after a week of real use and raise it (250ms) if the
+ * Review the `/ai` Usage tab after a week of real use and raise it (250ms) if the
  * spend is noticeable — this is the one place to change it.
  */
 export const FIELD_SUGGEST_DEBOUNCE_MS = 100;

@@ -31,7 +31,7 @@ test("recent AI calls filter transport and status before limiting rows", async (
         ELSE now() - (60 - n) * interval '1 minute' END
     FROM generate_series(0, 60) n
   `);
-  await gotoAuthenticatedPage(page, "/ai-usage");
+  await gotoAuthenticatedPage(page, "/ai?tab=usage");
   const recent = page.getByRole("region", { name: "Recent calls" });
   await expect(
     recent.getByText("synthetic.newer-gateway").first(),

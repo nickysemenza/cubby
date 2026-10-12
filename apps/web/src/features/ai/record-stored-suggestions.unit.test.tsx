@@ -3,6 +3,7 @@ import {
   suggestionReviewListInput,
   suggestionReviewListOut,
 } from "@cubby/schemas/ai";
+import { runShortcode } from "@cubby/schemas/identifiers";
 import {
   productCategorySummary,
   type ProductCategorySummary,
@@ -43,7 +44,7 @@ const record = {
 const suggestion = (overrides: Partial<SuggestionReviewRow> = {}) =>
   ({
     id: rowId,
-    runId: "22222222-2222-4222-8222-222222222222",
+    runId: runShortcode.parse("RUN-2222"),
     entity: "product",
     recordId: record.id,
     field: "categoryId",
@@ -76,6 +77,9 @@ function validatedStoredOperations(stored: SuggestionReviewRow[]) {
       id,
       status: "applied" as const,
     })),
+    acceptMany: vi.fn(async ({ ids }: { ids: string[] }) =>
+      ids.map((id) => ({ id, ok: true as const, status: "applied" as const })),
+    ),
     reject: vi.fn(async ({ id }: { id: string }) => ({
       id,
       status: "rejected" as const,
@@ -97,6 +101,7 @@ function setup(
   const harness = createBrowserTestHarness();
   const operations: StoredSuggestionOperations = {
     list: vi.fn(async () => stored),
+    acceptMany: vi.fn(async () => []),
     ...mutations,
   };
   const liveOperations: EntitySuggestionsOperations = {
@@ -254,7 +259,7 @@ describe("stored suggestions in generic list cells", () => {
       await screen.findByRole("button", { name: "Suggestion actions" }),
     );
     fireEvent.click(
-      await screen.findByRole("menuitem", { name: "Use a different value" }),
+      await screen.findByRole("button", { name: "Use a different value…" }),
     );
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
@@ -318,7 +323,7 @@ describe("stored suggestions in generic list cells", () => {
       await screen.findByRole("button", { name: "Suggestion actions" }),
     );
     fireEvent.click(
-      await screen.findByRole("menuitem", { name: "Use a different value" }),
+      await screen.findByRole("button", { name: "Use a different value…" }),
     );
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.getByLabelText("Type")).toBeInTheDocument();
@@ -379,7 +384,7 @@ describe("stored suggestions in generic list cells", () => {
       await screen.findByRole("button", { name: "Suggestion actions" }),
     );
     fireEvent.click(
-      await screen.findByRole("menuitem", { name: "Use a different value" }),
+      await screen.findByRole("button", { name: "Use a different value…" }),
     );
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.getByLabelText("Evidence expectation")).toBeInTheDocument();
@@ -438,10 +443,7 @@ describe("stored suggestions in generic list cells", () => {
       await screen.findByRole("button", { name: "Accept suggestions (1)" }),
     );
     await waitFor(() =>
-      expect(operations.accept).toHaveBeenCalledWith(
-        { id: rowId },
-        expect.anything(),
-      ),
+      expect(operations.acceptMany).toHaveBeenCalledWith({ ids: [rowId] }),
     );
     harness.dispose();
   });
@@ -617,7 +619,7 @@ describe("stored suggestions in generic list cells", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: /suggestion actions/i }),
     );
-    fireEvent.click(await screen.findByRole("menuitem", { name: /reject/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
     await waitFor(() =>
       expect(operations.reject).toHaveBeenCalledWith(
         expect.objectContaining({ id: rowId }),
@@ -633,22 +635,17 @@ describe("stored suggestions in generic list cells", () => {
       field: "manufacturer",
       suggestedValue: "Synthetic maker",
     });
-    const accept = vi.fn(async ({ id }: { id: string }) => ({
-      id,
-      status: "applied" as const,
-    }));
-    const { harness, operations } = setup([suggestion(), second], {
-      accept,
-      reject: vi.fn(),
-    });
+    const { harness, operations } = setup([suggestion(), second]);
     fireEvent.click(
       await screen.findByRole("button", { name: /accept suggestions/i }),
     );
-    await waitFor(() => expect(operations.accept).toHaveBeenCalledTimes(2));
-    expect(operations.accept).toHaveBeenCalledWith(
-      expect.objectContaining({ id: second.id }),
-      expect.anything(),
+    // One batch call, not a sequential loop of single accepts.
+    await waitFor(() =>
+      expect(operations.acceptMany).toHaveBeenCalledExactlyOnceWith({
+        ids: [rowId, second.id],
+      }),
     );
+    expect(operations.accept).not.toHaveBeenCalled();
     harness.dispose();
   });
 });

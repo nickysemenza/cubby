@@ -301,6 +301,10 @@ export const nativeCoverage = {
       ["run.import-agent-live", "run.import-agent-stopped"],
       "The live agent conversation is web-only: it streams from the import-run agent route, which native has no client for. Prompt, stop and review the agent on web.",
     ),
+    ...unsupported(
+      ["run.suggestions"],
+      "A sweep's Suggestions are reviewed on the web AI Review tab or through the MCP suggestion actions.",
+    ),
   },
   /**
    * Finance verbs a report's `records` block offers. `implemented` ones are exactly the cases

@@ -36,6 +36,9 @@ const productionIngredientMergeAiPort: IngredientMergeAiPort = {
   select: runAiSelection,
 };
 
+export const ingredientMergeSubject = (name: string) =>
+  `Is the recipe ingredient "${name}" the same purchasable item as an existing ingredient?`;
+
 export interface IngredientMergeSuggestion {
   target: {
     id: IngredientId;
@@ -78,7 +81,7 @@ export async function suggestIngredientMerge(
   const { selected, confidence, reasoning } = await ai.select(
     ingredientMergeSpec,
     {
-      subject: `Is the recipe ingredient "${source.name}" the same purchasable item as an existing ingredient?`,
+      subject: ingredientMergeSubject(source.name),
       candidates: shortlist,
       usage: {
         db,

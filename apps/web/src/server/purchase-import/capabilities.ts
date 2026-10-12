@@ -90,6 +90,7 @@ const actionCapability = {
   "entity.accept_suggestion": "member_decision",
   "entity.accept_suggestions": "member_decision",
   "entity.reject_suggestion": "member_decision",
+  "entity.reject_suggestions": "member_decision",
   "entity.record_suggestion_miss": "member_decision",
   "statement_rows.record": "generic_mutation",
   "statement_rows.update": "generic_mutation",

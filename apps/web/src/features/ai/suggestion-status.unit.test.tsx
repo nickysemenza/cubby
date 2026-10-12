@@ -193,7 +193,7 @@ describe("SuggestionStatus copy", () => {
     );
     openPopover();
     expect(
-      screen.getByText("Category — Agrees with Materials · 91%"),
+      screen.getByText("Category — Agrees with Materials · 91% · high"),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Location — Not checked — no candidates"),

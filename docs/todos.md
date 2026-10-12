@@ -1192,7 +1192,7 @@ related active work can find its deferred follow-ups.
 - 🧪 **Evaluate trade affinity in expense project suggestions.** Once the
   `expense.projectId` roster's per-project trade tallies
   (`server/ai/field-suggest/registry.ts`) have served real suggestions, compare
-  accept/override rates on `/ai-usage` and drop the tallies if they do not help.
+  accept/override rates on the `/ai` Usage tab and drop the tallies if they do not help.
 
 - 🐛 **Shared-expense export re-import dedupe.** A Splitwise-style CSV has no
   row id, so provider ids derive from date + description + amount; promote if

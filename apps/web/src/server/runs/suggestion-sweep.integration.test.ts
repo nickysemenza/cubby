@@ -27,6 +27,7 @@ import {
   noProposal,
   productCategoryId,
   productFixture,
+  runCode,
   resumeSuggestionSweep,
   runSuggestions,
   startSuggestionSweep,
@@ -209,7 +210,7 @@ describe("persisted Suggestion sweeps", () => {
     );
     expect(
       await listSuggestions(ctx.db, {
-        runId: started.id,
+        runId: await runCode(ctx.db, started.id),
         minConfidence: 0,
       }),
     ).toHaveLength(0);

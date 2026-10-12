@@ -253,12 +253,20 @@ export const MCP_TOOLS = defineMcpTools({
         op: aiContract.ops.acceptSuggestions,
         project: (results) => ({ results }),
         output: z.object({ results: suggestionReviewBatchOut }),
-        description: "Apply several pending field suggestions by id.",
+        description:
+          "Apply several pending field suggestions by id; each result is ok with its status or carries its own error.",
       }),
       reject_suggestion: mcpAction({
         op: aiContract.ops.rejectSuggestion,
         description:
-          "Reject one pending field suggestion, optionally recording correctValue.",
+          "Reject one pending field suggestion, optionally recording correctValue (written to the record and kept as the Miss label).",
+      }),
+      reject_suggestions: mcpAction({
+        op: aiContract.ops.rejectSuggestions,
+        project: (results) => ({ results }),
+        output: z.object({ results: suggestionReviewBatchOut }),
+        description:
+          "Reject several pending field suggestions by id as Misses without a correction; each result is ok or carries its own error.",
       }),
       record_suggestion_miss: mcpAction({
         op: aiContract.ops.recordFieldSuggestionMiss,

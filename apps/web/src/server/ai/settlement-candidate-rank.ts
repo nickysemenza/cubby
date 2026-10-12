@@ -45,7 +45,7 @@ interface TiedCandidate {
 
 const money = formatCurrency;
 
-function renderSubject(subject: SettlementSubject): string {
+export function renderSettlementSubject(subject: SettlementSubject): string {
   return [
     "Vendor order awaiting a matching card or bank statement transaction.",
     `Vendor: ${subject.vendorName ?? "unknown"}`,
@@ -55,7 +55,7 @@ function renderSubject(subject: SettlementSubject): string {
   ].join("\n");
 }
 
-const selectionSpec: AiSelectionSpec<TiedCandidate> = {
+export const settlementSelectionSpec: AiSelectionSpec<TiedCandidate> = {
   feature: SETTLEMENT_CANDIDATE_RANK_FEATURE,
   rules:
     "Choose the statement transaction most likely to be the payment for this vendor order. Compare the amount to the stated total, the transaction date to the order date, and the merchant text to the vendor. Use none when no listed transaction fits.",
@@ -99,8 +99,8 @@ export async function suggestSettlementMatch(args: {
   }
 
   try {
-    const outcome = await runAiSelection(selectionSpec, {
-      subject: renderSubject(args.subject),
+    const outcome = await runAiSelection(settlementSelectionSpec, {
+      subject: renderSettlementSubject(args.subject),
       candidates,
       usage: await args.openUsage(),
       jev: args.jev,

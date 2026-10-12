@@ -31,6 +31,9 @@ export interface UsdaMatchAiPort {
 
 const productionUsdaMatchAiPort: UsdaMatchAiPort = { select: runAiSelection };
 
+export const usdaMatchSubject = (ingredientName: string) =>
+  `Find the best USDA food for the recipe ingredient: "${ingredientName}".`;
+
 export interface UsdaFoodSuggestion {
   food: UsdaFoodListRow | null;
   confidence: Confidence;
@@ -60,7 +63,7 @@ export async function suggestUsdaFood(
   }
 
   const { selected, confidence, reasoning } = await ai.select(usdaFoodSpec, {
-    subject: `Find the best USDA food for the recipe ingredient: "${ingredientName}".`,
+    subject: usdaMatchSubject(ingredientName),
     candidates: shortlist,
     usage: {
       db,

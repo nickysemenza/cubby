@@ -1,5 +1,9 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
 import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
+import { entityFieldByKey } from "@cubby/schemas/entity-fields";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
@@ -32,6 +36,8 @@ import {
   financialTransaction,
   product,
   purchase,
+  run as runTable,
+  suggestion as suggestionTable,
 } from "~/server/db/schema";
 import { activityAttentionStatePredicate } from "~/server/repo/activity";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
@@ -43,7 +49,9 @@ import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
 import { buildFinancialTransactionWhere } from "~/server/repo/financial-transaction";
 import { buildProductWhere } from "~/server/repo/product/crud";
 import { buildPurchaseWhereClause } from "~/server/repo/purchase";
+import { purchaseEvidenceFieldResolutionsSql } from "~/server/repo/purchase-evidence-policy";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
+import { reviewableSuggestionSql } from "~/server/repo/suggestion-review";
 import { additionalWorkProblemSelections } from "~/server/repo/work-queue-problems";
 import {
   workExpenseOwners,
@@ -144,12 +152,25 @@ async function workQueueProjection(
       {
         source: "email",
         kind: "review",
-        reason: "Email needs attention",
+        // Replaced by the row's own pipeline gaps after paging.
+        reason: "Email pipeline gap",
         nextAction: "Review relevance, retained original and import status.",
       },
       "email",
     ),
   );
+  // One row per suggested field, never one per Suggestion: the Review list
+  // is where each is accepted or rejected.
+  selections.push(sql`SELECT ${suggestionTable.entity}::text AS entity, NULL::text AS id,
+    ${suggestionTable.entity} || '.' || ${suggestionTable.field} AS name,
+    'suggestion:' || ${suggestionTable.entity} || '.' || ${suggestionTable.field} AS key,
+    ${workQueueSourceSchema.enum.suggestion}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind,
+    count(*)::text || CASE WHEN count(*) = 1 THEN ' pending suggestion' ELSE ' pending suggestions' END AS reason,
+    'Accept or reject them in AI Review.'::text AS "nextAction",
+    ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey"
+    FROM ${suggestionTable} JOIN ${runTable} ON ${runTable.id} = ${suggestionTable.runId}
+    WHERE ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${reviewableSuggestionSql}
+    GROUP BY ${suggestionTable.entity}, ${suggestionTable.field}`);
 
   for (const definition of problemQueryDeclarations()) {
     const source = definition.source;
@@ -293,6 +314,99 @@ async function workQueueProjection(
   return sql.join(selections, sql` UNION ALL `);
 }
 
+const GAP_ROWS = [
+  { entity: "product", source: "research", view: "research-queue" },
+  { entity: "purchase", source: "research", view: "research-queue" },
+  { entity: "expense", source: "research", view: "research-queue" },
+  { entity: "email", source: "email", view: "pipeline-worklist" },
+] as const;
+
+const fieldLabel = (entity: Entity, field: string) => {
+  const suggested = z.enum(shortcodeEntities).safeParse(entity);
+  return (
+    (suggested.success
+      ? entityFieldByKey(suggested.data, field)?.label
+      : undefined) ?? field
+  );
+};
+
+/** Each row states its own gaps (an Email's missing original, a Purchase's
+ * required receipt and the policy that requires it), not a generic reason. */
+async function stateRowGaps(db: Database, items: WorkQueueRow[]) {
+  for (const { entity, source, view } of GAP_ROWS) {
+    const rows = items.filter(
+      (item) => item.entity === entity && item.source === source,
+    );
+    if (rows.length === 0) continue;
+    const ids = await resolveLiveShortcodes(
+      db,
+      rows.flatMap((item) => (item.id ? [item.id] : [])),
+      entity,
+    );
+    const qualities = await loadDataQualities(db, entity, [...ids.values()]);
+    const relevantChecks = new Set([viewFilters(entity, view).dataGap].flat());
+    const policies =
+      entity === "purchase"
+        ? await purchaseEvidencePolicies(db, [...ids.values()])
+        : new Map<string, string>();
+    for (const item of rows) {
+      const id = item.id ? ids.get(item.id) : undefined;
+      const quality = id ? qualities.get(id) : undefined;
+      if (!id || !quality) continue;
+      const messages = [...quality.gaps, ...quality.relatedGaps]
+        .filter((gap) => relevantChecks.has(gap.check))
+        .map((gap) =>
+          gap.check === "primary_document"
+            ? (policies.get(id) ?? gap.message)
+            : gap.message,
+        );
+      if (messages.length) item.reason = [...new Set(messages)].join("; ");
+    }
+  }
+}
+
+const POLICY_SOURCE_TEXT = {
+  "purchase override": "set on this purchase",
+  "vendor policy": "inherited from Vendor",
+  "spending category policy": "inherited from Spending category",
+  "unclassified policy": "no policy source",
+} as const;
+
+/** "Receipt required — inherited from Spending category Hardware": only a
+ * `required` expectation raises `primary_document`, so the row names where
+ * that expectation came from. */
+async function purchaseEvidencePolicies(db: Database, ids: string[]) {
+  if (ids.length === 0) return new Map<string, string>();
+  const result = await getDb(db).execute(sql`
+    SELECT "Purchase".id::text AS id, ${purchaseEvidenceFieldResolutionsSql("Purchase")} AS resolutions
+    FROM "Purchase" WHERE "Purchase".id IN (${sql.join(
+      ids.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})`);
+  const rows = z
+    .array(z.object({ id: z.string(), resolutions: fieldResolutionsSchema }))
+    .parse(result.rows);
+  return new Map(
+    rows.flatMap(({ id, resolutions }) => {
+      const policy = resolutions.evidenceExpectation;
+      if (!policy || policy.value !== "required") return [];
+      const origin =
+        new Map<string, string>(Object.entries(POLICY_SOURCE_TEXT)).get(
+          policy.source,
+        ) ?? policy.source;
+      // An override's sourceEntity is the fallback it overrides, not its origin.
+      const name =
+        policy.mode === "explicit" ? null : policy.sourceEntity?.name;
+      return [
+        [
+          id,
+          `Receipt required — ${origin}${name ? ` ${name}` : ""}; none is attached.`,
+        ],
+      ];
+    }),
+  );
+}
+
 async function attachDisplayImages(db: Database, items: WorkQueueRow[]) {
   const images = await resolvePublicEntityDisplayImageLists(
     db,
@@ -387,7 +501,8 @@ export async function readWorkQueue(
           WHEN ${either} THEN jsonb_build_object('kind', ${either}::text)
           WHEN ${members} THEN jsonb_build_object('kind', ${members}::text, 'members', (SELECT jsonb_agg(jsonb_build_object('id', member.shortcode, 'name', member.name) ORDER BY member.name, member.shortcode) FROM members member WHERE member.id = ANY(page.owners)))
           ELSE jsonb_build_object('kind', ${unresolved}::text, 'reason', 'Current private source ownership is not established.') END
-      ) || CASE WHEN "problemKey" IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('problemKey', "problemKey") END ORDER BY position) FROM page), '[]'::jsonb) AS items
+      ) || CASE WHEN "problemKey" IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('problemKey', "problemKey") END
+        || CASE WHEN source = ${workQueueSourceSchema.enum.suggestion} THEN jsonb_build_object('suggestionField', split_part(key, '.', 2)) ELSE '{}'::jsonb END ORDER BY position) FROM page), '[]'::jsonb) AS items
   `);
   const row = z
     .object({
@@ -396,29 +511,10 @@ export async function readWorkQueue(
       items: workQueueOutSchema.shape.items,
     })
     .parse(result.rows[0]);
-  for (const entity of ["product", "purchase", "expense"] as const) {
-    const researchRows = row.items.filter(
-      (item) => item.entity === entity && item.source === "research",
-    );
-    if (researchRows.length === 0) continue;
-    const ids = await resolveLiveShortcodes(
-      db,
-      researchRows.flatMap((item) => (item.id ? [item.id] : [])),
-      entity,
-    );
-    const qualities = await loadDataQualities(db, entity, [...ids.values()]);
-    const researchFilters = viewFilters(entity, "research-queue");
-    const relevantChecks = new Set([researchFilters.dataGap].flat());
-    for (const item of researchRows) {
-      const id = item.id ? ids.get(item.id) : undefined;
-      const quality = id ? qualities.get(id) : undefined;
-      if (!quality) continue;
-      const messages = [...quality.gaps, ...quality.relatedGaps]
-        .filter((gap) => relevantChecks.has(gap.check))
-        .map((gap) => gap.message);
-      if (messages.length) item.reason = [...new Set(messages)].join("; ");
-    }
-  }
+  await stateRowGaps(db, row.items);
+  for (const item of row.items)
+    if (item.entity && item.suggestionField)
+      item.name = `${entitySummary[item.entity].singular} · ${fieldLabel(item.entity, item.suggestionField)}`;
   // Member routing fences rows, not imagery borrowed through linked records
   // (a transaction's purchase receipts), so member reads carry none.
   if (!memberOnly) await attachDisplayImages(db, row.items);

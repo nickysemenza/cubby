@@ -31,6 +31,28 @@ export const confidence = z.enum(confidenceValues);
 
 export type Confidence = z.infer<typeof confidence>;
 
+/** The calibrated probability a decision needs to count as "high". */
+export const HIGH_CONFIDENCE_PROBABILITY = 0.85;
+const MEDIUM_CONFIDENCE_PROBABILITY = 0.6;
+
+/** Buckets a decision model's calibrated probability into the public
+ * `confidence`; the server's decisions and every client label share it. */
+export function decisionConfidence(probability: number): Confidence {
+  if (probability >= HIGH_CONFIDENCE_PROBABILITY) return "high";
+  if (probability >= MEDIUM_CONFIDENCE_PROBABILITY) return "medium";
+  return "low";
+}
+
+/** Every suggestion surface states confidence one way: "92% · high". A
+ * chat-tier answer carries no calibrated probability and shows its bucket. */
+export function formatConfidence(
+  probability: number | null,
+  bucket: Confidence = "low",
+): string {
+  if (probability === null) return bucket;
+  return `${Math.floor(probability * 100)}% · ${decisionConfidence(probability)}`;
+}
+
 // One shared result shape for the generic "AI selection" helper
 // (`server/ai/selection.ts`): given a subject and a rendered shortlist, the
 // model names the chosen candidate's id (or null when none fits) plus its
@@ -486,7 +508,7 @@ export const suggestionReviewListInput = z.object({
   field: z.string().optional(),
   kind: z.enum(["correction", "addition"]).optional(),
   minConfidence: z.number().min(0).max(1).default(0.5),
-  runId: z.string().uuid().optional(),
+  runId: runShortcode.optional(),
   /** Reviewed history (applied, rejected, superseded) is the decision-eval
    * label set; the review queue reads `pending`. */
   status: suggestionStatus.default("pending"),
@@ -504,7 +526,8 @@ const suggestionRecordId = anyShortcodeSchema([
 ]);
 export const suggestionReviewRowSchema = z.object({
   id: z.string().uuid(),
-  runId: z.string().uuid(),
+  /** The sweep or page Run that produced it, opened from its provenance. */
+  runId: runShortcode,
   entity: z.enum(shortcodeEntities),
   recordId: suggestionRecordId,
   field: z.string(),
@@ -532,7 +555,82 @@ export const suggestionReviewActionOut = z.object({
   id: z.string().uuid(),
   status: z.enum(["applied", "rejected"]),
 });
-export const suggestionReviewBatchOut = z.array(suggestionReviewActionOut);
+/** Each id settles independently: one failure never rolls back or hides the
+ * others, and carries its raw diagnostic. */
+export const suggestionReviewBatchOut = z.array(
+  z.discriminatedUnion("ok", [
+    suggestionReviewActionOut.extend({ ok: z.literal(true) }),
+    z.object({
+      id: z.string().uuid(),
+      ok: z.literal(false),
+      error: z.string(),
+    }),
+  ]),
+);
+export type SuggestionReviewBatchOut = z.infer<typeof suggestionReviewBatchOut>;
+
+/** Pending, applied, rejected and superseded counts per (entity, field),
+ * optionally for one Run; paired trial rows never count. */
+export const suggestionCountsInput = z.object({
+  runId: runShortcode.optional(),
+});
+export const suggestionCountRowSchema = z.object({
+  entity: z.enum(shortcodeEntities),
+  field: z.string(),
+  pending: z.number().int().nonnegative(),
+  applied: z.number().int().nonnegative(),
+  rejected: z.number().int().nonnegative(),
+  superseded: z.number().int().nonnegative(),
+});
+export const suggestionCountsOut = z.array(suggestionCountRowSchema);
+export type SuggestionCountRow = z.infer<typeof suggestionCountRowSchema>;
+
+/**
+ * `ai.decisionCatalog`: one row per manifest suggest field plus every
+ * non-field decision feature. `prompt` is rendered by the code the live call
+ * runs (subject renderer + choice envelope) over a synthetic subject, so it
+ * cannot drift from what the model sees; a live roster's choices come from
+ * household records and are shown by Try instead.
+ */
+export const decisionCatalogRowSchema = z.object({
+  /** `entity.field` for a suggest field, the feature id otherwise. */
+  key: z.string(),
+  entity: z.enum(shortcodeEntities).nullable(),
+  field: z.string().nullable(),
+  label: z.string(),
+  description: z.string().nullable(),
+  feature: z.string(),
+  model: z.string(),
+  /** False when the feature pins its model instead of sampling the trial split. */
+  sample: z.boolean(),
+  promptVersion: z.string(),
+  mode: z.enum(["fill", "prune", "choice"]),
+  choiceKind: z.enum(["enum", "reference", "text", "prune", "choice"]),
+  basis: z.array(z.object({ key: z.string(), label: z.string() })),
+  options: z.array(
+    z.object({
+      value: z.string(),
+      label: z.string(),
+      description: z.string().nullable(),
+    }),
+  ),
+  /** Reference and text targets choose from a live household roster. */
+  roster: z
+    .object({
+      entity: z.string().nullable(),
+      maxCandidates: z.number().int().positive(),
+    })
+    .nullable(),
+  rules: z.string(),
+  reviewRequired: z.boolean(),
+  prompt: z.object({ subject: z.string(), input: z.json() }),
+  /** Stored Suggestion outcomes; null for decisions that store none. */
+  counts: suggestionCountRowSchema
+    .pick({ pending: true, applied: true, rejected: true, superseded: true })
+    .nullable(),
+});
+export const decisionCatalogOut = z.array(decisionCatalogRowSchema);
+export type DecisionCatalogRow = z.infer<typeof decisionCatalogRowSchema>;
 export const fieldSuggestionMissInput = z.object({
   entity: z.enum(shortcodeEntities),
   entityId: z.string().min(1),

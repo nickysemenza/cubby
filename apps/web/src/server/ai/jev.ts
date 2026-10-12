@@ -2,7 +2,7 @@
  * The decision-tier runner: one closed-set choice placed with Jev or Clef
  * over Workers AI. The chat-tier counterpart is `run-feature.ts`.
  */
-import type { Confidence } from "@cubby/schemas/ai";
+import { type Confidence, decisionConfidence } from "@cubby/schemas/ai";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import {
   gatewayBaseURL,
@@ -129,19 +129,6 @@ export interface JevChoiceResult {
  * of answering from another model.
  */
 export type JevPort = (input: JevChoiceInput) => Promise<JevChoiceResponse>;
-
-// Jev's calibrated probability for the winning choice is bucketed into the
-// public `confidence` here. Exported so a caller that computes its own
-// aggregate probability (e.g. the min across several prune-target removals)
-// can bucket it the same way instead of re-deriving the thresholds.
-/** The calibrated probability a decision needs to count as "high". */
-export const HIGH_CONFIDENCE_PROBABILITY = 0.85;
-
-export function decisionConfidence(probability: number): Confidence {
-  if (probability >= HIGH_CONFIDENCE_PROBABILITY) return "high";
-  if (probability >= 0.6) return "medium";
-  return "low";
-}
 
 /** The answer in a successful response body, whichever wire shape carries it. */
 function parseJevResponse(body: string): JevChoiceResponse {
@@ -288,14 +275,15 @@ function validateProbabilities(
   }
 }
 
-interface JevChoicePrompt {
+export interface JevChoicePrompt {
   subject: string;
   rules: string;
   choices: readonly string[];
   allowNone?: boolean;
 }
 
-function buildChoiceInput(args: JevChoicePrompt): JevChoiceInput {
+/** The exact request body a choice sends; the Decisions catalog renders it. */
+export function buildChoiceInput(args: JevChoicePrompt): JevChoiceInput {
   const allowNone = args.allowNone ?? true;
   const criteria = Object.fromEntries(
     args.choices.map((label, index) => [`c${index}`, label]),

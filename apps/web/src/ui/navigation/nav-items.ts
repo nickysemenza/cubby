@@ -11,7 +11,6 @@ import { PaletteIcon } from "@phosphor-icons/react/dist/csr/Palette";
 import { PlugIcon } from "@phosphor-icons/react/dist/csr/Plug";
 import { PulseIcon } from "@phosphor-icons/react/dist/csr/Pulse";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
-import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
@@ -151,8 +150,7 @@ export const desktopNav: NavNode[] = [
     tier: "developer",
     children: [
       { to: "/design", label: "Design", icon: PaletteIcon },
-      { to: "/ai-smoke-test", label: "AI smoke test", icon: SparkleIcon },
-      { to: "/ai-usage", label: "AI usage", icon: RobotIcon },
+      { to: "/ai", label: "AI", icon: SparkleIcon },
       { to: "/search/debug", label: "Search debug", icon: MagnifyingGlassIcon },
       { to: "/mcp", label: "MCP tools", icon: PlugIcon },
     ],

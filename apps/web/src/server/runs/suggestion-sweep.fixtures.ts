@@ -1,6 +1,11 @@
 import { type FieldSuggestion, fieldSuggestionsOut } from "@cubby/schemas/ai";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import type { RunId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityRef,
+  runShortcode,
+  type RunId,
+} from "@cubby/schemas/identifiers";
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fields";
 import {
   type SupportedDecisionModel,
@@ -25,7 +30,10 @@ import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { getDb } from "~/server/repo/database-helpers";
 import { createProduct } from "~/server/repo/product/crud";
 import { makeProductInput } from "~/server/repo/repo.fixtures";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  lookupShortcodes,
+  resolveLiveShortcode,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -78,6 +86,14 @@ export async function recordId<E extends ShortcodeEntity>(
   const id = await resolveLiveShortcode(db, shortcode, entity);
   if (!id) throw new Error(`Synthetic ${entity} record is missing`);
   return id;
+}
+
+/** The review queue filters by a Run's public shortcode. */
+export async function runCode(db: Database, id: string) {
+  const codes = await lookupShortcodes(db, [parseEntityRef("run", id)]);
+  const code = codes.get(entityRefKey("run", id));
+  if (!code) throw new Error("Synthetic Run is missing");
+  return runShortcode.parse(code);
 }
 
 export const productFixture = (

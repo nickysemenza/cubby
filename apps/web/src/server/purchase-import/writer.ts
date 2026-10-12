@@ -393,7 +393,7 @@ export type LineIdentityDecision = {
   distinctFrom?: ExplicitDistinctFrom[];
 };
 
-const lineDecisionSubject = (line: ExtractedPurchaseLine) =>
+export const lineDecisionSubject = (line: ExtractedPurchaseLine) =>
   JSON.stringify({
     title: line.title,
     amount: line.amount,
@@ -404,40 +404,43 @@ const lineDecisionSubject = (line: ExtractedPurchaseLine) =>
     productUrl: line.productUrl ?? null,
   });
 
+/** One closed choice per import line stage; the Decisions catalog renders
+ * these same rules and choices. */
+export const PURCHASE_LINE_DECISIONS = {
+  role: {
+    feature: PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
+    choices: expenseLineKindValues,
+    rules:
+      "Classify the receipt row's financial role. Principal is a purchased or returned item; taxes, shipping, discounts, fees, tips, and other adjustments are not products.",
+  },
+  kit: {
+    feature: PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
+    choices: ["kit_with_components", "single", "n_pack"] as const,
+    rules:
+      "Classify the sellable item. A kit has distinct reusable components, an n-pack is repeated units of one item, and a single is one sellable product.",
+  },
+  promotion: {
+    feature: PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
+    choices: ["promote", "coarse_only"] as const,
+    rules:
+      "Choose promote only when the line identifies a durable sellable product worth creating or linking. Choose coarse_only for services, vague bundles, fees, warranties, or insufficient identity.",
+  },
+  reversal: {
+    feature: PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,
+    choices: ["return", "concession", "cancellation", "replacement"] as const,
+    rules:
+      "Classify a negative item row: return means units left the household; concession means the item was kept; cancellation means it was never acquired; replacement means the money line accompanies a replacement rather than a returned unit.",
+  },
+} as const;
+
 export async function chooseLineStage(
   db: Database,
   runId: string,
   index: number,
   line: ExtractedPurchaseLine,
-  stage: "role" | "kit" | "promotion" | "reversal",
+  stage: keyof typeof PURCHASE_LINE_DECISIONS,
 ) {
-  const specs = {
-    role: {
-      feature: PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
-      choices: expenseLineKindValues,
-      rules:
-        "Classify the receipt row's financial role. Principal is a purchased or returned item; taxes, shipping, discounts, fees, tips, and other adjustments are not products.",
-    },
-    kit: {
-      feature: PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
-      choices: ["kit_with_components", "single", "n_pack"] as const,
-      rules:
-        "Classify the sellable item. A kit has distinct reusable components, an n-pack is repeated units of one item, and a single is one sellable product.",
-    },
-    promotion: {
-      feature: PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
-      choices: ["promote", "coarse_only"] as const,
-      rules:
-        "Choose promote only when the line identifies a durable sellable product worth creating or linking. Choose coarse_only for services, vague bundles, fees, warranties, or insufficient identity.",
-    },
-    reversal: {
-      feature: PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,
-      choices: ["return", "concession", "cancellation", "replacement"] as const,
-      rules:
-        "Classify a negative item row: return means units left the household; concession means the item was kept; cancellation means it was never acquired; replacement means the money line accompanies a replacement rather than a returned unit.",
-    },
-  } as const;
-  const spec = specs[stage];
+  const spec = PURCHASE_LINE_DECISIONS[stage];
   return runJevChoice({
     feature: spec.feature,
     subject: lineDecisionSubject(line),

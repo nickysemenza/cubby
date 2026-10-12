@@ -677,8 +677,13 @@ one entry per key.
 Reviewable field suggestions are stored against their `ai_suggest` or sweep
 Run. A human acceptance writes through the entity update path (finance
 categories use the reviewed finance apply so linked Expense reach is checked);
-a rejection records a Miss on that Run. Misses are evidence for improving the
-prompt or classification vocabulary and do not suppress future suggestions.
+a rejection records a Miss on that Run. "Use a different value…" writes the
+member's value to the record and keeps it as that Miss's `correctValue`.
+Misses are evidence for improving the prompt or classification vocabulary and
+do not suppress future suggestions. Batch accept and reject
+(`ai.acceptSuggestions`, `ai.rejectSuggestions`; MCP `accept_suggestions`,
+`reject_suggestions`) settle each id through the same single-id handler and
+return a per-id result, so one failure never hides or rolls back the rest.
 Bulk sweeps retain paired model rows for evaluation, while review exposes only
 the pinned model's candidate. The response cache includes the active
 classification revision, which each sweep also records for later comparison.
@@ -1351,15 +1356,24 @@ probability, so outcome summaries never count them as proposed changes.
 
 Manifest-declared suggestion targets appear as field pills in entity lists.
 Pending Suggestions and confident live answers both appear in those cells as the
-same shared suggestion-mode pill (accept, reject as a Miss, or use a different
-value). Weaker live proposals and ranked alternatives remain behind the cell's
-suggestion actions menu, with reasoning, hierarchy context, and review through
-the normal editor. Percentages describe model or branch confidence, not a
-guarantee of correctness. Apply shows local saving feedback; completed row
+same shared suggestion-mode pill; one tap accepts. Every field-suggestion
+surface opens the same suggestion body (`features/ai/suggestion-body.tsx`):
+Accept / Reject (with "Use a different value…"), confidence as "92% · high"
+(`formatConfidence`), the runner-up and its probability, the basis fields the
+model read, and a provenance caption (model, Run, time, AI usage). Jev and Clef
+return no prose, so those facts are the suggestion's reasoning; a branch
+roll-up's note is shown inline, never in a `title`. Weaker live proposals stay
+behind the cell's mark. Percentages describe model or branch confidence, not a
+guarantee of correctness. Accept shows local saving feedback; completed row
 enrichment stays visible throughout same-query refreshes. A changed target or declared
 backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
 for the same record and field. Suggestions remain available to evaluation after
-review; there is no separate classification review page.
+review. The `/ai` page's Review tab lists stored Suggestions on the shared
+table, filtered by entity, field, status, kind, minimum confidence and Run,
+with bulk Accept and Reject; its Decisions tab catalogs every decision's basis,
+options, rules and rendered request (`ai.decisionCatalog`) with a Jev/Clef Try
+panel. The Work queue shows one row per (entity, field) with pending
+Suggestions, and a sweep Run's detail links to its pending review.
 Entity lists expose a generic pending-suggestion filter (any, Addition, or
 Correction) and can start a sweep across every declared target using the list's active filters.
 

@@ -25,6 +25,7 @@ import {
 } from "~/server/ai/features";
 import {
   jevChoiceFitsContext,
+  type JevChoicePrompt,
   type JevPort,
   runJevChoice,
 } from "~/server/ai/jev";
@@ -108,6 +109,16 @@ export interface AiSelectionOutcome<C> {
  * otherwise-correct answer. */
 const normalizeId = (id: string): string => id.trim().toLowerCase();
 
+/** The roster choice a selection asks the decision tier; the Decisions
+ * catalog renders the same prompt. */
+export function selectionPrompt<C>(
+  spec: Pick<AiSelectionSpec<C>, "rules" | "renderLine">,
+  subject: string,
+  shown: readonly C[],
+): JevChoicePrompt & { choices: string[] } {
+  return { subject, rules: spec.rules, choices: shown.map(spec.renderLine) };
+}
+
 /**
  * Truncate `candidates` to `spec.maxCandidates` and ask the model to pick
  * one. Never calls a model when there are no candidates. The returned
@@ -138,10 +149,9 @@ export async function runAiSelection<C>(
     };
   }
 
-  const choices = shown.map(spec.renderLine);
-  if (
-    !jevChoiceFitsContext({ subject: args.subject, rules: spec.rules, choices })
-  ) {
+  const prompt = selectionPrompt(spec, args.subject, shown);
+  const { choices } = prompt;
+  if (!jevChoiceFitsContext(prompt)) {
     const port = args.ai ?? productionAiSelectionPort;
     const result = await port.select({
       rules: spec.rules,
@@ -169,9 +179,7 @@ export async function runAiSelection<C>(
 
   const result = await runJevChoice({
     feature: spec.feature,
-    subject: args.subject,
-    rules: spec.rules,
-    choices,
+    ...prompt,
     usage: args.usage,
     port: args.jev,
     decisionModel: args.decisionModel,

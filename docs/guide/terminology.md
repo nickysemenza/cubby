@@ -601,8 +601,9 @@ A Suggestion whose value differs from the record's current value.
 A Suggestion for a field that is currently blank.
 
 **Miss**:
-A Suggestion the household rejected. A Miss is evidence that a prompt or the
-taxonomy needs fixing, not a standing instruction to hide that value.
+A Suggestion the household rejected (the Reject verb; "Use a different
+value…" records the chosen value with it). A Miss is evidence that a prompt or
+the taxonomy needs fixing, not a standing instruction to hide that value.
 _Avoid_: dismissal (dismissals record durable household facts, such as two
 Products not being duplicates)
 

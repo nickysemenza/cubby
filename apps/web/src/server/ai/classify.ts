@@ -13,7 +13,11 @@ import type { Confidence } from "@cubby/schemas/ai";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 
 import type { AiDecisionFeature } from "~/server/ai/features";
-import { type JevPort, runJevChoice } from "~/server/ai/jev";
+import {
+  type JevChoicePrompt,
+  type JevPort,
+  runJevChoice,
+} from "~/server/ai/jev";
 import type { AiRunContext } from "~/server/ai/run-feature";
 
 /** One runner-up: the caller (`resolveEnumTarget`) applies its own
@@ -42,6 +46,22 @@ function alternativesFrom<Value extends string>(
     });
 }
 
+/** The exhaustive choice an enum classification asks; the Decisions catalog
+ * renders the same prompt. */
+export function classificationPrompt<Value extends string>(args: {
+  subject: string;
+  rules: string;
+  values: readonly Value[];
+  describe: (value: Value) => string;
+}): JevChoicePrompt {
+  return {
+    subject: args.subject,
+    rules: args.rules,
+    choices: args.values.map((value) => `${value}: ${args.describe(value)}`),
+    allowNone: false,
+  };
+}
+
 export async function classifyWithJev<Value extends string>(args: {
   feature: AiDecisionFeature;
   subject: string;
@@ -65,11 +85,8 @@ export async function classifyWithJev<Value extends string>(args: {
   const { selectedIndex, confidence, probability, ranked } = await runJevChoice(
     {
       feature: args.feature,
-      subject: args.subject,
-      rules: args.rules,
-      choices: args.values.map((value) => `${value}: ${args.describe(value)}`),
+      ...classificationPrompt(args),
       usage: args.usage,
-      allowNone: false,
       port: args.port,
       decisionModel: args.decisionModel,
       onTokenUsage: args.onTokenUsage,

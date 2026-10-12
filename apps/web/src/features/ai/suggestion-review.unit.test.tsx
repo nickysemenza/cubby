@@ -104,12 +104,9 @@ describe("inline suggestion review", () => {
         "Remove apparel, jacquemus — restates classification, manufacturer",
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Use suggestion" }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Remove tags" }));
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     expect(save).toHaveBeenCalledOnce();
-    expect(screen.getByRole("button", { name: "Keep" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
   });
 
   it("requires 0.95 for a provided alternative even when the stored value is explicit None", () => {
@@ -139,12 +136,12 @@ describe("inline suggestion review", () => {
     expect(screen.getByText("Materials")).toBeInTheDocument();
     expect(screen.getByText("Tools")).toBeInTheDocument();
     expect(save).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("unavailable");
     expect(screen.getByText("Materials")).toBeInTheDocument();
     expect(errorSpy).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     await waitFor(() =>
       expect(screen.queryByText("Tools")).not.toBeInTheDocument(),
     );
@@ -169,13 +166,13 @@ describe("inline suggestion review", () => {
     expect(screen.getAllByText("Materials")).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Materials" }));
     expect(edit).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByRole("button", { name: "Keep current" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     expect(screen.queryByText("Tools")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Materials" }));
     expect(edit).toHaveBeenCalledTimes(2);
   });
 
-  it("records a Miss when Keep current is chosen", async () => {
+  it("records a Miss when Reject is chosen", async () => {
     const onDismiss = vi.fn(async () => {});
     render(
       <SuggestionReview
@@ -186,11 +183,11 @@ describe("inline suggestion review", () => {
         onDismiss={onDismiss}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Keep current" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     await vi.waitFor(() => expect(onDismiss).toHaveBeenCalledOnce());
   });
 
-  it("remembers Keep current across page changes, but new evidence and a new visit can propose again", () => {
+  it("remembers Reject across page changes, but new evidence and a new visit can propose again", () => {
     const content = (key: string | null) => (
       <SuggestionVisitProvider>
         {key ? (
@@ -204,7 +201,7 @@ describe("inline suggestion review", () => {
       </SuggestionVisitProvider>
     );
     const view = render(content("first"));
-    fireEvent.click(screen.getByRole("button", { name: "Keep current" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     view.rerender(content(null));
     view.rerender(content("first"));
     expect(screen.queryByText("Tools")).not.toBeInTheDocument();
@@ -281,15 +278,13 @@ describe("folded review", () => {
       expect(screen.getByText("Materials")).toBeInTheDocument();
       expect(screen.queryByText("Tools")).not.toBeInTheDocument();
       expect(
-        screen.queryByRole("button", { name: "Use suggestion" }),
+        screen.queryByRole("button", { name: "Accept" }),
       ).not.toBeInTheDocument();
 
       fireEvent.click(
-        screen.getByRole("button", { name: "Suggested Tools · 97%" }),
+        screen.getByRole("button", { name: "Suggested Tools · 97% · high" }),
       );
-      fireEvent.click(
-        await screen.findByRole("button", { name: "Use suggestion" }),
-      );
+      fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
       expect(save).toHaveBeenCalledOnce();
     },
   );

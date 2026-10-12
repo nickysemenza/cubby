@@ -24,6 +24,7 @@ import {
   expenseFixture,
   kernelCtx,
   productFixture,
+  runCode,
   recordId,
   runSuggestions,
   seedPending,
@@ -217,7 +218,7 @@ describe("Suggestion supersede", () => {
       );
     const firstRun = await sweep();
     const [first] = await listSuggestions(ctx.db, {
-      runId: firstRun.id,
+      runId: await runCode(ctx.db, firstRun.id),
       minConfidence: 0,
     });
     if (!first) throw new Error("Synthetic first Suggestion is missing");

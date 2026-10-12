@@ -28,6 +28,7 @@ export const workQueueSourceSchema = z.enum([
   "reconciliation",
   "account",
   "problem",
+  "suggestion",
 ]);
 
 export const workQueueRowSchema = problemRowSchema
@@ -39,6 +40,9 @@ export const workQueueRowSchema = problemRowSchema
     entity: problemRowSchema.shape.entity.nullable(),
     id: problemRowSchema.shape.id.nullable(),
     problemKey: z.string().min(1).optional(),
+    /** One row per (entity, field) with pending Suggestions; it opens the
+     * filtered AI Review list rather than a record. */
+    suggestionField: z.string().min(1).optional(),
     key: z.string().min(1),
     source: workQueueSourceSchema,
     kind: workQueueKindSchema,
@@ -53,9 +57,20 @@ export const workQueueRowSchema = problemRowSchema
     (row) =>
       (row.entity !== null &&
         row.id !== null &&
-        row.problemKey === undefined) ||
-      (row.entity === null && row.id === null && row.problemKey !== undefined),
-    { message: "Work must name a source record or a Problems diagnostic." },
+        row.problemKey === undefined &&
+        row.suggestionField === undefined) ||
+      (row.entity === null &&
+        row.id === null &&
+        row.problemKey !== undefined &&
+        row.suggestionField === undefined) ||
+      (row.entity !== null &&
+        row.id === null &&
+        row.problemKey === undefined &&
+        row.suggestionField !== undefined),
+    {
+      message:
+        "Work must name a source record, a Problems diagnostic, or a suggested field.",
+    },
   );
 
 export const workQueueSortableFields = [

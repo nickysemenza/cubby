@@ -48,7 +48,9 @@ function regexFastPath(
   return null;
 }
 
-function subjectFor(input: ExternalIdKindSuggestionInput): string {
+export function externalIdKindSubject(
+  input: ExternalIdKindSuggestionInput,
+): string {
   return [
     `Source: "${input.source}"`,
     `Identifier: "${input.identifier}"`,
@@ -82,7 +84,7 @@ export async function suggestExternalIdKind(
 
   const result = await classifyWithJev({
     feature: FIELD_SUGGESTION_FEATURE,
-    subject: subjectFor(input),
+    subject: externalIdKindSubject(input),
     rules: EXTERNAL_ID_KIND_RULES,
     values: externalIdKind.options,
     describe: (value) => EXTERNAL_ID_KIND_DESCRIPTIONS[value],

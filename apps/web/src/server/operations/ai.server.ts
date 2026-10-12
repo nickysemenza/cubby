@@ -35,7 +35,9 @@ import {
   listPagePendingSuggestions,
   listSuggestions,
   rejectSuggestion,
+  rejectSuggestions,
   recordFieldSuggestionMiss,
+  suggestionCounts,
 } from "~/server/repo/suggestion-review";
 import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 import {
@@ -328,6 +330,13 @@ export const aiHandlers = implementOperationDomain(aiContract, {
     acceptSuggestions(context.db, context, input),
   rejectSuggestion: (context, input) =>
     rejectSuggestion(context.db, context, input),
+  rejectSuggestions: (context, input) =>
+    rejectSuggestions(context.db, context, input),
+  suggestionCounts: (context, input) => suggestionCounts(context.db, input),
+  decisionCatalog: async (context) => {
+    const { decisionCatalog } = await import("~/server/ai/decision-catalog");
+    return decisionCatalog(context.db);
+  },
   recordFieldSuggestionMiss: async (context, input) =>
     recordFieldSuggestionMiss(
       context.db,

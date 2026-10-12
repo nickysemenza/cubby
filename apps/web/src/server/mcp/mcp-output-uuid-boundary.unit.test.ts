@@ -76,10 +76,8 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // row handle its review action took.
   "entity.id",
   "entity.results[].id",
-  // The producing read: entity_read.suggestion_queue rows (id and their
-  // ai_suggest Run).
+  // The producing read: entity_read.suggestion_queue row ids.
   "entity_read.items[].id",
-  "entity_read.items[].runId",
   "run.id",
   // run.approve_execution returns the authorization Run's internal id beside
   // its approvalFingerprint: the exact reference discovery records.
