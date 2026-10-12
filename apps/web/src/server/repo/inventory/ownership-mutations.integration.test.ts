@@ -200,6 +200,7 @@ describe("inventory ownership mutations", () => {
     );
     expect(effective?.effectiveOwner?.id).toBe(owner.output.id);
     expect(effective?.source).toBe("explicit");
+    expect(effective?.basis).toBe("Confirmed: Wardrobe owner");
 
     await moveInventoryEntries(
       ctx.db,
@@ -216,6 +217,36 @@ describe("inventory ownership mutations", () => {
       ownershipMode: "person",
       ownerLedgerPartyId: owner.entityId,
     });
+  });
+
+  it("refuses a partial quantity larger than the row and leaves the row unchanged", async () => {
+    const owner = await createLedgerParty(
+      ctx.db,
+      { name: "Bounded owner", kind: "member", notes: null },
+      TEST_ACTOR,
+    );
+    const subject = await createSubject("Bounded quantity", 3);
+    await expect(
+      setInventoryOwnership(
+        ctx.db,
+        subject.entryId,
+        { mode: "person", ownerId: owner.output.id },
+        4,
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow("Cannot reassign 4; only 3 is available.");
+    const rows = await getDb(ctx.db).query.inventoryEntry.findMany({
+      where: and(
+        eq(inventoryEntry.productId, subject.product.entityId),
+        notDeleted(inventoryEntry),
+      ),
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      ownershipMode: "inherit",
+      ownerLedgerPartyId: null,
+    });
+    expect(amountFromColumns(rows[0]!).value).toBe(3);
   });
 
   it("serializes concurrent partial ownership transfers and conserves quantity", async () => {
@@ -402,6 +433,9 @@ describe("inventory ownership mutations", () => {
       subject.entryId,
     );
     expect(inferred?.effectiveOwner?.id).toBe(firstOwner.output.id);
+    expect(inferred?.basis).toBe(
+      "Inherited: First buyer · purchase beneficiary",
+    );
     await confirmInventoryOwnership(
       ctx.db,
       subject.entryId,
@@ -450,11 +484,13 @@ describe("inventory ownership mutations", () => {
     expect(pinned).toMatchObject({
       source: "explicit",
       effectiveOwner: { id: firstOwner.output.id },
+      basis: "Confirmed: First buyer",
     });
     expect(ambiguous).toMatchObject({
       source: "unresolved",
       effectiveOwner: null,
       evidence: null,
+      basis: "Inherited owner unresolved",
     });
   });
 
