@@ -601,8 +601,6 @@ export const decisionCatalogRowSchema = z.object({
   description: z.string().nullable(),
   feature: z.string(),
   model: z.string(),
-  /** False when the feature pins its model instead of sampling the trial split. */
-  sample: z.boolean(),
   promptVersion: z.string(),
   mode: z.enum(["fill", "prune", "choice"]),
   choiceKind: z.enum(["enum", "reference", "text", "prune", "choice"]),

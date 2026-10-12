@@ -154,10 +154,7 @@ function catalogColumns() {
         meta: attachCubbyColumnMeta<DecisionCatalogRow>({
           mobile: { slot: "meta", priority: 4, label: "Model" },
         }),
-        cell: ({ row }) =>
-          row.original.sample
-            ? `${row.original.model} · trial split`
-            : row.original.model,
+        cell: ({ row }) => row.original.model,
       }),
     );
   });
@@ -367,9 +364,7 @@ function DecisionDetail({ row }: { row: DecisionCatalogRow }) {
     <Stack gap="md" className="text-sm">
       {row.description ? <p>{row.description}</p> : null}
       <Description size="xs" className="text-muted-foreground">
-        {row.feature} · {row.model}
-        {row.sample ? " · Jev/Clef trial split" : " · pinned model"} · prompt{" "}
-        {row.promptVersion}
+        {row.feature} · {row.model} · prompt {row.promptVersion}
         {row.reviewRequired ? " · review required" : ""}
       </Description>
       {row.counts ? (

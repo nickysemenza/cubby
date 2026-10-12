@@ -43,7 +43,7 @@ import {
   EXTERNAL_ID_KIND_RULES,
 } from "~/server/ai/vocabularies";
 import type { Database } from "~/server/db";
-import { mailTriagePrompt } from "~/server/purchase-import/gmail/triage-model";
+import { mailTriagePrompt } from "~/server/purchase-import/gmail/triage";
 import {
   lineDecisionSubject,
   PURCHASE_LINE_DECISIONS,
@@ -71,7 +71,6 @@ function featureFacts(feature: AiDecisionFeature) {
   return {
     feature: feature.feature,
     model: feature.model,
-    sample: feature.sample !== false,
     promptVersion: feature.promptVersion,
   };
 }
