@@ -128,8 +128,10 @@ test("unfamiliar statement CSV requires reviewed column and sign mapping", async
   await mapping
     .getByLabel("Account name (for a single-account file)")
     .fill("Fixture checking (...4242)");
-  await mapping.getByLabel("Date column").selectOption("When");
-  await mapping.getByLabel("Description column").selectOption("Details");
+  // The server suggests the columns; both clients prefill from it.
+  await expect(mapping.getByLabel("Date column")).toHaveValue("When");
+  await expect(mapping.getByLabel("Amount column")).toHaveValue("Total");
+  await expect(mapping.getByLabel("Description column")).toHaveValue("Details");
   await mapping.getByLabel("Direction column").selectOption("Flow");
   await mapping
     .getByLabel("Amount convention")

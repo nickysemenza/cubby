@@ -8,9 +8,9 @@ import {
   recordStatementRowsInput,
   STATEMENT_ROW_RECORD_MAX_ROWS,
   type RecordStatementRowsInput,
+  type StatementCsvColumnMapping,
   type StatementRowInput,
 } from "@cubby/schemas/statement-row";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { parse } from "csv-parse/browser/esm/sync";
 import { z } from "zod";
 
@@ -85,23 +85,6 @@ function amount(value: string): number {
   return parenthesized ? -Math.abs(parsed) : parsed;
 }
 
-export type CsvColumnMapping = {
-  source: string;
-  account: string;
-  accountColumn: string;
-  date: string;
-  amount: string;
-  description: string;
-  merchant: string;
-  category: string;
-  notes: string;
-  direction: string;
-  status: string;
-  pendingValue: string;
-  chargeValue: string;
-  creditValue: string;
-  sign: "charges-negative" | "charges-positive" | "direction-column";
-};
 export type ParsedStatementCsv = {
   source: string;
   label: string;
@@ -272,7 +255,7 @@ export function parseMappedStatementCsv(
   text: string,
   label: string,
   fingerprint: string,
-  mapping: CsvColumnMapping,
+  mapping: StatementCsvColumnMapping,
 ): ParsedStatementCsv {
   const records = positionedRecords(text);
   const headers = Object.keys(records[0]!.record);
@@ -552,8 +535,4 @@ export function recordStatementBatch(
     ),
     dryRun: false,
   });
-}
-
-export async function fingerprintStatementCsv(file: File): Promise<string> {
-  return sha256Hex(await file.text());
 }

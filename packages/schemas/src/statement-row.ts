@@ -39,9 +39,17 @@ export const statementCsvFileInput = z.object({
 });
 export type StatementCsvFileInput = z.infer<typeof statementCsvFileInput>;
 
+export type StatementCsvColumnMapping = z.infer<
+  typeof statementCsvColumnMapping
+>;
+
 export const statementCsvPreviewOut = z.object({
   headers: z.array(z.string()),
   needsMapping: z.boolean(),
+  /** Server-guessed columns for an unfamiliar file; clients prefill from it. */
+  suggestedMapping: statementCsvColumnMapping.nullable(),
+  /** Advisory: the first batch looks like an un-normalized all-positive export. */
+  signWarning: z.string().nullable(),
   source: z.string().nullable(),
   totalRows: z.number().int(),
   pendingRows: z.number().int(),

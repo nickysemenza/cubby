@@ -4,20 +4,14 @@ import {
   type FinancialTransactionKind,
 } from "@cubby/schemas/financial-transaction";
 import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
-import type { StatementCsvFileInput } from "@cubby/schemas/statement-row";
+import type {
+  StatementCsvColumnMapping,
+  StatementCsvFileInput,
+} from "@cubby/schemas/statement-row";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import {
-  type CsvColumnMapping,
-  fingerprintStatementCsv,
-  parseMappedStatementCsv,
-  parseStatementCsv,
-  recognizedStatementSource,
-  recordStatementBatch,
-  statementCsvHeaders,
-} from "~/app/finance/statement-csv";
 import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 import { statusTone } from "~/lib/status-tone";
@@ -29,16 +23,17 @@ import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { NativeSelect } from "~/ui/primitives/native-select";
 
-type ParsedImport = ReturnType<typeof parseStatementCsv>;
-type RecordStatementRowsOut = Awaited<
-  ReturnType<typeof statementRow.record.call>
->;
+type FilePreview = Awaited<ReturnType<typeof statementRow.previewCsv.call>>;
 type Review = {
   fileName: string;
   fileInput: StatementCsvFileInput;
-  parsed: ParsedImport;
-  preview: FinancialStatementImportPreviewOut | null;
-  dryRun: RecordStatementRowsOut;
+  file: FilePreview;
+};
+type MappingDraft = {
+  fileName: string;
+  text: string;
+  headers: string[];
+  mapping: StatementCsvColumnMapping;
 };
 
 export const Route = createFileRoute("/_authenticated/statement-rows/import")({
@@ -81,29 +76,13 @@ function confirmationLabel(
 
 function StatementImportPage() {
   const [review, setReview] = useState<Review | null>(null);
-  const [mappingFile, setMappingFile] = useState<{
-    text: string;
-    fileName: string;
-    fingerprint: string;
-    headers: string[];
-  } | null>(null);
-  const [mapping, setMapping] = useState<CsvColumnMapping>({
-    source: "",
-    account: "",
-    accountColumn: "",
-    date: "",
-    amount: "",
-    description: "",
-    merchant: "",
-    category: "",
-    notes: "",
-    direction: "",
-    status: "",
-    pendingValue: "pending",
-    chargeValue: "debit",
-    creditValue: "credit",
-    sign: "charges-negative",
-  });
+  const [mappingFile, setMappingFile] = useState<MappingDraft | null>(null);
+  const mapping = mappingFile?.mapping;
+  const updateMapping = (patch: Partial<StatementCsvColumnMapping>) =>
+    setMappingFile(
+      (before) =>
+        before && { ...before, mapping: { ...before.mapping, ...patch } },
+    );
   const [selected, setSelected] = useState<string[]>([]);
   const [kinds, setKinds] = useState<Record<string, FinancialTransactionKind>>(
     {},
@@ -121,25 +100,18 @@ function StatementImportPage() {
     alreadyPresent: number;
   } | null>(null);
 
-  async function prepareReview(
-    parsed: ParsedImport,
-    fileName: string,
-    fileInput: StatementCsvFileInput,
-  ) {
-    const [filePreview, dryRun] = await Promise.all([
-      statementRow.previewCsv.call(fileInput),
-      statementRow.record.call({
-        ...recordStatementBatch(parsed),
-        dryRun: true,
-      }),
-    ]);
-    setReview({
-      fileName,
-      fileInput,
-      parsed,
-      preview: filePreview.preview,
-      dryRun,
-    });
+  async function prepareReview(fileInput: StatementCsvFileInput) {
+    const file = await statementRow.previewCsv.call(fileInput);
+    if (file.needsMapping && file.suggestedMapping) {
+      setMappingFile({
+        fileName: fileInput.fileName,
+        text: fileInput.text,
+        headers: file.headers,
+        mapping: file.suggestedMapping,
+      });
+      return;
+    }
+    setReview({ fileName: fileInput.fileName, fileInput, file });
     setAttachments({});
     setSelected([]);
     setMappingFile(null);
@@ -153,41 +125,7 @@ function StatementImportPage() {
     setResult(null);
     setKinds({});
     try {
-      const text = await file.text();
-      const fingerprint = await fingerprintStatementCsv(file);
-      const headers = statementCsvHeaders(text);
-      if (recognizedStatementSource(headers)) {
-        await prepareReview(
-          parseStatementCsv(text, file.name, fingerprint),
-          file.name,
-          { fileName: file.name, text },
-        );
-      } else {
-        setMappingFile({ text, fileName: file.name, fingerprint, headers });
-        setMapping((before) => ({
-          ...before,
-          source: "",
-          account: "",
-          accountColumn:
-            headers.find((header) => /account/i.test(header)) ?? "",
-          merchant: "",
-          category: "",
-          notes: "",
-          direction: "",
-          status: headers.find((header) => /^status$/i.test(header)) ?? "",
-          sign: "charges-negative",
-          date:
-            headers.find((header) => /date|when|posted|time/i.test(header)) ??
-            "",
-          amount:
-            headers.find((header) => /amount|total|value|sum/i.test(header)) ??
-            "",
-          description:
-            headers.find((header) =>
-              /description|merchant|name|memo|details|payee/i.test(header),
-            ) ?? "",
-        }));
-      }
+      await prepareReview({ fileName: file.name, text: await file.text() });
     } catch (cause) {
       setError(cause);
     } finally {
@@ -200,16 +138,11 @@ function StatementImportPage() {
     setBusy(true);
     setError(null);
     try {
-      await prepareReview(
-        parseMappedStatementCsv(
-          mappingFile.text,
-          mappingFile.fileName,
-          mappingFile.fingerprint,
-          mapping,
-        ),
-        mappingFile.fileName,
-        { fileName: mappingFile.fileName, text: mappingFile.text, mapping },
-      );
+      await prepareReview({
+        fileName: mappingFile.fileName,
+        text: mappingFile.text,
+        mapping: mappingFile.mapping,
+      });
     } catch (cause) {
       setError(cause);
     } finally {
@@ -275,9 +208,9 @@ function StatementImportPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 py-5">
         <div className="border-b border-border pb-5">
           <p className="text-sm text-muted-foreground">
-            Choose a statement CSV. Cubby reads it in this browser and checks
-            source rows, accounts, and possible duplicates before saving.
-            Transactions require a separate, explicit review decision.
+            Choose a statement CSV. Cubby checks source rows, accounts, and
+            possible duplicates before saving. Transactions require a separate,
+            explicit review decision.
           </p>
           <label className="mt-4 flex min-h-20 cursor-pointer items-center justify-center rounded-sm border border-dashed border-border bg-card px-4 text-sm font-medium hover:border-primary">
             <input
@@ -298,7 +231,7 @@ function StatementImportPage() {
 
         {error !== null && <ErrorDisplay error={error} />}
 
-        {mappingFile && (
+        {mappingFile && mapping && (
           <section
             aria-label="Map statement columns"
             className="space-y-4 rounded-sm border border-border bg-card p-4"
@@ -320,10 +253,7 @@ function StatementImportPage() {
                   className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
                   value={mapping.source}
                   onChange={(event) =>
-                    setMapping((before) => ({
-                      ...before,
-                      source: event.target.value,
-                    }))
+                    updateMapping({ source: event.target.value })
                   }
                   placeholder="venmo"
                 />
@@ -334,10 +264,7 @@ function StatementImportPage() {
                   className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
                   value={mapping.account}
                   onChange={(event) =>
-                    setMapping((before) => ({
-                      ...before,
-                      account: event.target.value,
-                    }))
+                    updateMapping({ account: event.target.value })
                   }
                   placeholder="Checking (...1234)"
                 />
@@ -368,10 +295,7 @@ function StatementImportPage() {
                     className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
                     value={mapping[field]}
                     onChange={(event) =>
-                      setMapping((before) => ({
-                        ...before,
-                        [field]: event.target.value,
-                      }))
+                      updateMapping({ [field]: event.target.value })
                     }
                   >
                     <option value="">
@@ -401,7 +325,7 @@ function StatementImportPage() {
                       sign === "charges-positive" ||
                       sign === "direction-column"
                     )
-                      setMapping((before) => ({ ...before, sign }));
+                      updateMapping({ sign });
                   }}
                 >
                   <option value="charges-negative">Charges are negative</option>
@@ -419,10 +343,7 @@ function StatementImportPage() {
                       className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
                       value={mapping.chargeValue}
                       onChange={(event) =>
-                        setMapping((before) => ({
-                          ...before,
-                          chargeValue: event.target.value,
-                        }))
+                        updateMapping({ chargeValue: event.target.value })
                       }
                     />
                   </label>
@@ -432,10 +353,7 @@ function StatementImportPage() {
                       className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
                       value={mapping.creditValue}
                       onChange={(event) =>
-                        setMapping((before) => ({
-                          ...before,
-                          creditValue: event.target.value,
-                        }))
+                        updateMapping({ creditValue: event.target.value })
                       }
                     />
                   </label>
@@ -448,10 +366,7 @@ function StatementImportPage() {
                     className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
                     value={mapping.pendingValue}
                     onChange={(event) =>
-                      setMapping((before) => ({
-                        ...before,
-                        pendingValue: event.target.value,
-                      }))
+                      updateMapping({ pendingValue: event.target.value })
                     }
                   />
                 </label>
@@ -490,34 +405,36 @@ function StatementImportPage() {
                   {review.fileName}
                 </p>
                 <h2 className="mt-1 text-lg font-semibold">
-                  {formatCount(review.parsed.recordRows.length)} source rows ·{" "}
-                  {review.parsed.source}
+                  {formatCount(review.file.totalRows)} source rows ·{" "}
+                  {review.file.source}
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  {review.preview ? (
+                  {review.file.preview ? (
                     <>
-                      Previewing the first {review.preview.summary.rowsIn}{" "}
-                      posted rows · {review.preview.summary.readyToCreate} ready
-                      · {review.preview.summary.alreadyRecorded} recorded ·{" "}
-                      {review.preview.summary.unresolvedAccount +
-                        review.preview.summary.possibleExisting +
-                        review.preview.summary.indistinguishableDuplicate}{" "}
+                      Previewing the first {review.file.preview.summary.rowsIn}{" "}
+                      posted rows · {review.file.preview.summary.readyToCreate}{" "}
+                      ready · {review.file.preview.summary.alreadyRecorded}{" "}
+                      recorded ·{" "}
+                      {review.file.preview.summary.unresolvedAccount +
+                        review.file.preview.summary.possibleExisting +
+                        review.file.preview.summary
+                          .indistinguishableDuplicate}{" "}
                       need review
                     </>
                   ) : (
                     "No nonzero posted rows; all rows can be saved as evidence."
                   )}
                 </p>
-                {review.parsed.pending > 0 && (
+                {review.file.pendingRows > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    {review.parsed.pending} pending rows will be saved as
+                    {review.file.pendingRows} pending rows will be saved as
                     evidence only.
                   </p>
                 )}
-                {review.parsed.zeroValueRows > 0 && (
+                {review.file.zeroValueRows > 0 && (
                   <p className="text-xs text-warning-ink">
-                    {review.parsed.zeroValueRows} zero-value rows will be
-                    retained as source evidence without creating transactions.
+                    {review.file.zeroValueRows} zero-value rows will be retained
+                    as source evidence without creating transactions.
                   </p>
                 )}
               </div>
@@ -531,17 +448,17 @@ function StatementImportPage() {
                   selected.some((key) => !kinds[key]),
                   Object.values(attachments).filter(Boolean).length,
                   selected.length,
-                  review.parsed.recordRows.length,
+                  review.file.totalRows,
                 )}
               </Button>
             </div>
-            {review.dryRun.signWarning && (
+            {review.file.signWarning && (
               <p role="alert" className="text-sm text-destructive">
-                {review.dryRun.signWarning}
+                {review.file.signWarning}
               </p>
             )}
             <div className="divide-y divide-border rounded-sm border border-border bg-card">
-              {review.preview?.rows.map((row) => {
+              {review.file.preview?.rows.map((row) => {
                 const ready = row.status === "ready_to_create";
                 return (
                   <div
@@ -570,13 +487,10 @@ function StatementImportPage() {
                       </span>
                       <span className="block text-xs text-muted-foreground">
                         {row.proposed.postedDate} ·{" "}
-                        {row.accountName ??
-                          review.parsed.rows.find(
-                            (input) => input.key === row.key,
-                          )?.account}
+                        {row.accountName ?? row.provisionalAccount?.name}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {review.parsed.source} category:{" "}
+                        {review.file.source} category:{" "}
                         {row.proposed.sourceCategory || "Uncategorized"}
                       </span>
                       {ready && (

@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import {
   STATEMENT_ROW_RECORD_MAX_ROWS,
+  type StatementCsvColumnMapping,
   type StatementCsvCommitInput,
   type StatementCsvFileInput,
 } from "@cubby/schemas/statement-row";
@@ -26,8 +27,38 @@ import { createFinancialTransaction } from "~/server/repo/financial-transaction"
 import {
   recordStatementRows,
   attachStatementObservation,
+  statementSignWarning,
   updateStatementRows,
 } from "~/server/repo/statement-row";
+
+const firstHeader = (headers: string[], pattern: RegExp) =>
+  headers.find((header) => pattern.test(header)) ?? "";
+
+/** The one column guesser for an unfamiliar CSV; web and native prefill from it. */
+export function suggestStatementCsvMapping(
+  headers: string[],
+): StatementCsvColumnMapping {
+  return {
+    source: "",
+    account: "",
+    accountColumn: firstHeader(headers, /account/i),
+    date: firstHeader(headers, /date|when|posted|time/i),
+    amount: firstHeader(headers, /amount|total|value|sum/i),
+    description: firstHeader(
+      headers,
+      /description|merchant|name|memo|details|payee/i,
+    ),
+    merchant: "",
+    category: "",
+    notes: "",
+    direction: "",
+    status: firstHeader(headers, /^status$/i),
+    pendingValue: "pending",
+    chargeValue: "debit",
+    creditValue: "credit",
+    sign: "charges-negative",
+  };
+}
 
 async function parseFile(input: StatementCsvFileInput) {
   const headers = statementCsvHeaders(input.text);
@@ -69,6 +100,8 @@ export async function previewStatementCsv(
     return {
       headers,
       needsMapping: true,
+      suggestedMapping: suggestStatementCsvMapping(headers),
+      signWarning: null,
       source: null,
       totalRows: 0,
       pendingRows: 0,
@@ -89,6 +122,8 @@ export async function previewStatementCsv(
   return {
     headers,
     needsMapping: false,
+    suggestedMapping: null,
+    signWarning: statementSignWarning(recordStatementBatch(parsed).rows),
     source: parsed.source,
     totalRows: parsed.recordRows.length,
     pendingRows: parsed.pending,
