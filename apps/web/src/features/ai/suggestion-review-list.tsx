@@ -74,7 +74,7 @@ function RecordRef({ entity, id }: { entity: string; id: string }) {
 
 /** A stored value as its field shows it: a record link for a shortcode, the
  * manifest label for an enum member, the text otherwise. */
-export function SuggestionValue({
+function SuggestionValue({
   entity,
   field,
   value,
