@@ -10,6 +10,7 @@ import {
 import { listReadFields, projectListRows } from "~/entity/list-read-schema";
 import { withListEntityMedia } from "~/server/repo/entity-display-image";
 import { withRecordEmoji } from "~/server/repo/entity-emoji";
+import { listTotalLabels } from "~/server/repo/list-display-labels";
 import { expandListGroups } from "~/server/repo/list-projection";
 import { withListReadTracing } from "~/server/repo/list-read-tracing";
 import { normalizeStartOperationError } from "~/server/start-operation.server";
@@ -142,13 +143,9 @@ export function defineProgressiveListOperations<
       return {
         entity: binding.entity,
         data: await withRecordEmoji(context.db, binding.entity, result.data),
-        meta: buildPaginatedResponse(
-          pagination,
-          [],
-          result.count,
-          undefined,
-          result.groups,
-        ).meta,
+        meta: buildPaginatedResponse(pagination, [], result.count, {
+          groups: result.groups,
+        }).meta,
         groups: (["media", "quality", "relations", "derived"] as const)
           .filter((group) => fields[group].length > 0)
           .map((id) => ({ id, fields: fields[id] })),
@@ -193,8 +190,11 @@ export function defineProgressiveListOperations<
           pagination,
           result.data.map((row) => ({ ...row, ...enriched?.get(row.id) })),
           result.count,
-          sums,
-          result.groups,
+          {
+            sums,
+            totalLabels: listTotalLabels(binding.entity, sums),
+            groups: result.groups,
+          },
         ),
       };
     },
@@ -295,7 +295,11 @@ export function defineProgressiveListOperations<
           Promise.resolve({}),
         { "entity.kind": binding.entity },
       );
-      return { entity: binding.entity, sums };
+      return {
+        entity: binding.entity,
+        sums,
+        totalLabels: listTotalLabels(binding.entity, sums),
+      };
     },
   };
 }

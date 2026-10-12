@@ -86,7 +86,7 @@ describe("useInfiniteTableList", () => {
                 missingIds: [],
               }
             : enrichmentRefresh.promise,
-        summary: async () => ({ count: 1 }),
+        summary: async () => ({ sums: { count: 1 } }),
       },
     });
     const { result } = renderHook(
@@ -218,7 +218,7 @@ describe("useInfiniteTableList", () => {
                 missingIds: [],
               };
         },
-        summary: async () => ({ cost: 5 }),
+        summary: async () => ({ sums: { cost: 5 } }),
       },
     });
     const { result } = renderHook(
@@ -291,7 +291,9 @@ describe("useInfiniteTableList", () => {
             missingIds: [],
           };
         },
-        summary: async () => ({ cost: filters.scope === "old" ? 999 : 5 }),
+        summary: async () => ({
+          sums: { cost: filters.scope === "old" ? 999 : 5 },
+        }),
       },
     });
     const { result, rerender } = renderHook(
@@ -334,7 +336,7 @@ describe("useInfiniteTableList", () => {
       }[];
       missingIds: string[];
     }>();
-    const summary = Promise.withResolvers<{ cost: number }>();
+    const summary = Promise.withResolvers<{ sums: { cost: number } }>();
     let enrichmentSignal: AbortSignal | undefined;
     const queryOptions = () => ({
       queryKey: ["progressive-boundary"],
@@ -379,7 +381,7 @@ describe("useInfiniteTableList", () => {
       ],
       missingIds: [],
     });
-    summary.resolve({ cost: 99 });
+    summary.resolve({ sums: { cost: 99 } });
   });
 
   it("keeps operation cache tags on the infinite query", async () => {

@@ -40,24 +40,25 @@ public enum DisplayFormat {
     /// decimal, both grouped; a range joins with an en dash, a partial estimate ends in `+`, and
     /// anything unavailable or pending is `—`.
     public static func compactEstimate(_ estimate: MeasureEstimate, unit: EstimateUnit) -> String {
-        let partial = if case .partial = estimate { true } else { false }
-        return ValueFormat.compactEstimate(
-            known: knownFigure(estimate), partial: partial, unit: unit.format)
+        ValueFormat.compactEstimate(figure(estimate), unit: unit.format)
     }
 
-    /// The figure of a complete or partial estimate, without the partial marker; `nil` when
-    /// nothing is known.
-    public static func knownRange(_ estimate: MeasureEstimate, unit: EstimateUnit) -> String? {
-        knownFigure(estimate).map {
-            ValueFormat.compactRange(lower: $0.lower, upper: $0.upper, unit: unit.format)
-        }
+    /// The long form for detail text and accessibility, the web's `formatEstimate`: the figure or
+    /// range, `unit` once, then its confidence (`420 kcal known · partial`, `Pending`, `N/A`).
+    public static func estimate(
+        _ estimate: MeasureEstimate, measure: ValueFormat.EstimateMeasure, unit: String? = nil
+    ) -> String {
+        ValueFormat.estimate(figure(estimate), measure: measure, unit: unit)
     }
 
-    private static func knownFigure(_ estimate: MeasureEstimate) -> (lower: Double, upper: Double?)? {
+    private static func figure(_ estimate: MeasureEstimate) -> ValueFormat.Estimate {
         switch estimate {
-        case .complete(let known): (known.lower, known.upper)
-        case .partial(let known): (known.lower, known.upper)
-        case .unavailable, .pending: nil
+        case .complete(let known):
+            .complete(lower: known.lower, upper: known.upper, inferredZero: estimate.inferredZeroCount)
+        case .partial(let known):
+            .partial(lower: known.lower, upper: known.upper, inferredZero: estimate.inferredZeroCount)
+        case .unavailable: .unavailable(notApplicable: estimate.isNotApplicable)
+        case .pending: .pending
         }
     }
 }

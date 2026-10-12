@@ -60,6 +60,11 @@ export function formatCurrency(
   );
 }
 
+/** `$3.20` or `$3.20–$4.10`; a missing or equal upper prints once. */
+export function formatCurrencyRange(lower: number, upper?: number): string {
+  return wasmFormat.format_currency_range(lower, upper);
+}
+
 /** Format currency in compact notation (e.g. "$1.2M"). */
 export function formatCompactCurrency(value: number): string {
   return cachedNumberFormat({

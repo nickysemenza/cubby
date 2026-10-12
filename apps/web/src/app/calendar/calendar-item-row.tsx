@@ -22,9 +22,7 @@ function calendarItemCost(item: CalendarItem) {
       item.mealTotals.cost.reason === "empty"
     )
   )
-    return formatEstimate(item.mealTotals.cost, (value) =>
-      formatCurrency(value, 0),
-    );
+    return formatEstimate(item.mealTotals.cost, "cost");
   return null;
 }
 
@@ -34,10 +32,7 @@ function MealCalories({ item }: { item: CalendarItem }) {
   if (kcal.status === "unavailable" && kcal.reason === "empty") return null;
   return (
     <span title={estimateStatusText(kcal) ?? undefined}>
-      {formatEstimate(
-        kcal,
-        (value) => `${Math.round(value).toLocaleString()} kcal`,
-      )}
+      {formatEstimate(kcal, "kcal", "kcal")}
     </span>
   );
 }

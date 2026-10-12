@@ -9,7 +9,6 @@ import {
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
-import { formatCurrency } from "~/lib/utils";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row } from "~/ui/layout";
@@ -61,15 +60,12 @@ function StuckTotalsCell({
   );
 }
 
-const formatKcal = (value: number) => `${Math.round(value)} kcal`;
-
 /** One estimate column (cost or calories) over the recipe's stored totals. */
 const estimateColumn =
   (metric: "cost" | "kcal"): ListRenderer<"recipe"> =>
   (helper) => {
     const getEstimate = (row: RecipeRow) =>
       metric === "cost" ? row.totals?.cost : row.totals?.nutrition.kcal;
-    const format = metric === "cost" ? formatCurrency : formatKcal;
     // The primary figure is the server's text; only the per-serving subline
     // below is still derived here.
     const labelKey =
@@ -123,7 +119,8 @@ const estimateColumn =
                     <span className="ml-1.5 text-2xs text-muted-foreground">
                       {formatEstimate(
                         scaleEstimate(estimate, 1 / perItem.divisor),
-                        format,
+                        metric,
+                        metric === "kcal" ? "kcal" : undefined,
                       )}{" "}
                       {perUnitSuffix(perItem.noun, { short: true })}
                     </span>

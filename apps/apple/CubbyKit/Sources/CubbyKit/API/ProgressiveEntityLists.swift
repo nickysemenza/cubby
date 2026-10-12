@@ -56,7 +56,7 @@ extension CubbyClient {
                 guard !descriptor.presentation.listTotals.isEmpty else { return nil }
                 let response = try JSONValue(
                     encoding: try await entityListSummary(try JSONValue(encoding: input).decoded()))
-                return response["sums"]?.objectValue?.compactMapValues(\.doubleValue)
+                return response["totalLabels"]?.objectValue?.compactMapValues(\.stringValue)
             })
         return ListPage(
             items: response["data"]?.arrayValue?.compactMap(descriptor.row(from:)) ?? [],

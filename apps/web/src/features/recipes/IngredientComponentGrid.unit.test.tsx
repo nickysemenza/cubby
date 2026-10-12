@@ -213,9 +213,9 @@ describe("IngredientComponentGrid", () => {
     });
 
     expect(rowCells("Cost")).toEqual([
-      "$1.50 – $2.25",
+      "$1.50–$2.25",
       EMPTY_MARK,
-      "$1.50 – $2.25",
+      "$1.50–$2.25",
     ]);
   });
 });

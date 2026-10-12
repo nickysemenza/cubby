@@ -434,7 +434,7 @@ function ServerListBody({
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-2 py-1 text-xs md:px-4">
           <ListTotalSummary
             totals={entitySummary[entity].list.totals}
-            sums={list.sums}
+            labels={list.totalLabels}
             state={list.summaryState}
             onRetry={list.retrySummary}
           />

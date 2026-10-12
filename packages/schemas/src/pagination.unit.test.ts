@@ -19,11 +19,12 @@ it("carries ordered full-filter group counts in list metadata", () => {
     { pageIndex: 0, pageSize: 1 },
     [{ name: "one" }],
     3,
-    undefined,
-    [
-      { key: "category-one", label: "Category one", count: 2 },
-      { key: "category-two", label: "Category two", count: 1 },
-    ],
+    {
+      groups: [
+        { key: "category-one", label: "Category one", count: 2 },
+        { key: "category-two", label: "Category two", count: 1 },
+      ],
+    },
   );
   const schema = createPaginatedResponseSchema(z.object({ name: z.string() }));
   expect(schema.parse(response).meta.groups).toEqual(response.meta.groups);

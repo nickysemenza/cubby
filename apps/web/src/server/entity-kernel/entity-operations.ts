@@ -13,6 +13,7 @@ import {
   buildPaginatedResponse,
   DEFAULT_PAGE_SIZE,
   listGroupSummarySchema,
+  type ListGroupSummary,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
 import { and, eq, inArray } from "drizzle-orm";
@@ -46,6 +47,7 @@ import {
   entityDetailJson,
   recordEntitySources,
 } from "~/server/repo/entity-source";
+import { listTotalLabels } from "~/server/repo/list-display-labels";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   isMutationSideEffectRef,
@@ -94,6 +96,13 @@ const presentSchema = <S extends z.ZodType | null>(
       "Expected an entity capability schema",
     )
     .parse(schema);
+
+/** A list page's full-filter sums with their server-worded totals. */
+const aggregates = (
+  entity: EntityKernelEntity,
+  sums: Record<string, number> | undefined,
+  groups: ListGroupSummary[] | undefined,
+) => ({ sums, totalLabels: listTotalLabels(entity, sums), groups });
 
 const sideEffectEventFor = <
   E extends EntityKernelEntity,
@@ -358,18 +367,21 @@ export const defineEntityOperations = <
             validated.pagination,
             z.array(binding.schemas.list).parse(mediaPage.data),
             mediaPage.count,
-            "sums" in mediaPage
-              ? z
-                  .record(z.string(), z.number())
-                  .optional()
-                  .parse(mediaPage.sums)
-              : undefined,
-            "groups" in mediaPage
-              ? z
-                  .array(listGroupSummarySchema)
-                  .optional()
-                  .parse(mediaPage.groups)
-              : undefined,
+            aggregates(
+              binding.entity,
+              "sums" in mediaPage
+                ? z
+                    .record(z.string(), z.number())
+                    .optional()
+                    .parse(mediaPage.sums)
+                : undefined,
+              "groups" in mediaPage
+                ? z
+                    .array(listGroupSummarySchema)
+                    .optional()
+                    .parse(mediaPage.groups)
+                : undefined,
+            ),
           ),
         }),
       ),

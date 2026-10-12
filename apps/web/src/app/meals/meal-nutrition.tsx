@@ -7,22 +7,21 @@ import {
 } from "@cubby/usda";
 
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
-import { formatCurrency, roundTo } from "~/lib/utils";
 
 const DEFAULT_NUTRIENTS = new Set<NutrientKey>(KEY_NUTRIENT_KEYS);
 
 export const formatCostEstimate = (totals: NutritionTotals): string =>
-  formatEstimate(totals.cost, (value) => formatCurrency(value));
+  formatEstimate(totals.cost, "cost");
 
 const formatNutrientEstimate = (
   totals: NutritionTotals,
   key: NutrientKey,
 ): string => {
   const unit = TIER1_NUTRIENTS[key].unit.toLowerCase();
-  return formatEstimate(totals.nutrition[key], (value) =>
-    key === "kcal"
-      ? `${Math.round(value).toLocaleString()} ${unit}`
-      : `${roundTo(value, 1).toLocaleString()} ${unit}`,
+  return formatEstimate(
+    totals.nutrition[key],
+    key === "kcal" ? "kcal" : "macro",
+    unit,
   );
 };
 

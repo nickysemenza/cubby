@@ -4,7 +4,7 @@ import { memo, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
-import { formatCurrencyRange } from "~/lib/format-range";
+import { formatCurrencyRange } from "~/lib/number-format";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { formatCurrency } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";

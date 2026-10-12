@@ -12,37 +12,38 @@ import {
 } from "@cubby/usda";
 
 import { roundTo } from "~/lib/round-to";
+import { wasmFormat } from "~/lib/wasm";
 
 /** One decimal place, dropping a trailing `.0` (`12.0` → `12`, `0.25` → `0.3`). */
 export const trimAmount = (v: number) => roundTo(v, 1).toString();
 
-/**
- * Render an estimate without hiding its confidence. Callers own the unit and
- * rounding convention through `formatNumber`; this helper owns the shared
- * partial/range vocabulary.
- */
-export function formatEstimate(
-  estimate: MeasureEstimate,
-  formatNumber: (value: number) => string,
-): string {
-  if (!hasKnownEstimate(estimate)) {
-    return estimate.status === "pending"
-      ? "Pending"
-      : estimate.reason === "not_applicable"
-        ? "N/A"
-        : "—";
-  }
+export type CompactEstimateUnit = "kcal" | "macro";
+export type EstimateMeasure = "cost" | "kcal" | "macro" | "share";
 
-  const value =
-    estimate.upper == null || estimate.upper === estimate.lower
-      ? formatNumber(estimate.lower)
-      : `${formatNumber(estimate.lower)}–${formatNumber(estimate.upper)}`;
-  const confidence =
-    estimate.status === "partial" ? `${value} known · partial` : value;
-  return (estimate.coverage.inferredZero ?? 0) > 0
-    ? `${confidence} · includes inferred zero`
-    : confidence;
-}
+/**
+ * An estimate's long form for detail pages and labels: the figure or range,
+ * `unit` once, then its confidence language (`420 kcal known · partial`,
+ * `Pending`, `N/A`). Formatted by the Rust implementation native shares
+ * (`golden-vectors/display-format.json`).
+ */
+export const formatEstimate = (
+  estimate: MeasureEstimate,
+  measure: EstimateMeasure,
+  unit?: string,
+): string => wasmFormat.format_estimate(estimate, measure, unit);
+
+/** A bare calorie figure: whole, grouped (`1,234 kcal`). */
+export const formatKcal = (value: number): string =>
+  wasmFormat.format_kcal(value);
+
+/**
+ * The one-line macro cell: a range joins with an en dash, a partial estimate
+ * ends in `+`, and anything unavailable or pending is `—`.
+ */
+export const compactEstimateText = (
+  estimate: MeasureEstimate,
+  unit: CompactEstimateUnit,
+): string => wasmFormat.format_compact_estimate(estimate, unit);
 
 /** Accessible detail for an otherwise compact unavailable/pending cell. */
 export function estimateStatusText(estimate: MeasureEstimate): string | null {

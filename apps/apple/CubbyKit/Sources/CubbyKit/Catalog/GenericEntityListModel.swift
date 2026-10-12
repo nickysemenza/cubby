@@ -102,11 +102,11 @@ public final class GenericEntityListModel {
         guard activity == .idle, refreshError == nil else { return nil }
         guard var meta else { return nil }
         if enrichment.isLoadingSummary || enrichment.summaryError != nil {
-            meta.sums = nil
+            meta.totalLabels = nil
             return meta
         }
-        guard let sums = enrichment.sums else { return meta }
-        meta.sums = .init(additionalProperties: sums)
+        guard let labels = enrichment.totalLabels else { return meta }
+        meta.totalLabels = .init(additionalProperties: labels)
         return meta
     }
 

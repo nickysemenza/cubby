@@ -195,16 +195,9 @@ const KIND_SPECS = {
       const stats: string[] = [];
       const kcal = item.mealTotals.nutrition.kcal;
       if (hasKnownEstimate(kcal))
-        stats.push(
-          formatEstimate(kcal, (value) => `${Math.round(value)} kcal`),
-        );
+        stats.push(formatEstimate(kcal, "kcal", "kcal"));
       if (hasKnownEstimate(item.mealTotals.cost))
-        stats.push(
-          formatEstimate(
-            item.mealTotals.cost,
-            (value) => `$${value.toFixed(2)}`,
-          ),
-        );
+        stats.push(formatEstimate(item.mealTotals.cost, "cost"));
       if (kcal.status === "pending") stats.push("nutrition pending");
       if (stats.length > 0) parts.push(stats.join(" · "));
       return parts.length > 0 ? parts.join("\n") : null;

@@ -17,7 +17,8 @@ import {
   useHydratedProductImages,
 } from "~/features/products/product-image-summaries";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
+import { rangeMidpoint } from "~/lib/format-range";
+import { formatCurrencyRange } from "~/lib/number-format";
 import { formatCurrency } from "~/lib/utils";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";
 import {

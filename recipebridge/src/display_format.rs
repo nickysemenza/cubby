@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
-use crate::WMeasureEstimate;
+use crate::{WMeasureEstimate, WUnavailableReason};
 
 /// Which rounding convention a compact nutrition figure uses.
 #[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -176,6 +176,95 @@ pub fn compact_estimate_text(estimate: &WMeasureEstimate, unit: WCompactUnit) ->
     }
 }
 
+/// Which number rule a long-form estimate label uses.
+#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[tsify(from_wasm_abi)]
+pub enum WEstimateMeasure {
+    /// USD with cents.
+    Cost,
+    /// A whole number, grouped.
+    Kcal,
+    /// One decimal, grouped, a trailing `.0` dropped.
+    Macro,
+    /// A fraction printed as a one-decimal percent (`0.333` -> `33.3%`).
+    Share,
+}
+
+fn measure_number_text(value: f64, measure: WEstimateMeasure) -> String {
+    match measure {
+        WEstimateMeasure::Cost => format_currency_usd(value, 2, 2),
+        WEstimateMeasure::Kcal => compact_number_text(value, WCompactUnit::Kcal),
+        WEstimateMeasure::Macro => compact_number_text(value, WCompactUnit::Macro),
+        WEstimateMeasure::Share => compact_number_text(value * 100.0, WCompactUnit::Macro),
+    }
+}
+
+/// The long form of an estimate for detail pages and labels: the figure or
+/// range, then `unit` once (`1,500–2,250 kcal`), then the confidence language
+/// (` known · partial`, ` · includes inferred zero`). Pending is `Pending`,
+/// not-applicable `N/A`, and anything else unavailable `—`.
+pub fn estimate_label_text(
+    estimate: &WMeasureEstimate,
+    measure: WEstimateMeasure,
+    unit: Option<&str>,
+) -> String {
+    let (lower, upper, coverage, partial) = match estimate {
+        WMeasureEstimate::Pending { .. } => return "Pending".to_string(),
+        WMeasureEstimate::Unavailable {
+            reason: WUnavailableReason::NotApplicable,
+            ..
+        } => return "N/A".to_string(),
+        WMeasureEstimate::Unavailable { .. } => return "—".to_string(),
+        WMeasureEstimate::Complete {
+            lower,
+            upper,
+            coverage,
+        } => (*lower, *upper, coverage, false),
+        WMeasureEstimate::Partial {
+            lower,
+            upper,
+            coverage,
+        } => (*lower, *upper, coverage, true),
+    };
+    let mut text = measure_number_text(lower, measure);
+    if let Some(upper) = upper.filter(|upper| *upper != lower) {
+        text.push('–');
+        text.push_str(&measure_number_text(upper, measure));
+    }
+    if measure == WEstimateMeasure::Share {
+        text.push('%');
+    }
+    if let Some(unit) = unit.filter(|unit| !unit.is_empty()) {
+        text.push(' ');
+        text.push_str(unit);
+    }
+    if partial {
+        text.push_str(" known · partial");
+    }
+    if coverage.inferred_zero > 0 {
+        text.push_str(" · includes inferred zero");
+    }
+    text
+}
+
+/// A bare calorie figure: whole, grouped, `kcal` (`1,234 kcal`).
+pub fn kcal_text(value: f64) -> String {
+    format!("{} kcal", compact_number_text(value, WCompactUnit::Kcal))
+}
+
+/// Two USD values joined by an en dash (`$2.00–$3.00`); a missing or equal
+/// upper prints once.
+pub fn currency_range_text(lower: f64, upper: Option<f64>) -> String {
+    let lower_text = format_currency_usd(lower, 2, 2);
+    match upper {
+        Some(upper) if upper != lower => {
+            format!("{lower_text}–{}", format_currency_usd(upper, 2, 2))
+        }
+        _ => lower_text,
+    }
+}
+
 /// USD currency text. `min_fraction_digits`/`max_fraction_digits` default the
 /// way `Intl` does for USD at the call site (2 and 2).
 #[wasm_bindgen]
@@ -189,17 +278,32 @@ pub fn format_number(value: f64) -> String {
     format_number_plain(value)
 }
 
-/// One compact nutrition figure: kcal to a whole number, a macro to one
-/// decimal, both thousands-grouped.
-#[wasm_bindgen]
-pub fn format_compact_number(value: f64, unit: WCompactUnit) -> String {
-    compact_number_text(value, unit)
-}
-
 /// The one-line macro/cost cell; see [`compact_estimate_text`].
 #[wasm_bindgen]
 pub fn format_compact_estimate(estimate: WMeasureEstimate, unit: WCompactUnit) -> String {
     compact_estimate_text(&estimate, unit)
+}
+
+/// The long-form estimate label; see [`estimate_label_text`].
+#[wasm_bindgen]
+pub fn format_estimate(
+    estimate: WMeasureEstimate,
+    measure: WEstimateMeasure,
+    unit: Option<String>,
+) -> String {
+    estimate_label_text(&estimate, measure, unit.as_deref())
+}
+
+/// A bare calorie figure; see [`kcal_text`].
+#[wasm_bindgen]
+pub fn format_kcal(value: f64) -> String {
+    kcal_text(value)
+}
+
+/// A USD range; see [`currency_range_text`].
+#[wasm_bindgen]
+pub fn format_currency_range(lower: f64, upper: Option<f64>) -> String {
+    currency_range_text(lower, upper)
 }
 
 #[cfg(test)]
@@ -220,6 +324,21 @@ mod tests {
     }
 
     #[derive(Deserialize)]
+    struct LabelVector {
+        measure: WEstimateMeasure,
+        unit: Option<String>,
+        estimate: WMeasureEstimate,
+        out: String,
+    }
+
+    #[derive(Deserialize)]
+    struct RangeVector {
+        lower: f64,
+        upper: Option<f64>,
+        out: String,
+    }
+
+    #[derive(Deserialize)]
     struct Vectors {
         currency: Vec<ValueVector>,
         #[serde(rename = "signedCurrency")]
@@ -227,6 +346,10 @@ mod tests {
         number: Vec<ValueVector>,
         #[serde(rename = "compactEstimate")]
         compact_estimate: Vec<EstimateVector>,
+        estimate: Vec<LabelVector>,
+        kcal: Vec<ValueVector>,
+        #[serde(rename = "currencyRange")]
+        currency_range: Vec<RangeVector>,
     }
 
     fn vectors() -> Vectors {
@@ -270,6 +393,32 @@ mod tests {
                 "{:?}",
                 v.estimate
             );
+        }
+    }
+
+    #[test]
+    fn estimate_label_matches_the_shared_vectors() {
+        for v in vectors().estimate {
+            assert_eq!(
+                estimate_label_text(&v.estimate, v.measure, v.unit.as_deref()),
+                v.out,
+                "{:?}",
+                v.estimate
+            );
+        }
+    }
+
+    #[test]
+    fn kcal_matches_the_shared_vectors() {
+        for v in vectors().kcal {
+            assert_eq!(kcal_text(v.value), v.out, "value {}", v.value);
+        }
+    }
+
+    #[test]
+    fn currency_range_matches_the_shared_vectors() {
+        for v in vectors().currency_range {
+            assert_eq!(currency_range_text(v.lower, v.upper), v.out);
         }
     }
 

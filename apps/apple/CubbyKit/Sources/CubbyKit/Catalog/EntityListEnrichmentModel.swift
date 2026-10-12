@@ -10,7 +10,7 @@ public struct EntityListDeferred: Sendable {
     }
     public typealias Enricher =
         @Sendable (_ ids: [String], _ groups: [String]) async throws -> [EntityListGroupResult]
-    public typealias SummaryLoader = @Sendable () async throws -> [String: Double]?
+    public typealias SummaryLoader = @Sendable () async throws -> [String: String]?
 
     public let groups: [Group]
     let enrich: Enricher
@@ -33,7 +33,7 @@ public enum EntityListGroupResult: Sendable {
 @MainActor
 @Observable
 public final class EntityListEnrichmentModel {
-    public private(set) var sums: [String: Double]?
+    public private(set) var totalLabels: [String: String]?
     public private(set) var summaryError: String?
     public private(set) var isLoadingSummary = false
 
@@ -78,7 +78,7 @@ public final class EntityListEnrichmentModel {
         states = [:]
         fields = [:]
         patches = [:]
-        sums = nil
+        totalLabels = nil
         summaryError = nil
         summaryLoader = nil
         isLoadingSummary = false
@@ -204,7 +204,7 @@ public final class EntityListEnrichmentModel {
             do {
                 let result = try await loader()
                 guard let self, self.generation == current, !Task.isCancelled else { return }
-                self.sums = result
+                self.totalLabels = result
                 self.isLoadingSummary = false
             } catch {
                 guard let self, self.generation == current, !Task.isCancelled else { return }

@@ -1,46 +1,25 @@
 import type { EntitySummary } from "@cubby/schemas/entity-summary";
 
-import { formatCurrencyRange } from "~/lib/format-range";
-import { formatCount, formatCurrency } from "~/lib/utils";
 import { ErrorDetails } from "~/ui/feedback/error-details";
 import { Button } from "~/ui/primitives/button";
 
 import type { ListGroupState } from "../../ui/hooks/progressive-list";
 
-type ListTotalDescriptor = Omit<
+type ListTotalDescriptor = Pick<
   EntitySummary["list"]["totals"][number],
-  "keys"
-> & {
-  readonly keys: readonly [string] | readonly [string, string];
-};
-
-function totalValue(
-  total: ListTotalDescriptor,
-  sums?: Record<string, number>,
-): string | null {
-  const values = total.keys.map((key) => sums?.[key]);
-  if (values.some((value) => value === undefined || !Number.isFinite(value)))
-    return null;
-  const first = values[0]!;
-  switch (total.format) {
-    case "currency":
-      return formatCurrency(first);
-    case "currencyRange":
-      return formatCurrencyRange(first, values[1]!);
-    case "integer":
-      return formatCount(first);
-  }
-}
+  "id" | "label"
+>;
 
 /** Declared totals always describe the server's full filtered result. */
 export function ListTotalSummary({
   totals,
-  sums,
+  labels,
   state,
   onRetry,
 }: {
   totals: readonly ListTotalDescriptor[];
-  sums?: Record<string, number>;
+  /** The server's text for each total, by id; a missing one is unavailable. */
+  labels?: Record<string, string>;
   state?: ListGroupState;
   onRetry?: () => void;
 }) {
@@ -50,7 +29,7 @@ export function ListTotalSummary({
     value:
       state?.state === "pending" || state?.state === "loading"
         ? "Loading…"
-        : (totalValue(total, sums) ?? "Unavailable"),
+        : (labels?.[total.id] ?? "Unavailable"),
   }));
   if (values.length === 0) return null;
   return (

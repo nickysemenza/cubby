@@ -896,7 +896,7 @@ struct EntityListView: View {
             Text("\(meta.totalCount.formatted()) total · \(shown.formatted()) shown")
             if let totals = ListTotalsSummary.line(
                 totals: descriptor.presentation.listTotals,
-                sums: meta.sums?.additionalProperties)
+                labels: meta.totalLabels?.additionalProperties)
             {
                 Text(totals)
                     .fixedSize(horizontal: false, vertical: true)

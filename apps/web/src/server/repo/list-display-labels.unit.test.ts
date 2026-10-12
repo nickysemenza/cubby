@@ -4,6 +4,7 @@ import {
   estimateLabel,
   expectedQuantityLabel,
   expenseCountLabel,
+  listTotalLabels,
   mealCostLabel,
   quantityVarianceLabel,
   reconciliationLabel,
@@ -64,13 +65,34 @@ describe("estimateLabel", () => {
         { status: "partial", lower: 120.4, upper: 300, coverage },
         "kcal",
       ),
-    ).toBe("120 kcal–300 kcal known · partial");
+    ).toBe("120–300 kcal known · partial");
   });
 
   it("says Pending for an estimate that has not been computed", () => {
     expect(
       estimateLabel({ status: "pending", reason: "totals_missing" }, "cost"),
     ).toBe("Pending");
+  });
+});
+
+describe("listTotalLabels", () => {
+  it("words full-filter zero and signed totals, including a complete range", () => {
+    expect(
+      listTotalLabels("vendor", { spend: -12.5, purchaseCount: 1234 }),
+    ).toEqual({ spend: "-$12.50", purchaseCount: "1,234" });
+    expect(listTotalLabels("wish", { priceLow: 0, priceHigh: 42 })).toEqual({
+      priceRange: "$0.00–$42.00",
+    });
+    // Equal ends collapse to one value.
+    expect(listTotalLabels("wish", { priceLow: 3, priceHigh: 3 })).toEqual({
+      priceRange: "$3.00",
+    });
+  });
+
+  // A missing sum must read as unavailable on every client, never as $0.00.
+  it("leaves a total absent when any of its sums is missing", () => {
+    expect(listTotalLabels("wish", { priceLow: 10 })).toEqual({});
+    expect(listTotalLabels("wish", undefined)).toBeUndefined();
   });
 });
 

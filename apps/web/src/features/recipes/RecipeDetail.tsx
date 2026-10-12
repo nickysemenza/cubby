@@ -24,7 +24,7 @@ import {
   flattenSections,
 } from "~/lib/recipe-costing";
 import { deriveRecipeTotalsGaps } from "~/lib/recipe-totals-gaps";
-import { cn, formatCurrency } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useDebug } from "~/ui/hooks/useDebug";
 import { useWakeLock } from "~/ui/hooks/useWakeLock";
@@ -234,13 +234,7 @@ function RecipeSummary({
       </CardHeader>
       <CardContent className="flex flex-wrap items-start gap-6">
         <div className="grid gap-1 text-sm">
-          <span>
-            Cost:{" "}
-            {formatEstimate(
-              totals.estimates.cost,
-              (value) => `${formatCurrency(value)}`,
-            )}
-          </span>
+          <span>Cost: {formatEstimate(totals.estimates.cost, "cost")}</span>
           <span>Weight: {Math.round(totals.weight)} g</span>
           <span>
             {totals.totalIngredients}{" "}
