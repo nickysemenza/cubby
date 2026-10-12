@@ -529,7 +529,10 @@ describe("current purchase-agent system boundaries", () => {
       { check: `${prefix}-resolve`, includes: "unresolved" },
       ...(finish
         ? [
-            call(`${prefix}-done`, "claim_next_import_work"),
+            // A later claim is new work even if the model repeats its earlier id.
+            call(`${prefix}-done`, "claim_next_import_work", {
+              operationId: `${prefix}-claim`,
+            }),
             { check: `${prefix}-done`, includes: "none" },
           ]
         : []),

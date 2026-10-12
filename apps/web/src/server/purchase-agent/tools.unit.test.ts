@@ -10,6 +10,7 @@ import { runAgentTools } from "./tools";
 function fakeApi(): ToolExecutionApi {
   const memos = new Map<string, unknown>();
   return fromPartial<ToolExecutionApi>({
+    taskId: fromAny(1),
     memo: async (name: string, ...rest: unknown[]) => {
       if (rest.length === 2 && !memos.has(name)) memos.set(name, rest[0]);
       return fromAny(memos.get(name));
@@ -33,13 +34,8 @@ describe("run agent tool behavior", () => {
     ).find((candidate) => candidate.name === "claim_next_import_work");
     if (!tool) throw new Error("Missing photo work claim");
     expect(
-      (
-        await tool.execute(
-          { operationId: "op-1" },
-          fakeApi(),
-          BACKGROUND_CONTEXT,
-        )
-      ).control?.terminate,
+      (await tool.execute({}, fakeApi(), BACKGROUND_CONTEXT)).control
+        ?.terminate,
     ).toBe(true);
   });
   it("converts loosely typed scalars as TypeBox always has", () => {

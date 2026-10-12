@@ -104,7 +104,7 @@ const modelOperationRef = z.object(modelId);
 
 /** Photo inventory retains its existing restricted workflow and replay keys. */
 export const photoInventoryToolInputs = {
-  claim_next_import_work: modelOperationRef,
+  claim_next_import_work: z.object({}),
   report_agent_progress: modelOperationRef.extend({
     phase: agentProgressPhase,
     currentItem: agentProgressReport.shape.currentItem,
