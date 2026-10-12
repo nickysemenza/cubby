@@ -7,7 +7,7 @@
 
     // Serialized: parallel loopback listeners flake with connection-lost errors under
     // load. Production is a single one-shot listener per CLI invocation, which is unaffected.
-    @Suite("CLI auth handoff", .serialized)
+    @Suite("CLI auth handoff", .timeLimit(.minutes(1)), .serialized)
     struct CliAuthHandoffTests {
         private static let nonce = String(repeating: "n", count: 43)
         private static let origin = "https://cubby.example.com"
@@ -111,6 +111,55 @@
             #expect((response as? HTTPURLResponse)?.statusCode == 404)
         }
 
+        @Test func listenerFailureAfterStartSurfacesDiagnostic() async throws {
+            let handoff = CliAuthLoopbackHandoff(nonce: Self.nonce)
+            _ = try await handoff.start()
+            // Park the expiry so only the injected failure can finish the receive.
+            let expiry = Gate()
+            handoff.injectListenerFailure(.posix(.ECONNABORTED))
+            do {
+                _ = try await handoff.receive(for: Self.baseURL) { _ in try await expiry.pass() }
+                Issue.record("Expected a listener failure.")
+            } catch let error as CliAuthHandoffError {
+                guard case .listenerFailed = error else {
+                    Issue.record("Expected listenerFailed, got \(error).")
+                    return
+                }
+            } catch {
+                Issue.record("Unexpected error: \(error)")
+            }
+        }
+
+        @Test func receiveWaitsForAcknowledgment() async throws {
+            let handoff = CliAuthLoopbackHandoff(nonce: Self.nonce)
+            let port = try await handoff.start()
+            let published = Gate()
+            let task = Task {
+                let token = try await handoff.receive(for: Self.baseURL)
+                published.signal()
+                return token
+            }
+            defer { task.cancel() }
+            let body = try JSONEncoder().encode(
+                CliAuthHandoffPayload(
+                    token: "bearer.token", nonce: Self.nonce, origin: Self.origin))
+            let response = try await Self.sendRaw(
+                to: port,
+                chunks: [
+                    Data(
+                        "POST /handoff HTTP/1.1\r\nContent-Length: \(body.count)\r\n\r\n".utf8)
+                        + body
+                ],
+                holdOpen: true)
+            // The client holds the complete 200 bytes, but the server has not seen the close:
+            // nothing may publish yet. Publishing strictly follows the acknowledgment cycle,
+            // so neither return nor teardown can overtake it.
+            #expect(response.status == 200)
+            #expect(published.arrived == 0)
+            response.connection?.cancel()
+            #expect(try await task.value == "bearer.token")
+        }
+
         @Test func receiveTimesOutWithoutTheClock() async throws {
             let handoff = CliAuthLoopbackHandoff(nonce: Self.nonce)
             _ = try await handoff.start()
@@ -174,10 +223,12 @@
             #expect(try await received == "bearer.token")
         }
 
-        /// Sends raw chunks over one connection and reads one framed response, then closes.
-        private static func sendRaw(to port: UInt16, chunks: [Data]) async throws -> (
-            status: Int, text: String
-        ) {
+        /// Sends raw chunks over one connection and reads one framed response. With `holdOpen`
+        /// the connection stays open for the caller to close, so a test can observe what happens
+        /// before the server's acknowledgment cycle completes.
+        private static func sendRaw(to port: UInt16, chunks: [Data], holdOpen: Bool = false)
+            async throws -> (status: Int, text: String, connection: NWConnection?)
+        {
             let connection = NWConnection(
                 host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
             let queue = DispatchQueue(label: "test.cli-auth-handoff-raw")
@@ -225,13 +276,13 @@
                 if let data { bytes.append(data) }
                 if complete { break }
             }
-            connection.cancel()
+            if !holdOpen { connection.cancel() }
             let text = String(data: bytes, encoding: .utf8) ?? ""
             let status =
                 Int(
                     text.components(separatedBy: "\r\n").first?
                         .split(separator: " ").dropFirst().first.map(String.init) ?? "") ?? -1
-            return (status, text)
+            return (status, text, holdOpen ? connection : nil)
         }
 
         /// A response is complete once its headers and declared body have arrived. The server

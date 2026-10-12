@@ -280,6 +280,7 @@ targets:
     platform: macOS
     sources:
       - path: App/Tests/Navigation
+      - path: App/Tests/CliAuth
       - path: App/Tests/Browse
       - path: App/Tests/Photos/PhotoDestinationOptionTests.swift
       - path: App/Tests/Photos/PhotoEntityChooserModelTests.swift

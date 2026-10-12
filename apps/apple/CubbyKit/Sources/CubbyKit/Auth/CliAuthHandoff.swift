@@ -50,13 +50,10 @@ struct CliAuthHandoffPayload: Sendable, Codable {
 }
 
 public enum CliAuthOriginError: Error, Sendable, LocalizedError {
-    case emptyToken
     case mismatch(expected: String, received: String)
 
     public var errorDescription: String? {
         switch self {
-        case .emptyToken:
-            return "The Cubby app handed over an empty credential."
         case .mismatch(let expected, let received):
             return
                 "The Cubby app is signed in to \(received), but this CLI targets \(expected). Switch one of them to the same server and try again."

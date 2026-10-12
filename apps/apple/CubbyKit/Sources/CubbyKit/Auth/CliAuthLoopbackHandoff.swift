@@ -151,9 +151,17 @@
         private func failStart(_ error: Error) {
             let ready = self.ready
             self.ready = nil
-            ready?.resume(
-                throwing: CliAuthHandoffError.listenerFailed(String(describing: error)))
+            let failure = CliAuthHandoffError.listenerFailed(String(describing: error))
+            ready?.resume(throwing: failure)
+            // A failure after readiness must reach a waiting `receive()` as its diagnostic, not
+            // a bare cancellation — unless a handoff already won, in which case the token stands.
+            if !consumed { continuation.finish(throwing: failure) }
             close()
+        }
+
+        /// Test seam: replays a listener failure as if Network delivered it.
+        func injectListenerFailure(_ error: NWError) {
+            queue.async { [weak self] in self?.handleState(.failed(error)) }
         }
 
         private func handleConnection(_ connection: NWConnection) {
@@ -244,11 +252,13 @@
                 return
             }
             consumed = true
-            continuation.yield(payload)
-            respond(connection, status: 200, message: "ok")
+            respond(connection, status: 200, message: "ok", payload: payload)
         }
 
-        private func respond(_ connection: NWConnection, status: Int, message: String) {
+        private func respond(
+            _ connection: NWConnection, status: Int, message: String,
+            payload: CliAuthHandoffPayload? = nil
+        ) {
             let reason =
                 status == 200
                 ? "OK"
@@ -259,17 +269,32 @@
             connection.send(
                 content: Data(response.utf8),
                 completion: .contentProcessed { [weak self] _ in
-                    // Drain until the client closes (it will: `Connection: close`) before
-                    // cleaning up. Cancelling here can RST bytes the client has not read yet,
-                    // failing a handoff the server already accepted.
-                    connection.receive(minimumIncompleteLength: 1, maximumLength: 1) {
-                        [weak self] _, _, _, _ in
+                    self?.drain(connection) { [weak self] in
+                        guard let self else { connection.cancel(); return }
+                        // Publish only after the acknowledgment cycle completes: returning the
+                        // token (or tearing down) first can RST bytes the app has not read yet,
+                        // failing a handoff the CLI already reports as success. A timeout that
+                        // closed first skips the publish; its buffered absence is harmless.
+                        if let payload, !self.closed { self.continuation.yield(payload) }
                         connection.cancel()
-                        guard let self else { return }
                         self.connections.removeAll { $0 === connection }
-                        if status == 200 { self.close() }
+                        if payload != nil { self.close() }
                     }
                 })
+        }
+
+        /// Drains until the client closes or errors (it will: `Connection: close`), then runs
+        /// cleanup. One receive is not proof: an unread request byte is not a close.
+        private func drain(_ connection: NWConnection, then cleanup: @escaping () -> Void) {
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) {
+                [weak self] _, _, complete, error in
+                guard let self else { connection.cancel(); cleanup(); return }
+                if complete || error != nil {
+                    cleanup()
+                } else {
+                    self.drain(connection, then: cleanup)
+                }
+            }
         }
     }
 
@@ -277,7 +302,6 @@
     /// `receive()`, so an app/CLI server mismatch preserves the previous CLI credential — a
     /// copied bearer must never be discovered wrong by sending it to another server.
     func cliAuthToken(from payload: CliAuthHandoffPayload, for baseURL: URL) throws -> String {
-        guard !payload.token.isEmpty else { throw CliAuthOriginError.emptyToken }
         guard let expected = CliAuthOrigin.of(baseURL), payload.origin == expected else {
             throw CliAuthOriginError.mismatch(
                 expected: CliAuthOrigin.of(baseURL) ?? baseURL.absoluteString,
