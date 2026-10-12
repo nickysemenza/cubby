@@ -422,11 +422,11 @@ test("Similar products shows the first twelve tag matches and expands the rest",
     seedProductPrerequisite(page, candidate),
   );
   await gotoAuthenticatedPage(page, `/products/${source.id}`);
-  await expect(page.locator("#fits-with")).toBeVisible();
-  await page
+  const similar = page.locator("#fits-with");
+  await expect(similar).toBeVisible();
+  await similar
     .getByRole("heading", { name: "Similar products", exact: true })
     .scrollIntoViewIfNeeded();
-  const similar = page.locator("#fits-with");
   const links = similar.getByRole("link", {
     name: new RegExp(`^${escapeRegExp(name)} candidate`),
   });
