@@ -345,18 +345,45 @@ type CookbookSummaryRow = Awaited<
   ReturnType<typeof selectCookbookSummaryRows>
 >[number];
 
+// The linked product's own cover, via the shared batched reader rather than a
+// third join — ProductImage carries the cover flag, so inlining it here would
+// mean duplicating that resolution.
+const loadCookbookProductCovers = (db: Database, rows: CookbookSummaryRow[]) =>
+  getProductCoverImageUrlsByProductIds(
+    db,
+    rows.flatMap((r) => (r.productId ? [r.productId] : [])),
+  );
+
+/** A cookbook row's own facts; quality and media are separate list groups. */
+const cookbookCore = (
+  {
+    productId,
+    productShortcode,
+    productName,
+    coverKey,
+    ...r
+  }: CookbookSummaryRow,
+  productCovers: ReadonlyMap<string, string>,
+) => ({
+  ...r,
+  id: parseShortcodeFor("cookbook", r.shortcode),
+  coverUrl: coverKey ? getR2PublicUrl(coverKey) : null,
+  product:
+    productId && productShortcode && productName
+      ? {
+          id: parseShortcodeFor("product", productShortcode),
+          name: productName,
+          coverUrl: productCovers.get(productId) ?? null,
+        }
+      : null,
+});
+
 const hydrateCookbookSummaries = async (
   db: Database,
   rows: CookbookSummaryRow[],
 ): Promise<CookbookSummary[]> => {
-  // The linked product's own cover, via the shared batched reader rather than a
-  // third join — ProductImage carries the cover flag, so inlining it here would
-  // mean duplicating that resolution.
   const [productCovers, dataQualities] = await Promise.all([
-    getProductCoverImageUrlsByProductIds(
-      db,
-      rows.flatMap((r) => (r.productId ? [r.productId] : [])),
-    ),
+    loadCookbookProductCovers(db, rows),
     loadDataQualities(
       db,
       "cookbook",
@@ -364,26 +391,11 @@ const hydrateCookbookSummaries = async (
     ),
   ]);
 
-  return withDisplayImages(
-    db,
-    "cookbook",
-    rows,
-    ({ productId, productShortcode, productName, coverKey, ...r }) => ({
-      ...r,
-      id: parseShortcodeFor("cookbook", r.shortcode),
-      coverUrl: coverKey ? getR2PublicUrl(coverKey) : null,
-      product:
-        productId && productShortcode && productName
-          ? {
-              id: parseShortcodeFor("product", productShortcode),
-              name: productName,
-              coverUrl: productCovers.get(productId) ?? null,
-            }
-          : null,
-      // SAFETY: `r` came from `rows`, which `dataQualities` was loaded for.
-      dataQuality: dataQualities.get(r.id)!,
-    }),
-  );
+  return withDisplayImages(db, "cookbook", rows, (row) => ({
+    ...cookbookCore(row, productCovers),
+    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+    dataQuality: dataQualities.get(row.id)!,
+  }));
 };
 
 const cookbookScaffold = listScaffold("cookbook", cookbook);
@@ -432,11 +444,10 @@ export const cookbookListRead = (
       hydrate: (rows, selected) =>
         hydrateListRead(db, "cookbook", rows, selected, {
           media: true,
-          load: async () => {
-            const hydrated = await hydrateCookbookSummaries(db, rows);
-            return new Map(rows.map((row, index) => [row.id, hydrated[index]]));
-          },
-          mapRow: (row, { loaded }) => ({ ...loaded.get(row.id) }),
+          // Quality and media are the generic loader's deferred groups; the
+          // core facts must not depend on them.
+          load: () => loadCookbookProductCovers(db, rows),
+          mapRow: (row, { loaded }) => cookbookCore(row, loaded),
         }),
       resolveSort: resolveCookbookSort,
     },

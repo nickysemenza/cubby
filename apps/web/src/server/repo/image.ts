@@ -1268,7 +1268,8 @@ const loadImageRows = (db: Database, where: SQL) =>
 type ImageRelationRow = Awaited<ReturnType<typeof loadImageRows>>[number];
 
 /** Batched API projection of a page of image rows (representations, issues, targets, …). */
-const hydrateImageRows = async (db: Database, images: ImageRelationRow[]) => {
+/** An image row's own facts; quality and media are separate list groups. */
+const hydrateImageCore = async (db: Database, images: ImageRelationRow[]) => {
   const imageShortcodes = images.map((item) => item.shortcode);
   const [
     representations,
@@ -1276,7 +1277,6 @@ const hydrateImageRows = async (db: Database, images: ImageRelationRow[]) => {
     importTargets,
     analysisSummaries,
     capturedByParties,
-    dataQualities,
   ] = await Promise.all([
     loadImageRepresentations(db, imageShortcodes),
     loadImageProcessingIssues(db, imageShortcodes),
@@ -1285,11 +1285,6 @@ const hydrateImageRows = async (db: Database, images: ImageRelationRow[]) => {
     loadCapturedByParties(
       db,
       images.map((item) => item.capturedByPartyId),
-    ),
-    loadDataQualities(
-      db,
-      "image",
-      images.map((item) => parseEntityId("image", item.id)),
     ),
   ]);
   return images.map((item) => ({
@@ -1303,7 +1298,22 @@ const hydrateImageRows = async (db: Database, images: ImageRelationRow[]) => {
     processingIssue: processingIssues.get(item.shortcode) ?? null,
     importTarget: importTargets.get(item.shortcode) ?? null,
     analysisSummary: analysisSummaries.get(item.shortcode) ?? null,
-    dataQuality: dataQualities.get(parseEntityId("image", item.id)),
+  }));
+};
+
+const hydrateImageRows = async (db: Database, images: ImageRelationRow[]) => {
+  const [core, dataQualities] = await Promise.all([
+    hydrateImageCore(db, images),
+    loadDataQualities(
+      db,
+      "image",
+      images.map((item) => parseEntityId("image", item.id)),
+    ),
+  ]);
+  return core.map((row, index) => ({
+    ...row,
+    // SAFETY: `core` is `images` mapped in order.
+    dataQuality: dataQualities.get(parseEntityId("image", images[index]!.id)),
   }));
 };
 
@@ -1381,8 +1391,10 @@ export const imageListRead = (
     (images, selected) =>
       hydrateListRead(db, "image", images, selected, {
         media: true,
+        // Quality and media are the generic loader's deferred groups; the
+        // core facts must not depend on them.
         load: async () => {
-          const hydrated = await hydrateImageRows(db, images);
+          const hydrated = await hydrateImageCore(db, images);
           return new Map(images.map((row, index) => [row.id, hydrated[index]]));
         },
         mapRow: (row, { loaded }) => ({ ...loaded.get(row.id) }),
