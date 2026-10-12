@@ -1,10 +1,10 @@
 # Continuous integration
 
-Every required check is an Nx target, and GitHub Actions runs each one on
-every pull request and `main` push. A target's `inputs` decide its cache key;
-a passing result for the same key in the shared Nx remote cache, whether CI or
-the developer's Mac produced it, replays in seconds and satisfies the merge
-gate ([ADR 0009](adr/0009-content-hash-merge-gate.md),
+GitHub Actions reports all six required status contexts on every pull request
+and `main` push. Nx target inputs decide whether a lane executes: a verified
+passing result in the shared remote cache satisfies the merge gate without
+setting up another runner workspace, whether CI or the developer's Mac
+produced it ([ADR 0009](adr/0009-content-hash-merge-gate.md),
 [validation policy](agents/validation.md)). Merging to `main` independently
 deploys every production Worker, including after a documentation-only change;
 deployment never waits for post-merge CI.
@@ -33,9 +33,9 @@ own fingerprint still includes it, so changing a referenced entry is checked.
 ```mermaid
 flowchart LR
   Mac["Developer Mac: nx run target"] -->|PUT pass| Cache[("apps/nx-cache Worker + R2")]
-  Job["PR or main CI job: nx run target"] -->|GET input hash| Cache
-  Cache -->|hit| Replay["replay the pass in seconds"]
-  Cache -->|miss| Run["run the lane, PUT the pass"]
+  Probe["Early Linux job: Nx hash + archive probe"] -->|GET input hash| Cache
+  Cache -->|verified pass| Replay["lane reports success without setup"]
+  Cache -->|miss or probe failure| Run["set up runner, run lane, PUT the pass"]
   Nightly["nightly: NX_SKIP_NX_CACHE=true"] --> Full["every lane runs uncached"]
 ```
 
@@ -55,10 +55,11 @@ the Apple build reads instead of the whole tree (`appleGate` in
 scripts and CI configuration, the shared golden vectors, and the generated
 Swift, but no toolchain version, so a Mac pass on a newer Xcode than the
 runner's counts for CI; `pnpm apple check` regenerates before hashing,
-so a web-only change replays the Apple lanes. Linux validation probes both Apple
-passes using its existing dependency installation before scheduling macOS. A
-miss or unavailable probe runs the corresponding native job; a skipped native
-job satisfies the Apple aggregate only with its successful probe. Nightly runs
+so a web-only change replays the Apple lanes. The early Linux `Cache probe`
+job probes Apple alongside the Linux lanes before scheduling macOS; native
+misses no longer wait for Validation's static checks, audit and links. A miss
+or unavailable probe runs the corresponding native job; a skipped native job
+satisfies the Apple aggregate only with its successful probe. Nightly runs
 force both native jobs. Workflows that only deploy,
 publish or review (`deploy.yaml`, `apple-testflight.yaml`, the Claude
 workflows) are outside every key. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
@@ -69,6 +70,35 @@ broad. A false hit skips a check that should have run, so a target that starts
 reading something new must have it in its inputs. A change to ordinary
 documentation, a rebase that leaves the content unchanged, or a re-push of a
 tested tree hits; any code change misses.
+
+`Cache probe` prepares one workspace with the exact WASM outputs and generated
+Swift, then uses the installed Nx version's graph builder, task hasher and
+HTTP cache reader directly in the workflow. It never executes the probed
+commands, invents a second hash, or accepts HTTP 200 as a passing result: the
+archive must decode and report exit code zero. Each auxiliary target must
+pass before the auxiliary lane can bypass setup; both Rust targets and both
+Worker targets must pass for their respective lanes. PostgreSQL and desktop
+E2E shards are probed separately with their exact shard environment. The
+optional purchase-import lane follows the same rule.
+
+A verified Linux hit runs a single success step and omits checkout, dependency
+installation, WASM/Rust/Playwright cache work, and artifact uploads. Database
+service images are empty on a hit, which prevents GitHub from starting those
+containers. Auxiliary and Rust hits use `ubuntu-slim`; misses retain their
+original runners. The existing six required names and the Web aggregate's
+success-only gate remain unchanged. Validation still runs its own cached Nx
+checks and its uncached advisory, deduplication and Markdown-link checks; a
+documentation edit can change its formatting or generation inputs.
+
+Missing credentials, a failed probe workspace, an empty or failed hash,
+HTTP errors, corrupt archives and the probe's two-minute deadline all fall
+back to lane execution. Outputs from a failed probe job never authorize a
+bypass. Forks omit the probe workspace because they have no cache credentials.
+The scheduled nightly run skips the entire probe job, retains every lane's
+setup, and sets `NX_SKIP_NX_CACHE=true` for all commands, including nested Nx
+calls. A cache outage during ordinary target execution still follows Nx's
+normal error behavior; setup's availability check only protects initial
+connection.
 
 Known gaps the nightly run covers rather than the key: the Worker bundles all
 of `docs/**/*.md`, but only the Markdown listed above is in the web keys, so a
@@ -173,12 +203,13 @@ still keys the floating compiler.
 
 The Rust job uses an explicit, pinned `Swatinem/rust-cache` step with prefix
 `rust-gate-v3`; its key also hashes root `Cargo.toml`, because rust-cache hashes
-member manifests but omits the virtual workspace's profiles. When `cache-hit`
-is not `'true'` (a miss or partial match), the job runs Clippy and `cargo test
---no-run` under the `ci` profile for each Rust target's package and feature
-selection before Nx. This populates both check metadata and linked test
-dependencies even when Nx replays both targets. Exact hits skip population;
-only successful jobs save new entries.
+member manifests but omits the virtual workspace's profiles. A verified pass for both Nx Rust targets bypasses the entire ARM workspace.
+Otherwise the restored compiler artifacts are advisory: the Nx targets
+themselves run fmt, Clippy and tests on a result-cache miss and populate the
+dependency cache. The separate Clippy/`cargo test --no-run` population step was
+removed because it repeated compilation already owned by these targets. Only
+successful jobs save new entries; a partially cached lane may save only the
+dependencies it actually compiled.
 
 The old 39 MB entry was seeded by a
 [successful main run](https://github.com/nickysemenza/cubby/actions/runs/38073526350/job/114275644002)
@@ -192,8 +223,9 @@ Node/dependency setup. Despite an exact 39 MB Rust-cache restore, recipebridge
 spent 96s + 12s in clippy and 52s compiling tests; FFI spent 19s + 26s.
 Tests themselves took under one second. The new profile and populated cache
 target a warm job under about 2.5 minutes; local compilation reuse cannot
-establish hosted timing. A cache miss explicitly pays the population cost even
-when Nx has a passing result; later exact hits reuse the saved dependencies.
+establish hosted timing. Those measurements predate the early Nx probe and removal of the separate
+dependency-population step; current verified result hits perform no compilation
+or compiler-cache restore.
 
 `cubby-ffi` and the WASM packages share the `recipebridge` Rust core and Cargo
 lockfile, but each target needs its own compiled artifacts. EPUB extraction is
@@ -215,7 +247,7 @@ contracts (`SubjectLift`, `FeaturePrintIndex`) when running on the Simulator,
 for whichever caller — local or hosted — ends up running that scheme there.
 
 Two hosted macOS jobs, `Apple host tests` and `Apple simulator build`, run in
-parallel on every PR and `main` push. Each installs the workspace (which also
+parallel when their early probe misses on a PR or `main` push. Each installs the workspace (which also
 generates the Swift inputs) and, outside the nightly run, first runs its Nx target with
 `CUBBY_NX_CACHE_PROBE=1`: Nx replays a cached pass for the same input hash,
 and on a miss the script fails before building (Nx never caches that failure).
@@ -460,8 +492,8 @@ re-run of an old Deploy run from rolling production back to a stale commit.
 ## Branch protection and measurement
 
 The `main` ruleset requires `Scope`, `Validation`, `Web checks`, auxiliary,
-Rust, and Apple checks. Every lane runs on every PR; the aggregates verify
-their matrix and macOS jobs. Keep `strict` disabled so
+Rust, and Apple checks. Every Linux lane reports success only after execution
+or its verified cached pass; the aggregates verify their matrix and macOS jobs. Keep `strict` disabled so
 a green non-conflicting branch need not rebase, allow administrator bypasses,
 and do not require human review.
 
