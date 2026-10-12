@@ -112,8 +112,11 @@ function explainedCellContent<TItem extends RowData>(
     explanation?.field ?? cell.column.id,
   );
   const rowIdentity = dataRowIdentitySchema.safeParse(cell.row.original);
+  // A resolution mark is status (an inherited or defaulted value), so its
+  // rail stays visible; a bare explanation overlays the active row only.
   return explanation && rowIdentity.success ? (
     <CellFrame
+      overlay={!resolution}
       trailing={
         <FieldExplanation
           entity={explanation.entity}

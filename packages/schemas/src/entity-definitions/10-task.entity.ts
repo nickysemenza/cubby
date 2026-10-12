@@ -254,6 +254,7 @@ export default defineEntity({
           suggest: { basis: ["name"] },
         },
         display: {
+          columnLabel: "Product",
           list: true,
           detail: true,
           width: "md",

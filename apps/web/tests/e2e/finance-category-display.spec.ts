@@ -121,14 +121,23 @@ test("linked Expense categories display their readable label and transaction exp
   const category = row.getByText(categoryName, { exact: true });
   await expect(category).toBeVisible();
   await expect(category).toHaveText(categoryName);
-  const headers = await page.getByRole("columnheader").allTextContents();
-  const expectationIndex = headers.findIndex((value) =>
-    value.includes("Evidence expectation"),
-  );
+  // Headers paint short labels; the full label is the header's tooltip.
+  const headers = await page
+    .getByRole("columnheader")
+    .evaluateAll((cells) =>
+      cells.map(
+        (cell) =>
+          cell.querySelector("[data-header-label]")?.getAttribute("title") ??
+          "",
+      ),
+    );
+  const expectationIndex = headers.indexOf("Evidence expectation");
   expect(expectationIndex).toBeGreaterThanOrEqual(0);
   await expect(row.getByRole("cell").nth(expectationIndex)).toContainText(
     "Not expected",
   );
+  // A row's explanation appears once the row is hovered or focused.
+  await row.hover();
   await row
     .getByRole("button", { name: "How expense categories is determined" })
     .click();

@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 
 import { formatInstant } from "~/lib/date-format";
+import { yearMark } from "~/lib/date-span";
 import { StackedValue, useStackedCell } from "~/ui/common/stacked-value";
 import {
   Tooltip,
@@ -35,11 +36,18 @@ export function formatCompactRelative(date: Date): string {
   return `${Math.round(days / 365)}y`;
 }
 
-/** "Oct 11" this year, "May 14, 2025" otherwise, in the household zone. */
-function instantDay(date: Date): string {
+/**
+ * The household day over its age, "Oct 11" / "3mo ago"; another year leads
+ * the age line ("’25 · 1y ago"), as stacked plain dates do.
+ */
+function stackedInstant(date: Date, relativeTime: string) {
   const year = (value: Date) => formatInstant(value, "monthYear").slice(-4);
-  const thisYear = year(date) === year(new Date());
-  return formatInstant(date, thisYear ? "monthDay" : "dateShort");
+  const age = relativeTime === "now" ? "now" : `${relativeTime} ago`;
+  const shown = year(date);
+  return {
+    primary: formatInstant(date, "monthDay"),
+    secondary: shown === year(new Date()) ? age : `${yearMark(shown)} · ${age}`,
+  };
 }
 
 export function HoverableTimestamp({
@@ -64,10 +72,7 @@ export function HoverableTimestamp({
           }
         >
           {stack ? (
-            <StackedValue
-              primary={instantDay(date)}
-              secondary={relativeTime === "now" ? "now" : `${relativeTime} ago`}
-            />
+            <StackedValue {...stackedInstant(date, relativeTime)} />
           ) : (
             <span className="font-mono text-2xs">{relativeTime}</span>
           )}

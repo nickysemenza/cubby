@@ -291,7 +291,12 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         control: { kind: "date" },
-        display: { list: true, detail: true, format: "plainDate" },
+        display: {
+          columnLabel: "Transplanted",
+          list: true,
+          detail: true,
+          format: "plainDate",
+        },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
@@ -383,7 +388,11 @@ export default defineEntity({
         key: "expectedHarvestStart",
         kind: "date",
         nullable: true,
-        display: { list: true, format: "plainDate" },
+        display: {
+          columnLabel: "Harvest",
+          list: true,
+          format: "plainDate",
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "plant", relation: "plant" }],

@@ -484,6 +484,13 @@ const buildMetadataSchemas = () => {
         .optional()
         .default(false),
       /**
+       * A table header's short form when the label is longer than its
+       * column's values ("Itemized" for "Itemization coverage"). The label
+       * stays the header's accessible name and tooltip, and names the field
+       * everywhere else.
+       */
+      columnLabel: nonEmptyString().max(14).nullable().optional().default(null),
+      /**
        * Roster (label, tone) for the enum-like value this field renders when
        * it has no select control of its own: a derived status, or the
        * `kind`/`status` member of a JSON field. Enum fields with a select
@@ -529,6 +536,7 @@ const buildMetadataSchemas = () => {
         renderer,
         mobile,
         listHidden,
+        columnLabel,
         referencePreviewLimit,
         valueOptions,
         preview,
@@ -547,6 +555,7 @@ const buildMetadataSchemas = () => {
         renderer,
         mobile,
         listHidden,
+        columnLabel,
         referencePreviewLimit,
         valueOptions,
         preview,

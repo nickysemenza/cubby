@@ -255,7 +255,11 @@ export default defineEntity({
         key: "renderStatus",
         kind: "enum",
         nullable: true,
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Render",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: z.enum(generatedImageRenderStatusValues).nullable(),
           create: null,
@@ -266,7 +270,11 @@ export default defineEntity({
         key: "storageStatus",
         kind: "enum",
         nullable: true,
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Storage",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: z.enum(generatedImageStorageStatusValues).nullable(),
           create: null,
@@ -404,6 +412,7 @@ export default defineEntity({
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
+          columnLabel: "Captured by",
           list: true,
           detail: true,
         },
@@ -442,7 +451,11 @@ export default defineEntity({
       {
         key: "captureAttribution",
         kind: "enum",
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Attribution",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: imageCaptureAttribution,
           create: null,

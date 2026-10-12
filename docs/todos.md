@@ -574,16 +574,17 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   `cubby-ui-design-audit` measuring live computed styles against the mock,
   then land what holds up, updating `apps/web/DESIGN.md` (RTable):
   - Drop the tag glyph on every category chip; the chip already says "tag".
-  - Show header provenance/link icons only on header hover or focus.
   - Lighter status pills: 12px text, ~2px vertical padding, softer borders,
     well short of the row height.
-  - Quieter headers: 12px medium muted label, one stronger bottom rule, no
-    icons at rest.
+  - Quieter headers: 12px medium muted label, one stronger bottom rule.
   - Monospace only for codes and shortcodes, never timestamps or counts.
   - Secondary values as a muted smaller line or tone, never in parentheses.
   - Fainter column rules and row separators than the header boundary.
-  - Audit other per-cell icons (hierarchy, external link) for the same
-    every-row repetition; keep one only where it changes the action.
+  - Audit the remaining per-cell icons (hierarchy, external link) for the
+    every-row repetition the ⓘ and relation controls dropped; keep one only
+    where it changes the action.
+  - Apple list headers could read `display.columnLabel` too; the generated
+    Swift catalog does not carry it yet.
 - 🤔 ✨ **All-entities record interaction parity.** Reuse standard row inspection,
   selection, clipboard behavior, and actions in the Records tab. Decide which
   actions are eligible for mixed entity types before enabling batch work;

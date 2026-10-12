@@ -13,7 +13,7 @@ const MAX_LINES = 2;
  * to cut every chip to "Groce…", "Kitc…", "P…".
  *
  * `data-cell-wrap` keeps column fitting from sizing the column to every chip
- * on one line; the column keeps its configured width and the chips wrap.
+ * on one line; the column fits the first chip and the rest wrap.
  */
 export function ChipCluster({
   items,

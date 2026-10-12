@@ -166,7 +166,6 @@ export const inventoryListOverride = defineListOverride<
                   "reference",
                 ),
                 className: "min-w-0 w-64",
-                surplus: true,
                 mobile: { slot: "meta", priority: 50 },
                 filterConfig: { placeholder: "Filter product..." },
               },

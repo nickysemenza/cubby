@@ -558,6 +558,7 @@ const compileFieldModel = (
         detail: field.display.detail,
         listHidden: field.display.listHidden ?? false,
         referencePreviewLimit: field.display.referencePreviewLimit ?? null,
+        columnLabel: field.display.columnLabel ?? null,
         valueOptions: field.display.valueOptions
           ? colorizeEnumOptions(field.display.valueOptions)
           : field.kind === "enum" && field.control?.options == null

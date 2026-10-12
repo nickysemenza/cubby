@@ -227,7 +227,11 @@ export default defineEntity({
         key: "linkedProducts",
         kind: "json",
         reference: { entity: "product", multiple: true },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Products",
+          list: true,
+          detail: true,
+        },
         explanation: {
           ruleId: "usda-food.linked-products",
           description:

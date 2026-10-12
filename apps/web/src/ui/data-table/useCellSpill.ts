@@ -67,6 +67,32 @@ function unclippedClone(source: HTMLElement) {
 }
 
 /**
+ * The active row's overlay rail (its ⓘ) drawn at the same spot on top of the
+ * spill-over, which would otherwise hide it; clicks reach the real one.
+ */
+function railCopy(cell: HTMLElement, overlay: HTMLElement) {
+  const rail = cell.querySelector<HTMLElement>("[data-cell-rail]");
+  const box = rail?.getBoundingClientRect();
+  const clone = rail?.cloneNode(true);
+  if (!box || box.width === 0 || !(clone instanceof HTMLElement)) return;
+  for (const element of [clone, ...clone.querySelectorAll<HTMLElement>("*")])
+    element.removeAttribute("id");
+  clone.removeAttribute("data-cell-rail");
+  clone.dataset.cellSpillRail = "";
+  const frame = overlay.getBoundingClientRect();
+  Object.assign(clone.style, {
+    position: "absolute",
+    inset: "auto",
+    margin: "0",
+    left: `${box.left - frame.left}px`,
+    top: `${box.top - frame.top}px`,
+    background: "var(--popover, var(--card))",
+    boxShadow: "-6px 0 6px var(--popover, var(--card))",
+  });
+  overlay.append(clone);
+}
+
+/**
  * Lifts a clipped table value over its neighbours at the same row height
  * while the pointer (after a short delay) or keyboard focus is on its cell,
  * so a narrow column never hides a value. The overlay is inert and
@@ -134,6 +160,7 @@ export function useCellSpill(
       const box = element.getBoundingClientRect();
       if (box.right > limit)
         element.style.left = `${Math.max(EDGE_PX, limit - box.width)}px`;
+      railCopy(cell, element);
       overlay = element;
     };
 

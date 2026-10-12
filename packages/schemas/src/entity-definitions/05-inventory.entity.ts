@@ -173,6 +173,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnLabel: "Ownership",
           list: true,
           detail: true,
           renderer: { detail: "ownershipMode" },

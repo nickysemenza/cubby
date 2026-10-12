@@ -135,6 +135,7 @@ export default defineEntity({
         kind: "json",
         control: { kind: "specialized", renderer: "source-aliases" },
         display: {
+          columnLabel: "Aliases",
           list: true,
           detail: true,
           width: "xs",
@@ -170,6 +171,7 @@ export default defineEntity({
         reference: { entity: "vendor" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
+          columnLabel: "Provider",
           list: true,
           detail: true,
         },

@@ -407,6 +407,7 @@ Rules:
         kind: "timestamp",
         nullable: true,
         display: {
+          columnLabel: "Last counted",
           list: true,
           detail: true,
           format: "timestamp",

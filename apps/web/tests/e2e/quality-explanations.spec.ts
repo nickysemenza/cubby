@@ -66,6 +66,8 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   );
   const row = table.getByRole("row").filter({ hasText: name }).first();
   await expect(row).toContainText("/100");
+  // A row's explanation appears once the row is hovered or focused.
+  await row.hover();
   await row
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
@@ -173,6 +175,7 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   ).toHaveText("Not assessed");
   await page.getByRole("columnheader", { name: /Quality/ }).click();
   await expect(page).toHaveURL(/sort=.*dataQuality/);
+  await unassessedRow.hover();
   await unassessedRow
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
@@ -358,6 +361,7 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
     `/purchases?view=table&q=${encodeURIComponent(name)}`,
   );
   const row = page.getByRole("row").filter({ hasText: name }).first();
+  await row.hover();
   await row
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
@@ -655,8 +659,9 @@ test("explanation evidence formats links and dates without exposing internal ent
   );
   const row = page.getByRole("row").filter({ hasText: productName });
   await expect(row.locator('[data-cell-col="purchaseDate"]')).toContainText(
-    /Mar 11, 2022\s*\d+y ago/,
+    /^Mar 11’22 · \d+y ago$/,
   );
+  await row.locator('[data-cell-col="primaryGtin"]').hover();
   await row
     .locator('[data-cell-col="primaryGtin"]')
     .getByRole("button", { name: /How primary gtin is determined/ })

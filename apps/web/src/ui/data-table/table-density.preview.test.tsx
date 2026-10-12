@@ -17,7 +17,9 @@ import {
   TableRow,
 } from "~/ui/primitives/table";
 
+import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";
 import { ROW_DENSITY } from "./density";
+import { RowActiveProvider } from "./row-activity";
 import { HeaderLabel } from "./TableHeaderLayout";
 import { useCellSpill } from "./useCellSpill";
 
@@ -26,14 +28,23 @@ import { useCellSpill } from "./useCellSpill";
 // - spill-over flashes for values that already fit, or outlives the hover;
 // - a stacked date, chip cluster, or wrapped header stretches its row;
 // - chips silently drop values instead of counting them;
-// - a code truncates its distinguishing tail.
+// - a code truncates its distinguishing tail;
+// - an explanation ⓘ widens every cell of its column, covers a number, or
+//   disappears under the spill-over it sits beside.
 
 function Fixture({
   cells,
   header = "Value",
+  active = true,
 }: {
-  cells: Array<{ id: string; width: number; content: ReactNode }>;
+  cells: Array<{
+    id: string;
+    width: number;
+    content: ReactNode;
+    numeric?: boolean;
+  }>;
   header?: string;
+  active?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useCellSpill(ref);
@@ -56,22 +67,24 @@ function Fixture({
           </TableRow>
         </TableHeader>
         <TableBody>
-          <TableRow data-cell-row="0" className="table-record-row">
-            {cells.map((cell, index) => (
-              <TableCell
-                key={cell.id}
-                data-column-id={`c${index}`}
-                data-testid={`cell-${index}`}
-                className={ROW_DENSITY.cellClass}
-                style={{ width: cell.width, maxWidth: cell.width }}
-              >
-                <div className={ROW_DENSITY.cellContentClass}>
-                  <div className="min-w-0">{cell.content}</div>
-                </div>
-              </TableCell>
-            ))}
-            <TableCell />
-          </TableRow>
+          <RowActiveProvider value={active}>
+            <TableRow data-cell-row="0" className="table-record-row">
+              {cells.map((cell, index) => (
+                <TableCell
+                  key={cell.id}
+                  data-column-id={`c${index}`}
+                  data-testid={`cell-${index}`}
+                  className={`${ROW_DENSITY.cellClass}${cell.numeric ? " text-right" : ""}`}
+                  style={{ width: cell.width, maxWidth: cell.width }}
+                >
+                  <div className={ROW_DENSITY.cellContentClass}>
+                    <div className="min-w-0">{cell.content}</div>
+                  </div>
+                </TableCell>
+              ))}
+              <TableCell />
+            </TableRow>
+          </RowActiveProvider>
         </TableBody>
       </Table>
     </div>
@@ -156,6 +169,108 @@ describe("table density", () => {
       expect(Math.round(rect(cell).height)).toBe(32);
     }
     expect(view.getByTestId("cell-1").textContent).toMatch(/3mo ago$/);
+  });
+
+  it("moves another year to the distance line", async () => {
+    await page.viewport(1440, 900);
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c8",
+            width: 72,
+            content: (
+              <HoverableTimestamp
+                timestamp={new Date(Date.now() - 400 * 86_400_000)}
+                stacked
+              />
+            ),
+          },
+        ]}
+      />,
+    );
+    const [, secondary] = view
+      .getByTestId("cell-0")
+      .querySelectorAll("[data-stacked-line]");
+    expect(secondary?.textContent).toMatch(/^’\d{2} · 1y ago$/);
+  });
+
+  it("overlays the explanation on the active row without reserving width", async () => {
+    await page.viewport(1440, 900);
+    const explain = (
+      <button
+        type="button"
+        aria-label="Explain"
+        className={CELL_RAIL_BUTTON_CLASS}
+      >
+        i
+      </button>
+    );
+    const cells = [
+      {
+        id: "c9",
+        width: 120,
+        content: (
+          <CellFrame overlay trailing={explain}>
+            {LONG_NAME}
+          </CellFrame>
+        ),
+      },
+      {
+        id: "c10",
+        width: 64,
+        numeric: true,
+        content: (
+          <CellFrame overlay trailing={explain}>
+            12
+          </CellFrame>
+        ),
+      },
+    ];
+    const idle = render(<Fixture active={false} cells={cells} />);
+    expect(idle.queryAllByRole("button", { name: "Explain" })).toHaveLength(0);
+    const idleWidths = [0, 1].map((index) => {
+      const cell = idle.getByTestId(`cell-${index}`);
+      const value = cell.querySelector("[data-cell-value]");
+      const frame = cell.querySelector("[data-cell-frame]");
+      if (!value || !frame) throw new Error("missing cell frame");
+      expect(rect(value).width).toBe(rect(frame).width);
+      return rect(value).width;
+    });
+    idle.unmount();
+
+    const view = render(<Fixture cells={cells} />);
+    const [text, number] = view.getAllByRole("button", { name: "Explain" });
+    if (!text || !number) throw new Error("missing explanations");
+    for (const index of [0, 1]) {
+      const value = view
+        .getByTestId(`cell-${index}`)
+        .querySelector("[data-cell-value]");
+      if (!value) throw new Error("missing value");
+      expect(rect(value).width).toBe(idleWidths[index]);
+    }
+    const textFrame = view
+      .getByTestId("cell-0")
+      .querySelector("[data-cell-frame]");
+    const numberFrame = view
+      .getByTestId("cell-1")
+      .querySelector("[data-cell-frame]");
+    if (!textFrame || !numberFrame) throw new Error("missing frames");
+    // Text ends under the ⓘ; a right-aligned number keeps its digits clear.
+    expect(Math.round(rect(text).right)).toBe(
+      Math.round(rect(textFrame).right),
+    );
+    expect(Math.round(rect(number).left)).toBe(
+      Math.round(rect(numberFrame).left),
+    );
+
+    // The spill-over keeps the ⓘ drawn where it sits.
+    await userEvent.hover(view.getByTestId("cell-0"));
+    await waitFor(() => expect(overlay()).not.toBeNull());
+    const rail = overlay()?.querySelector("[data-cell-spill-rail]");
+    if (!rail) throw new Error("spill hid the explanation");
+    expect(Math.round(rect(rail).left)).toBe(Math.round(rect(text).left));
+    expect(Math.round(rect(rail).top)).toBe(Math.round(rect(text).top));
   });
 
   it("wraps chips to two lines and counts what does not fit", async () => {

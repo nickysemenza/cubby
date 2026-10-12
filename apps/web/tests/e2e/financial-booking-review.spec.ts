@@ -258,12 +258,17 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     .getByRole("row")
     .filter({ hasText: "Synthetic friend contribution" });
   await expect(row.getByLabel("Loading field")).toHaveCount(0);
-  const headersText = await page.getByRole("columnheader").allTextContents();
-  await expect(
-    row
-      .getByRole("cell")
-      .nth(
-        headersText.findIndex((text) => text.includes("Evidence expectation")),
+  // Headers paint short labels; the full label is the header's tooltip.
+  const headerLabels = await page
+    .getByRole("columnheader")
+    .evaluateAll((cells) =>
+      cells.map(
+        (cell) =>
+          cell.querySelector("[data-header-label]")?.getAttribute("title") ??
+          "",
       ),
+    );
+  await expect(
+    row.getByRole("cell").nth(headerLabels.indexOf("Evidence expectation")),
   ).toContainText("Not expected");
 });

@@ -340,7 +340,6 @@ export function RunHistory({
             size: 240,
             meta: {
               entityColumnRole: "identity",
-              surplus: true,
               mobile: { slot: "title", priority: 1 },
             },
             cell: ({ row }) => (

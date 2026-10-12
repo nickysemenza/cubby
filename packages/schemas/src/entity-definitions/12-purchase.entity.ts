@@ -224,7 +224,11 @@ export default defineEntity({
             { value: "recorded", label: "Recorded" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Booked",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: purchaseEvidenceCoverage.shape.booking,
           create: null,
@@ -247,7 +251,11 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Documented",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: purchaseEvidenceCoverage.shape.document,
           create: null,
@@ -270,7 +278,11 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Itemized",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: purchaseEvidenceCoverage.shape.itemization,
           create: null,
@@ -294,7 +306,11 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Products",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: purchaseEvidenceCoverage.shape.products,
           create: null,
@@ -328,6 +344,7 @@ export default defineEntity({
           sources: [{ label: "Live Expense category allocations" }],
         },
         display: {
+          columnLabel: "Categories",
           list: true,
           detail: true,
           renderer: {
@@ -370,7 +387,11 @@ export default defineEntity({
           renderer: "entity-select",
           suggest: { basis: ["displayLabel", "vendorId", "notes"] },
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Fallback",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
@@ -424,7 +445,11 @@ export default defineEntity({
             },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Evidence",
+          list: true,
+          detail: true,
+        },
         resolution: {
           reset: { evidenceExpectation: null },
           redundancy: "eligible",
@@ -583,6 +608,7 @@ export default defineEntity({
           placeholder: "e.g. pocket hole jig + bits",
         },
         display: {
+          columnLabel: "Label",
           list: true,
           detail: true,
           width: "lg",
@@ -784,6 +810,7 @@ export default defineEntity({
         // `SUM(Expense.cost)`: a negative total (a net credit) reads as money
         // in, a positive one (spend) stays neutral.
         display: {
+          columnLabel: "Total",
           list: true,
           width: "sm",
           format: "signedCurrency",
@@ -864,6 +891,7 @@ export default defineEntity({
         key: "financialReconciliation",
         kind: "json",
         display: {
+          columnLabel: "Financial",
           list: true,
           labelPath: "financialReconciliationLabel",
           renderer: { list: "financial-settlement" },

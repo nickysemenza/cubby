@@ -246,6 +246,7 @@ export type EntityField = Readonly<{
         }>[]
       | null;
     referencePreviewLimit: number | null;
+    columnLabel: string | null;
     preview: boolean;
   }>;
   validation: Readonly<{

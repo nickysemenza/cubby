@@ -141,7 +141,11 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text" },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Harvest",
+          list: true,
+          detail: true,
+        },
         validation: {
           read: optionalText,
           create: optionalText.default(null),

@@ -20,19 +20,13 @@ export function formatDateSpan(
   return relative ? `${label} (${relative})` : label;
 }
 
-/** A span's label and its distance from today, for separate lines. */
-export type DateSpanParts = { label: string; relative: string | null };
+type DateSpanParts = { label: string; relative: string | null };
 
-/**
- * `formatDateSpan` as separate lines for a stacked table cell: the label, and
- * its distance from today in compact form ("5d ago", "in 7mo"), or null when
- * the value is not a readable span.
- */
-export function dateSpanParts(
+function dateSpanParts(
   start: string | null,
   end: string | null,
-  today: string = householdLocalDate(),
-  distance: "words" | "compact" = "compact",
+  today: string,
+  distance: "words" | "compact",
 ): DateSpanParts {
   const first = start ?? end;
   if (first === null) return { label: "No date", relative: null };
@@ -56,13 +50,57 @@ export function dateSpanParts(
       label: `${formatCalendarDay(first, "dateShort")} – ${formatCalendarDay(last, "dateShort")}`,
       relative,
     };
+  return {
+    label: `${monthDayRange(first, last)}${yearSuffix}`,
+    relative,
+  };
+}
+
+/** "Sep 22 – 25" inside one month, "Sep 30 – Oct 2" across months. */
+function monthDayRange(first: string, last: string) {
   const endText =
-    from[2] === to[2]
+    first.slice(5, 7) === last.slice(5, 7)
       ? String(Number(last.slice(8)))
       : formatCalendarDay(last, "monthDay");
+  return `${formatCalendarDay(first, "monthDay")} – ${endText}`;
+}
+
+/** A year as the stacked cell's muted mark: "’25". */
+export const yearMark = (year: string) => `’${year.slice(-2)}`;
+
+/** A stacked cell's day line and its muted distance line. */
+export type StackedDate = { primary: string; secondary: string | null };
+
+/**
+ * The stacked table-cell form of `formatDateSpan`: the day ("Sep 3",
+ * "Sep 30 – Oct 2") over its compact distance ("5d ago", "in 7mo"). A year
+ * other than the household's current one leads the distance line ("’25 ·
+ * 1y ago") so the day line, which sets the column's width, stays short.
+ */
+export function stackedDateSpan(
+  start: string | null,
+  end: string | null,
+  today: string = householdLocalDate(),
+): StackedDate {
+  const first = start ?? end;
+  const last = start === null || end === start ? null : end;
+  const parts = dateSpanParts(start, end, today, "compact");
+  if (first === null || parts.relative === null)
+    return { primary: parts.label, secondary: parts.relative };
+  const years = [
+    ...new Set([first, last ?? first].map((day) => day.slice(0, 4))),
+  ];
+  const primary =
+    last === null
+      ? formatCalendarDay(first, "monthDay")
+      : monthDayRange(first, last);
+  const shown =
+    years.length === 1 && years[0] === today.slice(0, 4) ? [] : years;
   return {
-    label: `${formatCalendarDay(first, "monthDay")} – ${endText}${yearSuffix}`,
-    relative,
+    primary,
+    secondary: [shown.map(yearMark).join("–"), parts.relative]
+      .filter(Boolean)
+      .join(" · "),
   };
 }
 

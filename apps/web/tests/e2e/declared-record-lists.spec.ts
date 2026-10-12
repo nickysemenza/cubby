@@ -1,5 +1,6 @@
 import { chooseListView } from "./e2e-helpers";
 import { formatCalendarDay } from "~/lib/date-format";
+import { stackedDateSpan } from "~/lib/date-span";
 import { householdLocalDate, householdDaysFromNow } from "~/lib/household-date";
 import {
   seedVendorDisplayPrerequisite,
@@ -391,12 +392,17 @@ test("record dates retain their calendar label with present and future context",
     dueDate: today,
     dueEndDate: householdDaysFromNow(1),
   });
-  const currentDay = formatCalendarDay(today, "monthDay");
-  const currentLabel = `${currentDay} (today)`;
+  // Table cells stack the day over its compact distance; the title keeps
+  // the full label.
+  const current = stackedDateSpan(today, null, today);
+  const future = stackedDateSpan(later, null, today);
+  const currentDay = current.primary;
+  const currentLabel = `${formatCalendarDay(today, "monthDay")} (today)`;
   const laterYear =
     later.slice(0, 4) === today.slice(0, 4) ? "" : `, ${later.slice(0, 4)}`;
-  const futureDay = `${formatCalendarDay(later, "monthDay")}${laterYear}`;
-  const futureLabel = `${futureDay} (in a few weeks)`;
+  const futureDay = future.primary;
+  const futureLabel = `${formatCalendarDay(later, "monthDay")}${laterYear} (in a few weeks)`;
+  const futureContext = future.secondary ?? "";
   const assertDate = async (
     scope: ReturnType<typeof page.locator>,
     label: string,
@@ -439,7 +445,7 @@ test("record dates retain their calendar label with present and future context",
       .locator('[data-cell-col="dueDate"]'),
     futureLabel,
     futureDay,
-    "in 4w",
+    futureContext,
   );
   await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
   await assertDate(
@@ -452,7 +458,7 @@ test("record dates retain their calendar label with present and future context",
     page.locator('[data-cell-col="dueDate"]'),
     futureLabel,
     futureDay,
-    "in 4w",
+    futureContext,
   );
   const futureTaskLabel = page
     .getByTitle(futureLabel, { exact: true })
@@ -500,7 +506,7 @@ test("record dates retain their calendar label with present and future context",
     page.locator('[data-cell-col="date"]'),
     futureLabel,
     futureDay,
-    "in 4w",
+    futureContext,
   );
   await unclipped(
     page

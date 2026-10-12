@@ -305,6 +305,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "vendorAccount" },
         display: {
+          columnLabel: "Account",
           list: true,
           detail: true,
           labelPath: "vendorAccountLabel",

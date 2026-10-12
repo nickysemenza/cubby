@@ -160,7 +160,11 @@ export default defineEntity({
         nullable: true,
         labelOverride: "Reviewed relevance",
         control: { kind: "select", options: relevanceOptions },
-        display: { list: true, detail: true },
+        display: {
+          columnLabel: "Relevance",
+          list: true,
+          detail: true,
+        },
         provenance: {
           kind: "derived",
           sources: [{ label: "Independent review of this Email checksum" }],

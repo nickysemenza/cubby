@@ -63,6 +63,7 @@ import { Checkbox } from "~/ui/primitives/checkbox";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
 
+import { columnHeaderFor } from "./column-header";
 import { compactFieldRendererFor } from "./compact-field-renderers";
 import { recordFieldClearing } from "./editing/field-clearing";
 import { entities, entityPluralLabel, isBrowserRoutedEntity } from "./entities";
@@ -1479,13 +1480,19 @@ export function createEntityDisplayColumns<TRecord extends object>(
     for (const field of selected) {
       const columnId = field.display.columnId ?? field.key;
       // A suggestable field renders the suggestion mark in the cell rail;
-      // column sizing reserves its slot from this flag.
-      const add: typeof addColumn = (column) =>
-        addColumn(
-          field.control?.suggest
-            ? { ...column, meta: { ...column.meta, suggest: true } }
-            : column,
-        );
+      // column sizing reserves its slot from this flag. A column headed by
+      // the field's label paints its short form.
+      const headerForm = columnHeaderFor(field);
+      const add: typeof addColumn = (column) => {
+        const meta = { ...column.meta };
+        if (field.control?.suggest) meta.suggest = true;
+        if (column.header === field.label) {
+          if (headerForm.short !== field.label)
+            meta.shortHeader = headerForm.short;
+          if (headerForm.countOf) meta.countOf = headerForm.countOf;
+        }
+        addColumn({ ...column, meta });
+      };
       const isIdentityField = field.readKey === titleField;
       // The standard-column pipeline owns the one canonical identity lane; an
       // override claiming it fails below as undeclared.
