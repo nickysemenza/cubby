@@ -75,8 +75,10 @@ function Harness({
   );
 }
 
+// A form's status line reports every checked field; the field itself shows
+// only a proposal it can act on, so agreements and fills stay off the field.
 describe("AutoSuggestSlot outcome mark", () => {
-  it("reads 'Filled in' once the field is silently auto-filled in create mode", async () => {
+  it("keeps a silent create-mode auto-fill off the field", async () => {
     render(<Harness mode="create" defaultTrade="" suggestion={cabinetry} />, {
       wrapper: harness.wrapper,
     });
@@ -86,21 +88,21 @@ describe("AutoSuggestSlot outcome mark", () => {
       target: { value: "Replace electrical panel, redo" },
     });
     await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: /Filled in · 95%/ }),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/1 field checked/)).toBeInTheDocument(),
     );
+    expect(screen.queryByRole("button", { name: /Filled in/ })).toBeNull();
   });
 
-  it("reads 'Agrees with' when the field already holds the suggested value in edit mode", async () => {
+  it("keeps an edit-mode agreement off the field", async () => {
     render(
       <Harness mode="edit" defaultTrade="cabinetry" suggestion={cabinetry} />,
       { wrapper: harness.wrapper },
     );
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: /Agrees with Cabinetry · 95%/ }),
+        screen.getByText("No suggestions · 1 field checked"),
       ).toBeInTheDocument(),
     );
+    expect(screen.queryByRole("button", { name: /Agrees with/ })).toBeNull();
   });
 });

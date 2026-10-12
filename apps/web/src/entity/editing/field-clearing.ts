@@ -21,6 +21,8 @@ export function fieldClearing(
   return {
     clearable,
     clearLabel: expenseDate ? "Date unknown" : "Clear",
+    // "Date unknown" is a domain state; a plain clear is the picker's ×.
+    namedClear: expenseDate,
     clearDisabledReason:
       expenseDate && !clearable ? EXPENSE_DATE_REQUIRED_MESSAGE : undefined,
   };

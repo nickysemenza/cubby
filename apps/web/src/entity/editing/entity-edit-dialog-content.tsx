@@ -385,6 +385,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
         }}
         submitButtonText={presentation.submitLabel ?? "Create"}
         footerMode="dialog"
+        fieldLayout="ledger"
       >
         {evidence}
         <FieldSuggestionProvider

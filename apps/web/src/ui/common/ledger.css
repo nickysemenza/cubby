@@ -212,3 +212,43 @@
     min-height: 2.75rem;
   }
 }
+
+/* Ledger form: an editor laid out like the facts it edits — quiet label
+   column, control column. Below 26rem (the phone sheet) fields stay stacked.
+   Only top-level fields take the grid; a field nested in a fieldset or
+   another field (structured and specialized editors) keeps its own layout. */
+[data-field-layout="ledger"] {
+  container: field-ledger / inline-size;
+}
+@container field-ledger (min-width: 26rem) {
+  [data-field-layout="ledger"]
+    [data-slot="field"]:not(fieldset [data-slot="field"]):not(
+      [data-slot="field"] [data-slot="field"]
+    ) {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 9rem) minmax(0, 1fr);
+    column-gap: 0.75rem;
+    row-gap: 0.25rem;
+    align-items: center;
+  }
+  [data-field-layout="ledger"]
+    [data-slot="field"]:not(fieldset [data-slot="field"]):not(
+      [data-slot="field"] [data-slot="field"]
+    )
+    > * {
+    grid-column: 2;
+  }
+  [data-field-layout="ledger"]
+    [data-slot="field"]:not(fieldset [data-slot="field"]):not(
+      [data-slot="field"] [data-slot="field"]
+    )
+    > [data-slot="field-label"] {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: start;
+    min-height: 2rem;
+    align-items: center;
+    color: var(--muted-foreground);
+    font-weight: 400;
+  }
+}

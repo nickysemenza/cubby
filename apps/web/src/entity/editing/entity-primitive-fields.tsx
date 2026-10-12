@@ -5,7 +5,10 @@ import type {
   CompiledEntityPresentation,
 } from "@cubby/schemas/entity-definitions/definition";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  entityFieldModels,
+  type EntityFieldProvenance,
+} from "@cubby/schemas/entity-fields";
 import type { ControlRendererId } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
@@ -221,6 +224,14 @@ function EntityDateField({
   );
 }
 
+/** A direct reference's "Linked to X" restates what its picker already shows;
+ * an editor keeps only provenance that explains where a value comes from. */
+function editorProvenance(
+  provenance: EntityFieldProvenance | null | undefined,
+): EntityFieldProvenance | null {
+  return provenance && provenance.kind !== "reference" ? provenance : null;
+}
+
 /** Same reasoning as `suggestFieldFor`: an override (e.g. a select field
  * forced disabled with its own reason) beats the presentation's own
  * description, kept out of `renderPrimitiveField`'s own complexity budget. */
@@ -229,11 +240,12 @@ function selectDescriptionFor(
   presentation: EntityFieldPresentation,
 ): ReactNode {
   const helper = fieldOptions.description ?? presentation.description;
-  if (!helper && !presentation.provenance) return undefined;
+  const provenance = editorProvenance(presentation.provenance);
+  if (!helper && !provenance) return undefined;
   return (
     <span className="space-y-0.5">
       {helper ? <span className="block">{helper}</span> : null}
-      <FieldProvenance provenance={presentation.provenance} />
+      <FieldProvenance provenance={provenance} />
     </span>
   );
 }
@@ -815,7 +827,11 @@ function renderSingularReference({
         entity={referenceEntity as never}
         label={field.label}
         clearable={field.nullable}
-        description={<FieldProvenance provenance={field.provenance} />}
+        description={
+          editorProvenance(field.provenance) ? (
+            <FieldProvenance provenance={field.provenance} />
+          ) : undefined
+        }
         SearchProvider={(
           assignment?.searchProviderFor ?? requireReferenceEntitySearch
         )(referenceEntity)}
@@ -888,7 +904,7 @@ export function renderIntentField({
         `Field ${entity}.${field.key} has no specialized intent renderer for "${presentation.control.renderer}"`,
       );
     }
-    const provenanceId = field.provenance
+    const provenanceId = editorProvenance(field.provenance)
       ? `${idPrefix}-${field.key}-provenance`
       : undefined;
     return (
@@ -906,7 +922,7 @@ export function renderIntentField({
           mode={mode}
           scope={referenceScopeFor(field.reference, scopedValueRecord)}
         />
-        {field.provenance ? (
+        {editorProvenance(field.provenance) ? (
           <div id={provenanceId}>
             <FieldProvenance provenance={field.provenance} />
           </div>

@@ -68,6 +68,9 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
 }
 
 /** One field's suggestion line, from its `useAutoFieldSuggestion` result.
+ * Quiet: the provider's status line reports agreements, declines, and
+ * below-bar picks for every field, so the field shows only a proposal it can
+ * act on.
  * `currentLabel` overrides the hook's own when the caller knows a better
  * label for the current value (an id-valued picker's selected item name). */
 export function AutoSuggestHint({
@@ -93,6 +96,7 @@ export function AutoSuggestHint({
       outcome={context?.outcomeFor(field) ?? null}
       autoFilled={context?.isAutoFilled(field) ?? false}
       surface="line"
+      quiet
     />
   );
 }

@@ -240,7 +240,7 @@ export function DatePickerInput({
       >
         <div
           className={cn(
-            "flex h-7 w-full min-w-0 items-center rounded-none border border-border bg-input/20 transition-colors focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30 hover:bg-input/30 max-sm:h-10",
+            "flex h-8 w-full min-w-0 items-center rounded-sm border border-border bg-card transition-colors focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30 max-sm:h-11",
             invalid &&
               "border-destructive focus-within:border-destructive focus-within:ring-destructive/20",
           )}
@@ -258,7 +258,7 @@ export function DatePickerInput({
             aria-describedby={describedBy}
             aria-invalid={invalid}
             autoComplete="off"
-            className="h-full min-w-0 flex-1 bg-transparent px-2 py-1 font-mono text-sm outline-none placeholder:font-sans placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 max-sm:text-base"
+            className="h-full min-w-0 flex-1 bg-transparent px-2.5 py-1 text-sm tabular-nums outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 max-sm:text-base"
             onChange={(event) => {
               setDraft(event.target.value);
               clearError();
