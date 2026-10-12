@@ -44,6 +44,7 @@
         private var connections: [NWConnection] = []
         private var ready: CheckedContinuation<UInt16, Error>?
         private var consumed = false
+        private var resultPublished = false
         private var closed = false
 
         public init(nonce: String = CliAuthRequest.makeNonce()) {
@@ -120,7 +121,14 @@
             }
         }
 
+        /// Test observation: whether the accepted payload has been published to the stream.
+        /// Read this, not a consumer task's progress, to assert nothing published yet — the
+        /// consumer runs in another task and may lag publication. Tests only; never call from
+        /// queue callbacks (it blocks on the queue).
+        var hasPublishedResult: Bool { queue.sync { resultPublished } }
+
         public func close() {
+            var hasPublishedResult: Bool { queue.sync { resultPublished } }
             queue.async { [weak self] in
                 guard let self, !self.closed else { return }
                 self.closed = true
@@ -154,8 +162,10 @@
             let failure = CliAuthHandoffError.listenerFailed(String(describing: error))
             ready?.resume(throwing: failure)
             // A failure after readiness must reach a waiting `receive()` as its diagnostic, not
-            // a bare cancellation — unless a handoff already won, in which case the token stands.
-            if !consumed { continuation.finish(throwing: failure) }
+            // a bare cancellation — unless the result already published, in which case the token
+            // stands and a normal finish follows. Acceptance alone is not publication: a request
+            // accepted but not yet acknowledged must still surface the failure.
+            if !resultPublished { continuation.finish(throwing: failure) }
             close()
         }
 
@@ -275,7 +285,10 @@
                         // token (or tearing down) first can RST bytes the app has not read yet,
                         // failing a handoff the CLI already reports as success. A timeout that
                         // closed first skips the publish; its buffered absence is harmless.
-                        if let payload, !self.closed { self.continuation.yield(payload) }
+                        if let payload, !self.closed {
+                            self.resultPublished = true
+                            self.continuation.yield(payload)
+                        }
                         connection.cancel()
                         self.connections.removeAll { $0 === connection }
                         if payload != nil { self.close() }

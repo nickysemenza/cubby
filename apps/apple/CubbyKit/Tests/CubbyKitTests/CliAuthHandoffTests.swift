@@ -133,11 +133,37 @@
         @Test func receiveWaitsForAcknowledgment() async throws {
             let handoff = CliAuthLoopbackHandoff(nonce: Self.nonce)
             let port = try await handoff.start()
-            let published = Gate()
+            let task = Task { try await handoff.receive(for: Self.baseURL) }
+            defer { task.cancel() }
+            let body = try JSONEncoder().encode(
+                CliAuthHandoffPayload(
+                    token: "bearer.token", nonce: Self.nonce, origin: Self.origin))
+            let response = try await Self.sendRaw(
+                to: port,
+                chunks: [
+                    Data(
+                        "POST /handoff HTTP/1.1\r\nContent-Length: \(body.count)\r\n\r\n".utf8)
+                        + body
+                ],
+                holdOpen: true)
+            defer { response.connection?.cancel() }
+            // The client holds the complete 200 bytes, but the server has not seen the close:
+            // nothing may publish yet. Read at the producer boundary — a consumer task could
+            // lag publication and hide a premature yield.
+            #expect(response.status == 200)
+            #expect(!handoff.hasPublishedResult)
+            response.connection?.cancel()
+            #expect(try await task.value == "bearer.token")
+            #expect(handoff.hasPublishedResult)
+        }
+
+        @Test func listenerFailureDuringDrainSurfacesDiagnostic() async throws {
+            let handoff = CliAuthLoopbackHandoff(nonce: Self.nonce)
+            let port = try await handoff.start()
+            // Park the expiry so only the injected failure can finish the receive.
+            let expiry = Gate()
             let task = Task {
-                let token = try await handoff.receive(for: Self.baseURL)
-                published.signal()
-                return token
+                try await handoff.receive(for: Self.baseURL) { _ in try await expiry.pass() }
             }
             defer { task.cancel() }
             let body = try JSONEncoder().encode(
@@ -151,13 +177,22 @@
                         + body
                 ],
                 holdOpen: true)
-            // The client holds the complete 200 bytes, but the server has not seen the close:
-            // nothing may publish yet. Publishing strictly follows the acknowledgment cycle,
-            // so neither return nor teardown can overtake it.
+            defer { response.connection?.cancel() }
+            // Accepted (200 fully read) but unpublished: the acknowledgment cycle is still open.
             #expect(response.status == 200)
-            #expect(published.arrived == 0)
-            response.connection?.cancel()
-            #expect(try await task.value == "bearer.token")
+            #expect(!handoff.hasPublishedResult)
+            handoff.injectListenerFailure(.posix(.ECONNABORTED))
+            do {
+                _ = try await task.value
+                Issue.record("Expected a listener failure.")
+            } catch let error as CliAuthHandoffError {
+                guard case .listenerFailed = error else {
+                    Issue.record("Expected listenerFailed, got \(error).")
+                    return
+                }
+            } catch {
+                Issue.record("Unexpected error: \(error)")
+            }
         }
 
         @Test func receiveTimesOutWithoutTheClock() async throws {
