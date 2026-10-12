@@ -1420,7 +1420,6 @@ struct EntitySourceRow: View {
             if let runID {
                 NavigationLink(runID, value: Route.entityDetail(.run, id: runID)).font(.caption)
             }
-            .navigationLinkIndicatorVisibility(.hidden)
         }
     }
 }
