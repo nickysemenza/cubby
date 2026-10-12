@@ -26,11 +26,7 @@ struct EntityHeroView<Actions: View>: View {
     ) {
         self.descriptor = descriptor
         self.row = row
-        #if os(macOS)
-            self.showsTitle = showsTitle ?? true
-        #else
-            self.showsTitle = showsTitle ?? false
-        #endif
+        self.showsTitle = showsTitle ?? true
         self.actions = actions()
     }
 
@@ -207,28 +203,17 @@ struct FieldsSectionView<Inline: View>: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(group.fields, id: \.key) { field in
                         if field.key != group.id { Divider() }
-                        fieldRow(field)
-                            .frame(minHeight: field.explanation == nil ? 32 : FieldGuideTokens.touchTarget)
-                            .fixedSize(horizontal: false, vertical: true)
+                        dossierField(field)
                     }
                 }
+                .font(.subheadline)
+                .listRowInsets(
+                    EdgeInsets(
+                        top: 0, leading: FieldGuideTokens.Space.md,
+                        bottom: 0, trailing: FieldGuideTokens.Space.md))
             } else {
                 ForEach(group.fields, id: \.key) { field in
-                    fieldRow(field)
-                    if let resolved = FieldResolutionPresentation(raw: row.raw, field: field) {
-                        EntityFieldResolutionLabel(resolved: resolved)
-                        if resolved.resetPayload(field: field) != nil,
-                            descriptor.key.nativeActions.contains(.update)
-                        {
-                            Button {
-                                resetReview = ResetReview(field: field.key)
-                            } label: {
-                                Text("Review reset: \(resolved.resetLabel.lowercased())")
-                                    .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
-                            }
-                        }
-                    }
-                    if field.key == inlineFieldKey { inline }
+                    dossierField(field)
                 }
             }
         }
@@ -249,15 +234,16 @@ struct FieldsSectionView<Inline: View>: View {
         var id: String { fields[0].key }
     }
 
-    /// Contiguous scalar facts share one Form row; navigation, evidence and specialist renderers
-    /// keep their own native rows and the manifest's ordering.
+    /// Ordinary facts and their evidence share a Form child. Specialist/prose layouts keep
+    /// their own row, and grouping preserves manifest order.
     private var fieldGroups: [FieldGroup] {
         var groups: [FieldGroup] = []
         for field in rows {
             let compact =
-                field.reference == nil && field.itemsPath == nil
-                && field.detailRenderer == nil && field.key != inlineFieldKey
-                && FieldResolutionPresentation(raw: row.raw, field: field) == nil
+                field.itemsPath == nil && field.controlKind != .textarea
+                && field.detailRenderer != .expenseSpendingCategory
+                && field.detailRenderer != .spendingCategorySummary
+                && field.detailRenderer != .recipeSource
             if compact, groups.last?.compact == true {
                 groups[groups.count - 1].fields.append(field)
             } else {
@@ -265,6 +251,34 @@ struct FieldsSectionView<Inline: View>: View {
             }
         }
         return groups
+    }
+
+    @ViewBuilder
+    private func dossierField(_ field: FieldDescriptor) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            fieldRow(field)
+                .frame(
+                    minHeight: field.explanation != nil || field.reference != nil
+                        ? FieldGuideTokens.touchTarget : 32
+                )
+                .fixedSize(horizontal: false, vertical: true)
+            if let resolved = FieldResolutionPresentation(raw: row.raw, field: field) {
+                EntityFieldResolutionLabel(resolved: resolved)
+                if resolved.resetPayload(field: field) != nil,
+                    descriptor.key.nativeActions.contains(.update)
+                {
+                    Button {
+                        resetReview = ResetReview(field: field.key)
+                    } label: {
+                        Text("Review reset: \(resolved.resetLabel.lowercased())")
+                            .font(.subheadline)
+                            .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if field.key == inlineFieldKey { inline }
+        }
     }
 
     private var rows: [FieldDescriptor] {
@@ -299,7 +313,8 @@ struct FieldsSectionView<Inline: View>: View {
     @ViewBuilder
     private func fieldRow(_ field: FieldDescriptor) -> some View {
         if field.reference?.multiple == true {
-            RecordReferenceList(field: field, row: row)
+            RecordReferenceList(
+                field: field, row: row, subject: EntityRef(entity: descriptor.key, id: row.id))
         } else if field.itemsPath != nil {
             DetailDisplayRows(label: field.label, rows: field.detailItems(in: row.raw))
         } else if field.detailRenderer == .spendingCategorySummary {
@@ -318,17 +333,22 @@ struct FieldsSectionView<Inline: View>: View {
             recipeSourceRow(field, source: source)
         } else if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
             let value = reference.name ?? reference.id
-            NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
-                LabeledContent {
-                    HStack {
+            LabeledContent {
+                NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
+                    HStack(spacing: FieldGuideTokens.Space.xs) {
                         if let emoji = reference.emoji { Text(emoji).accessibilityHidden(true) }
-                        Text(value)
+                        Text(value).fixedSize(horizontal: false, vertical: true)
+                        Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
                     }
-                } label: {
-                    FieldExplanationLabel(
-                        field: field,
-                        subject: EntityRef(entity: descriptor.key, id: row.id))
+                    .foregroundStyle(.tint)
+                    .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .trailing)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+            } label: {
+                FieldExplanationLabel(
+                    field: field,
+                    subject: EntityRef(entity: descriptor.key, id: row.id))
             }
         } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
             ?? (FieldResolutionPresentation(raw: row.raw, field: field) == nil ? nil : "None")
@@ -341,7 +361,10 @@ struct FieldsSectionView<Inline: View>: View {
                         .textSelection(.enabled)
                 } else {
                     Text(value)
-                        .font(field.kind == .identifier ? .fieldGuideCode : .fieldGuideBody)
+                        .font(
+                            field.kind == .identifier
+                                ? .fieldGuideCode : field.controlKind == .textarea ? .body : .subheadline
+                        )
                         .textSelection(.enabled)
                         .multilineTextAlignment(.trailing)
                 }
@@ -1288,6 +1311,7 @@ private struct DetailDisplayRows: View {
 private struct RecordReferenceList: View {
     let field: FieldDescriptor
     let row: EntityRow
+    let subject: EntityRef
     @State private var expanded = false
     private var items: [JSONValue] { row.raw[field.readKey ?? field.key]?.arrayValue ?? [] }
     private var target: EntityKey? { field.reference?.entity }
@@ -1307,8 +1331,8 @@ private struct RecordReferenceList: View {
     }
     var body: some View {
         if let target {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                Text(field.label).font(.fieldGuideLabel)
+            VStack(alignment: .leading, spacing: 0) {
+                FieldExplanationLabel(field: field, subject: subject).font(.subheadline)
                 ForEach(
                     Array(
                         (expanded ? items : Array(items.prefix(field.referencePreviewLimit ?? items.count)))
@@ -1321,15 +1345,30 @@ private struct RecordReferenceList: View {
                                     Text(emoji).accessibilityHidden(true)
                                 }
                                 Text(item["name"]?.stringValue ?? id)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
                             }
+                            .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
                 }
                 if let limit = field.referencePreviewLimit, items.count > limit {
-                    Button(expanded ? "Show less" : "+\(items.count - limit) more") { expanded.toggle() }
+                    Button {
+                        expanded.toggle()
+                    } label: {
+                        Text(expanded ? "Show less" : "+\(items.count - limit) more")
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    .buttonStyle(.plain)
                 }
                 if !filters.isEmpty {
-                    NavigationLink("View all", value: Route.entityList(target, filters: filters))
+                    NavigationLink(value: Route.entityList(target, filters: filters)) {
+                        Label("View all", systemImage: "chevron.right")
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

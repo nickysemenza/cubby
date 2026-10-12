@@ -62,7 +62,7 @@ test("a member creates a Product from own item and label photos without an impor
       .getByRole("img", { name: "synthetic-wardrobe-label.png" }),
   ).toBeVisible();
   await page.setViewportSize({ width: 402, height: 874 });
-  const photo = page.getByRole("button", {
+  const photo = page.getByTestId("detail-spec-plate").getByRole("button", {
     name: "View synthetic-wardrobe-shirt.png",
     exact: true,
   });

@@ -36,7 +36,7 @@ struct EntityDetailView: View {
         let titled =
             content
             .fieldGuideScreen()
-            .navigationTitle(model?.row?.title ?? descriptor.singular)
+            .navigationTitle(descriptor.singular)
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -438,7 +438,13 @@ struct EntityDetailContent: View {
                     .pickerStyle(.menu)
                     .labelsHidden()
                     .accessibilityIdentifier("detail.record-view")
+                    .frame(minHeight: FieldGuideTokens.touchTarget)
                 }
+                .font(.subheadline)
+                .listRowInsets(
+                    EdgeInsets(
+                        top: 0, leading: FieldGuideTokens.Space.md,
+                        bottom: 0, trailing: FieldGuideTokens.Space.md))
             }
             if selectedSection == "overview", let journal = journalSection {
                 EntityJournalSectionView(model: journal) { onCreateRelation(journal) }
