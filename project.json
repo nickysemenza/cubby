@@ -111,7 +111,7 @@
       // output restoration, so an outer replay can never bypass them.
       "command": "nx run-many -t test --exclude=cubby-checks --output-style=static-failures-only",
       "cache": false,
-      "dependsOn": ["wasm"]
+      "dependsOn": ["wasm", "generate"]
     },
     "wasm": {
       // On CI, setup-node-with-deps (wasm: restore) already restored or built

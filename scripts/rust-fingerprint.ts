@@ -145,6 +145,11 @@ export const rustFingerprint = (
 // off so the run is self-contained; without node_modules the nx entry cannot
 // resolve, which is the "run pnpm install first" case.
 export const runNxTarget = (target: string, args: string[] = []) => {
+  // Inside an Nx task the enclosing graph owns this dependency (each target
+  // that runs tests or builds declares `wasm` and `generate` in dependsOn).
+  // Re-entering Nx from a task is refused as a recursive invocation, e.g. when
+  // knip loads vitest.config.ts during the `knip` target.
+  if (process.env.NX_TASK_TARGET_PROJECT !== undefined) return;
   let nx: string;
   try {
     nx = fileURLToPath(import.meta.resolve("nx/bin/nx.js"));
