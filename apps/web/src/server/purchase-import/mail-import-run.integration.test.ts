@@ -1,5 +1,6 @@
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { parseEntityId, runShortcode } from "@cubby/schemas/identifiers";
+import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -412,6 +413,7 @@ describe("mail research admission", () => {
       purpose: "mail_import",
       status: "running",
       endedAt: null,
+      coordinatorModel: coordinatorModelFor("mail_import"),
     });
     const [ledger] = await getDb(ctx.db)
       .select()

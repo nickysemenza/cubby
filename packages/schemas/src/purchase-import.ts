@@ -715,7 +715,12 @@ const preparedImportOrderInput = z
     evidenceChecksum: z.string().regex(/^[a-f0-9]{64}$/),
     extractionRevision: z.string().trim().min(1).max(200),
     extraction: importExtractionOutcome,
-    lineIds: z.array(stableImportItemId).max(500),
+    lineIds: z
+      .array(stableImportItemId)
+      .max(500)
+      .describe(
+        "One unique stable id per extraction.candidate.lines entry, in the same order. Put lineIds on this order beside extraction.",
+      ),
     primaryDocumentImageId: imageShortcode.nullable().default(null),
     screenshotImageId: imageShortcode.nullable().default(null),
   })
