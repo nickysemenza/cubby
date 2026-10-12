@@ -25,7 +25,10 @@ import {
 } from "~/server/entity-kernel/contracts";
 import { runEntityTimeline } from "~/server/entity-timeline";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { getConnectedRecords } from "~/server/repo/connected-records";
+import {
+  getConnectedRecords,
+  getConnectedRecordsPreview,
+} from "~/server/repo/connected-records";
 import { getEntityCounts } from "~/server/repo/dashboard";
 import { getEntityConnections } from "~/server/repo/entity-edge-source";
 import { getEntityGraph } from "~/server/repo/entity-graph";
@@ -95,6 +98,8 @@ export const entityGraphHandlers = implementOperationDomain(
     records: (context, input) => listEntityRecords(context.db, input),
     connectedRecords: (context, input) =>
       getConnectedRecords(context.db, input),
+    connectedRecordsPreview: (context, input) =>
+      getConnectedRecordsPreview(context.db, input),
     explore: (context, input) => getEntityGraphExplore(context.db, input),
     graph: (context, input) => getEntityGraph(context.db, input),
     graphPaths: (context, input) => getEntityGraphPaths(context.db, input),

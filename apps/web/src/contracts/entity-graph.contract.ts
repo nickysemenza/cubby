@@ -1,6 +1,8 @@
 import {
   connectedRecordsInputSchema,
   connectedRecordsOutputSchema,
+  connectedRecordsPreviewInputSchema,
+  connectedRecordsPreviewOutputSchema,
 } from "@cubby/schemas/connected-records";
 import {
   entityConnectionsInput,
@@ -42,6 +44,13 @@ export const entityGraphContract = defineContract("entity", {
     native: "Complete connection tables with record path evidence",
     input: connectedRecordsInputSchema,
     output: connectedRecordsOutputSchema,
+    cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
+  }),
+  connectedRecordsPreview: query({
+    mcp: { omit: "client_view" },
+    native: "Detail-page connected records, first rows of every view",
+    input: connectedRecordsPreviewInputSchema,
+    output: connectedRecordsPreviewOutputSchema,
     cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   explore: query({

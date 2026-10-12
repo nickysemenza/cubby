@@ -87,7 +87,7 @@ export interface DetailSection {
   placement: DetailPlacement;
   /** Supporting sections join Evidence unless an explicit workspace owns them. */
   overview?: boolean;
-  workspace?: "overview" | "work" | "evidence";
+  workspace?: "overview" | "work" | "evidence" | "relations";
   /** Exclude low-value/debug regions from the jump index. */
   includeInIndex?: boolean;
   /** Right-aligned header slot: a toolbar, action cluster, or rolled-up stat. */
@@ -651,7 +651,9 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   );
   validateDetailSectionIds(sections, relationship, activity);
   const groups = useMemo(() => {
-    const groupSections = (workspace: "overview" | "work" | "evidence") =>
+    const groupSections = (
+      workspace: "overview" | "work" | "evidence" | "relations",
+    ) =>
       sections.filter(
         (section) =>
           section.id !== RELATIONS_SECTION_ID &&
@@ -679,7 +681,10 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       {
         id: "detail-group-relations",
         title: "Relations",
-        sections: relationship.section ? [relationship.section] : [],
+        sections: [
+          ...groupSections("relations"),
+          ...(relationship.section ? [relationship.section] : []),
+        ],
       },
       {
         id: "detail-group-activity",

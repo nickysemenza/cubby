@@ -31,12 +31,29 @@ export const connectedRecordsOutputSchema = z.object({
   targetEntity: entitySchema,
   totalCount: z.number().int().nonnegative(),
   items: z.array(connectedRecordSchema),
-  /** Lengths declared by this view; row labels use witnessed path lengths. */
-  routeHopRange: z.object({
-    min: z.number().int().positive(),
-    max: z.number().int().positive(),
-  }),
 });
 export type ConnectedRecordsOutput = z.infer<
   typeof connectedRecordsOutputSchema
+>;
+
+export const connectedRecordsPreviewInputSchema = z.object({
+  source: entityGraphRootSchema,
+  /** Rows per view; each view also reports its complete count. */
+  limit: z.number().int().min(1).max(10).default(3),
+});
+export type ConnectedRecordsPreviewInput = z.input<
+  typeof connectedRecordsPreviewInputSchema
+>;
+
+/** Every curated connected view of one record in manifest order, first rows only. */
+export const connectedRecordsPreviewOutputSchema = z.object({
+  views: z.array(
+    connectedRecordsOutputSchema.extend({
+      viewKey: z.string(),
+      title: z.string(),
+    }),
+  ),
+});
+export type ConnectedRecordsPreviewOutput = z.infer<
+  typeof connectedRecordsPreviewOutputSchema
 >;

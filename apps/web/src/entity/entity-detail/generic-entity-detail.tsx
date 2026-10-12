@@ -83,7 +83,7 @@ import {
   EntityTimeline,
   type EntityTimelineOperations,
 } from "../timeline/entity-timeline";
-import { ConnectedRecordsTable } from "./connected-records-table";
+import { ConnectedRecordsSection } from "./connected-records-table";
 import { DetailActionProvider, DetailActionTarget } from "./detail-action-bar";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
@@ -607,21 +607,14 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const { images, documents } = detailFiles(entity, record, bag);
   const heroImages = detail.hero.images ? images : undefined;
   const sections = declaredSections(entity, record, bag, operations);
-  for (const view of connectedViews[entity]) {
+  if (connectedViews[entity].length > 0) {
     sections.push({
-      id: `connected-${view.key}`,
-      title: view.title,
-      workspace: "work",
+      id: "connected-records",
+      title: "Connected records",
+      workspace: "relations",
       icon: LinkIcon,
       placement: "primary",
-      content: (
-        <ConnectedRecordsTable
-          source={entity}
-          sourceId={bag.id}
-          viewKey={view.key}
-          target={view.target}
-        />
-      ),
+      content: <ConnectedRecordsSection source={entity} sourceId={bag.id} />,
     });
   }
 

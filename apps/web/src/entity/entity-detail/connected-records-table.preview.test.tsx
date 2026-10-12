@@ -72,14 +72,13 @@ it("contains long connection evidence inside a narrow relation column", async ()
   );
   const cell = getByTestId("connection-cell");
   const path = cell.querySelector("ol");
-  const truncated = cell.querySelector(".truncate");
-  if (!(path instanceof HTMLElement) || !(truncated instanceof HTMLElement))
+  if (!(path instanceof HTMLElement))
     throw new Error("missing connection evidence");
   expect(path.getBoundingClientRect().right).toBeLessThanOrEqual(
     cell.getBoundingClientRect().right + 1,
   );
-  expect(truncated.scrollWidth).toBeGreaterThan(truncated.clientWidth);
-  expect(getComputedStyle(truncated).textOverflow).toBe("ellipsis");
+  // Intermediate records read by kind; their long names stay in the title.
+  expect(path.textContent).toBe("Purchase→Product");
   // A second path is a toggle on the trail's own line, not a line below it.
   const toggle = cell.querySelector("button");
   if (!(toggle instanceof HTMLElement)) throw new Error("missing path toggle");

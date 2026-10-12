@@ -61,17 +61,21 @@ describe("record connection evidence", () => {
       />,
       { wrapper: harness.wrapper },
     );
-    expect(
-      screen.getAllByRole("link", { name: "Example seeds" })[0],
-    ).toHaveAttribute("href", "/products/PRD-SEED");
+    const product = screen.getAllByRole("link", { name: "Product" })[0];
+    expect(product).toHaveAttribute("href", "/products/PRD-SEED");
+    expect(product?.closest("[title]")).toHaveAttribute(
+      "title",
+      "Product: Example seeds",
+    );
     expect(screen.queryByText("Example order")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "+1 path" }));
-    expect(
-      screen.getByRole("link", { name: "Example expense" }),
-    ).toHaveAttribute("href", "/expenses/EXP-TEST");
+    expect(screen.getByRole("link", { name: "Expense" })).toHaveAttribute(
+      "href",
+      "/expenses/EXP-TEST",
+    );
   });
 
-  it("names a repeated label by its kind instead of repeating it", () => {
+  it("names every intermediate record by its kind", () => {
     render(
       <RecordPaths
         paths={[
@@ -93,9 +97,13 @@ describe("record connection evidence", () => {
       />,
       { wrapper: harness.wrapper },
     );
+    expect(screen.getByRole("link", { name: "Product" })).toHaveAttribute(
+      "href",
+      "/products/PRD-TEST",
+    );
     expect(
-      screen.getByRole("link", { name: "Example long product name" }),
-    ).toHaveAttribute("href", "/products/PRD-TEST");
+      screen.queryByText("Example long product name"),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Expense" })).toHaveAttribute(
       "href",
       "/expenses/EXP-TEST",

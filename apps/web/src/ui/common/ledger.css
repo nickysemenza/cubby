@@ -56,6 +56,10 @@
   grid-column: 2 / -1;
   grid-row: 3;
 }
+.ledger-row > [data-ledger-slot="group"] {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
 .ledger-row > [data-ledger-slot="detail"] {
   grid-column: 2 / -1;
   overflow-wrap: anywhere;

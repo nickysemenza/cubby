@@ -50,7 +50,14 @@ export function LedgerCell({
   ...props
 }: HTMLAttributes<HTMLElement> & {
   as?: "span" | "div" | "dt" | "dd";
-  slot: "leading" | "primary" | "secondary" | "trailing" | "actions" | "detail";
+  slot:
+    | "leading"
+    | "primary"
+    | "secondary"
+    | "trailing"
+    | "actions"
+    | "detail"
+    | "group";
 }) {
   return (
     <Component
