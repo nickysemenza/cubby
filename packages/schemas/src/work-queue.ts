@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { displayImagesField } from "./display-images";
 import { ledgerPartyShortcode } from "./identifiers";
-import { mcpPaginationFields } from "./pagination";
+import { createSortParamsSchema, mcpPaginationFields } from "./pagination";
 import { problemRowSchema } from "./problems";
 
 export const workQueueMemberSchema = z.object({
@@ -58,11 +58,26 @@ export const workQueueRowSchema = problemRowSchema
     { message: "Work must name a source record or a Problems diagnostic." },
   );
 
+export const workQueueSortableFields = [
+  "name",
+  "entity",
+  "kind",
+  "waitingFor",
+  "nextAction",
+  "source",
+] as const;
+
+export const workQueueSortSchema = createSortParamsSchema(
+  workQueueSortableFields,
+  "kind",
+);
+
 export const workQueuePageInput = z.object({
   ...mcpPaginationFields({ defaultPageSize: 25, maxPageSize: 100 }),
   query: z.string().max(500).optional(),
   kind: workQueueKindSchema.optional(),
   source: workQueueSourceSchema.optional(),
+  sort: workQueueSortSchema.optional(),
 });
 
 /** Household UI filters select routing metadata; they confer no source access. */
