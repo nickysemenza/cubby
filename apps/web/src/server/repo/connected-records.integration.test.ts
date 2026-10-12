@@ -1,5 +1,5 @@
 import { connectedViews } from "@cubby/schemas/connected-views";
-import { allEntities } from "@cubby/schemas/entity-manifest";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -36,10 +36,18 @@ describe("complete connected record tables", () => {
       }
       for (const section of entitySummary[source].detail.sections) {
         if (section.kind !== "relation") continue;
-        expect(
-          compiledConnectedRoutes(source, `relation:${section.relation}`)
-            .length,
-        ).toBeGreaterThan(0);
+        const relation = entityManifest[source].relationships.find(
+          (candidate) => candidate.key === section.relation,
+        );
+        // A derived relation is its list filter; it has no edge path.
+        const routes = compiledConnectedRoutes(
+          source,
+          `relation:${section.relation}`,
+        ).length;
+        expect({ relation: section.relation, compiles: routes > 0 }).toEqual({
+          relation: section.relation,
+          compiles: relation?.provenance.kind !== "derived",
+        });
       }
     }
   });

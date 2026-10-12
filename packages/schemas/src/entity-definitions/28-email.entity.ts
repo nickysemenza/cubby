@@ -344,10 +344,10 @@ export default defineEntity({
             },
           ],
         },
+        // The Email page's Purchase links ledger shows these with actions.
         display: {
           list: true,
           listHidden: true,
-          detail: true,
           renderer: { list: "purchase-links" },
         },
         validation: readOnly(z.array(emailPurchaseLink)),
