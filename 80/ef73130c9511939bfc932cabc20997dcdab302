@@ -1,0 +1,31 @@
+apps/web/src/features/work-queue/work-queue-page.tsx
+  s_47e8488e80f940::t_1883c2a94477a5 1-2,7,13-15,23,28,34-35,37-40,49-52,54-55,60,64-78,90-130,168-170,172-176,181,192-264,269,271,282,287-290,294-303,305-309,311-314,330,348
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_47e8488e80f940::t_42090f0095d974 35-36,39,1052-1106
+apps/web/src/server/repo/entity-display-image.ts
+  s_47e8488e80f940::t_31466b89a25143 474,477,500,513-520
+apps/web/src/server/repo/work-queue.ts
+  s_47e8488e80f940::t_4c9be8138e5dbe 1,39,341,377-387
+apps/web/src/ui/data-table/columnHelpers.tsx
+  s_47e8488e80f940::t_0b25e8af0fc353 436-439,471,476,489,493,501,506,528-530,550
+apps/web/tests/e2e/work-queue.spec.ts
+  s_47e8488e80f940::t_e181ce2fb11c65 3-9,22,160-227
+packages/schemas/src/work-queue.ts
+  s_47e8488e80f940::t_27a028b7e893f6 3,48-49,89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "80ef73130c9511939bfc932cabc20997dcdab302",
+  "prompts": {},
+  "sessions": {
+    "s_47e8488e80f940": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "25917b2c-6e6c-4bb4-9f67-0487df1850a0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
