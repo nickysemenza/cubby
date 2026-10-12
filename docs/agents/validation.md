@@ -69,6 +69,20 @@ Wait for a build runner's terminal success before starting a dependent prebuilt
 Worker or browser check. A yielded session is still running; a completed client
 bundle alone does not establish a finished Worker build and provenance stamp.
 
+## PR screenshots
+
+Screenshots are optional evidence, at the author's discretion: add them when a
+PR changes what a web screen looks like and an image says more than prose.
+Capture against the local E2E stack, whose seeded data is synthetic, never
+against production: the repository is public and attached images are too. Save
+`page.screenshot({ path })` files from a throwaway Playwright spec or the
+affected scenario, and delete the throwaway spec before committing. Reference
+each image in the body by its local path and pass the same path to
+`gh pr create --attach` or `gh pr edit --attach` (gh 2.102 has the flag; 2.96
+does not); the CLI uploads it and rewrites the reference. A before image (from
+`main` or a run before the first edit) helps when the change is a comparison.
+Do not open the images to check them: attaching a saved file costs no context.
+
 ## Commit, push, and merge
 
 Inspect CI logs and annotations before editing. Fix only change-caused failures;

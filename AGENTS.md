@@ -5,7 +5,7 @@
 - Make the requested in-scope change and choose the narrowest checks that
   verify its behavior. [Validation policy](docs/agents/validation.md) owns test
   choice and retention, failed-test read-back, subagent evidence, client
-  verification, and the merge gate.
+  verification, PR screenshots, and the merge gate.
 - Production migrations have one exclusive owner; establish that household data
   survives before pushing, then verify the schema afterward.
 - Update the doc that owns a behavior in the same change; docs agree with the
