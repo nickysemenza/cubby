@@ -471,10 +471,10 @@ async function resolveUniversalEntityDisplayImageLists(
 }
 
 /** Public shortcodes join durable identities inside the image query. */
-export async function resolvePublicEntityDisplayImages(
+export async function resolvePublicEntityDisplayImageLists(
   db: Database | DrizzleTransaction,
   refs: readonly PublicEntityRef[],
-): Promise<Map<string, ImageUrlSummary>> {
+): Promise<Map<string, DisplayImageSummary[]>> {
   const supported = [
     ...new Map(
       refs.flatMap((ref) => {
@@ -497,7 +497,7 @@ export async function resolvePublicEntityDisplayImages(
     ),
     sql`, `,
   );
-  const lists = await resolveDisplayImageListsFromSqlRefs(
+  return resolveDisplayImageListsFromSqlRefs(
     db,
     sql`input_refs("entityKind", "shortcode", "refKey") AS (VALUES ${values}),
         refs("entityKind", "entityId", "refKey") AS (
@@ -510,6 +510,14 @@ export async function resolvePublicEntityDisplayImages(
         )`,
     new Set(supported.map((ref) => ref.entityKind)),
   );
+}
+
+/** The cover of each public ref, for surfaces that show one thumbnail. */
+export async function resolvePublicEntityDisplayImages(
+  db: Database | DrizzleTransaction,
+  refs: readonly PublicEntityRef[],
+): Promise<Map<string, ImageUrlSummary>> {
+  const lists = await resolvePublicEntityDisplayImageLists(db, refs);
   return new Map(
     [...lists].flatMap(([key, images]) =>
       images[0]

@@ -1,4 +1,4 @@
-import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
@@ -36,6 +36,7 @@ import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { gapCondition } from "~/server/repo/data-quality/sql";
 import { getDb } from "~/server/repo/database-helpers";
 import { buildEmailWhere } from "~/server/repo/email";
+import { resolvePublicEntityDisplayImageLists } from "~/server/repo/entity-display-image";
 import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
 import { buildFinancialTransactionWhere } from "~/server/repo/financial-transaction";
 import { buildProductWhere } from "~/server/repo/product/crud";
@@ -337,7 +338,7 @@ export async function readWorkQueue(
       coalesce((SELECT jsonb_agg(jsonb_build_object('id', shortcode, 'name', name) ORDER BY name, shortcode) FROM members), '[]'::jsonb) AS members,
       coalesce((SELECT jsonb_agg(jsonb_build_object(
         'entity', entity, 'id', id, 'name', name, 'key', key, 'source', source, 'kind', kind,
-        'reason', reason, 'nextAction', "nextAction", 'waitingFor', CASE waiting_kind
+        'reason', reason, 'nextAction', "nextAction", 'displayImages', '[]'::jsonb, 'waitingFor', CASE waiting_kind
           WHEN ${either} THEN jsonb_build_object('kind', ${either}::text)
           WHEN ${members} THEN jsonb_build_object('kind', ${members}::text, 'members', (SELECT jsonb_agg(jsonb_build_object('id', member.shortcode, 'name', member.name) ORDER BY member.name, member.shortcode) FROM members member WHERE member.id = ANY(page.owners)))
           ELSE jsonb_build_object('kind', ${unresolved}::text, 'reason', 'Current private source ownership is not established.') END
@@ -373,6 +374,17 @@ export async function readWorkQueue(
       if (messages.length) item.reason = [...new Set(messages)].join("; ");
     }
   }
+  const images = await resolvePublicEntityDisplayImageLists(
+    db,
+    row.items.flatMap((item) =>
+      item.entity && item.id
+        ? [{ entityKind: item.entity, entityId: item.id }]
+        : [],
+    ),
+  );
+  for (const item of row.items)
+    if (item.entity && item.id)
+      item.displayImages = images.get(entityRefKey(item.entity, item.id)) ?? [];
   return workQueueOutSchema.parse({
     items: row.items,
     members: row.members,

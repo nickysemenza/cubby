@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { displayImagesField } from "./display-images";
 import { ledgerPartyShortcode } from "./identifiers";
 import { mcpPaginationFields } from "./pagination";
 import { problemRowSchema } from "./problems";
@@ -44,6 +45,8 @@ export const workQueueRowSchema = problemRowSchema
     reason: z.string(),
     nextAction: z.string(),
     waitingFor: workWaitingForSchema,
+    /** The source record's resolved thumbnails; empty for a Problems diagnostic. */
+    displayImages: displayImagesField,
   })
   .refine(
     (row) =>
@@ -83,4 +86,5 @@ export const workQueueOutSchema = z.object({
 
 export type WorkQueueRow = z.infer<typeof workQueueRowSchema>;
 export type WorkQueueMember = z.infer<typeof workQueueMemberSchema>;
+export type WorkQueueKind = z.infer<typeof workQueueKindSchema>;
 export type WorkWaitingFor = z.infer<typeof workWaitingForSchema>;
