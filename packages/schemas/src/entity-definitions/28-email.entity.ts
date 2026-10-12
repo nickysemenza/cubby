@@ -348,6 +348,8 @@ export default defineEntity({
         display: {
           list: true,
           listHidden: true,
+          // Native prints this text for the generic renderer.
+          labelPath: "purchaseLinks[].purchaseId",
           renderer: { list: "purchase-links" },
         },
         validation: readOnly(z.array(emailPurchaseLink)),
