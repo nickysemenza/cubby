@@ -1098,6 +1098,7 @@ struct EntityRowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .top)
         .contentShape(Rectangle())
         .accessibilityElement(children: .contain)

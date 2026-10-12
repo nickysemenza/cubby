@@ -592,6 +592,8 @@ struct ActivityRunRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .layoutPriority(1)
         }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
         .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
         .contentShape(Rectangle())
     }
