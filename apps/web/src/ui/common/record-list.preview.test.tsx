@@ -114,3 +114,21 @@ it("keeps loading, failure and emptiness distinct", () => {
   rerender(<RecordList empty="No synthetic records.">{[]}</RecordList>);
   expect(screen.getByText("No synthetic records.")).toBeVisible();
 });
+
+// Regression: without a leading column the empty first track still took a
+// column gap, indenting evidence and detail lines past their identity.
+it("starts evidence and detail under identity when no row has a leading cell", async () => {
+  await page.viewport(390, 844);
+  render(
+    <RecordList>
+      <RecordRow
+        primary={<span data-testid="identity">Synthetic gap</span>}
+        secondary={<span data-testid="evidence">Missing a weight</span>}
+        detail={<span data-testid="detail">Add a unit mapping</span>}
+      />
+    </RecordList>,
+  );
+  const identity = rect("identity").left;
+  expect(Math.abs(rect("evidence").left - identity)).toBeLessThanOrEqual(1);
+  expect(Math.abs(rect("detail").left - identity)).toBeLessThanOrEqual(1);
+});

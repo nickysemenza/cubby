@@ -2,6 +2,7 @@ import { humanize } from "@cubby/shared";
 import { type ComponentProps, useMemo } from "react";
 
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
@@ -159,65 +160,76 @@ export function DependencyGraphViewer({
         <summary className="cursor-pointer text-sm font-medium">
           Record and relationship list ({graph.nodes.length})
         </summary>
-        <ul className="divide-y text-sm">
-          {graph.nodes.map((node) => (
-            <li key={node.id} className="py-2">
-              {node.href == null ? (
-                <span className="font-medium">{node.name}</span>
-              ) : (
-                <a className="text-primary underline" href={node.href}>
-                  {node.name}
-                </a>
-              )}{" "}
-              <span className="text-muted-foreground">
-                {node.id}
-                {(node.metadata ?? []).length > 0
-                  ? ` · ${(node.metadata ?? []).join(" · ")}`
-                  : ""}
-                {node.completed ? " · Completed" : ""}
-                {node.overdue ? " · Overdue" : ""}
-                {node.external ? " · Outside scope" : ""}
-                {graph.cycleIds.includes(node.id) ? " · Cycle" : ""}
-              </span>
-              {onSelectNode && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="ml-2"
-                  onClick={() => onSelectNode(node)}
-                >
-                  Explore {node.name}
-                </Button>
-              )}
-              <ul>
-                {graph.edges
-                  .filter((edge) => edge.source === node.id)
-                  .map((edge) => (
-                    <li
-                      key={`${edge.kind}-${edge.id ?? edge.relationshipKey ?? edge.key ?? edge.label ?? ""}-${edge.target}`}
-                      className="text-muted-foreground"
+        <RecordList aria-label="Records and relationships">
+          {graph.nodes.map((node) => {
+            const outgoing = graph.edges.filter(
+              (edge) => edge.source === node.id,
+            );
+            return (
+              <RecordRow
+                key={node.id}
+                primary={
+                  node.href == null ? (
+                    <span className="font-medium">{node.name}</span>
+                  ) : (
+                    <a className="text-primary underline" href={node.href}>
+                      {node.name}
+                    </a>
+                  )
+                }
+                secondary={[
+                  node.id,
+                  ...(node.metadata ?? []),
+                  node.completed ? "Completed" : null,
+                  node.overdue ? "Overdue" : null,
+                  node.external ? "Outside scope" : null,
+                  graph.cycleIds.includes(node.id) ? "Cycle" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                actions={
+                  onSelectNode && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onSelectNode(node)}
                     >
-                      {edge.kind === "hierarchy"
-                        ? "Contains"
-                        : (edge.label ?? "Blocks")}
-                      :{" "}
-                      {graph.nodes.find((target) => target.id === edge.target)
-                        ?.name ?? edge.target}
-                      {onSelectEdge && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onSelectEdge(edge)}
+                      Explore {node.name}
+                    </Button>
+                  )
+                }
+                detail={
+                  outgoing.length > 0 ? (
+                    <ul className="text-xs/5 text-muted-foreground">
+                      {outgoing.map((edge) => (
+                        <li
+                          key={`${edge.kind}-${edge.id ?? edge.relationshipKey ?? edge.key ?? edge.label ?? ""}-${edge.target}`}
                         >
-                          Inspect connection
-                        </Button>
-                      )}
-                    </li>
-                  ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
+                          {edge.kind === "hierarchy"
+                            ? "Contains"
+                            : (edge.label ?? "Blocks")}
+                          :{" "}
+                          {graph.nodes.find(
+                            (target) => target.id === edge.target,
+                          )?.name ?? edge.target}
+                          {onSelectEdge && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onSelectEdge(edge)}
+                            >
+                              Inspect connection
+                            </Button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null
+                }
+              />
+            );
+          })}
+        </RecordList>
       </details>
     </Stack>
   );

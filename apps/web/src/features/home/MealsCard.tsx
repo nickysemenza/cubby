@@ -8,6 +8,7 @@ import { useId } from "react";
 import { formatMealCost, mealListLabel } from "~/app/meals/meal-format";
 import { mealKindIcon, mealTypeIcon } from "~/app/meals/meal-options";
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
@@ -88,50 +89,60 @@ export function TodayMeals({
               Retry
             </Button>
           </div>
-        ) : meals.length === 0 ? (
-          <p className="min-h-12 content-center text-sm text-muted-foreground">
-            Nothing planned this week.
-          </p>
         ) : (
-          meals.map((meal) => {
-            const date = parseISO(meal.date);
-            const isToday = isSameDay(date, today);
-            const mealLabel = mealListLabel(meal);
-            const SlotIcon = mealTypeIcon(meal.mealType);
-            const KindIcon = mealKindIcon(meal.mealKind);
-            return (
-              <Link
-                key={meal.id}
-                to="/meals/$shortcode"
-                params={{ shortcode: meal.id }}
-                className="flex min-h-11 min-w-0 items-center justify-between gap-2 border-b border-border py-1 text-sm last:border-b-0 hover:bg-muted/50 sm:min-h-0 sm:py-0 sm:pb-1"
-              >
-                <Row align="center" gap="xs" className="min-w-0">
-                  <span className="shrink-0 font-mono text-2xs text-slate uppercase tabular-nums">
-                    {isToday ? "Today" : format(date, "EEE d")}
-                  </span>
-                  <SlotIcon
-                    className="size-3.5 shrink-0 text-slate"
-                    aria-hidden
-                  />
-                  <span className="truncate" title={mealLabel}>
-                    {mealLabel}
-                  </span>
-                </Row>
-                <Row align="center" gap="xs" className="shrink-0">
-                  {KindIcon && (
-                    <KindIcon
-                      className="size-3.5 text-slate"
-                      aria-label={MEAL_KIND_LABELS[meal.mealKind]}
-                    />
-                  )}
-                  <span className="text-muted-foreground tabular-nums">
-                    {formatMealCost(meal.totals)}
-                  </span>
-                </Row>
-              </Link>
-            );
-          })
+          <RecordList
+            aria-label="Meals ahead"
+            empty={
+              <span className="block min-h-12 content-center text-sm">
+                Nothing planned this week.
+              </span>
+            }
+          >
+            {meals.map((meal) => {
+              const date = parseISO(meal.date);
+              const isToday = isSameDay(date, today);
+              const mealLabel = mealListLabel(meal);
+              const SlotIcon = mealTypeIcon(meal.mealType);
+              const KindIcon = mealKindIcon(meal.mealKind);
+              return (
+                <RecordRow
+                  key={meal.id}
+                  leading={
+                    <Row align="center" gap="xs">
+                      <span className="font-mono text-2xs text-slate uppercase tabular-nums">
+                        {isToday ? "Today" : format(date, "EEE d")}
+                      </span>
+                      <SlotIcon
+                        className="size-3.5 shrink-0 text-slate"
+                        aria-hidden
+                      />
+                    </Row>
+                  }
+                  primary={
+                    <Link
+                      to="/meals/$shortcode"
+                      params={{ shortcode: meal.id }}
+                      title={mealLabel}
+                      className="flex min-h-11 min-w-0 items-center hover:underline sm:min-h-0"
+                    >
+                      <span className="truncate">{mealLabel}</span>
+                    </Link>
+                  }
+                  trailing={
+                    <Row align="center" gap="xs">
+                      {KindIcon && (
+                        <KindIcon
+                          className="size-3.5 text-slate"
+                          aria-label={MEAL_KIND_LABELS[meal.mealKind]}
+                        />
+                      )}
+                      <span>{formatMealCost(meal.totals)}</span>
+                    </Row>
+                  }
+                />
+              );
+            })}
+          </RecordList>
         )}
       </Stack>
     </section>

@@ -19,6 +19,7 @@ import { useCallback, useEffect, useId, useMemo } from "react";
 import { EntityCover } from "~/entity/components/entity-cover";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
 import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import {
   createImageColumn,
@@ -95,16 +96,21 @@ function SmartMatchEvidence({ matches }: { matches: SmartCollectionMatch[] }) {
           <PopoverHeader className="border-b border-border p-2">
             <PopoverTitle>Why this Product is included</PopoverTitle>
           </PopoverHeader>
-          <ul className="max-h-72 divide-y divide-border overflow-y-auto">
-            {matches.map((match) => (
-              <li key={`${match.ruleIndex}:${match.kind}`} className="p-2">
-                <p className="font-medium">{formatSmartMatch(match)}</p>
-                <p className="mt-0.5 text-2xs text-muted-foreground">
-                  Rule {match.ruleIndex + 1}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <div className="max-h-72 overflow-y-auto px-2 py-1">
+            <RecordList aria-label="Matching rules">
+              {matches.map((match) => (
+                <RecordRow
+                  key={`${match.ruleIndex}:${match.kind}`}
+                  primary={
+                    <span className="font-medium">
+                      {formatSmartMatch(match)}
+                    </span>
+                  }
+                  trailing={`Rule ${match.ruleIndex + 1}`}
+                />
+              ))}
+            </RecordList>
+          </div>
         </PopoverContent>
       </Popover>
     </div>

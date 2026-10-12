@@ -9,10 +9,10 @@ import {
   type RecipeTotalsGap,
 } from "~/lib/recipe-totals-gaps";
 import { cn } from "~/lib/utils";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { buttonVariants } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
 import {
   Popover,
   PopoverContent,
@@ -83,23 +83,16 @@ function TotalsGapList({
   currentRecipeShortcode: string;
 }) {
   return (
-    <ul className="divide-y divide-border/60">
+    <RecordList aria-label="Totals gaps">
       {gaps.map((gap) => {
         const { lead, cta } = suggestionFor(gap);
         const missing = MISSING_CHIPS.filter((c) => gap.missing[c.key]);
         return (
-          <Row
-            as="li"
-            align="center"
-            justify="between"
-            wrap
-            gap="sm"
+          <RecordRow
             key={gap.source === "ingredient" ? gap.ingredientId : gap.rowId}
-            className="py-2"
-          >
-            <div className="min-w-0 flex-1">
+            primary={
               <Row align="center" wrap gap="sm">
-                <span className="text-sm font-medium">{gap.name}</span>
+                <span className="font-medium">{gap.name}</span>
                 {missing.map((c) => (
                   <Badge
                     key={c.key}
@@ -110,19 +103,20 @@ function TotalsGapList({
                   </Badge>
                 ))}
               </Row>
-              <Description as="div" size="2xs" className="leading-snug">
-                {lead}
-              </Description>
-            </div>
-            <TotalsGapAction
-              gap={gap}
-              currentRecipeShortcode={currentRecipeShortcode}
-              cta={cta}
-            />
-          </Row>
+            }
+            secondary={lead}
+            clip={false}
+            actions={
+              <TotalsGapAction
+                gap={gap}
+                currentRecipeShortcode={currentRecipeShortcode}
+                cta={cta}
+              />
+            }
+          />
         );
       })}
-    </ul>
+    </RecordList>
   );
 }
 

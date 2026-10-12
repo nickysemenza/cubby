@@ -95,3 +95,22 @@
     min-height: 2.75rem;
   }
 }
+
+/* Without a leading cell the empty first track still owns a column gap;
+   evidence and detail start under identity instead. */
+.ledger[data-record-list]:not(
+    :has(> .ledger-row > [data-ledger-slot="leading"])
+  )
+  > .ledger-row
+  > [data-ledger-slot="detail"] {
+  grid-column: 1 / -1;
+}
+@container ledger (width < 32rem) {
+  .ledger[data-record-list]:not(
+      :has(> .ledger-row > [data-ledger-slot="leading"])
+    )
+    > .ledger-row
+    > [data-ledger-slot="secondary"] {
+    grid-column: 1 / -1;
+  }
+}

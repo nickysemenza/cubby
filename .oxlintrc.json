@@ -483,9 +483,11 @@
     },
     {
       "files": [
+        "apps/web/src/app/collections/collection-assignment-matrix.tsx",
         "apps/web/src/app/meals/meal-nutrition-summary.tsx",
         "apps/web/src/features/recipes/RecipeMagazineView.tsx",
-        "apps/web/src/features/recipes/recipe-form/recipe-live-preview.tsx"
+        "apps/web/src/features/recipes/recipe-form/recipe-live-preview.tsx",
+        "apps/web/src/ui/navigation/application-directory.tsx"
       ],
       "rules": {
         "cubby/no-hand-rolled-record-list": "off"
