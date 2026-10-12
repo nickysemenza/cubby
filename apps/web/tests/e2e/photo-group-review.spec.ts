@@ -89,11 +89,15 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     actions.getByRole("button", { name: "Start grouping" }),
   ).toBeEnabled();
-  await page.getByRole("tab", { name: "Relations", exact: true }).click();
+  await page
+    .getByRole("heading", { level: 2, name: "Relations", exact: true })
+    .scrollIntoViewIfNeeded();
   await expect(
     actions.getByRole("button", { name: "Start grouping" }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Work", exact: true }).click();
+  await page
+    .getByRole("heading", { level: 2, name: "Work", exact: true })
+    .scrollIntoViewIfNeeded();
   if (recordingVideo) await page.waitForTimeout(1_500);
   const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
     data: { runId: seed.runId, groups: seed.groups },

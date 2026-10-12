@@ -62,7 +62,8 @@ struct RecordRowView: View {
                 .textSelection(.enabled)
         }
         if let label = row.detailLabel, let text = row.detailText {
-            DisclosureGroup(label) {
+            VStack(alignment: .leading) {
+                Text(label).font(.caption.weight(.medium))
                 Text(text).font(.caption.monospaced()).textSelection(.enabled)
             }
             .font(.caption)
@@ -374,12 +375,17 @@ struct RecordsBlockView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            if let title = records.title, !records.rows.isEmpty { Eyebrow(title) }
+            if let title = records.title {
+                HStack {
+                    Eyebrow(title).foregroundStyle(records.rows.isEmpty ? .secondary : .primary)
+                    if records.rows.isEmpty { Text("Empty").font(.caption).foregroundStyle(.secondary) }
+                }
+            }
             ForEach(plans(records.actions, scope: .section), id: \.0) { id, plan in
                 actionButton(id, plan, itemID: nil)
             }
-            if records.rows.isEmpty, !records.empty.isEmpty {
-                Text(records.empty).foregroundStyle(.secondary)
+            if records.rows.isEmpty {
+                Text(records.empty.isEmpty ? "No items" : records.empty).foregroundStyle(.secondary)
             }
             if records.filmstrip { captureFilmstrip }
             ForEach(records.filmstrip ? [] : records.rows) { row in

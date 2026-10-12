@@ -649,6 +649,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     sections.push({
       id: "images",
       title: "Images",
+      empty: images.length === 0,
       icon: ImageIcon,
       placement: "supporting",
       content: <EntityImageList images={images} />,
@@ -664,10 +665,11 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     });
   }
   const sources = recordSources(record);
-  if (sources.length > 0) {
+  {
     sections.push({
       id: "sources",
       title: "Sources",
+      empty: sources.length === 0,
       icon: QuotesIcon,
       placement: "supporting",
       content: <EntitySourcesSection entity={entity} sources={sources} />,

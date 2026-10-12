@@ -26,11 +26,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   const crop = await seedPlantPrerequisite(page, cropName);
   const growingBed = await seedLocationPrerequisite(page, growingBedName);
   const emptyShelf = await seedLocationPrerequisite(page, emptyShelfName);
-  // `hideWhenEmpty` gates the create button along with the rest of the
-  // section (`entity-relation-table.tsx`'s `useSectionVisible`), so a
-  // location's very first planting can't come from that button — seed one
-  // directly and use it to open the section, then create a second one
-  // through the real generic dialog.
+  // Seed an existing planting and create another through the generic dialog.
   const existingPlanting = await seedPlantingPrerequisite(page, {
     plantId: crop.id,
     locationId: growingBed.id,
@@ -43,20 +39,25 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   const plantingsSection = page.locator("#plantings");
   const gardenEntriesSection = page.locator("#garden-entries");
 
-  // A location with no plantings and no garden entries shows neither
-  // section — no header, no create button, nothing to indicate they exist.
-  // `hideWhenEmpty` hides through the `hidden` attribute rather than an
-  // unmount (`detail-page.tsx`), so the section stays in the DOM but is not
-  // visible — not merely absent.
   await gotoAuthenticatedPage(page, `/locations/${emptyShelf.id}#work`);
-  await expect(plantingsSection).not.toBeVisible();
-  await expect(gardenEntriesSection).not.toBeVisible();
+  await expect(plantingsSection).toBeVisible();
+  await expect(
+    plantingsSection.getByText("Empty", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    plantingsSection.getByRole("button", { name: "New planting", exact: true }),
+  ).toBeVisible();
+  await expect(gardenEntriesSection).toBeVisible();
+  await expect(
+    gardenEntriesSection.getByText("Empty", { exact: true }),
+  ).toBeVisible();
 
-  // The growing bed already has one planting, so its Plantings section is
-  // visible; its Garden entries section is still empty and hidden.
   await gotoAuthenticatedPage(page, `/locations/${growingBed.id}#work`);
   await expect(plantingsSection).toBeVisible();
-  await expect(gardenEntriesSection).not.toBeVisible();
+  await expect(gardenEntriesSection).toBeVisible();
+  await expect(
+    gardenEntriesSection.getByText("Empty", { exact: true }),
+  ).toBeVisible();
 
   // Create a second planting through the section's own generic create
   // dialog — seeded with this location via the direct `locationId` create
@@ -108,7 +109,9 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
 
   // The Journal relation section's create button opens the generic garden
   // entry dialog seeded with this planting's id.
-  await page.getByRole("tab", { name: "Work", exact: true }).click();
+  await page
+    .getByRole("heading", { level: 2, name: "Work", exact: true })
+    .scrollIntoViewIfNeeded();
   await page.getByRole("button", { name: "Log entry...", exact: true }).click();
   dialog = page.getByRole("dialog");
   await expect(dialog.getByText("New Garden Entry")).toBeVisible();
@@ -139,8 +142,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   ).toBeVisible();
 
   // The entry it just logged (`locationId: growingBed`) is a garden entry
-  // for the bed too, so the bed's Garden entries section now shows it —
-  // `hideWhenEmpty` flips back once its first page is non-empty.
+  // for the bed too, so its Garden entries section now shows the entry.
   await gotoAuthenticatedPage(page, `/locations/${growingBed.id}#work`);
   await expect(gardenEntriesSection).toBeVisible();
   const gardenEntries = page.getByRole("table", { name: "Garden entries" });
@@ -160,11 +162,8 @@ test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred inter
   const bedName = `e2e seedling bed ${suffix}`;
   const crop = await seedPlantPrerequisite(page, cropName);
   const bed = await seedLocationPrerequisite(page, bedName);
-  // `hideWhenEmpty` gates the section's own create button on its first row
-  // (see the seeding note atop the first test in this file) — this throwaway
-  // planting has neither `sowedOn` nor `transplantedOn`, so the lifecycle
-  // computation drops it from the timeline entirely (no start, no markers)
-  // and it never becomes a second row to disambiguate from.
+  // This planting has no lifecycle start, so it contributes no interval
+  // and cannot become a second timeline row to disambiguate from.
   await seedPlantingPrerequisite(page, {
     plantId: crop.id,
     locationId: bed.id,

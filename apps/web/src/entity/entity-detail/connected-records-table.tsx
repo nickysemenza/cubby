@@ -14,10 +14,10 @@ import { cn } from "~/lib/utils";
 import { Button } from "~/ui/primitives/button";
 
 import {
+  useContinuousDetail,
   useSectionCount,
-  useSectionIndexPending,
-  useSectionVisible,
-} from "../../ui/data-table/detail-page";
+  useSectionEmpty,
+} from "../../ui/data-table/detail-section-state";
 import {
   relationshipMovementSource,
   RelationshipMovementBadges,
@@ -239,6 +239,7 @@ export function ConnectedRecordsTable({
     target,
     viewKey.startsWith("relation:") ? viewKey.slice("relation:".length) : "",
   );
+  const continuous = useContinuousDetail();
   const [openAll, setOpenAll] = useState(initialOpenAll);
   const [page, setPage] = useState(0);
   const query = useQuery(
@@ -250,14 +251,7 @@ export function ConnectedRecordsTable({
     }),
   );
   useSectionCount(query.data?.totalCount);
-  useSectionVisible(
-    !hideWhenEmpty ||
-      query.isPending ||
-      query.isError ||
-      (query.data?.totalCount ?? 0) > 0,
-  );
-  // An index entry that appears, then vanishes when empty, shifts the rest.
-  useSectionIndexPending(hideWhenEmpty && query.isPending);
+  useSectionEmpty(query.isSuccess && query.data.totalCount === 0);
   if (query.isPending)
     return (
       <p className="text-sm text-muted-foreground">Loading connections…</p>
@@ -270,7 +264,7 @@ export function ConnectedRecordsTable({
     );
   const { items, totalCount, routeHopRange } = query.data;
   if (totalCount === 0)
-    return hideWhenEmpty ? null : (
+    return hideWhenEmpty && !continuous ? null : (
       <p className="text-sm text-muted-foreground">No connected records.</p>
     );
   return (

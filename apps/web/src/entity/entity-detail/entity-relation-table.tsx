@@ -48,10 +48,9 @@ import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Button } from "~/ui/primitives/button";
 
 import {
-  useSectionCollapsed,
   useSectionCount,
-  useSectionVisible,
-} from "../../ui/data-table/detail-page";
+  useSectionEmpty,
+} from "../../ui/data-table/detail-section-state";
 import { ListWorkbench } from "../../ui/data-table/ListWorkbench";
 import {
   createCubbyColumnHelper,
@@ -96,9 +95,9 @@ export interface RelationSectionPlan {
   columns: readonly string[] | null;
   sort: { field: string; direction: "asc" | "desc" };
   limit: number | null;
-  /** Skip the whole section, on both platforms, when its first page is empty. */
+  /** Historical manifest metadata; full detail sections remain visible. */
   hideWhenEmpty: boolean;
-  /** Keep the header but fold the body away when the first page is empty. */
+  /** Historical manifest metadata; full detail bodies remain open. */
   collapseWhenEmpty: boolean;
 }
 
@@ -318,46 +317,18 @@ export function RelationSectionActions({
   );
 }
 
-/** No data yet, no error: the SectionStates empty vocabulary — a sentence of
- * state, a sentence of consequence, one action. The journal variant keeps its
- * own single-line `emptyLabel` instead (it already leads with "Log entry"). */
+/** The section header owns creation; an empty body keeps one compact state message. */
 function RelationEmptyState({
-  plan,
-  recordId,
   pluralLabel,
-  singular,
   emptyLabel,
 }: {
-  plan: RelationSectionPlan;
-  recordId: string;
   pluralLabel: string;
-  singular: string;
   emptyLabel: string | undefined;
 }) {
-  const { setCreating, dialog } = useRelationCreateDialog(plan, recordId);
-  if (emptyLabel) {
-    return <p className="text-xs text-muted-foreground">{emptyLabel}</p>;
-  }
-  const lowerPlural = pluralLabel.toLocaleLowerCase();
   return (
-    <div className="flex flex-col items-start gap-1.5 py-2">
-      <p className="text-sm text-foreground">No {lowerPlural} yet.</p>
-      <p className="max-w-[40ch] text-xs text-muted-foreground">
-        Add one and it appears here and on the {lowerPlural} list.
-      </p>
-      {plan.seed !== null ? (
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-1"
-          onClick={() => setCreating(true)}
-        >
-          <PlusIcon />
-          New {singular.toLocaleLowerCase()}
-        </Button>
-      ) : null}
-      {dialog}
-    </div>
+    <p className="text-sm text-muted-foreground">
+      {emptyLabel ?? `No ${pluralLabel.toLocaleLowerCase()} yet.`}
+    </p>
   );
 }
 
@@ -638,9 +609,7 @@ function LiveEntityRelationTable({
   // empty — never mid-fetch, and never on an error (which leaves it
   // `undefined` too since the query never completes with data).
   const resolvedEmpty = !list.workbench.error && list.totalCount === 0;
-  useSectionVisible(!(plan.hideWhenEmpty && resolvedEmpty));
-  useSectionCollapsed(plan.collapseWhenEmpty && resolvedEmpty);
-  const { singular } = entitySummary[target];
+  useSectionEmpty(resolvedEmpty);
   const { pluralLabel } = entities[target];
 
   if (list.workbench.error) {
@@ -664,13 +633,7 @@ function LiveEntityRelationTable({
 
   if (list.totalCount === 0) {
     return (
-      <RelationEmptyState
-        plan={plan}
-        recordId={recordId}
-        pluralLabel={pluralLabel}
-        singular={singular}
-        emptyLabel={emptyLabel}
-      />
+      <RelationEmptyState pluralLabel={pluralLabel} emptyLabel={emptyLabel} />
     );
   }
 

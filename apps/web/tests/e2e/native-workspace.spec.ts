@@ -113,7 +113,7 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
     "Evidence",
   );
   await expect(
-    page.getByRole("tab", { name: "Overview", exact: true }),
+    page.getByRole("heading", { level: 2, name: "Overview", exact: true }),
   ).toHaveCount(0);
   await expect(page.locator('[data-app-shell="authenticated"]')).toHaveCount(0);
   await expect
@@ -191,9 +191,10 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
-    page.getByRole("tab", { name: "Work", exact: true }),
+    page.getByRole("heading", { level: 2, name: "Work", exact: true }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Work", exact: true }).click();
+  await page.getByRole("button", { name: /^Jump to:/ }).click();
+  await page.getByRole("menuitem", { name: "Work", exact: true }).click();
   await expect(page).toHaveURL(/#work$/u);
   await expect
     .poll(() =>

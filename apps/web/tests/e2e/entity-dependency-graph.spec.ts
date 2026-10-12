@@ -207,7 +207,9 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await expect(page).toHaveURL((url) => !url.searchParams.has("destination"));
 
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
-  await page.getByRole("tab", { name: "Relations", exact: true }).click();
+  await page
+    .getByRole("heading", { level: 2, name: "Relations", exact: true })
+    .scrollIntoViewIfNeeded();
   await page.getByRole("button", { name: "Graph view", exact: true }).click();
   await expect(
     page.getByRole("link", { name: "Open graph", exact: true }),

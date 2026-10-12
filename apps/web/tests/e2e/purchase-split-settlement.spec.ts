@@ -105,14 +105,18 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
       exact: true,
     }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Relations", exact: true }).click();
+  await page
+    .getByRole("heading", { level: 2, name: "Relations", exact: true })
+    .scrollIntoViewIfNeeded();
   await expect(
     actions.getByRole("button", {
       name: "Match statement activity",
       exact: true,
     }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Overview", exact: true }).click();
+  await page
+    .getByRole("heading", { level: 2, name: "Overview", exact: true })
+    .scrollIntoViewIfNeeded();
   const advisoryResponse = page.waitForResponse((response) => {
     return dispatchesOperation(
       response.request(),

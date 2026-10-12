@@ -363,7 +363,6 @@ struct EntityDetailContent: View {
     @Environment(\.developerOverlays) private var developerOverlays
     @State private var timeline: EntityTimelineOut?
     @State private var timelineError: String?
-    @State private var selectedSection = "overview"
     @State private var reviewedRelationship: RelationshipRecommendationReview?
     @State private var reportBatches = ReportBatchStore()
 
@@ -429,33 +428,13 @@ struct EntityDetailContent: View {
                     }
                 }
             }
-            if presentation.detailSections.contains(where: { !$0.overview }) {
-                LabeledContent("Record view") {
-                    Picker("Record view", selection: $selectedSection) {
-                        Text("Overview").tag("overview")
-                        ForEach(presentation.detailSections.filter { !$0.overview }) { section in
-                            Text(section.title ?? section.id).tag(section.id)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .accessibilityIdentifier("detail.record-view")
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
-                }
-                .font(.subheadline)
-                .listRowInsets(
-                    EdgeInsets(
-                        top: 0, leading: FieldGuideTokens.Space.md,
-                        bottom: 0, trailing: FieldGuideTokens.Space.md))
-            }
-            if selectedSection == "overview", let journal = journalSection {
+            if let journal = journalSection {
                 EntityJournalSectionView(model: journal) { onCreateRelation(journal) }
+                    .detailContentsAnchor(journal.id)
             }
             ForEach(presentation.detailSections) { section in
-                if section.id != journalSection?.id,
-                    (selectedSection == "overview" ? section.overview : section.id == selectedSection)
-                {
-                    declared(section)
+                if section.id != journalSection?.id {
+                    declared(section).detailContentsAnchor(section.id)
                 }
             }
             if hasUnsupportedPresentation {
@@ -465,56 +444,65 @@ struct EntityDetailContent: View {
                     Link("Open on web", destination: appModel.webURL(for: descriptor.key, id: row.id))
                 }
             }
-            if selectedSection == "overview" {
-                ForEach(connectedSections) { section in
-                    ConnectedSectionView(model: section)
-                }
-                if let physicalConnections {
-                    Section("Physical connections") {
-                        if physicalConnections.groups.isEmpty {
-                            Text("No physical connections").foregroundStyle(.secondary)
-                        }
-                        ForEach(Array(physicalConnections.groups.enumerated()), id: \.offset) { indexed in
-                            let group = indexed.element
-                            DisclosureGroup("\(group.label) · \(group.count)") {
-                                ForEach(group.items, id: \.id) { item in
-                                    if let key = EntityKey(rawValue: item.kind.rawValue) {
-                                        NavigationLink(
-                                            value: Route.entityDetail(key, id: item.id)
-                                        ) {
-                                            Text(item.name ?? item.id)
-                                        }
-                                    } else {
+            ForEach(connectedSections) { section in
+                ConnectedSectionView(model: section).detailContentsAnchor(section.id)
+            }
+            if let physicalConnections {
+                ContinuousDetailSection(title: "Physical connections") {
+                    if physicalConnections.groups.isEmpty {
+                        Text("No physical connections").foregroundStyle(.secondary)
+                            .preference(key: DetailSectionEmpty.self, value: true)
+                    }
+                    ForEach(Array(physicalConnections.groups.enumerated()), id: \.offset) { indexed in
+                        let group = indexed.element
+                        VStack(alignment: .leading) {
+                            Text("\(group.label) · \(group.count)").font(.subheadline)
+                            ForEach(group.items, id: \.id) { item in
+                                if let key = EntityKey(rawValue: item.kind.rawValue) {
+                                    NavigationLink(
+                                        value: Route.entityDetail(key, id: item.id)
+                                    ) {
                                         Text(item.name ?? item.id)
                                     }
+                                } else {
+                                    Text(item.name ?? item.id)
                                 }
                             }
                         }
                     }
-                } else if let physicalError {
-                    Section("Physical connections") { Text(physicalError).foregroundStyle(.secondary) }
-                }
-                if let relationshipsModel {
-                    Section("Relationships") {
-                        EntityRelationshipsSection(
-                            model: relationshipsModel, onAccepted: onRelationshipAccepted)
-                    }
-                }
-                let sources = row.sources
-                if !sources.isEmpty {
-                    Section("Sources") {
-                        ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
-                            EntitySourceRow(
-                                label: source.fieldPath.map { descriptor.field($0)?.label ?? $0 } ?? "Record",
-                                supportsCurrentValue: source.fieldPath == nil
-                                    ? nil : source.supportsCurrentValue,
-                                quote: source.quote, selectedVariant: source.selectedVariant, url: source.url,
-                                seenAt: source.observedAt ?? source.createdAt, runID: source.recorder.runId)
-                        }
-                    }
-                }
-                Section { RawRecordDisclosure(raw: row.raw) }
+                }.detailContentsAnchor("physical-connections")
+            } else if let physicalError {
+                ContinuousDetailSection(title: "Physical connections") {
+                    Text(physicalError).foregroundStyle(.secondary)
+                }.detailContentsAnchor("physical-connections")
+            } else {
+                ContinuousDetailSection(title: "Physical connections") {
+                    LoadingIndicator(label: "Loading physical connections")
+                }.detailContentsAnchor("physical-connections")
             }
+            if let relationshipsModel {
+                Section("Relationships") {
+                    EntityRelationshipsSection(
+                        model: relationshipsModel, onAccepted: onRelationshipAccepted)
+                }.detailContentsAnchor("relationships")
+            }
+            let sources = row.sources
+            ContinuousDetailSection(title: "Sources") {
+                if sources.isEmpty {
+                    Text("No sources").foregroundStyle(.secondary)
+                        .preference(key: DetailSectionEmpty.self, value: true)
+                }
+                ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
+                    EntitySourceRow(
+                        label: source.fieldPath.map { descriptor.field($0)?.label ?? $0 } ?? "Record",
+                        supportsCurrentValue: source.fieldPath == nil
+                            ? nil : source.supportsCurrentValue,
+                        quote: source.quote, selectedVariant: source.selectedVariant, url: source.url,
+                        seenAt: source.observedAt ?? source.createdAt, runID: source.recorder.runId)
+                }
+            }
+            .detailContentsAnchor("sources")
+            Section { RawRecordDisclosure(raw: row.raw) }.detailContentsAnchor("raw-record")
         }
         .listStyle(.plain)
         .listRowBackground(Color.clear)
@@ -538,6 +526,7 @@ struct EntityDetailContent: View {
                 #endif
             }
         }
+        .modifier(DetailContentsNavigation(entries: contentsEntries))
         .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
         .environment(\.reportBatchStore, reportBatches)
         .task { reportBatches.onRecordStale = onChanged }
@@ -547,7 +536,7 @@ struct EntityDetailContent: View {
     private func declared(_ section: DetailSection) -> some View {
         switch section.kind {
         case .fields(let keys):
-            Section(section.title ?? "") {
+            ContinuousDetailSection(title: section.title ?? "") {
                 FieldsSectionView(
                     descriptor: descriptor, row: row, keys: keys, inlineFieldKey: inlineRelationshipFieldKey
                 ) {
@@ -559,12 +548,13 @@ struct EntityDetailContent: View {
                 RelationSectionView(model: model) { onCreateRelation(model) }
             }
         case .timeline:
-            Section(section.title ?? "Timeline") {
+            ContinuousDetailSection(title: section.title ?? "Timeline") {
                 if let timelineError {
                     InlineLoadFailure(message: timelineError) { await loadTimelineIfDeclared() }
                 } else if let timeline {
                     if timeline.groups.isEmpty && (timeline.rows ?? []).isEmpty {
                         Text("No events").foregroundStyle(.secondary)
+                            .preference(key: DetailSectionEmpty.self, value: true)
                     }
                 } else {
                     LoadingIndicator(label: "Loading timeline")
@@ -588,10 +578,38 @@ struct EntityDetailContent: View {
                         )
                     }
                 } else {
-                    Section(section.title ?? "") { view }
+                    ContinuousDetailSection(title: section.title ?? "") { view }
+                }
+            } else {
+                ContinuousDetailSection(title: section.title ?? section.id) {
+                    Text("This section is available on web.").foregroundStyle(.secondary)
+                    Link("Open on web", destination: appModel.webURL(for: descriptor.key, id: row.id))
                 }
             }
         }
+    }
+
+    // Native declarations have no workspace grouping; preserve the detail's reading order.
+    private var contentsEntries: [DetailContentsEntry] {
+        let ordered =
+            presentation.detailSections.filter { $0.id == journalSection?.id }
+            + presentation.detailSections.filter { $0.id != journalSection?.id }
+        return ordered.map {
+            DetailContentsEntry(
+                id: $0.id, title: $0.title ?? $0.id, group: "Record")
+        }
+            + connectedSections.map {
+                DetailContentsEntry(id: $0.id, title: $0.spec.title, group: "Relations")
+            } + [
+                DetailContentsEntry(
+                    id: "physical-connections", title: "Physical connections", group: "Relations")
+            ]
+            + (relationshipsModel == nil
+                ? [] : [DetailContentsEntry(id: "relationships", title: "Relationships", group: "Relations")])
+            + [
+                DetailContentsEntry(id: "sources", title: "Sources", group: "Provenance"),
+                DetailContentsEntry(id: "raw-record", title: "Raw record", group: "Provenance"),
+            ]
     }
 
     private func loadTimelineIfDeclared() async {

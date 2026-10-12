@@ -51,7 +51,7 @@ The generated route component imports only its own override and passes it to
 Shared cells live with their generic feature (for example, the unit-mappings
 column lives in `features/units`), so generic hooks do not import a specialist
 list module merely to reuse one renderer.
-Timeline rendering loads only when its view is selected.
+Full record timelines join the continuous detail page. Timeline renderers remain lazy imports; section navigation never unmounts an editor or timeline.
 Ordinary browser surfaces never import `entityInspectorMetadata`: it carries the
 compiler's filter descriptors, port refs, and a duplicate of the summary, and
 one import ships all of it to every list. Read names, titles, resolved

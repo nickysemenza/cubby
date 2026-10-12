@@ -228,7 +228,10 @@ struct FieldsSectionView<Inline: View>: View {
                     appModel.recordEntityMutation(keys: [descriptor.key])
                 })
         }
-        if rows.isEmpty { Text("Nothing recorded").foregroundStyle(.secondary) }
+        if rows.isEmpty {
+            Text("Nothing recorded").foregroundStyle(.secondary)
+                .preference(key: DetailSectionEmpty.self, value: true)
+        }
     }
 
     private struct FieldGroup: Identifiable {
@@ -927,34 +930,31 @@ struct RelationSectionView: View {
             || (model.source.key == .purchase && model.target.key == .product)
     }
 
-    /// `spec.hideWhenEmpty` skips the whole section — header, create button, and all — once the
-    /// first page has loaded with no rows and no error; a still-loading or failed section always
-    /// renders so its own loading/retry state stays visible.
-    private var isHiddenEmpty: Bool {
-        model.spec.hideWhenEmpty && model.list.phase == .loaded && model.list.rows.isEmpty
-    }
-
     var body: some View {
         Group {
-            if !isHiddenEmpty {
-                Section {
-                    content
-                } header: {
-                    HStack {
-                        Text(model.section.title ?? model.target.plural)
-                        if let range = model.hopRange {
-                            Text(recordHopLabel(min: range.min, max: range.max))
-                                .font(.caption.monospaced()).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if let onCreate, model.target.key.nativeActions.contains(.create) {
-                            Button("New \(model.target.singular)", systemImage: "plus", action: onCreate)
-                                .labelStyle(.iconOnly)
-                                .font(.body)
-                                .frame(
-                                    minWidth: FieldGuideTokens.touchTarget,
-                                    minHeight: FieldGuideTokens.touchTarget)
-                        }
+            Section {
+                content
+            } header: {
+                HStack {
+                    Text(model.section.title ?? model.target.plural)
+                        .foregroundStyle(
+                            model.list.phase == .loaded && model.list.rows.isEmpty ? .secondary : .primary
+                        )
+                    if model.list.phase == .loaded && model.list.rows.isEmpty {
+                        Text("Empty").font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let range = model.hopRange {
+                        Text(recordHopLabel(min: range.min, max: range.max))
+                            .font(.caption.monospaced()).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if let onCreate, model.target.key.nativeActions.contains(.create) {
+                        Button("New \(model.target.singular)", systemImage: "plus", action: onCreate)
+                            .labelStyle(.iconOnly)
+                            .font(.body)
+                            .frame(
+                                minWidth: FieldGuideTokens.touchTarget,
+                                minHeight: FieldGuideTokens.touchTarget)
                     }
                 }
             }
@@ -1035,9 +1035,9 @@ struct RelationSectionView: View {
         case .unavailable(let message), .failed(let message):
             InlineLoadFailure(message: message) { await list.loadInitial() }
         case .loaded:
-            // `collapseWhenEmpty` folds an empty section down to its header and create button.
-            if list.rows.isEmpty && !model.spec.collapseWhenEmpty {
-                Text(model.spec.empty ?? "None").foregroundStyle(.secondary)
+            if list.rows.isEmpty {
+                Text(model.spec.empty ?? "No items").foregroundStyle(.secondary)
+                    .preference(key: DetailSectionEmpty.self, value: true)
             }
             ForEach(list.rows) { row in
                 VStack(alignment: .leading, spacing: 5) {
@@ -1089,7 +1089,10 @@ struct EntityJournalSectionView: View {
             case .unavailable(let message), .failed(let message):
                 InlineLoadFailure(message: message) { await list.loadInitial() }
             case .loaded:
-                if list.rows.isEmpty { Text("No entries yet.").foregroundStyle(.secondary) }
+                if list.rows.isEmpty {
+                    Text("No entries yet.").foregroundStyle(.secondary)
+                        .preference(key: DetailSectionEmpty.self, value: true)
+                }
                 ForEach(list.rows) { row in
                     VStack(alignment: .leading, spacing: 5) {
                         EntityJournalEntryRow(descriptor: model.target, row: row, columns: model.spec.columns)
@@ -1111,6 +1114,11 @@ struct EntityJournalSectionView: View {
         } header: {
             HStack {
                 Text(model.section.title ?? "Journal")
+                    .foregroundStyle(
+                        model.list.phase == .loaded && model.list.rows.isEmpty ? .secondary : .primary)
+                if model.list.phase == .loaded && model.list.rows.isEmpty {
+                    Text("Empty").font(.caption).foregroundStyle(.secondary)
+                }
                 if let range = model.hopRange {
                     Text(recordHopLabel(min: range.min, max: range.max))
                         .font(.caption.monospaced()).foregroundStyle(.secondary)
@@ -1239,19 +1247,17 @@ struct InlineRelationshipAlternativeView: View {
 
 struct RawRecordDisclosure: View {
     let raw: JSONValue
-    @State private var showingRaw = false
 
     var body: some View {
         Panel(padding: FieldGuideTokens.Space.md) {
-            DisclosureGroup(isExpanded: $showingRaw) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                Eyebrow("Raw record")
                 Text(prettyJSON)
                     .font(.fieldGuideCode)
                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, FieldGuideTokens.Space.sm)
-            } label: {
-                Eyebrow("Raw record")
             }
             .tint(FieldGuideTokens.graphiteSecondary)
         }

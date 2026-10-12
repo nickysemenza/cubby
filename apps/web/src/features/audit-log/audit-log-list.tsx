@@ -10,6 +10,7 @@ import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-o
 import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
 import { getErrorMessage } from "~/lib/error-utils";
+import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -103,6 +104,14 @@ export function AuditLogList({
         (entry) => entry.entryKey,
       ),
     [data],
+  );
+
+  useSectionEmpty(
+    data !== undefined &&
+      !isError &&
+      !isLoading &&
+      !session.isPending &&
+      entries.length === 0,
   );
 
   // Pre-hydration renders the empty state on both sides; isPending only

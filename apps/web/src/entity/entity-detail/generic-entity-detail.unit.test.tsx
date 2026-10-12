@@ -5,7 +5,13 @@ import { cookbookSummary } from "@cubby/schemas/recipe";
 import { runOut } from "@cubby/schemas/run";
 import { testShortcode } from "@cubby/schemas/testing";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -119,6 +125,7 @@ describe("GenericEntityDetail", () => {
     harness = createBrowserTestHarness();
   });
   afterEach(() => {
+    cleanup();
     harness.dispose();
   });
 
@@ -156,7 +163,7 @@ describe("GenericEntityDetail", () => {
       if (!(element instanceof HTMLElement))
         throw new Error(`${entity} did not render section ${section.id}`);
       expect(
-        within(element).getByRole("heading", { level: 2 }),
+        within(element).getByRole("heading", { level: 3 }),
       ).toHaveTextContent(section.title ?? "");
     },
   );
@@ -175,7 +182,7 @@ describe("GenericEntityDetail", () => {
       { wrapper: harness.wrapper },
     );
     const titles = screen
-      .getAllByRole("heading", { level: 2 })
+      .getAllByRole("heading", { level: 3 })
       .map((heading) => heading.textContent);
     expect(titles).toEqual(expect.arrayContaining(["AI usage", "Changes"]));
     expect(titles).not.toContain("Import");
@@ -341,10 +348,20 @@ describe("GenericEntityDetail", () => {
       mock(inventoryListItem, { seed: 2 }),
       mock(inventoryListItem, { seed: 3 }),
     ];
-    const list = entityList.list.withTransport(async () => ({
-      items: rows,
-      meta: { pageIndex: 0, pageSize: 50, totalCount: rows.length, sums: {} },
-    }));
+    const list = entityList.list.withTransport(
+      async ({ input: { entity } }) => {
+        const items = entity === "inventory" ? rows : [];
+        return {
+          items,
+          meta: {
+            pageIndex: 0,
+            pageSize: 50,
+            totalCount: items.length,
+            sums: {},
+          },
+        };
+      },
+    );
     const { container } = render(
       <GenericEntityDetail
         entity="product"
@@ -370,13 +387,8 @@ describe("GenericEntityDetail", () => {
     ).toBeInTheDocument();
   });
 
-  // `hideWhenEmpty` wiring end to end, through a real manifest declaration
-  // (product.plantings): the mechanism itself — hide the whole section, show
-  // it again once non-empty, leave a non-`hideWhenEmpty` section alone — is
-  // covered exhaustively and without a real entity's async fan-out (lazy
-  // slots, reference-link previews) in `SectionCard`'s own table-driven
-  // tests, `detail-page.unit.test.tsx`.
-  it("hides a real hideWhenEmpty relation section once its first page resolves empty", async () => {
+  // Empty relations retain a discoverable heading and their create action.
+  it("keeps a real empty relation section discoverable once its first page resolves", async () => {
     await harness.router.navigate({ to: "/", hash: "plantings" });
     const { container } = render(
       <GenericEntityDetail
@@ -386,10 +398,11 @@ describe("GenericEntityDetail", () => {
       />,
       { wrapper: harness.wrapper },
     );
-    // Its header and "+Add" button only ever existed as descendants of this
-    // section, so an inaccessible section proves both are gone too.
     await waitFor(() => {
-      expect(container.querySelector("section#plantings")).not.toBeVisible();
+      const section = container.querySelector<HTMLElement>("section#plantings");
+      expect(section).toBeVisible();
+      if (!section) throw new Error("Expected the plantings section");
+      expect(within(section).getByText("Empty", { exact: true })).toBeVisible();
     });
   });
 });

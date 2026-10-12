@@ -544,7 +544,9 @@ for (const statementFirst of [true, false]) {
       .and(page.locator(`a[href="${originalMailUrl}"]`));
     await expect(originalMail).toBeVisible();
     await expect(originalMail).toHaveAttribute("href", originalMailUrl);
-    await page.getByRole("tab", { name: "Work", exact: true }).click();
+    await page
+      .getByRole("heading", { level: 2, name: "Work", exact: true })
+      .scrollIntoViewIfNeeded();
     await expect(
       page.getByRole("link", { name: names.productName, exact: true }).first(),
     ).toBeVisible();

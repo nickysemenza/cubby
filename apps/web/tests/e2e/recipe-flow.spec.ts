@@ -170,14 +170,18 @@ test.describe("Recipe Flow", () => {
     await expect(
       actions.getByRole("button", { name: "copy parse", exact: true }),
     ).toBeVisible();
-    await page.getByRole("tab", { name: "Relations", exact: true }).click();
+    await page
+      .getByRole("heading", { level: 2, name: "Relations", exact: true })
+      .scrollIntoViewIfNeeded();
     await expect(
       actions.getByRole("button", { name: /Add to meal/i }),
     ).toBeVisible();
     await expect(
       actions.getByRole("button", { name: "Regenerate walkthrough" }),
     ).toBeVisible();
-    await page.getByRole("tab", { name: "Overview", exact: true }).click();
+    await page
+      .getByRole("heading", { level: 2, name: "Overview", exact: true })
+      .scrollIntoViewIfNeeded();
     await page.getByRole("button", { name: "Flow view", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "E2E Branching Biscuits", level: 2 }),

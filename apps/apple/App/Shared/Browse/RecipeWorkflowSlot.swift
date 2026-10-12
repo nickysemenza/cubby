@@ -28,7 +28,6 @@ struct RecipeWorkflowView: View {
     @State private var weightText = ""
     @State private var weightOpen = false
     @State private var cooking = false
-    @State private var walkthroughOpen = false
     /// The unscaled total weight in grams, from the server's costing report; nil until it loads
     /// or when no ingredient line reaches grams.
     @State private var baseWeight: Double?
@@ -42,6 +41,7 @@ struct RecipeWorkflowView: View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
             if let recipeID {
                 ReportDetailSlot(slot: .recipe_availability, id: recipeID)
+                    .transformPreference(DetailSectionEmpty.self) { $0 = false }
             }
             scaleControls
             if let makes = plan.yieldLabel(factor: factor) {
@@ -73,12 +73,11 @@ struct RecipeWorkflowView: View {
             }
             if let recipeID {
                 RecipeCoverageSection(
-                    recipeID: recipeID, requested: weightOpen, baseWeight: $baseWeight,
+                    recipeID: recipeID, baseWeight: $baseWeight,
                     loaded: $coverageLoaded)
-                DisclosureGroup("AI walkthrough", isExpanded: $walkthroughOpen) {
-                    if walkthroughOpen {
-                        ReportDetailSlot(slot: .recipe_walkthrough, id: recipeID)
-                    }
+                OpenDetailGroup(title: "AI walkthrough") {
+                    ReportDetailSlot(slot: .recipe_walkthrough, id: recipeID)
+                        .transformPreference(DetailSectionEmpty.self) { $0 = false }
                 }
                 .accessibilityIdentifier("recipe.walkthrough")
             }
@@ -164,23 +163,20 @@ struct RecipeWorkflowView: View {
     }
 }
 
-/// Why a recipe's totals are incomplete, from the server's `recipe.costing-coverage` report. Read
-/// once the weight target or the disclosure asks for it (it costs the recipe), and hands the
-/// unscaled weight to the scale control.
+/// Why a recipe's totals are incomplete, from the server's `recipe.costing-coverage` report. It
+/// stays open in the continuous detail and hands the unscaled weight to the scale control.
 private struct RecipeCoverageSection: View {
     let recipeID: String
-    /// The weight target was opened, which needs the report before the disclosure is.
-    let requested: Bool
     @Binding var baseWeight: Double?
     @Binding var loaded: Bool
     @Environment(AppModel.self) private var appModel
-    @State private var open = false
     @State private var model: ReportSlotModel?
 
     var body: some View {
-        DisclosureGroup("Totals coverage", isExpanded: $open) {
+        OpenDetailGroup(title: "Totals coverage") {
             if let presentation = model?.presentation {
                 ReportBlocksView(report: presentation, host: nil, model: model)
+                    .transformPreference(DetailSectionEmpty.self) { $0 = false }
             } else if let failure = model?.failure {
                 Text(failure).foregroundStyle(.secondary)
             } else {
@@ -188,8 +184,7 @@ private struct RecipeCoverageSection: View {
             }
         }
         .accessibilityIdentifier("recipe.costingCoverage")
-        .task(id: "\(recipeID)|\(open || requested)") {
-            guard open || requested else { return }
+        .task(id: recipeID) {
             let next =
                 model
                 ?? ReportSlotModel(slot: .recipe_costingCoverage, id: recipeID, service: appModel.client)

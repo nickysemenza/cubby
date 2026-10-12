@@ -21,7 +21,7 @@ import { entityReport } from "~/integrations/tanstack-query/generated/catalog.ge
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
 import { cn, formatCurrency } from "~/lib/utils";
-import { useSectionVisible } from "~/ui/data-table/detail-page";
+import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { buttonVariants } from "~/ui/primitives/button";
@@ -410,8 +410,14 @@ function useReportBlocks(
     ? (report?.blocks ?? [])
     : mergePages(paged.data?.pages ?? []);
   const loaded = batched ? batch.isSuccess : paged.isSuccess;
-  // A Run report with no blocks hides its section (nothing to show for this run).
-  useSectionVisible(nested || !loaded || blocks.length > 0);
+  // Nested reports cannot mark their enclosing workflow empty.
+  useSectionEmpty(
+    !nested &&
+      loaded &&
+      !batch.isError &&
+      !paged.isError &&
+      blocks.length === 0,
+  );
   const state = batched ? batch : paged;
   return {
     isPending: state.isPending,
@@ -472,6 +478,9 @@ export function EntityReportSlot({
         />
       ) : (
         <>
+          {query.blocks.length === 0 && (
+            <p className="text-sm text-muted-foreground">No items.</p>
+          )}
           <ReportBlocks
             slot={input.slot}
             blocks={query.blocks}

@@ -26,7 +26,9 @@ test("full Relationships review applies an expense alternative", async ({
   const name = `e2e full relationship ${Date.now()}`;
   const fixture = await seedRelationshipReviewPrerequisite(page, name);
   await gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
-  await page.getByRole("tab", { name: "Relations", exact: true }).click();
+  await page
+    .getByRole("heading", { level: 2, name: "Relations", exact: true })
+    .scrollIntoViewIfNeeded();
   await page
     .getByRole("button", {
       name: `Review ${name} suggested suggestion`,
@@ -46,7 +48,9 @@ test("placement acceptance follows the surviving stock row after merging", async
   const name = `e2e placement ${Date.now()}`;
   const fixture = await seedPlacementReviewPrerequisite(page, name);
   await gotoAuthenticatedPage(page, `/inventory/${fixture.source.id}`);
-  await page.getByRole("tab", { name: "Relations", exact: true }).click();
+  await page
+    .getByRole("heading", { level: 2, name: "Relations", exact: true })
+    .scrollIntoViewIfNeeded();
   await page
     .getByRole("button", {
       name: `Review ${name} workshop suggestion`,
