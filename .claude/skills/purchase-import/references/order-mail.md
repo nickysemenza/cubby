@@ -4,7 +4,7 @@ Identify actual purchases and their related lifecycle evidence. A message may
 describe several orders, and several messages may support one Purchase.
 Services, digital access, recurring purchases and food receipts count as
 purchases; promotions, transfers and bank statements have different roles.
-Jev routes mail cheaply and escalates uncertainty to the researcher rather than
+The decision model routes mail cheaply and escalates uncertainty to the researcher rather than
 discarding unfamiliar vendors or formats. Read related retained originals and
 use the hosted research workflow's task and evidence references.
 When a stored Relevance looks wrong, `mail.reclassify` reruns every stage from

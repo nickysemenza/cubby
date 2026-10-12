@@ -594,6 +594,12 @@ A classification or field value that has been computed for a record but not
 yet accepted by the household, with a confidence.
 _Avoid_: proposal, Jev suggestion, recommendation
 
+**Decision model**:
+The closed-set classifier behind every Suggestion and Mail triage: Jev or
+Clef, chosen per call by the trial split. Stored stages and user-facing text
+say "decision"; the record's `model` names which one answered.
+_Avoid_: Jev (when either model may have answered)
+
 **Correction**:
 A Suggestion whose value differs from the record's current value.
 
@@ -618,7 +624,7 @@ A message Cubby scanned from a member's mailbox, including unrelated messages. E
 _Avoid_: OrderMail, order mail, receipt email, scanned message
 
 **Relevance**:
-Whether an Email is related, unrelated or uncertain to the household's purchases, with the stage that decided it (rule, Jev, model or a member's resolution). Only a related or uncertain Email keeps its content.
+Whether an Email is related, unrelated or uncertain to the household's purchases, with the stage that decided it (rule, decision model, relevance model or a member's resolution). Only a related or uncertain Email keeps its content.
 _Avoid_: triage result, classification verdict
 
 **Mail discovery**:
@@ -626,7 +632,7 @@ Unattended paging of a member's mailbox that records every Email's Relevance, ke
 _Avoid_: mail sync, Gmail scan
 
 **Classification-only backfill**:
-A Mail discovery pass over mailbox history that decides Relevance with rules and Jev alone and imports nothing, so Relevance can be reviewed before any Mail import.
+A Mail discovery pass over mailbox history that decides Relevance with rules and the decision model alone and imports nothing, so Relevance can be reviewed before any Mail import.
 _Avoid_: dry run, Jev-only scan
 
 **Mail import**:
@@ -642,7 +648,7 @@ A recorded judgment that an imported line is a different Product from an exact i
 _Avoid_: force new, override
 
 **Email pipeline**:
-The ordered steps an Email can pass through: retrieval, rule, Jev, model, member review, extraction preview, Mail import and Purchase association. For one Email, each step has run, was skipped because an earlier step decided, has not been reached, or failed.
+The ordered steps an Email can pass through: retrieval, rule, decision model, relevance model, member review, extraction preview, Mail import and Purchase association. For one Email, each step has run, was skipped because an earlier step decided, has not been reached, or failed.
 _Avoid_: processing trail, stage ledger, triage
 
 **Reclassify**:

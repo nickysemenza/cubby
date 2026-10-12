@@ -100,8 +100,8 @@ that fails its own schema is `INVALID_OUTPUT` and names each failing path.
 
 Every call has a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
 `apps/web/src/server/mcp/tools/tool-registration.ts`): 18 s for reads, 45 s
-for reads that declare `modelBacked` (Jev's 30 s retry budget plus database
-work), and 230 s for writes. An action that can wait on Jev or another model
+for reads that declare `modelBacked` (the decision model's 30 s retry budget plus database
+work), and 230 s for writes. An action that can wait on the decision model or another model
 declares `modelBacked: true` in `apps/web/src/contracts/mcp-tools.ts`; today
 those are `entity_read.preview` and `entity_read.suggest_fields`. Past its budget the call answers
 `MCP_TOOL_DEADLINE_EXCEEDED` with the elapsed time, request id, and Sentry event id, logs a

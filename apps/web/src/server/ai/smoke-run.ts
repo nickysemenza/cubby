@@ -17,6 +17,10 @@ import {
   extractPurchaseEvidence,
 } from "~/server/agents/purchase-import/extract";
 import { purchaseExtractionPrompt } from "~/server/agents/purchase-import/prompts";
+import {
+  DECISION_MAX_CANDIDATES,
+  runDecisionChoice,
+} from "~/server/ai/decision-model";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import {
   ENTITY_EMBEDDING_FEATURE,
@@ -31,7 +35,6 @@ import {
   USDA_FOOD_SUGGEST_FEATURE,
 } from "~/server/ai/features";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
-import { JEV_MAX_CANDIDATES, runJevChoice } from "~/server/ai/jev";
 import {
   runStructuredFeature,
   type StructuredRunPorts,
@@ -244,7 +247,7 @@ async function runCase(
     case "selectionOverflow": {
       const { fixture } = aiSmokeInputs.selectionOverflow.parse(raw);
       const candidates = Array.from(
-        { length: JEV_MAX_CANDIDATES + 1 },
+        { length: DECISION_MAX_CANDIDATES + 1 },
         (_, index) => ({
           id: `item-${index + 1}`,
           label: `Example item ${index + 1}`,
@@ -394,7 +397,7 @@ async function runCase(
       });
       if (scenario === "mailboxTriage") {
         return {
-          result: await runJevChoice({
+          result: await runDecisionChoice({
             ...mailTriagePrompt(
               JSON.stringify({
                 headers: original.mail.headers,
@@ -472,7 +475,7 @@ async function runCase(
             "Garden rake | manufacturer=Example Tools | model=RAKE-10",
           ];
       return {
-        result: await runJevChoice({
+        result: await runDecisionChoice({
           feature: PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
           subject: JSON.stringify({
             title: line.title,

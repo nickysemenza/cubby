@@ -71,7 +71,7 @@ struct StatementMatchSheet: View {
             case .loaded(let review):
                 if let message = review.message { Text(message).foregroundStyle(.secondary) }
                 if review.suggestHint != nil {
-                    Button(session.isSuggesting ? "Asking Jev…" : "Suggest a match") {
+                    Button(session.isSuggesting ? "Suggesting…" : "Suggest a match") {
                         Task { await session.suggest() }
                     }
                     .disabled(session.isSuggesting)

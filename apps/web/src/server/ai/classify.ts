@@ -1,8 +1,8 @@
 /**
- * One exhaustive closed-set classification on the decision tier: Jev picks
+ * One exhaustive closed-set classification on the decision tier: the decision model picks
  * over value-labeled choices with no `none` (every product has a category,
  * every location a type), and the winner's index maps back to the value.
- * Jev writes no prose, so `reasoning` is the empty string the wire shape
+ * The decision model writes no prose, so `reasoning` is the empty string the wire shape
  * requires.
  *
  * Moved out of `clients/ai.ts` so both `AiClient`'s two decision-tier
@@ -12,12 +12,12 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 
-import type { AiDecisionFeature } from "~/server/ai/features";
 import {
-  type JevChoicePrompt,
-  type JevPort,
-  runJevChoice,
-} from "~/server/ai/jev";
+  type DecisionChoicePrompt,
+  type DecisionPort,
+  runDecisionChoice,
+} from "~/server/ai/decision-model";
+import type { AiDecisionFeature } from "~/server/ai/features";
 import type { AiRunContext } from "~/server/ai/run-feature";
 
 /** One runner-up: the caller (`resolveEnumTarget`) applies its own
@@ -27,8 +27,8 @@ export interface ClassifyAlternative<Value extends string> {
   probability: number;
 }
 
-/** Top-3 runners-up (after the winner) from Jev's ranked distribution,
- * mapped back to the roster's own values. Empty when `runJevChoice` has
+/** Top-3 runners-up (after the winner) from the decision model's ranked distribution,
+ * mapped back to the roster's own values. Empty when `runDecisionChoice` has
  * nothing to rank (an exhaustive vocabulary of one). */
 function alternativesFrom<Value extends string>(
   ranked: { index: number; probability: number }[],
@@ -53,7 +53,7 @@ export function classificationPrompt<Value extends string>(args: {
   rules: string;
   values: readonly Value[];
   describe: (value: Value) => string;
-}): JevChoicePrompt {
+}): DecisionChoicePrompt {
   return {
     subject: args.subject,
     rules: args.rules,
@@ -62,14 +62,14 @@ export function classificationPrompt<Value extends string>(args: {
   };
 }
 
-export async function classifyWithJev<Value extends string>(args: {
+export async function classifyWithDecisionModel<Value extends string>(args: {
   feature: AiDecisionFeature;
   subject: string;
   rules: string;
   values: readonly Value[];
   describe: (value: Value) => string;
   usage: AiRunContext;
-  port?: JevPort;
+  port?: DecisionPort;
   decisionModel?: SupportedDecisionModel;
   onTokenUsage?: (usage: {
     inputTokens: number | null;
@@ -82,19 +82,18 @@ export async function classifyWithJev<Value extends string>(args: {
   reasoning: "";
   alternatives: ClassifyAlternative<Value>[];
 }> {
-  const { selectedIndex, confidence, probability, ranked } = await runJevChoice(
-    {
+  const { selectedIndex, confidence, probability, ranked } =
+    await runDecisionChoice({
       feature: args.feature,
       ...classificationPrompt(args),
       usage: args.usage,
       port: args.port,
       decisionModel: args.decisionModel,
       onTokenUsage: args.onTokenUsage,
-    },
-  );
+    });
   const value = selectedIndex === null ? undefined : args.values[selectedIndex];
   if (value === undefined) {
-    throw new Error("Jev classification returned no value.");
+    throw new Error("Decision-model classification returned no value.");
   }
   return {
     value,

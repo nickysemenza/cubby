@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { jevChoiceFitsContext } from "~/server/ai/jev";
+import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
 import { email as emailTable, orderMail, run } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -92,7 +92,7 @@ describe("Gmail classification stage and reason", () => {
     return row;
   }
 
-  it("records Jev's verdict", async () => {
+  it("records the decision model's verdict", async () => {
     expect(
       await classify(
         "jev-unrelated",
@@ -101,12 +101,12 @@ describe("Gmail classification stage and reason", () => {
       ),
     ).toEqual({
       classification: "unrelated",
-      stage: "jev",
-      reason: "Jev classified the message unrelated",
+      stage: "decision",
+      reason: "The decision model classified the message unrelated",
     });
   });
 
-  it("lets the relevance model decide an attachment-bearing message Jev called unrelated", async () => {
+  it("lets the relevance model decide an attachment-bearing message the decision model called unrelated", async () => {
     expect(
       await classify(
         "rule-attachment",
@@ -151,11 +151,13 @@ describe("Gmail classification stage and reason", () => {
         await classify(`partial-${verdict}`, message(body), triage),
       ).toMatchObject({
         classification: verdict === "related" ? "related" : "uncertain",
-        stage: verdict === "related" ? "jev" : "rule",
+        stage: verdict === "related" ? "decision" : "rule",
       });
       expect(triage).toHaveBeenCalledOnce();
       expect(
-        jevChoiceFitsContext(mailTriagePrompt(triage.mock.calls[0]?.[0] ?? "")),
+        decisionChoiceFitsContext(
+          mailTriagePrompt(triage.mock.calls[0]?.[0] ?? ""),
+        ),
       ).toBe(true);
       const [retained] = await getDb(ctx.db)
         .select({ content: orderMail.content, runId: emailTable.runId })

@@ -1,7 +1,7 @@
 /**
- * The bounded Jev tie-break for the Purchase settlement review. When the
+ * The bounded the decision model tie-break for the Purchase settlement review. When the
  * deterministic candidate ranking ties two or more statement transactions at
- * its top tier, a person may ask Jev to order only those tied candidates.
+ * its top tier, a person may ask the decision model to order only those tied candidates.
  * The result is a suggestion: nothing here writes an allocation, and the
  * review's own allocate action remains the only write authority.
  */
@@ -14,8 +14,8 @@ import {
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { formatCurrency } from "~/lib/utils";
+import type { DecisionPort } from "~/server/ai/decision-model";
 import { SETTLEMENT_CANDIDATE_RANK_FEATURE } from "~/server/ai/features";
-import type { JevPort } from "~/server/ai/jev";
 import {
   type AiSelectionSpec,
   type AiSelectionUsage,
@@ -81,7 +81,7 @@ export async function suggestSettlementMatch(args: {
   ranks: readonly SettlementRank[];
   loadTransaction: (id: string) => Promise<FinancialTransactionOut>;
   openUsage: () => Promise<AiSelectionUsage>;
-  jev?: JevPort;
+  decisionPort?: DecisionPort;
 }): Promise<PurchaseSettlementSuggestOut> {
   const tied = tiedTopSettlementCandidates(args.ranks);
   if (tied.length < 2)
@@ -103,7 +103,7 @@ export async function suggestSettlementMatch(args: {
       subject: renderSettlementSubject(args.subject),
       candidates,
       usage: await args.openUsage(),
-      jev: args.jev,
+      decisionPort: args.decisionPort,
     });
     const selectedTransactionId = outcome.selected
       ? financialTransactionShortcode.parse(outcome.selected.id)
@@ -147,9 +147,9 @@ export async function suggestSettlementMatch(args: {
       ranked,
       displayOrder,
       note:
-        `Suggestion only. Jev ordered the ${tied.length} equally ranked charges; nothing is saved until you allocate.` +
+        `Suggestion only. The decision model ordered the ${tied.length} equally ranked charges; nothing is saved until you allocate.` +
         (selectedTransactionId === null
-          ? " Jev found no clear match among them."
+          ? " The decision model found no clear match among them."
           : ""),
     };
   } catch (error) {

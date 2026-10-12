@@ -4,10 +4,13 @@ import { selectDecisionModel } from "@cubby/shared/ai/models";
 import { and, eq, isNull } from "drizzle-orm";
 
 import {
+  decisionChoiceFitsContext,
+  runDecisionChoice,
+} from "~/server/ai/decision-model";
+import {
   MAILBOX_TRIAGE_FEATURE,
   type AiDecisionFeature,
 } from "~/server/ai/features";
-import { jevChoiceFitsContext, runJevChoice } from "~/server/ai/jev";
 import type { Database } from "~/server/db";
 import { email as emailTable, orderMail } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -80,7 +83,7 @@ export async function productionCandidateChoice(
   const model = selectDecisionModel();
   let requested = false;
   const choose: EmailCandidateChoice = async (prompt) => {
-    if (!jevChoiceFitsContext(prompt))
+    if (!decisionChoiceFitsContext(prompt))
       return {
         selectedIndex: null,
         confidence: "high",
@@ -88,7 +91,7 @@ export async function productionCandidateChoice(
         ranked: [],
       };
     requested = true;
-    return runJevChoice({
+    return runDecisionChoice({
       ...prompt,
       feature: MAILBOX_ORDER_CANDIDATE_FEATURE,
       decisionModel: model,

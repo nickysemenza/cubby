@@ -177,7 +177,7 @@ const tradeSuggestion: FieldSuggestion = {
 };
 
 describe("useAutoFieldSuggestion", () => {
-  it("keeps auto-filled Task intent out of Jev basis and resets its mode on retraction", async () => {
+  it("keeps auto-filled Task intent out of decision basis and resets its mode on retraction", async () => {
     let form!: UseFormReturn<FieldValues>;
     const operations = operationsReturning((input) => ({
       suggestions: {

@@ -98,7 +98,7 @@ export const classificationPolicySql = <Id extends ClassificationPolicyId>(
 /**
  * True when a recorded classification refuses `field` on this record.
  * `basis` holds the record's classification references as public shortcodes,
- * keyed by reference field (a Jev basis). A record without one is
+ * keyed by reference field (a decision basis). A record without one is
  * unclassified: writing an evidence-bearing field classifies it
  * (`impliedClassification`), so nothing is refused yet. An unresolvable
  * shortcode counts as unclassified.

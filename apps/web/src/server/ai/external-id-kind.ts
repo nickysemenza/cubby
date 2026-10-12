@@ -4,7 +4,7 @@
  * prefix, a barcode's digit count, Home Depot's 9-digit internet number —
  * and resolve at `probability: 1` with no model call. Everything else (a
  * manufacturer's own item number, a distributor's catalog number, a
- * retailer's SKU) is genuine judgment and goes to Jev, same as every other
+ * retailer's SKU) is genuine judgment and goes to the decision model, same as every other
  * enum `control.suggest` target (`field-suggest/registry.ts`), except this
  * one has no manifest field behind it — `externalIds[]` is a repeatable
  * array, not a singular reference/enum column `resolveEnumTarget` can name.
@@ -19,9 +19,9 @@ import {
 } from "@cubby/schemas/external-id";
 import { isGtin } from "@cubby/shared/upc";
 
-import { classifyWithJev } from "~/server/ai/classify";
+import { classifyWithDecisionModel } from "~/server/ai/classify";
+import type { DecisionPort } from "~/server/ai/decision-model";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
-import type { JevPort } from "~/server/ai/jev";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import {
   EXTERNAL_ID_KIND_DESCRIPTIONS,
@@ -65,7 +65,7 @@ export function externalIdKindSubject(
 export async function suggestExternalIdKind(
   input: ExternalIdKindSuggestionInput,
   usage: AiRunContext,
-  ports?: { jev?: JevPort },
+  ports?: { decisionPort?: DecisionPort },
 ): Promise<FieldSuggestion | null> {
   const fastKind = regexFastPath(input);
   if (fastKind) {
@@ -82,14 +82,14 @@ export async function suggestExternalIdKind(
     };
   }
 
-  const result = await classifyWithJev({
+  const result = await classifyWithDecisionModel({
     feature: FIELD_SUGGESTION_FEATURE,
     subject: externalIdKindSubject(input),
     rules: EXTERNAL_ID_KIND_RULES,
     values: externalIdKind.options,
     describe: (value) => EXTERNAL_ID_KIND_DESCRIPTIONS[value],
     usage: { ...usage, operation: "suggestExternalIdKind" },
-    port: ports?.jev,
+    port: ports?.decisionPort,
   });
   return {
     value: result.value,

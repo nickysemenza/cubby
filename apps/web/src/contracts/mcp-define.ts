@@ -102,7 +102,7 @@ export interface McpActionSpec<
     | "strong"
     | ((input: MemberInput<Op>) => "strong" | "context");
   /**
-   * A read that may wait on a model (Jev or another AI call). Its MCP deadline
+   * A read that may wait on a model (the decision model or another AI call). Its MCP deadline
    * outlasts the model's retry budget instead of using the plain read budget.
    * Writes already have the longer write budget.
    */

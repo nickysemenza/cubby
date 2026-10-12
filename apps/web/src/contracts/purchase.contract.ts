@@ -66,7 +66,7 @@ export const purchaseContract = defineContract("purchase", {
     cache: { tags: [["purchase"], ["financialTransaction"]] },
   }),
   /**
-   * On-demand Jev tie-break over candidates tied at the top deterministic
+   * On-demand the decision model tie-break over candidates tied at the top deterministic
    * rank. A mutation because it is person-triggered and bills model usage,
    * not because it writes: it never allocates and invalidates nothing.
    */

@@ -276,7 +276,7 @@ describe("member Reclassify", () => {
     expect(f.triage.mock.calls[0]?.[0]).toContain("spring meetup");
     expect(preview).toMatchObject({
       classification: "unrelated",
-      stage: "jev",
+      stage: "decision",
       model: null,
       view: { complete: true, incompleteReasons: [] },
     });
@@ -307,8 +307,8 @@ describe("member Reclassify", () => {
       "A synthetic newsletter with no order.",
       {
         classification: "related",
-        classificationStage: "jev",
-        classificationReason: "Synthetic earlier Jev",
+        classificationStage: "decision",
+        classificationReason: "Synthetic earlier the decision model",
         status: "pending",
       },
     );
@@ -324,11 +324,11 @@ describe("member Reclassify", () => {
     expect(result.results[0]).toMatchObject({
       outcome: "awaiting_acceptance",
       classification: "unrelated",
-      stage: "jev",
+      stage: "decision",
     });
     expect(await f.current(email.id)).toMatchObject({
       classification: "related",
-      classificationStage: "jev",
+      classificationStage: "decision",
       contentClearedAt: null,
       orderMailId: original.id,
     });
@@ -339,7 +339,7 @@ describe("member Reclassify", () => {
     expect(kept?.content.bodyText).toBe("Synthetic retained order body");
     expect((await f.history(email.id))[0]).toMatchObject({
       classification: "unrelated",
-      stage: "jev",
+      stage: "decision",
     });
   });
 
@@ -395,8 +395,8 @@ describe("member Reclassify", () => {
       "A complete synthetic promotion body.",
       {
         classification: "unrelated",
-        classificationStage: "jev",
-        classificationReason: "Synthetic earlier Jev",
+        classificationStage: "decision",
+        classificationReason: "Synthetic earlier the decision model",
         status: "completed",
         contentClearedAt: new Date(),
       },
@@ -407,8 +407,8 @@ describe("member Reclassify", () => {
         emailId: email.id,
         checksum: email.checksum,
         classification: "unrelated",
-        stage: "jev",
-        reason: "Synthetic earlier Jev",
+        stage: "decision",
+        reason: "Synthetic earlier the decision model",
         classificationVersion: "synthetic-history",
       })
       .returning();

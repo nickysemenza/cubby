@@ -1,7 +1,7 @@
 import { emojiCandidates } from "@cubby/schemas/emoji";
 /**
  * One entry per `GeneratedSuggestFieldKey` (`packages/schemas`'s
- * `control.suggest`-declared fields): what kind of Jev call the field runs
+ * `control.suggest`-declared fields): what kind of decision call the field runs
  * as, its vocabulary/roster, and how to render the subject the model sees.
  * `suggest-fields.ts` is the only reader; it resolves basis values and walks
  * this table, so adding a field is one manifest line (step 1) plus one entry
@@ -71,7 +71,7 @@ interface EnumSuggestSpec<V extends string> {
   kind: "enum";
   values: readonly V[];
   /** Narrows `values` for this record; an empty result skips the target
-   * without asking Jev (nothing admissible to suggest). */
+   * without asking the decision model (nothing admissible to suggest). */
   candidates?(db: Database, raw: RawBasis): Promise<readonly V[]>;
   describe(v: V): string;
   labelOf?(v: V): string;
@@ -115,7 +115,7 @@ interface TextRosterSuggestSpec {
  * self-basis — `docs/entities.md`). `suggest-fields.ts`'s `resolvePruneTarget`
  * is the only reader: it parses the self-basis JSON array via `candidates`,
  * asks `deterministic` for the subset `redundantTokens` already flags at
- * probability 1, then spends at most `maxJevCandidates` per-tag Jev binary
+ * probability 1, then spends at most `maxDecisionCandidates` per-tag decision binary
  * calls (`rules` + `subject`) on the rest.
  */
 export interface ArrayPruneSuggestSpec {
@@ -124,18 +124,18 @@ export interface ArrayPruneSuggestSpec {
   /** The target field's own manifest key (e.g. `"tags"`) — where the
    * self-basis JSON array lives in `raw`. */
   arrayKey: string;
-  /** Caps the per-survivor Jev calls a large ad-hoc tag list could incur. */
-  maxJevCandidates: number;
+  /** Caps the per-survivor decision calls a large ad-hoc tag list could incur. */
+  maxDecisionCandidates: number;
   /** Every current entry eligible for pruning: the self-basis array minus
    * `collection:*` (Collections' own namespace, never a prune candidate). */
   candidates(basis: ResolvedBasis, raw: RawBasis): readonly string[];
-  /** The subset of `candidates(...)` already redundant with no Jev call. */
+  /** The subset of `candidates(...)` already redundant with no decision call. */
   deterministic(
     basis: ResolvedBasis,
     raw: RawBasis,
     db: Database,
   ): Promise<readonly RedundantTokenMatch[]>;
-  /** One survivor tag's Jev subject line. */
+  /** One survivor tag's decision subject line. */
   subject(basis: ResolvedBasis, value: string): string;
 }
 
@@ -197,7 +197,7 @@ interface ExpenseProjectOption extends ProjectOptionsOut {
  * The expense→project roster carries the same project × trade matrix
  * `rankProjectSuggestions` weights by. The basis cannot include the
  * expense's own `trade` (the reverse edge of `expense.trade`'s basis would
- * be cyclic), so each line lists the project's trade tallies and Jev matches
+ * be cyclic), so each line lists the project's trade tallies and the decision model matches
  * the expense against them.
  */
 async function expenseProjectRoster(
@@ -243,11 +243,11 @@ const projectOptionDetail = (candidate: ProjectOptionsOut): string | null =>
     ? `${candidate.effectiveStart} – ${candidate.effectiveEnd ?? "ongoing"}`
     : null;
 
-/** Rosters bounded well under `JEV_MAX_CANDIDATES` (254): the decision tier
+/** Rosters bounded well under `DECISION_MAX_CANDIDATES` (254): the decision tier
  * is the common case, and only a very large household ever overflows to the
  * fast-tier selection feature. */
 const REFERENCE_ROSTER_CAP = 200;
-/** Vendor names: small enough Jev sees the whole household roster. */
+/** Vendor names: small enough the decision model sees the whole household roster. */
 const VENDOR_ROSTER_CAP = 200;
 /** Semantic neighbours of a product name; the right ingredient is near the top. */
 const INGREDIENT_ROSTER_CAP = 25;
@@ -324,7 +324,7 @@ const productCategoryPath = (
   candidate: ProductCategorySuggestionOption,
 ): string => candidate.path.map(({ name }) => name).join(" > ");
 
-/** Give Jev every lexical handle attached to a category, while keeping the
+/** Give the decision model every lexical handle attached to a category, while keeping the
  * hierarchy visible so a similarly named leaf is never selected in isolation. */
 const renderProductCategoryOption = (
   candidate: ProductCategorySuggestionOption,
@@ -443,13 +443,13 @@ const FIELD_SUGGEST_OVERRIDES = {
     rules:
       "You are a household-product classifier. Choose the ONE most specific existing classification supported by the product evidence. Compare the complete hierarchy, names, aliases, and descriptions. Choose none when the evidence does not support a classification; never invent a category.",
     // Categories are a taxonomy rather than a household-sized roster. Show
-    // every live node; `runAiSelection` uses its overflow path above Jev's
+    // every live node; `runAiSelection` uses its overflow path above the decision model's
     // choice limit instead of silently dropping broad roots or their leaves.
     //
     // The picker's pinned "Suggested" section (`use-auto-field-suggestion.ts`
-    // `seedItems`) reads Jev's `alternatives`, which only the decision-tier
+    // `seedItems`) reads the decision model's `alternatives`, which only the decision-tier
     // path produces — the overflow chat-tier pick (`selection.ts`) always
-    // returns `alternatives: []`. Past `JEV_MAX_CANDIDATES` (254) live nodes
+    // returns `alternatives: []`. Past `DECISION_MAX_CANDIDATES` (254) live nodes
     // this roster crosses into overflow and "Suggested" quietly degrades to
     // the single winner. 29 nodes today; revisit if the taxonomy grows.
     maxCandidates: Number.MAX_SAFE_INTEGER,
@@ -499,7 +499,7 @@ const FIELD_SUGGEST_OVERRIDES = {
         .find((field) => field.key === "tags")
         ?.control?.suggest?.rules?.join("\n") ?? "",
     arrayKey: "tags",
-    maxJevCandidates: 8,
+    maxDecisionCandidates: 8,
     candidates: (_basis, raw) => pruneCandidates(raw, "tags"),
     // `raw.categoryId` is the still-unresolved shortcode (`RawBasis`, unlike
     // `basis.categoryId`'s display label) — the same raw-shortcode-lookup

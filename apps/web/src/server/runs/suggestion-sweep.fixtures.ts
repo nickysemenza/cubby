@@ -18,8 +18,8 @@ import {
 } from "tooling/product-category-fixtures";
 import type { TestDbContext } from "tooling/test-setup";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import type { ReferenceSuggestSpec } from "~/server/ai/field-suggest/registry";
-import type { JevPort } from "~/server/ai/jev";
 import type { Database } from "~/server/db";
 import {
   expense as expenseTable,
@@ -211,7 +211,7 @@ export const noProposal = (field: string) =>
     },
   });
 
-/** The single category the Jev roster offers, so every decision proposes it. */
+/** The single category the decision roster offers, so every decision proposes it. */
 export const SUGGESTED_CATEGORY: ProductCategoryFeature = "food";
 
 type CategoryCandidate = { id: string; title: string };
@@ -230,7 +230,7 @@ const categorySpec: ReferenceSuggestSpec<CategoryCandidate> = {
 };
 
 const decisionAt =
-  (confidence: number): JevPort =>
+  (confidence: number): DecisionPort =>
   async (input) => {
     const keys = Object.keys(input.questions.selection.criteria);
     const choice = keys[0]!;
@@ -253,10 +253,10 @@ const decisionAt =
     };
   };
 
-/** Real field-suggest path for `product.categoryId` with a scripted Jev. */
+/** Real field-suggest path for `product.categoryId` with a scripted the decision model. */
 export const categoryPorts = (confidence = 0.97) => ({
   suggestPorts: {
-    jev: decisionAt(confidence),
+    decisionPort: decisionAt(confidence),
     registry: { "product.categoryId": categorySpec },
   },
 });

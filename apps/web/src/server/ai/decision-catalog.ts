@@ -17,6 +17,10 @@ import { extractedPurchaseLine } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
 import { classificationPrompt } from "~/server/ai/classify";
+import {
+  buildChoiceInput,
+  type DecisionChoicePrompt,
+} from "~/server/ai/decision-model";
 import { externalIdKindSubject } from "~/server/ai/external-id-kind";
 import {
   type AiDecisionFeature,
@@ -32,7 +36,6 @@ import {
   type ResolvedBasis,
 } from "~/server/ai/field-suggest/registry";
 import { prunePrompt } from "~/server/ai/field-suggest/suggest-fields";
-import { buildChoiceInput, type JevChoicePrompt } from "~/server/ai/jev";
 import { selectionPrompt } from "~/server/ai/selection";
 import {
   renderSettlementSubject,
@@ -75,7 +78,7 @@ function featureFacts(feature: AiDecisionFeature) {
   };
 }
 
-function rendered(prompt: JevChoicePrompt): DecisionCatalogRow["prompt"] {
+function rendered(prompt: DecisionChoicePrompt): DecisionCatalogRow["prompt"] {
   return {
     subject: prompt.subject,
     input: z.json().parse(buildChoiceInput(prompt)),
@@ -101,7 +104,7 @@ function syntheticBasis(
 function fieldPrompt(
   spec: FieldSuggestSpec,
   basis: ResolvedBasis,
-): JevChoicePrompt {
+): DecisionChoicePrompt {
   switch (spec.kind) {
     case "enum":
       return classificationPrompt({
@@ -180,7 +183,7 @@ function featureRow(
   label: string,
   description: string,
   feature: AiDecisionFeature,
-  prompt: JevChoicePrompt,
+  prompt: DecisionChoicePrompt,
   extra: Partial<Pick<CatalogRow, "options" | "roster">> = {},
 ): CatalogRow {
   return {

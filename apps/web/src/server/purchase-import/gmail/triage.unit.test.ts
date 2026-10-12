@@ -1,11 +1,11 @@
 /** Failures: missing originals classify negatively; a clipped amount, order
- * number, attachment, image-only body or dropped MIME part lets Jev's
+ * number, attachment, image-only body or dropped MIME part lets the decision model's
  * `unrelated` stand; HTML alone forces `uncertain`; escaping, Unicode or
- * transport headers push the view past Jev's request gate. */
+ * transport headers push the view past the decision model's request gate. */
 import * as recipebridge from "@cubby/recipebridge";
 import { describe, expect, it, vi } from "vitest";
 
-import { jevChoiceFitsContext } from "~/server/ai/jev";
+import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
 
 import {
   EMAIL_FIXTURE_SUMMARY,
@@ -49,7 +49,7 @@ const route = async (
 };
 
 const withinGate = (content: string) =>
-  jevChoiceFitsContext(mailTriagePrompt(content));
+  decisionChoiceFitsContext(mailTriagePrompt(content));
 
 describe("transient Gmail triage", () => {
   it("compacts the shared Email fixtures exactly as workerd does", () => {
@@ -58,13 +58,13 @@ describe("transient Gmail triage", () => {
     );
   });
 
-  it("lets Jev's unrelated stand for a complete HTML newsletter", async () => {
+  it("lets the decision model's unrelated stand for a complete HTML newsletter", async () => {
     const { decision, view, content } = await route(
       message(EMAIL_HTML_FIXTURES.newsletter, "text/html"),
     );
     expect(decision).toMatchObject({
       classification: "unrelated",
-      stage: "jev",
+      stage: "decision",
     });
     expect(view).toMatchObject({ complete: true, incompleteReasons: [] });
     expect(JSON.parse(content)).toMatchObject({
@@ -139,7 +139,7 @@ describe("transient Gmail triage", () => {
     });
     expect(decision).toMatchObject({
       classification: "unrelated",
-      stage: "jev",
+      stage: "decision",
     });
   });
 
@@ -274,7 +274,10 @@ describe("transient Gmail triage", () => {
       ],
     };
     const { decision, content } = await route(raw, "related");
-    expect(decision).toMatchObject({ classification: "related", stage: "jev" });
+    expect(decision).toMatchObject({
+      classification: "related",
+      stage: "decision",
+    });
     expect(withinGate(content)).toBe(true);
     expect(JSON.parse(content)).toMatchObject({
       senderDomain: "shop.example",

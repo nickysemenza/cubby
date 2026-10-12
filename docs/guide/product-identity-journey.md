@@ -18,7 +18,7 @@ web or native statement review (or MCP), and capture own-item and label photos o
 These sources can arrive in any order. Cubby should converge them on one exact
 Product, an itemized Purchase, and a truthful settlement allocation. A human
 reviews uncertain identity, grouped photos, and ambiguous charges. The import-run
-agent can coordinate the browser, mail, and photo jobs; Jev can help rank bounded
+agent can coordinate the browser, mail, and photo jobs; the decision model can help rank bounded
 ambiguous choices. Neither agent substitutes for source evidence or approval.
 After an import commits, automatic Product research investigates the original
 ordered variant. Accepted category, Ingredient and grown-Plant claims pass
@@ -66,7 +66,7 @@ was bought. A delivered email and a card charge do not receive inventory.
 
 Known-Vendor and selected-charge research use ordinary Runs and shared mail
 reports. Targeted search leaves broad mailbox coverage progress separate.
-Discovery pages retained Gmail history excluding Spam and Trash; Jev routes
+Discovery pages retained Gmail history excluding Spam and Trash; the decision model routes
 purchase-related and uncertain messages to the researcher. Unrelated mail keeps
 minimal scan metadata. Related originals and useful attachments become retained
 evidence, and repeat acquisition shares the canonical source instead of creating

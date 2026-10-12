@@ -7,7 +7,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import type { JevPort } from "~/server/ai/jev";
+import type { DecisionPort } from "~/server/ai/decision-model";
 import {
   financialTransaction,
   financialTransactionAllocation,
@@ -93,7 +93,7 @@ describe("reviewed linked finance category suggestions", () => {
       })
       .returning();
     if (!allocation) throw new Error("Missing fixture allocation");
-    const jev = vi.fn<JevPort>(async (input) => {
+    const decisionPort = vi.fn<DecisionPort>(async (input) => {
       const entries = Object.entries(input.questions.selection.criteria);
       const choice = entries.find(([, label]) =>
         label.includes(category.shortcode),
@@ -130,7 +130,7 @@ describe("reviewed linked finance category suggestions", () => {
           targets: ["spendingCategoryId"],
           basis: { merchant: "Unsaved misleading restaurant" },
         }),
-        { jev },
+        { decisionPort },
       );
     const context = entityKernelContextSchema.parse({
       ...createTestRequestContext(ctx.db),
@@ -145,7 +145,7 @@ describe("reviewed linked finance category suggestions", () => {
       line,
       charge,
       allocation,
-      jev,
+      decisionPort,
       suggest,
       context,
     };
@@ -155,7 +155,7 @@ describe("reviewed linked finance category suggestions", () => {
     const proposal = (await f.suggest()).suggestions.spendingCategoryId;
     expect(proposal?.value).toBe(f.category.shortcode);
     expect(proposal?.financeReview?.fingerprint).toMatch(/^[a-f0-9]{64}$/);
-    const subject = f.jev.mock.calls[0]![0].state;
+    const subject = f.decisionPort.mock.calls[0]![0].state;
     expect(subject).toContain("Fixture black crew shirt");
     expect(subject).toContain('"productQuantity":2');
     expect(subject).not.toContain("Unsaved misleading restaurant");
@@ -249,14 +249,14 @@ describe("reviewed linked finance category suggestions", () => {
       deletedAt: new Date(),
     });
     await f.suggest("purchase", f.purchase.shortcode);
-    const mixed = f.jev.mock.calls.at(-1)![0].state;
+    const mixed = f.decisionPort.mock.calls.at(-1)![0].state;
     expect(mixed).toContain("Fixture shipment tax");
     expect(mixed).toContain('"lineKind":"tax"');
     expect(mixed).toContain('"economicRole":"reimbursement"');
     expect(mixed).toContain('"cost":-8');
     expect(mixed).not.toContain("Fixture retired aggregate");
     await f.suggest("expense", f.line.shortcode);
-    const ownLine = f.jev.mock.calls.at(-1)![0].state;
+    const ownLine = f.decisionPort.mock.calls.at(-1)![0].state;
     expect(ownLine).toContain("Fixture black crew shirt");
     expect(ownLine).not.toContain("Fixture shipment tax");
     expect(ownLine).not.toContain("Fixture friend reimbursement");
@@ -265,7 +265,7 @@ describe("reviewed linked finance category suggestions", () => {
       .set({ deletedAt: new Date() })
       .where(eq(product.id, f.good.entityId));
     await f.suggest("purchase", f.purchase.shortcode);
-    expect(f.jev.mock.calls.at(-1)![0].state).not.toContain(
+    expect(f.decisionPort.mock.calls.at(-1)![0].state).not.toContain(
       "Fixture black crew shirt",
     );
   });

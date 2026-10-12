@@ -333,7 +333,7 @@ describe("Email generic persisted reads", () => {
         emailId: email.id,
         checksum: email.checksum,
         classification: "unrelated",
-        stage: "jev",
+        stage: "decision",
         reason: "Synthetic initial prediction",
         classificationVersion: "synthetic-v1",
       })
@@ -386,7 +386,7 @@ describe("Email generic persisted reads", () => {
         name: "Synthetic false positives",
         count: 6,
         classification: "related",
-        stage: "jev",
+        stage: "decision",
         model: "typesafe/jev",
       },
       {
@@ -407,7 +407,7 @@ describe("Email generic persisted reads", () => {
       name: string;
       count: number;
       classification: "related" | "unrelated";
-      stage: "jev" | "rule" | "model";
+      stage: "decision" | "rule" | "model";
       model: string | null;
     }>) {
       for (let index = 0; index < group.count; index++) {

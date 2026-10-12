@@ -889,7 +889,7 @@ describe("generic enum fields", () => {
     const [statusCell, tradeCell] = columns.visit((column) =>
       renderRowCell(column.cell, record),
     );
-    // `trade` declares `control.suggest`, so its open editor mounts the Jev
+    // `trade` declares `control.suggest`, so its open editor mounts the decision model
     // apply affordance, which queries — hence the harness.
     const harness = createBrowserTestHarness();
 
@@ -912,7 +912,7 @@ describe("generic enum fields", () => {
     expect(
       screen.getByRole("button", { name: /^Clear/i, hidden: true }),
     ).toBeInTheDocument();
-    // The open editor asks Jev for `trade` (declared `control.suggest`, as a
+    // The open editor asks the decision model for `trade` (declared `control.suggest`, as a
     // "provided" alternative since a value is stored) and never for `status`
     // (no `suggest`) — the generic list editor used to omit this entirely.
     const suggestionTargets = harness.queryClient

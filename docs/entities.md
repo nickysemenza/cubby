@@ -649,7 +649,7 @@ derived target without backing columns. Derived DDL supersedes pending
 suggestions when a backing column changes; referenced backing watches every
 target row linked through `via`.
 
-Shared AI selection sends the entire shown roster to Jev only when it fits
+Shared AI selection sends the entire shown roster to the decision model only when it fits
 both the 254-choice limit and the 32,000-byte serialized UTF-8 envelope,
 including subject, rules, labels, and the none option. Otherwise the fast chat
 tier selects from that same roster with explicit candidate ids, even when its
@@ -1293,7 +1293,7 @@ field order is precedence, so food evidence outranks an ISBN. Tools,
 Electronics, Storage, and Household require a model. Consumers read the
 evaluator, never a feature literal: the `product_model` gap
 (`classificationPolicySql`), category admission on create, update, merge, and
-reviewed reassignment, and Jev targets — `suggestFields` skips a field the
+reviewed reassignment, and decision-model targets — `suggestFields` skips a field the
 record's recorded classification refuses (`classificationRefusesField`; an
 unclassified record is not refused, since the write classifies it), and
 post-import auto-fill re-checks under its row lock. Each declared

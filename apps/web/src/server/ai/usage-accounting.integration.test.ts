@@ -106,11 +106,11 @@ describe("AiUsage accounting", () => {
           { headers: { "cf-aig-log-id": "log-decision" } },
         );
       });
-      const { runJevChoice } = await import("./jev");
+      const { runDecisionChoice } = await import("./decision-model");
       const runId = await ensureRun(ctx.db, ctx.actor, {
         purpose: "ai_suggest",
       });
-      await runJevChoice({
+      await runDecisionChoice({
         feature: { ...FIELD_SUGGESTION_FEATURE, cache: false },
         subject: "synthetic decision",
         rules: "Choose one.",
@@ -161,9 +161,9 @@ describe("AiUsage accounting", () => {
         },
       ),
     );
-    const { runJevChoice } = await import("./jev");
+    const { runDecisionChoice } = await import("./decision-model");
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
-    await runJevChoice({
+    await runDecisionChoice({
       feature: { ...FIELD_SUGGESTION_FEATURE, cache: false },
       subject: "synthetic decision",
       rules: "Choose one.",

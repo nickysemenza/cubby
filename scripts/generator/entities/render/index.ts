@@ -944,7 +944,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
     }),
   );
   // Every `"entity.field"` whose control declares `suggest`, across all
-  // entities, in declaration order — the decision-tier (Jev) field-suggest
+  // entities, in declaration order — the decision-tier field-suggest
   // registry keys off this list (`GeneratedSuggestFieldKey`).
   const suggestFieldKeys = entities.flatMap(({ key, fieldModel }) =>
     fieldModel.fields

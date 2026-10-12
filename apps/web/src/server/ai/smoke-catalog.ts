@@ -72,7 +72,7 @@ export const AI_SMOKE_CASES = {
   selectionOverflow: {
     feature: SELECTION_OVERFLOW_FEATURE,
     label: "Large shortlist",
-    description: "Selection beyond Jev's roster limit",
+    description: "Selection beyond the decision model's roster limit",
     group: "Decisions",
   },
   settlementCandidateRank: {

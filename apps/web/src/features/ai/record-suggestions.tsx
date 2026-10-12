@@ -541,7 +541,7 @@ function visibleSuggestTargets(
 
 /** The label of the first non-reference basis field a suggest target
  * declares — what the "Not checked — add a `name` first" status line names
- * as the thing to fill in before Jev has anything to evaluate. */
+ * as the thing to fill in before the decision model has anything to evaluate. */
 function firstBasisFieldLabel(
   entity: StandardEntity,
   targets: SuggestTargets,
@@ -931,7 +931,7 @@ function BoundRecordSuggestions({
         }
         return;
       }
-      // Acceptance reads the entity again without asking Jev twice. Rebuild
+      // Acceptance reads the entity again without asking the decision model twice. Rebuild
       // the basis over the request's own key set (`source.basis`'s keys,
       // not every visible target's union) so a parent/default or line-kind
       // change still revokes the proposal, while an unrelated visible
@@ -991,7 +991,7 @@ function BoundRecordSuggestions({
     queries.some((query) => query.isFetching || query.isPending);
   const failures = queries.filter((query) => query.isError).length;
   // The client never asked at all — every requestable target's basis fell
-  // short of `isBasisSufficient`, not that Jev declined once asked. Name the
+  // short of `isBasisSufficient`, not that the decision model declined once asked. Name the
   // first basis field that would unblock a request, e.g. "name".
   const unasked =
     requests.length === 0 && records.length > 0 && targets.targets.length > 0

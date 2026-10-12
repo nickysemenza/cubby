@@ -102,7 +102,7 @@ export const MCP_TOOLS = defineMcpTools({
         op: aiContract.ops.suggestFields,
         modelBacked: true,
         description:
-          "Jev's field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint spending_classification_write.apply_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss. decisionModel pins Jev (typesafe/jev) or Clef (@cf/cloudflare/clef) to replay one record through each trial model.",
+          "Decision-model field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint spending_classification_write.apply_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss. decisionModel pins Jev (typesafe/jev) or Clef (@cf/cloudflare/clef) to replay one record through each trial model.",
       }),
       suggestion_queue: mcpAction({
         op: aiContract.ops.listSuggestionReviewQueue,
@@ -136,10 +136,10 @@ export const MCP_TOOLS = defineMcpTools({
       preview: mcpAction({
         op: kernelAction("preview", "query"),
         readPolicy: "strong",
-        // A create preview asks Jev for manifest-declared field suggestions.
+        // A create preview asks the decision model for manifest-declared field suggestions.
         modelBacked: true,
         description:
-          'Preview without writing. `{entity, data, context?}` previews one create: contextual seeds merge first, explicit data wins, and manifest-declared Jev suggestions come back with confidence and provenance. `{items: [...]}` previews up to 50 creates independently. `{operation: {action: "attach"|"detach", entity, relation, id, items}}` dry-runs a link change, returning `blockers`, `changes` and `sideEffects` with per-target breakdowns and `canProceed`; it is advisory, since the mutation re-validates in its own transaction.',
+          'Preview without writing. `{entity, data, context?}` previews one create: contextual seeds merge first, explicit data wins, and manifest-declared decision suggestions come back with confidence and provenance. `{items: [...]}` previews up to 50 creates independently. `{operation: {action: "attach"|"detach", entity, relation, id, items}}` dry-runs a link change, returning `blockers`, `changes` and `sideEffects` with per-target breakdowns and `canProceed`; it is advisory, since the mutation re-validates in its own transaction.',
       }),
       relations: mcpAction({
         op: entityGraphContract.ops.relation,
@@ -758,7 +758,7 @@ export const MCP_TOOLS = defineMcpTools({
       reclassify: mcpAction({
         op: purchaseImportContract.ops.emailReclassify,
         description:
-          "Rerun Relevance for at most 200 owned Emails (one Run per mailbox): rule, Jev and the relevance model, refetching each original from Gmail. The result is recorded as history. It replaces Relevance only when no retained content or import would be dropped (`awaiting_acceptance` otherwise; accept with `mail.resolve` unrelated), never overrides a member resolution, and reports `conflict` when it disagrees with the member's review.",
+          "Rerun Relevance for at most 200 owned Emails (one Run per mailbox): rule, the decision model and the relevance model, refetching each original from Gmail. The result is recorded as history. It replaces Relevance only when no retained content or import would be dropped (`awaiting_acceptance` otherwise; accept with `mail.resolve` unrelated), never overrides a member resolution, and reports `conflict` when it disagrees with the member's review.",
       }),
       rerun_preview: mcpAction({
         op: purchaseImportContract.ops.emailPreviewRerun,

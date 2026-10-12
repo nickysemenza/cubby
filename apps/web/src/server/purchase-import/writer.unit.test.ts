@@ -1,7 +1,7 @@
 import type { ExtractedPurchaseLine } from "@cubby/schemas/purchase-import";
 import { describe, expect, it, vi } from "vitest";
 
-import type { JevChoiceResult } from "~/server/ai/jev";
+import type { DecisionChoiceResult } from "~/server/ai/decision-model";
 
 import {
   buildPurchaseImportPlan,
@@ -124,7 +124,7 @@ describe("explicitLineDecisions", () => {
     ...overrides,
   });
 
-  const noReversal = vi.fn<() => Promise<JevChoiceResult>>();
+  const noReversal = vi.fn<() => Promise<DecisionChoiceResult>>();
 
   it("decides every line when only principal lines carry a resolution, leaving adjustments unresolved by design", async () => {
     const lines = [
@@ -186,12 +186,14 @@ describe("explicitLineDecisions", () => {
     const resolutions = [
       { kind: "existing" as const, lineIndex: 0, productId: "product-1" },
     ];
-    const resolveReversal = vi.fn<() => Promise<JevChoiceResult>>(async () => ({
-      selectedIndex: 0,
-      confidence: "high",
-      probability: 0.9,
-      ranked: [{ index: 0, probability: 0.9 }],
-    }));
+    const resolveReversal = vi.fn<() => Promise<DecisionChoiceResult>>(
+      async () => ({
+        selectedIndex: 0,
+        confidence: "high",
+        probability: 0.9,
+        ranked: [{ index: 0, probability: 0.9 }],
+      }),
+    );
 
     const [decision] = await explicitLineDecisions(
       lines,

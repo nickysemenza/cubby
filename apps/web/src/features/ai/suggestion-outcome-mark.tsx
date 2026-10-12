@@ -414,7 +414,7 @@ export function SuggestionOutcomeMark({
   /** The outcome is still in flight. The glyph shows from the start rather
    * than on arrival: on a phone the 44px glyph wraps onto its own line, so
    * mounting it late pushed every later fact down mid-tap (a reset button
-   * tapped as Jev settled received the tap on empty space). */
+   * tapped as the decision model settled received the tap on empty space). */
   pending?: boolean;
   /** The field's query failed; shown instead of silently omitting the mark. */
   error?: unknown;

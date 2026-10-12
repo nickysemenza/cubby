@@ -5,7 +5,7 @@ import type {
 } from "@cubby/schemas/mailbox-research";
 
 import { wasm } from "~/lib/wasm";
-import { jevChoiceFitsContext } from "~/server/ai/jev";
+import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
 
 import { droppedBodyParts } from "./normalize";
 import type {
@@ -192,7 +192,7 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
           images[index]?.src === src && images[index].alt === alt,
       );
   }
-  // Cues are scanned on the full text; each must survive into the content Jev reads.
+  // Cues are scanned on the full text; each must survive into the content the decision model reads.
   const cues = [
     ...new Map(
       [...(html?.cues ?? []), ...wasm.purchase_cues(plain)].map((cue) => [
@@ -227,9 +227,9 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
       missing,
     };
   };
-  // The real gate: Jev's serialized request, rules and escaping included.
+  // The real gate: the decision model's serialized request, rules and escaping included.
   const fits = (length: number) =>
-    jevChoiceFitsContext(mailTriagePrompt(encode(length).content));
+    decisionChoiceFitsContext(mailTriagePrompt(encode(length).content));
   let low = 0;
   let high = body.length;
   while (low < high) {
@@ -246,7 +246,7 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
   };
 }
 
-/** What Jev read: its size and why it cannot prove a message unrelated. */
+/** What the decision model read: its size and why it cannot prove a message unrelated. */
 type MailTriageView = {
   bytes: number;
   complete: boolean;
@@ -284,15 +284,15 @@ export async function routeGmailMessage(
       decision: {
         classification: "uncertain",
         stage: "rule",
-        reason: `Jev said unrelated, but the bounded view is incomplete: ${incompleteReasons.join(", ")}`,
+        reason: `The decision model said unrelated, but the bounded view is incomplete: ${incompleteReasons.join(", ")}`,
       },
       view,
     };
   return {
     decision: {
       classification: choice,
-      stage: "jev",
-      reason: `Jev classified the ${view.complete ? "message" : "partial message"} ${choice}`,
+      stage: "decision",
+      reason: `The decision model classified the ${view.complete ? "message" : "partial message"} ${choice}`,
     },
     view,
   };

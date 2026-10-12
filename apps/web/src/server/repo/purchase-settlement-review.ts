@@ -61,7 +61,7 @@ export function composeSettlementReview(
     tiedTransactionIds: tied.map(({ transaction }) => transaction.id),
     suggestHint:
       tied.length >= 2
-        ? `${tied.length} charges rank equally. Jev can suggest which fits best; you still choose and allocate.`
+        ? `${tied.length} charges rank equally. The decision model can suggest which fits best; you still choose and allocate.`
         : null,
   };
 }

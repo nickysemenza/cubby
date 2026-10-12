@@ -20,7 +20,7 @@ const MIN_IDENTIFIER_LENGTH = 2;
  * Binds the generic
  * `useRowEnumSuggestion` to `ai.suggestExternalIdKind` — server-side regex
  * fast paths answer the common shapes (ASIN, barcode) with no model call;
- * everything else goes to Jev.
+ * everything else goes to the decision model.
  */
 export function ExternalIdKindSuggestion<TFieldValues extends FieldValues>({
   form,

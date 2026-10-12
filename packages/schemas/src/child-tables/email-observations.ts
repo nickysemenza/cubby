@@ -114,7 +114,7 @@ export const emailObservationChildren = [
       },
       {
         name: "EmailClassificationObservation_stage_check",
-        sql: "{stage} IN ('rule', 'jev', 'model', 'resolution')",
+        sql: "{stage} IN ('rule', 'decision', 'model', 'resolution')",
       },
     ],
   }),

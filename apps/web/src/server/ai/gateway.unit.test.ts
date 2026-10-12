@@ -454,12 +454,12 @@ describe("gatewayFetch metadata contract", () => {
 
 // Regression: Universal `gateway.run({provider: "workers-ai"})` forwarded the
 // model call unscoped, so the account's `default` gateway logged (and
-// recreated itself for) every Jev decision a second time with no metadata.
+// recreated itself for) every decision decision a second time with no metadata.
 // `AI.run` with `gateway.id` posts to the binding's `/ai-gateway/run`
 // (workerd `ai-api.ts`), and REST names the gateway in `cf-aig-gateway-id`
 // (https://developers.cloudflare.com/ai-gateway/usage/rest-api/).
 describe("gatewayFetch Workers AI", () => {
-  const jevInput = { choices: ["red", "blue"], prompt: "synthetic" };
+  const decisionInput = { choices: ["red", "blue"], prompt: "synthetic" };
 
   it("runs the model natively on the binding, scoped to the cubby gateway", async () => {
     const universal = vi.fn();
@@ -485,7 +485,7 @@ describe("gatewayFetch Workers AI", () => {
     })(`${gatewayBaseURL("workers-ai")}/run/typesafe/jev`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(jevInput),
+      body: JSON.stringify(decisionInput),
       signal: controller.signal,
     });
 
@@ -494,7 +494,7 @@ describe("gatewayFetch Workers AI", () => {
     expect(runs).toEqual([
       [
         "typesafe/jev",
-        jevInput,
+        decisionInput,
         {
           gateway: {
             id: "cubby",
@@ -525,7 +525,7 @@ describe("gatewayFetch Workers AI", () => {
       requestTimeoutMs: 30000,
     })(`${gatewayBaseURL("workers-ai")}/run/typesafe/jev`, {
       method: "POST",
-      body: JSON.stringify(jevInput),
+      body: JSON.stringify(decisionInput),
     });
 
     const [call] = sent;
@@ -543,7 +543,7 @@ describe("gatewayFetch Workers AI", () => {
     expect(headers.get("cf-aig-request-timeout")).toBe("30000");
     expect(JSON.parse(String(call?.init?.body))).toEqual({
       model: "typesafe/jev",
-      input: jevInput,
+      input: decisionInput,
     });
   });
 });

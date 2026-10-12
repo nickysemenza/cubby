@@ -107,7 +107,7 @@ function bucketSummary(fields: readonly SuggestionStatusField[]): string {
 
 /**
  * The one status line every suggestion surface (list, detail, and form)
- * renders once its query settles — how many fields Jev checked, so a record
+ * renders once its query settles — how many fields the decision model checked, so a record
  * it agreed with in full no longer reads as untouched ("0 suggestions").
  * Hover/tap opens the per-field breakdown; beyond `MAX_LISTED_FIELDS` that
  * becomes bucketed counts instead of a wall of rows.

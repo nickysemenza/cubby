@@ -9,9 +9,9 @@ import { sql, type SQL } from "drizzle-orm";
 // Leaf module: data-quality bindings import these predicates, and the Email
 // repository imports the list scaffold that imports those bindings.
 
-const { rule, jev, model, resolution } = mailboxClassificationStage.enum;
+const { rule, decision, model, resolution } = mailboxClassificationStage.enum;
 /** The stages a member's review can disagree with. */
-export const automatedStagesSql = sql`(${rule}, ${jev}, ${model})`;
+export const automatedStagesSql = sql`(${rule}, ${decision}, ${model})`;
 
 /**
  * Correlated to the plain Email root table used by the list scaffold. Explicit
@@ -100,7 +100,7 @@ export const emailMemberClassificationSql =
     LIMIT 1
   ) END
 `;
-/** The latest rule, Jev or model result for the current original. */
+/** The latest rule, decision-model or relevance-model result for the current original. */
 const emailAutomatedClassificationSql = () => sql`
   COALESCE(
     (SELECT prediction."classification"

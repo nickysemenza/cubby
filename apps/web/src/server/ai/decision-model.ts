@@ -31,22 +31,22 @@ import {
   recordFeatureUsage,
 } from "~/server/ai/run-feature";
 
-/** Common trial bounds: Jev's 32k context, conservatively measured in bytes. */
-const JEV_CONTEXT_BYTE_LIMIT = 32_000;
-const JEV_MAX_CHOICES = 255;
+/** Common trial bounds: the decision model's 32k context, conservatively measured in bytes. */
+const DECISION_CONTEXT_BYTE_LIMIT = 32_000;
+const DECISION_MAX_CHOICES = 255;
 /** One slot is reserved for `none`. */
-export const JEV_MAX_CANDIDATES = JEV_MAX_CHOICES - 1;
+export const DECISION_MAX_CANDIDATES = DECISION_MAX_CHOICES - 1;
 const NONE_KEY = "none";
-const JEV_MAX_ATTEMPTS = 3;
-/** Jev's whole budget for one choice, retries included; MCP model reads outlast it. */
-export const JEV_DEADLINE_MS = 30_000;
+const DECISION_MAX_ATTEMPTS = 3;
+/** The decision model's whole budget for one choice, retries included; MCP model reads outlast it. */
+export const DECISION_DEADLINE_MS = 30_000;
 
 function retryDelay(
   response: Response,
   attempt: number,
   elapsedMs: number,
 ): number | null {
-  if (response.status !== 429 || attempt >= JEV_MAX_ATTEMPTS) return null;
+  if (response.status !== 429 || attempt >= DECISION_MAX_ATTEMPTS) return null;
   const header = response.headers.get("retry-after");
   const seconds = header === null ? NaN : Number(header);
   const retryAfterMs = Number.isFinite(seconds)
@@ -60,10 +60,10 @@ function retryDelay(
     backoff,
     Number.isFinite(retryAfterMs) ? retryAfterMs : 0,
   );
-  return elapsedMs + delayMs < JEV_DEADLINE_MS ? delayMs : null;
+  return elapsedMs + delayMs < DECISION_DEADLINE_MS ? delayMs : null;
 }
 
-const jevChoiceInputSchema = z.object({
+const decisionChoiceInputSchema = z.object({
   state: z.string(),
   questions: z.object({
     selection: z.object({
@@ -73,9 +73,9 @@ const jevChoiceInputSchema = z.object({
     }),
   }),
 });
-type JevChoiceInput = z.infer<typeof jevChoiceInputSchema>;
+type DecisionChoiceInput = z.infer<typeof decisionChoiceInputSchema>;
 
-const jevChoiceResponseSchema = z.object({
+const decisionChoiceResponseSchema = z.object({
   answers: z.object({
     selection: z.object({
       type: z.literal("choice"),
@@ -91,29 +91,33 @@ const jevChoiceResponseSchema = z.object({
     })
     .optional(),
 });
-export type JevChoiceResponse = z.infer<typeof jevChoiceResponseSchema>;
+export type DecisionChoiceResponse = z.infer<
+  typeof decisionChoiceResponseSchema
+>;
 
 /**
  * Jev wraps its answer in `result`; Clef returns the answer directly.
  * Keep both wire shapes validated against the same choice contract.
  */
-const jevGatewayEnvelopeSchema = z.object({ result: jevChoiceResponseSchema });
+const jevGatewayEnvelopeSchema = z.object({
+  result: decisionChoiceResponseSchema,
+});
 /**
  * The gateway-scoped run route (`AI.run` with `gateway.id`, REST `/ai/run`)
- * adds a run layer around Jev's answer: `{result: {state, result}, success,
+ * adds a run layer around the decision model's answer: `{result: {state, result}, success,
  * errors}`. Only a `Completed` run carries an answer.
  */
 const jevRunEnvelopeSchema = z.object({
   result: z.object({
     state: z.literal("Completed"),
-    result: jevChoiceResponseSchema,
+    result: decisionChoiceResponseSchema,
   }),
 });
 
-export interface JevChoiceResult {
+export interface DecisionChoiceResult {
   selectedIndex: number | null;
   confidence: Confidence;
-  /** Jev's calibrated probability for the selected choice, before bucketing. */
+  /** The decision model's calibrated probability for the selected choice, before bucketing. */
   probability: number;
   /**
    * Every candidate's calibrated probability, desc by probability, `none`
@@ -128,10 +132,12 @@ export interface JevChoiceResult {
  * Production always runs the real transport, so a model failure throws instead
  * of answering from another model.
  */
-export type JevPort = (input: JevChoiceInput) => Promise<JevChoiceResponse>;
+export type DecisionPort = (
+  input: DecisionChoiceInput,
+) => Promise<DecisionChoiceResponse>;
 
 /** The answer in a successful response body, whichever wire shape carries it. */
-function parseJevResponse(body: string): JevChoiceResponse {
+function parseDecisionResponse(body: string): DecisionChoiceResponse {
   let decoded: unknown;
   try {
     decoded = JSON.parse(body);
@@ -143,7 +149,7 @@ function parseJevResponse(body: string): JevChoiceResponse {
   if (run.success) return run.data.result.result;
   const enveloped = jevGatewayEnvelopeSchema.safeParse(decoded);
   if (enveloped.success) return enveloped.data.result;
-  const direct = jevChoiceResponseSchema.safeParse(decoded);
+  const direct = decisionChoiceResponseSchema.safeParse(decoded);
   if (direct.success) return direct.data;
   // The raw body carries an unfinished run's state and the API's `errors`.
   throw new Error(
@@ -151,12 +157,12 @@ function parseJevResponse(body: string): JevChoiceResponse {
   );
 }
 
-async function requestJev(
-  input: JevChoiceInput,
+async function requestDecision(
+  input: DecisionChoiceInput,
   ctx: AiRunContext,
   feature: AiDecisionFeature,
   applicationCacheStatus: ApplicationCacheStatus,
-): Promise<JevChoiceResponse> {
+): Promise<DecisionChoiceResponse> {
   const metadata: GatewayMetadata = {
     feature: feature.feature,
     operation: ctx.operation,
@@ -189,8 +195,8 @@ async function requestJev(
     controller.abort(
       new Error("Decision request exceeded its 30-second deadline."),
     );
-  }, JEV_DEADLINE_MS);
-  let parsed: JevChoiceResponse | undefined;
+  }, DECISION_DEADLINE_MS);
+  let parsed: DecisionChoiceResponse | undefined;
   let attempt = 0;
   try {
     const { response, body } = await retryWithBackoff(
@@ -231,7 +237,7 @@ async function requestJev(
         { status: response.status },
       );
     }
-    parsed = parseJevResponse(await response.text().catch(() => ""));
+    parsed = parseDecisionResponse(await response.text().catch(() => ""));
     return parsed;
   } catch (error) {
     throw wrapAiGatewayError(error, {
@@ -267,15 +273,19 @@ function validateProbabilities(
     keys.length !== expectedKeys.size ||
     keys.some((key) => !expectedKeys.has(key))
   ) {
-    throw new Error("Jev returned an unexpected probability key set.");
+    throw new Error(
+      "The decision model returned an unexpected probability key set.",
+    );
   }
   const total = keys.reduce((sum, key) => sum + probabilities[key]!, 0);
   if (Math.abs(total - 1) > 0.02) {
-    throw new Error("Jev returned probabilities that do not normalize.");
+    throw new Error(
+      "The decision model returned probabilities that do not normalize.",
+    );
   }
 }
 
-export interface JevChoicePrompt {
+export interface DecisionChoicePrompt {
   subject: string;
   rules: string;
   choices: readonly string[];
@@ -283,7 +293,9 @@ export interface JevChoicePrompt {
 }
 
 /** The exact request body a choice sends; the Decisions catalog renders it. */
-export function buildChoiceInput(args: JevChoicePrompt): JevChoiceInput {
+export function buildChoiceInput(
+  args: DecisionChoicePrompt,
+): DecisionChoiceInput {
   const allowNone = args.allowNone ?? true;
   const criteria = Object.fromEntries(
     args.choices.map((label, index) => [`c${index}`, label]),
@@ -303,30 +315,30 @@ export function buildChoiceInput(args: JevChoicePrompt): JevChoiceInput {
   };
 }
 
-function inputFitsContext(input: JevChoiceInput): boolean {
+function inputFitsContext(input: DecisionChoiceInput): boolean {
   // UTF-8 bytes include JSON escaping and the complete request envelope.
   return (
     new TextEncoder().encode(JSON.stringify(input)).byteLength <=
-    JEV_CONTEXT_BYTE_LIMIT
+    DECISION_CONTEXT_BYTE_LIMIT
   );
 }
 
-/** Decide overflow before requesting Jev, using the same envelope as the transport. */
-export function jevChoiceFitsContext(args: JevChoicePrompt): boolean {
+/** Decide overflow before requesting the decision model, using the same envelope as the transport. */
+export function decisionChoiceFitsContext(args: DecisionChoicePrompt): boolean {
   return (
-    args.choices.length <= JEV_MAX_CANDIDATES &&
+    args.choices.length <= DECISION_MAX_CANDIDATES &&
     inputFitsContext(buildChoiceInput(args))
   );
 }
 
 /**
- * One closed-set choice: Jev picks over `c0…cn` (plus `none` unless the
+ * One closed-set choice: the decision model picks over `c0…cn` (plus `none` unless the
  * vocabulary is exhaustive), and the winner's index maps back to the
  * caller's roster. An oversized roster or input throws rather than being
  * silently truncated here; `runAiSelection` routes choices exceeding either
  * the candidate count or serialized byte budget to its overflow feature.
  */
-export async function runJevChoice(args: {
+export async function runDecisionChoice(args: {
   feature: AiDecisionFeature;
   subject: string;
   rules: string;
@@ -338,28 +350,28 @@ export async function runJevChoice(args: {
    * (every product has a category), where "none" would be an invalid value.
    */
   allowNone?: boolean;
-  port?: JevPort;
+  port?: DecisionPort;
   onTokenUsage?: (usage: {
     inputTokens: number | null;
     outputTokens: number | null;
   }) => void;
   /** A long-lived Run may pin the sampled decision tier for reproducibility. */
   decisionModel?: SupportedDecisionModel;
-}): Promise<JevChoiceResult> {
-  if (args.choices.length > JEV_MAX_CANDIDATES) {
+}): Promise<DecisionChoiceResult> {
+  if (args.choices.length > DECISION_MAX_CANDIDATES) {
     throw new Error(
-      `Jev supports at most ${JEV_MAX_CANDIDATES} choices, got ${args.choices.length}.`,
+      `The decision model supports at most ${DECISION_MAX_CANDIDATES} choices, got ${args.choices.length}.`,
     );
   }
 
   const input = buildChoiceInput(args);
   if (!inputFitsContext(input)) {
     throw new Error(
-      `Jev choice input exceeds the ${JEV_CONTEXT_BYTE_LIMIT}-byte bound.`,
+      `Decision choice input exceeds the ${DECISION_CONTEXT_BYTE_LIMIT}-byte bound.`,
     );
   }
 
-  const validate = (value: unknown): JevChoiceResult => {
+  const validate = (value: unknown): DecisionChoiceResult => {
     const result = z
       .object({
         selectedIndex: z.number().int().nonnegative().nullable(),
@@ -377,10 +389,10 @@ export async function runJevChoice(args: {
       result.selectedIndex !== null &&
       result.selectedIndex >= args.choices.length
     ) {
-      throw new Error("Jev cached an unknown candidate key.");
+      throw new Error("The decision model cached an unknown candidate key.");
     }
     if (result.ranked.some(({ index }) => index >= args.choices.length)) {
-      throw new Error("Jev cached an unknown ranked choice.");
+      throw new Error("The decision model cached an unknown ranked choice.");
     }
     return result;
   };
@@ -407,7 +419,7 @@ export async function runJevChoice(args: {
     compute: async (applicationCacheStatus) => {
       const response = await (args.port
         ? args.port(input)
-        : requestJev(input, args.usage, feature, applicationCacheStatus));
+        : requestDecision(input, args.usage, feature, applicationCacheStatus));
       args.onTokenUsage?.({
         inputTokens: response.usage?.input_tokens ?? null,
         outputTokens: response.usage?.output_tokens ?? null,
@@ -419,7 +431,9 @@ export async function runJevChoice(args: {
       );
       const selectedProbability = answer.probabilities[answer.choice];
       if (selectedProbability === undefined) {
-        throw new Error("Jev selected a key absent from its probability map.");
+        throw new Error(
+          "The decision model selected a key absent from its probability map.",
+        );
       }
       const confidence = decisionConfidence(selectedProbability);
       const ranked = Object.entries(answer.probabilities)
@@ -442,7 +456,9 @@ export async function runJevChoice(args: {
         !Number.isInteger(selectedIndex) ||
         selectedIndex >= args.choices.length
       ) {
-        throw new Error("Jev selected an unknown candidate key.");
+        throw new Error(
+          "The decision model selected an unknown candidate key.",
+        );
       }
       return {
         selectedIndex,

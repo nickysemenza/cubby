@@ -21,7 +21,7 @@ const textValueSchema = z.string().catch("");
 /** Silent auto-apply is a higher bar than the hint's own review gate
  * (`actionableSuggestion`'s 0.85/0.95 split, `suggestion-review.tsx`) — a
  * row commits itself with no operator glance at all, so it only does that
- * once Jev is very sure. */
+ * once the decision model is very sure. */
 const AUTO_APPLY_THRESHOLD = 0.95;
 
 /** Placeholder key for a row that is not askable yet (see `opts`); never fetched. */

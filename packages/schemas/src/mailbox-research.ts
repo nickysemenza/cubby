@@ -18,10 +18,10 @@ export const mailboxClassification = z.enum([
   "uncertain",
 ]);
 export type MailboxClassification = z.infer<typeof mailboxClassification>;
-/** Which step decided a classification: a deterministic rule, Jev, the relevance model, or an Email resolution. */
+/** Which step decided a classification: a deterministic rule, the decision model (Jev or Clef), the relevance model, or an Email resolution. */
 export const mailboxClassificationStage = z.enum([
   "rule",
-  "jev",
+  "decision",
   "model",
   "resolution",
 ]);
@@ -35,8 +35,8 @@ export const MAILBOX_CLASSIFICATION_LABEL = {
 } as const satisfies Record<MailboxClassification, string>;
 export const MAILBOX_CLASSIFICATION_STAGE_LABEL = {
   rule: "Rule",
-  jev: "Jev",
-  model: "Model",
+  decision: "Decision model",
+  model: "Relevance model",
   resolution: "Member resolution",
 } as const satisfies Record<MailboxClassificationStage, string>;
 /** The Email list cell: Relevance and the stage that decided it. */
@@ -180,7 +180,7 @@ export type MailMessageRef = z.infer<typeof mailMessageRef>;
 
 /**
  * Why Mail triage's bounded view cannot prove a message unrelated; any one
- * turns Jev's `unrelated` into `uncertain`.
+ * turns the decision model's `unrelated` into `uncertain`.
  */
 export const mailTriageIncompleteReason = z.enum([
   /** An amount, order/invoice number or receipt phrase fell outside the view. */
@@ -212,7 +212,7 @@ export const mailTriagePreviewOut = z.object({
   classification: mailboxClassification,
   stage: mailboxClassificationStage,
   reason: z.string(),
-  /** The decision model asked, or null when a rule decided before Jev. */
+  /** The decision model asked, or null when a rule decided before the decision model. */
   model: supportedDecisionModelSchema.nullable(),
   /** Null when the original had no readable body and no view was built. */
   view: z

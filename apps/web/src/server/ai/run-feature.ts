@@ -174,7 +174,7 @@ export interface FeatureUsageOutcome {
 
 /**
  * The usage row for a declared feature's call: chat-tier (from the
- * `AssistantMessage` pi-ai returns), Jev's raw gateway fetch, embeddings, and
+ * `AssistantMessage` pi-ai returns), the decision model's raw gateway fetch, embeddings, and
  * an answer replayed from the caller's own cache (`AiAnalysis`). Provider
  * comes from the model declaration. Calls outside a feature declaration (the
  * cookbook forwarder, audit recovery, the import agent) call `recordAiUsage`

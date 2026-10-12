@@ -32,7 +32,7 @@ const north = candidate(code("4K7M"), "Example Hardware North");
 const south = candidate(code("5N8P"), "Example Hardware South");
 const garden = candidate(code("6Q9R"), "Example Garden");
 const hint =
-  "2 charges rank equally. Jev can suggest which fits best; you still choose and allocate.";
+  "2 charges rank equally. The decision model can suggest which fits best; you still choose and allocate.";
 
 function renderList(
   candidates: SettlementCandidate[],
@@ -93,7 +93,7 @@ describe("SettlementCandidateList", () => {
           { transactionId: code("4K7M"), probability: 0.18, badge: "18%" },
         ],
         displayOrder: [code("5N8P"), code("4K7M"), code("6Q9R")],
-        note: "Suggestion only. Jev ordered the 2 equally ranked charges; nothing is saved until you allocate.",
+        note: "Suggestion only. The decision model ordered the 2 equally ranked charges; nothing is saved until you allocate.",
       },
     });
     expect(screen.getByText("Suggested · 72%")).toBeInTheDocument();

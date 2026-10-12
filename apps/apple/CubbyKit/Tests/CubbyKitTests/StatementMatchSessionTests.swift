@@ -118,7 +118,7 @@ struct StatementMatchSessionTests {
           \(candidate("FTX-6Q9R", amount: 42.5, merchant: "Example Garden",
                       proposed: "[{\"purchaseId\":\"PUR-2345\",\"amount\":\"42.50\"}]"))
         ],"tiedTransactionIds":["FTX-4K7M","FTX-5N8P"],
-        "suggestHint":"2 charges rank equally. Jev can suggest which fits best; you still choose and allocate."}
+        "suggestHint":"2 charges rank equally. The decision model can suggest which fits best; you still choose and allocate."}
         """
 
     nonisolated private static let rankedJSON = """
@@ -126,7 +126,7 @@ struct StatementMatchSessionTests {
          "ranked":[{"transactionId":"FTX-5N8P","probability":0.72,"badge":"Suggested · 72%"},
                    {"transactionId":"FTX-4K7M","probability":0.18,"badge":"18%"}],
          "displayOrder":["FTX-5N8P","FTX-4K7M","FTX-6Q9R"],
-         "note":"Suggestion only. Jev ordered the 2 equally ranked charges; nothing is saved until you allocate."}
+         "note":"Suggestion only. The decision model ordered the 2 equally ranked charges; nothing is saved until you allocate."}
         """
 
     nonisolated private static func check(
@@ -171,7 +171,7 @@ struct StatementMatchSessionTests {
         ])
         #expect(
             session.suggestionNote
-                == "2 charges rank equally. Jev can suggest which fits best; you still choose and allocate.")
+                == "2 charges rank equally. The decision model can suggest which fits best; you still choose and allocate.")
         await session.suggest()
         #expect(session.displayOrder == ["FTX-5N8P", "FTX-4K7M", "FTX-6Q9R"])
         #expect(session.badge(for: "FTX-5N8P") == "Suggested · 72%")

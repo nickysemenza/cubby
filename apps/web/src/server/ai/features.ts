@@ -4,7 +4,7 @@
  * Every feature-runner call is declared here once — tier (which
  * decides the model), token cap, reasoning effort, whether the gateway may
  * cache it, the prompt version the AiAnalysis store keys on, and the schema
- * the model must return. `run-feature.ts` (or `jev.ts`) alone reads a
+ * the model must return. `run-feature.ts` (or `decision-model.ts`) alone reads a
  * record to actually place a call, so a gateway-wide policy change (a cache
  * TTL, a new middleware, a tier's model) is one edit here or there rather
  * than ten copies of the same block across `clients/ai.ts`.
@@ -150,7 +150,7 @@ function defineFeature<
 // Decision tier — Jev/Clef trial on Workers AI. Closed-set classification and
 // selection: the feature hands the model a roster of choices and gets back one
 // index plus a calibrated probability, so there is no id to echo and no
-// prose to parse. A selection whose roster exceeds Jev's limit runs on
+// prose to parse. A selection whose roster exceeds the decision model's limit runs on
 // `SELECTION_OVERFLOW_FEATURE` instead (`ai/selection.ts`).
 // ---------------------------------------------------------------------------
 
@@ -259,7 +259,7 @@ export const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
 
 /**
  * Where any `runAiSelection` lands when its roster is larger than the
- * decision tier takes in one choice: the model names the chosen candidate's
+ * Decision tier takes in one choice: the model names the chosen candidate's
  * id from a rendered shortlist. Shared by every selection consumer; the
  * gateway metadata's `operation` says which one overflowed.
  */

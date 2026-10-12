@@ -235,7 +235,7 @@ export function SuggestionReview({
   basis?: readonly string[];
   notice?: string;
   alternative?: boolean;
-  /** What Jev's decision tier did with this field — drives the always-visible
+  /** What the decision model's decision tier did with this field — drives the always-visible
    * mark even when there's no actionable proposal (or none at all). */
   outcome?: FieldSuggestionOutcome | null;
   /** `"cell"` folds the whole body into the mark's popover so a dense table

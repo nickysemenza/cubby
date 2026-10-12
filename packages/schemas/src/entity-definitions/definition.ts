@@ -319,7 +319,7 @@ const buildMetadataSchemas = () => {
         .optional()
         .default(null),
       /**
-       * A field whose value the decision tier (Jev) infers from the named
+       * A field whose value the decision tier infers from the named
        * sibling fields (`basis`, model field keys of the same entity). The
        * browser editor auto-fills it while untouched and offers a one-tap
        * apply once a value already exists.

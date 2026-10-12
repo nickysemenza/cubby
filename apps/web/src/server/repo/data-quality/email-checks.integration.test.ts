@@ -45,7 +45,7 @@ describe("Email data quality", () => {
         messageId,
         checksum: "c".repeat(64),
         classification: "related",
-        classificationStage: "jev",
+        classificationStage: "decision",
         status: "pending",
         ...fields,
       });

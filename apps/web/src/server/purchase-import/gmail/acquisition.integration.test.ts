@@ -111,7 +111,7 @@ describe("Gmail acquisition retention and replay", () => {
     const [email] = await getDb(ctx.db).select().from(emailTable);
     expect(email).toMatchObject({
       classification: "uncertain",
-      classificationStage: "jev",
+      classificationStage: "decision",
       executionPolicy: "classification_only",
       sender: "shared@platform.example",
       subject: "Synthetic notice",

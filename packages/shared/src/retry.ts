@@ -36,7 +36,7 @@ export interface RetryOptions<T> {
 /**
  * Run `run` until `delayFor` says stop. The policy (which status or error is
  * transient, how long to wait, how many attempts) stays with the caller; this
- * owns only the loop, so Gmail's HTTP statuses, Jev's deadline-bounded 429s and
+ * owns only the loop, so Gmail's HTTP statuses, the decision model's deadline-bounded 429s and
  * a throttled Vectorize write share one implementation.
  */
 export async function retryWithBackoff<T>(

@@ -13,7 +13,7 @@ import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /**
  * User's call, snappy by design: every typing pause longer than this fires
- * one `ai.suggestFields` request. Jev is the cheap decision tier and the
+ * one `ai.suggestFields` request. The decision model is the cheap decision tier and the
  * 30-day gateway cache makes repeated prefixes free, so a 20-character name
  * settling in is on the order of 5–15 requests, not one per keystroke.
  * Review the `/ai` Usage tab after a week of real use and raise it (250ms) if the
@@ -80,7 +80,7 @@ const EMPTY_TARGETS: SuggestTargets = { targets: [], basisKeys: [] };
 /**
  * Every `control.suggest` field of `entity`, optionally restricted to a
  * roster of field keys (e.g. the mounted intent's field list — a form that
- * only renders a subset of the entity's fields has no business asking Jev to
+ * only renders a subset of the entity's fields has no business asking the decision model to
  * fill in ones it never shows), plus the deduped union of their basis keys —
  * what a caller (the provider, or a single-field surface) needs to watch.
  */
@@ -191,7 +191,7 @@ export function fieldSuggestionBasisFromRecord<TRecord extends object>(
 }
 
 /**
- * Whether a basis snapshot is worth asking Jev about at all — guards the
+ * Whether a basis snapshot is worth asking the decision model about at all — guards the
  * cheap-but-not-free decision tier from firing on "a" or an empty picker.
  * Any reference-typed basis key that is set (a picked project, a picked
  * product) is sufficient on its own; otherwise any text basis of at least 2

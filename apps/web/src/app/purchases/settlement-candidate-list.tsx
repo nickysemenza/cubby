@@ -64,7 +64,7 @@ export function SettlementCandidateList({
             disabled={suggesting}
             onClick={onSuggest}
           >
-            {suggesting ? "Asking Jev…" : "Suggest a match"}
+            {suggesting ? "Suggesting…" : "Suggest a match"}
           </Button>
           <Description size="xs">{suggestion?.note ?? suggestHint}</Description>
         </div>

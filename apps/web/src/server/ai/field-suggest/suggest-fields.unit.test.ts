@@ -20,7 +20,7 @@ const productCategoryFeatureSpec =
   FIELD_SUGGEST_REGISTRY["productCategory.feature"];
 if (productCategoryFeatureSpec.kind !== "enum")
   throw new Error("productCategory.feature must remain an enum suggestion");
-import type { JevPort } from "~/server/ai/jev";
+import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
 
 import { suggestFields } from "./suggest-fields";
@@ -28,17 +28,17 @@ import { suggestFields } from "./suggest-fields";
 const fakeDb = {} as Database;
 const fixtureRunId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
-type JevInput = Parameters<JevPort>[0];
+type DecisionInput = Parameters<DecisionPort>[0];
 
 /**
- * A fake `JevPort` that picks whichever criterion's rendered label contains
+ * A fake `DecisionPort` that picks whichever criterion's rendered label contains
  * the first matching needle, and fills every other criterion's probability
- * so `validateProbabilities` (`jev.ts`) accepts the response. Generic over
+ * so `validateProbabilities` (`decision-model.ts`) accepts the response. Generic over
  * both enum and reference/text choices — every spec renders its own criteria
  * labels, so the port only needs to recognize distinctive substrings.
  */
-function jevPortPicking(...needles: string[]) {
-  return vi.fn(async (input: JevInput) => {
+function decisionPortPicking(...needles: string[]) {
+  return vi.fn(async (input: DecisionInput) => {
     const entries = Object.entries(input.questions.selection.criteria);
     const needle = needles.find((n) =>
       entries.some(([, label]) => label.includes(n)),
@@ -67,11 +67,14 @@ function jevPortPicking(...needles: string[]) {
   });
 }
 
-/** A fake `JevPort` pinned to one choice index and probability — for prune
+/** A fake `DecisionPort` pinned to one choice index and probability — for prune
  * cases where the test cares about the exact threshold boundary, unlike
- * `jevPortPicking`'s fixed 0.9 winner. */
-function jevPortAt(choiceIndex: number, probability: number): JevPort {
-  return vi.fn(async (input: JevInput) => {
+ * `decisionPortPicking`'s fixed 0.9 winner. */
+function decisionPortAt(
+  choiceIndex: number,
+  probability: number,
+): DecisionPort {
+  return vi.fn(async (input: DecisionInput) => {
     const entries = Object.entries(input.questions.selection.criteria);
     const [choiceKey] = entries[choiceIndex]!;
     const rest = entries.filter(([key]) => key !== choiceKey);
@@ -93,10 +96,10 @@ function jevPortAt(choiceIndex: number, probability: number): JevPort {
   });
 }
 
-/** A fake `JevPort` that always answers `none`, at the given per-key
+/** A fake `DecisionPort` that always answers `none`, at the given per-key
  * probabilities — for asserting an `evaluated/none` outcome's probability
- * and ranked alternatives independent of `jevPortPicking`'s fixed winner. */
-function jevPortNone(probabilities: Record<string, number>): JevPort {
+ * and ranked alternatives independent of `decisionPortPicking`'s fixed winner. */
+function decisionPortNone(probabilities: Record<string, number>): DecisionPort {
   return vi.fn(async () => ({
     answers: {
       selection: {
@@ -109,14 +112,14 @@ function jevPortNone(probabilities: Record<string, number>): JevPort {
   }));
 }
 
-/** A fake `JevPort` for `resolvePruneTarget`'s per-tag calls: answers each
+/** A fake `DecisionPort` for `resolvePruneTarget`'s per-tag calls: answers each
  * survivor's binary "redundant"/"genuine" choice by matching the tag's
  * value against `input.state` (the rendered subject), so a multi-survivor
  * test can pin a different answer per tag. */
-function jevPortForTags(
+function decisionPortForTags(
   responses: Record<string, { choiceIndex: number; probability: number }>,
-): JevPort {
-  return vi.fn(async (input: JevInput) => {
+): DecisionPort {
+  return vi.fn(async (input: DecisionInput) => {
     const tag = Object.keys(responses).find((t) => input.state.includes(t));
     if (!tag) throw new Error(`No fake response for state: ${input.state}`);
     const { choiceIndex, probability } = responses[tag]!;
@@ -165,7 +168,7 @@ function fakeTagPruneSpec(
     rules:
       "Decide whether the candidate tag restates the subject or is a genuine compatibility token.",
     arrayKey: "tags",
-    maxJevCandidates: 8,
+    maxDecisionCandidates: 8,
     candidates: (_basis, raw) => rawTagsArray(raw),
     deterministic,
     subject: (_basis, value) => `Candidate tag: "${value}"`,
@@ -210,9 +213,9 @@ interface TableCase {
   entity: FieldSuggestionsInput["entity"];
   targets: string[];
   basis: Record<string, string | null>;
-  jev: JevPort;
+  decisionPort: DecisionPort;
   registry?: Partial<Record<string, FieldSuggestSpec>>;
-  assert: (out: FieldSuggestionsOut, jev: JevPort) => void;
+  assert: (out: FieldSuggestionsOut, decisionPort: DecisionPort) => void;
 }
 
 describe("suggestFields", () => {
@@ -222,7 +225,7 @@ describe("suggestFields", () => {
       entity: "expense",
       targets: ["trade"],
       basis: { name: "panel upgrade" },
-      jev: jevPortPicking("electrical:"),
+      decisionPort: decisionPortPicking("electrical:"),
       assert: (out) => {
         expect(out.suggestions.trade).toEqual({
           value: "electrical",
@@ -257,7 +260,7 @@ describe("suggestFields", () => {
       entity: "task",
       targets: ["projectId"],
       basis: { name: "build a shelf for the kitchen" },
-      jev: jevPortPicking("Kitchen Remodel"),
+      decisionPort: decisionPortPicking("Kitchen Remodel"),
       registry: { "task.projectId": fakeProjectSpec() },
       assert: (out) => {
         expect(out.suggestions.projectId).toEqual({
@@ -285,41 +288,41 @@ describe("suggestFields", () => {
       entity: "product",
       targets: ["categoryId"],
       basis: {},
-      jev: jevPortPicking("food:"),
-      assert: (out, jev) => {
+      decisionPort: decisionPortPicking("food:"),
+      assert: (out, decisionPort) => {
         expect(out.suggestions.categoryId).toBeNull();
         // (a) a basis without signal is never asked.
         expect(out.outcomes?.categoryId).toEqual({
           kind: "skipped",
           reason: "no_signal",
         });
-        expect(jev).not.toHaveBeenCalled();
+        expect(decisionPort).not.toHaveBeenCalled();
       },
     },
     {
-      // (b) an empty roster is never asked either — it never reaches Jev.
-      name: "a reference target whose roster is empty skips without calling Jev",
+      // (b) an empty roster is never asked either — it never reaches the decision model.
+      name: "a reference target whose roster is empty skips without calling the decision model",
       entity: "task",
       targets: ["projectId"],
       basis: { name: "general upkeep" },
-      jev: jevPortPicking("Kitchen Remodel"),
+      decisionPort: decisionPortPicking("Kitchen Remodel"),
       registry: { "task.projectId": fakeProjectSpec([]) },
-      assert: (out, jev) => {
+      assert: (out, decisionPort) => {
         expect(out.suggestions.projectId).toBeNull();
         expect(out.outcomes?.projectId).toEqual({
           kind: "skipped",
           reason: "no_candidates",
         });
-        expect(jev).not.toHaveBeenCalled();
+        expect(decisionPort).not.toHaveBeenCalled();
       },
     },
     {
-      // (c) a decline still carries Jev's probability and ranked runners-up.
-      name: "a reference target's Jev decline surfaces as evaluated/none with the ranked runners-up",
+      // (c) a decline still carries the decision model's probability and ranked runners-up.
+      name: "a reference target's decision decline surfaces as evaluated/none with the ranked runners-up",
       entity: "task",
       targets: ["projectId"],
       basis: { name: "general upkeep" },
-      jev: jevPortNone({ c0: 0.25, c1: 0.15, none: 0.6 }),
+      decisionPort: decisionPortNone({ c0: 0.25, c1: 0.15, none: 0.6 }),
       registry: { "task.projectId": fakeProjectSpec() },
       assert: (out) => {
         expect(out.suggestions.projectId).toBeNull();
@@ -346,14 +349,14 @@ describe("suggestFields", () => {
       },
     },
     {
-      name: "a prune target's deterministic hits are included at probability 1 with no Jev call",
+      name: "a prune target's deterministic hits are included at probability 1 with no decision call",
       entity: "product",
       targets: ["tags"],
       basis: {
         manufacturer: "Acme",
         tags: JSON.stringify(["acme"]),
       },
-      jev: jevPortPicking("restates"),
+      decisionPort: decisionPortPicking("restates"),
       registry: {
         "product.tags": fakeTagPruneSpec(async (_basis, raw) =>
           rawTagsArray(raw)
@@ -365,7 +368,7 @@ describe("suggestFields", () => {
             })),
         ),
       },
-      assert: (out, jev) => {
+      assert: (out, decisionPort) => {
         expect(out.suggestions.tags).toEqual({
           value: "acme",
           label: "Remove acme",
@@ -387,24 +390,24 @@ describe("suggestFields", () => {
           probability: 1,
           alternatives: [],
         });
-        expect(jev).not.toHaveBeenCalled();
+        expect(decisionPort).not.toHaveBeenCalled();
       },
     },
     {
-      name: "a prune target's Jev survivor below the 0.85 include floor is excluded",
+      name: "a prune target's decision survivor below the 0.85 include floor is excluded",
       entity: "product",
       targets: ["tags"],
       basis: { manufacturer: "Acme", tags: JSON.stringify(["battery"]) },
-      jev: jevPortAt(0, 0.6),
+      decisionPort: decisionPortAt(0, 0.6),
       registry: { "product.tags": fakeTagPruneSpec() },
-      assert: (out, jev) => {
+      assert: (out, decisionPort) => {
         expect(out.suggestions.tags).toBeNull();
-        expect(jev).toHaveBeenCalledTimes(1);
+        expect(decisionPort).toHaveBeenCalledTimes(1);
       },
     },
     {
       // (e) every survivor judged genuine: the min P(genuine) and the
-      // survivors ranked by P(redundant), read off Jev's distribution rather
+      // survivors ranked by P(redundant), read off the decision model's distribution rather
       // than derived as `1 - p`.
       name: "a prune target where every survivor is judged genuine reports evaluated/none with the min P(genuine) and ranked P(redundant)",
       entity: "product",
@@ -413,7 +416,7 @@ describe("suggestFields", () => {
         manufacturer: "Acme",
         tags: JSON.stringify(["battery", "waterproof"]),
       },
-      jev: jevPortForTags({
+      decisionPort: decisionPortForTags({
         battery: { choiceIndex: 1, probability: 0.75 },
         waterproof: { choiceIndex: 1, probability: 0.5 },
       }),
@@ -447,33 +450,34 @@ describe("suggestFields", () => {
       entity: "product",
       targets: ["tags"],
       basis: { manufacturer: "Acme", tags: JSON.stringify([]) },
-      jev: jevPortPicking("restates"),
+      decisionPort: decisionPortPicking("restates"),
       registry: { "product.tags": fakeTagPruneSpec() },
-      assert: (out, jev) => {
+      assert: (out, decisionPort) => {
         expect(out.suggestions.tags).toBeNull();
         expect(out.outcomes?.tags).toEqual({
           kind: "skipped",
           reason: "no_candidates",
         });
-        expect(jev).not.toHaveBeenCalled();
+        expect(decisionPort).not.toHaveBeenCalled();
       },
     },
     {
-      name: "an enum target asks Jev only about its narrowed candidates",
+      name: "an enum target asks the decision model only about its narrowed candidates",
       entity: "productCategory",
       targets: ["feature"],
       basis: { name: "Garden" },
-      jev: jevPortPicking("supplies:"),
+      decisionPort: decisionPortPicking("supplies:"),
       registry: {
         "productCategory.feature": {
           ...productCategoryFeatureSpec,
           candidates: async () => ["supplies", "storage"],
         },
       },
-      assert: (out, jev) => {
+      assert: (out, decisionPort) => {
         expect(out.suggestions.feature?.value).toBe("supplies");
         const criteria =
-          vi.mocked(jev).mock.calls[0]?.[0].questions.selection.criteria;
+          vi.mocked(decisionPort).mock.calls[0]?.[0].questions.selection
+            .criteria;
         expect(Object.values(criteria ?? {}).join("\n")).not.toContain("food:");
       },
     },
@@ -481,14 +485,14 @@ describe("suggestFields", () => {
 
   it.each(cases)(
     "$name",
-    async ({ entity, targets, basis, jev, registry, assert }) => {
+    async ({ entity, targets, basis, decisionPort, registry, assert }) => {
       const out = await suggestFields(
         fakeDb,
         fixtureRunId,
         { entity, targets, basis, basisMode: "suggested" },
-        { jev, registry },
+        { decisionPort, registry },
       );
-      assert(out, jev);
+      assert(out, decisionPort);
     },
   );
 
@@ -552,8 +556,8 @@ describe("suggestFields", () => {
     "runs independent fields concurrently in %s mode",
     async (basisMode) => {
       const release: Array<() => void> = [];
-      const pick = jevPortPicking();
-      const jev: JevPort = async (input) => {
+      const pick = decisionPortPicking();
+      const decisionPort: DecisionPort = async (input) => {
         await new Promise<void>((resolve) => {
           release.push(resolve);
         });
@@ -568,7 +572,7 @@ describe("suggestFields", () => {
           basis: { name: "evening meal" },
           basisMode,
         },
-        { jev },
+        { decisionPort },
       );
       await vi.waitFor(() => expect(release).toHaveLength(2));
       release.forEach((resolve) => resolve());
@@ -577,7 +581,7 @@ describe("suggestFields", () => {
   );
 
   it("does not turn an unaccepted project proposal into trade evidence", async () => {
-    const jev = jevPortPicking("Kitchen Remodel", "electrical:");
+    const decisionPort = decisionPortPicking("Kitchen Remodel", "electrical:");
     const labels = vi.fn(async () => new Map<string, string>());
     await suggestFields(
       fakeDb,
@@ -589,12 +593,12 @@ describe("suggestFields", () => {
         basisMode: "provided",
       },
       {
-        jev,
+        decisionPort,
         resolveLabels: labels,
         registry: { "expense.projectId": fakeProjectSpec() },
       },
     );
-    const trade = jev.mock.calls.find(([input]) =>
+    const trade = decisionPort.mock.calls.find(([input]) =>
       Object.values(input.questions.selection.criteria).some((label) =>
         label.startsWith("electrical:"),
       ),
@@ -608,7 +612,7 @@ describe("suggestFields", () => {
     // sparkle. It already inherits its root's binding, and applying the
     // suggestion would violate `ProductCategory_feature_live_unique`.
     const parentId = testShortcode("productCategory", "CAT-2ABC");
-    const jev = jevPortPicking("food:");
+    const decisionPort = decisionPortPicking("food:");
     const out = await suggestFields(
       fakeDb,
       fixtureRunId,
@@ -618,14 +622,17 @@ describe("suggestFields", () => {
         basis: { name: "Produce", parentId },
         basisMode: "suggested",
       },
-      { jev, resolveLabels: async () => new Map([[parentId, "Food"]]) },
+      {
+        decisionPort,
+        resolveLabels: async () => new Map([[parentId, "Food"]]),
+      },
     );
     expect(out.suggestions.feature).toBeNull();
     expect(out.outcomes?.feature).toEqual({
       kind: "skipped",
       reason: "no_candidates",
     });
-    expect(jev).not.toHaveBeenCalled();
+    expect(decisionPort).not.toHaveBeenCalled();
   });
 
   it("rolls a split tree pick up to the branch that clears high confidence", async () => {
@@ -653,7 +660,7 @@ describe("suggestFields", () => {
       parentIdOf: (c) => c.parent,
     };
     // Order follows the roster: Food, Prepared, Snacks, Household.
-    const jev: JevPort = vi.fn(async () => ({
+    const decisionPort: DecisionPort = vi.fn(async () => ({
       answers: {
         selection: {
           type: "choice" as const,
@@ -672,7 +679,7 @@ describe("suggestFields", () => {
         basis: { name: "frozen dumplings" },
         basisMode: "suggested",
       },
-      { jev, registry: { "product.categoryId": spec } },
+      { decisionPort, registry: { "product.categoryId": spec } },
     );
     expect(out.suggestions.categoryId).toMatchObject({
       value: "CAT-AAAA",
@@ -724,7 +731,7 @@ describe("suggestFields", () => {
       const entries = probabilities
         .slice(0, 4)
         .map((probability, index) => [`c${index}`, probability]);
-      const jev: JevPort = vi.fn(async () => ({
+      const decisionPort: DecisionPort = vi.fn(async () => ({
         answers: {
           selection: {
             type: "choice" as const,
@@ -746,7 +753,7 @@ describe("suggestFields", () => {
           basis: { name: "frozen dumplings", categoryId: "CAT-BBBB" },
           basisMode: "provided",
         },
-        { jev, registry: { "product.categoryId": spec } },
+        { decisionPort, registry: { "product.categoryId": spec } },
       );
 
       expect(out.suggestions.categoryId).toBeNull();
@@ -791,7 +798,7 @@ describe("suggestFields", () => {
         choiceIndex === 1
           ? [0.04, 0.9, 0.02, 0.02, 0.02]
           : [0.04, 0.02, 0.9, 0.02, 0.02];
-      const jev: JevPort = vi.fn(async () => ({
+      const decisionPort: DecisionPort = vi.fn(async () => ({
         answers: {
           selection: {
             type: "choice" as const,
@@ -815,7 +822,7 @@ describe("suggestFields", () => {
           basis: { name: "frozen dumplings", categoryId: current },
           basisMode: "provided",
         },
-        { jev, registry: { "product.categoryId": spec } },
+        { decisionPort, registry: { "product.categoryId": spec } },
       );
     };
 
@@ -832,7 +839,7 @@ describe("suggestFields", () => {
   });
 
   it("rejects an unknown target without calling the model", async () => {
-    const jev = jevPortPicking();
+    const decisionPort = decisionPortPicking();
 
     await expect(
       suggestFields(
@@ -844,19 +851,19 @@ describe("suggestFields", () => {
           targets: ["notAField"],
           basis: {},
         },
-        { jev },
+        { decisionPort },
       ),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
       reason: "SUGGEST_FIELD_UNKNOWN",
     });
-    expect(jev).not.toHaveBeenCalled();
+    expect(decisionPort).not.toHaveBeenCalled();
   });
 
   it.each(["tax", "auto", null])(
     "forbids project suggestions for adjustment drafts with line kind %s",
     async (lineKind) => {
-      const jev = jevPortPicking("Kitchen Remodel");
+      const decisionPort = decisionPortPicking("Kitchen Remodel");
       await expect(
         suggestFields(
           fakeDb,
@@ -867,20 +874,23 @@ describe("suggestFields", () => {
             targets: ["projectId"],
             basis: { name: "Sales tax", lineKind },
           },
-          { jev, registry: { "expense.projectId": fakeProjectSpec() } },
+          {
+            decisionPort,
+            registry: { "expense.projectId": fakeProjectSpec() },
+          },
         ),
       ).rejects.toMatchObject({
         code: "BAD_REQUEST",
         reason: "SUGGEST_FIELD_FORBIDDEN",
       });
-      expect(jev).not.toHaveBeenCalled();
+      expect(decisionPort).not.toHaveBeenCalled();
     },
   );
 
   // Regression guard: a record panel asks for every target at once, so one
   // refused target must not fail the request for the allowed ones.
   it("drops a refused target and still suggests the allowed ones", async () => {
-    const jev = jevPortPicking("Kitchen Remodel");
+    const decisionPort = decisionPortPicking("Kitchen Remodel");
     const result = await suggestFields(
       fakeDb,
       fixtureRunId,
@@ -890,10 +900,10 @@ describe("suggestFields", () => {
         targets: ["projectId", "costType"],
         basis: { name: "Sales tax", lineKind: "tax" },
       },
-      { jev, registry: { "expense.projectId": fakeProjectSpec() } },
+      { decisionPort, registry: { "expense.projectId": fakeProjectSpec() } },
     );
     expect(result.suggestions.projectId).toBeUndefined();
-    expect(jev).toHaveBeenCalled();
+    expect(decisionPort).toHaveBeenCalled();
   });
 
   it("resolves automatic principal line kinds before asking for projects", async () => {
@@ -907,7 +917,7 @@ describe("suggestFields", () => {
         basis: { name: "Kitchen shelf", lineKind: "auto" },
       },
       {
-        jev: jevPortPicking("Kitchen Remodel"),
+        decisionPort: decisionPortPicking("Kitchen Remodel"),
         registry: { "expense.projectId": fakeProjectSpec() },
       },
     );
@@ -915,7 +925,7 @@ describe("suggestFields", () => {
   });
 
   it("excludes an inherited target using the authoritative draft snapshot", async () => {
-    const jev = jevPortPicking("electrical:");
+    const decisionPort = decisionPortPicking("electrical:");
     const fieldResolutions = {
       trade: {
         mode: "inherit" as const,
@@ -942,7 +952,7 @@ describe("suggestFields", () => {
         basis: { name: "replace a valve", trade: null },
       },
       {
-        jev,
+        decisionPort,
         resolveInheritance: async () => fieldResolutions,
       },
     );
@@ -953,11 +963,11 @@ describe("suggestFields", () => {
       fieldResolutions,
       eligibleTargets: [],
     });
-    expect(jev).not.toHaveBeenCalled();
+    expect(decisionPort).not.toHaveBeenCalled();
   });
 
   it("suggests only unresolved inherited targets and uses effective inherited basis", async () => {
-    const jev = jevPortPicking("electrical:");
+    const decisionPort = decisionPortPicking("electrical:");
     const fieldResolutions = {
       projectId: {
         mode: "inherit" as const,
@@ -994,7 +1004,7 @@ describe("suggestFields", () => {
         basis: { name: "replace panel", projectId: null },
       },
       {
-        jev,
+        decisionPort,
         resolveInheritance: async () => fieldResolutions,
         resolveLabels: async () => new Map([["PRJ-AAAA", "Kitchen Remodel"]]),
         registry: { "task.projectId": fakeProjectSpec() },
@@ -1009,11 +1019,11 @@ describe("suggestFields", () => {
       kind: "skipped",
       reason: "resolved",
     });
-    expect(jev.mock.calls[0]?.[0].state).toContain("Kitchen Remodel");
+    expect(decisionPort.mock.calls[0]?.[0].state).toContain("Kitchen Remodel");
   });
 
   it("never suggests a value that follows a purchase's items, even when provided", async () => {
-    const jev = jevPortPicking("electrical:");
+    const decisionPort = decisionPortPicking("electrical:");
     const followsItems = {
       mode: "allocated" as const,
       storedValue: null,
@@ -1033,18 +1043,21 @@ describe("suggestFields", () => {
         targets: ["trade"],
         basis: { name: "sales tax", lineKind: "tax", trade: null },
       },
-      { jev, resolveInheritance: async () => ({ trade: followsItems }) },
+      {
+        decisionPort,
+        resolveInheritance: async () => ({ trade: followsItems }),
+      },
     );
     expect(result.eligibleTargets).toEqual([]);
     expect(result.outcomes?.trade).toEqual({
       kind: "skipped",
       reason: "resolved",
     });
-    expect(jev).not.toHaveBeenCalled();
+    expect(decisionPort).not.toHaveBeenCalled();
   });
 
   it("allows provided alternatives for explicit None without using a sibling proposal as evidence", async () => {
-    const jev = jevPortPicking("Kitchen Remodel", "electrical:");
+    const decisionPort = decisionPortPicking("Kitchen Remodel", "electrical:");
     const fieldResolutions = {
       projectId: {
         mode: "none" as const,
@@ -1077,7 +1090,7 @@ describe("suggestFields", () => {
         basis: { name: "replace panel", projectId: null },
       },
       {
-        jev,
+        decisionPort,
         resolveInheritance: async () => fieldResolutions,
         resolveLabels: async () => new Map([["PRJ-AAAA", "Kitchen Remodel"]]),
         registry: { "task.projectId": fakeProjectSpec() },
@@ -1086,7 +1099,7 @@ describe("suggestFields", () => {
 
     expect(result.eligibleTargets).toEqual(["projectId", "trade"]);
     expect(result.suggestions.projectId?.value).toBe("PRJ-AAAA");
-    const tradeCall = jev.mock.calls.find(([call]) =>
+    const tradeCall = decisionPort.mock.calls.find(([call]) =>
       Object.values(call.questions.selection.criteria).some((label) =>
         label.startsWith("electrical:"),
       ),
@@ -1095,7 +1108,7 @@ describe("suggestFields", () => {
   });
 
   it("chains an untouched unresolved suggested project into an unresolved trade", async () => {
-    const jev = jevPortPicking("Kitchen Remodel", "electrical:");
+    const decisionPort = decisionPortPicking("Kitchen Remodel", "electrical:");
     const unresolved = {
       mode: "inherit" as const,
       storedValue: null,
@@ -1116,7 +1129,7 @@ describe("suggestFields", () => {
         basis: { name: "replace panel", projectId: null },
       },
       {
-        jev,
+        decisionPort,
         resolveInheritance: async () => ({
           projectId: unresolved,
           trade: unresolved,
@@ -1129,7 +1142,7 @@ describe("suggestFields", () => {
     expect(result.eligibleTargets).toEqual(["projectId", "trade"]);
     expect(result.suggestions.projectId?.value).toBe("PRJ-AAAA");
     expect(result.suggestions.trade?.value).toBe("electrical");
-    const tradeCall = jev.mock.calls.find(([call]) =>
+    const tradeCall = decisionPort.mock.calls.find(([call]) =>
       Object.values(call.questions.selection.criteria).some((label) =>
         label.startsWith("electrical:"),
       ),
@@ -1138,7 +1151,7 @@ describe("suggestFields", () => {
   });
 
   it("chains a resolved target's value into a sibling target's basis, uses a client value when sent, and carries the resolved display name into the sibling's subject", async () => {
-    const jev = jevPortPicking("Kitchen Remodel", "electrical:");
+    const decisionPort = decisionPortPicking("Kitchen Remodel", "electrical:");
     const resolveLabels = vi.fn(
       async (_db: Database, codes: readonly string[]) => {
         const byCode = new Map<string, string>();
@@ -1165,7 +1178,7 @@ describe("suggestFields", () => {
         basis: { name: "panel upgrade", projectId: null },
       },
       {
-        jev,
+        decisionPort,
         resolveLabels,
         registry: { "expense.projectId": fakeProjectSpec() },
       },
@@ -1174,12 +1187,15 @@ describe("suggestFields", () => {
     expect(chained.suggestions.trade?.value).toBe("electrical");
     // The reference basis key resolved to its display name before being
     // rendered into the sibling target's subject.
-    const tradeCall = jev.mock.calls.at(-1)?.[0];
+    const tradeCall = decisionPort.mock.calls.at(-1)?.[0];
     expect(tradeCall?.state).toContain('Project: "Kitchen Remodel"');
 
     // A client-supplied `projectId` wins over the sibling target's own
     // resolution, even though `projectId` is requested in the same call.
-    const explicitJev = jevPortPicking("Deck Build", "electrical:");
+    const explicitDecisionPort = decisionPortPicking(
+      "Deck Build",
+      "electrical:",
+    );
     const explicit = await suggestFields(
       fakeDb,
       fixtureRunId,
@@ -1190,13 +1206,13 @@ describe("suggestFields", () => {
         basis: { name: "panel upgrade", projectId: "PRJ-EXPLICIT" },
       },
       {
-        jev: explicitJev,
+        decisionPort: explicitDecisionPort,
         resolveLabels,
         registry: { "expense.projectId": fakeProjectSpec() },
       },
     );
     expect(explicit.suggestions.trade?.value).toBe("electrical");
-    const explicitTradeCall = explicitJev.mock.calls.at(-1)?.[0];
+    const explicitTradeCall = explicitDecisionPort.mock.calls.at(-1)?.[0];
     expect(explicitTradeCall?.state).toContain('Project: "Explicit Project"');
   });
 });

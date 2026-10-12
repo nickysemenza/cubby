@@ -7,10 +7,13 @@ import {
 import type { z } from "zod";
 
 import {
+  decisionChoiceFitsContext,
+  runDecisionChoice,
+} from "~/server/ai/decision-model";
+import {
   MAILBOX_RELEVANCE_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
 } from "~/server/ai/features";
-import { jevChoiceFitsContext, runJevChoice } from "~/server/ai/jev";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { paidResearchPreflight } from "~/server/runs/execution-transport";
@@ -36,9 +39,9 @@ export const productionMailTriage =
   ): MailTriage =>
   async (subject) => {
     const prompt = mailTriagePrompt(subject);
-    if (!jevChoiceFitsContext(prompt)) return "uncertain";
+    if (!decisionChoiceFitsContext(prompt)) return "uncertain";
     const model = decisionModel ?? selectDecisionModel();
-    const result = await runJevChoice({
+    const result = await runDecisionChoice({
       ...prompt,
       feature: MAILBOX_TRIAGE_FEATURE,
       decisionModel: model,

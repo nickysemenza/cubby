@@ -106,7 +106,7 @@ async function ownedEmails(
 
 /**
  * A request's Reclassify stops starting Emails after this long and defers the
- * rest: MCP writes have a 230 s budget, and one Email (Gmail, Jev, relevance
+ * rest: MCP writes have a 230 s budget, and one Email (Gmail, the decision model, relevance
  * model) can take most of a minute.
  */
 const RECLASSIFY_TIME_BUDGET_MS = 150_000;

@@ -13,7 +13,7 @@ import { type JSONType, z } from "zod";
 import type { McpActionSpec } from "~/contracts/mcp-define";
 import { roundTo } from "~/lib/round-to";
 import type { StartOperationId } from "~/lib/start-operation-observability";
-import { JEV_DEADLINE_MS } from "~/server/ai/jev";
+import { DECISION_DEADLINE_MS } from "~/server/ai/decision-model";
 import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { run as runTable } from "~/server/db/schema";
@@ -113,8 +113,8 @@ export type McpToolBindings = Readonly<
  *
  * - Reads, 18 s: the motivating read's HTTP twin died with an empty 503 after
  *   ~22 s. Abandoning a read loses nothing, and the caller can narrow it.
- * - Model-backed reads (`modelBacked` on the action), Jev's 30 s retry budget
- *   plus 15 s for the database work around it: a Retry-After inside Jev's
+ * - Model-backed reads (`modelBacked` on the action), the decision model's 30 s retry budget
+ *   plus 15 s for the database work around it: a Retry-After inside the decision model's
  *   budget must not turn into an MCP timeout.
  * - Writes, 230 s: the Postgres work is not cancelled, so an early answer only
  *   turns a likely success into an unknown one. AI-backed imports legitimately
@@ -126,7 +126,7 @@ export type McpToolBindings = Readonly<
  */
 const MCP_TOOL_DEADLINE_MS = {
   read: 18_000,
-  modelRead: JEV_DEADLINE_MS + 15_000,
+  modelRead: DECISION_DEADLINE_MS + 15_000,
   write: 230_000,
 } as const satisfies Record<ToolBudget, number>;
 

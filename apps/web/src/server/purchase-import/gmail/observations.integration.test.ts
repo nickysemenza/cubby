@@ -66,7 +66,7 @@ describe("immutable Email observations", () => {
     expect(prediction).toMatchObject({
       emailId: email.id,
       classification: "uncertain",
-      stage: "jev",
+      stage: "decision",
       checksum: email.checksum,
       runId: null,
       model: null,

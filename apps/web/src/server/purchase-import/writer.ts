@@ -27,12 +27,15 @@ import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { householdLocalDate } from "~/lib/household-date";
 import { wasm } from "~/lib/wasm";
 import {
+  runDecisionChoice,
+  type DecisionChoiceResult,
+} from "~/server/ai/decision-model";
+import {
   PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
   PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
   PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
   PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,
 } from "~/server/ai/features";
-import { runJevChoice, type JevChoiceResult } from "~/server/ai/jev";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityAttachment,
@@ -441,7 +444,7 @@ export async function chooseLineStage(
   stage: keyof typeof PURCHASE_LINE_DECISIONS,
 ) {
   const spec = PURCHASE_LINE_DECISIONS[stage];
-  return runJevChoice({
+  return runDecisionChoice({
     feature: spec.feature,
     subject: lineDecisionSubject(line),
     rules: spec.rules,
@@ -475,7 +478,7 @@ export async function explicitLineDecisions(
   resolveReversal: (
     index: number,
     line: ExtractedPurchaseLine,
-  ) => Promise<JevChoiceResult>,
+  ) => Promise<DecisionChoiceResult>,
 ): Promise<LineIdentityDecision[]> {
   const decisions: LineIdentityDecision[] = [];
   for (const [index, line] of lines.entries()) {
@@ -1007,7 +1010,7 @@ async function recordImportSourceAssociation(
  * Receiving is for stock-tracked goods (ADR 0013): goods still unresolved, or a
  * principal Product line whose Product is effectively tracked or undecided.
  * Groceries and other untracked Products, expense-only lines (meals, tickets)
- * and lines Jev judged not worth a Product have nothing to receive. A new
+ * and lines the decision model judged not worth a Product have nothing to receive. A new
  * Product starts uncategorized and undecided, so it asks — including a
  * promotion still pending because a reviewed aggregate replacement defers
  * Product creation; applying that replacement later never re-evaluates this

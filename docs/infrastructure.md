@@ -107,7 +107,7 @@ The Run row is the record; an instance is one attempt at it, named
   broad history scans; continuous monthly grants cover incremental Gmail
   history. These allowances remain independent. Known Vendor and unmatched
   transaction queries run first; broad scans exclude Spam and Trash.
-  Jev routes unrelated, related, and uncertain mail. Unrelated mail keeps a
+  The decision model routes unrelated, related, and uncertain mail. Unrelated mail keeps a
   minimal scan record; related and uncertain mail retain content and streamed
   attachments for the researcher. Research admission uses batches of up to
   fifty retained messages, including unfamiliar vendors and lifecycle mail.
@@ -123,13 +123,13 @@ The Run row is the record; an instance is one attempt at it, named
   stops starting Emails after 150 s and reports the rest `deferred`.
   `imports_read.mail_triage_preview` opens the same Run (`triage_preview`
   mode) to rerun triage on one original and records only model usage.
-- Mail triage (`gmail/triage.ts`) sends Jev one bounded view sized by the
-  real Jev request gate (`jevChoiceFitsContext`, escaping included). HTML is
+- Mail triage (`gmail/triage.ts`) sends the decision model one bounded view sized by the
+  real decision-model request gate (`decisionChoiceFitsContext`, escaping included). HTML is
   compacted by recipebridge's `compact_email_html` (preheader kept, tracking
   pixels dropped, data tables as `cell | cell` rows, footers last, links
   ranked by purchase cues) and the full text's purchase cues — amounts,
   order/invoice numbers, receipt phrases — are re-checked against the
-  serialized view. Jev's `unrelated` becomes `uncertain` only for a listed
+  serialized view. The decision model's `unrelated` becomes `uncertain` only for a listed
   incompleteness reason (`mailTriageIncompleteReason`): a clipped cue,
   attachments, an image-only body, a clipped cue-bearing link/image or
   structured data, the compactor's own bound, dropped MIME text parts, or
@@ -587,8 +587,8 @@ retired with the hosted researcher); see [todos](todos.md#import-pipeline-archit
 Field decision prompts are measured from a Claude/Codex session over Cubby
 MCP, following `.claude/skills/decision-grading`: reviewed Suggestions
 (`entity_read.suggestion_queue` with `status`) are the labels, and
-`entity_read.suggest_fields` with `decisionModel` replays a record through Jev
-or Clef server-side. Only aggregates leave the session.
+`entity_read.suggest_fields` with `decisionModel` replays a record through
+Jev or Clef server-side. Only aggregates leave the session.
 
 The `AI_GATEWAY_API_KEY` environment variable authenticates the direct REST
 fallback used outside Cloudflare Workers. It is optional in the deployed Worker

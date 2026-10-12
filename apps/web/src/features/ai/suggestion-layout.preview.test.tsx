@@ -1,5 +1,5 @@
 /**
- * Real-browser layout invariants for the Jev suggestion surfaces (PR #1223):
+ * Real-browser layout invariants for the decision suggestion surfaces (PR #1223):
  * a fixed glyph footprint across states, a phone inline review folding into
  * the glyph instead of growing the page, a desktop inline review staying on
  * its one wrapping row, and `SuggestionStatus`'s headline never wrapping.

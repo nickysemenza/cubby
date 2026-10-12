@@ -134,7 +134,7 @@ export function heroChipLabel<TRecord extends object>(
 }
 
 /**
- * The editor-level Jev source for a field that declares `control.suggest`:
+ * The editor-level decision source for a field that declares `control.suggest`:
  * always `"provided"` so the apply affordance works whether or not a value is
  * already stored. Shared by the generic list editor and the detail editor so
  * neither surface forgets it.

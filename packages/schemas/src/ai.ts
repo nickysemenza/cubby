@@ -666,7 +666,7 @@ export const suggestionSweepStatusOut = z.object({
  * `null` means no suggestion could be made — see `outcomes` for why.
  */
 /**
- * A runner-up from Jev's calibrated distribution over every choice, so a
+ * A runner-up from the decision model's calibrated distribution over every choice, so a
  * picker can pin the top few candidates instead of only the winner. Empty on
  * the roster-overflow path (a chat-tier pick has no distribution).
  */
@@ -697,7 +697,7 @@ export const fieldSuggestionSchema = z.object({
   label: z.string().nullable(),
   detail: z.string().nullable(),
   confidence,
-  /** Calibrated Jev probability; null for non-Jev/absent suggestions. */
+  /** Calibrated decision-model probability; null for chat-overflow or absent suggestions. */
   probability: z.number().min(0).max(1).nullable().default(null),
   reasoning: z.string(),
   alternatives: z.array(fieldSuggestionAlternativeSchema).default([]),
@@ -768,7 +768,7 @@ export const fieldSuggestionsOut = z.object({
   suggestions: z.record(z.string(), fieldSuggestionSchema.nullable()),
   /** Authoritative inheritance state for this exact draft snapshot. */
   fieldResolutions: fieldResolutionsSchema.optional(),
-  /** Requested targets the server allowed Jev to evaluate. */
+  /** Requested targets the server allowed the decision model to evaluate. */
   eligibleTargets: z.array(z.string()).optional(),
   /** One entry per requested target; why `suggestions[target]` is or isn't a
    * proposal. */

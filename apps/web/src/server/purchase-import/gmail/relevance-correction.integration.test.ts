@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import * as choices from "~/server/ai/jev";
+import * as choices from "~/server/ai/decision-model";
 import { account } from "~/server/db/auth.schema";
 import {
   email as emailTable,
@@ -114,7 +114,7 @@ describe("member-only exact original relevance correction", () => {
         objects.delete(key);
       });
     const model = vi
-      .spyOn(choices, "runJevChoice")
+      .spyOn(choices, "runDecisionChoice")
       .mockImplementation(async () => {
         throw new Error("Correction cannot invoke a model");
       });

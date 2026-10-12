@@ -431,10 +431,10 @@ const stateTone = {
   "Not reached": "muted",
   Failed: "destructive",
 } as const;
-const automatedStages = ["rule", "jev", "model"] as const;
+const automatedStages = ["rule", "decision", "model"] as const;
 const stageStep = {
   rule: "Rule",
-  jev: "Jev",
+  decision: "Decision model",
   model: "Relevance model",
 } as const satisfies Record<(typeof automatedStages)[number], string>;
 
@@ -1177,7 +1177,7 @@ export async function emailReviewReport(
           label: "Reclassify",
           prominent: true,
           confirm:
-            "Rerun rule, Jev and the relevance model from this Email's Gmail original? The result is recorded; it replaces Relevance only when nothing retained is dropped.",
+            "Rerun rule, the decision model and the relevance model from this Email's Gmail original? The result is recorded; it replaces Relevance only when nothing retained is dropped.",
           request: { kind: "reclassify-email", ids: [shortcode] },
         },
       ],
@@ -1374,7 +1374,7 @@ export async function emailAccuracyViewReport(
           ],
         })),
         empty:
-          "No recorded rule, Jev or model result disagrees with a member's review.",
+          "No recorded rule, decision-model or relevance-model result disagrees with a member's review.",
       },
       {
         kind: "table",

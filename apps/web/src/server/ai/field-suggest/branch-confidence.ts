@@ -1,6 +1,6 @@
 /**
  * Hierarchy-aware placement for a reference suggestion over a tree roster
- * (product categories). Jev spreads probability across every node, so a
+ * (product categories). The decision model spreads probability across every node, so a
  * parent and its children, or sibling leaves, split the mass: "Food 0.10,
  * Food › Prepared 0.70, Food › Snacks 0.08" is a confident "Food" but a
  * medium leaf. Summing each node's subtree lets a suggestion stop at the
