@@ -1,6 +1,8 @@
 import {
   fieldSuggestionsInput,
   financeCategoryApplyInput,
+  suggestionReviewListInput,
+  suggestionStatus,
 } from "@cubby/schemas/ai";
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { RunId } from "@cubby/schemas/identifiers";
@@ -28,12 +30,9 @@ import {
 } from "~/server/repo/shortcode-resolver";
 
 const rowIdInput = z.object({ id: z.string().uuid() });
-const filtersSchema = z.object({
-  entity: fieldSuggestionsInput.shape.entity.optional(),
-  field: z.string().optional(),
-  kind: z.enum(["correction", "addition"]).optional(),
-  minConfidence: z.number().min(0).max(1).default(0.5),
-  runId: z.string().uuid().optional(),
+const filtersSchema = suggestionReviewListInput.omit({
+  recordIds: true,
+  fields: true,
 });
 const jsonSchema = z.json();
 const pageSuggestionsInput = z.object({
@@ -51,20 +50,25 @@ const suggestionRowSchema = z.object({
   currentValue: jsonSchema.nullable(),
   suggestedValue: jsonSchema,
   confidence: z.number(),
+  runnerUpValue: jsonSchema.nullable(),
+  runnerUpConfidence: z.number().nullable(),
   model: z.string(),
   kind: z.enum(["correction", "addition"]),
-  status: z.enum(["pending", "applied", "rejected"]),
+  status: suggestionStatus,
   correctValue: jsonSchema.nullable(),
   pairKey: z.string().uuid().nullable(),
+  createdAt: z.date().transform((value) => value.toISOString()),
 });
 
-export async function listPendingSuggestions(
+/** Pending review queue, or reviewed history by `status` (the label set a
+ * decision eval replays). Paired evaluation candidates never appear. */
+export async function listSuggestions(
   db: Database,
   rawInput: z.input<typeof filtersSchema> = {},
 ) {
   const input = filtersSchema.parse(rawInput);
   const conditions = [
-    eq(suggestionTable.status, "pending"),
+    eq(suggestionTable.status, input.status),
     gte(suggestionTable.confidence, input.minConfidence),
   ];
   if (input.entity) conditions.push(eq(suggestionTable.entity, input.entity));
@@ -79,7 +83,12 @@ export async function listPendingSuggestions(
     .from(suggestionTable)
     .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(and(...conditions))
-    .orderBy(desc(suggestionTable.confidence));
+    .orderBy(
+      input.status === "pending"
+        ? desc(suggestionTable.confidence)
+        : desc(suggestionTable.updatedAt),
+    )
+    .limit(input.limit);
   const reviewable = rows.flatMap(({ suggestion, runInput }) => {
     const decisionModel = z
       .object({ decisionModel: z.string().optional() })

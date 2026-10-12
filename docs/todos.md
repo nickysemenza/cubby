@@ -810,6 +810,20 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   image hard delete stays on `IMAGE_HARD_DELETE` on purpose
   (`repo/removal/core.unit.test.ts`).
 
+- ⏳ 🛠️ **Generic child-table review lists.** Several Run/import child tables
+  carry a review lifecycle but no manifest identity, so each has a
+  hand-written list: `Suggestion` (pending → applied/rejected/superseded; the
+  `/ai` Review tab), `RunFinding` (open → applied/dismissed; Problems),
+  `RunApproval` (pending operations), `PhotoGroupProposal` and
+  `PhotoRunImage` (photo review), `OrderMailCandidateDecision`, and
+  `StatementRow` (open disposition; overlaps the item above). Extend the
+  entity compiler with a child-backed read adapter, an identity/navigation
+  contract for uuid-keyed rows, and workflow actions that delegate to the
+  existing handlers (not field updates; the compiler rejects update
+  capabilities on read-only entities), so these render through
+  `GenericEntityList`. Promote when a second review list is about to be
+  rewritten; move `Suggestion` first.
+
 ---
 
 ## Classification in the manifest

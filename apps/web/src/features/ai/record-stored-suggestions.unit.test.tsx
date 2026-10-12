@@ -52,7 +52,11 @@ const suggestion = (overrides: Partial<SuggestionReviewRow> = {}) =>
     confidence: 0.97,
     model: "synthetic-model",
     kind: "addition",
+    status: "pending",
+    runnerUpValue: null,
+    runnerUpConfidence: null,
     correctValue: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
   }) satisfies SuggestionReviewRow;
 

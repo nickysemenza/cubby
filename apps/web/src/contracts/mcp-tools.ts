@@ -102,7 +102,7 @@ export const MCP_TOOLS = defineMcpTools({
         op: aiContract.ops.suggestFields,
         modelBacked: true,
         description:
-          "Jev's field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint spending_classification_write.apply_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss.",
+          "Jev's field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint spending_classification_write.apply_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss. decisionModel pins Jev (typesafe/jev) or Clef (@cf/cloudflare/clef) to replay one record through each trial model.",
       }),
       suggestion_queue: mcpAction({
         op: aiContract.ops.listSuggestionReviewQueue,
@@ -111,7 +111,7 @@ export const MCP_TOOLS = defineMcpTools({
           items: aiContract.ops.listSuggestionReviewQueue.output,
         }),
         description:
-          "Pending field suggestions to review, filtered by entity, field, kind, confidence or recordIds; each id feeds entity.accept_suggestion(s) or reject_suggestion.",
+          "Stored field suggestions filtered by entity, field, kind, confidence or recordIds. status defaults to pending (the review queue; each id feeds entity.accept_suggestion(s) or reject_suggestion); applied, rejected and superseded read reviewed history with correctValue — the decision-eval label set. Paired trial rows never appear.",
       }),
       inventory_ownership_context: mcpAction({
         op: expenseContract.ops.inventoryOwnershipContext,

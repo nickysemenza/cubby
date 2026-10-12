@@ -17,7 +17,7 @@ import {
   updateExpensesInBulk,
 } from "~/server/repo/expense/crud";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { listPendingSuggestions } from "~/server/repo/suggestion-review";
+import { listSuggestions } from "~/server/repo/suggestion-review";
 
 import {
   categoryPorts,
@@ -216,7 +216,7 @@ describe("Suggestion supersede", () => {
         { context: kernelCtx(ctx), ...categoryPorts() },
       );
     const firstRun = await sweep();
-    const [first] = await listPendingSuggestions(ctx.db, {
+    const [first] = await listSuggestions(ctx.db, {
       runId: firstRun.id,
       minConfidence: 0,
     });

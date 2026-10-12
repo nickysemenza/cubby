@@ -33,7 +33,7 @@ import {
   acceptSuggestions,
   latestSuggestionSweepStatus,
   listPagePendingSuggestions,
-  listPendingSuggestions,
+  listSuggestions,
   rejectSuggestion,
   recordFieldSuggestionMiss,
 } from "~/server/repo/suggestion-review";
@@ -228,6 +228,7 @@ const suggestionsForContext = async (
     context.db,
     await actorAiRun(context, { runKey: input.runKey }),
     input,
+    input.decisionModel ? { decisionModel: input.decisionModel } : undefined,
   );
 
 export const aiHandlers = implementOperationDomain(aiContract, {
@@ -320,7 +321,7 @@ export const aiHandlers = implementOperationDomain(aiContract, {
           recordIds: input.recordIds,
           fields: input.fields,
         })
-      : listPendingSuggestions(context.db, input),
+      : listSuggestions(context.db, input),
   acceptSuggestion: (context, input) =>
     acceptSuggestion(context.db, context, input),
   acceptSuggestions: (context, input) =>

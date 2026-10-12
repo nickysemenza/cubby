@@ -570,19 +570,11 @@ revision, replay command, and results under `artifacts/feature-routing-eval/`.
 Mail import model routing has no billed eval today (the research evals were
 retired with the hosted researcher); see [todos](todos.md#import-pipeline-architecture).
 
-Field decision prompts are measured by the opt-in, billed
-`pnpm --dir apps/web eval:decisions` eval. Set
-`DECISION_EVAL_DATABASE_URL` to a database URL with read-only access; the eval
-refuses to start without it and reads accepted/rejected Suggestions in a
-read-only transaction. `AI_GATEWAY_API_KEY` authenticates billed inference. It
-replays each saved record through the current field
-prompt for `typesafe/jev` and `@cf/cloudflare/clef`;
-`DECISION_EVAL_MODELS` selects candidates. JSON results, including record ids,
-are written under the OS temp directory; set `DECISION_EVAL_REPORT` to choose
-another path outside the repository. Unit tests use synthetic rows and a fake
-decision port, never this live-eval entrypoint. The report includes accuracy,
-repeat misses, confidence, token counts, and priced token cost where the model
-catalog has rates.
+Field decision prompts are measured from a Claude/Codex session over Cubby
+MCP, following `.claude/skills/decision-grading`: reviewed Suggestions
+(`entity_read.suggestion_queue` with `status`) are the labels, and
+`entity_read.suggest_fields` with `decisionModel` replays a record through Jev
+or Clef server-side. Only aggregates leave the session.
 
 The `AI_GATEWAY_API_KEY` environment variable authenticates the direct REST
 fallback used outside Cloudflare Workers. It is optional in the deployed Worker

@@ -19,7 +19,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   acceptSuggestion,
   listPagePendingSuggestions,
-  listPendingSuggestions,
+  listSuggestions,
   recordFieldSuggestionMiss,
   rejectSuggestion,
 } from "~/server/repo/suggestion-review";
@@ -68,7 +68,7 @@ describe("Suggestion review", () => {
       categoryId: taxonomyId("tools"),
     });
     const runId = await sweepCategories([product.id]);
-    const [row] = await listPendingSuggestions(ctx.db, {
+    const [row] = await listSuggestions(ctx.db, {
       runId,
       minConfidence: 0,
     });
@@ -127,7 +127,7 @@ describe("Suggestion review", () => {
       categoryId: taxonomyId("tools"),
     });
     const runId = await sweepCategories([dismissed.id, corrected.id]);
-    const pending = await listPendingSuggestions(ctx.db, {
+    const pending = await listSuggestions(ctx.db, {
       runId,
       minConfidence: 0,
     });
@@ -165,8 +165,17 @@ describe("Suggestion review", () => {
       taxonomyId("household"),
     );
     expect(
-      await listPendingSuggestions(ctx.db, { runId, minConfidence: 0 }),
+      await listSuggestions(ctx.db, { runId, minConfidence: 0 }),
     ).toHaveLength(0);
+    // Reviewed history is the decision-eval label set read over MCP.
+    const history = await listSuggestions(ctx.db, {
+      runId,
+      minConfidence: 0,
+      status: "rejected",
+    });
+    expect(history.map(({ correctValue }) => correctValue).sort()).toEqual(
+      [null, taxonomyShortcode("household")].sort(),
+    );
     expect(
       await listPagePendingSuggestions(ctx.db, {
         entity: "product",
@@ -238,7 +247,7 @@ describe("Suggestion review", () => {
       },
       { context, suggest },
     );
-    const [row] = await listPendingSuggestions(ctx.db, {
+    const [row] = await listSuggestions(ctx.db, {
       runId: started.id,
       minConfidence: 0,
     });
@@ -313,7 +322,7 @@ describe("Suggestion review", () => {
     expect(await vendorCategory(autoVendor.id)).toBe(category.id);
     expect(await vendorCategory(reviewedVendor.id)).toBeNull();
 
-    const pending = await listPendingSuggestions(ctx.db, {
+    const pending = await listSuggestions(ctx.db, {
       runId: started.id,
       minConfidence: 0,
     });

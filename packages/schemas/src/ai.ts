@@ -1,4 +1,5 @@
 import { vendorSpendingProfile } from "./spending-classification";
+import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 import { fieldResolutionsSchema } from "./field-resolution";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
@@ -468,6 +469,9 @@ export const fieldSuggestionsInput = z.object({
    * UTC hour.
    */
   runKey: z.string().uuid().optional(),
+  /** Pins the decision model so a session can replay one record through
+   * each trial model; omitted samples the live traffic split. */
+  decisionModel: supportedDecisionModelSchema.optional(),
 });
 export type FieldSuggestionsInput = z.infer<typeof fieldSuggestionsInput>;
 
@@ -483,6 +487,10 @@ export const suggestionReviewListInput = z.object({
   kind: z.enum(["correction", "addition"]).optional(),
   minConfidence: z.number().min(0).max(1).default(0.5),
   runId: z.string().uuid().optional(),
+  /** Reviewed history (applied, rejected, superseded) is the decision-eval
+   * label set; the review queue reads `pending`. */
+  status: suggestionStatus.default("pending"),
+  limit: z.number().int().min(1).max(1000).default(500),
   /** Bounded list-page read; both are supplied together by generic entity lists. */
   recordIds: z.array(z.string().min(1)).max(250).optional(),
   fields: z.array(z.string()).max(100).optional(),
@@ -505,7 +513,11 @@ export const suggestionReviewRowSchema = z.object({
   confidence: z.number(),
   model: z.string(),
   kind: z.enum(["correction", "addition"]),
+  status: suggestionStatus,
+  runnerUpValue: z.json().nullable(),
+  runnerUpConfidence: z.number().nullable(),
   correctValue: z.json().nullable(),
+  createdAt: z.string(),
 });
 export const suggestionReviewListOut = z.array(suggestionReviewRowSchema);
 export type SuggestionReviewRow = z.infer<typeof suggestionReviewRowSchema>;
