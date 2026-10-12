@@ -60,10 +60,10 @@ struct EntityHeroView<Actions: View>: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: besidePhoto ? 180 : 200)
                 .background(FieldGuideTokens.inset)
-                .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
+                .clipped()
                 .overlay {
-                    RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
-                        .strokeBorder(FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
+                    Rectangle().strokeBorder(
+                        FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                 }
         }
         .frame(maxWidth: besidePhoto ? 240 : .infinity)
@@ -208,6 +208,7 @@ struct FieldsSectionView<Inline: View>: View {
                 }
                 .font(.subheadline)
                 .navigationLinkIndicatorVisibility(.hidden)
+                .listRowBackground(Color.clear)
                 .listRowInsets(
                     EdgeInsets(
                         top: 0, leading: FieldGuideTokens.Space.md,

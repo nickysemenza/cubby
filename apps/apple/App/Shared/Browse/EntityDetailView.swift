@@ -394,7 +394,7 @@ struct EntityDetailContent: View {
     }
 
     var body: some View {
-        Form {
+        List {
             if let redirectedFrom = row.redirectedFrom {
                 Section {
                     Label("\(redirectedFrom) was merged into \(row.id)", systemImage: "arrow.triangle.branch")
@@ -409,6 +409,8 @@ struct EntityDetailContent: View {
                         supplement
                     }
                 }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
                 // Layer 4: shortcode + fetched-at/age. The generic entity API never exposes the
                 // underlying uuid (only shortcodes cross the wire — see apps/apple/AGENTS.md), so
                 // there is nothing to show beyond the shortcode already in `row.id`.
@@ -514,7 +516,8 @@ struct EntityDetailContent: View {
                 Section { RawRecordDisclosure(raw: row.raw) }
             }
         }
-        .formStyle(.grouped)
+        .listStyle(.plain)
+        .listRowBackground(Color.clear)
         .fieldGuideDetailDensity()
         .frame(maxWidth: 900)
         .frame(maxWidth: .infinity, alignment: .top)
