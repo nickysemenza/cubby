@@ -393,11 +393,6 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   against GPT-6 Luna as the second ladder reader; compare recall, escalation
   rate, latency, and cost. Keep Gemini 2.5 Flash as first reader meanwhile.
 
-- 🤔 🧪 **Reconsider the remaining USDA MCP App.** The USDA Picker template
-  (`apps/mcp-apps/src/usda-picker.ts`) is 352,004 bytes raw / 83,655 gzip; keep
-  it only while refinement and explicit selection beat a plain
-  `usda_food.search`.
-
 - ⏳ 🐛 **Explicit idempotency key for `meal_recipe.add`.** Promote if a re-sent
   call duplicates a meal line. Not a natural-key index: one meal may repeat a
   recipe at different scales. First slice is an `operations/meal.server.ts`

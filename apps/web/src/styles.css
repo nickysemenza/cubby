@@ -4,10 +4,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 /* Field Guide primitives (surface ramp, ink, signal, domain colors,
-   semantic tones, type stacks) live in one framework-free file so apps/mcp-apps — which
-   has no Tailwind and ships as standalone iframe HTML — renders as cubby
-   instead of drifting from a copy. Imported first; everything below only
-   references these vars. */
+   semantic tones, type stacks) are generated from the shared design tokens.
+   Imported first; everything below only references these vars. */
 @import "@cubby/design-tokens/brand.css";
 /*
   ---break---
@@ -147,8 +145,7 @@
 */
 :root {
   /* The Field Guide palette itself lives in @cubby/design-tokens
-     (imported above) — shared with apps/mcp-apps. Only cubby-web-specific
-     derivations stay here. */
+     (imported above). Only cubby-web-specific derivations stay here. */
   --brand-sage: oklch(0.94 0.025 145);
 
   /* Ordinary surfaces use tone and hairlines. Elevation is reserved for

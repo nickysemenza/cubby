@@ -14,7 +14,6 @@ import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 import { purchaseAgentRunActions } from "~/server/purchase-import/capabilities";
 
 import { purchaseAgentTools } from "./agent-tool-catalog";
-import { registerMcpApps } from "./apps";
 import { trustedPurchaseAgent } from "./purchase-agent-protocol";
 import { installToolCallTelemetryHandler } from "./tools/tool-call-telemetry";
 import { installMockStrippedListToolsHandler } from "./tools/tool-catalog";
@@ -54,7 +53,7 @@ Workflow tips:
 - Meals: meal_recipe.add returns \`mealRecipeId\`; use that occurrence id (not recipeId) with meal_recipe.update or meal_recipe.remove. Entity meal reads omit the storage-only mealRecipe id.
 - Products: usdaFdcId reflects either an explicit fdc_id or a barcode-resolved USDA link. A product carries a SET of barcodes as \`gtin\` external ids, canonical GTIN-14; \`primaryGtin\` is the one that stands for it, and the \`upc\` write field sets that slot in any encoding. Use entity_read.list with sort=[{orderBy:"dataQuality",direction:"asc"}] (ascending = weakest identity first; every scored entity accepts it, plus dataStatus/dataGap filters) for enrichment worklists, entity.update with externalIds patch items ({op:"add"|"replace"|"remove", key:{source,kind,externalId}}) for slot-safe typed identifier changes, and imports_read.external_id_collisions for exact (source, kind, externalId) checks before adding identity. entity_read.get(product) with resultDetail "full" is the detailed media read; product_enrichment.verify_images is the explicit R2 integrity check.
 - Recipes: prefer recipe_import.from_text for pasted prep sheets; use entity.create(recipe) when you already have ingredient ids.
-- Interactive: use usda_food.search when nutrition mapping requires a choice among plausible USDA records; its picker shows and refines the candidates, so wait for the user's "Use this" choice instead of reproducing every result in prose. Use nutrition.shopping_list when the user asks what to buy for planned meals in a date range; its checks are temporary and are not saved as manual shopping items.
+- Interactive: use usda_food.search when nutrition mapping requires a choice among plausible USDA records; it returns ranked candidates, so present the top few and let the member pick one before linking. Use nutrition.shopping_list when the user asks what to buy for planned meals in a date range; its checks are temporary and are not saved as manual shopping items.
 - Research and reconciliation: start with activity.work_queue for actionable work belonging to the connected member plus shared work. It applies current source/account eligibility before counts and pagination; unresolved private ownership stays for household review. The Work queue page provides household routing metadata and links from Problems and Research. Read evidence, attach Sources to supported facts, and ask the member about material ambiguity. Imports require their own execution authorization; classification-only mail never grants import admission. Runs record imports and model work; read their status and findings through imports_read.run_status.
 - Problems: activity.problems with countsOnly=true for cheap triage; type="duplicateInventory" finds unique Products stored in more than one location.
 - Ledger shape: \`Expense → Purchase ← FinancialTransaction → FinancialAccount\`, with \`Vendor ──< Purchase\`. ALL spend lives on \`Expense.cost\`; a \`Purchase\` is one vendor order, receipt, or deliberately separate purchase event (not a card charge), and its \`statedTotal\` is literal vendor paperwork that is never summed into spend. Financial Transactions are settlement evidence only: matching paperwork or Expense totals does not prove payment.
@@ -152,9 +151,6 @@ export function createMcpServer() {
   );
   registerMcpTools(server, MCP_TOOL_BINDINGS, MCP_TOOLS);
   registerEntityCatalog(server);
-  // The `ui://` resources those tools' `_meta.ui.resourceUri` pointers resolve
-  // to. Adds the `resources` capability beside the entity catalog.
-  registerMcpApps(server);
   installToolCallTelemetryHandler(server);
   installMockStrippedListToolsHandler(server, purchaseAgentCatalogView);
   return server;
@@ -187,7 +183,7 @@ export async function listMcpToolCatalog() {
   return introspect((client) => client.listTools());
 }
 
-/** Introspect the live resource catalog — the `ui://` MCP App bundles. */
+/** Introspect the live resource catalog (the entity catalog). */
 export async function listMcpResourceCatalog() {
   return introspect((client) => client.listResources());
 }

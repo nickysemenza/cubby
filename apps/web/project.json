@@ -33,10 +33,6 @@
         {
           "projects": ["cubby-checks"],
           "target": "wasm"
-        },
-        {
-          "projects": ["@cubby/mcp-apps"],
-          "target": "build"
         }
       ],
       "inputs": ["webGate"],
@@ -121,7 +117,6 @@
       "inputs": [
         "default",
         "^default",
-        "{workspaceRoot}/apps/mcp-apps/**",
         "{workspaceRoot}/scripts/**",
         "{workspaceRoot}/packages/**",
         "{workspaceRoot}/*.{json,jsonc,yaml,yml,toml,lock}",
