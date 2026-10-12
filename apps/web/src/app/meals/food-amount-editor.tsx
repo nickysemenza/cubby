@@ -47,13 +47,11 @@ export function formatFoodAmountEstimate(
     parts.push(`Estimated weight ${formatCount(estimate.grams, 2)} g`);
   } else if (hasKnownEstimate(estimate.weight)) {
     parts.push(
-      `Estimated weight ${formatEstimate(estimate.weight, (value) => `${formatCount(value, 2)} g`)}`,
+      `Estimated weight ${formatEstimate(estimate.weight, "macro", "g")}`,
     );
   }
   if (hasKnownEstimate(estimate.batchShare)) {
-    parts.push(
-      `${formatEstimate(estimate.batchShare, (value) => `${formatCount(value * 100, 2)}%`)} of batch`,
-    );
+    parts.push(`${formatEstimate(estimate.batchShare, "share")} of batch`);
   }
   if (parts.length) return parts.join(" · ");
   return "Current conversion unavailable; this amount can still be saved.";

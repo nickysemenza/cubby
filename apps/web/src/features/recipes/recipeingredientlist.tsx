@@ -24,7 +24,7 @@ import type {
 } from "~/lib/recipe-costing";
 import type { RecipeTotalsGap } from "~/lib/recipe-totals-gaps";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { cn, formatCurrency, roundTo } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import { useHydrationGate } from "~/ui/hooks/useHydrated";
 import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
@@ -138,7 +138,8 @@ export const RecipeIngredientList: React.FC<{
     if (estimate.status !== "unavailable")
       return formatEstimate(
         estimate,
-        (value) => `${roundTo(value, 1)} ${nutrient.unit.toLowerCase()}`,
+        key === "kcal" ? "kcal" : "macro",
+        nutrient.unit.toLowerCase(),
       );
     const label = `Repair ${nutrient.displayName.toLowerCase()} data for ${getIngredientName(row)}`;
     return row.type === "ingredient" ? (
@@ -338,7 +339,7 @@ export const RecipeIngredientList: React.FC<{
           footer: () =>
             totals ? (
               <div className="text-right font-mono tabular-nums">
-                {formatEstimate(totals.estimates.cost, formatCurrency)}
+                {formatEstimate(totals.estimates.cost, "cost")}
               </div>
             ) : null,
           cell: (info) => {
@@ -464,8 +465,8 @@ export const RecipeIngredientList: React.FC<{
                 <div className="text-right font-mono text-xs whitespace-normal tabular-nums">
                   {formatEstimate(
                     displayedNutrition[key],
-                    (value) =>
-                      `${roundTo(value, 1)} ${nutrient.unit.toLowerCase()}`,
+                    key === "kcal" ? "kcal" : "macro",
+                    nutrient.unit.toLowerCase(),
                   )}
                 </div>
               ) : null,
@@ -629,8 +630,8 @@ export const RecipeIngredientList: React.FC<{
               <span className="font-mono text-xs">
                 {formatEstimate(
                   displayedNutrition[focusedNutrient],
-                  (value) =>
-                    `${roundTo(value, 1)} ${TIER1_NUTRIENTS[focusedNutrient].unit.toLowerCase()}`,
+                  focusedNutrient === "kcal" ? "kcal" : "macro",
+                  TIER1_NUTRIENTS[focusedNutrient].unit.toLowerCase(),
                 )}
               </span>
             </div>

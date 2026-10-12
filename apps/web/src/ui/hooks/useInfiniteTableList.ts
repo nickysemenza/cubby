@@ -60,6 +60,8 @@ interface UseInfiniteTableListReturn<TData extends IdentifiedListRow> {
   totalCount: number;
   /** Server-computed full-filtered-set column sums (footer totals). */
   sums?: Record<string, number>;
+  /** The declared list totals as the server words them, by total id. */
+  totalLabels?: Record<string, string>;
   deferredFields: readonly string[];
   enrichmentVersion: number;
   summaryState: ListGroupState;
@@ -188,7 +190,7 @@ export function useInfiniteTableList<
   // Every page carries the same full-set aggregates; the latest page's are
   // the freshest after mutations invalidate/refetch.
   const totalCount = infiniteData?.pages[0]?.meta?.totalCount ?? 0;
-  const sums = infiniteData?.pages.at(-1)?.meta?.sums;
+  const lastMeta = infiniteData?.pages.at(-1)?.meta;
   const groups = infiniteData?.pages[0]?.meta?.groups;
   const progressive = useProgressiveList({
     pages: infiniteData?.pages,
@@ -297,10 +299,15 @@ export function useInfiniteTableList<
     data,
     totalCount,
     sums: firstPageOptions.progressive
-      ? progressive.sums
+      ? progressive.totals?.sums
       : isPlaceholderData
         ? undefined
-        : sums,
+        : lastMeta?.sums,
+    totalLabels: firstPageOptions.progressive
+      ? progressive.totals?.totalLabels
+      : isPlaceholderData
+        ? undefined
+        : lastMeta?.totalLabels,
     summaryState: firstPageOptions.progressive
       ? progressive.summaryState
       : { state: "ready" },

@@ -5,8 +5,7 @@ import { match } from "ts-pattern";
 
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
-import { formatEstimate } from "~/lib/nutrition-format";
-import { formatCurrency } from "~/lib/utils";
+import { formatEstimate, formatKcal } from "~/lib/nutrition-format";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
@@ -74,7 +73,7 @@ const MeasureCell: React.FC<{
   const value =
     "value" in diag
       ? `${Number.parseFloat(diag.value.toPrecision(4))} ${diag.unit}`
-      : `${diag.kcal != null ? Math.round(diag.kcal) : "·"} kcal (${diag.nutrientCount} codes)`;
+      : `${diag.kcal != null ? formatKcal(diag.kcal) : "· kcal"} (${diag.nutrientCount} codes)`;
   const route = path !== undefined ? pathLabel(path ?? null) : null;
   return (
     <span className="text-xs">
@@ -138,17 +137,14 @@ export const RecipeCostingDebugCard: React.FC<{
           <span className="text-muted-foreground">
             persisted{" "}
             {persisted.totals
-              ? `${formatEstimate(persisted.totals.cost, formatCurrency)} · ${formatEstimate(persisted.totals.nutrition.kcal, (value) => `${Math.round(value)} kcal`)}`
+              ? `${formatEstimate(persisted.totals.cost, "cost")} · ${formatEstimate(persisted.totals.nutrition.kcal, "kcal", "kcal")}`
               : "—"}
             {persisted.totalsComputedAt &&
               ` @ ${formatInstant(persisted.totalsComputedAt, "dateTime")}`}
           </span>
           <span className={showDrift ? "font-medium" : ""}>
-            live {formatEstimate(computed.totals.cost, formatCurrency)} ·{" "}
-            {formatEstimate(
-              computed.totals.nutrition.kcal,
-              (value) => `${Math.round(value)} kcal`,
-            )}
+            live {formatEstimate(computed.totals.cost, "cost")} ·{" "}
+            {formatEstimate(computed.totals.nutrition.kcal, "kcal", "kcal")}
             {showDrift && (
               <Badge className="ml-1" variant="destructive">
                 drift

@@ -35,7 +35,7 @@ const plan: ListQueryPlan<{ id: string }> = {
         })),
         missingIds: [],
       }),
-    summary: (signal) => abortable(signal, { count: 2 }),
+    summary: (signal) => abortable(signal, { sums: { count: 2 } }),
   },
 };
 

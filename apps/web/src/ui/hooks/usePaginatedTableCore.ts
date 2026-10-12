@@ -5,15 +5,21 @@ import { useMemo } from "react";
 import type { TableStateReturn } from "../data-table/useTableState";
 import type { DeferredListGroup, LoadListEnrichment } from "./progressive-list";
 
+/** Full-filtered-set aggregates: column sums and the declared totals' server text. */
+export interface ListTotals {
+  /** Column aggregates (footer totals), by column id. */
+  sums?: Record<string, number>;
+  /** Declared list totals as the server words them, by total id. */
+  totalLabels?: Record<string, string>;
+}
+
 export interface ListQueryResponse<TData> {
   items: TData[];
   deferredGroups?: DeferredListGroup[];
-  meta: {
+  meta: ListTotals & {
     pageIndex: number;
     pageSize: number;
     totalCount: number;
-    /** Full-filtered-set column aggregates (footer totals), by column id. */
-    sums?: Record<string, number>;
     groups?: ListGroupSummary[];
   };
 }
@@ -32,9 +38,7 @@ export interface ListQueryPlan<TData> {
   execute: (signal: AbortSignal) => Promise<ListQueryResponse<TData>>;
   progressive?: {
     enrich: LoadListEnrichment;
-    summary: (
-      signal: AbortSignal,
-    ) => Promise<Record<string, number> | undefined>;
+    summary: (signal: AbortSignal) => Promise<ListTotals>;
   };
 }
 

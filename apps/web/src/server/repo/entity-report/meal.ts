@@ -9,7 +9,6 @@ import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 import { and, asc, inArray } from "drizzle-orm";
 
 import { formatEstimate } from "~/lib/nutrition-format";
-import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";
 import { ledgerParty } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -86,7 +85,7 @@ export async function mealCompositionReport(
         entity: "recipe",
         id: entry.recipe.id,
         title: name,
-        subtitle: `×${entry.scale} · ${formatEstimate(entry.scaledTotals.cost, (value) => formatCurrency(value))}`,
+        subtitle: `×${entry.scale} · ${formatEstimate(entry.scaledTotals.cost, "cost")}`,
         trailing: null,
         key: entry.id,
         commands: [

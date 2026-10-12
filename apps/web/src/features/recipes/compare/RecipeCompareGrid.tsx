@@ -16,7 +16,7 @@ import { formatEstimate } from "~/lib/nutrition-format";
 import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
-import { formatCurrency, roundTo } from "~/lib/utils";
+import { formatCurrency } from "~/lib/utils";
 import { stickyRowHeaderCard } from "~/ui/matrix/matrix-chrome";
 import { Image } from "~/ui/primitives/image";
 import { ChoiceSwitcher } from "~/ui/primitives/view-switcher";
@@ -429,11 +429,7 @@ export const RecipeCompareGrid: React.FC<{
             label="Total cost"
             recipes={compared}
             renderCell={(c) =>
-              c.estimates
-                ? formatEstimate(c.estimates.cost, (value) =>
-                    formatCurrency(value),
-                  )
-                : DASH
+              c.estimates ? formatEstimate(c.estimates.cost, "cost") : DASH
             }
             average={<AverageCell stats={costStats} format={currencyFormat} />}
           />
@@ -448,7 +444,7 @@ export const RecipeCompareGrid: React.FC<{
                   : null;
               return estimate && sb ? (
                 <span>
-                  {formatEstimate(estimate, formatCurrency)}{" "}
+                  {formatEstimate(estimate, "cost")}{" "}
                   <span className="text-xs text-muted-foreground">
                     {perUnitSuffix(sb.noun)}
                   </span>
@@ -469,10 +465,7 @@ export const RecipeCompareGrid: React.FC<{
             recipes={compared}
             renderCell={(c) =>
               c.estimates
-                ? formatEstimate(
-                    c.estimates.nutrition.kcal,
-                    (n) => `${Math.round(n)} kcal`,
-                  )
+                ? formatEstimate(c.estimates.nutrition.kcal, "kcal", "kcal")
                 : DASH
             }
             average={
@@ -491,9 +484,7 @@ export const RecipeCompareGrid: React.FC<{
                 c.estimates && sb
                   ? scaleEstimate(c.estimates.nutrition.kcal, 1 / sb.divisor)
                   : null;
-              return estimate
-                ? formatEstimate(estimate, (n) => `${Math.round(n)} kcal`)
-                : DASH;
+              return estimate ? formatEstimate(estimate, "kcal", "kcal") : DASH;
             }}
             average={
               <AverageCell
@@ -507,10 +498,7 @@ export const RecipeCompareGrid: React.FC<{
             recipes={compared}
             renderCell={(c) =>
               c.estimates
-                ? formatEstimate(
-                    c.estimates.nutrition.protein,
-                    (n) => `${roundTo(n, 1)} g`,
-                  )
+                ? formatEstimate(c.estimates.nutrition.protein, "macro", "g")
                 : DASH
             }
             average={

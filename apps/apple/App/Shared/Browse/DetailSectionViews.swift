@@ -843,7 +843,7 @@ private struct ExplanationEvidenceValue: View {
         case .bool(let value): return AnyView(Text(value ? "Yes" : "No"))
         case .number(let value):
             return AnyView(
-                Text(property == "amount" ? value.formatted(.currency(code: "USD")) : value.formatted())
+                Text(property == "amount" ? value.usd : value.formatted())
                     .monospacedDigit())
         case .string(let value):
             if let entity = EntityCatalog.descriptor(forShortcode: value) {

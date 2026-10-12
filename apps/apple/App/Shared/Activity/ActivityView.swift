@@ -801,7 +801,7 @@ struct ActivityDetailView: View {
                 "State", value: detail.run.state.replacingOccurrences(of: "_", with: " ").capitalized)
             LabeledContent("Started") { Text(detail.run.createdAt, style: .relative) }
             if let cost = detail.run.estimatedCost {
-                LabeledContent("Estimated cost", value: cost, format: .usd)
+                LabeledContent("Estimated cost", value: cost.usd)
             }
             if let error = detail.run.error {
                 Text(error).foregroundStyle(FieldGuideTokens.destructive)

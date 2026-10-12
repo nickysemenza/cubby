@@ -19,7 +19,7 @@ import type {
   CalculateTotalsResult,
   RecipeCosting,
 } from "~/lib/recipe-costing";
-import { cn, formatCurrency, roundTo } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { MarkdownText } from "~/ui/markdown";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
@@ -107,13 +107,10 @@ function VitalsPanel({
 
           <div className="mb-3 space-y-1">
             <div className="font-heading text-lg font-semibold tracking-tight">
-              {formatEstimate(stats.cost, formatCurrency)}
+              {formatEstimate(stats.cost, "cost")}
             </div>
             <div className="font-mono text-sm text-muted-foreground tabular-nums">
-              {formatEstimate(
-                stats.nutrition.kcal,
-                (value) => `${Math.round(value)} kcal`,
-              )}
+              {formatEstimate(stats.nutrition.kcal, "kcal", "kcal")}
             </div>
           </div>
 
@@ -145,10 +142,7 @@ function VitalsPanel({
                   {macro.label}
                 </dt>
                 <dd className="font-mono text-xs tabular-nums">
-                  {formatEstimate(
-                    macro.estimate,
-                    (value) => `${roundTo(value, 1)} g`,
-                  )}
+                  {formatEstimate(macro.estimate, "macro", "g")}
                 </dd>
               </div>
             ))}

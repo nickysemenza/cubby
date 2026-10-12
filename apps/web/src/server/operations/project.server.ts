@@ -134,12 +134,9 @@ export const projectHandlers = implementOperationDomain(projectContract, {
       normalizeSorts(input.sort),
       input.pagination,
     );
-    return buildPaginatedResponse(
-      input.pagination,
-      page.data,
-      page.count,
-      page.sums,
-    );
+    return buildPaginatedResponse(input.pagination, page.data, page.count, {
+      sums: page.sums,
+    });
   },
   dashboardSummary: (context, input) =>
     projectDashboardSummary(context.db, input),

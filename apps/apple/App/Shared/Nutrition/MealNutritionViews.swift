@@ -182,7 +182,7 @@ private struct MacroGrid: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(label): \(amount.accessibilityValue(calories: calories)) \(unit)\(amount.inferredZeroCount > 0 ? ", \(amount.inferredZeroCount) contributors inferred from label" : "")"
+            "\(label): \(amount.accessibilityValue(calories: calories, unit: unit))\(amount.inferredZeroCount > 0 ? ", \(amount.inferredZeroCount) contributors inferred from label" : "")"
         )
     }
 }
@@ -193,14 +193,8 @@ private extension MeasureEstimate {
         DisplayFormat.compactEstimate(self, unit: calories ? .kcal : .macro)
     }
 
-    func accessibilityValue(calories: Bool) -> String {
-        let known = DisplayFormat.knownRange(self, unit: calories ? .kcal : .macro)
-        return switch self {
-        case .complete: known ?? ""
-        case .partial: "\(known ?? ""), known subtotal"
-        case .unavailable: isNotApplicable ? "not applicable" : "unavailable"
-        case .pending: "pending"
-        }
+    func accessibilityValue(calories: Bool, unit: String) -> String {
+        DisplayFormat.estimate(self, measure: calories ? .kcal : .macro, unit: unit)
     }
 }
 

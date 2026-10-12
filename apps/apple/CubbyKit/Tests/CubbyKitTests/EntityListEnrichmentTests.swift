@@ -31,7 +31,7 @@ struct EntityListEnrichmentTests {
 
     @Test func lateGroupAndSummaryCannotCrossARefresh() async {
         let groups = Reply<[EntityListGroupResult]>()
-        let summary = Reply<[String: Double]?>()
+        let summary = Reply<[String: String]?>()
         let model = EntityListEnrichmentModel(descriptor: EntityCatalog[.product])
         let old = Self.page(
             enrich: { _, _ in await groups.wait() }, summary: { await summary.wait() })
@@ -40,14 +40,14 @@ struct EntityListEnrichmentTests {
         await summary.gate.arrivals(1)
         let stale = model.tasks + [model.summaryTask].compactMap { $0 }
         model.invalidate()
-        let fresh = Self.page(enrich: { _, _ in [] }, summary: { ["price": 3] })
+        let fresh = Self.page(enrich: { _, _ in [] }, summary: { ["price": "$3.00"] })
         model.accept(fresh, replacing: true)
         await model.waitForBackground()
         groups.resolve([.ready(id: "media", rows: [["id": "PRD-2345", "displayImages": []]])])
-        summary.resolve(["price": 99])
+        summary.resolve(["price": "$99.00"])
         for task in stale { await task.waitUnlessCancelled() }
 
-        #expect(model.sums?["price"] == 3)
+        #expect(model.totalLabels?["price"] == "$3.00")
         #expect(model.project(fresh.items).first?.raw["displayImages"] != .array([]))
     }
 

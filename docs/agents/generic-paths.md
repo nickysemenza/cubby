@@ -177,9 +177,13 @@ existing block. Extend the generic path when it almost fits. See
   direct `setColumnOrder` / `setColumnPinning` / `column.pin` calls.
 - Formatting: `lib/utils` formatters (`formatCurrency`, `formatCount`,
   `formatPercent`, `roundTo`, compact variants) and the WASM amount formatter.
-  Currency, bare numbers, amounts, and the compact nutrition cell are one Rust
-  implementation (`recipebridge/src/display_format.rs`) shared with native via
-  UniFFI; add a rule there and to `golden-vectors/display-format.json`.
+  Currency, bare numbers, amounts, kcal, and estimates (compact cell
+  `compactEstimateText`, long form `formatEstimate` in `lib/nutrition-format.ts`)
+  are one Rust implementation (`recipebridge/src/display_format.rs`) shared
+  with native via UniFFI; add a rule there and to
+  `golden-vectors/display-format.json`. Declared list totals arrive as
+  server-worded `totalLabels` (`server/repo/list-display-labels.ts`); clients
+  print them.
 - Search results: `features/search/search-utils.tsx` (routes, media, match
   text) and `features/search/product-family.tsx`, the one Product-family
   model (summary, child rows, destinations, keys, disclosure) behind both the
@@ -213,7 +217,8 @@ existing block. Extend the generic path when it almost fits. See
 
 ## Swift
 
-- `Error.userMessage`, `CubbyClient` list-all helper, `Double.usd`.
+- `Error.userMessage`, `CubbyClient` list-all helper, `Double.usd` / `Decimal.usd` (Rust
+  `ValueFormat.currency`; never a Foundation currency style).
   `Diagnostics.report` owns native cancellation filtering; callers pass errors unchanged.
   `CubbyAPIError.unwrapping` preserves transport cancellation identity through generated-client
   wrappers while retaining other transport diagnostics.

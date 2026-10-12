@@ -9,11 +9,7 @@ import {
   TIER1_NUTRIENTS,
 } from "@cubby/usda";
 
-import {
-  estimateStatusText,
-  formatEstimate,
-  trimAmount,
-} from "~/lib/nutrition-format";
+import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { cn } from "~/lib/utils";
 
 /**
@@ -53,8 +49,7 @@ const SUB_NUTRIENTS: ReadonlySet<NutrientKey> = new Set([
 const formatAmount = (
   estimate: NutritionEstimate[NutrientKey],
   unit: string,
-): string =>
-  formatEstimate(estimate, (value) => `${trimAmount(value)} ${unit}`);
+): string => formatEstimate(estimate, "macro", unit);
 
 const formatDailyValue = (
   nutrientKey: NutrientKey,
@@ -160,7 +155,7 @@ export function NutritionLabel({
         <span className="text-lg font-bold">Calories</span>
         <span className="text-2xl font-bold tabular-nums">
           <span title={estimateStatusText(kcalEstimate) ?? undefined}>
-            {formatEstimate(kcalEstimate, (value) => `${Math.round(value)}`)}
+            {formatEstimate(kcalEstimate, "kcal")}
           </span>
         </span>
       </div>

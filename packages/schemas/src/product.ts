@@ -595,8 +595,8 @@ export const productAddToInventoryPreviewOut = z.object({
   kitWarning: z
     .object({ accounted: z.number(), expected: z.number() })
     .nullable(),
-  /** Stock already at the location; the add sums into that row. */
-  existingAtLocation: amount.nullable(),
+  /** Stock already at the location as display text (`3 each`); the add sums into that row. */
+  existingAtLocationLabel: z.string().nullable(),
 });
 export type ProductAddToInventoryPreviewOut = z.infer<
   typeof productAddToInventoryPreviewOut

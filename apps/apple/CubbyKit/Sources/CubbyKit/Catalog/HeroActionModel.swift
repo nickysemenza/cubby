@@ -101,9 +101,10 @@ public final class HeroActionModel: Identifiable {
 
     /// Stock already at the chosen location: the add sums into that row.
     public var existingStock: String? {
-        guard case .addToInventory(let preview)? = currentPreview, let existing = preview.existingAtLocation
+        guard case .addToInventory(let preview)? = currentPreview,
+            let existing = preview.existingAtLocationLabel
         else { return nil }
-        return "already \(existing.value.formatted()) \(existing.unit) here — adds to that row"
+        return "already \(existing) here — adds to that row"
     }
 
     /// Whether Submit is enabled: required fields filled, and the preview (if the verb has one)

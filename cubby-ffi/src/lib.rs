@@ -144,14 +144,86 @@ impl From<CompactUnit> for recipebridge::WCompactUnit {
     }
 }
 
-/// The part of a nutrition/cost estimate a compact cell reads: a known figure
-/// (complete or partial) or nothing. Mirrors the status split of
-/// `recipebridge::WMeasureEstimate` without its coverage metadata.
+/// A nutrition/cost estimate as the display formatters read it: mirrors
+/// `recipebridge::WMeasureEstimate` without the coverage counts no label prints.
 #[derive(uniffi::Enum)]
 pub enum EstimateFigure {
-    Complete { lower: f64, upper: Option<f64> },
-    Partial { lower: f64, upper: Option<f64> },
-    Unknown,
+    Complete {
+        lower: f64,
+        upper: Option<f64>,
+        inferred_zero: u32,
+    },
+    Partial {
+        lower: f64,
+        upper: Option<f64>,
+        inferred_zero: u32,
+    },
+    Unavailable {
+        not_applicable: bool,
+    },
+    Pending,
+}
+
+impl From<EstimateFigure> for recipebridge::WMeasureEstimate {
+    fn from(figure: EstimateFigure) -> Self {
+        let coverage = |inferred_zero| recipebridge::WEstimateCoverage {
+            covered: 0,
+            total: 0,
+            inferred_zero,
+        };
+        match figure {
+            EstimateFigure::Complete {
+                lower,
+                upper,
+                inferred_zero,
+            } => Self::Complete {
+                lower,
+                upper,
+                coverage: coverage(inferred_zero),
+            },
+            EstimateFigure::Partial {
+                lower,
+                upper,
+                inferred_zero,
+            } => Self::Partial {
+                lower,
+                upper,
+                coverage: coverage(inferred_zero),
+            },
+            EstimateFigure::Unavailable { not_applicable } => Self::Unavailable {
+                reason: if not_applicable {
+                    recipebridge::WUnavailableReason::NotApplicable
+                } else {
+                    recipebridge::WUnavailableReason::NoData
+                },
+                coverage: None,
+            },
+            EstimateFigure::Pending => Self::Pending {
+                reason: recipebridge::WPendingReason::TotalsMissing,
+            },
+        }
+    }
+}
+
+/// Which number rule a long-form estimate label uses; mirrors
+/// `recipebridge::WEstimateMeasure`.
+#[derive(uniffi::Enum)]
+pub enum EstimateMeasure {
+    Cost,
+    Kcal,
+    Macro,
+    Share,
+}
+
+impl From<EstimateMeasure> for recipebridge::WEstimateMeasure {
+    fn from(measure: EstimateMeasure) -> Self {
+        match measure {
+            EstimateMeasure::Cost => Self::Cost,
+            EstimateMeasure::Kcal => Self::Kcal,
+            EstimateMeasure::Macro => Self::Macro,
+            EstimateMeasure::Share => Self::Share,
+        }
+    }
 }
 
 /// A `{ value, unit }` amount as the web renders it (`2 cup`, `3 each`,
@@ -235,25 +307,20 @@ pub fn format_number(value: f64) -> String {
     recipebridge::format_number_plain(value)
 }
 
-/// A compact nutrition figure or range without the partial marker (`1,500–2,250`).
-#[uniffi::export]
-pub fn format_compact_range(lower: f64, upper: Option<f64>, unit: CompactUnit) -> String {
-    recipebridge::compact_range_text(lower, upper, unit.into())
-}
-
 /// The one-line macro/cost cell: a partial figure ends in `+`, unknown is `—`.
 #[uniffi::export]
 pub fn format_compact_estimate(figure: EstimateFigure, unit: CompactUnit) -> String {
-    let unit = unit.into();
-    match figure {
-        EstimateFigure::Complete { lower, upper } => {
-            recipebridge::compact_range_text(lower, upper, unit)
-        }
-        EstimateFigure::Partial { lower, upper } => {
-            format!("{}+", recipebridge::compact_range_text(lower, upper, unit))
-        }
-        EstimateFigure::Unknown => "—".to_string(),
-    }
+    recipebridge::compact_estimate_text(&figure.into(), unit.into())
+}
+
+/// The long-form estimate label (`420 kcal known · partial`, `Pending`, `N/A`).
+#[uniffi::export]
+pub fn format_estimate(
+    figure: EstimateFigure,
+    measure: EstimateMeasure,
+    unit: Option<String>,
+) -> String {
+    recipebridge::estimate_label_text(&figure.into(), measure.into(), unit.as_deref())
 }
 
 #[cfg(test)]
@@ -285,22 +352,45 @@ mod tests {
         // A bare count stays a plain number rather than a unit-formatted fraction.
         assert_eq!(format_amount(String::new(), 1.5, None), "1.5");
         assert_eq!(
-            format_compact_range(1500.0, Some(2250.4), CompactUnit::Kcal),
-            "1,500–2,250"
-        );
-        assert_eq!(
             format_compact_estimate(
                 EstimateFigure::Partial {
                     lower: 5.0,
-                    upper: Some(6.5)
+                    upper: Some(6.5),
+                    inferred_zero: 0,
                 },
                 CompactUnit::Macro
             ),
             "5–6.5+"
         );
         assert_eq!(
-            format_compact_estimate(EstimateFigure::Unknown, CompactUnit::Kcal),
+            format_compact_estimate(EstimateFigure::Pending, CompactUnit::Kcal),
             "—"
+        );
+        assert_eq!(
+            format_estimate(
+                EstimateFigure::Partial {
+                    lower: 1500.0,
+                    upper: Some(2250.4),
+                    inferred_zero: 0,
+                },
+                EstimateMeasure::Kcal,
+                Some("kcal".to_string())
+            ),
+            "1,500–2,250 kcal known · partial"
+        );
+        assert_eq!(
+            format_estimate(
+                EstimateFigure::Unavailable {
+                    not_applicable: true
+                },
+                EstimateMeasure::Macro,
+                None
+            ),
+            "N/A"
+        );
+        assert_eq!(
+            format_estimate(EstimateFigure::Pending, EstimateMeasure::Cost, None),
+            "Pending"
         );
     }
 

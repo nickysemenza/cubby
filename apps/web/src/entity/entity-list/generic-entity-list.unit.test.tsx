@@ -116,7 +116,7 @@ describe("list manifest and deferred rows", () => {
         }),
         progressive: {
           enrich: async () => new Promise(() => {}),
-          summary: async () => undefined,
+          summary: async () => ({}),
         },
       });
       await renderListPage(

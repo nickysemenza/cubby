@@ -10,7 +10,6 @@ import { formatEstimate } from "~/lib/nutrition-format";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { formatRecipeTime } from "~/lib/recipe-time";
-import { roundTo, formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
 import { tryFormatAmount } from "../inventory/format-amount";
@@ -122,9 +121,9 @@ export function buildRecipeKicker(
       basis ? 1 / basis.divisor : 1,
     );
     parts.push(
-      `${formatEstimate(estimates.cost, (n) => `${formatCurrency(n)}`)}${basis ? ` ${perUnitSuffix(basis.noun)}` : " total"}`,
-      `${formatEstimate(estimates.nutrition.kcal, (n) => `${Math.round(n)} kcal`)}${basis ? ` ${perUnitSuffix(basis.noun)}` : ""}`,
-      `${formatEstimate(estimates.nutrition.protein, (n) => `${roundTo(n, 1)} g protein`)}${basis ? ` ${perUnitSuffix(basis.noun)}` : ""}`,
+      `${formatEstimate(estimates.cost, "cost")}${basis ? ` ${perUnitSuffix(basis.noun)}` : " total"}`,
+      `${formatEstimate(estimates.nutrition.kcal, "kcal", "kcal")}${basis ? ` ${perUnitSuffix(basis.noun)}` : ""}`,
+      `${formatEstimate(estimates.nutrition.protein, "macro", "g protein")}${basis ? ` ${perUnitSuffix(basis.noun)}` : ""}`,
     );
   }
 
@@ -149,19 +148,11 @@ export function recipeMacroSegments(
 
   const parts: string[] = [];
   if (opts?.includeCost !== false)
-    parts.push(formatEstimate(estimates.cost, (n) => `${formatCurrency(n)}`));
-  parts.push(
-    formatEstimate(estimates.nutrition.kcal, (n) => `${Math.round(n)} kcal`),
-  );
-  parts.push(
-    formatEstimate(estimates.nutrition.protein, (n) => `${roundTo(n, 1)} g P`),
-  );
-  parts.push(
-    formatEstimate(estimates.nutrition.fat, (n) => `${roundTo(n, 1)} g F`),
-  );
-  parts.push(
-    formatEstimate(estimates.nutrition.carbs, (n) => `${roundTo(n, 1)} g C`),
-  );
+    parts.push(formatEstimate(estimates.cost, "cost"));
+  parts.push(formatEstimate(estimates.nutrition.kcal, "kcal", "kcal"));
+  parts.push(formatEstimate(estimates.nutrition.protein, "macro", "g P"));
+  parts.push(formatEstimate(estimates.nutrition.fat, "macro", "g F"));
+  parts.push(formatEstimate(estimates.nutrition.carbs, "macro", "g C"));
 
   return { basisLabel: basis ? `per ${basis.noun}` : "total", parts };
 }

@@ -146,7 +146,7 @@ function assignedAmountText(preparation: MealPreparation): string {
     summary.assignedShare.status === "complete" ||
     summary.assignedShare.status === "partial"
   )
-    return `${formatEstimate(summary.assignedShare, (value) => `${roundTo(value * 100, 1).toLocaleString()}%`)} of batch assigned`;
+    return `${formatEstimate(summary.assignedShare, "share")} of batch assigned`;
   return "Assigned weight unknown";
 }
 

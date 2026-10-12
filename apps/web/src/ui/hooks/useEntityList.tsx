@@ -214,6 +214,7 @@ export interface UseEntityListReturn<
   requestDelete: (item: TData) => void;
   totalCount: number | undefined;
   sums: Record<string, number> | undefined;
+  totalLabels: Record<string, string> | undefined;
   summaryState?: ListGroupState;
   enrichmentFailures?: import("./progressive-list").ListEnrichmentFailure[];
   retryEnrichment?: (
@@ -801,6 +802,7 @@ export function useEntityList<
     // "0 …" in the eyebrow before the real count arrives.
     totalCount: isLoading ? undefined : totalCount,
     sums,
+    totalLabels: infiniteResult.totalLabels,
     summaryState: infiniteResult.summaryState,
     enrichmentFailures: infiniteResult.enrichmentFailures,
     retryEnrichment: infiniteResult.retryEnrichment,

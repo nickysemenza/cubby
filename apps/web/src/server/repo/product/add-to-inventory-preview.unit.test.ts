@@ -84,7 +84,7 @@ describe("describeAddToInventory", () => {
       describeAddToInventory({
         ...base,
         existingAtLocation: { value: 3, unit: "each" },
-      }).existingAtLocation,
-    ).toEqual({ value: 3, unit: "each" });
+      }).existingAtLocationLabel,
+    ).toBe("3 each");
   });
 });

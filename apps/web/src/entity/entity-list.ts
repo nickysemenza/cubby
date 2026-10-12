@@ -211,8 +211,10 @@ export function entityListBaseFor<E extends ListEntity>(entity: E) {
           groups: import("~/ui/hooks/progressive-list").ListReadGroup[],
           signal: AbortSignal,
         ) => enrichment.call({ entity, ids, groups }, { signal }),
-        summary: async (signal: AbortSignal) =>
-          (await summary.call(parsed, { signal })).sums,
+        summary: async (signal: AbortSignal) => {
+          const { sums, totalLabels } = await summary.call(parsed, { signal });
+          return { sums, totalLabels };
+        },
       },
     };
   };

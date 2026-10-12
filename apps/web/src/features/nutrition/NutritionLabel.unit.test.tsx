@@ -72,7 +72,7 @@ describe("NutritionLabel", () => {
     expect(screen.getByText("120–180 known · partial")).toBeVisible();
 
     const fatRow = screen.getByRole("region", { name: "Total Fat" });
-    expect(fatRow).toHaveTextContent("10 g–20 g known · partial");
+    expect(fatRow).toHaveTextContent("10–20 g known · partial");
     expect(
       within(fatRow).getByTitle(
         "Daily Value omitted because the nutrient estimate is partial",
@@ -81,7 +81,7 @@ describe("NutritionLabel", () => {
     expect(fatRow).not.toHaveTextContent("partialg");
 
     const fiberRow = screen.getByRole("region", { name: "Fiber" });
-    expect(fiberRow).toHaveTextContent("10 g–20 g");
+    expect(fiberRow).toHaveTextContent("10–20 g");
     expect(fiberRow).toHaveTextContent("36–71%");
   });
 });
