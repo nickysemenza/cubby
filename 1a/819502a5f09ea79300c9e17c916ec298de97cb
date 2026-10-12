@@ -1,0 +1,19 @@
+docs/agents/validation.md
+  s_92f11563412ea0::t_cbf82975dc4976 74-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1a819502a5f09ea79300c9e17c916ec298de97cb",
+  "prompts": {},
+  "sessions": {
+    "s_92f11563412ea0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de538b4e-46ae-4993-93b7-d4f3cbc1e035",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
