@@ -12,7 +12,7 @@ import {
   assertSimulatorDatabaseName,
 } from "./sim-db-guard";
 import { testServiceConfig } from "./test-service-config";
-import { worktreeRoot } from "../../../scripts/lib/harness-lock.ts";
+import { holdLock, worktreeRoot } from "../../../scripts/lib/harness-lock.ts";
 
 /**
  * Disposable databases for Vitest, browser E2E and native runners.
@@ -84,14 +84,31 @@ export async function prepareTemplate(
   // A run killed between creating and finalizing the template leaves it
   // unfinished: IntegreSQL answers the next initialize with 423 (which the
   // client treats as "someone else is initializing") and holds every checkout
-  // until a finalize that never comes. Runs in one worktree are serialized by
-  // its harness lock, so a marker left behind means that initialization was
-  // abandoned; discard it and start over.
+  // until a finalize that never comes. Preparation holds a per-hash lock, so a
+  // marker seen under it was left by an initialization that never finished;
+  // discard that template and start over.
   const markers = join(
     worktreeRoot,
     "node_modules/.cache/cubby-test-templates",
   );
   const marker = join(markers, `${hash}.pending`);
+  mkdirSync(markers, { recursive: true });
+  const release = await holdLock({
+    path: join(markers, hash),
+    label: `${namespace} template preparation`,
+  });
+  try {
+    await initializeOwnedTemplate(namespace, hash, marker);
+  } finally {
+    await release();
+  }
+}
+
+async function initializeOwnedTemplate(
+  namespace: TemplateNamespace,
+  hash: string,
+  marker: string,
+): Promise<void> {
   if (existsSync(marker)) {
     console.log(
       `[test database] Discarding the abandoned ${namespace} template`,
@@ -100,7 +117,6 @@ export async function prepareTemplate(
       .api.discardTemplate(hash)
       .catch(() => {});
   }
-  mkdirSync(markers, { recursive: true });
   writeFileSync(marker, "");
   // The client discards the template after a failed migration and rethrows,
   // but a failed discard replaces the migration error; keep both.
@@ -125,7 +141,13 @@ export async function prepareTemplate(
       }
       console.log(`[test database] Migrated the ${namespace} template`);
     });
+    // Finalized, or already initialized by an earlier run.
+    rmSync(marker, { force: true });
   } catch (error) {
+    // The client discarded the template after the failed migration. Any other
+    // failure (e.g. finalize never reached IntegreSQL) keeps the marker so the
+    // next preparation discards the unfinished template.
+    if (error === migrationError) rmSync(marker, { force: true });
     if (migrationError !== undefined && error !== migrationError) {
       throw new AggregateError(
         [migrationError, error],
@@ -134,8 +156,6 @@ export async function prepareTemplate(
       );
     }
     throw error;
-  } finally {
-    rmSync(marker, { force: true });
   }
 }
 

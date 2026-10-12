@@ -86,6 +86,8 @@
     },
     "knip": {
       "command": "knip --no-config-hints --no-gitignore && pnpm knip:production",
+      // Knip loads vitest.config.ts, whose ensures defer to this graph.
+      "dependsOn": ["wasm", "generate"],
       "cache": true,
       "inputs": ["repo"]
     },

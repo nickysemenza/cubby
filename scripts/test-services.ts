@@ -430,7 +430,9 @@ export async function runWithTestServices(
     console.error("[test-services]", error);
   } finally {
     if (interrupted) signalGroup("SIGKILL");
-    leave();
+    // A descendant can outlive the group leader; its still-live group keeps
+    // the record, and liveRuns deletes it once the group is gone.
+    if (!(detachedCommand && child?.pid && groupIsAlive(child.pid))) leave();
     if (killTimer) clearTimeout(killTimer);
     process.off("SIGINT", onInt);
     process.off("SIGTERM", onTerm);
