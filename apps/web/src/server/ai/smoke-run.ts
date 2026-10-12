@@ -42,7 +42,7 @@ import { aiUsage, image, run as runTable } from "~/server/db/schema";
 import { loadPurchaseAuditBatch } from "~/server/purchase-import/audit-batch";
 import { normalizeMessage } from "~/server/purchase-import/gmail/normalize";
 import { interpretMailRelevance } from "~/server/purchase-import/gmail/relevance";
-import { mailTriagePrompt } from "~/server/purchase-import/gmail/triage-model";
+import { mailTriagePrompt } from "~/server/purchase-import/gmail/triage";
 import {
   chooseLineStage,
   PRODUCT_IDENTITY_RULES,

@@ -578,7 +578,8 @@ async function acquireEligible(
           stage: "rule",
           reason: "Found by a member's search; the caller decides",
         })
-      : () => routeGmailMessage(message, normalized, ports.triage),
+      : async () =>
+          (await routeGmailMessage(message, normalized, ports.triage)).decision,
     !relevanceModelRuns(input, executionPolicy)
       ? null
       : () =>

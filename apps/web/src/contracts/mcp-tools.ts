@@ -570,7 +570,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   imports_read: {
     description:
-      "Import reads: one retained Email, purchase-import operation status, one run's live status and target outcomes, vendor coverage, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
+      "Import reads: one retained Email and its Mail triage preview, purchase-import operation status, one run's live status and target outcomes, vendor coverage, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
     actions: {
       email_accuracy_blind: mcpAction({
         op: purchaseImportContract.ops.emailAccuracyBlind,
@@ -592,6 +592,11 @@ export const MCP_TOOLS = defineMcpTools({
         op: purchaseImportContract.ops.mailRead,
         description:
           "Read one retained Email: headers, body, links, attachments and checksum. acceptedSourceOrders supplies owned accepted-order handles and source identities for prepare_reconciliation, separately from lifecycle Purchase links. Pass attachmentId for original PDF/image bytes (at most 3 MiB). Start research from this original and its links.",
+      }),
+      mail_triage_preview: mcpAction({
+        op: purchaseImportContract.ops.mailTriagePreview,
+        description:
+          "Run the deployed Mail triage on one retained Email's Gmail original, refetched as Reclassify does, without recording an observation or changing Relevance (its Run holds only model usage). Pass decisionModel to pin Jev or Clef; omitted samples the live split. Returns the routed classification, stage, reason and model, and the bounded view's bytes, completeness and incompleteReasons.",
       }),
       purchase_status: mcpAction({
         op: purchaseImportContract.ops.operationStatus,

@@ -21,7 +21,6 @@ const MAILBOX_ORDER_CANDIDATE_FEATURE = {
   ...MAILBOX_TRIAGE_FEATURE,
   feature: "mailbox-order-candidate",
   promptVersion: "2026-10-10.1",
-  sample: true,
 } satisfies AiDecisionFeature;
 
 /** Exact member, provider identity and retained bytes own this read-only evidence. */

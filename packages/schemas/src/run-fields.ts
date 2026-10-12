@@ -318,10 +318,13 @@ export const suggestionSweepRunProgress = z.object({
 export type SuggestionSweepRunProgress = z.infer<
   typeof suggestionSweepRunProgress
 >;
-/** A member's Reclassify or extraction-preview rerun of selected Emails in one mailbox. */
+/**
+ * A member's Reclassify, extraction-preview rerun, or read-only triage preview
+ * of selected Emails in one mailbox.
+ */
 export const mailReclassifyRunInput = z.strictObject({
   kind: z.literal("mail_reclassify"),
-  mode: z.enum(["relevance", "preview"]),
+  mode: z.enum(["relevance", "preview", "triage_preview"]),
   executionAuthorization: executionAuthorizationRef.optional(),
   mailboxId: z.string().min(1),
   emails: z

@@ -2,12 +2,14 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { jevChoiceFitsContext } from "~/server/ai/jev";
 import { email as emailTable, orderMail, run } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { syntheticMailImportRun } from "./execution.fixtures";
 import { ingestGmailMessages } from "./ingest";
+import { mailTriagePrompt } from "./triage";
 import type { GmailProvider } from "./types";
 
 const message =
@@ -140,7 +142,9 @@ describe("Gmail classification stage and reason", () => {
     async (verdict) => {
       const body =
         "Your order shipped. " +
-        "x".repeat(40_000) +
+        "x ".repeat(14_000) +
+        "Order total $18.00 " +
+        "x ".repeat(14_000) +
         " Receipt details at the end.";
       const triage = vi.fn(async (_content: string) => verdict);
       expect(
@@ -151,8 +155,8 @@ describe("Gmail classification stage and reason", () => {
       });
       expect(triage).toHaveBeenCalledOnce();
       expect(
-        Buffer.byteLength(triage.mock.calls[0]?.[0] ?? ""),
-      ).toBeLessThanOrEqual(12_000);
+        jevChoiceFitsContext(mailTriagePrompt(triage.mock.calls[0]?.[0] ?? "")),
+      ).toBe(true);
       const [retained] = await getDb(ctx.db)
         .select({ content: orderMail.content, runId: emailTable.runId })
         .from(emailTable)

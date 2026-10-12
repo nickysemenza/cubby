@@ -95,7 +95,7 @@ describe("runJevChoice", () => {
     },
   );
 
-  it("keeps a declared routing model pinned when trial sampling would choose Clef", async () => {
+  it("keeps a caller-pinned model and omits payload logging when trial sampling would choose Clef", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     vi.spyOn(Math, "random").mockReturnValue(0.75);
     vi.resetModules();
@@ -114,7 +114,8 @@ describe("runJevChoice", () => {
     });
     await route({
       ...base,
-      feature: { ...base.feature, sample: false, collectPayload: false },
+      feature: { ...base.feature, collectPayload: false },
+      decisionModel: "typesafe/jev",
       choices: ["purchase-related"],
     });
     expect(sentModel(sent[0])).toBe("typesafe/jev");

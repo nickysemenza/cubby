@@ -121,6 +121,20 @@ The Run row is the record; an instance is one attempt at it, named
   is skipped); with neither it refuses before any Run or Gmail read. Jev/Clef
   calls are unmetered as in discovery. It never admits import. One request
   stops starting Emails after 150 s and reports the rest `deferred`.
+  `imports_read.mail_triage_preview` opens the same Run (`triage_preview`
+  mode) to rerun triage on one original and records only model usage.
+- Mail triage (`gmail/triage.ts`) sends Jev one bounded view sized by the
+  real Jev request gate (`jevChoiceFitsContext`, escaping included). HTML is
+  compacted by recipebridge's `compact_email_html` (preheader kept, tracking
+  pixels dropped, data tables as `cell | cell` rows, footers last, links
+  ranked by purchase cues) and the full text's purchase cues — amounts,
+  order/invoice numbers, receipt phrases — are re-checked against the
+  serialized view. Jev's `unrelated` becomes `uncertain` only for a listed
+  incompleteness reason (`mailTriageIncompleteReason`): a clipped cue,
+  attachments, an image-only body, a clipped cue-bearing link/image or
+  structured data, the compactor's own bound, dropped MIME text parts, or
+  clipped headers. HTML alone no longer does, and there are no sender-wide
+  exclusions. Triage is Jev/Clef trial traffic like every decision feature.
 - A completed scheduled pass that saved no message and recorded no history
   event is `routine`; the Runs list hides routine Runs by default.
 

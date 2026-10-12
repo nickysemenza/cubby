@@ -4,7 +4,8 @@
  * policy; replacing Relevance in a way that drops retained content; overriding
  * a member's resolution; losing a disagreement with the member's review;
  * re-pointing the Email's processing Run (which would freeze later refreshes);
- * and admitting more than one capped batch.
+ * admitting more than one capped batch; and a triage preview that writes
+ * Relevance, history or retained content.
  */
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
@@ -33,7 +34,7 @@ import { productionOrderMailAttachmentStorage } from "./attachment-storage";
 import { originalChecksum } from "./checksum";
 import { normalizeMessage } from "./normalize";
 import * as providers from "./provider";
-import { reclassifyEmails } from "./reclassify";
+import { previewMailTriage, reclassifyEmails } from "./reclassify";
 import type { MailRelevance } from "./relevance";
 import type { MailTriage } from "./triage";
 import type { GmailMessage, GmailProvider } from "./types";
@@ -252,6 +253,49 @@ describe("member Reclassify", () => {
       runId: recorded!.id,
       classification: "related",
       stage: "model",
+    });
+  });
+
+  it("previews triage from the refetched original without writing the Email, its history or retained content", async () => {
+    const f = await fixture();
+    f.triage.mockResolvedValue("unrelated");
+    const email = await f.seed(
+      "synthetic-preview",
+      "Club news: the spring meetup moves to the community hall.",
+      { classification: "uncertain", status: "pending" },
+    );
+    const before = await f.current(email.id);
+    const preview = await previewMailTriage(
+      ctx.db,
+      { mailboxId, messageId: "synthetic-preview" },
+      ctx.actor,
+      { triage: f.triage },
+    );
+
+    expect(f.getMessage).toHaveBeenCalledWith("synthetic-preview");
+    expect(f.triage.mock.calls[0]?.[0]).toContain("spring meetup");
+    expect(preview).toMatchObject({
+      classification: "unrelated",
+      stage: "jev",
+      model: null,
+      view: { complete: true, incompleteReasons: [] },
+    });
+    expect(preview.view?.bytes).toBeGreaterThan(0);
+    expect(f.relevance).not.toHaveBeenCalled();
+    expect(await f.current(email.id)).toEqual(before);
+    expect(await f.history(email.id)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(orderMail)).toEqual([]);
+    const runs = (
+      await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.purpose, "background"))
+    ).filter((row) => mailReclassifyRunInput.safeParse(row.input).success);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ status: "completed" });
+    expect(mailReclassifyRunInput.parse(runs[0]!.input)).toMatchObject({
+      mode: "triage_preview",
+      emails: [{ emailId: email.id }],
     });
   });
 

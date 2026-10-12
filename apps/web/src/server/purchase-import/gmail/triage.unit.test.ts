@@ -1,120 +1,267 @@
-/** Failures: missing originals classify negatively; non-text order evidence is discarded;
- * transport headers, styling or large HTML attributes consume the decision context. */
+/** Failures: missing originals classify negatively; a clipped amount, order
+ * number, attachment, image-only body or dropped MIME part lets Jev's
+ * `unrelated` stand; HTML alone forces `uncertain`; escaping, Unicode or
+ * transport headers push the view past Jev's request gate. */
+import * as recipebridge from "@cubby/recipebridge";
 import { describe, expect, it, vi } from "vitest";
 
-import { normalizeMessage } from "./normalize";
-import { routeGmailMessage } from "./triage";
-import type { GmailMessage } from "./types";
+import { jevChoiceFitsContext } from "~/server/ai/jev";
 
-const message = (body?: string): GmailMessage => ({
+import {
+  EMAIL_FIXTURE_SUMMARY,
+  EMAIL_HTML_FIXTURES,
+  summarizeEmailFixtures,
+} from "./email-html.fixtures";
+import { normalizeMessage } from "./normalize";
+import { mailTriagePrompt, routeGmailMessage } from "./triage";
+import type { GmailMessage, GmailMessagePart } from "./types";
+
+const part = (body: string, mimeType = "text/plain"): GmailMessagePart => ({
+  mimeType,
+  body: {
+    data: Buffer.from(body).toString("base64url"),
+    size: Buffer.byteLength(body),
+  },
+});
+
+const message = (body?: string, mimeType = "text/plain"): GmailMessage => ({
   id: "synthetic-mail",
   payload: {
-    mimeType: "text/plain",
-    body: body
-      ? {
-          data: Buffer.from(body).toString("base64url"),
-          size: Buffer.byteLength(body),
-        }
-      : {},
+    ...(body ? part(body, mimeType) : { mimeType, body: {} }),
     headers: [{ name: "Subject", value: "Payment" }],
   },
 });
+
+const route = async (
+  raw: GmailMessage,
+  choice: "related" | "unrelated" | "uncertain" = "unrelated",
+) => {
+  let content = "";
+  const routed = await routeGmailMessage(
+    raw,
+    normalizeMessage("google-subject", raw),
+    async (input) => {
+      content = input;
+      return choice;
+    },
+  );
+  return { ...routed, content };
+};
+
+const withinGate = (content: string) =>
+  jevChoiceFitsContext(mailTriagePrompt(content));
+
 describe("transient Gmail triage", () => {
-  it("retains multipart HTML meaning and order evidence beside a plain fallback", async () => {
+  it("compacts the shared Email fixtures exactly as workerd does", () => {
+    expect(summarizeEmailFixtures(recipebridge.compact_email_html)).toEqual(
+      EMAIL_FIXTURE_SUMMARY,
+    );
+  });
+
+  it("lets Jev's unrelated stand for a complete HTML newsletter", async () => {
+    const { decision, view, content } = await route(
+      message(EMAIL_HTML_FIXTURES.newsletter, "text/html"),
+    );
+    expect(decision).toMatchObject({
+      classification: "unrelated",
+      stage: "jev",
+    });
+    expect(view).toMatchObject({ complete: true, incompleteReasons: [] });
+    expect(JSON.parse(content)).toMatchObject({
+      preheader: "Five things to plant before the frost",
+      bodyComplete: true,
+      omittedPurchaseCues: false,
+    });
+    expect(content).not.toContain("line-height");
+  });
+
+  it("keeps an order table's rows, ranked order links and structured data in the view", async () => {
+    const { content, view } = await route(
+      message(EMAIL_HTML_FIXTURES.orderTable, "text/html"),
+      "related",
+    );
+    expect(content).toContain("Bamboo spatula set | 2 | $18.50");
+    expect(JSON.parse(content).htmlEvidence.links[0]).toEqual({
+      href: "https://carrier.example.test/track?id=1Z999SYN",
+      text: "Track package",
+    });
+    expect(view?.complete).toBe(true);
+
+    const jsonLd = await route(
+      message(EMAIL_HTML_FIXTURES.jsonLdOrder, "text/html"),
+      "related",
+    );
+    expect(JSON.parse(jsonLd.content).htmlEvidence.structuredData[0]).toContain(
+      '"orderNumber": "EB-778201"',
+    );
+  });
+
+  it("keeps an image-only receipt uncertain", async () => {
+    const { decision, view } = await route(
+      message(EMAIL_HTML_FIXTURES.imageOnlyReceipt, "text/html"),
+    );
+    expect(decision).toMatchObject({
+      classification: "uncertain",
+      stage: "rule",
+    });
+    expect(view?.incompleteReasons).toEqual(["image_only"]);
+  });
+
+  it("keeps a message whose purchase cue the gate clipped uncertain", async () => {
+    const { decision, view, content } = await route(
+      message(
+        "Newsletter " +
+          "filler ".repeat(4_000) +
+          "Receipt for order #SYN-55123 total $42.00 " +
+          "filler ".repeat(4_000),
+      ),
+    );
+    expect(withinGate(content)).toBe(true);
+    expect(content).not.toContain("$42.00");
+    expect(JSON.parse(content)).toMatchObject({
+      bodyComplete: false,
+      omittedPurchaseCues: true,
+    });
+    expect(decision).toMatchObject({
+      classification: "uncertain",
+      stage: "rule",
+    });
+    expect(view?.incompleteReasons).toEqual(["purchase_cue_clipped"]);
+  });
+
+  it("lets unrelated stand when the clipped middle carries no purchase cue", async () => {
+    const { decision, content } = await route(
+      message("Club news " + "filler ".repeat(8_000) + " See you soon"),
+    );
+    expect(JSON.parse(content)).toMatchObject({
+      bodyComplete: false,
+      omittedPurchaseCues: false,
+    });
+    expect(decision).toMatchObject({
+      classification: "unrelated",
+      stage: "jev",
+    });
+  });
+
+  it("keeps a message with attachments uncertain", async () => {
     const raw = message();
     raw.payload = {
       ...raw.payload,
-      mimeType: "multipart/alternative",
+      mimeType: "multipart/mixed",
       parts: [
-        message("Your email client cannot display this message.").payload!,
+        part("Please see attached."),
         {
-          ...message(
-            '<style>.layout { color: red; }</style><p>Your order was refunded $12.00.</p><a href="https://shop.example/orders/synthetic-order">View order</a><script type="application/ld+json">{"@type":"Order","orderNumber":"synthetic-order"}</script>',
-          ).payload!,
-          mimeType: "text/html",
+          mimeType: "application/pdf",
+          filename: "statement.pdf",
+          body: { attachmentId: "synthetic-attachment", size: 900 },
         },
       ],
     };
-    const original = JSON.stringify(raw);
-    let content = "";
-    const result = await routeGmailMessage(
-      raw,
-      normalizeMessage("google-subject", raw),
-      async (input) => {
-        content = input;
-        return "unrelated";
-      },
-    );
-    expect(content).toContain("Your order was refunded $12.00.");
-    expect(content).toContain("https://shop.example/orders/synthetic-order");
-    expect(content).toContain("orderNumber");
-    expect(content).not.toContain("color: red");
-    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
-    expect(result).toMatchObject({
+    const { decision, view } = await route(raw);
+    expect(decision).toMatchObject({
       classification: "uncertain",
       stage: "rule",
     });
-    expect(JSON.stringify(raw)).toBe(original);
+    expect(view?.incompleteReasons).toEqual(["attachments"]);
   });
-  it("retains non-text order evidence in the bounded HTML decision input", async () => {
-    const raw = message(
-      '<html><body><p>Account update</p><a href="https://shop.example/orders/synthetic-order">View order</a><img src="https://shop.example/receipt.png" alt="Receipt paid $12.00"><script type="application/ld+json">{"@type":"Order","orderNumber":"synthetic-order"}</script></body></html>',
-    );
-    raw.payload = { ...raw.payload, mimeType: "text/html" };
-    let content = "";
-    await routeGmailMessage(
-      raw,
-      normalizeMessage("google-subject", raw),
-      async (input) => {
-        content = input;
-        return "related";
-      },
-    );
-    expect(content).toContain("https://shop.example/orders/synthetic-order");
-    expect(content).toContain("Receipt paid $12.00");
-    expect(content).toContain("orderNumber");
-    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
-    expect(JSON.parse(content).bodyComplete).toBe(false);
-  });
-  it("bounds HTML evidence without turning clipped evidence into a negative verdict", async () => {
-    const raw = message(
-      `<html><body>Newsletter${Array.from(
-        { length: 30 },
-        () =>
-          `<a href="https://shop.example/${"x".repeat(2_000)}">${"offer".repeat(500)}</a><img src="https://shop.example/image" alt="${"🧾".repeat(1_000)}"><script type="application/ld+json">${JSON.stringify({ "@type": "Order", description: "receipt".repeat(2_000) })}</script>`,
-      ).join("")}</body></html>`,
-    );
-    raw.payload = { ...raw.payload, mimeType: "text/html" };
-    let content = "";
-    const result = await routeGmailMessage(
-      raw,
-      normalizeMessage("google-subject", raw),
-      async (input) => {
-        content = input;
-        return "unrelated";
-      },
-    );
-    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
-    expect(content).not.toContain("�");
-    expect(JSON.parse(content).htmlEvidenceComplete).toBe(false);
-    expect(result).toMatchObject({
+
+  it("keeps forwarded multipart mail with dropped text parts uncertain", async () => {
+    const raw = message();
+    raw.payload = {
+      ...raw.payload,
+      mimeType: "multipart/mixed",
+      parts: [
+        part("FYI, forwarding this."),
+        part(EMAIL_HTML_FIXTURES.forwarded, "text/html"),
+        part("Second inline note without its own HTML."),
+      ],
+    };
+    const { decision, view } = await route(raw);
+    expect(decision).toMatchObject({
       classification: "uncertain",
       stage: "rule",
     });
+    expect(view?.incompleteReasons).toEqual(["mime_parts_dropped"]);
   });
+
+  it("keeps a clipped cue-bearing link uncertain but ignores clipped plain links", async () => {
+    const plainLinks = Array.from(
+      { length: 20 },
+      (_, index) =>
+        `<a href="https://news.example.test/article/${index}">Story ${index}</a>`,
+    ).join("");
+    const unrelated = await route(
+      message(
+        `<html><body><p>Weekly stories</p>${plainLinks}</body></html>`,
+        "text/html",
+      ),
+    );
+    expect(unrelated.decision.classification).toBe("unrelated");
+
+    const orderLinks = Array.from(
+      { length: 14 },
+      (_, index) =>
+        `<a href="https://shop.example.test/orders/${index}">Order ${index}</a>`,
+    ).join("");
+    const clipped = await route(
+      message(
+        `<html><body><p>Account update</p>${orderLinks}</body></html>`,
+        "text/html",
+      ),
+    );
+    expect(clipped.decision.classification).toBe("uncertain");
+    expect(clipped.view?.incompleteReasons).toEqual(["links_clipped"]);
+  });
+
   it("escalates missing bodies without classifying a provider snippet", async () => {
     const choose = vi.fn(async () => "unrelated" as const);
     const raw = { ...message(), snippet: "Your order shipped" };
+    const routed = await routeGmailMessage(
+      raw,
+      normalizeMessage("google-subject", raw),
+      choose,
+    );
+    expect(routed).toMatchObject({
+      decision: { classification: "uncertain", stage: "rule" },
+      view: null,
+    });
+    expect(choose).not.toHaveBeenCalled();
+  });
+
+  it("escalates MIME data that is shorter than the provider's declared bytes", async () => {
+    const raw = message("receipt");
+    if (raw.payload?.body) raw.payload.body.size = 900;
+    const choose = vi.fn(async () => "unrelated" as const);
     expect(
-      await routeGmailMessage(
-        raw,
-        normalizeMessage("google-subject", raw),
-        choose,
-      ),
+      (
+        await routeGmailMessage(
+          raw,
+          normalizeMessage("google-subject", raw),
+          choose,
+        )
+      ).decision,
     ).toMatchObject({ classification: "uncertain", stage: "rule" });
     expect(choose).not.toHaveBeenCalled();
   });
-  it("classifies an oversized original from bounded sender, subject and body evidence", async () => {
+
+  it.each([
+    [
+      "quotes and backslashes",
+      'Receipt "quoted" \\ path\\to\\file\n'.repeat(4_000),
+    ],
+    ["Unicode", "Receipt 🧾 für Café — 領収書 ".repeat(4_000)],
+  ])(
+    "fills the real request gate with %s without broken characters",
+    async (_name, body) => {
+      const { content } = await route(message(body), "uncertain");
+      expect(withinGate(content)).toBe(true);
+      expect(Buffer.byteLength(content)).toBeGreaterThan(20_000);
+      expect(content).not.toContain("�");
+      expect(JSON.parse(content).bodyComplete).toBe(false);
+    },
+  );
+
+  it("bounds metadata-heavy mail from sender, subject and body evidence", async () => {
     const raw = message(
       "Your order shipped. " + "x".repeat(40_000) + " Tracking: synthetic",
     );
@@ -126,17 +273,9 @@ describe("transient Gmail triage", () => {
         { name: "DKIM-Signature", value: "transport-data".repeat(8_000) },
       ],
     };
-    let content = "";
-    const result = await routeGmailMessage(
-      raw,
-      normalizeMessage("google-subject", raw),
-      async (input) => {
-        content = input;
-        return "related";
-      },
-    );
-    expect(result).toMatchObject({ classification: "related", stage: "jev" });
-    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
+    const { decision, content } = await route(raw, "related");
+    expect(decision).toMatchObject({ classification: "related", stage: "jev" });
+    expect(withinGate(content)).toBe(true);
     expect(JSON.parse(content)).toMatchObject({
       senderDomain: "shop.example",
       headers: {
@@ -149,104 +288,24 @@ describe("transient Gmail triage", () => {
     expect(content).toContain("Tracking: synthetic");
     expect(content).not.toContain("transport-data");
   });
-  it("cannot discard an oversized original from an unrelated partial verdict", async () => {
-    const raw = message(
-      "Newsletter " + "x".repeat(40_000) + " Receipt for your purchase",
+
+  it("keeps HTML evidence bounded and Unicode-safe", async () => {
+    const { content, decision } = await route(
+      message(
+        `<html><body>Newsletter${Array.from(
+          { length: 30 },
+          () =>
+            `<a href="https://shop.example/${"x".repeat(2_000)}">${"offer".repeat(500)}</a><img src="https://shop.example/image" alt="${"🧾".repeat(1_000)}"><script type="application/ld+json">${JSON.stringify({ "@type": "Order", description: "receipt".repeat(2_000) })}</script>`,
+        ).join("")}</body></html>`,
+        "text/html",
+      ),
     );
-    const choose = vi.fn(async () => "unrelated" as const);
-    expect(
-      await routeGmailMessage(
-        raw,
-        normalizeMessage("google-subject", raw),
-        choose,
-      ),
-    ).toMatchObject({ classification: "uncertain", stage: "rule" });
-    expect(choose).toHaveBeenCalledOnce();
-  });
-  it.each([
-    '<script type="application/ld+json">{"@type":"Order","orderNumber":"synthetic-order"}</script>',
-    '<a href="https://shop.example/orders/synthetic-order">View details</a>',
-    '<div itemscope itemtype="http://schema.org/Order"><meta itemprop="orderNumber" content="synthetic-order"></div>',
-  ])(
-    "preserves HTML evidence omitted from readable text: %s",
-    async (evidence) => {
-      const raw = message(
-        `<html><body>Account update${evidence}</body></html>`,
-      );
-      raw.payload = { ...raw.payload, mimeType: "text/html" };
-      const choose = vi.fn(async () => "unrelated" as const);
-      expect(
-        await routeGmailMessage(
-          raw,
-          normalizeMessage("google-subject", raw),
-          choose,
-        ),
-      ).toMatchObject({ classification: "uncertain", stage: "rule" });
-      expect(choose).toHaveBeenCalledOnce();
-    },
-  );
-  it("bounds serialized Unicode and escaped body bytes without broken characters", async () => {
-    const raw = message('Receipt 🧾 "\\\n'.repeat(5_000));
-    let content = "";
-    expect(
-      await routeGmailMessage(
-        raw,
-        normalizeMessage("google-subject", raw),
-        async (input) => {
-          content = input;
-          return "uncertain";
-        },
-      ),
-    ).toMatchObject({ classification: "uncertain", stage: "jev" });
-    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
+    expect(withinGate(content)).toBe(true);
     expect(content).not.toContain("�");
-    expect(JSON.parse(content).bodyComplete).toBe(false);
-  });
-  it("uses readable HTML instead of spending context on styles", async () => {
-    const raw = message(
-      "<html><head><style>" +
-        ".layout { color: red; }".repeat(8_000) +
-        "</style></head><body><p>Your subscription renewed at Forge Services.</p></body></html>",
-    );
-    raw.payload = { ...raw.payload, mimeType: "text/html" };
-    let content = "";
-    expect(
-      await routeGmailMessage(
-        raw,
-        normalizeMessage("google-subject", raw),
-        async (input) => {
-          content = input;
-          return "related";
-        },
-      ),
-    ).toMatchObject({ classification: "related", stage: "jev" });
-    expect(content).toContain("Your subscription renewed");
-    expect(content).not.toContain("color: red");
-    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(12_000);
-  });
-  it("escalates MIME data that is shorter than the provider's declared bytes", async () => {
-    const raw = message("receipt");
-    if (raw.payload?.body) raw.payload.body.size = 900;
-    const choose = vi.fn(async () => "unrelated" as const);
-    expect(
-      await routeGmailMessage(
-        raw,
-        normalizeMessage("google-subject", raw),
-        choose,
-      ),
-    ).toMatchObject({ classification: "uncertain", stage: "rule" });
-    expect(choose).not.toHaveBeenCalled();
-  });
-  it("routes readable original content including unfamiliar shared senders", async () => {
-    const raw = message("Your subscription renewed. Merchant: Forge Services.");
-    const choose = vi.fn(async (_content: string) => "related" as const);
-    expect(
-      await routeGmailMessage(
-        raw,
-        normalizeMessage("google-subject", raw),
-        choose,
-      ),
-    ).toMatchObject({ classification: "related", stage: "jev" });
-    expect(choose.mock.calls[0]?.[0]).toContain("Forge Services");
+    expect(JSON.parse(content).htmlEvidenceComplete).toBe(false);
+    expect(decision).toMatchObject({
+      classification: "uncertain",
+      stage: "rule",
+    });
   });
 });

@@ -15,8 +15,18 @@ import {
   parseShortcodeFor,
   type RunId,
 } from "@cubby/schemas/identifiers";
-import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import {
+  mailTriagePreviewInput,
+  mailTriagePreviewOut,
+  type MailTriagePreviewInput,
+  type MailTriagePreviewOut,
+} from "@cubby/schemas/mailbox-research";
+import {
+  mailReclassifyRunInput,
+  type MailReclassifyRunInput,
+} from "@cubby/schemas/run-fields";
+import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
+import { and, desc, eq, inArray, type SQL } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -41,8 +51,10 @@ import {
   type EmailCandidateChoice,
 } from "./candidate-extraction";
 import { ingestGmailMessages } from "./ingest";
+import { normalizeMessage } from "./normalize";
 import { recordEmailCandidateObservation } from "./observations";
 import { gmailProviderForUser } from "./provider";
+import { routeGmailMessage, type MailTriage } from "./triage";
 
 type IngestPorts = Pick<
   Parameters<typeof ingestGmailMessages>[2],
@@ -50,14 +62,14 @@ type IngestPorts = Pick<
 >;
 type OwnedEmail = typeof emailTable.$inferSelect;
 
-async function ownedEmails(
+async function ownedEmailRows(
   db: Database,
-  codes: readonly string[],
   actor: ActorContext,
+  where: SQL | undefined,
 ) {
   if (actor.runId)
     throw new Error("Only a member without a Run can reclassify Emails.");
-  const rows = await getDb(db)
+  return getDb(db)
     .select({ email: emailTable })
     .from(emailTable)
     .innerJoin(
@@ -69,12 +81,20 @@ async function ownedEmails(
       ),
     )
     .where(
-      and(
-        inArray(emailTable.shortcode, [...codes]),
-        eq(emailTable.provider, "gmail"),
-        notDeleted(emailTable),
-      ),
+      and(where, eq(emailTable.provider, "gmail"), notDeleted(emailTable)),
     );
+}
+
+async function ownedEmails(
+  db: Database,
+  codes: readonly string[],
+  actor: ActorContext,
+) {
+  const rows = await ownedEmailRows(
+    db,
+    actor,
+    inArray(emailTable.shortcode, [...codes]),
+  );
   const found = new Map(rows.map(({ email }) => [email.shortcode, email]));
   const missing = codes.filter((code) => !found.has(code));
   if (missing.length)
@@ -146,7 +166,7 @@ async function finishReclassifyRun(
 async function startReclassifyRun(
   db: Database,
   actor: ActorContext,
-  mode: "relevance" | "preview",
+  mode: MailReclassifyRunInput["mode"],
   emails: readonly OwnedEmail[],
   executionAuthorization: Awaited<ReturnType<typeof mailboxApproval>>,
 ) {
@@ -413,6 +433,75 @@ export async function rerunEmailPreview(
       status: published.status,
       reason: published.status === "abstained" ? published.reason : null,
     });
+  } catch (error) {
+    await finishReclassifyRun(db, created.id, [
+      scrubErrorMessage(error instanceof Error ? error.message : String(error)),
+    ]);
+    throw error;
+  }
+}
+
+/**
+ * Mail triage on one owned Email's Gmail original, fetched as Reclassify
+ * fetches it, without recording anything about the Email: no observation and
+ * no Relevance change. Its Run only holds the decision model's usage.
+ */
+export async function previewMailTriage(
+  db: Database,
+  rawInput: MailTriagePreviewInput,
+  actor: ActorContext,
+  ports: { triage?: MailTriage } = {},
+): Promise<MailTriagePreviewOut> {
+  const input = mailTriagePreviewInput.parse(rawInput);
+  const [row] = await ownedEmailRows(
+    db,
+    actor,
+    and(
+      eq(emailTable.mailboxId, input.mailboxId),
+      eq(emailTable.messageId, input.messageId),
+    ),
+  );
+  if (!row)
+    throw new Error(
+      `No live Gmail Email owned by this member: ${input.mailboxId} ${input.messageId}`,
+    );
+  const { email } = row;
+  const created = await startReclassifyRun(
+    db,
+    actor,
+    "triage_preview",
+    [email],
+    await mailboxApproval(
+      db,
+      { userId: actor.userId, ledgerPartyId: email.ledgerPartyId },
+      email.mailboxId,
+    ),
+  );
+  try {
+    const provider = await gmailProviderForUser(
+      db,
+      actor.userId,
+      email.mailboxId,
+    );
+    const message = await provider.getMessage(email.messageId);
+    let model: MailTriagePreviewOut["model"] = null;
+    const triage =
+      ports.triage ??
+      (await import("./triage-model")).productionMailTriage(
+        db,
+        created.id,
+        (call) => {
+          model = supportedDecisionModelSchema.parse(call.model);
+        },
+        input.decisionModel,
+      );
+    const { decision, view } = await routeGmailMessage(
+      message,
+      normalizeMessage(email.mailboxId, message),
+      triage,
+    );
+    await finishReclassifyRun(db, created.id, []);
+    return mailTriagePreviewOut.parse({ ...decision, model, view });
   } catch (error) {
     await finishReclassifyRun(db, created.id, [
       scrubErrorMessage(error instanceof Error ? error.message : String(error)),

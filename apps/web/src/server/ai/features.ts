@@ -95,7 +95,7 @@ type AiChatFeatureTier = {
 };
 
 /** The decision tier has no output to cap and no reasoning dial. */
-type AiDecisionFeatureTier = { tier: "decision"; sample?: boolean };
+type AiDecisionFeatureTier = { tier: "decision" };
 
 type AiFeatureTier = AiChatFeatureTier | AiDecisionFeatureTier;
 type AiEmbeddingFeatureTier = { tier: "embedding" };
@@ -197,10 +197,9 @@ export const SETTLEMENT_CANDIDATE_RANK_FEATURE = defineFeature({
 
 export const MAILBOX_TRIAGE_FEATURE = defineFeature({
   feature: "mailbox-triage",
-  promptVersion: "2026-10-11.1",
+  promptVersion: "2026-10-12.1",
   cache: false,
   tier: "decision",
-  sample: false,
   collectPayload: false,
 });
 

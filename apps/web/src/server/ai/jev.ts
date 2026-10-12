@@ -396,10 +396,12 @@ export async function runJevChoice(args: {
     }
     return result;
   };
-  // Mail routing stays pinned; trial features sample once before cache/retry.
+  // Every decision feature is trial traffic: a caller's pinned model (Mail
+  // triage records the one it sampled) wins; otherwise sample once before
+  // cache/retry.
   const feature = args.decisionModel
     ? { ...args.feature, model: args.decisionModel }
-    : args.port || args.feature.sample === false
+    : args.port
       ? args.feature
       : { ...args.feature, model: selectDecisionModel() };
   return withAiResponseCache({

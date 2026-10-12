@@ -3,6 +3,7 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import { startEmailImport } from "~/server/purchase-import/email-actions";
 import { decideEmailPurchase } from "~/server/purchase-import/email-purchase-decision";
 import {
+  previewMailTriage,
   reclassifyEmails,
   rerunEmailPreview,
 } from "~/server/purchase-import/gmail/reclassify";
@@ -71,6 +72,8 @@ export const purchaseImportHandlers = implementOperationDomain(
       confirmMerchantVendorRule(context.db, input, context.actorContext),
     mailRead: (context, input) =>
       readMail(context.db, input, context.actorContext),
+    mailTriagePreview: (context, input) =>
+      previewMailTriage(context.db, input, context.actorContext),
     mailSearch: (context, input) =>
       searchMail(context.db, input, context.actorContext),
     mailResolve: (context, input) =>

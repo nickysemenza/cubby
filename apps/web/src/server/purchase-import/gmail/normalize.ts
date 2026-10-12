@@ -94,6 +94,36 @@ const walkParts = (
   attachments.push(attachment);
 };
 
+/**
+ * Whether `walkParts` left inline text out of the body: it keeps only the
+ * first `text/plain` and first `text/html` body, so a forwarded or mixed
+ * multipart message's further text parts (and inline `text/*` of other types)
+ * never reach a reader of the normalized mail.
+ */
+export const droppedBodyParts = (payload: GmailMessagePart): boolean => {
+  const seen = new Set<string>();
+  let dropped = false;
+  const visit = (part: GmailMessagePart) => {
+    for (const child of part.parts ?? []) visit(child);
+    const mimeType = (part.mimeType ?? "").toLowerCase();
+    if (
+      part.filename ||
+      part.body?.attachmentId ||
+      !part.body?.data ||
+      !mimeType.startsWith("text/")
+    )
+      return;
+    if (
+      seen.has(mimeType) ||
+      (mimeType !== "text/plain" && mimeType !== "text/html")
+    )
+      dropped = true;
+    seen.add(mimeType);
+  };
+  visit(payload);
+  return dropped;
+};
+
 export const normalizeMessage = (
   mailboxId: string,
   message: GmailMessage,
