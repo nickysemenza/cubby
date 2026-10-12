@@ -1,8 +1,6 @@
 import {
   imageBrowserDeleteInput,
   imageBrowserDeleteOut,
-  imageBrowserListInput,
-  imageBrowserListOut,
   imageBrowserUpdateInput,
   imageWithEntitySchema,
   imageHashIndexSchema,
@@ -32,17 +30,6 @@ export const imageContract = defineContract("image", {
     input: imageRecordSightingsInput,
     output: imageRecordSightingsOut,
     invalidates: ["image"],
-  }),
-  list: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["list"],
-      note: "entity_read.list on images",
-    },
-    native: "Native photo browse",
-    input: imageBrowserListInput,
-    output: imageBrowserListOut,
-    cache: { tags: [["image"]] },
   }),
   analysis: query({
     mcp: { omit: "client_view", note: "Native photo diagnostics" },

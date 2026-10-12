@@ -51,7 +51,6 @@ type ParsedEntityRoute = {
   create?: "dialog" | "page";
   list: true | null;
   listColumns?: SourceRef;
-  listRows: "kernel" | "custom";
   detail: true | null;
 };
 /** The list-route query parameter(s) a filter descriptor binds to. */

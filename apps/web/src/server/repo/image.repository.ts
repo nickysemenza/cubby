@@ -1,11 +1,11 @@
-import { defineRepository, listOn } from "~/server/repo/repository";
+import { defineRepository, listReadOn } from "~/server/repo/repository";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 
 import {
   deleteImages,
   getImageById,
   IMAGE_HARD_DELETE,
-  imageList,
+  imageListRead,
   updateImage,
 } from "./image";
 
@@ -17,7 +17,11 @@ export const imageRepository = defineRepository("image", {
   lifecycle: { delete: IMAGE_HARD_DELETE },
   get: async (ctx, shortcode) =>
     getImageById(ctx.db, await imageShortcodes.one(ctx.db, shortcode)),
-  list: listOn(imageList),
+  // The full list is the progressive read's complete projection, so every
+  // client's row carries the same display images (an image displays itself).
+  list: (ctx, filters, sorts, pagination) =>
+    imageListRead(ctx.db, filters, sorts, pagination, { kind: "full" }),
+  listRead: listReadOn(imageListRead),
   update: async (ctx, shortcode, data) => {
     const entityId = await imageShortcodes.one(ctx.db, shortcode);
     return { output: await updateImage(ctx.db, entityId, data), entityId };

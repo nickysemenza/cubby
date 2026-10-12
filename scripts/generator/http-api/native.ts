@@ -314,13 +314,9 @@ const renderNativeCoverage = (
       const nativeRead = actions.includes("list")
         ? "resource"
         : rpcIds.includes(`${entity}.list`)
-          ? entity === "cookbook"
-            ? "cookbook"
-            : entity === "image"
-              ? "image"
-              : entity === "usda-food"
-                ? "usdaFood"
-                : "custom"
+          ? entity === "usda-food"
+            ? "usdaFood"
+            : "custom"
           : null;
       return [
         entity,
@@ -372,7 +368,7 @@ type NativeHttpAction = "list" | "timeline" | "get" | "create" | "update" | "del
 export interface NativeCoverage {
   httpActions: readonly NativeHttpAction[];
   /** The generated native browse bridge; \`null\` means no native list. */
-  nativeRead: "resource" | "cookbook" | "image" | "usdaFood" | "custom" | null;
+  nativeRead: "resource" | "usdaFood" | "custom" | null;
   imageAttach: boolean;
   imageOrder: boolean;
   rpcIds: readonly string[];

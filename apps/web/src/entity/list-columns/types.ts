@@ -15,7 +15,6 @@ import type {
   UseEntityListOptions,
   UseEntityListReturn,
 } from "~/ui/hooks/useEntityList";
-import type { ListQueryOptionsFn } from "~/ui/hooks/usePaginatedTableCore";
 
 /**
  * What the generic list hands an override module: the route's validated
@@ -101,27 +100,6 @@ export interface EntityListOverrideResult<
   useWorkbench?: (
     list: UseEntityListReturn<TData, TFilters, TRow>,
   ) => ListOverrideWorkbenchProps<TData>;
-  /**
-   * A row source other than the entity's generic list operation, for an
-   * entity that has no generated list (image).
-   */
-  source?: ListQueryOptionsFn<TFilters, TRow>;
-  /**
-   * Caller-provided rows for an entity whose read is one unpaginated
-   * projection (cookbook); the generic list then pages client-side. Must be
-   * referentially stable.
-   */
-  client?: {
-    data: TData[];
-    isLoading?: boolean;
-    error?: unknown;
-    /** Refreshes the projection after a retry from Cards/Compact. */
-    refetch?: () => Promise<void>;
-    /** True while an already-loaded projection is being refreshed. */
-    isRefreshing?: boolean;
-    /** Matches the manifest primary-search query against a client row. */
-    matchesSearch?: (row: TData, query: string) => boolean;
-  };
   /** Chrome rendered above the table, given the mounted list model. */
   above?: (list: UseEntityListReturn<TData, TFilters, TRow>) => ReactNode;
   /** Dialogs and other chrome rendered under the table. */
@@ -137,12 +115,6 @@ export interface EntityListOverride<
   TFilters extends object,
   TRow extends BaseListRow = TData,
 > {
-  /**
-   * `client` pages `use().client` rows in the browser instead of running the
-   * entity's list operation. Static (not part of `use`) so the generic list
-   * can pick its hook path before any hook runs.
-   */
-  mode?: "server" | "client";
   use: (
     context: ListOverrideContext,
   ) => EntityListOverrideResult<TData, TFilters, TRow>;

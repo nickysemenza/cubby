@@ -1,4 +1,3 @@
-import { imageWithEntitySchema } from "@cubby/schemas/image";
 import { infLocation } from "@cubby/schemas/location";
 import { plantingOut } from "@cubby/schemas/planting";
 import { projectOut } from "@cubby/schemas/project";
@@ -10,7 +9,7 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
 import { PreviewQuery } from "../../ui/preview/preview-query";
-import { manifestPreviewCard, toImageCard } from "./EntityPreviewContent";
+import { manifestPreviewCard } from "./EntityPreviewContent";
 
 const withMedia = <T,>(value: T, url?: string) => ({
   ...value,
@@ -220,60 +219,5 @@ describe("manifestPreviewCard", () => {
         label: "Garage",
       }),
     ]);
-  });
-});
-
-describe("toImageCard", () => {
-  it("shows every existing image association without a second query", () => {
-    const image = mock(imageWithEntitySchema, {
-      seed: 7,
-      overrides: {
-        filename: "workbench.jpg",
-        status: "UPLOADED",
-        width: 1600,
-        height: 1200,
-        associations: [
-          {
-            entityKind: "product",
-            entityId: testShortcode("product", "PRD-4K7M"),
-            entityName: "Bench lamp",
-            role: "cover",
-          },
-          {
-            entityKind: "project",
-            entityId: testShortcode("project", "PRJ-7M2X"),
-            entityName: "Workshop refresh",
-            role: "attachment",
-          },
-        ],
-      },
-    });
-
-    const card = toImageCard(withMedia(image, image.url));
-
-    expect(card.crossLinks).toEqual([
-      expect.objectContaining({
-        to: "/products/$shortcode",
-        params: { shortcode: "PRD-4K7M" },
-        label: "Bench lamp · cover",
-      }),
-      expect.objectContaining({
-        to: "/projects/$shortcode",
-        params: { shortcode: "PRJ-7M2X" },
-        label: "Workshop refresh · attachment",
-      }),
-    ]);
-    expect(card.body).toEqual(
-      expect.arrayContaining([
-        { kind: "thumb", url: image.url },
-        {
-          kind: "stats",
-          stats: [
-            { label: "Dimensions", value: "1600 × 1200" },
-            { label: "Associations", value: 2 },
-          ],
-        },
-      ]),
-    );
   });
 });

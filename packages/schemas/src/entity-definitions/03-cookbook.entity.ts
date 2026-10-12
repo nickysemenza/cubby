@@ -12,8 +12,6 @@ export default defineEntity({
       module: "~/entity/list-columns/cookbook",
       export: "cookbookListOverride",
     },
-    // The browse index filters every cookbook client-side over its own read.
-    listRows: "custom",
     basePath: "cookbooks",
   },
   table: "Cookbook",
@@ -41,9 +39,9 @@ export default defineEntity({
         { kind: "slot", id: "import-progress", title: "Import" },
       ],
     },
-    // The client-paged cookbook list has no generic row delete action.
     list: {
       links: [{ label: "Import", path: "/recipes/import" }],
+      read: { media: ["displayImages"], quality: ["dataQuality"] },
     },
   },
   model: {
@@ -311,7 +309,21 @@ export default defineEntity({
       product: "productId",
     },
   },
-  filters: { descriptors: [] },
+  filters: {
+    audit: true,
+    schema: { module: "@cubby/schemas/recipe", export: "cookbookFilterFields" },
+    descriptors: [
+      {
+        columnId: "subjects",
+        field: "subjectFilters",
+        kind: "multiselect",
+        placeholder: "Filter by subject...",
+        optionsKey: "subjects",
+        deriveSchema: true,
+        stored: { array: true },
+      },
+    ],
+  },
   relations: [
     {
       key: "recipes",

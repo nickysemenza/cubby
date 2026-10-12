@@ -62,6 +62,8 @@ export default defineEntity({
         { kind: "slot", id: "associations", title: "Used by" },
       ],
     },
+    // An uploaded image displays itself; it loads as list media.
+    list: { read: { media: ["displayImages"], quality: ["dataQuality"] } },
   },
   model: {
     fields: [
@@ -733,6 +735,7 @@ export default defineEntity({
           module: "~/entity/filter-behavior",
           export: "resolveImageCreatedDate",
         },
+        wire: { kind: "range", from: "createdFrom", to: "createdTo" },
       },
       {
         columnId: "updatedAt",
@@ -748,6 +751,7 @@ export default defineEntity({
           module: "~/entity/filter-behavior",
           export: "resolveUpdatedDate",
         },
+        wire: { kind: "range", from: "updatedFrom", to: "updatedTo" },
       },
       {
         columnId: "runId",
