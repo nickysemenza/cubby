@@ -319,7 +319,12 @@ successful `pg_terminate_backend` statement alone does not mean node-postgres
 has received the fatal message: checking out that idle client first removes
 its pool error listener and can turn the delayed `57P01` into an uncaught
 exception. The regression pauses a real idle socket's reads to enforce this
-ordering; unexpected query and pool errors retain their existing handling.
+ordering. Reset targets also retain a temporary error handler while checked
+out: only the deliberate `57P01` and its subsequent disconnect notification
+are consumed, and the handler is removed after socket closure. Existing idle
+handlers remain unchanged. Real checked-out and in-flight-query regressions
+pin that lifecycle; unexpected query and pool
+errors retain their existing handling.
 
 A profile (`WORKERD_PROFILES` in `workerd-harness.ts`) routes each production
 queue consumer to one of:
