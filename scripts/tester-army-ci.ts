@@ -105,6 +105,8 @@ if (process.argv[2] === "dispatch") {
       "tester-army-web",
       "tester-army-both",
       "tester-army-all",
+      "tester-army-visual",
+      "tester-army-explore",
     ].includes(journey!);
     selected.ios = [
       "tester-army-ios",
@@ -176,6 +178,12 @@ if (process.argv[2] === "dispatch") {
           {
             lane: "web",
             harness: "standard",
+            mode:
+              journey === "tester-army-visual"
+                ? "visual"
+                : journey === "tester-army-explore"
+                  ? "explore"
+                  : "agent",
             timeout: automatic ? 10 : 25,
             journeys: automatic
               ? "product-rename,receive-purchase,field-product-tags"

@@ -574,3 +574,10 @@ pnpm exec nx show projects --affected --base=origin/main
 After a material workflow change, compare at least ten representative runs for
 PR p50/p95 wall time, merge-to-deploy time, total job-minutes, cancellations,
 and cache behavior.
+
+## Additional Tester Army web coverage
+
+The existing `e2e-journeys.yaml` manual dispatcher includes visual baselines and
+bounded authenticated exploration. These use the existing model setup, reports,
+synthetic harness and evidence uploads. They do not change the required gate.
+See [web coverage additions](tester-army.md#web-coverage-additions).
