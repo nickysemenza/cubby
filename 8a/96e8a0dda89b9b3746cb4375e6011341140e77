@@ -1,0 +1,23 @@
+.github/workflows/ci.yaml
+  s_5844b4bd3bb15a::t_6686f5bbb6de6e 44,62,70-74,85-86,120-123,143-214
+docs/ci.md
+  s_5844b4bd3bb15a::t_575a520211457f 85-89,99-100
+scripts/ci-cache-probe.test.ts
+  s_5844b4bd3bb15a::t_d2df3e6bcbe86f 63,69,118,139-140,142,162-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8a96e8a0dda89b9b3746cb4375e6011341140e77",
+  "prompts": {},
+  "sessions": {
+    "s_5844b4bd3bb15a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a131f7-51c6-78c3-8228-3caf5125b599",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
