@@ -1007,8 +1007,8 @@ export function EntityBasicInfo<TRecord extends object>({
             />
           ) : undefined;
         const resolution = fieldResolutionFor(record, field.key);
-        // The suggestion mark rides the value's own line; the resolution
-        // caption goes beneath so neither pushes the row actions around.
+        // Keep suggestion and resolution with the value; BasicInfo's separate
+        // action rail owns the controls regardless of caption wrapping.
         const decoratedValue = field.control?.suggest ? (
           <span className="inline-flex max-w-full min-w-0 items-center gap-1">
             <RecordFieldSuggestion record={record} field={field.key}>

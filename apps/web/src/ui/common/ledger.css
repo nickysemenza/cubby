@@ -74,7 +74,7 @@
 }
 
 .ledger[data-ledger="facts"] > .ledger-row {
-  align-items: baseline;
+  align-items: center;
 }
 .ledger[data-ledger="facts"] > .ledger-row > [data-ledger-slot="primary"] {
   grid-column: 1;
@@ -147,7 +147,7 @@
      sharing the leftover width between a long title and timestamp. */
   .ledger[data-ledger="records"]
     > .ledger-row:has(
-      > [data-ledger-slot="leading"] img,
+      > [data-ledger-slot="leading"] :is(img, [role="img"]:not(svg)),
       > [data-ledger-slot="secondary"]
         :is(input, select, textarea, [role="combobox"])
     )
@@ -157,7 +157,7 @@
   }
   .ledger[data-ledger="records"]
     > .ledger-row:has(
-      > [data-ledger-slot="leading"] img,
+      > [data-ledger-slot="leading"] :is(img, [role="img"]:not(svg)),
       > [data-ledger-slot="secondary"]
         :is(input, select, textarea, [role="combobox"])
     )
@@ -165,7 +165,9 @@
     grid-column: 2 / 4;
   }
   .ledger[data-ledger="records"]
-    > .ledger-row:has(> [data-ledger-slot="leading"] img)
+    > .ledger-row:has(
+      > [data-ledger-slot="leading"] :is(img, [role="img"]:not(svg))
+    )
     > [data-ledger-slot="leading"] {
     grid-row: 1 / span 2;
   }
@@ -181,17 +183,28 @@
 /* Expanded controls and recorded exception prose cannot occupy an icon rail. */
 .ledger[data-ledger="records"]
   > .ledger-row
-  > [data-ledger-slot="actions"]:has(
-    form,
-    input,
-    select,
-    textarea,
-    [role="combobox"],
-    .basis-full
-  ) {
+  > [data-ledger-slot="actions"]:has(form, [data-ledger-expanded]) {
   grid-column: 1 / -1;
   grid-row: auto;
   justify-self: stretch;
+}
+
+.ledger[data-ledger="records"]
+  > .ledger-row:has(
+    > [data-ledger-slot="actions"] :is(form, [data-ledger-expanded])
+  )
+  > [data-ledger-slot="trailing"] {
+  grid-column: 3 / -1;
+}
+
+@container ledger (min-width: 32rem) {
+  .ledger[data-ledger="records"]
+    > .ledger-row:has(
+      > [data-ledger-slot="actions"] :is(form, [data-ledger-expanded])
+    )
+    > [data-ledger-slot="trailing"] {
+    grid-column: 4 / -1;
+  }
 }
 
 @media (max-width: 767px) {
