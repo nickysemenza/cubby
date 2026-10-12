@@ -30,6 +30,3 @@ export const SectionEmptyRegistryContext = createContext<
   ((id: string, empty: boolean) => void) | null
 >(null);
 export const ContinuousDetailContext = createContext(false);
-export function useContinuousDetail() {
-  return useContext(ContinuousDetailContext);
-}

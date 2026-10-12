@@ -72,7 +72,7 @@ const isEmpty = (children: ReactNode) =>
   (Array.isArray(children) && children.every(isEmpty));
 
 /** Placeholder rows at the loaded row height, so a section does not jump when data arrives. */
-export function RecordListSkeleton({ rows }: { rows: number }) {
+function RecordListSkeleton({ rows }: { rows: number }) {
   return (
     <div
       aria-busy
