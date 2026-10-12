@@ -3,6 +3,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { SPLIT_NEEDS_PURCHASE_REASON } from "@cubby/schemas/purchase";
 import { cents } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -15,9 +16,6 @@ import { getExpenseByShortcode } from "~/server/repo/expense/crud";
 import { sectionBlocks, sectionOut } from "./finance-section";
 
 type ChargeContext = Awaited<ReturnType<typeof expenseChargeContextWorkflow>>;
-
-const countLabel = (count: number) =>
-  `${count} expense${count === 1 ? "" : "s"}`;
 
 /**
  * How this line settles: the purchase it belongs to and its sibling lines (the whole purchase,
@@ -90,7 +88,7 @@ export const composeExpenseSettlementSection = (
       siblings.length === 0
         ? ["This is the only expense in the purchase."]
         : [],
-    footer: `${countLabel(lines.length)} · ${formatCurrency(totalCents / 100)}${
+    footer: `${countLabel(lines.length, "expense")} · ${formatCurrency(totalCents / 100)}${
       unpriced > 0 ? ` · ${unpriced} without a cost` : ""
     }`,
     actions,

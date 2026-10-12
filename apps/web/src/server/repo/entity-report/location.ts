@@ -1,9 +1,9 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import type { LocationId } from "@cubby/schemas/identifiers";
+import { countLabel } from "@cubby/shared/pluralize";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { locationChildGroupLabel } from "~/lib/location-child-label";
-import { countLabel } from "~/lib/pluralize";
 import { formatPricingCountsSummary } from "~/lib/pricing-counts";
 import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";

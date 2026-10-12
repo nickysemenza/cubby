@@ -1,4 +1,5 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -83,7 +84,7 @@ export function OpenTasksByProject({
               }
             />
           </strong>
-          : {row.openTaskCount} open task{row.openTaskCount !== 1 ? "s" : ""}
+          : {countLabel(row.openTaskCount, "open task")}
         </ChartTooltip>
       )}
       onClick={(row) =>

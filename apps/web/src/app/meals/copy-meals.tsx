@@ -1,4 +1,5 @@
 import { getErrorMessage } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -23,7 +24,7 @@ export function CopyLastWeekButton({ weekStart }: { weekStart: string }) {
     success: ({ copied }) =>
       copied === 0
         ? "Nothing was planned last week"
-        : `Copied ${copied} meal${copied === 1 ? "" : "s"} from last week`,
+        : `Copied ${countLabel(copied, "meal")} from last week`,
     error: (error) => getErrorMessage(error) || "Failed to copy last week",
   });
   return (

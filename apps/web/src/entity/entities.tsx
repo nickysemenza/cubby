@@ -9,6 +9,7 @@ import { productShortcode } from "@cubby/schemas/identifiers";
 import { duplicateProductIdentitySchema } from "@cubby/schemas/problems";
 import { productListItemOut } from "@cubby/schemas/product";
 import { purchaseListItemOut } from "@cubby/schemas/purchase";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
@@ -387,7 +388,7 @@ const entityDefinitions = withEntityNames({
         }),
       rowLabel: (row) => row.name,
       rowStat: (row) =>
-        `${row.purchaseCount} purchase${row.purchaseCount === 1 ? "" : "s"} · ${formatCurrency(row.spend)}`,
+        `${countLabel(row.purchaseCount, "purchase")} · ${formatCurrency(row.spend)}`,
       copy: {
         title: (keeperLabel) => <>Merge into {keeperLabel}</>,
         description:

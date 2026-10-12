@@ -17,6 +17,7 @@ import type {
   ProjectAttentionType,
 } from "@cubby/schemas/project";
 import { humanize } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { DownloadIcon } from "@phosphor-icons/react/dist/csr/Download";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
@@ -55,7 +56,6 @@ import {
   maintenance,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay, formatInstant } from "~/lib/date-format";
-import { countLabel } from "~/lib/pluralize";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
@@ -590,10 +590,7 @@ const variantSubtitle = (
     "count" | "canonical" | "canonicalCount"
   >,
   noun: string,
-) =>
-  `${v.count} ${noun}${v.count === 1 ? "" : "s"} — "${v.canonical}" has ${
-    v.canonicalCount
-  }`;
+) => `${countLabel(v.count, noun)} — "${v.canonical}" has ${v.canonicalCount}`;
 
 function WorkbenchFixLink({ ingredientId }: { ingredientId: string | null }) {
   return (
@@ -1360,9 +1357,7 @@ const DECLARED_SECTIONS = [
     problemKeys: ["understatedCostMeals"],
     entity: "meal",
     renderItem: (meal) => {
-      const recipes = `${meal.recipeCount} recipe${
-        meal.recipeCount === 1 ? "" : "s"
-      } with unpriced ingredients`;
+      const recipes = `${countLabel(meal.recipeCount, "recipe")} with unpriced ingredients`;
       return {
         title: meal.name ?? mealDay(meal),
         subtitle: meal.name ? `${mealDay(meal)} · ${recipes}` : recipes,
@@ -1626,7 +1621,7 @@ const DECLARED_SECTIONS = [
         item.matchedOn === "stated_total" && item.purchaseStatedTotal !== null
           ? item.purchaseStatedTotal
           : item.purchaseExpenseTotal,
-      )} across ${item.purchaseExpenseCount} line${item.purchaseExpenseCount === 1 ? "" : "s"}`,
+      )} across ${countLabel(item.purchaseExpenseCount, "line")}`,
       details: [
         // Name both days. "3 days apart" alone is a claim the reader can't
         // check without opening both records — exactly the work the card is
@@ -1653,15 +1648,14 @@ const DECLARED_SECTIONS = [
         ...(item.dayDelta > 0
           ? [
               <Badge key="gap" variant="outline">
-                {item.dayDelta} day{item.dayDelta === 1 ? "" : "s"} apart
+                {countLabel(item.dayDelta, "day")} apart
               </Badge>,
             ]
           : []),
         ...(item.alternateMatchCount > 0
           ? [
               <Badge key="alternates" variant="outline">
-                +{item.alternateMatchCount} weaker match
-                {item.alternateMatchCount === 1 ? "" : "es"}
+                +{countLabel(item.alternateMatchCount, "weaker match")}
               </Badge>,
             ]
           : []),
@@ -1735,7 +1729,7 @@ const DECLARED_SECTIONS = [
     entity: "financialAccount",
     renderItem: (item) => ({
       title: item.name,
-      subtitle: `${item.transactionCount} transaction${item.transactionCount === 1 ? "" : "s"} · no provider alias or statement reference`,
+      subtitle: `${countLabel(item.transactionCount, "transaction")} · no provider alias or statement reference`,
       route: entityDetailLink("financialAccount", item.id),
       editLabel: "Link account",
     }),
@@ -1750,7 +1744,7 @@ const DECLARED_SECTIONS = [
       title: item.name ?? item.id,
       subtitle: [
         formatCurrency(item.amount),
-        `${item.allocationCount} allocation${item.allocationCount === 1 ? "" : "s"} totalling ${formatCurrency(item.allocatedTotal)}`,
+        `${countLabel(item.allocationCount, "allocation")} totalling ${formatCurrency(item.allocatedTotal)}`,
         item.postedDate
           ? `posted ${formatCalendarDay(item.postedDate, "dateShort")}`
           : null,

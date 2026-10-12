@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/product";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { formatCategoryLabel } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { PushPinIcon } from "@phosphor-icons/react/dist/csr/PushPin";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -564,7 +565,7 @@ export function describeProductPricingSource(
     case "explicit":
       return "Manual override";
     case "derived":
-      return `Derived from ${pricing.knownExpenseCount} expense${pricing.knownExpenseCount === 1 ? "" : "s"}${pricing.partial ? " · partial history" : ""}`;
+      return `Derived from ${countLabel(pricing.knownExpenseCount, "expense")}${pricing.partial ? " · partial history" : ""}`;
     case "none":
       return "No override or quantified purchase history";
   }

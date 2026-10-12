@@ -1,5 +1,6 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useDraggable } from "@dnd-kit/core";
 import { CrosshairIcon } from "@phosphor-icons/react/dist/csr/Crosshair";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
@@ -113,11 +114,9 @@ export function ArrangeLocationRow({
       depth={depth}
       active={isOver}
       faded={isDragging}
-      primaryMeta={`${itemCount} item${itemCount === 1 ? "" : "s"}`}
+      primaryMeta={countLabel(itemCount, "item")}
       secondaryMeta={
-        childCount > 0
-          ? `${childCount} sublocation${childCount === 1 ? "" : "s"}`
-          : undefined
+        childCount > 0 ? countLabel(childCount, "sublocation") : undefined
       }
       icon={
         <ArrangeThumb

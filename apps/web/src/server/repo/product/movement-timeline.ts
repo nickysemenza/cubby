@@ -16,6 +16,7 @@ import type {
   ProductFilters,
   ProductMovementKind,
 } from "@cubby/schemas/product";
+import { countLabel } from "@cubby/shared/pluralize";
 import {
   and,
   asc,
@@ -632,7 +633,7 @@ const unitsLabel = (movement: ProductMovementLine) =>
       ? "Quantity unknown"
       : movement.quantity === 0
         ? "No unit moved"
-        : `${Math.abs(movement.quantity)} unit${Math.abs(movement.quantity) === 1 ? "" : "s"}`;
+        : countLabel(Math.abs(movement.quantity), "unit");
 
 /**
  * The movement timeline in the generic `EntityTimelineOut` shape: purchase
@@ -713,7 +714,7 @@ export function toEntityTimeline(
   const notes: string[] = [];
   if (meta.totalCount > timeline.products.length)
     notes.push(
-      `Movements and totals cover the ${timeline.products.length} product${timeline.products.length === 1 ? "" : "s"} on this page of ${meta.totalCount}.`,
+      `Movements and totals cover the ${countLabel(timeline.products.length, "product")} on this page of ${meta.totalCount}.`,
     );
   if (omitted.productsWithoutMovements > 0)
     notes.push(

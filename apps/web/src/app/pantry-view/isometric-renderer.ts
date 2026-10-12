@@ -1,4 +1,5 @@
 import type { LocationType } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 
 import {
   adjustLight,
@@ -822,7 +823,7 @@ export function drawTitle(
   ctx.fillStyle = "rgba(102, 112, 133, 0.95)";
   ctx.font = '12px "Inter Variable", Inter, system-ui, sans-serif';
   ctx.fillText(
-    `${totalItems} item${totalItems !== 1 ? "s" : ""} in ${totalRooms} room${totalRooms !== 1 ? "s" : ""}`,
+    `${countLabel(totalItems, "item")} in ${countLabel(totalRooms, "room")}`,
     canvasW - 24,
     46,
   );

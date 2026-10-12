@@ -1,4 +1,5 @@
 import type { RecipeListItem } from "@cubby/schemas/recipe";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -8,7 +9,6 @@ import { EditableTagsCell } from "~/features/recipes/editable-tags-cell";
 import { RecipeTag } from "~/features/recipes/recipe-tag";
 import { formatYield } from "~/features/recipes/recipe-yield";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { countLabel } from "~/lib/pluralize";
 import {
   numberCellData,
   specFromCellData,

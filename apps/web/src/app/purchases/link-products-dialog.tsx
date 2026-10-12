@@ -6,6 +6,7 @@ import type {
   PurchaseOut,
   purchaseLinkProductCandidate,
 } from "@cubby/schemas/purchase";
+import { countLabel } from "@cubby/shared/pluralize";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -99,8 +100,7 @@ export function LinkProductsDialog({
   };
   const attach = useActionMutation({
     mutationFn: purchaseOperations.attachProducts.mutationOptions,
-    success: (result) =>
-      `Attached ${result.changed} product${result.changed === 1 ? "" : "s"}`,
+    success: (result) => `Attached ${countLabel(result.changed, "product")}`,
     onSuccess: () => resetAndClose(false),
   });
 

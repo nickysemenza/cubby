@@ -5,8 +5,10 @@
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useMutation } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
+import pluralize from "pluralize";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -94,9 +96,7 @@ export function MoveInventoryDialog({
       return;
     }
 
-    toast.success(
-      `Successfully moved ${items.length} item${items.length !== 1 ? "s" : ""}`,
-    );
+    toast.success(`Successfully moved ${countLabel(items.length, "item")}`);
     invalidateInventory({ sideEffects: result.sideEffects });
     setTargetLocation(null);
     onSuccess();
@@ -118,7 +118,7 @@ export function MoveInventoryDialog({
       items={items}
       action="Move"
       pendingLabel="Moving..."
-      description={`Select a destination location for the selected inventory item${items.length !== 1 ? "s" : ""}.`}
+      description={`Select a destination location for the selected inventory ${pluralize("item", items.length)}.`}
       renderItem={(item) =>
         `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
       }

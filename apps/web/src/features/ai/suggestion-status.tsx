@@ -2,6 +2,7 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
+import { countLabel } from "@cubby/shared/pluralize";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 
 import { Stack } from "~/ui/layout";
@@ -31,10 +32,6 @@ export interface SuggestionStatusField {
  * bucketed counts — a whole table page's worth of rows × suggest fields
  * would otherwise be an unreadable wall of rows. */
 const MAX_LISTED_FIELDS = 8;
-
-function pluralize(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
-}
 
 function headlineText({
   checking,
@@ -67,7 +64,7 @@ function headlineText({
         : `${count} suggestions`;
   return (
     suggestionsText +
-    ` · ${pluralize(evaluated, "field")} checked` +
+    ` · ${countLabel(evaluated, "field")} checked` +
     (skipped > 0 ? ` · ${skipped} not checked` : "") +
     (failures > 0 ? " · Some suggestions unavailable" : "")
   );

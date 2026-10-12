@@ -13,6 +13,7 @@ import {
   type purchaseSplitCheckOut,
   splitAttributionPolicy,
 } from "@cubby/schemas/purchase";
+import { countLabel } from "@cubby/shared/pluralize";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useDebouncedValue } from "@tanstack/react-pacer";
@@ -30,7 +31,6 @@ import { entityDetailLink } from "~/entity/entities";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { FieldSuggestionApply } from "~/features/ai/field-suggestion-apply";
 import { purchase } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 import { EntityPicker } from "~/ui/combobox/entity-picker";
 import { StaticPicker } from "~/ui/combobox/static-picker";

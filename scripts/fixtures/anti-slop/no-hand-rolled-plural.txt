@@ -1,0 +1,8 @@
+export const a = (n: number) => `${n} item${n === 1 ? "" : "s"}`;
+export const b = (n: number) => `${n} item${n !== 1 ? "s" : ""}`;
+export const c = (n: number) => `${n} field${n > 1 ? "s" : ""}`;
+export const d = (n: number) => `${n} match${1 === n ? "" : "es"}`;
+export const e = (n: number) => `${n} categor${n === 1 ? "y" : "ies"}`;
+export const f = (n: number) => (n === 1 ? "it" : "them");
+export const g = (n: number) => (n === 2 ? "" : "s");
+export const h = (n: number) => (n === 1 ? "item" : "items");

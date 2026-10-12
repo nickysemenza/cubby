@@ -4,6 +4,7 @@ import type {
   SearchIndexRepairCounters,
 } from "@cubby/schemas/maintenance";
 import type { MaintenanceCounts } from "@cubby/schemas/problems";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
@@ -14,7 +15,6 @@ import {
   recipe,
   problems,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { countLabel } from "~/lib/pluralize";
 import {
   openProblemsPruneAliasesStream,
   openProblemsReparseStream,

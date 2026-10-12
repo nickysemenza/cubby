@@ -11,6 +11,7 @@ import type {
 import type { ImageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";
 import type { NutritionTotals } from "@cubby/schemas/nutrition";
 import type { WishCandidateOut } from "@cubby/schemas/wish";
+import { countLabel } from "@cubby/shared/pluralize";
 
 import { formatCurrency } from "~/lib/number-format";
 import { estimateLabel } from "~/server/repo/list-display-labels";
@@ -99,9 +100,6 @@ export const agentHintsLabel = (hints: {
     "\n",
   );
 
-const count = (value: number, noun: string) =>
-  `${value} ${noun}${value === 1 ? "" : "s"}`;
-
 /** What a recipe holds, for the scan before opening its body. */
 export const recipeCompositionLabel = (
   sections: readonly {
@@ -110,15 +108,15 @@ export const recipeCompositionLabel = (
   }[],
 ): string =>
   [
-    count(sections.length, "section"),
-    count(
+    countLabel(sections.length, "section"),
+    countLabel(
       sections.reduce(
         (total, section) => total + section.ingredients.length,
         0,
       ),
       "ingredient",
     ),
-    count(
+    countLabel(
       sections.reduce(
         (total, section) => total + section.instructions.length,
         0,

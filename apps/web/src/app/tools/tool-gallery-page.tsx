@@ -5,6 +5,7 @@ import type {
   ToolGalleryItemOut,
 } from "@cubby/schemas/project";
 import { toolGalleryGroupBy } from "@cubby/schemas/project";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { SquaresFourIcon } from "@phosphor-icons/react/dist/csr/SquaresFour";
@@ -217,8 +218,7 @@ export function ToolCard({
 
         {compact ? (
           <p className="mt-1 text-2xs text-muted-foreground">
-            {item.inventoryEntries.length} placement
-            {item.inventoryEntries.length === 1 ? "" : "s"}
+            {countLabel(item.inventoryEntries.length, "placement")}
           </p>
         ) : (
           <>
@@ -254,7 +254,7 @@ export function ToolCard({
                 <p className="text-2xs text-muted-foreground">
                   {item.projectUseCount === 0
                     ? "No project uses"
-                    : `${item.projectUseCount} project use${item.projectUseCount === 1 ? "" : "s"}`}
+                    : countLabel(item.projectUseCount, "project use")}
                 </p>
               </div>
               {item.costPerProjectUse !== null ? (
@@ -295,7 +295,7 @@ export function ToolInspectorSummary({ item }: { item: ToolGalleryItemOut }) {
         <span>
           {item.projectUseCount === 0
             ? "No project uses"
-            : `${item.projectUseCount} project use${item.projectUseCount === 1 ? "" : "s"}`}
+            : countLabel(item.projectUseCount, "project use")}
         </span>
         {item.costPerProjectUse !== null ? (
           <span className="font-mono text-primary tabular-nums">

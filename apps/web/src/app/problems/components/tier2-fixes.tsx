@@ -1,4 +1,5 @@
 import { ProblemItem } from "@cubby/schemas/problems";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useQueries } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -69,7 +70,7 @@ export function OrphanedDeleteFix({
 }
 
 /** `1 purchase` / `4 purchases` — a vendor's weight in the merge decision. */
-const purchases = (n: number) => `${n} purchase${n === 1 ? "" : "s"}`;
+const purchases = (n: number) => countLabel(n, "purchase");
 
 /**
  * Fold a duplicate vendor into the spelling that carries more purchases.
@@ -324,7 +325,7 @@ export function DuplicateAccountAliasFix({
       claimants={loaded.map((row) => ({
         id: row.id,
         label: row.name,
-        detail: `${row.sourceAliases.length} alias${row.sourceAliases.length === 1 ? "" : "es"}`,
+        detail: countLabel(row.sourceAliases.length, "alias"),
       }))}
       onConfirm={async (keepId) => {
         try {

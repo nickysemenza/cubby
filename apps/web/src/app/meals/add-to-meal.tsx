@@ -7,6 +7,7 @@ import {
   mealKindSchema,
   mealTypeSchema,
 } from "@cubby/schemas/meal-classification";
+import { countLabel } from "@cubby/shared/pluralize";
 import { CalendarPlusIcon } from "@phosphor-icons/react/dist/csr/CalendarPlus";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -150,9 +151,7 @@ export function AddToMeal({
         // visible before selecting, not only after.
         label:
           meal.mealKind === "cooked"
-            ? `${mealListLabel(meal)} (${meal.recipes.length} recipe${
-                meal.recipes.length === 1 ? "" : "s"
-              })`
+            ? `${mealListLabel(meal)} (${countLabel(meal.recipes.length, "recipe")})`
             : `${mealListLabel(meal)} — ${MEAL_KIND_LABELS[meal.mealKind]}`,
       })) ?? []),
     ],

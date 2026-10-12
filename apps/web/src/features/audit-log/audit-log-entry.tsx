@@ -1,5 +1,6 @@
 import type { AuditJsonValue, AuditLogListOut } from "@cubby/schemas/audit";
 import { parseShortcode } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
@@ -8,7 +9,6 @@ import { useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EntityIcon, entityLabel } from "~/entity/entities";
-import { countLabel } from "~/lib/pluralize";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCount } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
@@ -437,8 +437,7 @@ export function AuditLogEntryComponent({
                   ) : (
                     <CaretRightIcon className="size-3" />
                   )}
-                  {Object.keys(changes).length} field
-                  {Object.keys(changes).length > 1 ? "s" : ""} changed
+                  {countLabel(Object.keys(changes).length, "field")} changed
                 </CollapsibleTrigger>
               )}
 

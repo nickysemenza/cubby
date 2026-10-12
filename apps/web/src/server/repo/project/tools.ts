@@ -18,6 +18,7 @@ import type {
   Trade,
 } from "@cubby/schemas/project";
 import { isLiveProjectStatus } from "@cubby/schemas/project";
+import { countLabel } from "@cubby/shared/pluralize";
 import {
   and,
   asc,
@@ -1592,9 +1593,7 @@ export async function suggestProjectTools(
         reasons: [
           `Historically purchased as ${row.trade}`,
           ...(toolMetrics.projectUseCount > 0
-            ? [
-                `Used on ${toolMetrics.projectUseCount} project${toolMetrics.projectUseCount === 1 ? "" : "s"}`,
-              ]
+            ? [`Used on ${countLabel(toolMetrics.projectUseCount, "project")}`]
             : []),
         ],
         isInventoried: true,

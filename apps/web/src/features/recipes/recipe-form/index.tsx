@@ -1,5 +1,6 @@
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { getErrorMessage } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
@@ -239,7 +240,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       0,
     );
     toast.success(
-      `Imported ${ingredientCount} ingredient${ingredientCount === 1 ? "" : "s"} across ${result.sections.length} section${result.sections.length === 1 ? "" : "s"}.`,
+      `Imported ${countLabel(ingredientCount, "ingredient")} across ${countLabel(result.sections.length, "section")}.`,
     );
   };
 

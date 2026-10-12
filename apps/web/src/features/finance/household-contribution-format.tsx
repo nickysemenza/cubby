@@ -1,10 +1,10 @@
 import type { HouseholdContributionGapOut } from "@cubby/schemas/household-contribution";
 import { contributionGapLabels } from "@cubby/schemas/household-contribution-labels";
+import { countLabel } from "@cubby/shared/pluralize";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 
 import { entityDetailLink } from "~/entity/entities";
-import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import {

@@ -17,6 +17,7 @@
     "./golden-vectors/*": "./golden-vectors/*",
     "./image-types": "./src/image-types.ts",
     "./location-type-theme": "./src/location-type-theme.ts",
+    "./pluralize": "./src/pluralize.ts",
     "./redundant-tokens": "./src/redundant-tokens.ts",
     "./retry": "./src/retry.ts",
     "./sha256": "./src/sha256.ts",
@@ -39,9 +40,11 @@
     "eventsource-parser": "3.1.1",
     "ipaddr.js": "^2.4.0",
     "nanoid": "^6.0.0",
+    "pluralize": "^8.0.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/pluralize": "^0.0.33",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
   }

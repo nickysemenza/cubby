@@ -8,6 +8,7 @@ import {
   type EntityGraphOutput,
 } from "@cubby/schemas/entity-graph";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
@@ -969,13 +970,13 @@ function ExplorationCompletion({
   const routeCount = data.paths.length;
   const suffix =
     routeCount > 0
-      ? ` ${routeCount} explanatory route${routeCount === 1 ? "" : "s"} retained.`
+      ? ` ${countLabel(routeCount, "explanatory route")} retained.`
       : "";
   if (status === "exhausted") {
     return (
       <p className="text-xs text-muted-foreground">
-        Explored every reachable relationship within {reachedDepth} hop
-        {reachedDepth === 1 ? "" : "s"}.{suffix}
+        Explored every reachable relationship within{" "}
+        {countLabel(reachedDepth, "hop")}.{suffix}
       </p>
     );
   }

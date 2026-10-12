@@ -8,9 +8,9 @@ import {
 } from "@cubby/schemas/identifiers";
 import { LEDGER_PARTY_KIND_LABELS } from "@cubby/schemas/ledger-party-fields";
 import { expenseFiltersSchema } from "@cubby/schemas/project";
+import { countLabel } from "@cubby/shared/pluralize";
 import { sum } from "es-toolkit";
 
-import { countLabel } from "~/lib/pluralize";
 import { buildDetailScheduleRows } from "~/lib/project-schedule";
 import { budgetRemaining } from "~/lib/spend";
 import { formatCurrency } from "~/lib/utils";

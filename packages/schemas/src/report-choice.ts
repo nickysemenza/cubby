@@ -1,3 +1,4 @@
+import { countLabel } from "@cubby/shared/pluralize";
 import type { z } from "zod";
 
 import type { CommitPreparedRequest, ReportChoice } from "./entity-report";
@@ -57,7 +58,7 @@ export function remainingChoices(
 
 /** "2 Product decisions remaining." */
 export function remainingSentence(noun: string, remaining: number): string {
-  return `${remaining} ${noun}${remaining === 1 ? "" : "s"} remaining.`;
+  return `${countLabel(remaining, noun)} remaining.`;
 }
 
 /**

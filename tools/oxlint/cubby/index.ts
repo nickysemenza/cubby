@@ -10,6 +10,7 @@ import {
   noUnboundedPageSizeRule,
 } from "./rules/generic-paths.ts";
 import { noErrorToastInHandlerRule } from "./rules/no-error-toast-in-handler.ts";
+import { noHandRolledPluralRule } from "./rules/no-hand-rolled-plural.ts";
 import { noRawEnumLiteralInSqlRule } from "./rules/no-raw-enum-literal-in-sql.ts";
 import { noSwallowedCatchRule } from "./rules/no-swallowed-catch.ts";
 import { noUnsafeIdentifiersRule } from "./rules/no-unsafe-identifiers.ts";
@@ -24,6 +25,7 @@ const cubbyPlugin = eslintCompatPlugin({
     "no-ad-hoc-number-format": noAdHocNumberFormatRule,
     "no-error-toast-in-handler": noErrorToastInHandlerRule,
     "no-hand-parsed-create-input": noHandParsedCreateInputRule,
+    "no-hand-rolled-plural": noHandRolledPluralRule,
     "no-kernel-action-guard": noKernelActionGuardRule,
     "no-raw-console": noRawConsoleRule,
     "no-raw-enum-literal-in-sql": noRawEnumLiteralInSqlRule,
