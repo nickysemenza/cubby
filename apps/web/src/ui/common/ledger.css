@@ -1,5 +1,9 @@
 .ledger-container {
   container: ledger / inline-size;
+  /* Inline-size containment ignores content width, so a start-aligned parent
+     would measure the ledger as 0px and force the narrow template. */
+  align-self: stretch;
+  justify-self: stretch;
 }
 
 .ledger {

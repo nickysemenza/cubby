@@ -155,3 +155,48 @@ it("keeps compact action controls beside their record", async () => {
   expect(action.top).toBeLessThan(record.bottom);
   expect(action.bottom).toBeGreaterThan(record.top);
 });
+
+// Regression: a report slot stacked its blocks with `items-start`, so the
+// inline-size container measured only its widest sibling and the narrow grid
+// broke a block title one character per line.
+it("fills a start-aligned column instead of shrinking to a sibling", async () => {
+  await page.viewport(1440, 900);
+  render(
+    <div
+      style={{
+        width: 600,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+      }}
+    >
+      <Ledger data-testid="usage">
+        <LedgerRow>
+          <LedgerCell slot="primary">Synthetic model usage title</LedgerCell>
+          <LedgerCell slot="trailing">12:38 PM</LedgerCell>
+        </LedgerRow>
+      </Ledger>
+      <span>Subtotal</span>
+    </div>,
+  );
+  const ledger = screen.getByTestId("usage").getBoundingClientRect();
+  const title = screen
+    .getByText("Synthetic model usage title")
+    .getBoundingClientRect();
+  expect(ledger.width).toBeGreaterThanOrEqual(599);
+  expect(title.height).toBeLessThan(24);
+});
+
+// Regression: Similar products rendered rows with no Ledger, so subgrid fell
+// back to implicit columns and every row aligned differently.
+it("refuses a row rendered outside a ledger", () => {
+  expect(() =>
+    render(
+      <ul>
+        <LedgerRow>
+          <LedgerCell slot="primary">Orphan row</LedgerCell>
+        </LedgerRow>
+      </ul>,
+    ),
+  ).toThrow(/inside a Ledger/);
+});

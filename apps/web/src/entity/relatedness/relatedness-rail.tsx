@@ -11,6 +11,7 @@ import {
   recommendations,
   search,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Ledger } from "~/ui/common/ledger";
 import { Row, Stack } from "~/ui/layout";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 
@@ -182,12 +183,16 @@ export function RelatednessRail({
         }))}
         seeded={seededDisplayImages}
       >
-        {visibleItems.map((item) => (
-          <RelatedProductRowWithCanonicalImage
-            key={item.target.id}
-            item={item}
-          />
-        ))}
+        {visibleItems.length > 0 && (
+          <Ledger>
+            {visibleItems.map((item) => (
+              <RelatedProductRowWithCanonicalImage
+                key={item.target.id}
+                item={item}
+              />
+            ))}
+          </Ledger>
+        )}
       </EntityDisplayImagesProvider>
 
       {items.length > visibleCount && (
