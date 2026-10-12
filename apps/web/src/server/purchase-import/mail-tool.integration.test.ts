@@ -30,6 +30,7 @@ import {
   mailboxCursor,
   email as emailTable,
   orderMail,
+  purchase,
   orderMailAttachment,
   orderMailCandidateDecision,
   orderMailEvent,
@@ -309,6 +310,27 @@ describe("public mail tool", () => {
         ctx.actor,
       ),
     ).rejects.toThrow("different reviewed refund set");
+    const readInput = { mailboxId, messageId: source.messageId };
+    const codes = purchases.map((row) => row.shortcode).sort();
+    const beforeDeletion = await readMail(ctx.db, readInput, ctx.actor);
+    expect(beforeDeletion).toMatchObject({
+      purchaseIds: codes,
+      purchaseAssociations: codes.map((purchaseId) => ({
+        purchaseId,
+        purchaseDeleted: false,
+      })),
+    });
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ deletedAt: new Date() })
+      .where(eq(purchase.id, secondPurchase.id));
+    expect(await readMail(ctx.db, readInput, ctx.actor)).toMatchObject({
+      purchaseIds: codes,
+      purchaseAssociations: codes.map((purchaseId) => ({
+        purchaseId,
+        purchaseDeleted: purchaseId === secondPurchase.shortcode,
+      })),
+    });
   });
 
   describe("search", () => {

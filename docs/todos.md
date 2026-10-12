@@ -726,6 +726,22 @@ in entity lists without a separate page
   classification preview hand-writes. Generated SQL must match hand-tuned
   performance; #1712's preview equivalence and scale tests are the guard.
   Decide the declaration shape first.
+- 🤔 🧪 **Calibrate Email relevance and reduce false uncertainty.** The bounded
+  HTML path marks every HTML message incomplete, so an unrelated Jev decision
+  becomes uncertain even when the readable evidence clearly establishes a
+  newsletter or promotion. Distinguish semantic evidence coverage from omitted
+  markup; retain purchase-bearing table, amount, order and attachment evidence.
+  Escalate only a material omitted-evidence risk, without sender-wide exclusions
+  that could hide subscription receipts. Evaluate broader evidence or a second
+  bounded pass on ambiguous cases; preserve original predictions and member
+  decisions. Grade an independent stratified sample including unrelated and
+  clipped messages, measure false negatives, false positives, abstention and
+  cost, and compare changes before enabling automatic disposal or import.
+  Separately audit Purchase Problems and Work queue receipt checks against the
+  effective evidence expectation and reviewed itemization: optional paperwork
+  must not create a missing-document task. Show the policy source so inherited
+  requirements and stale queue entries can be distinguished from real gaps.
+
 - 🤔 🧪 **Re-evaluate categories and Jev-backed dropdown options.** Review the
   category hierarchies and declared classification choices against actual usage
   and per-field decision misses. Identify overlapping, ambiguous, stale or

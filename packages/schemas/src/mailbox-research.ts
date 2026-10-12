@@ -294,6 +294,11 @@ export const mailAttachmentOriginal = z.strictObject({
 });
 export type MailAttachmentOriginal = z.infer<typeof mailAttachmentOriginal>;
 
+export const mailPurchaseAssociation = z.object({
+  purchaseId: purchaseShortcode,
+  purchaseDeleted: z.boolean(),
+});
+
 export const mailReadOut = mailMessageRef.extend({
   threadId: z.string().nullable(),
   checksum: sha256,
@@ -312,6 +317,8 @@ export const mailReadOut = mailMessageRef.extend({
   originalAttachment: mailAttachmentOriginal.optional(),
   /** True when Pi reads an Email its Mail import Run admitted. */
   boundToRun: z.boolean(),
+  purchaseIds: z.array(purchaseShortcode).default([]),
+  purchaseAssociations: z.array(mailPurchaseAssociation).default([]),
   financialAssociations: z.array(mailFinancialAssociation).default([]),
 });
 export const mailSearchOut = z.object({

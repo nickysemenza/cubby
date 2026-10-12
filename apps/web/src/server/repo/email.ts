@@ -30,6 +30,7 @@ import {
   unwrapDb,
 } from "~/server/repo/database-helpers";
 import { readEmailFinancialAssociations } from "~/server/repo/email-financial-associations";
+import { readEmailPurchaseAssociations } from "~/server/repo/email-purchase-associations";
 import {
   emailLifecyclePurchasesSql,
   emailLinkedSql,
@@ -96,8 +97,13 @@ export async function readEmailAssociations(
         ),
       )
       .orderBy(desc(purchase.date), purchase.id);
-  const purchases = await purchasesFor(emailPurchaseAssociationsSql());
-  const purchaseIds = purchases.map((row) => row.id);
+  const purchases = await readEmailPurchaseAssociations(
+    db,
+    parseEntityId("email", selected.email.id),
+  );
+  const purchaseIds = purchases
+    .filter((row) => !row.purchaseDeleted)
+    .map((row) => row.id);
   const expenses = purchaseIds.length
     ? await client
         .select({

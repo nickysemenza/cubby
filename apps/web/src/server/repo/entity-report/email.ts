@@ -52,14 +52,24 @@ type StatsBlock = Extract<ReportBlock, { kind: "stats" }>;
 function emailAssociationBlocks(
   associations: Awaited<ReturnType<typeof readEmailAssociations>>,
 ): ReportBlock[] {
-  const purchases = (rows: typeof associations.purchases) =>
-    rows.map((row) => ({
-      entity: "purchase",
-      id: row.shortcode,
-      title: row.orderId ?? "Purchase",
-      subtitle: row.date,
-      trailing: null,
-    }));
+  const purchases = (
+    rows:
+      | typeof associations.purchases
+      | typeof associations.dismissedCandidates,
+  ) =>
+    rows.map((row): ReportRecordRow => {
+      const deleted = "purchaseDeleted" in row && row.purchaseDeleted === true;
+      return {
+        entity: deleted ? null : "purchase",
+        id: deleted ? null : row.shortcode,
+        title: row.orderId ?? "Purchase",
+        subtitle: row.date,
+        trailing: null,
+        statuses: deleted
+          ? [{ label: "Purchase deleted", tone: "warning" }]
+          : [],
+      };
+    });
   const emails = (rows: typeof associations.samePurchaseEmails) =>
     rows.map((row): ReportRecordRow => ({
       entity: "email",
@@ -818,17 +828,18 @@ function purchaseRow(
   email: EmailRow,
   purchases: Awaited<ReturnType<typeof readEmailAssociations>>["purchases"],
 ) {
-  const [first] = purchases;
-  if (!first)
+  if (!purchases.length)
     return pipelineRow(
       "Linked Purchase",
       email.classification === "related" ? "Not reached" : "Skipped",
     );
+  const first = purchases.find((row) => !row.purchaseDeleted);
   return pipelineRow("Linked Purchase", "Ran", {
-    entity: "purchase",
-    id: first.shortcode,
+    entity: first ? "purchase" : undefined,
+    id: first?.shortcode,
     lines: purchases.map(
-      (item) => `${item.shortcode}${item.orderId ? ` · ${item.orderId}` : ""}`,
+      (item) =>
+        `${item.shortcode}${item.orderId ? ` · ${item.orderId}` : ""}${item.purchaseDeleted ? " · Deleted Purchase" : ""}`,
     ),
   });
 }

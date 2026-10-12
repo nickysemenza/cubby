@@ -391,10 +391,22 @@ test("record dates retain their calendar label with present and future context",
     dueDate: today,
     dueEndDate: householdDaysFromNow(1),
   });
-  const currentLabel = `${formatCalendarDay(today, "monthDay")} (today)`;
+  const currentDay = formatCalendarDay(today, "monthDay");
+  const currentLabel = `${currentDay} (today)`;
   const laterYear =
     later.slice(0, 4) === today.slice(0, 4) ? "" : `, ${later.slice(0, 4)}`;
-  const futureLabel = `${formatCalendarDay(later, "monthDay")}${laterYear} (in a few weeks)`;
+  const futureDay = `${formatCalendarDay(later, "monthDay")}${laterYear}`;
+  const futureLabel = `${futureDay} (in a few weeks)`;
+  const assertDate = async (
+    scope: ReturnType<typeof page.locator>,
+    label: string,
+    day: string,
+    context: string,
+  ) => {
+    const date = scope.getByTitle(label, { exact: true });
+    await expect(date.getByText(day, { exact: true })).toBeVisible();
+    await expect(date.getByText(context, { exact: true })).toBeVisible();
+  };
   await createFixture(page, "task", {
     name: `${prefix} current`,
     projectId: project.id,
@@ -411,22 +423,40 @@ test("record dates retain their calendar label with present and future context",
     page,
     `/tasks?view=next&q=${encodeURIComponent(prefix)}`,
   );
-  await expect(
-    page.getByRole("row").filter({ hasText: `${prefix} current` }),
-  ).toContainText(currentLabel);
-  await expect(
-    page.getByRole("row").filter({ hasText: `${prefix} future` }),
-  ).toContainText(futureLabel);
-  await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
-  await expect(
-    page.locator('[data-cell-col="dueDate"]').filter({ hasText: "(today)" }),
-  ).toHaveText(currentLabel);
-  await expect(
+  await assertDate(
     page
-      .locator('[data-cell-col="dueDate"]')
-      .filter({ hasText: "(in a few weeks)" }),
-  ).toHaveText(futureLabel);
-  const futureTaskLabel = page.getByText(futureLabel, { exact: true });
+      .getByRole("row")
+      .filter({ hasText: `${prefix} current` })
+      .locator('[data-cell-col="dueDate"]'),
+    currentLabel,
+    currentDay,
+    "today",
+  );
+  await assertDate(
+    page
+      .getByRole("row")
+      .filter({ hasText: `${prefix} future` })
+      .locator('[data-cell-col="dueDate"]'),
+    futureLabel,
+    futureDay,
+    "in 4w",
+  );
+  await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
+  await assertDate(
+    page.locator('[data-cell-col="dueDate"]'),
+    currentLabel,
+    currentDay,
+    "today",
+  );
+  await assertDate(
+    page.locator('[data-cell-col="dueDate"]'),
+    futureLabel,
+    futureDay,
+    "in 4w",
+  );
+  const futureTaskLabel = page
+    .getByTitle(futureLabel, { exact: true })
+    .getByText(futureDay, { exact: true });
   const unclipped = async (label: typeof futureTaskLabel) => {
     await expect(label).toBeVisible();
     expect(
@@ -466,12 +496,17 @@ test("record dates retain their calendar label with present and future context",
     page,
     `/expenses?q=${encodeURIComponent(`${prefix} expense`)}`,
   );
-  await expect(
+  await assertDate(
+    page.locator('[data-cell-col="date"]'),
+    futureLabel,
+    futureDay,
+    "in 4w",
+  );
+  await unclipped(
     page
-      .locator('[data-cell-col="date"]')
-      .filter({ hasText: "(in a few weeks)" }),
-  ).toHaveText(futureLabel);
-  await unclipped(page.getByText(futureLabel, { exact: true }));
+      .getByTitle(futureLabel, { exact: true })
+      .getByText(futureDay, { exact: true }),
+  );
   await gotoAuthenticatedPage(page, "/projects?view=overview");
   const ongoing = page.getByRole("link", {
     name: `${prefix} ongoing`,

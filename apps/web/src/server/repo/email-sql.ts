@@ -19,7 +19,7 @@ export const automatedStagesSql = sql`(${rule}, ${jev}, ${model})`;
  * Accepted Orders on any member of the canonical source family survive cache
  * disposal and historical aliases; active lifecycle decisions remain separate.
  */
-export const emailAcceptedEvidenceSql = (): SQL => sql`
+export const emailAcceptedEvidenceSql = (includeDeleted = false): SQL => sql`
   SELECT accepted."purchaseId", accepted."checksum" AS "evidenceChecksum", accepted."createdAt" AS "acceptedAt"
   FROM "ImportSourceClaim" identity
   INNER JOIN "ImportSourceClaim" root
@@ -32,7 +32,7 @@ export const emailAcceptedEvidenceSql = (): SQL => sql`
     AND family."ledgerPartyId" = root."ledgerPartyId"
     AND family."kind" = root."kind"
   INNER JOIN "ImportSourceOrder" accepted ON accepted."sourceClaimId" = family."id"
-  INNER JOIN "Purchase" p ON p."id" = accepted."purchaseId" AND p."deletedAt" IS NULL
+  INNER JOIN "Purchase" p ON p."id" = accepted."purchaseId" AND ${includeDeleted ? sql`true` : sql`p."deletedAt" IS NULL`}
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
   WHERE identity."ledgerPartyId" = "Email"."ledgerPartyId"
     AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
@@ -51,12 +51,13 @@ export const emailAcceptedEvidenceSql = (): SQL => sql`
 
 export const emailLifecyclePurchasesSql = (
   decision: "linked" | "dismissed",
+  includeDeleted = false,
 ): SQL => sql`
   SELECT decision."purchaseId"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
   INNER JOIN "OrderMailCandidateDecision" decision ON decision."eventId" = event."id"
-  INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND p."deletedAt" IS NULL
+  INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${includeDeleted ? sql`true` : sql`p."deletedAt" IS NULL`}
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
   WHERE original."id" = "Email"."orderMailId"
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
@@ -65,9 +66,11 @@ export const emailLifecyclePurchasesSql = (
 `;
 
 /** Accepted families and explicit lifecycle decisions share one association policy. */
-export const emailPurchaseAssociationsSql = (): SQL => sql`
-  SELECT evidence."purchaseId" FROM (${emailAcceptedEvidenceSql()}) evidence
-  UNION ${emailLifecyclePurchasesSql("linked")}
+export const emailPurchaseAssociationsSql = (
+  includeDeleted = false,
+): SQL => sql`
+  SELECT evidence."purchaseId" FROM (${emailAcceptedEvidenceSql(includeDeleted)}) evidence
+  UNION ${emailLifecyclePurchasesSql("linked", includeDeleted)}
 `;
 
 /**
