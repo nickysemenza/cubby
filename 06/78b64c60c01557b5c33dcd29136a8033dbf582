@@ -1,0 +1,53 @@
+apps/apple/App/Shared/Browse/ConnectedSectionView.swift
+  s_d8b0104fa13905::t_a049be89cdaf95 4-6,12-13,15,17,22,26-46,50,55-57,60-149,154-155,157-163,166-198
+apps/apple/App/Shared/Browse/EntityDetailView.swift
+  s_d8b0104fa13905::t_cc3012c10f2204 18,188,232-234,236,244,249,332,426-427,548-553
+apps/apple/App/Shared/Browse/EntityRelationshipsView.swift
+  s_d8b0104fa13905::t_7042075fba8aab 4-6,19,21,123-125
+apps/apple/App/Shared/Route.swift
+  s_d8b0104fa13905::t_e323b01a5831bd 21-22
+apps/apple/App/Shared/SectionView.swift
+  s_d8b0104fa13905::t_2b2bec0d0ebf63 73-74
+apps/apple/App/Shared/Today/TodayView.swift
+  s_d8b0104fa13905::t_bc67c57913216b 73,93-94,96,99-100,110-120,123-135,156,159-179,181,350-351,550
+apps/apple/CubbyKit/Sources/CubbyKit/Catalog/AuditEntryFolding.swift
+  s_d8b0104fa13905::t_0a971ec8487a91 1-97
+apps/apple/CubbyKit/Sources/CubbyKit/Relationships/EntityRelationships.swift
+  s_d8b0104fa13905::t_4bd1ef9dc5a789 374
+apps/apple/CubbyKit/Tests/CubbyKitTests/AuditEntryFoldingTests.swift
+  s_d8b0104fa13905::t_fa2694650385e5 1-58
+apps/apple/CubbyKit/Tests/CubbyKitTests/ConnectedRecordsPreviewTests.swift
+  s_d8b0104fa13905::t_66a5892c617757 1-33
+apps/apple/CubbyKit/Tests/CubbyKitTests/EntityRelationshipsTests.swift
+  s_d8b0104fa13905::t_063f65ce474d17 165,167,174
+packages/shared/src/apple-client-version.ts
+  s_d8b0104fa13905::t_5bb996e76e32a4 8
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyClient.swift
+  s_5feb063492716a::t_6740c0627d162f 302-313
+apps/apple/CubbyKit/Sources/CubbyKit/Catalog/ConnectedSectionModel.swift
+  s_5feb063492716a::t_57fb56943431ff 3-4,58-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0678b64c60c01557b5c33dcd29136a8033dbf582",
+  "prompts": {},
+  "sessions": {
+    "s_5feb063492716a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-aa96b8e78163719b3",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_d8b0104fa13905": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd9091e5-6d0e-4f69-a35f-3af868a5b12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
