@@ -4,13 +4,61 @@ import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/repo/database-helpers";
 
-import { createPostgresPool } from "./postgres-pool";
+import {
+  createPostgresPool,
+  terminateOtherPostgresConnections,
+} from "./postgres-pool";
 import { withTestDb } from "./test-setup";
 
 // Pool.end can resolve before a removed client's socket closes. Recreating its
 // database then sends 57P01 to that client after its owner believes it is gone.
 describe("PostgreSQL pool shutdown", () => {
   const ctx = withTestDb();
+
+  it("waits for terminated idle clients before the next test can acquire them", async () => {
+    const pool = createPostgresPool({ connectionString: ctx.databaseUrl });
+    pool.on("error", () => {});
+    const observerUrl = new URL(ctx.databaseUrl);
+    observerUrl.pathname = "/postgres";
+    const observer = createPostgresPool({ connectionString: observerUrl.href });
+    const idle = await pool.connect();
+    const { rows } = await idle.query<{ pid: number }>(
+      "SELECT pg_backend_pid() AS pid",
+    );
+    const pid = rows[0]?.pid;
+    expect(pid).toBeDefined();
+    const control = await pool.connect();
+    idle.connection.stream.pause();
+    idle.release();
+    control.release();
+    let finished = false;
+    const reset = terminateOtherPostgresConnections(pool);
+    void reset.then(() => {
+      finished = true;
+    });
+    try {
+      await pollUntil(
+        async () => {
+          const result = await observer.query(
+            "SELECT 1 FROM pg_stat_activity WHERE pid = $1",
+            [pid],
+          );
+          return result.rows.length === 0 ? true : undefined;
+        },
+        { label: "terminated idle backend", timeoutMs: 1000 },
+      );
+      expect(finished).toBe(false);
+      idle.connection.stream.resume();
+      await reset;
+      await expect(pool.query("SELECT 1")).resolves.toMatchObject({
+        rowCount: 1,
+      });
+    } finally {
+      idle.connection.stream.resume();
+      await reset;
+      await Promise.all([pool.end(), observer.end()]);
+    }
+  });
 
   it("delivers repeated shutdown errors to the callback", async () => {
     const pool = createPostgresPool({ connectionString: ctx.databaseUrl });
