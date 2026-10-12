@@ -195,7 +195,13 @@ function queueColumns(members: WorkQueueMember[]) {
         header: "Type",
         size: 128,
         meta: attachCubbyColumnMeta<WorkQueueRow>({
-          mobile: { slot: "meta", priority: 1, label: "Type" },
+          // Diagnostics have no entity but still render their Problem pill.
+          mobile: {
+            slot: "meta",
+            priority: 1,
+            label: "Type",
+            showWhenEmpty: true,
+          },
           cellData: textCellData<WorkQueueRow>("text", (row) =>
             row.entity ? entitySummary[row.entity].singular : "Problem",
           ),

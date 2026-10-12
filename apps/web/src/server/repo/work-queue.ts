@@ -291,6 +291,20 @@ async function workQueueProjection(
   return sql.join(selections, sql` UNION ALL `);
 }
 
+async function attachDisplayImages(db: Database, items: WorkQueueRow[]) {
+  const images = await resolvePublicEntityDisplayImageLists(
+    db,
+    items.flatMap((item) =>
+      item.entity && item.id
+        ? [{ entityKind: item.entity, entityId: item.id }]
+        : [],
+    ),
+  );
+  for (const item of items)
+    if (item.entity && item.id)
+      item.displayImages = images.get(entityRefKey(item.entity, item.id)) ?? [];
+}
+
 /** Authority is an implicit argument supplied only by the authenticated operation context. */
 export async function readWorkQueue(
   db: Database,
@@ -374,17 +388,9 @@ export async function readWorkQueue(
       if (messages.length) item.reason = [...new Set(messages)].join("; ");
     }
   }
-  const images = await resolvePublicEntityDisplayImageLists(
-    db,
-    row.items.flatMap((item) =>
-      item.entity && item.id
-        ? [{ entityKind: item.entity, entityId: item.id }]
-        : [],
-    ),
-  );
-  for (const item of row.items)
-    if (item.entity && item.id)
-      item.displayImages = images.get(entityRefKey(item.entity, item.id)) ?? [];
+  // Member routing fences rows, not imagery borrowed through linked records
+  // (a transaction's purchase receipts), so member reads carry none.
+  if (!memberOnly) await attachDisplayImages(db, row.items);
   return workQueueOutSchema.parse({
     items: row.items,
     members: row.members,

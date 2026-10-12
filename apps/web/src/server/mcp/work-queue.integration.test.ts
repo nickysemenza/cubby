@@ -1049,8 +1049,9 @@ describe("member actionable Work queue", () => {
       (await read(ctx.actor.userId, { waitingFor: second.shortcode })).isError,
     ).toBe(true);
   });
-  // Failure modes: rows carry no thumbnail, or a borrowed-image entity misses
-  // its product's cover.
+  // Failure modes: rows carry no thumbnail, a borrowed-image entity misses
+  // its product's cover, or a member read exposes imagery borrowed through a
+  // linked record the member's routing never established.
   it("carries each source record's resolved display images", async () => {
     const pictured = await createProductFixture(
       ctx.db,
@@ -1103,5 +1104,16 @@ describe("member actionable Work queue", () => {
     expect(imagesFor("inventory").length).toBeGreaterThan(0);
     for (const ids of imagesFor("inventory"))
       expect(ids).toEqual([cover.shortcode]);
+    const memberRead = await readWorkQueue(
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({
+        query: "Synthetic pictured queue item",
+        pageSize: 100,
+      }),
+      true,
+    );
+    expect(memberRead.items.length).toBeGreaterThan(0);
+    for (const row of memberRead.items) expect(row.displayImages).toEqual([]);
   });
 });

@@ -45,7 +45,8 @@ export const workQueueRowSchema = problemRowSchema
     reason: z.string(),
     nextAction: z.string(),
     waitingFor: workWaitingForSchema,
-    /** The source record's resolved thumbnails; empty for a Problems diagnostic. */
+    /** The source record's resolved thumbnails on household reads; empty for a
+     * Problems diagnostic and for every member-only read. */
     displayImages: displayImagesField,
   })
   .refine(
