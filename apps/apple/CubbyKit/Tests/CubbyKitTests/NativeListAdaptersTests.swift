@@ -32,78 +32,40 @@ struct NativeListAdaptersTests {
             session: NativeListStub.session())
     }
 
-    @Test func cookbookListFiltersLocallyAndPagesTheCompleteResponse() async throws {
+    /// Regression: native cookbooks sorted a client-side copy through a hand-kept field allow-list
+    /// that threw `invalidValue` for the manifest's `createdAt` sort. Cookbook now reads the
+    /// kernel list like every other entity, so a declared sort reaches the server on both the
+    /// resource route and the progressive read the browse model uses.
+    @Test func cookbookListSendsDeclaredSortsToTheServer() async throws {
         defer { NativeListStub.handler.withLock { $0 = nil } }
-        NativeListStub.handler.withLock { handler in
-            handler = { _ in (200, Self.cookbooksPayload) }
-        }
-
-        let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.cookbook], client: try makeClient(), pageSize: 1,
-            searchDebounceNanoseconds: 0)
-        await model.loadInitial()
-
-        #expect(model.rows.map(\.id) == ["CKB-1"])
-        #expect(model.rows.first?.title == "Alpha Cookbook")
-        #expect(model.hasMore)
-
-        await model.loadNextPage()
-        #expect(model.rows.map(\.id) == ["CKB-1", "CKB-2"])
-        #expect(model.hasMore == false)
-
-        model.setSearchQuery("Beta")
-        await model.searchModel?.settled()
-        #expect(model.searchModel?.phase == .loaded)
-        #expect(model.searchModel?.rows.map(\.id) == ["CKB-2"])
-        #expect(model.searchModel?.rows.first?.title == "Beta Cookbook")
-    }
-
-    @Test func cookbookListSortsBeforeTakingTheLocalPage() async throws {
-        defer { NativeListStub.handler.withLock { $0 = nil } }
-        NativeListStub.handler.withLock { handler in
-            handler = { _ in (200, Self.cookbooksPayload) }
-        }
-
-        let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.cookbook], client: try makeClient(), pageSize: 1,
-            sort: "-name")
-        await model.loadInitial()
-        #expect(model.rows.map(\.id) == ["CKB-2"])
-
-        await model.loadNextPage()
-        #expect(model.rows.map(\.id) == ["CKB-2", "CKB-1"])
-    }
-
-    @Test func imageListSendsTypedFiltersAndOneBasedPagingAsTheGeneratedInput() async throws {
-        defer { NativeListStub.handler.withLock { $0 = nil } }
-        let body = Mutex<Data?>(nil)
+        let urls = Mutex<[URL]>([])
         NativeListStub.handler.withLock { handler in
             handler = { request in
-                body.withLock { $0 = try? Self.requestBody(request) }
-                return (200, Self.imagesPage)
+                if let url = request.url { urls.withLock { $0.append(url) } }
+                return (200, Self.pagePayload(Self.cookbooks))
             }
         }
 
-        var filters = EntityFilterState()
-        filters.set(.single("PENDING"), for: "status")
-        filters.set(.single("cover"), for: "nameFilter")
-        let page = try await makeClient().list(
-            EntityCatalog[.image], page: 3, pageSize: 7, sort: "-createdAt", filters: filters)
+        let descriptor = EntityCatalog[.cookbook]
+        let page = try await makeClient().list(descriptor, page: 2, pageSize: 1, sort: "-createdAt")
 
-        #expect(page.items.map(\.id) == ["IMG-1", "IMG-2"])
-        #expect(page.items.first?.imageURL == nil)
-        #expect(page.items.dropFirst().first?.imageURL == URL(string: "https://images.example/ready.jpg"))
-        let encoded = try #require(body.withLock { $0 })
-        let object = try #require(
-            JSONDecoder().decode(JSONValue.self, from: encoded).objectValue)
-        let expectedFilters = JSONValue.object([
-            "nameFilter": .string("cover"),
-            "status": .array([.string("PENDING")]),
-        ])
-        #expect(object["filters"] == expectedFilters)
-        #expect(object["pagination"] == ["pageIndex": 2, "pageSize": 7])
-        // The server accepts only the stack form, even for one sort key.
-        #expect(object["sort"] == .array([["orderBy": "createdAt", "direction": "desc"]]))
+        #expect(page.items.map(\.id) == ["CKB-1", "CKB-2"])
+        let url = try #require(urls.withLock { $0.first })
+        #expect(url.path == "/api/v1/cookbooks")
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(query.contains(URLQueryItem(name: "sort", value: "-createdAt")))
+        #expect(query.contains(URLQueryItem(name: "page", value: "2")))
+
+        let input = try JSONValue(
+            encoding: descriptor.progressiveListInput(
+                page: 1, pageSize: 20, sort: "updatedAt,-createdAt", filters: EntityFilterState()))
+        #expect(input["entity"] == "cookbook")
+        #expect(
+            input["sort"]
+                == .array([
+                    ["orderBy": "updatedAt", "direction": "asc"],
+                    ["orderBy": "createdAt", "direction": "desc"],
+                ]))
     }
 
     @Test func usdaListKeepsNumericIdentityAndTypedFilters() async throws {
@@ -194,21 +156,6 @@ struct NativeListAdaptersTests {
         #expect(queryItems[1].contains(URLQueryItem(name: "id", value: "12345")))
     }
 
-    nonisolated private static let imagesPage: Data = {
-        let date = Date(timeIntervalSince1970: 1_700_000_000)
-        let pending = ImageWithEntity(
-            id: ImageCode("IMG-1"), url: "https://images.example/pending.jpg", key: "pending-key",
-            filename: "pending.jpg", size: 1, contentType: "image/jpeg", status: .pending, source: .unknown,
-            useOriginal: false, captureAttribution: .none, createdAt: date, updatedAt: date,
-            associations: [])
-        let uploaded = ImageWithEntity(
-            id: ImageCode("IMG-2"), url: "https://images.example/ready.jpg", key: "ready-key",
-            filename: "ready.jpg", size: 1, contentType: "image/jpeg", status: .uploaded, source: .unknown,
-            useOriginal: false, captureAttribution: .none, createdAt: date, updatedAt: date,
-            associations: [])
-        return pagePayload([pending, uploaded])
-    }()
-
     nonisolated private static let usdaFood = FoodSummaryWithLinkedProducts(
         fdcId: 12345,
         description: "Numeric food",
@@ -259,10 +206,6 @@ struct NativeListAdaptersTests {
             createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0),
             dataQuality: completeDataQuality, displayImages: []),
     ]
-
-    nonisolated private static let cookbooksPayload: Data = {
-        try! JSONEncoder.cubby().encode(cookbooks)
-    }()
 
     /// The kernel `get` adds the shared detail media to the cookbook summary.
     nonisolated private static let cookbookDetailPayload: Data = {

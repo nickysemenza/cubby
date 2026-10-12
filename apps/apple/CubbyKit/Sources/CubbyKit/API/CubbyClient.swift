@@ -171,12 +171,6 @@ public actor CubbyClient {
     ) async throws -> ListPage<EntityRow> {
         try await perform {
             switch descriptor.key.nativeReadKind {
-            case .cookbook:
-                return try await cookbookPage(
-                    descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
-            case .image:
-                return try await imagePage(
-                    descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
             case .usdaFood:
                 return try await usdaFoodPage(
                     descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
@@ -264,9 +258,7 @@ public actor CubbyClient {
                 }
                 raw = try usdaFoodJSON(
                     try await api.usdaFood_detail(query: .init(id: fdcID)).ok.body.json)
-            // Cookbook and image list through their own reads but share the
-            // kernel `get` every other entity uses.
-            case .resource, .cookbook, .image:
+            case .resource:
                 raw = try await descriptor.getRow(client: api, id: id)
             case .unavailable:
                 throw EntityOperationError.unsupported(descriptor.key, .get)
@@ -1004,85 +996,10 @@ public actor CubbyClient {
         }
     }
 
-    // MARK: - Non-resource entity reads
+    // MARK: - USDA catalog reads
 
-    /// Cookbooks predate the generic resource list and intentionally return the complete set.
-    /// Keep paging and search local so the generic list model retains one paging contract.
-    private func cookbookPage(
-        _ descriptor: EntityDescriptor,
-        page: Int,
-        pageSize: Int,
-        sort: String?,
-        filters: EntityFilterState
-    ) async throws -> ListPage<EntityRow> {
-        var query: String?
-        for name in filters.names {
-            guard let value = filters[name] else { continue }
-            switch name {
-            case "searchQuery": query = try value.string(name)
-            default: throw EntityFilterError.unknownParameter(.cookbook, name)
-            }
-        }
-
-        let all = try await api.cookbook_list().ok.body.json
-        let filtered = all.filter { cookbook in
-            guard let query = query?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty else {
-                return true
-            }
-            let haystack = [cookbook.id, cookbook.name] + cookbook.author + cookbook.subjects
-            return haystack.contains { $0.localizedCaseInsensitiveContains(query) }
-        }
-        let sorted = try sortedCookbooks(filtered, by: sort)
-        let safePage = max(1, page)
-        let safePageSize = max(1, pageSize)
-        let start = min(sorted.count, (safePage - 1) * safePageSize)
-        let end = min(sorted.count, start + safePageSize)
-        return ListPage(
-            items: try sorted[start..<end].compactMap {
-                descriptor.row(from: try cookbookJSON($0))
-            },
-            meta: .init(
-                pageIndex: safePage - 1,
-                pageSize: safePageSize,
-                totalCount: sorted.count
-            )
-        )
-    }
-
-    private func imagePage(
-        _ descriptor: EntityDescriptor,
-        page: Int,
-        pageSize: Int,
-        sort: String?,
-        filters: EntityFilterState
-    ) async throws -> ListPage<EntityRow> {
-        var typedFilters = ImageListFilters()
-        for name in filters.names {
-            guard let value = filters[name] else { continue }
-            switch name {
-            case "createdAtFrom": typedFilters.createdFrom = PlainDate(rawValue: try value.string(name))
-            case "createdAtTo": typedFilters.createdTo = PlainDate(rawValue: try value.string(name))
-            case "updatedAtFrom": typedFilters.updatedFrom = PlainDate(rawValue: try value.string(name))
-            case "updatedAtTo": typedFilters.updatedTo = PlainDate(rawValue: try value.string(name))
-            case "nameFilter": typedFilters.nameFilter = try value.string(name)
-            case "status": typedFilters.status = .init(value2: try value.enumCases(name))
-            case "referencePresenceFilter":
-                typedFilters.referencePresenceFilter = try value.enumCase(name)
-            case "uploadedAgeHoursMin": typedFilters.uploadedAgeHoursMin = try value.double(name)
-            default: throw EntityFilterError.unknownParameter(.image, name)
-            }
-        }
-
-        var input = ImageBrowserListInput(filters: typedFilters)
-        input.pagination = .init(pageIndex: max(0, page - 1), pageSize: max(1, pageSize))
-        input.sort = try imageSort(sort)
-        let result = try await api.image_list(body: .json(input)).ok.body.json
-        return ListPage(
-            items: try result.items.compactMap { descriptor.row(from: try imageJSON($0)) },
-            meta: result.meta
-        )
-    }
-
+    /// USDA foods are the external catalog, not a kernel entity, so they read through the
+    /// typed USDA RPCs; every other entity lists through its resource route.
     private func usdaFoodPage(
         _ descriptor: EntityDescriptor,
         page: Int,
@@ -1113,73 +1030,10 @@ public actor CubbyClient {
         )
     }
 
-    /// Sort payloads are generated as named operation contracts around anonymous item schemas.
-    /// Decode through the named contract so handwritten code never depends on positional
-    /// `InputSchemaNN` aliases.
-    private func imageSort(_ sort: String?) throws -> ImageBrowserListInput.SortPayload? {
-        try decodedSort(sort, as: ImageBrowserListInput.SortPayload.self)
-    }
-
+    /// The sort payload is a named operation contract around an anonymous item schema; decode
+    /// through it so handwritten code never depends on positional `InputSchemaNN` aliases.
     private func usdaFoodSort(_ sort: String?) throws -> UsdaListInput.SortPayload? {
         try decodedSort(sort, as: UsdaListInput.SortPayload.self)
-    }
-
-    private func sortedCookbooks(_ values: [CookbookSummary], by sort: String?) throws
-        -> [CookbookSummary]
-    {
-        guard let sort, !sort.isEmpty else { return values }
-        let allowed = Set([
-            "id", "shortcode", "name", "author", "subjects", "recipeCount",
-            "coverUrl", "sourceRecipeCount", "needsReextract", "product",
-        ])
-        let terms = try sort.split(separator: ",").map { token -> (field: String, descending: Bool) in
-            let descending = token.hasPrefix("-")
-            let field = String(descending ? token.dropFirst() : token[...])
-            guard allowed.contains(field) else {
-                throw EntityFilterError.invalidValue(
-                    parameter: "sort", value: field,
-                    expected: "a declared cookbook list field")
-            }
-            return (field, descending)
-        }
-        return values.enumerated().sorted { lhs, rhs in
-            for term in terms {
-                let comparison = cookbookComparison(lhs.element, rhs.element, field: term.field)
-                guard comparison != .orderedSame else { continue }
-                return term.descending
-                    ? comparison == .orderedDescending
-                    : comparison == .orderedAscending
-            }
-            return lhs.offset < rhs.offset
-        }.map(\.element)
-    }
-
-    private func cookbookComparison(
-        _ lhs: CookbookSummary, _ rhs: CookbookSummary, field: String
-    ) -> ComparisonResult {
-        switch field {
-        case "id", "shortcode": lhs.id.localizedCaseInsensitiveCompare(rhs.id)
-        case "name": lhs.name.localizedCaseInsensitiveCompare(rhs.name)
-        case "author":
-            lhs.author.joined(separator: " ").localizedCaseInsensitiveCompare(
-                rhs.author.joined(separator: " "))
-        case "subjects":
-            lhs.subjects.joined(separator: " ").localizedCaseInsensitiveCompare(
-                rhs.subjects.joined(separator: " "))
-        case "recipeCount": comparison(lhs.recipeCount, rhs.recipeCount)
-        case "coverUrl": (lhs.coverUrl ?? "").localizedCaseInsensitiveCompare(rhs.coverUrl ?? "")
-        case "sourceRecipeCount": comparison(lhs.sourceRecipeCount, rhs.sourceRecipeCount)
-        case "needsReextract": comparison(lhs.needsReextract ? 1 : 0, rhs.needsReextract ? 1 : 0)
-        case "product":
-            (lhs.product?.name ?? "").localizedCaseInsensitiveCompare(rhs.product?.name ?? "")
-        default: .orderedSame
-        }
-    }
-
-    private func comparison<Value: Comparable>(_ lhs: Value, _ rhs: Value) -> ComparisonResult {
-        if lhs < rhs { return .orderedAscending }
-        if lhs > rhs { return .orderedDescending }
-        return .orderedSame
     }
 
     private func decodedSort<Sort: Decodable>(_ sort: String?, as _: Sort.Type) throws -> Sort? {
@@ -1194,23 +1048,6 @@ public actor CubbyClient {
         }
         return try JSONDecoder.cubby().decode(
             Sort.self, from: JSONEncoder.cubby().encode(JSONValue.array(values)))
-    }
-
-    private func cookbookJSON(_ cookbook: CookbookSummary) throws -> JSONValue {
-        try normalizedJSON(cookbook) { object in
-            object["shortcode"] = .string(cookbook.id)
-        }
-    }
-
-    private func imageJSON(_ image: ImageWithEntity) throws -> JSONValue {
-        try normalizedJSON(image) { object in
-            object["displayImages"] =
-                image.status == .uploaded
-                ? .array([
-                    .object(["id": .string(image.id.rawValue), "url": .string(image.url)])
-                ])
-                : .array([])
-        }
     }
 
     private func usdaFoodJSON(_ food: some USDAFoodRow) throws -> JSONValue {
