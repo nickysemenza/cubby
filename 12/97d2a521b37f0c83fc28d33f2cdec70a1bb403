@@ -1,0 +1,21 @@
+apps/web/src/entity/timeline/entity-timeline.tsx
+  s_d8b0104fa13905::t_b1fbb3a0f7477a 35,354-378,390-412,424-425,428-435,437-442
+apps/web/src/ui/common/record-list.css
+  s_d8b0104fa13905::t_823c42c5bd4be2 42-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1297d2a521b37f0c83fc28d33f2cdec70a1bb403",
+  "prompts": {},
+  "sessions": {
+    "s_d8b0104fa13905": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd9091e5-6d0e-4f69-a35f-3af868a5b12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

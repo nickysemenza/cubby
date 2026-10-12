@@ -1,0 +1,21 @@
+apps/web/src/entity/relationships/entity-relations.tsx
+  s_d8b0104fa13905::t_436611461d72f2 168
+apps/web/src/entity/relationships/graph-explorer.tsx
+  s_d8b0104fa13905::t_8e397f5bacb0cd 75,90-91,276,289-293,374-378,381-383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0523f2ad6d6ddb0fb5491a34e1ee0c73107049b0",
+  "prompts": {},
+  "sessions": {
+    "s_d8b0104fa13905": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd9091e5-6d0e-4f69-a35f-3af868a5b12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

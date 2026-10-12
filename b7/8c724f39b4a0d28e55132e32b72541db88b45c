@@ -1,0 +1,29 @@
+apps/apple/DESIGN.md
+  s_d8b0104fa13905::t_ceb53dbadb6b71 43
+apps/web/DESIGN.md
+  s_d8b0104fa13905::t_8cc2c5586d9149 40,44
+docs/agents/generic-paths.md
+  s_d8b0104fa13905::t_33ac48e36679df 199-204
+docs/agents/web-ui-reference.md
+  s_d8b0104fa13905::t_045a9a6d8b0670 148
+docs/entities.md
+  s_d8b0104fa13905::t_47c705a9cc3e9d 421
+docs/todos.md
+  s_d8b0104fa13905::t_7c96cfcb0ad7af 585-592
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b78c724f39b4a0d28e55132e32b72541db88b45c",
+  "prompts": {},
+  "sessions": {
+    "s_d8b0104fa13905": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd9091e5-6d0e-4f69-a35f-3af868a5b12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
