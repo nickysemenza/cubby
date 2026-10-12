@@ -61,7 +61,10 @@ Record "searched, not available" with `data_exception.set`.
 ## Failures and timeouts
 
 Published input schemas keep an object root and share repeated nested fields
-through definitions. Any change to a tool's input schema or its `.describe`
+through definitions, including small constrained workflow fields. Measure the
+whole catalog when tuning sharing: reference overhead can exceed the saving,
+and validation plus model-facing descriptions must survive.
+Any change to a tool's input schema or its `.describe`
 text, including a shared Zod schema a tool imports, runs
 `pnpm test:postgres src/server/mcp/catalog.integration.test.ts` and the
 `mcp-contract` project before push: the budget and uuid-boundary checks live
