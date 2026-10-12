@@ -2,7 +2,7 @@ import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { useMemo } from "react";
 
-import { monthLabel } from "../shared";
+import { monthLabel } from "../project-formatting";
 import { ChartEmpty } from "./chart-empty";
 import {
   PlannedActualBar,

@@ -1,7 +1,7 @@
+import { getErrorMessage } from "@cubby/shared";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Button } from "~/ui/primitives/button";

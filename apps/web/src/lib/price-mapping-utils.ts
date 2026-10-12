@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import { round2 } from "@cubby/shared";
 
 import { convertAmountsToPrice } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
@@ -35,14 +36,6 @@ export const isCanonicalPriceMapping = (mapping: {
   (isSingleEach(mapping.b) && isMoneyUnit(mapping.a.unit));
 
 /**
- * Truncate a monetary value to 2 decimal places (cents precision).
- * Uses rounding to avoid floating-point errors.
- */
-export const truncateToTwoDecimals = (value: number): number => {
-  return Math.round(value * 100) / 100;
-};
-
-/**
  * Cents-rounded money, or `null` for a value the `real` valuation column must
  * never receive. `Infinity`/`NaN` are reachable from a real graph — a product
  * priced at $0 synthesizes `1 each = $0`, whose reverse edge is `1/0` — and
@@ -50,7 +43,7 @@ export const truncateToTwoDecimals = (value: number): number => {
  * that reads the column.
  */
 const toStorableMoney = (value: number): number | null =>
-  Number.isFinite(value) ? truncateToTwoDecimals(value) : null;
+  Number.isFinite(value) ? round2(value) : null;
 
 /**
  * Value one inventory entry by routing its amount to money through the

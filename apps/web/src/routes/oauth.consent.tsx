@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@cubby/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
@@ -9,7 +10,6 @@ import {
   verifyPublicClient,
 } from "~/app/auth/oauth-consent-client";
 import { authClient } from "~/lib/auth-client";
-import { getErrorMessage } from "~/lib/error-utils";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 import { useHydrated } from "~/ui/hooks/useHydrated";

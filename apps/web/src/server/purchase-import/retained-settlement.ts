@@ -9,6 +9,7 @@ import {
   type LedgerPartyId,
   type PurchaseId,
 } from "@cubby/schemas/identifiers";
+import { cents } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, asc, between, eq, inArray, sql } from "drizzle-orm";
 
@@ -36,7 +37,6 @@ import {
   readAllocations,
   writeAllocationSet,
 } from "~/server/repo/financial-transaction-allocations";
-import { cents } from "~/server/repo/money";
 
 import {
   matchCompletePaymentSet,

@@ -27,7 +27,11 @@ import {
   ledgerParty,
 } from "~/server/db/schema";
 import { sourceObservationIdentitySql } from "~/server/purchase-import/reconciliation-observations";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  ilikeContains,
+  notDeleted,
+} from "~/server/repo/database-helpers";
 import {
   compareProductTitles,
   extractVariantFacts,
@@ -284,9 +288,6 @@ export function rankPhotoProductCandidates(
     );
 }
 
-const searchPattern = (value: string) =>
-  `%${value.replace(/[\\%_]/g, "\\$&")}%`;
-
 /** Bounded, read-only suggestions for one review group; every choice stays human-approved. */
 export async function photoProductCandidates(
   db: Database,
@@ -377,7 +378,7 @@ export async function findPhotoProductCandidates(
   ];
   if (!terms.length && !exactIds.length) return [];
   const textMatch = (term: string) => {
-    const pattern = searchPattern(term);
+    const pattern = ilikeContains(term);
     return or(
       ilike(product.name, pattern),
       ilike(product.manufacturer, pattern),

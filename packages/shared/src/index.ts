@@ -9,6 +9,8 @@ export {
 
 export { UNRESOLVABLE_ENTITY_FILTER } from "./filter";
 
+export { cents, dollars, round2 } from "./money";
+
 export {
   getErrorMessage,
   AppErrors,

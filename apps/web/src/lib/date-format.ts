@@ -17,6 +17,8 @@ const DATE_PRESETS = {
   dateShort: "MMM d, yyyy",
   /** Jan 05, 2026 — zero-padded day for fixed-width mono eyebrows. */
   dateShortPadded: "MMM dd, yyyy",
+  /** Jan 5, 2026, 1:04 PM */
+  dateShortTime: "MMM d, yyyy, h:mm a",
   /** 1/5/2026 */
   dateNumeric: "M/d/yyyy",
   /** 1/5/2026, 1:04:09 PM */

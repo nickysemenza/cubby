@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@cubby/shared";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -10,7 +11,6 @@ import {
   type EntityMutationOptionsFactory,
   type StandardEntity,
 } from "~/entity/entity-contracts";
-import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import {

@@ -12,11 +12,11 @@ import type {
   proposeProductMatchInput,
   proposeProductMatchOut,
 } from "@cubby/schemas/recommendations";
+import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { chunk } from "es-toolkit";
 import type { z } from "zod";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import {
   type EntityKernelContext,

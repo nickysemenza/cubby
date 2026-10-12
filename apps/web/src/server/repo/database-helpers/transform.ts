@@ -5,6 +5,7 @@ import { amount, amountFromColumns } from "@cubby/schemas/codec";
  */
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
+import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import type { z } from "zod";
 
@@ -188,6 +189,13 @@ export const resolveLiveJoinName = (
 export const resolveLiveJoinShortcode = (
   rel: { shortcode: string; deletedAt: Date | null } | null | undefined,
 ): string | null => (rel && rel.deletedAt === null ? rel.shortcode : null);
+
+/** Brand a resolved join shortcode, preserving null for an absent/deleted parent. */
+export const brandJoinShortcode = <T extends ShortcodeType>(
+  type: T,
+  code: string | null,
+): ShortcodeFor<T> | null =>
+  code === null ? null : parseShortcodeFor(type, code);
 
 export {
   amountFromColumns,

@@ -29,6 +29,7 @@ import {
   projectKindValues,
   projectStatusValues,
 } from "@cubby/schemas/project";
+import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
@@ -64,8 +65,6 @@ import {
 import { Input } from "~/ui/primitives/input";
 import { NativeSelect } from "~/ui/primitives/native-select";
 import { Skeleton } from "~/ui/primitives/skeleton";
-
-import { PROJECT_STATUS_LABELS } from "./project-formatting";
 
 /**
  * How long a cell waits before it commits. A click-and-revert inside this

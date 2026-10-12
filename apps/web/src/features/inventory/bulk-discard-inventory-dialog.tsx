@@ -1,5 +1,6 @@
 import { inventoryShortcode } from "@cubby/schemas/identifiers";
 import { tradeSchema } from "@cubby/schemas/task-fields";
+import { getErrorMessage } from "@cubby/shared";
 /**
  * BulkDiscardInventoryDialog — write off units from a selection of shelf rows.
  *
@@ -34,7 +35,6 @@ import { z } from "zod";
 
 import type { InventoryDialogItem } from "~/features/inventory/dialog-item";
 import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { Stack } from "~/ui/layout";

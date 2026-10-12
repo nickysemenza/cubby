@@ -1,6 +1,7 @@
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { EntityRef } from "@cubby/schemas/entity";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
+import { getErrorMessage } from "@cubby/shared";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
@@ -26,7 +27,6 @@ import {
   entityReport,
   project,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
 import { useLoadAllPages } from "~/ui/hooks/useAllEntityRecords";
 import { Button } from "~/ui/primitives/button";

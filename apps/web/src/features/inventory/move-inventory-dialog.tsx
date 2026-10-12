@@ -4,6 +4,7 @@
  */
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import { getErrorMessage } from "@cubby/shared";
 import { useMutation } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useState } from "react";
@@ -16,7 +17,6 @@ import {
   refuseSourceLocations,
 } from "~/features/locations/location-move-dialog";
 import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 

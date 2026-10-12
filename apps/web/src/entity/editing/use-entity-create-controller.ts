@@ -1,8 +1,8 @@
+import { getErrorMessage } from "@cubby/shared";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { entities, entityDetailLink } from "~/entity/entities";
-import { getErrorMessage } from "~/lib/error-utils";
 
 import type { EntityEditResultFor } from "./intent-types";
 import type { EditableEntity, EntityEditMutationData } from "./types";

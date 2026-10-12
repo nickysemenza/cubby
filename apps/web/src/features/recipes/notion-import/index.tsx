@@ -1,4 +1,5 @@
 import type { notionPreviewOut } from "@cubby/schemas/import-recipe";
+import { getErrorMessage } from "@cubby/shared";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
@@ -14,7 +15,6 @@ import {
   recipeStreams,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { getErrorMessage } from "~/lib/error-utils";
 import { useBulkStream } from "~/ui/hooks/useBulkStream";
 import { Row } from "~/ui/layout/row";
 import { Stack } from "~/ui/layout/stack";

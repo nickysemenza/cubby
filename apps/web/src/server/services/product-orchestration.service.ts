@@ -28,12 +28,11 @@ import type {
   ProductWithFoodAndSideEffectsOut,
 } from "@cubby/schemas/product";
 import type { ScanAtLocationCode } from "@cubby/schemas/scan";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { UNSPECIFIED_MANUFACTURER, getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { uniq } from "es-toolkit";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { type ResolvedProductCode, resolveProductScan } from "~/lib/scan-code";
 import { wasm } from "~/lib/wasm";

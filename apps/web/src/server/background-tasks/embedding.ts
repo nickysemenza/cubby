@@ -3,9 +3,9 @@ import {
   isEmbeddableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
+import { getErrorMessage } from "@cubby/shared";
 import { retryWithBackoff } from "@cubby/shared/retry";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import { ENTITY_EMBEDDING_FEATURE } from "~/server/ai/features";
 import type { Database } from "~/server/db";
 import {

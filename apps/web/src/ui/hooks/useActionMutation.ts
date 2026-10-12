@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@cubby/shared";
 import type {
   MutationFunction,
   UseMutationOptions,
@@ -17,7 +18,6 @@ import type {
   StandardAction,
   StandardEntity,
 } from "~/entity/entity-contracts";
-import { getErrorMessage } from "~/lib/error-utils";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 type ActionSuccess<TData> = ReactNode | ((data: TData) => ReactNode);

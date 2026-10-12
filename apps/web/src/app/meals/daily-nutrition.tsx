@@ -7,6 +7,7 @@ import {
   mealTypeSchema,
   type MealType,
 } from "@cubby/schemas/meal-classification";
+import { getErrorMessage } from "@cubby/shared";
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
@@ -17,7 +18,6 @@ import { useState } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { StaticPicker } from "~/ui/combobox/static-picker";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";

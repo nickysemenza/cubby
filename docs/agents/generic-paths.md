@@ -88,7 +88,7 @@ existing block. Extend the generic path when it almost fits. See
   `runMutationSideEffects(ForEntities)`, or `refreshDerivedSearchRefs` for
   refs captured before an edge is removed.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
-- Money: `cents`, `dollars`, `round2` (`server/repo/money.ts`); expense
+- Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
   rollups select `expenseAggregateFields` (`server/repo/expense-aggregate-sql.ts`);
   all money is `SUM(Expense.cost)`.
 - Postgres errors: `findPgError`, `isUniqueViolation`, `isStatementTimeout`

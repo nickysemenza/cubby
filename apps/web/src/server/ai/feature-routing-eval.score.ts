@@ -3,8 +3,7 @@ import type {
   ImportAuditOutput,
 } from "@cubby/schemas/purchase-import";
 import type { RecipeFlowPlan } from "@cubby/schemas/recipe-flow";
-
-import { cents } from "~/server/repo/money";
+import { cents } from "@cubby/shared";
 
 /**
  * Answer keys and verdicts for the structured-feature routing eval

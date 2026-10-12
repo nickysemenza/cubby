@@ -1,5 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
+import { getErrorMessage } from "@cubby/shared";
 import {
   type CollisionDetection,
   closestCorners,
@@ -16,7 +17,6 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useDeleteEntityAction } from "~/entity/actions/delete-entity-action";
 import { taskCaptureRequest } from "~/entity/editing/editor-requests";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
-import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import {
   createDndAnnouncements,

@@ -2,6 +2,7 @@ import { expenseShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { SPLIT_NEEDS_PURCHASE_REASON } from "@cubby/schemas/purchase";
+import { cents } from "@cubby/shared";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -10,7 +11,6 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { expenseChargeContextWorkflow } from "~/server/operations/expense.server";
 import { getExpenseByShortcode } from "~/server/repo/expense/crud";
-import { cents } from "~/server/repo/money";
 
 import { sectionBlocks, sectionOut } from "./finance-section";
 

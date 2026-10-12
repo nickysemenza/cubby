@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { getErrorMessage } from "@cubby/shared";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 
@@ -6,7 +7,6 @@ import {
   recipe,
   image,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import { useActionMutation } from "../../ui/hooks/useActionMutation";

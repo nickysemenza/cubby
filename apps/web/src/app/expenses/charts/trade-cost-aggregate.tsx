@@ -3,14 +3,15 @@ import {
   costTypeValues,
   type ExpenseTradeCostAggregate,
   type Trade,
+  TRADE_LABELS,
 } from "@cubby/schemas/project";
+import { capitalize } from "@cubby/shared";
 import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { useMemo } from "react";
 
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { HorizontalBarChart } from "~/app/projects/charts/horizontal-bar-chart";
-import { capitalize, TRADE_LABELS } from "~/app/projects/project-formatting";
 import {
   nivoBarChrome,
   nivoChartTheme,

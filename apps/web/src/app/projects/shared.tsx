@@ -38,12 +38,6 @@ export {
   nivoChartTheme,
   nivoCurrencyAxis,
 } from "~/lib/nivo-theme";
-export {
-  capitalize,
-  monthLabel,
-  PROJECT_STATUS_LABELS,
-  TRADE_LABELS,
-} from "./project-formatting";
 export { TradeBadge } from "./trade-badge";
 
 export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {

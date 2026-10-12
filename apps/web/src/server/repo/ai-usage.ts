@@ -15,6 +15,7 @@ import { aiUsage } from "~/server/db/schema";
 import {
   getDb,
   householdDaySql,
+  ilikeContains,
   notDeleted,
 } from "~/server/repo/database-helpers";
 
@@ -30,10 +31,7 @@ export function isUnbilledAiTransport(transport: AiUsageTransport): boolean {
 const unbilledTransportSql = sql`${aiUsage.transport} in ('cache', 'chatgpt')`;
 
 function recentFilterConditions(filters: AiUsageRecentFilters = {}) {
-  // LIKE metacharacters in a search are literal text.
-  const pattern = filters.query
-    ? `%${filters.query.replace(/[\\%_]/g, "\\$&")}%`
-    : null;
+  const pattern = filters.query ? ilikeContains(filters.query) : null;
   return [
     filters.transport ? eq(aiUsage.transport, filters.transport) : undefined,
     filters.status ? eq(aiUsage.status, filters.status) : undefined,

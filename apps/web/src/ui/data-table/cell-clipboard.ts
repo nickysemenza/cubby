@@ -27,10 +27,9 @@
  * copied on the Locations page into any location cell across tables.
  */
 
+import { getErrorMessage } from "@cubby/shared";
 import { toast } from "sonner";
 import { z } from "zod";
-
-import { getErrorMessage } from "~/lib/error-utils";
 
 const cellJsonValueSchema = z.json();
 const cellClipboardEnvelopeSchema = z.object({

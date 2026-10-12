@@ -16,6 +16,7 @@ import {
   type AllowedImageType,
 } from "@cubby/schemas/image";
 import { cookbookBundleManifestSchema } from "@cubby/schemas/import-recipe";
+import { getErrorMessage } from "@cubby/shared";
 import { encodeBase64 } from "@cubby/shared/base64";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQueries } from "@tanstack/react-query";
@@ -34,7 +35,6 @@ import {
   flattenRecipes,
   topoOrder,
 } from "~/lib/cookbook-graph";
-import { getErrorMessage } from "~/lib/error-utils";
 import {
   PresignedUploadError,
   putPresignedObject,

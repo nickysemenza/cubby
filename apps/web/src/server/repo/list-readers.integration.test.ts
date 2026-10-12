@@ -138,6 +138,26 @@ describe("custom list readers", () => {
     ).toEqual(expected);
   });
 
+  it("matches LIKE metacharacters in a declared text filter literally", async () => {
+    for (const name of ["Bin 50% left", "Bin 500 left", "Bin a_b", "Bin axb"])
+      await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name, type: "box" }),
+        ctx.actor,
+      );
+    const names = async (nameFilter: string) =>
+      (
+        await locationSearch(
+          ctx.db,
+          { nameFilter },
+          [{ orderBy: "name", direction: "asc" }],
+          page(0, 10),
+        )
+      ).data.map((row) => row.name);
+    expect(await names("50%")).toEqual(["Bin 50% left"]);
+    expect(await names("a_b")).toEqual(["Bin a_b"]);
+  });
+
   it("pages the Location picker by its own sort roster", async () => {
     for (const name of ["Shelf alpha", "Shelf beta", "Shelf gamma"])
       await createLocationFixture(

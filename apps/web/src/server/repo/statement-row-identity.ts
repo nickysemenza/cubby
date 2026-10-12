@@ -1,6 +1,5 @@
+import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-
-import { cents } from "./money";
 
 /**
  * The frozen legacy identity function for a provider statement row.

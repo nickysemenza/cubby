@@ -32,7 +32,11 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { generatedEntityResolveCapabilities } from "~/server/generated/entity-kernel-entities.gen";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import {
+  ilikeContains,
+  notDeleted,
+  unwrapDb,
+} from "~/server/repo/database-helpers";
 import { buildAnyPrefixTsQuery } from "~/server/repo/search-lexical";
 import {
   SHORTCODE_TABLE,
@@ -284,8 +288,8 @@ const candidatesFor = async <E extends ResolvableEntity>(
   const contains = or(
     ...plan.match.map(({ column, array }) =>
       array
-        ? sql`EXISTS (SELECT 1 FROM unnest(${qualified(column)}) AS value WHERE value ILIKE '%' || m.key || '%')`
-        : sql`${qualified(column)} ILIKE '%' || m.key || '%'`,
+        ? sql`EXISTS (SELECT 1 FROM unnest(${qualified(column)}) AS value WHERE value ILIKE m.pattern)`
+        : sql`${qualified(column)} ILIKE m.pattern`,
     ),
   );
   const contained = sql`(char_length(${name}) >= 3 AND strpos(m.key, lower(${name})) > 0)`;
@@ -299,8 +303,9 @@ const candidatesFor = async <E extends ResolvableEntity>(
     SELECT m.key AS key, cand.id AS id, cand.shortcode AS shortcode, cand.name AS name
     FROM unnest(
       ARRAY[${textList(lowered)}]::text[],
-      ARRAY[${textList(lowered.map(buildAnyPrefixTsQuery))}]::text[]
-    ) AS m(key, tsq)
+      ARRAY[${textList(lowered.map(buildAnyPrefixTsQuery))}]::text[],
+      ARRAY[${textList(lowered.map(ilikeContains))}]::text[]
+    ) AS m(key, tsq, pattern)
     CROSS JOIN LATERAL (
       SELECT t."id" AS id, t."shortcode" AS shortcode, ${name} AS name
       FROM ${sql.identifier(getTableName(plan.table))} t

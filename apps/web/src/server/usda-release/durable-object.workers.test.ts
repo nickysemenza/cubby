@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda";
 import type { FoodSearchArgs } from "@cubby/usda/release";
 import {
@@ -16,8 +17,6 @@ import {
 } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-
-import { getErrorMessage } from "~/lib/error-utils";
 
 import { seedUsdaRelease } from "../../../tooling/dev/usda-synthetic-release";
 import { usdaReleaseObjectName } from "./client";

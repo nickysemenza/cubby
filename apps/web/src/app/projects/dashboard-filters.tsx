@@ -2,6 +2,8 @@ import {
   projectStatusSchema,
   projectStatusValues,
 } from "@cubby/schemas/project";
+import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
+import { capitalize } from "@cubby/shared";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { type ReactNode, useId, useState } from "react";
 
@@ -17,7 +19,6 @@ import {
   hasActiveFilters,
 } from "./dashboard-filter-state";
 import { FilterChipGroup, SingleSelectChipGroup } from "./filter-chips";
-import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
 
 const DATE_PRESET_LABELS = new Map<string, string>(
   DATE_RANGE_PRESETS.map(({ key, label }) => [key, label]),

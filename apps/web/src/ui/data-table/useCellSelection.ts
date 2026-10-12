@@ -1,10 +1,10 @@
+import { getErrorMessage } from "@cubby/shared";
 import type { RowData } from "@tanstack/react-table";
 import * as React from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 
 import { copyText } from "~/lib/clipboard";
-import { getErrorMessage } from "~/lib/error-utils";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 import { resolveCellClearTarget } from "./cell-clear";

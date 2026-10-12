@@ -1,4 +1,5 @@
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import { getErrorMessage } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
@@ -14,7 +15,6 @@ import { z } from "zod";
 
 import { EntityPrimitiveFields } from "~/entity/editing/entity-primitive-fields";
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useImageState } from "~/ui/hooks/useImageState";

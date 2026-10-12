@@ -1,12 +1,7 @@
-import { TRADE_LABELS } from "@cubby/schemas/project";
 import { capitalize } from "@cubby/shared";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { plainDateDaysBetween } from "~/lib/household-date";
-
-export { capitalize } from "@cubby/shared";
-
-export { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 
 export function monthLabel(key: string): string {
   const [year, month] = key.split("-");
@@ -60,5 +55,3 @@ export function projectDateDelta(
       : `${capitalize(side)} is ${unit} ${direction} the ${anchor}`,
   };
 }
-
-export { TRADE_LABELS };

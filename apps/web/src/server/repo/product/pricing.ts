@@ -5,6 +5,7 @@ import {
   productId,
 } from "@cubby/schemas/identifiers";
 import type { ProductTopLevelOut } from "@cubby/schemas/product";
+import { round2 } from "@cubby/shared";
 import type { AnyColumn } from "drizzle-orm";
 import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
@@ -12,7 +13,6 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { getDb, notDeleted, unwrapDb } from "~/server/repo/database-helpers";
-import { round2 } from "~/server/repo/money";
 import {
   costWeighted,
   kitAncestorCteSql,

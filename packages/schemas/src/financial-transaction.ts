@@ -1,3 +1,4 @@
+import { cents, dollars } from "@cubby/shared";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { financialTransactionBaseFilterFields } from "./generated/financialTransaction.gen";
@@ -249,6 +250,24 @@ const postedRequiresDate = <T extends z.ZodType>(schema: T) =>
     { message: "posted transactions require postedDate", path: ["postedDate"] },
   );
 
+/**
+ * The refusal when a transaction's allocations do not sum to its amount, compared
+ * in whole cents; null when they do. Shared by the input schema and the repository
+ * write so both refuse with the same words.
+ */
+export const allocationSumViolation = (
+  allocationAmounts: readonly number[],
+  transactionAmount: number,
+): string | null => {
+  const total = allocationAmounts.reduce(
+    (sum, amount) => sum + cents(amount),
+    0,
+  );
+  return total === cents(transactionAmount)
+    ? null
+    : `Allocations must sum to the transaction amount: got ${dollars(total).toFixed(2)}, expected ${transactionAmount.toFixed(2)}.`;
+};
+
 const validSettlementState = <T extends z.ZodType>(schema: T) =>
   schema.superRefine((value, ctx) => {
     const transaction = settlementStateSchema.parse(value);
@@ -261,8 +280,7 @@ const validSettlementState = <T extends z.ZodType>(schema: T) =>
       const agrees =
         allocations.length === 1 &&
         allocations[0]?.purchaseId === transaction.purchaseId &&
-        Math.round((allocations[0]?.amount ?? 0) * 100) ===
-          Math.round(transaction.amount * 100);
+        cents(allocations[0]?.amount ?? 0) === cents(transaction.amount);
       if (!agrees)
         ctx.addIssue({
           code: "custom",
@@ -273,14 +291,14 @@ const validSettlementState = <T extends z.ZodType>(schema: T) =>
     }
 
     if (allocations.length > 0) {
-      const total = allocations.reduce(
-        (sum, row) => sum + Math.round(row.amount * 100),
-        0,
+      const sumViolation = allocationSumViolation(
+        allocations.map((row) => row.amount),
+        transaction.amount,
       );
-      if (total !== Math.round(transaction.amount * 100))
+      if (sumViolation)
         ctx.addIssue({
           code: "custom",
-          message: `allocations must sum to the transaction amount: got ${(total / 100).toFixed(2)}, expected ${transaction.amount.toFixed(2)}`,
+          message: sumViolation,
           path: ["allocations"],
         });
       if (

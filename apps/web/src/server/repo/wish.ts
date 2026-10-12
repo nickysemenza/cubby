@@ -29,6 +29,7 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   formatSearchTerm,
+  ilikeContains,
   getDb,
   notDeleted,
   unwrapDb,
@@ -234,7 +235,7 @@ const hydrateWishesRead = (
 // rather than interpolate `product.name` (which would retain Product's table
 // name instead of the alias).
 const candidateProductSearch = (term: string) => {
-  const pattern = `%${term}%`;
+  const pattern = ilikeContains(term);
   return sql`(p."name" ILIKE ${pattern} OR p."manufacturer" ILIKE ${pattern} OR p."model" ILIKE ${pattern})`;
 };
 

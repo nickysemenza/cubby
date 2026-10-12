@@ -1,4 +1,4 @@
-import { type Trade, tradeValues } from "@cubby/schemas/project";
+import { type Trade, tradeValues, TRADE_LABELS } from "@cubby/schemas/project";
 import { AirplaneTiltIcon } from "@phosphor-icons/react/dist/csr/AirplaneTilt";
 import { ArchiveIcon } from "@phosphor-icons/react/dist/csr/Archive";
 import { CarIcon } from "@phosphor-icons/react/dist/csr/Car";
@@ -22,8 +22,6 @@ import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 
 import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
-
-import { TRADE_LABELS } from "./project-formatting";
 
 /**
  * Trade presentation — glyphs, chips, and select options.

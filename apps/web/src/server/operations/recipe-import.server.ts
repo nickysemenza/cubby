@@ -24,13 +24,13 @@ import type {
   setCookbookProductInput,
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
+import { getErrorMessage } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 import { uniq } from "es-toolkit";
 import type { z } from "zod";
 
 import { topoOrder } from "~/lib/cookbook-graph";
-import { getErrorMessage } from "~/lib/error-utils";
 import {
   importRecipeSignature,
   recipeOutSignature,

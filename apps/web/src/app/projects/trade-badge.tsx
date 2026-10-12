@@ -1,9 +1,9 @@
+import { TRADE_LABELS } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/project";
 
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
-import { TRADE_LABELS } from "./project-formatting";
 import { TradeIcon } from "./trade-options";
 
 // Separate from the options module: the enum registry imports that module during initialization.

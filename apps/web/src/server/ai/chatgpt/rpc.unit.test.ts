@@ -1,6 +1,5 @@
+import { getErrorMessage } from "@cubby/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { getErrorMessage } from "~/lib/error-utils";
 
 import { ChatGptInferenceRequests } from "./rpc";
 

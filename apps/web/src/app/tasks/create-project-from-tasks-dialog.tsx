@@ -1,5 +1,6 @@
 import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import { plainDate, projectKindSchema } from "@cubby/schemas/project";
+import { getErrorMessage } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -8,7 +9,6 @@ import { z } from "zod";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
 import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import {
   FormWrapper,
   NullableNumericField,

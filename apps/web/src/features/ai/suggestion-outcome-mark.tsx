@@ -4,12 +4,12 @@ import type {
   FieldSuggestionOutcome,
   FieldSuggestionRemoval,
 } from "@cubby/schemas/ai";
+import { getErrorMessage } from "@cubby/shared";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { ClassicV2 } from "loading-dev";
 import type { MouseEvent, ReactNode } from "react";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";

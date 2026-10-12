@@ -3,8 +3,7 @@ import type {
   ExtractedPurchaseLine,
   ExtractedOrderCandidate,
 } from "@cubby/schemas/purchase-import";
-
-import { cents } from "~/server/repo/money";
+import { cents } from "@cubby/shared";
 
 /** Cosmetic evidence changes cannot replace accepted ledger or payment rows. */
 export const sourceFinancialFacts = (candidate: ExtractedOrderCandidate) => {

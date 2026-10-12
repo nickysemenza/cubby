@@ -2,6 +2,7 @@
 
 import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import { getErrorMessage } from "@cubby/shared";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
@@ -19,7 +20,6 @@ import { toast } from "sonner";
 
 import type { FieldSuggestionSource } from "~/features/ai/field-suggestion";
 import { FieldSuggestionApply } from "~/features/ai/field-suggestion-apply";
-import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Button } from "~/ui/primitives/button";

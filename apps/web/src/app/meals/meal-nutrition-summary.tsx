@@ -6,6 +6,7 @@ import type {
 } from "@cubby/schemas/meal";
 import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
 import type { NutritionTotals } from "@cubby/schemas/nutrition";
+import { getErrorMessage } from "@cubby/shared";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -15,7 +16,6 @@ import { toast } from "sonner";
 
 import { entityDetailLink } from "~/entity/entities";
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import {
   compactEstimateText,
   compactNumberText,

@@ -22,6 +22,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
+import { cents } from "@cubby/shared";
 import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { capitalize, sortBy, uniq } from "es-toolkit";
 
@@ -78,7 +79,6 @@ import {
   enrichFinancialTransactionsWithVendorInference,
   enrichFinancialTransactionVendorRead,
 } from "~/server/repo/merchant-vendor-inference";
-import { cents } from "~/server/repo/money";
 import {
   asActor,
   defineRepository,

@@ -10,10 +10,9 @@ import {
   importExtractionOutcome,
   type ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
+import { cents, dollars } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
-
-import { cents, dollars } from "~/server/repo/money";
 
 import { sourceFinancialFacts } from "../writer-policy";
 

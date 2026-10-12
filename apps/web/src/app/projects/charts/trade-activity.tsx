@@ -1,15 +1,13 @@
-import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
+import {
+  type ProjectPortfolioAnalyticsOut,
+  TRADE_LABELS,
+} from "@cubby/schemas/project";
 import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
 import { useMemo } from "react";
 
 import { formatCurrency } from "~/lib/utils";
 
-import {
-  nivoBarChrome,
-  nivoChartTheme,
-  nivoCurrencyAxis,
-  TRADE_LABELS,
-} from "../shared";
+import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 import { ChartTooltip } from "./ChartTooltip";
 import { HorizontalBarChart } from "./horizontal-bar-chart";

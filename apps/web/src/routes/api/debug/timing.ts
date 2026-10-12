@@ -1,7 +1,7 @@
+import { getErrorMessage } from "@cubby/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import { db } from "~/server/db";
 import {
   countProducts as countProductsRepo,

@@ -1,4 +1,5 @@
 import { purchaseAgentConnectionStatus } from "@cubby/schemas/purchase-import-debug";
+import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
@@ -23,7 +24,6 @@ import {
 import { authClient } from "~/lib/auth-client";
 import { copyTextWithToast } from "~/lib/clipboard";
 import { formatInstant } from "~/lib/date-format";
-import { getErrorMessage } from "~/lib/error-utils";
 import { hasGmailReadonlyScope } from "~/lib/google-auth";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { pageTitle } from "~/lib/page-title";

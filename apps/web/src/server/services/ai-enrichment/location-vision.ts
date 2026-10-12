@@ -27,10 +27,13 @@ import {
   productCategorySummary,
   type ProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
-import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
+import {
+  getMiscDisplayName,
+  isMiscProduct,
+  getErrorMessage,
+} from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import {
   buildLocationAnalysisFingerprint,
   LOCATION_DESCRIPTION_FEATURE,

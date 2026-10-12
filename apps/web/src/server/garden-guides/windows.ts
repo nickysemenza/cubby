@@ -19,6 +19,7 @@ import {
   gardenPracticeSources,
 } from "@cubby/schemas/garden-practice";
 
+import { formatCalendarDay } from "~/lib/date-format";
 import { shiftPlainDate } from "~/lib/household-date";
 
 export type GardenGuideKey = GardenCropKey;
@@ -71,20 +72,9 @@ const FALLBACK_MICROCLIMATE: GardenGuideMicroclimate = "bay-area";
 const SOW_METHODS: readonly GardenGuideMethod[] = ["sow", "direct-sow"];
 const TRANSPLANT_METHODS: readonly GardenGuideMethod[] = ["transplant"];
 
-const MONTH_ABBREVIATIONS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-] as const;
+/** A month number (1–12) as its short name: `2` -> `"Feb"`. */
+const monthLabel = (month: number): string =>
+  formatCalendarDay(`2000-${String(month).padStart(2, "0")}-01`, "monthShort");
 
 const guidesByKey = new Map<string, (typeof plantingGuides.guides)[number]>(
   plantingGuides.guides.map((guide) => [guide.key, guide]),
@@ -156,8 +146,8 @@ function formatMonths(months: readonly number[]): string {
   }
   return runs
     .map((run) => {
-      const start = MONTH_ABBREVIATIONS[run[0]! - 1];
-      const end = MONTH_ABBREVIATIONS[run.at(-1)! - 1];
+      const start = monthLabel(run[0]!);
+      const end = monthLabel(run.at(-1)!);
       return run.length === 1 ? start : `${start}–${end}`;
     })
     .join(", ");
@@ -242,10 +232,7 @@ const packetRange = (
 ): DayRange | null =>
   min === null && max === null ? null : [min ?? max!, max ?? min!];
 
-const formatDay = (date: string): string => {
-  const [, month, day] = date.split("-").map(Number);
-  return `${MONTH_ABBREVIATIONS[month! - 1]} ${day}`;
-};
+const formatDay = (date: string): string => formatCalendarDay(date, "monthDay");
 
 /** A crop range's basis: its cited source's name, else "crop estimate". */
 const cropBasis = (source: string | undefined): string =>

@@ -3,9 +3,9 @@ import {
   purchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import type { SettlementAllocationDraft } from "@cubby/schemas/purchase";
+import { cents, dollars } from "@cubby/shared";
 
 import { formatCurrency } from "~/lib/utils";
-import { cents, dollars } from "~/server/repo/money";
 
 /**
  * The allocation form's rules, kept on the server so web and native share one

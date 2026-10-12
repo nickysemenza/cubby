@@ -12,11 +12,11 @@ import type {
   purchaseLinkExpensesCheckOut,
   purchaseLinkProductsCandidatesOut,
 } from "@cubby/schemas/purchase";
+import { cents, dollars } from "@cubby/shared";
 import type { z } from "zod";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
-import { cents, dollars } from "~/server/repo/money";
 
 /**
  * The rules of the two attach dialogs, kept on the server so web and native offer the same

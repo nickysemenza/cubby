@@ -151,6 +151,14 @@ export function rangeConditions<P extends string>(
   ];
 }
 
+/**
+ * The ILIKE pattern for "contains `term` literally": backslash, `%`, and `_` in the
+ * term are escaped so a search for `50%` or `a_b` cannot widen into a
+ * wildcard match. Every hand-written substring ILIKE goes through this.
+ */
+export const ilikeContains = (term: string): string =>
+  `%${term.replace(/[\\%_]/g, "\\$&")}%`;
+
 export const formatSearchTerm = (
   column: AnyColumn | SQL,
   term?: string,
@@ -158,7 +166,7 @@ export const formatSearchTerm = (
   if (term === undefined || term.trim() === "") {
     return undefined;
   }
-  return ilike(column, `%${term}%`);
+  return ilike(column, ilikeContains(term));
 };
 
 /**
@@ -171,7 +179,7 @@ export const textArrayMatches = (
   term?: string,
 ): SQL | undefined => {
   if (term === undefined || term.trim() === "") return undefined;
-  return sql`EXISTS (SELECT 1 FROM unnest(${column}) AS element WHERE element ILIKE ${`%${term}%`})`;
+  return sql`EXISTS (SELECT 1 FROM unnest(${column}) AS element WHERE element ILIKE ${ilikeContains(term)})`;
 };
 
 /**

@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { Client } from "@notionhq/client";
 import type {
@@ -10,7 +11,6 @@ import { LRUCache } from "lru-cache";
 import pRetry from "p-retry";
 import { z } from "zod";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 const log = createLogger("notion");

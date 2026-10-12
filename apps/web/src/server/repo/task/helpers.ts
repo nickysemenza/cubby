@@ -15,19 +15,10 @@ import {
   type MappableImageRecord,
   resolveLiveJoinName,
   resolveLiveJoinShortcode,
+  brandJoinShortcode,
 } from "~/server/repo/database-helpers";
 
 /** SQL counterpart of `effectiveTaskDueDate` for repository predicates. */
-
-/** Brand a resolved join shortcode, preserving null for an absent/deleted parent. */
-const toProductShortcode = (code: string | null) =>
-  code === null ? null : parseShortcodeFor("product", code);
-
-const toProjectShortcode = (code: string | null) =>
-  code === null ? null : parseShortcodeFor("project", code);
-
-const toTaskShortcode = (code: string | null) =>
-  code === null ? null : parseShortcodeFor("task", code);
 
 export const effectiveTaskDueDateSql = () =>
   sql`coalesce(${task.dueEndDate}, ${task.dueDate})`;
@@ -85,12 +76,16 @@ export const dbTaskToAPI = <
   // public identity, same "shortcode never dies" reasoning as
   // `purchaseOut.vendorId`. `projectName` stays separately gated on the
   // parent's own liveness via `resolveLiveJoinName`.
-  projectId: toProjectShortcode(resolveLiveJoinShortcode(row.project)),
-  subjectProductId: toProductShortcode(
+  projectId: brandJoinShortcode(
+    "project",
+    resolveLiveJoinShortcode(row.project),
+  ),
+  subjectProductId: brandJoinShortcode(
+    "product",
     resolveLiveJoinShortcode(row.subjectProduct),
   ),
   parentTaskId: row.parentTask
-    ? toTaskShortcode(row.parentTask.shortcode)
+    ? parseShortcodeFor("task", row.parentTask.shortcode)
     : null,
   dueDate: row.dueDate,
   dueEndDate: row.dueEndDate,

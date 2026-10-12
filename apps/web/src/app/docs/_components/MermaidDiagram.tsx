@@ -1,6 +1,5 @@
+import { getErrorMessage } from "@cubby/shared";
 import { useEffect, useState } from "react";
-
-import { getErrorMessage } from "~/lib/error-utils";
 
 let nextDiagramId = 0;
 

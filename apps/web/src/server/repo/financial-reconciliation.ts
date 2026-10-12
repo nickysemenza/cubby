@@ -1,7 +1,7 @@
 import type { FinancialReconciliationSummary } from "@cubby/schemas/financial-reconciliation";
 import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
+import { cents } from "@cubby/shared";
 
-import { cents } from "~/server/repo/money";
 import type { PurchaseFinancialAggregate } from "~/server/repo/purchase-financial-aggregates";
 
 /**

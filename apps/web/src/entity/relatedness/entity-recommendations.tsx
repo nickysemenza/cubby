@@ -5,6 +5,7 @@ import type {
   ExpenseProjectProposal,
 } from "@cubby/schemas/entity-recommendations";
 import type { InventoryPlacementProposal } from "@cubby/schemas/entity-recommendations";
+import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb";
 import { useQuery } from "@tanstack/react-query";
@@ -21,7 +22,6 @@ import {
   entityMedia,
   recommendations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { Ledger } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";

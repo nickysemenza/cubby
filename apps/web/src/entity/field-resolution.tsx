@@ -5,7 +5,7 @@ import {
   fieldResolutionsSchema,
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
-import { capitalize, parseShortcode } from "@cubby/shared";
+import { capitalize, parseShortcode, getErrorMessage } from "@cubby/shared";
 import { ArrowBendDownRightIcon } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { ChartPieIcon } from "@phosphor-icons/react/dist/csr/ChartPie";
@@ -23,7 +23,6 @@ import { parseEntityEditUpdateInput } from "~/entity/editing/mutation-data";
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { Button } from "~/ui/primitives/button";

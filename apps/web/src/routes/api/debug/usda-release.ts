@@ -1,8 +1,8 @@
 import { userId } from "@cubby/schemas/identifiers";
+import { getErrorMessage } from "@cubby/shared";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { auth } from "~/lib/auth";
-import { getErrorMessage } from "~/lib/error-utils";
 import { getUsdaReleaseEnv } from "~/server/cf-env";
 import { db } from "~/server/db";
 import {

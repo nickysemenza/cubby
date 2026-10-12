@@ -8,6 +8,7 @@ import {
   normalizeImportExtractionModelOutput,
 } from "@cubby/schemas/purchase-import";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
+import { cents } from "@cubby/shared";
 import {
   gatewayBaseURL,
   type GatewayResponseInfo,
@@ -34,7 +35,6 @@ import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
 import { image } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { cents } from "~/server/repo/money";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { purchaseImportPromptText } from "./prompt-text.gen";

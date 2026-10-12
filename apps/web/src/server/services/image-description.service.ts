@@ -17,6 +17,7 @@ import {
 } from "@cubby/shared/external-fetch";
 import { TIER1_NUTRIENTS } from "@cubby/usda";
 
+import { transformedImageUrl } from "~/lib/image-url";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import {
   type AiImagePart,
@@ -42,8 +43,11 @@ import { imageAnalysisKey, uploadToS3 } from "~/server/utils/s3";
  * compatible JPEG without mutating or replacing the original attachment.
  */
 export function imageAnalysisRenditionUrl(originalUrl: string): string {
-  const parsed = new URL(originalUrl);
-  return `${parsed.origin}/cdn-cgi/image/width=2048,fit=scale-down,format=jpeg${parsed.pathname}${parsed.search}`;
+  // An unbounded rendered width snaps to the largest rung.
+  return transformedImageUrl(originalUrl, Number.POSITIVE_INFINITY, {
+    format: "jpeg",
+    anyOrigin: true,
+  });
 }
 
 const RENDITION_ERROR_BODY_CHARS = 500;

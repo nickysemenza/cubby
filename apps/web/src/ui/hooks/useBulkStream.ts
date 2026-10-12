@@ -1,8 +1,9 @@
+import { getErrorMessage } from "@cubby/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
-import { getErrorMessage, type UnparsedError } from "~/lib/error-utils";
+import { type UnparsedError } from "~/lib/error-utils";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 interface BulkStreamState<Result> {

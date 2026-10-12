@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { SignInIcon } from "@phosphor-icons/react/dist/csr/SignIn";
@@ -15,7 +16,6 @@ import { StartOperationError } from "~/integrations/tanstack-query/start-transpo
 import { sentryEventUrl } from "~/lib/error-diagnostics";
 import {
   getAppErrorDetails,
-  getErrorMessage,
   isDynamicImportError,
   isSupersededViewTransitionError,
   type UnparsedError,

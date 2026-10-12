@@ -11,6 +11,7 @@ import {
   type MealNutritionFood,
   type MealFoodNutrients,
 } from "@cubby/schemas/meal";
+import { getErrorMessage } from "@cubby/shared";
 import {
   useMutation,
   useQuery,
@@ -24,7 +25,6 @@ import {
   entityFilterOptions,
   meal,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import {
   getAllUnitMappingsFromProduct,

@@ -12,6 +12,7 @@ import {
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { cents } from "@cubby/shared";
 import { and, inArray, or, sql } from "drizzle-orm";
 import { uniq, uniqBy } from "es-toolkit";
 
@@ -29,7 +30,6 @@ import {
   merchantVendorInferences,
   normalizeMerchant,
 } from "~/server/repo/merchant-vendor-inference";
-import { cents } from "~/server/repo/money";
 import {
   statementRowExternalId,
   statementRowOccurrenceId,

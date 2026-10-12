@@ -2,6 +2,7 @@ import type { IngredientOut } from "@cubby/schemas/ingredient";
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
+import { getErrorMessage } from "@cubby/shared";
 import { TIER1_NUTRIENT_KEYS, TIER1_NUTRIENTS } from "@cubby/usda";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
@@ -21,7 +22,6 @@ import { ConversionCapabilities } from "~/features/units/ConversionCapabilities"
 import { UnitMappingGraph } from "~/features/units/unit-mapping-graph";
 import { UnitMappingsTable } from "~/features/units/unitmappingstable";
 import { BASE_KINDS } from "~/lib/conversion-coverage";
-import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { StaticPicker } from "~/ui/combobox/static-picker";
