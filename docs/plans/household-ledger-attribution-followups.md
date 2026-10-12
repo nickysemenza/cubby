@@ -119,7 +119,7 @@ bulk id cap applies.
    so nothing can route them into `.set()` — for example
    `bulkUpdate: { fields: [...], nested: ["beneficiaries", "funders"] }`. Teach
    the generator (`scripts/generator/`) to include declared nested fields in the
-   emitted bulk input schema. Run `pnpm generate`; `pnpm generate:check` must
+   emitted bulk input schema. Run `pnpm generate`; `pnpm check:clean` must
    pass.
 2. **Kernel.** The kernel stays unaware of nested semantics and passes the
    validated patch to the adapter. Audit any kernel step that assumes every bulk
@@ -251,13 +251,13 @@ consolidate same-shape cases into table-driven tests.
 
 ## 10. Validation and done
 
-Follow [validation](../agents/validation.md): `pnpm generate:check`,
+Follow [validation](../agents/validation.md): `pnpm generate`,
 `pnpm typecheck`, and `pnpm test:file` for touched tests while iterating; the
 integration tier provisions Apple `container` services on macOS; Linux uses
 externally managed PostgreSQL/IntegreSQL. Follow the validation policy for the
 required PR checks. All repository text uses synthetic data.
 
-- [ ] `pnpm generate:check` and `pnpm check` pass
+- [ ] `pnpm generate` leaves the tree clean and `pnpm check` passes
 - [ ] Bulk replace works from MCP `entity` `bulkUpdate` and from the web bulk
       dialog, for each role independently, with clear and no-op distinguished
 - [ ] The filter/report parity test passes for every code under both scopes

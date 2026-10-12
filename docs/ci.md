@@ -113,7 +113,7 @@ it live in the [validation policy](agents/validation.md) and
 
 - `--parallel=1` is deliberate: every tier is already parallel inside (vitest
   workers, Playwright workers, cargo, xcodebuild), and running tiers side by
-  side on one host reproduces the contention the sequential `test:all` removed
+  side on one host reproduces the contention that sequential tiers avoid
   — measured 2026-09-16, the web unit tier took 196s instead of 24s under
   `run-many`'s default parallelism and tripped a 5s test timeout.
 - Selected targets replay from the Nx cache when their content is unchanged.

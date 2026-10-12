@@ -247,8 +247,7 @@ need Tailwind's real
 CSS output (`tooling/preview-test-setup.ts` imports `~/styles.css`) since a
 utility class only affects a real browser's layout once Tailwind has
 generated it — jsdom tests never needed this because jsdom has no layout
-engine to feed. A component that imports `@cubby/recipebridge` (directly or
-transitively) needs `pnpm wasm` run first, same as the `ui` tier.
+engine to feed.
 
 ## Test and dev data factories
 

@@ -1,68 +1,18 @@
 #!/usr/bin/env node
-// Runs `pnpm generate` only when its inputs changed since the last run, so
-// install, build, typecheck and test can all depend on generated output that
-// is never committed. The fingerprint covers every tracked or untracked
-// (not ignored) file under the generator's input roots; the generated outputs
-// are gitignored and so never feed their own key.
+// Brings the never-committed generated output current, so install, build,
+// typecheck and test can all depend on it. Nx owns staleness: the
+// `cubby-checks:generate` target declares the generator's inputs and outputs,
+// so an unchanged checkout is a cache hit that also restores any missing or
+// edited output file.
 //
 //   ensure.ts                generate if stale
 //   ensure.ts --force        always generate
 //   ensure.ts --postinstall  generate if stale, but skip a filtered install
 //                            that left out the web app's dependencies
-import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
-import { digestFiles } from "../lib/tree-digest.ts";
-
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-// Every root the generator reads: its own code, the packages the declarations
-// and contracts import, the web app (contracts, routes, list sources), and the
-// preview-fixture builder it loads from apps/web/scripts.
-const INPUTS = [
-  "scripts/generator",
-  "packages",
-  "apps/web/src",
-  "apps/web/scripts/apple-preview-fixtures.ts",
-  // The R2 public origin generated into `SharedConstants.swift`.
-  "apps/web/wrangler.jsonc",
-  "apps/web/tooling/wrangler-public-config.ts",
-  "apps/web/tsconfig.json",
-  // Deferred MCP capabilities must be listed here (start-operations/mcp-tools.ts).
-  "docs/todos.md",
-  "package.json",
-  "pnpm-lock.yaml",
-];
-const STAMP = join(ROOT, "node_modules/.cache/cubby-generate.fingerprint");
-// Written by main.ts: every file the last run produced. A missing one (a
-// clean, a deleted Swift file or fixture) forces a run.
-const OUTPUTS = join(ROOT, "node_modules/.cache/cubby-generate.outputs");
-
-const fingerprint = () => {
-  let listing: string;
-  try {
-    listing = execFileSync(
-      "git",
-      ["ls-files", "-z", "-co", "--exclude-standard", "--", ...INPUTS],
-      { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
-    );
-  } catch {
-    // No git checkout (an exported tarball): nothing to key on, so generate.
-    return null;
-  }
-  const files = listing.split("\0").filter(Boolean).sort();
-  return digestFiles(
-    ROOT,
-    files.map((file) => join(ROOT, file)),
-  );
-};
+import { ROOT, runNxTarget } from "../rust-fingerprint.ts";
 
 if (
   process.argv.includes("--postinstall") &&
@@ -72,27 +22,7 @@ if (
   process.exit(0);
 }
 
-const key = fingerprint();
-const current =
-  !process.argv.includes("--force") &&
-  existsSync(OUTPUTS) &&
-  readFileSync(OUTPUTS, "utf8")
-    .split("\n")
-    .filter(Boolean)
-    .every((path) => existsSync(join(ROOT, path))) &&
-  key !== null &&
-  existsSync(STAMP) &&
-  readFileSync(STAMP, "utf8") === key;
-if (!current) {
-  // Invalidate first: a run that fails after rewriting some outputs must not
-  // leave the previous stamp claiming them current, or returning to those
-  // inputs (reverting the edit that broke generation) skips regeneration.
-  rmSync(STAMP, { force: true });
-  execFileSync(
-    join(ROOT, "node_modules/.bin/tsx"),
-    ["--tsconfig", "apps/web/tsconfig.json", "scripts/generator/main.ts"],
-    { cwd: ROOT, stdio: "inherit" },
-  );
-  mkdirSync(dirname(STAMP), { recursive: true });
-  if (key !== null) writeFileSync(STAMP, key);
-}
+runNxTarget(
+  "generate",
+  process.argv.includes("--force") ? ["--skip-nx-cache"] : [],
+);

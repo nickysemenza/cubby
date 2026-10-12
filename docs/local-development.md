@@ -16,14 +16,14 @@ its own volume; switching does not transfer existing local data. Then run:
 
 ```sh
 pnpm dev
-pnpm dev:status -- --json
-pnpm dev:doctor -- --json
+pnpm dev status --json
+pnpm dev doctor --json
 ```
 
 The startup output names the app, synthetic login, local resource explorer,
 inspector, database, and discovery file. `.cubby-dev/session.json` records the
 selected origin, database, profile, process identity, readiness, startup phase
-timings, and inspection URLs. Use that file or `dev:status` to discover the
+timings, and inspection URLs. Use that file or `pnpm dev status` to discover the
 running origin; ports can differ between checkouts. `/__dev/health` reports
 runtime identity, while `/__dev/ready` checks database connectivity, committed
 migrations, the completed core fixture marker, and that the synthetic USDA
@@ -55,9 +55,9 @@ credential through `localSecret` (`apps/web/tooling/local-secret.ts`): shell,
 then this checkout's `apps/web/.env`, then the primary checkout's. Use it
 instead of grepping another checkout's `.env`.
 
-Ctrl-C stops the owned runtime and keeps persistent data. `pnpm dev:down` stops
-that checkout's supervisor. `pnpm dev:reset` stops it and resets its database and
-Worker state; start `pnpm dev` again to recreate the corpus (`pnpm dev:seed`
+Ctrl-C stops the owned runtime and keeps persistent data. `pnpm dev down` stops
+that checkout's supervisor. `pnpm dev reset` stops it and resets its database and
+Worker state; start `pnpm dev` again to recreate the corpus (`pnpm dev seed`
 reseeds without resetting). Low-level `db:dev:up`, `migrate`, and `down` manage
 the shared PostgreSQL service.
 
@@ -85,12 +85,12 @@ projects, tasks, purchases, expenses, and a photo-inventory run. Optional packs
 add small synthetic graphs to the running session:
 
 ```sh
-pnpm dev:seed recipes
-pnpm dev:seed images
-pnpm dev:seed purchase
-pnpm dev:seed garden
-pnpm dev:seed calendar
-pnpm dev:seed problems
+pnpm dev seed recipes
+pnpm dev seed images
+pnpm dev seed purchase
+pnpm dev seed garden
+pnpm dev seed calendar
+pnpm dev seed problems
 ```
 
 The Problems pack adds incomplete entities, a failed photo-processing Run/job,
@@ -100,7 +100,7 @@ image pack uploads and finalizes real
 synthetic bytes through the local storage API. A development-only PostgreSQL
 table, `cubby_dev_fixture`, records the pack version and `seeding`, `complete`,
 or `failed` state. A completed current pack skips reseeding. Partial or outdated
-packs require `dev:reset`, so a failed seed cannot silently duplicate its graph
+packs require `pnpm dev reset`, so a failed seed cannot silently duplicate its graph
 or report ready based on an unrelated Product count. This marker table is
 created by development tooling and has no production migration.
 
@@ -114,7 +114,7 @@ Purchase-agent starts fail immediately with `dispatch_failed` before an offline
 producer can enqueue work. Unexpected queue deliveries are retried and throw
 rather than acknowledged as successful work. Telemetry is off unless `CUBBY_DEV_TELEMETRY=true` is explicit.
 
-For billed AI/provider work, use `pnpm dev:integrations`. AI requests use the
+For billed AI/provider work, use `pnpm dev integrations`. AI requests use the
 shared `cubby` gateway with `environment=development`; the Vectorize binding
 remains isolated: `CUBBY_DEV_VECTORIZE_INDEX` must start with `cubby-dev-<id>`.
 Set `CUBBY_DEV_AI_GATEWAY_API_KEY` explicitly when REST authentication requires
@@ -145,12 +145,12 @@ Validate those transformations against the deployed boundary when relevant.
 
 The printed resource explorer exposes local bindings; the inspector URL exposes
 the Worker debugging target. To inspect PostgreSQL directly, use the connection
-shown by `dev:status`. `pnpm --filter @cubby/web preview:cf` builds and runs the
+shown by `pnpm dev status`. `pnpm --filter @cubby/web preview:cf` builds and runs the
 same offline profile through Wrangler with its persistent resources.
 
 ## Native iteration and validation
 
-Start the web session, then run `pnpm dev:sim -- --sim <name>` to build, install,
+Start the web session, then run `pnpm dev sim --sim <name>` to build, install,
 and launch the simulator app against the session's discovered origin. The
 launcher sets a development server marker and persists that server choice.
 Manual Settings exploration uses the same synthetic account and database.

@@ -2,7 +2,7 @@
 
 `pnpm typecheck:web` checks web app code for web-only work; it leaves out
 tests and test tooling, about 20% faster. When tests or test tooling change,
-include `pnpm typecheck:web:tests` as an affected check: passing Vitest does not
+include `pnpm typecheck` as an affected check: passing Vitest does not
 prove those files typecheck. This checks the full program that `pnpm check` and
 CI run. Tests use the configured TypeScript libraries; runtime support for an
 API does not establish that the configured libraries expose it.
@@ -67,7 +67,8 @@ Lint policy the exceptions follow:
   ```
 
 Generated output is never committed. `pnpm install`, `build`, `typecheck` and
-every test entry point run `scripts/generator/ensure.ts`, which reruns
-`pnpm generate` when its inputs changed; `pnpm generate` forces a run. The
+every test entry point run `scripts/generator/ensure.ts`, which runs the
+Nx-cached `cubby-checks:generate` target (a hit also restores missing output);
+`pnpm generate` forces a run. The
 Swift OpenAPI client is built by the swift-openapi-generator SwiftPM plugin
 and the UniFFI shim by `apps/apple/scripts/build-rust.sh`.

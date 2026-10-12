@@ -31,7 +31,7 @@ Before them, a first edit or export change cost 50–54 s of CPU and up to 7 GB
 for most files (a full re-check, more than a cold run), and a buildinfo copied
 from a days-old checkout cost 71 s of CPU and 7.6 GB.
 
-Those rows are the full program (`pnpm typecheck:web:tests`, `pnpm check`,
+Those rows are the full program (`pnpm typecheck`, `pnpm check`,
 CI). `pnpm typecheck:web` checks `tsconfig.app.json`, which leaves out tests
 and test tooling: 983 of the program's ~3,500 own files, and a quarter of a
 client file's re-check set or a third of a server file's. Measured back to

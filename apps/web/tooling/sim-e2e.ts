@@ -6,7 +6,7 @@ import {
 import { testerArmyReplayCommand } from "./tester-army/model";
 import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
-import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
+import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
 import { spawnToExit } from "../../../scripts/lib/run.ts";
 import { sharedDeviceCommand } from "../../../scripts/lib/shared-device-command.ts";
 import { createHash, randomBytes } from "node:crypto";
@@ -321,29 +321,19 @@ function appleSourceVersion(): string {
 }
 
 function nativeSourceFingerprint(includeApp: boolean): string {
-  const kitSources = path.join(kitRoot, "Sources");
-  const files = readdirSync(kitSources, { recursive: true, encoding: "utf8" })
-    .filter((entry) => entry.endsWith(".swift"))
-    .map((entry) => path.join(kitSources, entry));
-  files.push(path.join(kitRoot, "Package.swift"));
-  if (includeApp) {
-    const appSources = path.join(appleRoot, "App");
+  const swift = (directory: string) =>
+    walkFiles(directory).filter((file) => file.endsWith(".swift"));
+  const files = [
+    ...swift(path.join(kitRoot, "Sources")),
+    path.join(kitRoot, "Package.swift"),
+  ];
+  if (includeApp)
     files.push(
-      ...readdirSync(appSources, { recursive: true, encoding: "utf8" })
-        .filter((entry) => entry.endsWith(".swift"))
-        .map((entry) => path.join(appSources, entry)),
+      ...swift(path.join(appleRoot, "App")),
       path.join(appleRoot, "project.yml"),
       path.join(appleRoot, "packages.yml"),
     );
-  }
-  const hash = createHash("sha256");
-  for (const file of files.sort()) {
-    hash.update(path.relative(repoRoot, file));
-    hash.update("\0");
-    hash.update(readFileSync(file));
-    hash.update("\0");
-  }
-  return hash.digest("hex");
+  return digestFiles(repoRoot, files.sort());
 }
 
 async function assertNativeEdit(

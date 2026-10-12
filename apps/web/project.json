@@ -42,30 +42,6 @@
       "inputs": ["webGate"],
       "outputs": ["{projectRoot}/.vitest-results.json"]
     },
-    "typecheck": {
-      "command": "pnpm run typecheck",
-      "options": { "cwd": "apps/web" },
-      "cache": true,
-      "dependsOn": [{ "projects": ["cubby-checks"], "target": "wasm" }],
-      "inputs": [
-        "repo",
-        "sharedGlobals",
-        { "dependentTasksOutputFiles": "packages/wasm/**/*" }
-      ],
-      "outputs": ["{projectRoot}/tsconfig.tsbuildinfo"]
-    },
-    "typecheck:app": {
-      "command": "pnpm run typecheck:app",
-      "options": { "cwd": "apps/web" },
-      "cache": true,
-      "dependsOn": [{ "projects": ["cubby-checks"], "target": "wasm" }],
-      "inputs": [
-        "repo",
-        "sharedGlobals",
-        { "dependentTasksOutputFiles": "packages/wasm/**/*" }
-      ],
-      "outputs": ["{projectRoot}/tsconfig.app.tsbuildinfo"]
-    },
     // CUBBY_POSTGRES_SHARD (`index/count`) splits the files across CI runners.
     "postgres": {
       "command": "pnpm exec node ../../scripts/test-services.ts -- vitest run --project integration --shard=${CUBBY_POSTGRES_SHARD:-1/1}",

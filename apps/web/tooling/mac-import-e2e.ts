@@ -1,7 +1,7 @@
 import { createPostgresPool } from "./postgres-pool";
 import { execFileSync, spawn } from "node:child_process";
 import { withKitPackageResolution } from "../../../scripts/apple-package-resolution.ts";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,10 +33,8 @@ import {
 import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
 import { leaseNamedDatabase } from "./test-database-lease";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
-import {
-  rustFingerprint,
-  sourceDigest,
-} from "../../../scripts/rust-fingerprint";
+import { rustFingerprint } from "../../../scripts/rust-fingerprint";
+import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
 
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -186,40 +184,32 @@ function installScenarioEnvironment(storageURL: string): () => void {
 }
 
 function nativeSourceFingerprint(): string {
-  const hash = createHash("sha256");
-  hash.update("native-inputs-v2\0fixture-build:ENABLE_DEBUG_DYLIB=NO\0");
-  for (const root of [
-    "App",
-    "CubbyKit/Sources",
-    "CubbyKit/Frameworks",
-    "scripts",
-  ]) {
-    hash.update(
-      `${root}\0${sourceDigest(path.join(repoRoot, "apps/apple", root))}\0`,
-    );
-  }
-  for (const relative of [
-    "project.yml",
-    "packages.yml",
-    "CubbyKit/Package.swift",
-    "CubbyKit/Package.resolved",
-    "Cubby.xcodeproj/project.pbxproj",
-    "Cubby.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
-  ]) {
-    const file = path.join(repoRoot, "apps/apple", relative);
-    hash.update(`${relative}\0`);
-    hash.update(existsSync(file) ? readFileSync(file) : "absent");
-    hash.update("\0");
-  }
-  hash.update(
-    rustFingerprint(path.join(repoRoot, "Cargo.toml"), [
-      execFileSync("xcodebuild", ["-version"], { encoding: "utf8" }),
-      process.arch,
-      `profile=${process.env.CUBBY_FFI_PROFILE ?? "release"}`,
-      `targets=${process.env.CUBBY_FFI_TARGETS ?? "all"}`,
-    ]),
-  );
-  return hash.digest("hex");
+  const appleRoot = path.join(repoRoot, "apps/apple");
+  const trees = ["App", "CubbyKit/Sources", "CubbyKit/Frameworks", "scripts"];
+  const files = [
+    ...trees.flatMap((tree) =>
+      walkFiles(path.join(appleRoot, tree), {
+        skip: (name) => name === ".DS_Store",
+      }),
+    ),
+    ...[
+      "project.yml",
+      "packages.yml",
+      "CubbyKit/Package.swift",
+      "CubbyKit/Package.resolved",
+      "Cubby.xcodeproj/project.pbxproj",
+      "Cubby.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+    ].map((file) => path.join(appleRoot, file)),
+  ];
+  const rust = rustFingerprint(path.join(repoRoot, "Cargo.toml"), [
+    execFileSync("xcodebuild", ["-version"], { encoding: "utf8" }),
+    process.arch,
+    `profile=${process.env.CUBBY_FFI_PROFILE ?? "release"}`,
+    `targets=${process.env.CUBBY_FFI_TARGETS ?? "all"}`,
+  ]);
+  return digestFiles(appleRoot, files, {
+    seed: `native-inputs-v3\0fixture-build:ENABLE_DEBUG_DYLIB=NO\0${rust}`,
+  });
 }
 
 async function reuseNativeBuild(reuseManifest: string): Promise<void> {
