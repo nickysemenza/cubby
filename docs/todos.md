@@ -582,6 +582,14 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Web UI
 
+- 🟢 ✨ **Filter Activity by action and writer.** The RecordList timeline
+  folds bursts and links the Run behind a write; chips for create/update/
+  delete and for people versus agents would narrow a long History without a
+  second page.
+- 🤔 ✨ **Merge a Run's system log into its Activity timeline.** The Run
+  "System and agent log" report and the Run's audit changes are both dated
+  rows on the same timeline geometry; interleaving them would show what an
+  agent did beside what it wrote.
 - 🟢 🐛 **Show unmatched edit issues in the dialog banner.** A validation issue
   whose path has no rendered control (e.g. `externalIds.0.isPrimary`) is set on
   the form but never shown: `entityEditBannerIssues`
