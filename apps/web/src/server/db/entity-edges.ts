@@ -110,6 +110,7 @@ import {
   sourceOrderObservation,
   emailCandidateObservation,
   emailClassificationObservation,
+  emailFinancialAssociation,
   emailRetrievalFailure,
   run as runTable,
   runApproval,
@@ -345,6 +346,18 @@ export const ENTITY_EDGES = {
         kind: "allow-target-deleted",
         reason:
           "Immutable observation history retains its original subject UUID through deletion and merge.",
+      },
+    },
+    "EmailFinancialAssociation.emailId": {
+      column: emailFinancialAssociation.emailId,
+      role: "history",
+      label: "financial associations",
+      description:
+        "A member-reviewed link from this Email's evidence to a settlement transaction, retained through its tombstone.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
       },
     },
     "EmailRetrievalFailure.emailId": {
@@ -1226,6 +1239,18 @@ export const ENTITY_EDGES = {
         "A settlement-side event recorded by this financial account.",
       liveness: { kind: "must-target-live" },
     },
+    "EmailFinancialAssociation.reviewedAccountId": {
+      column: emailFinancialAssociation.reviewedAccountId,
+      role: "history",
+      label: "reviewed Email associations",
+      description:
+        "The account a member confirmed when linking an Email to a settlement transaction; the review keeps naming it after the account is deleted.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
+      },
+    },
     "StatementRow.accountId": {
       column: statementRow.accountId,
       role: "reference",
@@ -1237,6 +1262,18 @@ export const ENTITY_EDGES = {
   }),
   financialTransaction: {
     ...edges({
+      "EmailFinancialAssociation.transactionId": {
+        column: emailFinancialAssociation.transactionId,
+        role: "history",
+        label: "reviewed Email associations",
+        description:
+          "A member-reviewed link from an Email's evidence to this transaction; the review keeps naming it after the transaction is deleted.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
+        },
+      },
       "FinancialTransactionAllocation.transactionId": {
         column: financialTransactionAllocation.transactionId,
         role: "composition",

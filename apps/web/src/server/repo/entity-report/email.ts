@@ -76,6 +76,71 @@ function emailAssociationBlocks(
       purchases(associations.purchases),
     ],
     [
+      "Reviewed refunds",
+      "Reviewed refunds",
+      associations.financialAssociations.map((row): ReportRecordRow => ({
+        entity: row.transactionDeleted ? null : "financialTransaction",
+        id: row.transactionDeleted ? null : row.transactionId,
+        title: row.transactionId,
+        subtitle: row.reviewReason,
+        trailing: row.sourceAccountLabel,
+        at: row.reviewedAt,
+        statuses: [
+          { label: "Reviewed evidence", tone: "muted" },
+          ...(row.transactionDeleted
+            ? [{ label: "Transaction deleted", tone: "warning" as const }]
+            : []),
+          ...(row.accountChanged
+            ? [
+                {
+                  label: "Account changed since review",
+                  tone: "warning" as const,
+                },
+              ]
+            : []),
+        ],
+        lines: [
+          { text: `Reviewed account: ${row.reviewedAccountId}` },
+          {
+            text: row.currentAccountId
+              ? `Current account: ${row.currentAccountId}`
+              : "No live current account",
+            tone: row.currentAccountId ? undefined : "warning",
+          },
+        ],
+        detail: {
+          label: "Reviewed evidence checksum",
+          text: row.evidenceChecksum,
+        },
+      })),
+    ],
+    [
+      "Reviewed financial accounts",
+      "Reviewed financial accounts",
+      associations.financialAssociations.map((row): ReportRecordRow => ({
+        entity: row.reviewedAccountDeleted ? null : "financialAccount",
+        id: row.reviewedAccountDeleted ? null : row.reviewedAccountId,
+        title: row.reviewedAccountId,
+        subtitle: row.sourceAccountLabel,
+        trailing: row.transactionId,
+        at: row.reviewedAt,
+        statuses: [
+          { label: "Account at review", tone: "muted" },
+          ...(row.reviewedAccountDeleted
+            ? [{ label: "Reviewed account deleted", tone: "warning" as const }]
+            : []),
+          ...(row.accountChanged
+            ? [
+                {
+                  label: "Account changed since review",
+                  tone: "warning" as const,
+                },
+              ]
+            : []),
+        ],
+      })),
+    ],
+    [
       "Expenses",
       "Purchase Expenses",
       associations.expenses.map((row) => ({

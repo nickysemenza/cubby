@@ -39,6 +39,7 @@ import type {
   DeviceId,
   ExpenseId,
   FinancialAccountId,
+  FinancialTransactionId,
   ImageId,
   IngredientId,
   LedgerPartyId,
@@ -73,6 +74,8 @@ import {
 import {
   purchase,
   entityExternalId,
+  email as emailTable,
+  emailFinancialAssociation,
   entityLink,
   run as runTable,
   expenseAttribution,
@@ -803,6 +806,7 @@ interface StagingIds {
   expenseId: ExpenseId | null;
   ledgerTransferId: LedgerTransferId | null;
   financialAccountId: FinancialAccountId | null;
+  financialTransactionId: FinancialTransactionId | null;
   // Untyped uuid columns (no `.$type<VendorAccountId>()`/`<ImageId>()` on
   // these particular references) — a plain string, not a branded id.
   vendorAccountId: string | null;
@@ -1177,6 +1181,36 @@ async function seedOrderMailAttachment(db: Database, ids: StagingIds) {
 }
 
 /** ImageProcessingJob.imageId and ImageDerivative.imageId. */
+/** A reviewed Email-to-transaction link; account and transaction deletes preserve it. */
+async function seedEmailFinancialAssociation(db: Database, ids: StagingIds) {
+  const { financialTransactionId, financialAccountId } = ids;
+  if (!financialTransactionId || !financialAccountId) return;
+  const party = await insertWithShortcode(db, "ledgerParty", {
+    name: "Delete policy financial review party",
+    kind: "guest",
+  });
+  const mail = await retainedMailFixture(db, {
+    ledgerPartyId: party.id,
+    mailboxId: "delete-policy-mailbox",
+    messageId: "delete-policy-financial-msg-1",
+    checksum: "delete-policy-financial-checksum",
+  });
+  const [reviewed] = await getDb(db)
+    .select({ shortcode: emailTable.shortcode })
+    .from(emailTable)
+    .where(eq(emailTable.orderMailId, mail.id));
+  if (!reviewed) throw new Error("Synthetic Email did not persist");
+  await insertAndReturn(db, emailFinancialAssociation, {
+    emailId: await resolveOrThrow(db, "email", reviewed.shortcode),
+    evidenceChecksum: "delete-policy-financial-checksum",
+    transactionId: financialTransactionId,
+    reviewedAccountId: financialAccountId,
+    sourceAccountLabel: "Synthetic card ending 0000",
+    reviewReason: "Delete policy fixture review",
+    decidedByUserId: buildKernelContext(db).actorContext.userId,
+  });
+}
+
 async function seedImageProcessingRows(db: Database, ids: StagingIds) {
   if (!ids.imageId) return;
   await insertAndReturn(db, imageDerivative, {
@@ -1232,6 +1266,7 @@ async function seedDeletePolicyStagingRows(
     expenseId: await resolve("expense", "EXP-"),
     ledgerTransferId: await resolve("ledgerTransfer", "LTR-"),
     financialAccountId: await resolve("financialAccount", "FAC-"),
+    financialTransactionId: await resolve("financialTransaction", "FTX-"),
     vendorAccountId: await resolve("vendorAccount", "VACCT-"),
     deviceId: await resolve("device", "DEV-"),
     imageId: await resolve("image", "IMG-"),
@@ -1251,6 +1286,7 @@ async function seedDeletePolicyStagingRows(
   await seedRunOwnedRows(db, ids, runId);
   await seedRunEvidenceRows(db, ids, runId);
   await seedOrderMailAttachment(db, ids);
+  await seedEmailFinancialAssociation(db, ids);
   await seedImageProcessingRows(db, ids);
 }
 

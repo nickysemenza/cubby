@@ -145,14 +145,6 @@ See also the image operational passes at the end of this file.
 
 ### Reconcile charges and refunds
 
-- 🤔 🛠️ **Resolve combined-credit Emails without false order attribution.**
-  A bank alert can describe one credit covering refunds from several orders.
-  `mail.resolve` currently links one Purchase. Investigate an evidence-backed
-  settlement association or explicit reviewed disposition that preserves the
-  Email and every constituent payment leg, without choosing one order to stand
-  for the combined credit or booking it again. Keep account identity proof and
-  source ownership as separate requirements.
-
 - 🧱 ✨ **Record points and miles redemptions.** An award ticket's fare is a $0
   principal Expense; only its taxes and fees are money. Record the loyalty
   program, points spent, and an optional cents-per-point value on the Expense,
