@@ -65,6 +65,8 @@ delegated identity for subsequent calls.
 On input validation failure, read the reported field path and correct that
 field before another call. An unchanged payload repeats the same failure.
 Input rejection has not prepared an order. For an interrupted write whose
-outcome is unknown, read `imports_read.purchase_status` with the original
-operation id before continuing. Stop for review when the valid contract cannot
-express the source evidence, and retain the exact diagnostic and evidence gap.
+outcome is unknown, stop for member review with the original operation id and
+diagnostic. The member can read its durable result through
+`imports_read.purchase_status`; this Run's tools do not expose that action.
+Stop for review when the valid contract cannot express the source evidence,
+and retain the exact diagnostic and evidence gap.
