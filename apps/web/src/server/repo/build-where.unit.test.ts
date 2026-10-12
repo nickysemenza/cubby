@@ -350,9 +350,6 @@ describe("buildProductWhere", () => {
     expect(await where({ notesPresenceFilter: "none" })).toContain(
       '"notes" is null',
     );
-    expect(await where({ stockTrackedPresenceFilter: "none" })).toContain(
-      '"stockTracked" is null',
-    );
   });
 });
 

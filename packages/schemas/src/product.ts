@@ -407,12 +407,9 @@ export const productFilterFields = {
   componentPresenceFilter: presenceFilter.describe(
     "Filter to products that are / aren't kits — i.e. that do or don't contain at least one component product.",
   ),
-  /**
-   * `product.stockTracked` is a nullable column on the root table (like
-   * `pricePresenceFilter`): `null` = undecided (the review worklist),
-   * `false`/`true` = reviewed either way. `"none"` is the undecided worklist;
-   * `"has"` means reviewed, regardless of which way it was decided.
-   */
+  // `stockTrackedPresenceFilter` is derived from its manifest descriptor and
+  // matches the EFFECTIVE decision (the Product's own, else its category's):
+  // `"none"` is the undecided worklist, `"has"` decided either way.
 };
 
 export const productFiltersSchema = z.object(productFilterFields);

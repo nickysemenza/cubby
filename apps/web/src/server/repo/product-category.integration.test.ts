@@ -231,6 +231,117 @@ describe("product category hierarchy", () => {
     });
   });
 
+  // Failure modes: an ancestor's default skips a nearer decision; a
+  // category's own decision is lost or cannot be reset to inherit; an
+  // all-undecided chain invents a value; deleting the source keeps it effective.
+  it("inherits stock tracking from the nearest decided ancestor and resets to inherit", async () => {
+    const create = (
+      name: string,
+      stockTracked: boolean | null,
+      parentId: ProductCategoryShortcode | null = null,
+    ) =>
+      createProductCategory(
+        ctx.db,
+        {
+          spendingCategoryId: null,
+          spendingCategoryMode: "inherit",
+          name,
+          aliases: [],
+          description: null,
+          parentId,
+          sortOrder: 0,
+          feature: null,
+          stockTracked,
+        },
+        ctx.actor,
+      );
+    const root = await create("Synthetic untracked root", false);
+    const group = await create(
+      "Synthetic inheriting group",
+      null,
+      root.output.id,
+    );
+    const tracked = await create(
+      "Synthetic tracked type",
+      true,
+      group.output.id,
+    );
+    const inheriting = await create(
+      "Synthetic inheriting type",
+      null,
+      group.output.id,
+    );
+    const undecided = await create("Synthetic undecided root", null);
+    const resolution = async (id: ProductCategoryShortcode) =>
+      (await getProductCategoryByShortcode(ctx.db, id))?.fieldResolutions
+        ?.stockTracked;
+
+    expect(await resolution(root.output.id)).toMatchObject({
+      mode: "explicit",
+      storedValue: false,
+      value: false,
+      fallbackValue: null,
+      sourceEntity: null,
+      canReset: true,
+    });
+    expect(await resolution(group.output.id)).toMatchObject({
+      mode: "inherit",
+      storedValue: null,
+      value: false,
+      fallbackValue: false,
+      sourceEntity: { entityKind: "productCategory", entityId: root.output.id },
+      canReset: false,
+    });
+    expect(await resolution(tracked.output.id)).toMatchObject({
+      mode: "explicit",
+      storedValue: true,
+      value: true,
+      fallbackValue: false,
+      matchesFallback: false,
+      canReset: true,
+    });
+    expect(await resolution(inheriting.output.id)).toMatchObject({
+      mode: "inherit",
+      value: false,
+      sourceEntity: { entityId: root.output.id },
+    });
+    expect(await resolution(undecided.output.id)).toMatchObject({
+      mode: "inherit",
+      value: null,
+      fallbackValue: null,
+      sourceEntity: null,
+    });
+
+    // The editor keeps the stored intent; reset returns the type to its
+    // ancestor's default.
+    expect(
+      (await getProductCategoryByShortcode(ctx.db, tracked.output.id))
+        ?.stockTracked,
+    ).toBe(true);
+    await updateProductCategory(
+      ctx.db,
+      tracked.output.id,
+      { stockTracked: null },
+      ctx.actor,
+    );
+    expect(await resolution(tracked.output.id)).toMatchObject({
+      mode: "inherit",
+      value: false,
+      sourceEntity: { entityId: root.output.id },
+    });
+
+    // A deleted ancestor never remains an effective source.
+    await getDb(ctx.db)
+      .update(productCategory)
+      .set({ deletedAt: new Date() })
+      .where(eq(productCategory.id, root.entityId));
+    expect(await resolution(inheriting.output.id)).toMatchObject({
+      mode: "inherit",
+      value: null,
+      sourceEntity: null,
+    });
+  });
+
   // Clients print this text (`display.detailLabelPath`) instead of joining
   // the path nodes themselves.
   it("words the root-first path for the detail read", async () => {

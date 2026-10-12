@@ -284,8 +284,10 @@ export const productListOverride = defineListOverride<
             }),
           );
           // Editable, and tri-state on purpose: `null` is the undecided
-          // backlog the "Products the ledger says you own" saved view filters
-          // on, so this cell is where that view gets worked.
+          // backlog the "Not on a shelf" saved view filters on, so this cell
+          // is where that view gets worked. It shows the effective decision
+          // (the product's own, else its category's — ADR 0013) and edits the
+          // product's own.
           add(
             createBooleanColumn(columnHelper, "stockTracked", {
               header: "Stock tracking",

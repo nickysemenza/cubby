@@ -27,7 +27,10 @@ import {
   attachInventoryValuations,
   loadInventoryValuations,
 } from "~/server/repo/inventory/valuation";
-import { categorySummarySql } from "~/server/repo/product-category-sql";
+import {
+  categoryStockTrackingSql,
+  categorySummarySql,
+} from "~/server/repo/product-category-sql";
 
 import { productClassificationEvidenceSql } from "./classification-evidence";
 import { getProductCoverImageUrlsByProductIds } from "./crud";
@@ -110,6 +113,9 @@ export const findProductsByFoodIdentifiers = async (
     where: and(linkCondition, notDeleted(product)),
     extras: {
       category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+      categoryStockTracking: categoryStockTrackingSql(
+        sql`${product.categoryId}`,
+      ).as("categoryStockTracking"),
       classificationEvidence: productClassificationEvidenceSql(
         sql`${product.id}`,
       ).as("classificationEvidence"),
@@ -212,6 +218,9 @@ const findProductToAPI = async (
     where,
     extras: {
       category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+      categoryStockTracking: categoryStockTrackingSql(
+        sql`${product.categoryId}`,
+      ).as("categoryStockTracking"),
       classificationEvidence: productClassificationEvidenceSql(
         sql`${product.id}`,
       ).as("classificationEvidence"),

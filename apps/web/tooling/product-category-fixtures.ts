@@ -116,6 +116,7 @@ const productRowDefaults = {
   categoryId: taxonomyId("food"),
   category: categorySummaryFixture("food"),
   classificationEvidence: "",
+  categoryStockTracking: null,
   price: 4.5,
   usdaUnavailable: null,
   labelReviewedRevision: null,
