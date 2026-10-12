@@ -14,6 +14,7 @@ import { useTableVirtualizer } from "./hooks/useTableVirtualizer";
 import { useInfinitePrefetch } from "./infinite-prefetch";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 import { useCellSelection } from "./useCellSelection";
+import { useCellSpill } from "./useCellSpill";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
 import {
@@ -173,12 +174,14 @@ export function useDataTableController<TItem extends RowData>({
     .sort()
     .join(",");
   const fitScope = renderedColumnFitScope(table);
+  const desktopLayout = !isMobile && hydrated;
   const renderedWidths = useRenderedColumnWidths(
     table,
     tableContainerRef,
     fitScope,
-    !isMobile && hydrated,
+    desktopLayout,
   );
+  useCellSpill(tableContainerRef, desktopLayout);
   const columnSizeVars = useMemo(
     () =>
       columnWidthVariables(

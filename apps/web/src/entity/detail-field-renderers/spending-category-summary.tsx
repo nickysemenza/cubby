@@ -5,11 +5,11 @@ import {
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { formatCurrency } from "~/lib/utils";
+import { ChipCluster } from "~/ui/common/chip-cluster";
 import { Row, Stack } from "~/ui/layout";
 
 const compactSummaryLabels = {
   ...spendingCategorySummaryLabels,
-  mixed: "Mixed",
   partial: "Partial",
 } satisfies Record<SpendingCategorySummary["state"], string>;
 
@@ -23,26 +23,31 @@ export function SpendingCategorySummaryValue({
   compact?: boolean;
 }) {
   if (compact)
-    // Dense list rows: the chips are the value. A lone chip needs no state
-    // word; a muted state names what the chips cannot (mixed, partial, none).
+    // Dense list rows: the chips are the value. Chips need no state word when
+    // they say it themselves (one category, or several: mixed); a muted state
+    // names what the chips cannot (partial, unclassified, not applicable).
     return (
-      <Row gap="sm" className="min-w-0 overflow-hidden whitespace-nowrap">
-        {summary.state !== "single" && (
-          <span className="shrink-0 text-muted-foreground">
-            {compactSummaryLabels[summary.state]}
-          </span>
-        )}
-        {summary.categories.map((category) => (
-          <EntityRefLink
-            key={category.id}
-            variant="chip"
-            entity="spendingCategory"
-            id={category.id}
-            name={category.name}
-            displayImage={null}
-          />
-        ))}
-      </Row>
+      <ChipCluster
+        leading={
+          summary.state === "single" || summary.state === "mixed"
+            ? undefined
+            : compactSummaryLabels[summary.state]
+        }
+        items={summary.categories.map((category) => ({
+          key: category.id,
+          label: category.name,
+          node: (
+            <EntityRefLink
+              variant="chip"
+              compact
+              entity="spendingCategory"
+              id={category.id}
+              name={category.name}
+              displayImage={null}
+            />
+          ),
+        }))}
+      />
     );
   return (
     <Stack gap="xs">

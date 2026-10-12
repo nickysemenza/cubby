@@ -31,6 +31,7 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "./table-features";
+import { HeaderLabel } from "./TableHeaderLayout";
 import { useRenderedColumnWidths } from "./useRenderedColumnWidths";
 
 const helper = createCubbyColumnHelper<{ id: string }>();
@@ -57,12 +58,14 @@ function FitFixture({
   pinned = false,
   icon = false,
   total = "Total",
+  qualityHeader = "Quality",
 }: {
   location?: string;
   scope?: string;
   pinned?: boolean;
   icon?: boolean;
   total?: string;
+  qualityHeader?: string;
 }) {
   const table = useCubbyTable({
     data: [{ id: "synthetic" }],
@@ -127,7 +130,13 @@ function FitFixture({
                   className="h-8 px-1 text-xs"
                   style={cellStyle(id)}
                 >
-                  {id === "quality" ? "Quality" : "Location"}
+                  {id === "quality" ? (
+                    <HeaderLabel label={qualityHeader}>
+                      {qualityHeader}
+                    </HeaderLabel>
+                  ) : (
+                    "Location"
+                  )}
                 </TableHead>
               ))}
               <TableHead style={{ width: 400 }} />
@@ -323,6 +332,20 @@ describe("rendered column fit", () => {
     );
   });
 
+  // Regression: a one-line "Itemization coverage" header set its pill
+  // column's width; the label now wraps to two lines and fits beside it.
+  it("fits a long header at its two-line width", async () => {
+    await page.viewport(1440, 900);
+    const header = "Itemization coverage";
+    const view = render(<FitFixture qualityHeader={header} />);
+    await waitFor(() =>
+      expect(width(view.getByTestId("quality"))).toBeLessThan(120),
+    );
+    const label = view.getByText(header);
+    expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
+    expect(label.scrollHeight).toBeLessThanOrEqual(label.clientHeight);
+  });
+
   it("fits aggregate footer totals larger than individual values", async () => {
     await page.viewport(1440, 900);
     const view = render(<FitFixture total="$123,456.78" />);
@@ -362,9 +385,11 @@ describe("rendered column fit", () => {
     expect(width(view.getByTestId("location"))).toBeLessThan(100);
     const pill = view.getByText("Good");
     const info = view.getByRole("button", { name: "Explain quality" });
-    expect(
-      info.getBoundingClientRect().left - pill.getBoundingClientRect().right,
-    ).toBe(2);
+    // The column hugs pill + 2px gap + rail; fitting rounds up to whole px.
+    const gap =
+      info.getBoundingClientRect().left - pill.getBoundingClientRect().right;
+    expect(gap).toBeGreaterThanOrEqual(2);
+    expect(gap).toBeLessThan(3);
     expect(view.getByTestId("quality").getBoundingClientRect().height).toBe(32);
     expect(view.getByTestId("manual-state").textContent).toBe("{}");
   });

@@ -1,17 +1,37 @@
-import { formatDateSpan } from "~/lib/date-span";
+import { dateSpanParts, formatDateSpan } from "~/lib/date-span";
+import { StackedValue, useStackedCell } from "~/ui/common/stacked-value";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 
+/**
+ * A plain-date span. `stacked` is the table-cell form: the date over a muted
+ * compact distance, two lines inside one 32px row; it defaults on inside a
+ * desktop table cell.
+ */
 export function CalendarDate({
   start,
   end = null,
   className,
+  stacked,
 }: {
   start: string | null;
   end?: string | null;
   className?: string;
+  stacked?: boolean;
 }) {
   const today = useHouseholdToday();
+  const stack = useStackedCell(stacked);
   const label = formatDateSpan(start, end, today);
+  if (stack) {
+    const parts = dateSpanParts(start, end, today);
+    return (
+      <StackedValue
+        className={className}
+        title={label}
+        primary={parts.label}
+        secondary={parts.relative}
+      />
+    );
+  }
   const parts = /^(.*) (\([^()]+\))$/.exec(label);
   return (
     <span className={className} title={label}>

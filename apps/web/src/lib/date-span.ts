@@ -16,36 +16,70 @@ export function formatDateSpan(
   end: string | null,
   today: string = householdLocalDate(),
 ): string {
+  const { label, relative } = dateSpanParts(start, end, today, "words");
+  return relative ? `${label} (${relative})` : label;
+}
+
+/** A span's label and its distance from today, for separate lines. */
+export type DateSpanParts = { label: string; relative: string | null };
+
+/**
+ * `formatDateSpan` as separate lines for a stacked table cell: the label, and
+ * its distance from today in compact form ("5d ago", "in 7mo"), or null when
+ * the value is not a readable span.
+ */
+export function dateSpanParts(
+  start: string | null,
+  end: string | null,
+  today: string = householdLocalDate(),
+  distance: "words" | "compact" = "compact",
+): DateSpanParts {
   const first = start ?? end;
-  if (first === null) return "No date";
+  if (first === null) return { label: "No date", relative: null };
   const last = start === null || end === start ? null : end;
   const from = PLAIN_DATE.exec(first);
   const to = last === null ? null : PLAIN_DATE.exec(last);
   if (!from || (last !== null && !to) || !validCalendarDays(first, last))
-    return last === null ? first : `${first} – ${last}`;
-  const relative = spanContext(first, last, today);
-  const suffix = relative ? ` (${relative})` : "";
+    return {
+      label: last === null ? first : `${first} – ${last}`,
+      relative: null,
+    };
+  const relative = spanContext(first, last, today, distance);
   const yearSuffix = from[1] === today.slice(0, 4) ? "" : `, ${from[1]}`;
   if (last === null || to === null)
-    return `${formatCalendarDay(first, "monthDay")}${yearSuffix}${suffix}`;
+    return {
+      label: `${formatCalendarDay(first, "monthDay")}${yearSuffix}`,
+      relative,
+    };
   if (from[1] !== to[1])
-    return `${formatCalendarDay(first, "dateShort")} – ${formatCalendarDay(last, "dateShort")}${suffix}`;
+    return {
+      label: `${formatCalendarDay(first, "dateShort")} – ${formatCalendarDay(last, "dateShort")}`,
+      relative,
+    };
   const endText =
     from[2] === to[2]
       ? String(Number(last.slice(8)))
       : formatCalendarDay(last, "monthDay");
-  return `${formatCalendarDay(first, "monthDay")} – ${endText}${yearSuffix}${suffix}`;
+  return {
+    label: `${formatCalendarDay(first, "monthDay")} – ${endText}${yearSuffix}`,
+    relative,
+  };
 }
 
 function spanContext(
   start: string,
   end: string | null,
   today: string,
+  distance: "words" | "compact",
 ): string | null {
   if (end !== null && start <= today && end >= today) return "ongoing";
-  return calendarDayContext(
-    plainDateDaysBetween(today, end !== null && end < today ? end : start),
+  const days = plainDateDaysBetween(
+    today,
+    end !== null && end < today ? end : start,
   );
+  return distance === "words"
+    ? calendarDayContext(days)
+    : compactCalendarDayContext(days);
 }
 
 function validCalendarDays(...days: (string | null)[]): boolean {
@@ -70,4 +104,21 @@ function calendarDayContext(days: number): string | null {
   if (days < 330) return "in a few months";
   if (days < 548) return "in about a year";
   return `in about ${Math.round(days / 365.2425)} years`;
+}
+
+/** "today", "5d ago", "in 3w", "in 7mo", "2y ago" — calendar days, not hours. */
+function compactCalendarDayContext(days: number): string {
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  if (days === -1) return "yesterday";
+  const magnitude = Math.abs(days);
+  const amount =
+    magnitude < 7
+      ? `${magnitude}d`
+      : magnitude < 30
+        ? `${Math.round(magnitude / 7)}w`
+        : magnitude < 365
+          ? `${Math.max(1, Math.round(magnitude / 30.4375))}mo`
+          : `${Math.round(magnitude / 365.2425)}y`;
+  return days < 0 ? `${amount} ago` : `in ${amount}`;
 }

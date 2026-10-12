@@ -174,7 +174,10 @@ existing block. Extend the generic path when it almost fits. See
 - Tables: `RTable` and the generic relation table; raw `<table>` only for
   matrices, cross-tabs, and debug views. Column-layout changes go through
   `moveColumn` / `applyColumnLayout` (`ui/data-table/column-layout.ts`), never
-  direct `setColumnOrder` / `setColumnPinning` / `column.pin` calls.
+  direct `setColumnOrder` / `setColumnPinning` / `column.pin` calls. Cell
+  content that needs a second line uses `StackedValue` (value over muted
+  context) or `ChipCluster` (two chip lines, then "+N"); clipped codes and
+  paths use `MiddleTruncate`; `useCellSpill` already shows any clipped value.
 - Formatting: `lib/utils` formatters (`formatCurrency`, `formatCount`,
   `formatPercent`, `roundTo`, compact variants) and the WASM amount formatter.
   Currency, bare numbers, amounts, and the compact nutrition cell are one Rust

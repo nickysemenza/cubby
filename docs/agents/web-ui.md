@@ -11,9 +11,11 @@ share this formatter through `CalendarDate`. Mounted labels subscribe to
 `useHouseholdToday`, whose shared clock refreshes at household midnight, on
 focus, and on visibility changes; cached records must not need a query refetch
 to update relative context. Calendar metadata passes the same reactive day to
-the pure formatter. Date columns start at 232px and declared spans at 320px; shared rendered-content fitting preserves the full current labels so
-relative context stays visible by default; full labels remain available in the
-title when a column is resized narrower. Task summaries pass the optional end
+the pure formatter. Inside a desktop table cell, `CalendarDate` stacks the
+label over its compact distance from `dateSpanParts` ("Oct 7" / "5d ago",
+"in 7mo"), so date columns start at 96px and declared spans at 320px; shared
+rendered-content fitting preserves the full current labels, and the full
+`formatDateSpan` label remains in the title. Task summaries pass the optional end
 so an ongoing window cannot collapse to a past start day. Browser checks verify
 unclipped labels rather than only matching DOM text. `formatCalendarDay` remains the absolute primitive for
 editable date inputs, calendar axes/headings, and fixed-format diagnostics.
@@ -57,7 +59,9 @@ real dialog journey.
 Use `RTable` for interactive lists, Table primitives for static tables, and raw
 tables only for matrices/debug/external content. `useTableColumnLayout` owns
 table order/pinning/visibility/sizing. Decorated cells render through
-`CellFrame`; don't append icons beside a cell value by hand. Rendered entity names are linked and
+`CellFrame`; don't append icons beside a cell value by hand. Two-line cell
+content uses `StackedValue` or `ChipCluster`, and clipped codes use
+`MiddleTruncate`. Rendered entity names are linked and
 readable: use `EntityRefLink` (all record links, one component with variants), a titled truncated link, or `createNameColumn`
 in RTable. Audit history can retain retired entity kinds; icon lookup tolerates
 absent metadata and leaves those references unlinked. Pages use the `Page`

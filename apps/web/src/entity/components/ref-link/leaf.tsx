@@ -249,6 +249,11 @@ export type ChipRefLinkProps = {
   /** Full labels in bounded explanation panels; dense cells keep truncation. */
   wrap?: boolean;
   /**
+   * An 11px tinted chip with no mark, for chip clusters in table rows where
+   * a mark on every chip repeats what the column already says.
+   */
+  compact?: boolean;
+  /**
    * `undefined` falls back to the nearest `EntityDisplayImagesProvider`'s
    * cover; an explicit `null` renders the entity icon.
    */
@@ -268,6 +273,7 @@ export function ChipRefLink({
   displayImage,
   emoji,
   wrap = false,
+  compact = false,
 }: Leaf<ChipRefLinkProps>) {
   const label = name ?? id;
   const providedImage = useEntityDisplayImage({
@@ -275,6 +281,31 @@ export function ChipRefLink({
     entityId: id,
   });
   const image = displayImage === undefined ? providedImage : displayImage;
+  if (compact) {
+    const chip =
+      "inline-flex max-w-full min-w-0 rounded-sm bg-muted px-1 text-[0.6875rem] leading-3";
+    const text = <span className="min-w-0 truncate">{label}</span>;
+    return isHoverPreviewEntity(entity) ? (
+      <PreviewRefLink
+        entity={entity}
+        id={id}
+        displayImage={image}
+        showIdentityMark={false}
+        className={tableLinkVariants({ className: chip })}
+      >
+        {text}
+      </PreviewRefLink>
+    ) : (
+      <TableRefLink
+        to={entities[entity].routes.detail}
+        params={entityDetailParams(id)}
+        title={label}
+        className={chip}
+      >
+        {text}
+      </TableRefLink>
+    );
+  }
   if (isHoverPreviewEntity(entity))
     return (
       <PreviewRefLink

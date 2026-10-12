@@ -13,6 +13,7 @@ import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 import type { Header, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
+import type { ReactNode } from "react";
 
 import { FieldProvenance } from "~/entity/field-provenance";
 import { cn } from "~/lib/utils";
@@ -69,6 +70,28 @@ function sortableHeaderLabel<TData extends RowData>(
   return isStringHeader(definition) ? definition : humanize(header.column.id);
 }
 
+/**
+ * A header label that wraps to two lines, then clamps. `data-header-label`
+ * lets column fitting measure it at its two-line width.
+ */
+export function HeaderLabel({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      data-header-label=""
+      className="line-clamp-2 min-w-0 leading-[14px] break-words whitespace-normal"
+      title={label}
+    >
+      {children}
+    </span>
+  );
+}
+
 function pinBoundaryClass<TData extends RowData>(
   header: Header<typeof cubbyTableFeatures, TData, unknown>,
 ) {
@@ -113,9 +136,9 @@ function SortableHeader<TData extends RowData>({
   const provenance = header.column.columnDef.meta?.provenance;
   const headerLabel = sortableHeaderLabel(header);
 
-  // One line, always: the label truncates with an ellipsis and the column's
-  // source collapses to an icon whose phrase is the tooltip. The old second
-  // "From …" line made headers two rows tall and truncated to noise.
+  // The label wraps to at most two 14px lines inside the 32px header, so a
+  // long label no longer sets its column's width; the column's source
+  // collapses to an icon whose phrase is the tooltip.
   const title = (
     <span
       className={cn(
@@ -125,11 +148,11 @@ function SortableHeader<TData extends RowData>({
         numeric && "flex-row-reverse",
       )}
     >
-      <span className="min-w-0 truncate" title={headerLabel}>
+      <HeaderLabel label={headerLabel}>
         {header.isPlaceholder
           ? null
           : flexRender(header.column.columnDef.header, header.getContext())}
-      </span>
+      </HeaderLabel>
       <FieldProvenance compact provenance={provenance} />
       {sortingArrows}
       {sortDirection && table.state.sorting.length > 1 && (

@@ -559,6 +559,21 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   the form but never shown: `entityEditBannerIssues`
   (`entity-edit-dialog-content.tsx`) excludes every field-scoped issue, so Save
   fails silently. Surface issues no registered control can display.
+- 🤔 🛠️ **RTable visual polish pass.** Quieter cells read as finished; the
+  mocked target has fewer marks and type-led hierarchy. Start with
+  `cubby-ui-design-audit` measuring live computed styles against the mock,
+  then land what holds up, updating `apps/web/DESIGN.md` (RTable):
+  - Drop the tag glyph on every category chip; the chip already says "tag".
+  - Show header provenance/link icons only on header hover or focus.
+  - Lighter status pills: 12px text, ~2px vertical padding, softer borders,
+    well short of the row height.
+  - Quieter headers: 12px medium muted label, one stronger bottom rule, no
+    icons at rest.
+  - Monospace only for codes and shortcodes, never timestamps or counts.
+  - Secondary values as a muted smaller line or tone, never in parentheses.
+  - Fainter column rules and row separators than the header boundary.
+  - Audit other per-cell icons (hierarchy, external link) for the same
+    every-row repetition; keep one only where it changes the action.
 - 🤔 ✨ **All-entities record interaction parity.** Reuse standard row inspection,
   selection, clipboard behavior, and actions in the Records tab. Decide which
   actions are eligible for mixed entity types before enabling batch work;

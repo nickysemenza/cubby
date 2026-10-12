@@ -305,6 +305,7 @@ type TableWidthColumn = {
       entityColumnRole?: EntityColumnRole;
       surplus?: boolean;
       numeric?: boolean;
+      mono?: boolean;
       cellData?: { kind: string };
     };
   };
@@ -336,13 +337,30 @@ function isFlexibleColumn(column: TableWidthColumn) {
   return isNonEmptyColumnHeader(column.columnDef.header);
 }
 
+/**
+ * The widest a fitted or slack-grown column paints: a record title stops at
+ * 240px and a code column at 128px, and their clipped values spill over on
+ * hover (`useCellSpill`). A person's resize still reaches `maxSize`.
+ */
+const IDENTITY_FIT_MAX = 240;
+const CODE_FIT_MAX = 128;
+
+export function columnFitMax(column: TableWidthColumn) {
+  const max = column.columnDef.maxSize ?? Number.POSITIVE_INFINITY;
+  const meta = column.columnDef.meta;
+  if (meta?.entityColumnRole === "identity")
+    return Math.min(max, IDENTITY_FIT_MAX);
+  if (meta?.mono && !meta.numeric) return Math.min(max, CODE_FIT_MAX);
+  return max;
+}
+
 /** Trailing gutter width variable; it takes whatever the columns cannot use. */
 const SPACER_WIDTH_VARIABLE: ColumnWidthVariable = "--cubby-column-spacer";
 export const spacerWidthValue = `var(${SPACER_WIDTH_VARIABLE}, 0px)`;
 
 /**
  * Shares `slack` across `candidates` in proportion to configured width, each
- * column capped at its `maxSize`; returns what no column could take.
+ * column capped at its fit maximum; returns what no column could take.
  */
 function distributeSlack(
   widths: Record<string, number>,
@@ -359,9 +377,7 @@ function distributeSlack(
     const open: TableWidthColumn[] = [];
     for (const column of pool) {
       const share = Math.floor((remaining * column.getSize()) / totalWeight);
-      const room =
-        (column.columnDef.maxSize ?? Number.POSITIVE_INFINITY) -
-        (widths[column.id] ?? 0);
+      const room = columnFitMax(column) - (widths[column.id] ?? 0);
       const grant = Math.max(0, Math.min(share, room));
       widths[column.id] = (widths[column.id] ?? 0) + grant;
       distributed += grant;
@@ -378,15 +394,17 @@ function distributeSlack(
 /**
  * Resolves the widths the browser should paint without mutating TanStack's own
  * column-sizing state. A user's deliberate resize remains the source of truth
- * (`userSized` and pinned columns never receive slack). Pane slack goes to
- * the record identity first, up to its `maxSize`; the other flexible columns then share what is
- * left in proportion to their configured width, each capped at its
- * `maxSize`; what no column can use goes to the trailing spacer.
+ * (`userSized` and pinned columns never receive slack). A measured width
+ * stops at the column's fit maximum. Pane slack goes to the record identity
+ * first, up to its 240px fit; the other flexible columns then share what is
+ * left in proportion to their configured width, each capped at its fit
+ * maximum; what no column can use goes to the trailing spacer.
  *
  * Regressions: all slack used to go to one column past its maxSize, so a
  * three-column table (Product Categories) painted a 1200px name beside
  * crammed facts; spreading slack evenly then widened every free-text column
- * while the title it exists for stayed truncated.
+ * while the title it exists for stayed truncated; a 560px title then pushed
+ * the facts beside it off the pane.
  */
 export function resolvedTableColumnWidths(
   columns: readonly TableWidthColumn[],
@@ -396,9 +414,10 @@ export function resolvedTableColumnWidths(
 ) {
   const widths: Record<string, number> = {};
   for (const column of columns) {
+    const fit = measured[column.id];
     widths[column.id] =
-      !isLockedColumn(column) && !userSized.has(column.id)
-        ? (measured[column.id] ?? column.getSize())
+      !isLockedColumn(column) && !userSized.has(column.id) && fit !== undefined
+        ? Math.min(fit, columnFitMax(column))
         : column.getSize();
   }
   const configuredWidth = Object.values(widths).reduce(
@@ -494,9 +513,9 @@ function tailwindWidth(className: string, prefix: "w" | "min-w" | "max-w") {
 }
 
 /** Every plain-date column that declares no width of its own. */
-const DATE_COLUMN_WIDTH = 232;
+const DATE_COLUMN_WIDTH = 96;
 
-/** Above this, a long header truncates rather than widening its column. */
+/** Above this, a long header clamps rather than widening its column. */
 const HEADER_FIT_MAX = 160;
 
 /**
@@ -506,13 +525,12 @@ const HEADER_FIT_MAX = 160;
  * free text and relation labels truncate with their full value in a title.
  */
 function defaultColumnSize(meta: CubbyColumnMeta | undefined) {
-  if (meta?.entityColumnRole === "identity") return 280;
+  if (meta?.entityColumnRole === "identity") return IDENTITY_FIT_MAX;
   const kind = meta?.cellData?.kind;
   if (kind === "boolean") return 56;
-  // Compact relative instants ("1h", "3mo"); the header sets the width.
-  if (kind === "timestamp") return 64;
-  // `formatDateSpan` keeps its relative context unclipped: the longest
-  // single-day label, "Sep 30, 2024 (about 2 years ago)", paints 209px.
+  // Dates and instants stack the day over its compact distance; the longest
+  // line, "Sep 30, 2024", paints about 80px.
+  if (kind === "timestamp") return 72;
   if (kind === "date") return DATE_COLUMN_WIDTH;
   if (meta?.numeric || kind === "number" || kind === "currency") return 72;
   if (kind === "amount") return 72;
@@ -522,14 +540,19 @@ function defaultColumnSize(meta: CubbyColumnMeta | undefined) {
 }
 
 /**
- * The width a short header label needs beside its sort arrow (and source
- * icon), estimated from the 12px medium header face (~6.5px per character)
- * plus cell padding, so a narrow kind default never truncates
- * "Storage status".
+ * The width a header label needs beside its sort arrow (and source icon),
+ * estimated from the 12px medium header face (~6.5px per character) plus cell
+ * padding. Labels wrap to two lines, so the widest line is the longest word
+ * or about half the label: "Itemization coverage" no longer sets the width
+ * of its pill column.
  */
 function headerFitWidth(label: string, meta: CubbyColumnMeta | undefined) {
   const icon = meta?.provenance ? 18 : 0;
-  return Math.min(Math.ceil(label.length * 6.5) + 24 + icon, HEADER_FIT_MAX);
+  const longestWord = Math.max(
+    ...label.split(/\s+/).map((word) => word.length),
+  );
+  const line = Math.max(longestWord, Math.ceil(label.length * 0.55));
+  return Math.min(Math.ceil(line * 6.5) + 24 + icon, HEADER_FIT_MAX);
 }
 
 /**

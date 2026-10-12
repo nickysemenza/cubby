@@ -10,8 +10,10 @@ import { cn } from "~/lib/utils";
  * Regression: decorations used to be appended as bare flex siblings of a
  * `min-w-0` value that never clipped, so in a narrow column the text spilled
  * out under the icon ("$2.ⓘ99"). The value slot owns the clip; the rail never
- * shrinks. Short values keep their rails beside the value; long values shrink
- * before the rail, which never gives up its target width.
+ * shrinks. The value slot takes the remaining width, so every row's rail
+ * lines up at the column's end edge while the column itself hugs its widest
+ * value plus rail; a right-aligned (numeric) cell ends its value against the
+ * rail. Long values shrink before the rail, which never gives up its width.
  */
 export function CellFrame({
   children,
@@ -27,7 +29,7 @@ export function CellFrame({
       data-cell-frame=""
       className={cn("flex w-full min-w-0 items-center gap-0.5", className)}
     >
-      <span data-cell-value="" className="min-w-0 truncate">
+      <span data-cell-value="" className="min-w-0 flex-1 truncate">
         {children}
       </span>
       <span data-cell-rail="" className="flex shrink-0 items-center">
@@ -38,11 +40,14 @@ export function CellFrame({
 }
 
 /** Width of one rail affordance plus its gap; column sizing reserves this. */
-export const CELL_RAIL_SLOT_PX = 20;
+export const CELL_RAIL_SLOT_PX = 18;
 
-/** Icon-only rail control: 18px square, always visible, quiet until hovered. */
+/**
+ * Icon-only rail control: 16px square with a 10px glyph, always visible,
+ * quiet until hovered. Coarse pointers keep the 44px touch floor.
+ */
 export const CELL_RAIL_BUTTON_CLASS =
-  "size-[18px] shrink-0 rounded-sm text-muted-foreground/70 hover:bg-muted hover:text-foreground focus-visible:text-foreground";
+  "size-4 shrink-0 [&_svg]:size-2.5 rounded-sm text-muted-foreground/70 hover:bg-muted hover:text-foreground focus-visible:text-foreground";
 
 /**
  * Wrapper for a value with an icon-only edit pencil. The pencil overlays the

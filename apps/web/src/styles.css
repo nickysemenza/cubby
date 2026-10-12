@@ -495,10 +495,6 @@
     );
   }
 
-  .table-record-row td.text-right [data-cell-frame] {
-    justify-content: flex-end;
-  }
-
   /* Full-height column rules stay quieter than the header boundary. */
   .table-grid-lines th:not(:last-child):not(.table-pinned-boundary-start),
   .table-grid-lines td:not(:last-child):not(.table-pinned-boundary-start) {
