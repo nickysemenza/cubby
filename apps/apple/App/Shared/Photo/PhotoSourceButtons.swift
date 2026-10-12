@@ -17,8 +17,7 @@ import UniformTypeIdentifiers
 /// 256px preview is decoded for the UI. Callers decide whether to upload, match, or attach them.
 struct PhotoSourceButtons: View {
     let onSelection: ([PhotoSelectionItem]) -> Void
-    /// nil leaves the selection unbounded, as the in-app library grid already is.
-    let maxSelectionCount: Int?
+    let maxSelectionCount: Int
     let reviewsUploads: Bool
     @Environment(AppModel.self) private var appModel
     @Environment(\.scenePhase) private var scenePhase
@@ -35,7 +34,7 @@ struct PhotoSourceButtons: View {
     }
 
     init(
-        maxSelectionCount: Int?, reviewsUploads: Bool = true,
+        maxSelectionCount: Int, reviewsUploads: Bool = true,
         onSelection: @escaping ([PhotoSelectionItem]) -> Void
     ) {
         self.reviewsUploads = reviewsUploads
@@ -113,7 +112,7 @@ struct PhotoSourceButtons: View {
         #elseif os(macOS)
             .fileImporter(
                 isPresented: $showingFileImporter, allowedContentTypes: [.image],
-                allowsMultipleSelection: maxSelectionCount != 1
+                allowsMultipleSelection: maxSelectionCount > 1
             ) { handleFileImport($0) }
         #endif
         .task {

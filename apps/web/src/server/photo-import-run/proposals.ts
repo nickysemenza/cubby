@@ -32,6 +32,7 @@ import {
 } from "@cubby/schemas/photo-import-run";
 import { runPurpose, runStatus } from "@cubby/schemas/purchase-import";
 import { getErrorMessage } from "@cubby/shared";
+import { PHOTO_RUN_IMAGE_LIMIT } from "@cubby/shared/client-constants";
 /**
  * Review queue in front of the photo-inventory writer: an agent proposes item
  * groups for a run, a household member edits and approves them on the run
@@ -83,8 +84,6 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { commitPhotoGroup } from "./writer";
 
-/** Matches the native uploader's per-run ceiling. */
-const RUN_IMAGE_LIMIT = 1_000;
 const DISCARD_REASON = "Discarded in review";
 
 type ProposalRow = typeof photoGroupProposal.$inferSelect;
@@ -158,7 +157,7 @@ async function loadRunImages(db: Database, runId: RunId) {
     .innerJoin(image, eq(image.id, photoRunImage.imageId))
     .where(eq(photoRunImage.runId, runId))
     .orderBy(...photoRunImageOrder())
-    .limit(RUN_IMAGE_LIMIT);
+    .limit(PHOTO_RUN_IMAGE_LIMIT);
   const ordered: RunImage[] = rows.map((row) => ({
     ...row,
     imageId: imageId.parse(row.imageId),
@@ -1148,7 +1147,7 @@ export async function listPhotoRunImages(
     .innerJoin(image, eq(image.id, photoRunImage.imageId))
     .where(eq(photoRunImage.runId, run.id))
     .orderBy(...photoRunImageOrder())
-    .limit(RUN_IMAGE_LIMIT);
+    .limit(PHOTO_RUN_IMAGE_LIMIT);
   if (!rows.length) return [];
   const shortcodes = rows.map((row) => row.shortcode);
   const [representations, summaries, jobs, localAnalyses] = await Promise.all([

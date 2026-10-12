@@ -32,3 +32,10 @@ export const ACTIVE_RUN_STATUSES = [
   "paused_offline",
   "paused_approval",
 ] as const;
+
+/**
+ * The most photos one photo-inventory Run holds. Review and the grouping
+ * agent read a whole Run at once, so finalize refuses photos past it and
+ * every photo picker caps a selection at it.
+ */
+export const PHOTO_RUN_IMAGE_LIMIT = 500;

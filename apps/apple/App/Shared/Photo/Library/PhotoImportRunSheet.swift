@@ -4,8 +4,9 @@ import SwiftUI
 /// The state behind the bulk "Add to import run" flow: pick or start a `photo_inventory` run,
 /// materialize the selection, then hand it to `PhotoImportRunSession`. There is no per-photo
 /// destination step — `preparedPhotos` goes into the run in picker order and that is the entire
-/// decision the user makes here, matching the "select 1-1000 photos and that's it" requirement
-/// this flow exists for (the manifest-based `PhotoImportManifest` owns per-photo routing).
+/// decision the user makes here, matching the "select photos and that's it" requirement this
+/// flow exists for, up to `SharedConstants.photoRunImageLimit` per run (the manifest-based
+/// `PhotoImportManifest` owns per-photo routing).
 @MainActor
 @Observable
 final class PhotoImportRunFlow {

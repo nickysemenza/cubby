@@ -604,6 +604,32 @@ describe("photo group proposals", () => {
     });
   });
 
+  // Undated photos (stripped-EXIF exports) tie on capture time, so each
+  // appended batch must stay together before its own picker order applies.
+  it("keeps undated photos grouped by the upload that added them", async () => {
+    const { run, codes } = await seedRun(4);
+    const uploads = [
+      { code: codes[0]!, position: 0, addedAt: "2026-09-20T09:00:00.000Z" },
+      { code: codes[1]!, position: 1, addedAt: "2026-09-20T09:00:00.000Z" },
+      { code: codes[2]!, position: 0, addedAt: "2026-09-20T10:00:00.000Z" },
+      { code: codes[3]!, position: 1, addedAt: "2026-09-20T10:00:00.000Z" },
+    ];
+    for (const photo of uploads) {
+      const [row] = await getDb(ctx.db)
+        .update(image)
+        .set({ capturedAt: null })
+        .where(eq(image.shortcode, photo.code))
+        .returning({ id: image.id });
+      await getDb(ctx.db)
+        .update(photoRunImage)
+        .set({ position: photo.position, createdAt: new Date(photo.addedAt) })
+        .where(eq(photoRunImage.imageId, parseEntityId("image", row!.id)));
+    }
+
+    const listed = await listPhotoRunImages(ctx.db, run.shortcode);
+    expect(listed.map((photo) => photo.id)).toEqual(codes);
+  });
+
   it("reports description attempt time separately from queue time", async () => {
     const { run, codes } = await seedRun(1);
     const [source] = await getDb(ctx.db)

@@ -1340,13 +1340,18 @@ const imageListWith = async <Out>(
   const runOrder =
     runIdsForOrder === undefined
       ? undefined
-      : photoRunImageOrder(
-          sql`(
+      : photoRunImageOrder({
+          addedAt: sql`(
+            SELECT min("createdAt") FROM "PhotoRunImage"
+            WHERE "PhotoRunImage"."imageId" = ${image.id}
+              AND "PhotoRunImage"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
+          )`,
+          position: sql`(
             SELECT min("position") FROM "PhotoRunImage"
             WHERE "PhotoRunImage"."imageId" = ${image.id}
               AND "PhotoRunImage"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
           )`,
-        );
+        });
 
   return imageScaffold.list(
     db,

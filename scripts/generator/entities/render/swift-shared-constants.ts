@@ -6,6 +6,7 @@ import {
   ACTIVE_RUN_STATUSES,
   HOUSEHOLD_TIMEZONE,
   IMAGE_WIDTHS,
+  PHOTO_RUN_IMAGE_LIMIT,
   TASK_BOARD_INBOX_LABEL,
   TASK_BOARD_UNTITLED_PROJECT_LABEL,
 } from "../../../../packages/shared/src/client-constants.ts";
@@ -79,6 +80,8 @@ export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
         `    public static let importReportRunPurposes: [String] = [${IMPORT_REPORT_RUN_PURPOSES.map(swiftString).join(", ")}]\n` +
         "    /// Run statuses in which a run is still moving (`ACTIVE_RUN_STATUSES`).\n" +
         `    public static let activeRunStatuses: [String] = [${ACTIVE_RUN_STATUSES.map(swiftString).join(", ")}]\n` +
+        "    /// The most photos one photo-inventory Run holds (`PHOTO_RUN_IMAGE_LIMIT`).\n" +
+        `    public static let photoRunImageLimit = ${PHOTO_RUN_IMAGE_LIMIT}\n` +
         "}\n\n" +
         "extension ActivityKind {\n" +
         "    /// The shared activity label (`ACTIVITY_KIND_LABEL`).\n" +

@@ -5,8 +5,9 @@ agent propose one group per garment, then approve the groups. Approval creates
 or reuses the Products and receives Inventory owned by that person. Nothing is
 written to Products or Inventory before you approve.
 
-A Run has no fixed photo limit. Split a large wardrobe into one Run per capture session so each Run
-keeps one owner and a short list of locations.
+A Run holds up to 500 photos, and the app's photo picker stops a selection
+there. Split a larger wardrobe into one Run per capture session, which also
+keeps each Run to one owner and a short list of locations.
 
 ## Before you start
 

@@ -54,7 +54,10 @@ import {
   runTargetEntityKind,
 } from "@cubby/schemas/run-fields";
 import { parseShortcodeFor } from "@cubby/shared";
-import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
+import {
+  ACTIVE_RUN_STATUSES,
+  PHOTO_RUN_IMAGE_LIMIT,
+} from "@cubby/shared/client-constants";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
@@ -614,6 +617,31 @@ export async function finalizePhotoRun(
         }
         return { ...entry, row: locked };
       });
+
+      // Review and the grouping agent read a whole Run at once and stop at
+      // the limit, so a photo past it would upload but never be imported.
+      // The lock serializes concurrent chunks of the same Run for the count.
+      await getDb(transactionDb).execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${scope.public.runId}))`,
+      );
+      const targeted = new Set(
+        (
+          await getDb(transactionDb)
+            .select({ imageId: photoRunImage.imageId })
+            .from(photoRunImage)
+            .where(eq(photoRunImage.runId, scope.public.runId))
+        ).map((row) => row.imageId),
+      );
+      const adding = lockedStaged.filter(
+        (entry) => !targeted.has(imageId.parse(entry.row.id)),
+      ).length;
+      if (targeted.size + adding > PHOTO_RUN_IMAGE_LIMIT) {
+        throw new Error(
+          `Photo run ${input.runId} holds at most ${PHOTO_RUN_IMAGE_LIMIT} photos: ` +
+            `it has ${targeted.size} and this upload adds ${adding}. ` +
+            "Start a new run for the rest.",
+        );
+      }
 
       const inserted = await getDb(transactionDb)
         .insert(photoRunImage)
