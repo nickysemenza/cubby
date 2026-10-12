@@ -334,6 +334,11 @@ struct ActivityView: View {
                 Text(model.total == 1 ? "1 work group" : "\(model.total) work groups")
             }
         }
+        .listRowInsets(
+            EdgeInsets(
+                top: 0, leading: FieldGuideTokens.Space.md,
+                bottom: 0, trailing: FieldGuideTokens.Space.md)
+        )
         .navigationTitle("Activity")
         .refreshable { await model.refreshLoaded(client: appModel.client) }
         .task(id: "\(appModel.host):\(model.filterIdentity)") {
@@ -363,6 +368,11 @@ struct ActivityView: View {
             ActivityRunRow(run: run)
         }
         .buttonStyle(.plain)
+        .listRowInsets(
+            EdgeInsets(
+                top: 0, leading: FieldGuideTokens.Space.md,
+                bottom: 0, trailing: FieldGuideTokens.Space.md)
+        )
         .accessibilityIdentifier("activity.run.\(run.id)")
     }
 
@@ -558,39 +568,24 @@ private extension String {
     }
 }
 
-private struct ActivityRunRow: View {
+struct ActivityRunRow: View {
     let run: ActivityRun
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: EntityCatalog[run.iconEntity].sfSymbol)
+        RecordListRow(
+            title: run.subjectName,
+            imageURL: run.subjectImage.flatMap { URL(string: $0.representations?.preferred ?? $0.url) },
+            symbol: EntityCatalog[run.iconEntity].sfSymbol
+        ) {
+            Text(([run.workLabel] + run.executors.map(\.name)).joined(separator: " · "))
+        } rail: {
+            Text(run.state.replacingOccurrences(of: "_", with: " ").capitalized)
                 .foregroundStyle(run.active ? FieldGuideTokens.interaction : Color.secondary)
-                .frame(width: 22)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(run.subjectName).font(.headline)
-                HStack(spacing: 6) {
-                    Text(run.workLabel)
-                    Text("·")
-                    Text(run.state.replacingOccurrences(of: "_", with: " ").capitalized)
-                    Text("·")
-                    Text(run.createdAt, style: .relative)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                if let progress = run.progressLine {
-                    Text(progress).font(.caption).monospacedDigit().lineLimit(1)
-                }
-                if !run.executors.isEmpty {
-                    Text(run.executors.map(\.name).joined(separator: ", "))
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-                if let error = run.error {
-                    Text(error).font(.caption).foregroundStyle(FieldGuideTokens.destructive).lineLimit(2)
-                }
-            }
+            RecordRowTimestamp(date: run.createdAt)
+        } supplement: {
+            if let progress = run.progressLine { Text(progress).monospacedDigit() }
+            if let error = run.error { Text(error).foregroundStyle(FieldGuideTokens.destructive) }
         }
-        .padding(.vertical, 4)
     }
 }
 

@@ -8,7 +8,7 @@ import { cn } from "~/lib/utils";
 const EYEBROW_CLASS = "eyebrow";
 
 /**
- * The mono eyebrow label, backed by the `eyebrow` CSS utility (see styles.css).
+ * The compact caption label, backed by the `eyebrow` CSS utility (see styles.css).
  * Renders a `<p>` by default; pass `as` for a span/div/th/label. Override
  * tracking/spacing/color via className (cn is twMerge-backed, so a later class
  * wins).

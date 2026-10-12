@@ -1,12 +1,25 @@
 import CubbyKit
 import SwiftUI
 
+#if os(iOS)
+    import UIKit
+#elseif os(macOS)
+    import AppKit
+#endif
+
 /// Shared brand decisions on native surfaces. Controls, navigation, and text sizing remain SwiftUI.
 enum FieldGuideTokens {
-    static let canvas = Color("Canvas")
-    static let surface = Color("Surface")
-    static let inset = Color("Inset")
-    static let hairline = Color("Hairline")
+    #if os(iOS)
+        static let canvas = Color(uiColor: .systemGroupedBackground)
+        static let surface = Color(uiColor: .secondarySystemGroupedBackground)
+        static let inset = Color(uiColor: .tertiarySystemGroupedBackground)
+        static let hairline = Color(uiColor: .separator)
+    #else
+        static let canvas = Color(nsColor: .windowBackgroundColor)
+        static let surface = Color(nsColor: .controlBackgroundColor)
+        static let inset = Color(nsColor: .underPageBackgroundColor)
+        static let hairline = Color(nsColor: .separatorColor)
+    #endif
     static let graphite = Color.primary
     static let graphiteSecondary = Color.secondary
 
@@ -109,12 +122,12 @@ extension EntityKey {
     }
 }
 
-/// Editorial headings use a system serif; all reading and controls retain Dynamic Type.
+/// Native text styles preserve system typography and Dynamic Type.
 extension Font {
     /// Dashboard and sign-in identity (Mac Today, Login), and a record title on Mac.
-    static let fieldGuideDisplay = Font.system(.largeTitle, design: .serif).weight(.semibold)
+    static let fieldGuideDisplay = Font.largeTitle.weight(.semibold)
     /// Page identity and major regions.
-    static let fieldGuideHeadline = Font.system(.title2, design: .serif).weight(.semibold)
+    static let fieldGuideHeadline = Font.title2.weight(.semibold)
     /// A record detail's hero title. Phone steps down to the headline size so the title does not
     /// push the record's data below the first screen; Mac keeps the display size.
     static var fieldGuideRecordTitle: Font {

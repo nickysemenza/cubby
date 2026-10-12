@@ -113,7 +113,7 @@ export function FlowSourceContent({
             className={
               readable
                 ? "block text-xs text-muted-foreground"
-                : "block font-mono text-2xs tracking-wider text-slate uppercase"
+                : "block text-xs font-medium text-muted-foreground"
             }
           >
             {source.role}
@@ -138,7 +138,7 @@ function FlowOperationContent({
 }) {
   return (
     <>
-      <span className="font-mono text-2xs tracking-wider text-slate uppercase">
+      <span className="text-xs font-medium text-muted-foreground">
         {operation.label}
       </span>
       {operation.outputLabel && (

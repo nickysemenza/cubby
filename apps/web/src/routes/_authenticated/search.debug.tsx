@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authenticated/search/debug")({
 
 function SearchDebugRoute() {
   return (
-    <Page variant="list" title="Search debug" compact decoration="none">
+    <Page variant="list" title="Search debug" compact>
       <SearchDebugPage />
     </Page>
   );

@@ -48,7 +48,6 @@ const StatementRowsPage = listChromePage({
   title: "Statement Rows",
   layout: "full",
   compact: true,
-  decoration: "none",
   page: StatementRowList,
   actions: () => (
     <Button render={<Link to="/statement-rows/import" />} nativeButton={false}>

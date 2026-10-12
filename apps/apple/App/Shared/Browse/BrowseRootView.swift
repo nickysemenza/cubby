@@ -13,6 +13,7 @@ struct BrowseRootView: View {
             if query.isEmpty {
                 Section {
                     statementImportLink
+                        .listRowInsets(browseRowInsets)
                         .accessibilityIdentifier("browse.importStatement")
                 } header: {
                     headerTitle("Finance intake")
@@ -37,6 +38,7 @@ struct BrowseRootView: View {
                     Section {
                         ForEach(group.rows, id: \.key) { descriptor in
                             row(for: descriptor)
+                                .listRowInsets(browseRowInsets)
                         }
                         if !group.unlisted.isEmpty {
                             unlistedFootnote(names: group.unlisted)
@@ -48,7 +50,7 @@ struct BrowseRootView: View {
             }
         }
         .accessibilityIdentifier("browse.catalog")
-        .listStyle(.plain)
+        .listStyle(.automatic)
         .fieldGuideScreen()
         .navigationTitle("Browse")
         .searchable(text: $query)
@@ -96,16 +98,13 @@ struct BrowseRootView: View {
     private func headerTitle(_ title: String, domain: AppDomain? = nil) -> some View {
         HStack(spacing: FieldGuideTokens.Space.sm) {
             if let domain { DomainMark(domain) }
-            Eyebrow(title)
+            Text(title).font(.subheadline.weight(.semibold)).textCase(nil)
             Spacer()
         }
-        .padding(.top, FieldGuideTokens.Space.lg)
-        .padding(.bottom, FieldGuideTokens.Space.sm)
         .listRowInsets(
             EdgeInsets(
                 top: 0, leading: FieldGuideTokens.Space.lg, bottom: 0, trailing: FieldGuideTokens.Space.lg)
         )
-        .background(FieldGuideTokens.canvas)
     }
 
     @ViewBuilder private func row(for descriptor: EntityDescriptor) -> some View {

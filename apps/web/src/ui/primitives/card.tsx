@@ -14,7 +14,7 @@ function Card({
     <div
       data-slot="card"
       data-size={size}
-      // Field Guide panels use warm surfaces, hairlines, and a 16px radius.
+      // Shared panels use neutral surfaces, hairlines, and the token radius.
       className={cn(
         "bg-card text-card-foreground group/card flex flex-col gap-3 overflow-hidden rounded-[var(--brand-radius-panel)] border border-[var(--border)] py-3 text-xs/relaxed has-[>img:first-child]:pt-0 data-[size=sm]:gap-2 data-[size=sm]:py-2.5",
         className,

@@ -47,13 +47,7 @@ function ShelfTriagePage() {
   const navigate = Route.useNavigate();
 
   return (
-    <Page
-      variant="list"
-      title="Shelf triage"
-      eyebrow="Inventory"
-      compact
-      decoration="none"
-    >
+    <Page variant="list" title="Shelf triage" eyebrow="Inventory" compact>
       <Suspense fallback={<SimpleLoading text="Loading shelf triage..." />}>
         <ShelfTriageWorkbench
           run={run}

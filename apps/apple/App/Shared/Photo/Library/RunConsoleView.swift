@@ -64,7 +64,7 @@ struct RunConsoleView: View {
             if let snapshot = session.snapshot {
                 let row = row(snapshot)
                 Section {
-                    EntityHeroView(descriptor: descriptor, row: row) { EmptyView() }
+                    EntityHeroView(descriptor: descriptor, row: row, showsTitle: true) { EmptyView() }
                     if let error = session.error {
                         InlineLoadFailure(message: error) { await refresh() }
                     }

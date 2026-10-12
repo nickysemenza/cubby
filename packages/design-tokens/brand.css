@@ -1,13 +1,13 @@
 /* Generated from tokens.json. Edit the source and run pnpm generate. */
 :root {
-  --brand-foreground: #1b211b;
-  --brand-graphite-secondary: #626960;
-  --brand-canvas: #f5f4ed;
-  --brand-surface: #fffefa;
-  --brand-inset: #eeefe8;
-  --brand-hairline: #d9ded2;
-  --brand-interaction: #1b211b;
-  --brand-interaction-hover: #344035;
+  --brand-foreground: #1d1d1f;
+  --brand-graphite-secondary: #636368;
+  --brand-canvas: #f5f5f7;
+  --brand-surface: #ffffff;
+  --brand-inset: #eeeef0;
+  --brand-hairline: #dcdce0;
+  --brand-interaction: #1d1d1f;
+  --brand-interaction-hover: #3a3a3e;
   --brand-on-accent: #ffffff;
   --brand-signal: #c9f45b;
   --brand-domain-cook: #a86c25;
@@ -19,7 +19,7 @@
   --brand-warning: #9b640d;
   --brand-warning-ink: #75500d;
   --brand-destructive: #b54336;
-  --brand-slate: #626960;
+  --brand-slate: #636368;
   --brand-graphite: var(--brand-foreground);
   --brand-paper: var(--brand-canvas);
   --brand-paper-alt: var(--brand-inset);
@@ -30,7 +30,7 @@
   --brand-cobalt: var(--brand-interaction);
   --brand-aubergine: var(--brand-domain-finance);
   --brand-radius-control: 8px;
-  --brand-radius-panel: 16px;
+  --brand-radius-panel: 12px;
   --brand-radius-chip: 7px;
   --brand-radius-pill: 999px;
   --brand-space-1: 4px;
@@ -42,13 +42,12 @@
   --brand-motion-fast: 120ms;
   --brand-motion-standard: 180ms;
   --brand-ease-cozy: cubic-bezier(0.2, 0, 0, 1);
-  --brand-font-display: "Iowan Old Style", Georgia, serif;
+  --brand-font-display:
+    system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --brand-font-heading:
-    "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
-  --brand-font-sans:
-    "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
-  --brand-font-mono:
-    "JetBrains Mono Variable", "JetBrains Mono", "SF Mono", monospace;
+    system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --brand-font-sans: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --brand-font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   --positive: var(--brand-positive);
   --warning: var(--brand-warning);
   --warning-ink: var(--brand-warning-ink);

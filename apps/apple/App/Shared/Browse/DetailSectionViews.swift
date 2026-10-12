@@ -14,105 +14,119 @@ struct EntityHeroView<Actions: View>: View {
 
     @State private var showingPhoto = false
 
-    private let heroMaxHeight: CGFloat = 280
-
     private var presentation: EntityPresentation { descriptor.presentation }
 
+    @Environment(\.dynamicTypeSize) private var textSize
+    @State private var availableWidth: CGFloat = 0
+    let showsTitle: Bool
+
+    init(
+        descriptor: EntityDescriptor, row: EntityRow, showsTitle: Bool? = nil,
+        @ViewBuilder actions: () -> Actions
+    ) {
+        self.descriptor = descriptor
+        self.row = row
+        self.showsTitle = showsTitle ?? true
+        self.actions = actions()
+    }
+
+    private var besidePhoto: Bool { availableWidth >= 600 && !textSize.isAccessibilitySize }
+
     var body: some View {
-        if let photo = heroPhoto {
-            Button {
-                showingPhoto = true
-            } label: {
-                RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
-                    .fill(FieldGuideTokens.inset)
-                    .aspectRatio(4.0 / 3.0, contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: heroMaxHeight)
-                    .overlay {
-                        PhotoAttachmentImage(photo: photo, renderedWidth: FieldGuideTokens.readingWidth)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
-                            .strokeBorder(
-                                FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Preview \(photo.filename)")
-            .photoPreviewPresentation(isPresented: $showingPhoto) {
-                PhotoPreview(photos: [photo], selectedID: photo.id)
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+            let layout =
+                besidePhoto
+                ? AnyLayout(HStackLayout(alignment: .top, spacing: FieldGuideTokens.Space.md))
+                : AnyLayout(VStackLayout(alignment: .leading, spacing: FieldGuideTokens.Space.md))
+            layout {
+                if let photo = heroPhoto { photoButton(photo) }
+                summary
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) {
+            $0.size.width
+        } action: {
+            availableWidth = $0
+        }
+        actions
+    }
+
+    private func photoButton(_ photo: PhotoAttachment) -> some View {
+        Button {
+            showingPhoto = true
+        } label: {
+            PhotoAttachmentImage(photo: photo, renderedWidth: FieldGuideTokens.readingWidth)
+                .frame(maxWidth: .infinity)
+                .frame(height: besidePhoto ? 180 : 200)
+                .background(FieldGuideTokens.inset)
+                .clipped()
+                .overlay {
+                    Rectangle().strokeBorder(
+                        FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
+                }
+        }
+        .frame(maxWidth: besidePhoto ? 240 : .infinity)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Preview \(photo.filename)")
+        .photoPreviewPresentation(isPresented: $showingPhoto) {
+            PhotoPreview(photos: [photo], selectedID: photo.id)
+        }
+    }
+
+    private var summary: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             if let breadcrumb = presentation.heroBreadcrumb, let field = descriptor.field(breadcrumb),
                 let reference = EntityFieldValue.reference(in: row.raw, field: field)
             {
                 NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
-                    HStack(spacing: FieldGuideTokens.Space.xs) {
-                        Image(systemName: "chevron.left").font(.fieldGuideLabel.weight(.semibold))
-                        Text(reference.name ?? reference.id).font(.fieldGuideLabel)
-                    }
-                    .foregroundStyle(FieldGuideTokens.interaction)
+                    Label(reference.name ?? reference.id, systemImage: "chevron.left")
+                        .font(.subheadline)
+                        .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
                 }
                 .buttonStyle(.plain)
             }
-            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
-                if let emoji = descriptor.recordEmoji(in: row) {
-                    Text(emoji).font(Font.fieldGuideRecordTitle).accessibilityHidden(true)
-                } else if descriptor.recordIconEntityField != nil {
-                    Image(systemName: descriptor.recordSymbol(in: row))
-                        .font(.fieldGuideTitle).accessibilityHidden(true)
-                }
+            if showsTitle || besidePhoto {
                 Text(row.title)
-                    .font(Font.fieldGuideRecordTitle)
-                    .tracking(-0.4)
-                    .foregroundStyle(FieldGuideTokens.graphite)
+                    .font(.headline)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
-                if let chip = presentation.heroChip, let field = descriptor.field(chip),
-                    let text = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
-                {
-                    StatusChip(
-                        text: text,
-                        color: FieldGuideMetrics.optionColor(
-                            EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail")))
-                }
             }
             if let subtitle = row.subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.fieldGuideBody)
-                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: FieldGuideTokens.Space.sm) {
-                DomainMark(descriptor.key)
-                Text(row.id)
-                    .font(.fieldGuideCode)
-                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                    .textSelection(.enabled)
-                Text(descriptor.singular)
-                    .font(.fieldGuideLabel)
-                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                if let emoji = descriptor.recordEmoji(in: row) {
+                    Text(emoji).accessibilityHidden(true)
+                } else if descriptor.recordIconEntityField != nil {
+                    Image(systemName: descriptor.recordSymbol(in: row)).accessibilityHidden(true)
+                } else {
+                    DomainMark(descriptor.key)
+                }
+                Text(row.id).font(.fieldGuideCode).textSelection(.enabled)
+                Text(descriptor.singular).font(.caption)
             }
-        }
-        let stats = heroStats
-        if !stats.isEmpty {
-            HStack(spacing: FieldGuideTokens.Space.lg) {
-                ForEach(stats, id: \.label) { stat in
-                    VStack(alignment: .leading, spacing: 2) {
-                        FieldExplanationLabel(
-                            field: stat.field,
-                            subject: EntityRef(entity: descriptor.key, id: row.id)
-                        )
-                        .font(.fieldGuideLabel)
-                        .foregroundStyle(.secondary)
-                        Text(stat.value).font(.fieldGuideData.weight(.semibold))
-                    }
-                    .accessibilityElement(children: .combine)
+            .foregroundStyle(.secondary)
+            if let chip = presentation.heroChip, let field = descriptor.field(chip),
+                let text = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
+            {
+                StatusChip(
+                    text: text,
+                    color: FieldGuideMetrics.optionColor(
+                        EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail")))
+            }
+            ForEach(heroStats, id: \.label) { stat in
+                LabeledContent {
+                    Text(stat.value).font(.fieldGuideData.weight(.semibold))
+                } label: {
+                    FieldExplanationLabel(
+                        field: stat.field,
+                        subject: EntityRef(entity: descriptor.key, id: row.id))
                 }
             }
         }
-        actions
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var heroStats: [(label: String, value: String, field: FieldDescriptor)] {
@@ -143,6 +157,26 @@ struct EntityHeroView<Actions: View>: View {
     .environment(PreviewFixtures.signedInModel())
 }
 
+#Preview("Entity hero · accessibility") {
+    Form {
+        EntityHeroView(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow) {
+            EmptyView()
+        }
+    }
+    .dynamicTypeSize(.accessibility3)
+    .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Entity hero · wide") {
+    Form {
+        EntityHeroView(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow) {
+            EmptyView()
+        }
+    }
+    .frame(width: 760)
+    .environment(PreviewFixtures.signedInModel())
+}
+
 // MARK: - Fields
 
 /// The `fields` section: one `LabeledContent` per declared key that carries a value. A
@@ -164,18 +198,27 @@ struct FieldsSectionView<Inline: View>: View {
 
     var body: some View {
         let rows = rows
-        ForEach(rows, id: \.key) { field in
-            fieldRow(field)
-            if let resolved = FieldResolutionPresentation(raw: row.raw, field: field) {
-                EntityFieldResolutionLabel(resolved: resolved)
-                if resolved.resetPayload(field: field) != nil, descriptor.key.nativeActions.contains(.update)
-                {
-                    Button("Review reset: \(resolved.resetLabel.lowercased())") {
-                        resetReview = ResetReview(field: field.key)
+        ForEach(fieldGroups) { group in
+            if group.compact {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(group.fields, id: \.key) { field in
+                        if field.key != group.id { Divider() }
+                        dossierField(field)
                     }
                 }
+                .font(.subheadline)
+                .navigationLinkIndicatorVisibility(.hidden)
+                .listRowBackground(Color.clear)
+                .listRowInsets(
+                    EdgeInsets(
+                        top: 0, leading: FieldGuideTokens.Space.md,
+                        bottom: 0, trailing: FieldGuideTokens.Space.md))
+            } else {
+                ForEach(group.fields, id: \.key) { field in
+                    fieldRow(field)
+                    fieldSuffix(field)
+                }
             }
-            if field.key == inlineFieldKey { inline }
         }
         .sheet(item: $resetReview) { review in
             EntityEditorSheet(
@@ -186,6 +229,64 @@ struct FieldsSectionView<Inline: View>: View {
                 })
         }
         if rows.isEmpty { Text("Nothing recorded").foregroundStyle(.secondary) }
+    }
+
+    private struct FieldGroup: Identifiable {
+        var fields: [FieldDescriptor]
+        let compact: Bool
+        var id: String { fields[0].key }
+    }
+
+    /// Ordinary facts and their evidence share a Form child. Specialist/prose layouts keep
+    /// their own row, and grouping preserves manifest order.
+    private var fieldGroups: [FieldGroup] {
+        var groups: [FieldGroup] = []
+        for field in rows {
+            let compact =
+                field.itemsPath == nil && field.controlKind != .textarea
+                && field.detailRenderer != .expenseSpendingCategory
+                && field.detailRenderer != .spendingCategorySummary
+                && field.detailRenderer != .recipeSource
+            if compact, groups.last?.compact == true {
+                groups[groups.count - 1].fields.append(field)
+            } else {
+                groups.append(FieldGroup(fields: [field], compact: compact))
+            }
+        }
+        return groups
+    }
+
+    @ViewBuilder
+    private func dossierField(_ field: FieldDescriptor) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            fieldRow(field)
+                .frame(
+                    minHeight: field.explanation != nil || field.reference != nil
+                        ? FieldGuideTokens.touchTarget : 32
+                )
+                .fixedSize(horizontal: false, vertical: true)
+            fieldSuffix(field)
+        }
+    }
+
+    @ViewBuilder
+    private func fieldSuffix(_ field: FieldDescriptor) -> some View {
+        if let resolved = FieldResolutionPresentation(raw: row.raw, field: field) {
+            EntityFieldResolutionLabel(resolved: resolved)
+            if resolved.resetPayload(field: field) != nil,
+                descriptor.key.nativeActions.contains(.update)
+            {
+                Button {
+                    resetReview = ResetReview(field: field.key)
+                } label: {
+                    Text("Review reset: \(resolved.resetLabel.lowercased())")
+                        .font(.subheadline)
+                        .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        if field.key == inlineFieldKey { inline }
     }
 
     private var rows: [FieldDescriptor] {
@@ -220,7 +321,8 @@ struct FieldsSectionView<Inline: View>: View {
     @ViewBuilder
     private func fieldRow(_ field: FieldDescriptor) -> some View {
         if field.reference?.multiple == true {
-            RecordReferenceList(field: field, row: row)
+            RecordReferenceList(
+                field: field, row: row, subject: EntityRef(entity: descriptor.key, id: row.id))
         } else if field.itemsPath != nil {
             DetailDisplayRows(label: field.label, rows: field.detailItems(in: row.raw))
         } else if field.detailRenderer == .spendingCategorySummary {
@@ -239,18 +341,25 @@ struct FieldsSectionView<Inline: View>: View {
             recipeSourceRow(field, source: source)
         } else if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
             let value = reference.name ?? reference.id
-            NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
-                LabeledContent {
-                    HStack {
+            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
+                FieldExplanationLabel(
+                    field: field,
+                    subject: EntityRef(entity: descriptor.key, id: row.id))
+                Spacer(minLength: FieldGuideTokens.Space.sm)
+                NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
+                    HStack(spacing: FieldGuideTokens.Space.xs) {
                         if let emoji = reference.emoji { Text(emoji).accessibilityHidden(true) }
-                        Text(value)
+                        Text(value).fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.trailing)
+                        Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
                     }
-                } label: {
-                    FieldExplanationLabel(
-                        field: field,
-                        subject: EntityRef(entity: descriptor.key, id: row.id))
+                    .foregroundStyle(.tint)
+                    .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .trailing)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
+            .frame(maxWidth: .infinity)
         } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
             ?? (FieldResolutionPresentation(raw: row.raw, field: field) == nil ? nil : "None")
         {
@@ -262,7 +371,10 @@ struct FieldsSectionView<Inline: View>: View {
                         .textSelection(.enabled)
                 } else {
                     Text(value)
-                        .font(field.kind == .identifier ? .fieldGuideCode : .fieldGuideBody)
+                        .font(
+                            field.kind == .identifier
+                                ? .fieldGuideCode : field.controlKind == .textarea ? .body : .subheadline
+                        )
                         .textSelection(.enabled)
                         .multilineTextAlignment(.trailing)
                 }
@@ -308,6 +420,7 @@ struct FieldExplanationLabel: View {
     let subject: EntityRef
     var labelOverride: String? = nil
     var surface = "detail"
+    var iconOnly = false
     @Environment(AppModel.self) private var appModel
     @State private var showingExplanation = false
     @State private var resolved: FieldExplanationOutput?
@@ -321,8 +434,10 @@ struct FieldExplanationLabel: View {
                 showingExplanation = true
             } label: {
                 HStack(spacing: FieldGuideTokens.Space.xs) {
-                    Text(labelOverride ?? field.label)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if !iconOnly {
+                        Text(labelOverride ?? field.label)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Image(systemName: "info.circle")
                         .accessibilityHidden(true)
                 }
@@ -977,7 +1092,7 @@ struct EntityJournalSectionView: View {
                 if list.rows.isEmpty { Text("No entries yet.").foregroundStyle(.secondary) }
                 ForEach(list.rows) { row in
                     VStack(alignment: .leading, spacing: 5) {
-                        EntityJournalEntryRow(descriptor: model.target, row: row)
+                        EntityJournalEntryRow(descriptor: model.target, row: row, columns: model.spec.columns)
                         if let evidence = model.connectionEvidence[row.id] {
                             RecordPathView(paths: evidence.paths)
                         }
@@ -1020,6 +1135,7 @@ struct EntityJournalSectionView: View {
 struct EntityJournalEntryRow: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
+    var columns: [String]? = nil
 
     private var images: [URL] {
         row.raw["displayImages"]?.arrayValue?.compactMap { image in
@@ -1033,26 +1149,9 @@ struct EntityJournalEntryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             NavigationLink(value: Route.entityDetail(descriptor.key, id: row.id)) {
-                HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(row.title).font(.fieldGuideBody.weight(.semibold))
-                        if let field = descriptor.field("observedOn"),
-                            let day = EntityFieldValue.text(row.raw["observedOn"], field: field)
-                        {
-                            Text(day).font(.fieldGuideLabel).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    if let field = descriptor.field("kind"),
-                        let kind = EntityFieldValue.text(row.raw["kind"], field: field)
-                    {
-                        StatusChip(
-                            text: kind,
-                            color: FieldGuideMetrics.optionColor(
-                                EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail")))
-                    }
-                }
+                EntityRowView(key: descriptor.key, row: row, columns: columns)
             }
+
             if let note = row.raw["notes"]?.stringValue, !note.isEmpty {
                 Text(note).font(.fieldGuideBody).fixedSize(horizontal: false, vertical: true)
             }
@@ -1209,6 +1308,7 @@ private struct DetailDisplayRows: View {
 private struct RecordReferenceList: View {
     let field: FieldDescriptor
     let row: EntityRow
+    let subject: EntityRef
     @State private var expanded = false
     private var items: [JSONValue] { row.raw[field.readKey ?? field.key]?.arrayValue ?? [] }
     private var target: EntityKey? { field.reference?.entity }
@@ -1228,8 +1328,8 @@ private struct RecordReferenceList: View {
     }
     var body: some View {
         if let target {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                Text(field.label).font(.fieldGuideLabel)
+            VStack(alignment: .leading, spacing: 0) {
+                FieldExplanationLabel(field: field, subject: subject).font(.subheadline)
                 ForEach(
                     Array(
                         (expanded ? items : Array(items.prefix(field.referencePreviewLimit ?? items.count)))
@@ -1242,15 +1342,30 @@ private struct RecordReferenceList: View {
                                     Text(emoji).accessibilityHidden(true)
                                 }
                                 Text(item["name"]?.stringValue ?? id)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
                             }
+                            .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
                 }
                 if let limit = field.referencePreviewLimit, items.count > limit {
-                    Button(expanded ? "Show less" : "+\(items.count - limit) more") { expanded.toggle() }
+                    Button {
+                        expanded.toggle()
+                    } label: {
+                        Text(expanded ? "Show less" : "+\(items.count - limit) more")
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    .buttonStyle(.plain)
                 }
                 if !filters.isEmpty {
-                    NavigationLink("View all", value: Route.entityList(target, filters: filters))
+                    NavigationLink(value: Route.entityList(target, filters: filters)) {
+                        Label("View all", systemImage: "chevron.right")
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

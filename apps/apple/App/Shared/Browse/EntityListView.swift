@@ -951,19 +951,24 @@ struct EntityListView: View {
     }
 
     @ViewBuilder private func rowContent(_ row: EntityRow) -> some View {
-        #if os(macOS)
-            if usesBrowseSelection {
-                EntityRowView(key: key, row: row).tag(RecordSelection(key: key, id: row.id))
-            } else {
+        Group {
+            #if os(macOS)
+                if usesBrowseSelection {
+                    EntityRowView(key: key, row: row).tag(RecordSelection(key: key, id: row.id))
+                } else {
+                    NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                        EntityRowView(key: key, row: row)
+                    }
+                }
+            #else
                 NavigationLink(value: Route.entityDetail(key, id: row.id)) {
                     EntityRowView(key: key, row: row)
                 }
-            }
-        #else
-            NavigationLink(value: Route.entityDetail(key, id: row.id)) {
-                EntityRowView(key: key, row: row)
-            }
-        #endif
+            #endif
+        }
+        .listRowInsets(
+            EdgeInsets(
+                top: 2, leading: FieldGuideTokens.Space.md, bottom: 2, trailing: FieldGuideTokens.Space.md))
     }
 }
 
@@ -1000,29 +1005,58 @@ struct EntityRowView: View {
     /// Preview-only image injection keeps the production row on the shared URL-backed Thumb
     /// while allowing previews to exercise the real image geometry and clipping.
     var previewImage: Image? = nil
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var presentation: EntityRowPresentation {
         EntityRowPresentation.resolve(
             descriptor: EntityCatalog[key], row: row, columns: columns, photoMode: photoMode)
     }
 
-    private var thumbnailSize: CGFloat {
-        #if os(iOS)
-            36
-        #else
-            36
-        #endif
+    private var railFacts: [EntityRowPresentation.Fact] {
+        let descriptor = EntityCatalog[key]
+        let dated = presentation.facts.first { $0.isDate }
+        let leading = presentation.facts.filter { !$0.isDate }.sorted { left, right in
+            func priority(_ fact: EntityRowPresentation.Fact) -> Int {
+                guard let field = descriptor.field(fact.id) else { return .max }
+                if field.key == descriptor.presentation.heroChip { return -1 }
+                if field.mobileSlot == "trailing" { return field.mobilePriority ?? 0 }
+                return fact.id == "dataQuality" ? 1000 : .max
+            }
+            return priority(left) < priority(right)
+        }.first { fact in
+            let field = descriptor.field(fact.id)
+            return field?.key == descriptor.presentation.heroChip
+                || field?.mobileSlot == "trailing" || fact.id == "dataQuality"
+        }
+        return [leading, dated].compactMap { $0 }
+    }
+
+    private var contextFact: EntityRowPresentation.Fact? {
+        let railIDs = Set(railFacts.map(\.id))
+        return presentation.facts.filter {
+            !railIDs.contains($0.id) && EntityCatalog[key].field($0.id)?.mobileSlot == "subtitle"
+        }.min {
+            (EntityCatalog[key].field($0.id)?.mobilePriority ?? .max)
+                < (EntityCatalog[key].field($1.id)?.mobilePriority ?? .max)
+        }
+    }
+
+    private var supportingFacts: [EntityRowPresentation.Fact] {
+        let headerIDs = Set(railFacts.map(\.id) + [contextFact?.id].compactMap { $0 })
+        return presentation.facts.filter { !headerIDs.contains($0.id) }
     }
 
     @ViewBuilder
-    private func factView(_ fact: EntityRowPresentation.Fact) -> some View {
+    private func factView(_ fact: EntityRowPresentation.Fact, isRail: Bool = false) -> some View {
         let field = EntityCatalog[key].field(fact.id)
         HStack(spacing: FieldGuideTokens.Space.xs) {
             if fact.id == "dataQuality", let field {
                 FieldExplanationLabel(
                     field: field, subject: EntityRef(entity: key, id: row.id),
                     labelOverride: fact.value, surface: "list")
+            } else if isRail {
+                Text(fact.value)
+                    .monospacedDigit()
+                    .accessibilityLabel("\(fact.label ?? field?.label ?? fact.id): \(fact.value)")
             } else if let field,
                 let color = FieldGuideMetrics.optionColor(
                     EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list"))
@@ -1042,7 +1076,7 @@ struct EntityRowView: View {
             if let field, field.explanation != nil, fact.id != "dataQuality" {
                 FieldExplanationLabel(
                     field: field, subject: EntityRef(entity: key, id: row.id),
-                    labelOverride: "About \(field.label)", surface: "list")
+                    labelOverride: fact.value, surface: "list", iconOnly: true)
             }
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -1050,11 +1084,11 @@ struct EntityRowView: View {
 
     @ViewBuilder
     private var supportingBand: some View {
-        if presentation.facts.isEmpty && row.pendingFields.isEmpty && row.failedFields.isEmpty && !photoMode {
+        if supportingFacts.isEmpty && row.pendingFields.isEmpty && row.failedFields.isEmpty && !photoMode {
             EmptyView()
-        } else if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                ForEach(presentation.facts) { fact in factView(fact) }
+        } else {
+            WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm) {
+                ForEach(supportingFacts) { fact in factView(fact) }
                 if !row.pendingFields.isEmpty {
                     Text("Loading details…").font(.caption).foregroundStyle(.secondary)
                 } else if !row.failedFields.isEmpty {
@@ -1064,64 +1098,23 @@ struct EntityRowView: View {
                     Text(presentation.shortcode).font(.caption2.monospaced())
                 }
             }
+            .font(.caption)
             .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            ScrollView(.horizontal) {
-                HStack(spacing: FieldGuideTokens.Space.sm) {
-                    ForEach(presentation.facts) { fact in factView(fact) }
-                    if !row.pendingFields.isEmpty {
-                        Text("Loading details…").font(.caption).foregroundStyle(.secondary)
-                    } else if !row.failedFields.isEmpty {
-                        Text("Some details unavailable").font(.caption).foregroundStyle(.secondary)
-                    }
-                    if photoMode {
-                        Text(presentation.shortcode).font(.caption2.monospaced())
-                    }
-                }
-                .frame(minHeight: FieldGuideTokens.touchTarget)
-            }
-            .scrollIndicators(.hidden)
         }
     }
 
     var body: some View {
-        HStack(spacing: FieldGuideTokens.Space.md) {
-            if let previewImage {
-                previewImage
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: thumbnailSize, height: thumbnailSize)
-                    .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
-                    .accessibilityHidden(true)
-            } else if let imageURL = presentation.imageURL {
-                Thumb(
-                    url: imageURL, size: thumbnailSize, symbol: EntityCatalog[key].recordSymbol(in: row),
-                    emoji: EntityCatalog[key].recordEmoji(in: row))
-            } else if row.pendingFields.contains("displayImages") {
-                Thumb(
-                    url: nil, size: thumbnailSize, symbol: EntityCatalog[key].recordSymbol(in: row),
-                    emoji: EntityCatalog[key].recordEmoji(in: row))
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    if presentation.imageURL == nil, let emoji = EntityCatalog[key].recordEmoji(in: row) {
-                        Text(emoji).accessibilityHidden(true)
-                    } else if presentation.imageURL == nil, EntityCatalog[key].recordIconEntityField != nil {
-                        Image(systemName: EntityCatalog[key].recordSymbol(in: row)).accessibilityHidden(true)
-                    }
-                    Text(presentation.title)
-                        .accessibilityIdentifier("entity.row.title.\(key.rawValue).\(row.id)")
-                }
-                .font(.body.weight(.semibold))
-                .foregroundStyle(FieldGuideTokens.graphite)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                supportingBand
-            }
-            Spacer(minLength: FieldGuideTokens.Space.sm)
+        RecordListRow(
+            title: presentation.title, imageURL: presentation.imageURL,
+            symbol: EntityCatalog[key].recordSymbol(in: row), emoji: EntityCatalog[key].recordEmoji(in: row),
+            previewImage: previewImage, titleIdentifier: "entity.row.title.\(key.rawValue).\(row.id)"
+        ) {
+            if let contextFact { factView(contextFact) }
+        } rail: {
+            ForEach(railFacts) { fact in factView(fact, isRail: true) }
+        } supplement: {
+            supportingBand
         }
-        .padding(.vertical, FieldGuideTokens.Space.xs)
-        .frame(minHeight: 48, alignment: .center)
-        .contentShape(Rectangle())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             (photoMode

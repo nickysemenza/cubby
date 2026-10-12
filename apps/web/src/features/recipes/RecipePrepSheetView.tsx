@@ -206,7 +206,7 @@ function Component({
             {node.recipe.name}
           </EntityRefLink>
         </h3>
-        <div className="ml-auto text-right font-mono text-2xs leading-tight tracking-wider text-slate uppercase">
+        <div className="ml-auto text-right text-xs leading-tight text-muted-foreground">
           {makes && (
             <div>
               makes {makes}

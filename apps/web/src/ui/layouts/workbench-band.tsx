@@ -9,10 +9,8 @@ interface WorkbenchBandProps {
    * "N products", not "N of M": no unfiltered total is ever read (that would
    * be an extra query — see the plan's M7 correction), so the count always
    * reads as the current (possibly filtered) cohort. The caller (`page-hero.tsx`)
-   * decides the plural — every workbench route's title IS the entity's plural
-   * label (`listPage` sets `title: plural ?? singular`) — since only it knows
-   * whether `title` is the plain string that reads sensibly lowercased next to
-   * a count; this component just renders whatever string it's given.
+   * uses the declared entity plural independently of the title's rendered
+   * content; this component just renders that count label.
    */
   countLabel?: string;
   controls?: ReactNode;
@@ -38,7 +36,7 @@ export function WorkbenchBand({
       className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-2 py-2 max-md:sticky max-md:top-[var(--app-chrome-top)] max-md:z-20 md:px-4"
     >
       <div className="flex min-w-0 items-baseline gap-2 max-md:basis-full md:shrink-0">
-        <h1 className="truncate font-display text-xl leading-8 tracking-tight">
+        <h1 className="truncate font-heading text-xl leading-8 font-semibold tracking-tight">
           {title}
         </h1>
         {count !== undefined && (

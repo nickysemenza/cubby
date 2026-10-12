@@ -6,15 +6,26 @@ struct EntityFieldResolutionLabel: View {
     let resolved: FieldResolutionPresentation
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            Text(resolved.sourceText).font(.caption).foregroundStyle(.secondary)
-            if let source = resolved.sourceEntity,
-                let entity = EntityKey(rawValue: source.entityKind.rawValue)
-            {
+        if let source = resolved.sourceEntity,
+            let entity = EntityKey(rawValue: source.entityKind.rawValue)
+        {
+            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
+                Text(resolved.sourceText).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: FieldGuideTokens.Space.sm)
                 NavigationLink(value: Route.entityDetail(entity, id: source.entityId)) {
-                    Text(source.name ?? source.entityId).font(.caption)
+                    Label(source.name ?? source.entityId, systemImage: "chevron.right")
+                        .font(.caption)
+                        .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .trailing)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
+            .frame(maxWidth: .infinity)
+            .navigationLinkIndicatorVisibility(.hidden)
+        } else {
+            Text(resolved.sourceText).font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -32,5 +43,6 @@ struct EntityFieldResolutionLabel: View {
         ]
     ]
     EntityFieldResolutionLabel(resolved: FieldResolutionPresentation(raw: raw, field: field)!)
+        .environment(PreviewFixtures.signedInModel())
         .padding()
 }

@@ -79,6 +79,11 @@ struct AuditHistoryView: View {
                     .disabled(history.loading)
             }
         }
+        .listRowInsets(
+            EdgeInsets(
+                top: 0, leading: FieldGuideTokens.Space.md,
+                bottom: 0, trailing: FieldGuideTokens.Space.md)
+        )
         .navigationTitle("Changes")
         .task(id: appModel.host) { await history.load(client: appModel.client, reset: true) }
         .refreshable { await history.load(client: appModel.client, reset: true) }
@@ -110,27 +115,30 @@ struct AuditEntryRow: View {
                 content
             }
         }
+        .listRowInsets(
+            EdgeInsets(
+                top: 0, leading: FieldGuideTokens.Space.md,
+                bottom: 0, trailing: FieldGuideTokens.Space.md)
+        )
         .accessibilityElement(children: .combine)
     }
 
     private var content: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: entry.action == .delete ? "trash" : "clock.arrow.circlepath")
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(entry.entityName ?? entry.entityKind.rawValue.capitalized)
-                    .font(.subheadline.weight(.medium))
-                Text("\(entry.action.rawValue.capitalized) · \(entry.entityKind.rawValue)")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            // `style: .relative` renders compound durations ("4 min, 27 sec") for very recent
-            // times; the named relative format ("4 minutes ago") matches the rest of the app
-            // (see ActivityView's event rows and ImageEntityDetailView).
-            Text(entry.createdAt.formatted(.relative(presentation: .named)))
-                .font(.caption).foregroundStyle(.secondary)
+        RecordListRow(
+            title: entry.entityName ?? entry.entityKind.rawValue.capitalized,
+            imageURL: entry.displayImage.flatMap { URL(string: $0.representations?.preferred ?? $0.url) },
+            symbol: EntityKey(rawValue: entry.entityKind.rawValue).map { EntityCatalog[$0].sfSymbol }
+                ?? "clock.arrow.circlepath"
+        ) {
+            Text(
+                EntityKey(rawValue: entry.entityKind.rawValue).map { EntityCatalog[$0].singular }
+                    ?? entry.entityKind.rawValue)
+        } rail: {
+            Text(entry.action.rawValue.capitalized)
+            RecordRowTimestamp(date: entry.createdAt)
+        } supplement: {
+            EmptyView()
         }
-        .frame(minHeight: FieldGuideTokens.touchTarget)
     }
 }
 
@@ -277,17 +285,6 @@ struct TodayContent: View {
     #if os(iOS)
         private var iOSList: some View {
             List {
-                Section {
-                    HStack(spacing: FieldGuideTokens.Space.sm) {
-                        Circle()
-                            .fill(FieldGuideTokens.signal)
-                            .frame(width: 9, height: 9)
-                            .accessibilityHidden(true)
-                        Text("Your household at a glance")
-                            .font(.fieldGuideBody)
-                            .foregroundStyle(.secondary)
-                    }
-                }
                 Section("Activity inbox") {
                     NavigationLink(value: Route.activityList) {
                         Label("All activity", systemImage: "clock.arrow.circlepath")
@@ -296,16 +293,13 @@ struct TodayContent: View {
                         Button {
                             model.navigator.openActivity(.serverRun(run.id))
                         } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(run.subjectName).font(.headline)
-                                Text(
-                                    "\(run.workLabel) · \(run.state.replacingOccurrences(of: "_", with: " ").capitalized)"
-                                )
-                                .font(.caption).foregroundStyle(.secondary)
-                            }
-                            .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                            ActivityRunRow(run: run)
                         }
                         .buttonStyle(.plain)
+                        .listRowInsets(
+                            EdgeInsets(
+                                top: 0, leading: FieldGuideTokens.Space.md,
+                                bottom: 0, trailing: FieldGuideTokens.Space.md))
                     }
                     if highlights?.runs.isEmpty == true {
                         emptyStateText("No recent runs")
@@ -334,7 +328,7 @@ struct TodayContent: View {
                         nextUpEmptyState(briefing)
                         ForEach(briefing.next) { task in
                             NavigationLink(value: Route.entityDetail(.task, id: task.id)) {
-                                TaskRow(task: task)
+                                taskRow(task)
                             }
                         }
                     }
@@ -353,7 +347,7 @@ struct TodayContent: View {
                         if rows.isEmpty { emptyStateText("No meals planned") }
                         ForEach(rows) { meal in
                             NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) {
-                                MealRow(meal: meal)
+                                mealRow(meal)
                             }
                         }
                     }
@@ -418,6 +412,12 @@ struct TodayContent: View {
                     }
                 }
             }
+            .listRowInsets(
+                EdgeInsets(
+                    top: 0, leading: FieldGuideTokens.Space.md,
+                    bottom: 0, trailing: FieldGuideTokens.Space.md)
+            )
+            .environment(\.defaultMinListRowHeight, FieldGuideTokens.touchTarget)
             .refreshControl(onRefresh)
             .accessibilityIdentifier("today.sections")
             .navigationSubtitle(dateText)
@@ -494,8 +494,12 @@ struct TodayContent: View {
             dashboardPanel("Activity inbox", systemImage: "clock.arrow.circlepath") {
                 Button("All activity") { model.navigator.section = .activity }
                 ForEach(highlights.runs, id: \.id) { run in
-                    Button(run.subjectName) { model.navigator.openActivity(.serverRun(run.id)) }
-                        .buttonStyle(.link)
+                    Button {
+                        model.navigator.openActivity(.serverRun(run.id))
+                    } label: {
+                        ActivityRunRow(run: run)
+                    }
+                    .buttonStyle(.plain)
                 }
                 if highlights.runs.isEmpty { emptyStateText("No recent runs") }
             }
@@ -521,7 +525,7 @@ struct TodayContent: View {
                         if rows.isEmpty { emptyStateText("No meals planned") }
                         ForEach(rows) { meal in
                             NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) {
-                                MealRow(meal: meal)
+                                mealRow(meal)
                             }
                         }
                     }
@@ -565,7 +569,7 @@ struct TodayContent: View {
                         nextUpEmptyState(briefing)
                         ForEach(briefing.next) { task in
                             NavigationLink(value: Route.entityDetail(.task, id: task.id)) {
-                                TaskRow(task: task)
+                                taskRow(task)
                             }
                         }
                     }
@@ -632,7 +636,7 @@ struct TodayContent: View {
         }
     #endif
 
-    /// Matches `TaskRow`/`MealRow`/`AuditEntryRow`'s `touchTarget` minHeight so a section's
+    /// Matches the shared record row's `touchTarget` minHeight so a section's
     /// loading placeholder doesn't collapse to a single text line and then jump taller once its
     /// first real row replaces it.
     private func loadingRow(_ label: String) -> some View {
@@ -655,6 +659,36 @@ struct TodayContent: View {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
+    private func taskRow(_ task: TaskTodayBriefingItemOut) -> some View {
+        RecordListRow(title: task.name, symbol: EntityCatalog[.task].sfSymbol) {
+            if let project = task.projectName {
+                Text([task.projectEmoji, project].compactMap { $0 }.joined(separator: " "))
+            }
+        } rail: {
+            Text(task.status == .inProgress ? "In progress" : "Not started")
+                .foregroundStyle(task.status == .inProgress ? FieldGuideTokens.interaction : Color.secondary)
+            if let dueDate = task.dueDate { Text("Due \(formattedDueDate(dueDate))").monospacedDigit() }
+        } supplement: {
+            EmptyView()
+        }
+    }
+
+    private func mealRow(_ meal: MealListItem) -> some View {
+        RecordListRow(
+            title: meal.displayName,
+            imageURL: meal.displayImages.first.flatMap {
+                URL(string: $0.representations?.preferred ?? $0.url)
+            },
+            symbol: EntityCatalog[.meal].sfSymbol
+        ) {
+            if !meal.recipeNames.isEmpty { Text(meal.recipeNames.joined(separator: ", ")) }
+        } rail: {
+            if let type = meal.mealType { Text(type.rawValue.capitalized) }
+        } supplement: {
+            EmptyView()
+        }
+    }
+
     /// One consistently-styled empty/summary line for "Next up" instead of two differently-sized
     /// messages stacked (a summary-count caption plus a body-size "nothing ready" line).
     @ViewBuilder
@@ -673,78 +707,6 @@ struct TodayContent: View {
     /// rendering at the default body size and others at caption size.
     private func emptyStateText(_ text: String) -> some View {
         Text(text).font(.fieldGuideLabel).foregroundStyle(.secondary)
-    }
-}
-
-/// One task row: name, then project and due date as a quiet second line, with status called out
-/// both by color and by word.
-private struct TaskRow: View {
-    let task: TaskTodayBriefingItemOut
-
-    var body: some View {
-        HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(task.name)
-                    .font(.fieldGuideTitle)
-                    .foregroundStyle(FieldGuideTokens.graphite)
-
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.fieldGuideLabel)
-                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-
-                }
-            }
-            Spacer(minLength: FieldGuideTokens.Space.sm)
-            StatusChip(text: statusLabel, tone: statusTone)
-        }
-        .padding(.vertical, 4)
-        .frame(minHeight: FieldGuideTokens.touchTarget)
-    }
-
-    private var subtitle: String? {
-        let parts = [task.projectName, task.dueDate.map(formattedDueDate)].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-
-    private var statusLabel: String {
-        task.status == .inProgress ? "In progress" : "Not started"
-    }
-
-    private var statusTone: StatusChip.Tone {
-        task.status == .inProgress ? .positive : .neutral
-    }
-}
-
-/// One meal row: name and type, with the recipes attached to it as a quiet second line.
-private struct MealRow: View {
-    let meal: MealListItem
-
-    var body: some View {
-        HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: FieldGuideTokens.Space.xs) {
-                    Text(meal.displayName)
-                        .font(.fieldGuideTitle)
-                        .foregroundStyle(FieldGuideTokens.graphite)
-
-                    if let mealType = meal.mealType {
-                        Text(mealType.rawValue.capitalized)
-                            .font(.fieldGuideLabel)
-                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                    }
-                }
-                if !meal.recipeNames.isEmpty {
-                    Text(meal.recipeNames.joined(separator: ", "))
-                        .font(.fieldGuideLabel)
-                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-
-                }
-            }
-            Spacer(minLength: FieldGuideTokens.Space.sm)
-        }
-        .padding(.vertical, 4)
-        .frame(minHeight: FieldGuideTokens.touchTarget)
     }
 }
 

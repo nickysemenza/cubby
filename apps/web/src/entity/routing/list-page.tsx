@@ -223,7 +223,6 @@ interface ListChromeOptions {
   layout?: PageLayout;
   eyebrow?: ReactNode;
   compact?: boolean;
-  decoration?: "accent" | "none";
   actions?: () => ReactNode;
   /**
    * A `ViewSwitcher` or similar, rendered in the workbench query
@@ -255,7 +254,6 @@ export function listChromePage({
   layout = "full",
   eyebrow,
   compact,
-  decoration,
   actions,
   workbenchControls,
   bodyGutter,
@@ -278,7 +276,6 @@ export function listChromePage({
           layout={layout}
           eyebrow={eyebrow}
           compact={compact}
-          decoration={decoration}
           actions={actions?.()}
           workbenchControls={resolvedWorkbenchControls?.()}
           bodyGutter={bodyGutter?.()}

@@ -30,7 +30,6 @@ function EntitySchemaPage() {
       variant="list"
       title="Entity schema"
       compact
-      decoration="none"
       bodyGutter="standard"
       actions={
         <Link

@@ -130,7 +130,6 @@ interface PageListProps extends PageBaseProps {
   entity?: Entity;
   actions?: ReactNode;
   compact?: boolean;
-  decoration?: "accent" | "none";
   /**
    * List pages that are durable operating surfaces use a compact ruled
    * workbench header instead of the editorial page hero. The header remains
@@ -214,7 +213,6 @@ function ListPageShell(props: PageListProps) {
           entity={entity}
           actions={props.actions}
           compact={props.compact}
-          decoration={props.decoration}
           listChrome={listChrome}
           workbenchControls={props.workbenchControls}
           mobileTitleVisible={props.mobileTitleVisible}

@@ -36,7 +36,6 @@ struct StatementCsvImportView: View {
                     completion(result)
                 } else {
                     VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                        Text("Import statement").font(.fieldGuideHeadline)
                         Text("Review your CSV before recording transactions.")
                             .foregroundStyle(.secondary)
                     }

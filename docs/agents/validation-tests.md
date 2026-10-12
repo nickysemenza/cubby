@@ -16,6 +16,9 @@ content; Overview does not expose Work or Evidence sections. After changing
 test queries, use the web `typecheck` command: `typecheck:app` excludes tests.
 Testing Library role queries use exact string names by default; Playwright's
 `exact` option is not a Testing Library option.
+When removing shared UI bindings, render every affected header branch or run
+the app TypeScript check before handoff. Helper-only tests and lint do not
+establish that a list or detail header can render with its actual props.
 
 `pnpm test` runs fast unit, UI, contract, and auxiliary tests; `pnpm
 test:postgres` runs the `integration` and `integration-workerd` contract
