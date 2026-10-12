@@ -151,6 +151,9 @@ export function ResponsiveDialog({
             <div
               className={cn(
                 "min-h-0 flex-1",
+                // A form body owns its scroll region, which is bounded only
+                // when this wrapper is a flex column (else the footer clips).
+                bodyMode === "form" && "flex flex-col",
                 bodyMode === "scroll" &&
                   "overflow-y-auto overscroll-contain p-4",
                 !footer &&
@@ -197,6 +200,7 @@ export function ResponsiveDialog({
           <div
             className={cn(
               "min-h-0 flex-1",
+              bodyMode === "form" && "flex flex-col",
               bodyMode === "scroll" && "overflow-y-auto overscroll-contain p-4",
             )}
           >

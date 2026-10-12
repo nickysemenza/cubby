@@ -577,7 +577,8 @@ const presentations = {
   },
   "product:update:full": {
     title: () => "Edit product",
-    description: () => "Change this product's own fields.",
+    // The dialog shell names the record; there is no extra note.
+    description: () => "",
     submitLabel: "Save changes",
     size: "lg",
     Fields: ProductFields,
@@ -708,10 +709,9 @@ function genericPresentation<E extends EditableEntity>(input: {
   );
   return {
     title: () => (isUpdate ? `Edit ${singular}` : `New ${singular}`),
+    // An update's subtitle is the record's own name (the dialog shell).
     description: () =>
-      isUpdate
-        ? `Change this ${singular.toLocaleLowerCase()}'s own fields.`
-        : `Add a ${singular.toLocaleLowerCase()}.`,
+      isUpdate ? "" : `Add a ${singular.toLocaleLowerCase()}.`,
     submitLabel: isUpdate ? "Save changes" : "Create",
     Fields,
     successMessage: () =>

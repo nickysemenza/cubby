@@ -38,21 +38,24 @@ export default defineEntity({
   identifiers: { brand: "PurchaseId", shortcode: "PUR-" },
   presentation: {
     edit: {
+      // Vendor, date, and total lead (the untitled remainder); how the
+      // order is classified follows.
       sections: [
         {
-          id: "details",
-          title: "Details",
-          fields: ["defaultProjectId", "defaultTrade"],
-        },
-        {
-          id: "identity",
-          title: "Identity",
+          id: "order",
+          title: "Order",
           fields: ["orderId", "vendorAccountId", "displayLabel"],
         },
         {
-          id: "schedule",
-          title: "Schedule",
-          fields: ["date"],
+          id: "classification",
+          title: "Classification",
+          fields: [
+            "defaultProjectId",
+            "defaultTrade",
+            "spendingCategoryId",
+            "evidenceExpectation",
+            "itemizationEvidence",
+          ],
         },
       ],
     },

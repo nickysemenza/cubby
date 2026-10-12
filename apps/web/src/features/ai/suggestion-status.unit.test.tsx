@@ -200,6 +200,31 @@ describe("SuggestionStatus copy", () => {
     ).toBeInTheDocument();
   });
 
+  // Regression: form fields hide below-bar picks, so the breakdown is their
+  // only explanation; it must apply the field's own 95% alternative bar
+  // rather than the 85% fill bar.
+  it("judges an alternative target against its own bar", () => {
+    const fields: SuggestionStatusField[] = [
+      {
+        label: "Trade",
+        outcome: pick(0.9),
+        suggestion: suggestion("other", 0.9),
+        currentValue: null,
+        alternative: true,
+      },
+    ];
+    render(
+      <SuggestionStatus
+        checking={false}
+        failures={0}
+        count={0}
+        fields={fields}
+      />,
+    );
+    openPopover();
+    expect(screen.getByText(/^Trade — .*needs 95%/)).toBeInTheDocument();
+  });
+
   it("aggregates into buckets once the field list exceeds the listing cap", () => {
     const fields: SuggestionStatusField[] = Array.from(
       { length: 9 },

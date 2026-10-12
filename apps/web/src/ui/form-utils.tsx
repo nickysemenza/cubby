@@ -34,6 +34,8 @@ import { Textarea } from "~/ui/primitives/textarea";
 
 import { StaticPicker } from "./combobox/static-picker";
 import { DatePickerInput } from "./date-picker-input";
+
+import "./common/ledger.css";
 import { FormFieldGroup } from "./forms/form-field-group";
 
 // Build-time guard so the bundler eliminates the @hookform/devtools import (and
@@ -235,6 +237,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   footerMode = "inline",
   footerStart,
   successMessage,
+  fieldLayout,
 }: {
   form: UseFormReturn<TFieldValues>;
   onSubmit: (values: TFieldValues) => void;
@@ -255,6 +258,9 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
    * Omit to keep the form silent on success (e.g. when the caller toasts).
    */
   successMessage?: string;
+  /** `"ledger"` puts labels in a quiet left column beside their controls
+   * (`ledger.css`); dialog forms only. Stacked by default. */
+  fieldLayout?: "ledger";
 }) {
   // Compile-time opt-in via the `formDevtools` flag. The panel only mounts
   // when the devtools are bundled (dev) AND the flag is on (see flags.ts).
@@ -309,7 +315,11 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
         {footerMode === "dialog" ? (
           <div
             data-slot="dialog-form-body"
-            className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-4 pt-1 pb-4"
+            data-field-layout={fieldLayout}
+            className={cn(
+              "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-1 pb-4",
+              fieldLayout === "ledger" ? "space-y-2.5" : "space-y-3.5",
+            )}
           >
             {children}
             <FormStatusBanner error={error} />
@@ -455,6 +465,7 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
   clearable = true,
   clearLabel = "Clear date",
   clearDisabledReason,
+  namedClear = false,
   showClearAction = true,
 }: {
   form: UseFormReturn<TFieldValues>;
@@ -464,6 +475,9 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
   clearable?: boolean;
   clearLabel?: string;
   clearDisabledReason?: string | undefined;
+  /** The clear action records a domain state ("Date unknown") worth its own
+   * labeled button; a plain clear is the picker's own ×. */
+  namedClear?: boolean;
   showClearAction?: boolean;
 }) {
   const controlId = useId();
@@ -494,7 +508,7 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
               aria-invalid={fieldState.invalid}
               aria-describedby={description ? descriptionId : undefined}
             />
-            {clearable && showClearAction ? (
+            {clearable && showClearAction && namedClear ? (
               <Button
                 type="button"
                 variant="ghost"
@@ -649,6 +663,7 @@ export function SideBySideFields({
 }): ReactNode {
   return (
     <div
+      data-slot="side-by-side-fields"
       className={cn(
         "flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2",
         className,

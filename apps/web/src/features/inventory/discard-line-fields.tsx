@@ -81,6 +81,7 @@ export function DiscardLineFields<TFieldValues extends DiscardLineFieldValues>({
           name={dateName}
           label="Date"
           clearLabel="Date unknown"
+          namedClear
         />
         <SelectField
           form={form}

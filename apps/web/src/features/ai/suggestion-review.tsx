@@ -480,6 +480,7 @@ export function SuggestionReview({
   surface = "inline",
   autoFilled = false,
   prune = false,
+  quiet,
   error,
   children,
 }: {
@@ -506,6 +507,9 @@ export function SuggestionReview({
   prune?: boolean;
   /** The suggestion query failed; the mark shows it rather than vanishing. */
   error?: unknown;
+  /** A form whose status line already reports every checked field: show only
+   * an actionable proposal, never a status-only mark. */
+  quiet?: boolean;
 }) {
   const key = suggestionReviewKey(questionKey, currentValue, suggestion);
   const { dismissed, dismiss, apply, saving, failure } = useSuggestionActions(
@@ -522,6 +526,7 @@ export function SuggestionReview({
   // suggestion still reads "Suggested X", not "Leaning X … needs 85%".
   const meetsBar = actionableSuggestion(suggestion, currentValue, alternative);
   if (!meetsBar || dismissed) {
+    if (quiet) return <>{children}</>;
     // A status-only mark (checking, unavailable, declined) is quiet on an idle
     // table row; an actionable proposal below always shows. See row-activity.
     if (surface === "cell" && !rowActive)

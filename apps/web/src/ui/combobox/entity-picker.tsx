@@ -454,9 +454,9 @@ function EntityPickerInput<TId extends string>({
     >
       <div
         className={cn(
-          "flex min-w-0 flex-1 items-center border border-border bg-input/20 transition-colors focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30 hover:bg-input/30",
+          "flex min-w-0 flex-1 items-center border border-border bg-card transition-colors focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30",
           "rounded-sm",
-          compact ? "h-7 max-sm:h-11" : "h-9 max-sm:h-11",
+          compact ? "h-7 max-sm:h-11" : "h-8 max-sm:h-11",
         )}
       >
         <ComboboxPrimitive.Input

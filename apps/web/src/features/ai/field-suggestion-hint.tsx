@@ -21,6 +21,7 @@ export function FieldSuggestionHint({
   outcome = null,
   surface = "line",
   autoFilled = false,
+  quiet = false,
 }: {
   suggestion: FieldSuggestion | null;
   applied: boolean;
@@ -33,7 +34,10 @@ export function FieldSuggestionHint({
   outcome?: FieldSuggestionOutcome | null;
   surface?: SuggestionOutcomeSurface;
   autoFilled?: boolean;
+  /** See `SuggestionReview`'s `quiet`: only an actionable proposal renders. */
+  quiet?: boolean;
 }) {
+  if (applied && quiet) return null;
   if (applied) {
     // Already applied (auto-filled or manually matched) — no proposal to
     // review, but the mark still says why: "Filled in"/"Agrees with …".
@@ -62,6 +66,7 @@ export function FieldSuggestionHint({
       outcome={outcome}
       surface={surface}
       autoFilled={autoFilled}
+      quiet={quiet}
     />
   );
 }

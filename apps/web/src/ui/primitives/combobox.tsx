@@ -145,10 +145,9 @@ export function FilterableCombobox({
         data-hydrating={gate["data-hydrating"]}
         className={cn(
           // Structure
-          "flex h-8 max-sm:h-11 w-full items-center justify-between gap-1.5 rounded-md border bg-card px-2.5",
+          "flex h-8 max-sm:h-11 w-full items-center justify-between gap-1.5 rounded-sm border bg-card px-2.5",
           // Colors & background
-          "border-border bg-input/20",
-          "hover:bg-input/30",
+          "border-border",
           // Focus states
           "focus-visible:border-ring focus-visible:ring-ring/30 focus-visible:ring-[2px]",
           // Typography
