@@ -113,6 +113,8 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       throw redirect({
         href: `${location.pathname}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`,
         replace: true,
+        // Client materialization would retain the flag from the pending location.
+        reloadDocument: true,
       });
     }
     if (import.meta.env.SSR) {
