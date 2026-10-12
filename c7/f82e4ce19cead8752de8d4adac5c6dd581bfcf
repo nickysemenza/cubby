@@ -1,0 +1,37 @@
+apps/web/src/app/recommendations/recommendation-workbench.tsx
+  s_d8b0104fa13905::t_83f35b784902e9 27,445,459,486
+apps/web/src/app/runs/run-history.tsx
+  s_d8b0104fa13905::t_8e1ebfde836756 30,604,606-616,625-644,646
+apps/web/src/entity/entity-detail/entity-sources-section.tsx
+  s_d8b0104fa13905::t_4b3a5f15fbfc2c 7,51,53,60-93,95-100,102-114,116
+apps/web/src/entity/entity-detail/records-block.tsx
+  s_d8b0104fa13905::t_dfa40b3bae1169 12,422,437
+apps/web/src/entity/relatedness/entity-recommendations.tsx
+  s_d8b0104fa13905::t_303adb73150b39 25,281,294-298,302
+apps/web/src/entity/relatedness/related-product-row.tsx
+  s_d8b0104fa13905::t_4ef9416eb6d5b5 5,16-17,22-24,27-28,35-46
+apps/web/src/entity/relatedness/relatedness-rail.tsx
+  s_d8b0104fa13905::t_3eccfb3e683485 14,187,194,243
+apps/web/src/entity/relationships/entity-relations.tsx
+  s_d8b0104fa13905::t_97a36b458cdd96 44,853,855-857,863-864,869-870,879-880,882
+apps/web/src/entity/relationships/graph-explorer.tsx
+  s_d8b0104fa13905::t_70e8f8b220a08a 26,353-375
+apps/web/src/entity/relationships/physical-connections.tsx
+  s_d8b0104fa13905::t_e2d471edc6ef0c 13,15,70-76,78-80,82-83,89-90,92-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c7f82e4ce19cead8752de8d4adac5c6dd581bfcf",
+  "prompts": {},
+  "sessions": {
+    "s_d8b0104fa13905": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd9091e5-6d0e-4f69-a35f-3af868a5b12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

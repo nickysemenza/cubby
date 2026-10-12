@@ -1,0 +1,37 @@
+.oxlintrc.json
+  s_d8b0104fa13905::t_0c9bf5fdd97a58 486,489-490
+apps/web/src/app/collections/collection-detail-page.tsx
+  s_d8b0104fa13905::t_8f85b3db6c6507 22,99-113
+apps/web/src/features/home/HouseCard.tsx
+  s_d8b0104fa13905::t_7ae0c94617c38f 18,91-92,94-96,98,100-122,124-125,227-231
+apps/web/src/features/home/MealsCard.tsx
+  s_d8b0104fa13905::t_cae18453a5c79a 11,93-145
+apps/web/src/features/recipes/RecipeCostingCoverage.tsx
+  s_d8b0104fa13905::t_3fc76cab58d41a 12,86,91,93,95,106-116,119
+apps/web/src/features/schedule/schedule-grid.preview.test.tsx
+  s_d8b0104fa13905::t_cfddc2921a44a8 87-90
+apps/web/src/features/schedule/schedule-grid.tsx
+  s_d8b0104fa13905::t_a79ec2ba42d540 16,346-405
+apps/web/src/ui/common/record-list.css
+  s_d8b0104fa13905::t_031dfac63ce601 98-116
+apps/web/src/ui/common/record-list.preview.test.tsx
+  s_d8b0104fa13905::t_88569e3c01a7d7 117-134
+apps/web/src/ui/visualizations/dependency-graph-viewer.tsx
+  s_d8b0104fa13905::t_f8ea49a83191ca 5,163-195,197-206,208-232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e6e2e9c191510b46b1379d7a03cefd65df2fb72f",
+  "prompts": {},
+  "sessions": {
+    "s_d8b0104fa13905": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd9091e5-6d0e-4f69-a35f-3af868a5b12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

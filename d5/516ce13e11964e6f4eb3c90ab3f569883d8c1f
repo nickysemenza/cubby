@@ -1,0 +1,19 @@
+apps/web/src/entity/relationships/graph-explorer.tsx
+  s_d8b0104fa13905::t_33a8ad83cdccc9 162,428,432,444,469-470,472
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d5516ce13e11964e6f4eb3c90ab3f569883d8c1f",
+  "prompts": {},
+  "sessions": {
+    "s_d8b0104fa13905": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd9091e5-6d0e-4f69-a35f-3af868a5b12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

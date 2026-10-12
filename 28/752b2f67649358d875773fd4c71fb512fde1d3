@@ -1,0 +1,29 @@
+apps/web/src/features/audit-log/audit-log-entry.tsx
+  s_d8b0104fa13905::t_325feaa72f05b8 10-15,20,231,240-241,253-274,276-280,282-307,309-349,351-356,358-385
+apps/web/src/features/audit-log/audit-log-fold.ts
+  s_d8b0104fa13905::t_a7fcea72bbc76d 1-64
+apps/web/src/features/audit-log/audit-log-fold.unit.test.ts
+  s_d8b0104fa13905::t_cf0115f7f87af5 1-58
+apps/web/src/features/audit-log/audit-log-list.tsx
+  s_d8b0104fa13905::t_384378afd7a336 8,13-14,28-29,107-117,171-209
+apps/web/src/features/audit-log/audit-log-list.unit.test.tsx
+  s_d8b0104fa13905::t_f002d5f950e504 72-120
+apps/web/src/ui/common/record-list.tsx
+  s_d8b0104fa13905::t_9aee60e8ded9cb 280,284-287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "28752b2f67649358d875773fd4c71fb512fde1d3",
+  "prompts": {},
+  "sessions": {
+    "s_d8b0104fa13905": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd9091e5-6d0e-4f69-a35f-3af868a5b12c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
