@@ -17,6 +17,8 @@ on:
           - simulator-search
           - simulator-inputs
           - tester-army-pr
+          - tester-army-visual
+          - tester-army-explore
           - tester-army-web
           - tester-army-ios
           - tester-army-both
@@ -189,6 +191,7 @@ jobs:
       TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL }}
       TESTER_ARMY_AGENT_MODEL: ${{ vars.TESTER_ARMY_AGENT_MODEL }}
       TESTER_ARMY_AGENT_EFFORT: ${{ vars.TESTER_ARMY_AGENT_EFFORT }}
+      TESTER_ARMY_WEB_MODE: ${{ matrix.mode || 'agent' }}
       TESTER_ARMY_LANE: ${{ matrix.lane }}
       TESTER_ARMY_JOURNEYS: ${{ matrix.journeys }}
       E2E_TELEMETRY_DISABLED: "1"
@@ -275,6 +278,7 @@ jobs:
             apps/web/.e2e/runs/web/**/report.json
             apps/web/.e2e/runs/web/**/junit.xml
             apps/web/.e2e/runs/web/**/results/*/attempt-*/screenshots/*.png
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/snapshots/**/*.png
             apps/web/.e2e/runs/web/**/results/*/trace.md
             apps/web/.e2e/runs/web/**/results/*/attempt-*/screen-at-failure.txt
             apps/web/.e2e/runs/web/**/results/*/attempt-*/video/*.webm

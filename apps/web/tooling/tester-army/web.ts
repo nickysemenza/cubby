@@ -29,12 +29,41 @@ import {
  * turn and merges their summaries.
  */
 const flags = process.argv.slice(2).filter((argument) => argument !== "--");
-applyJourneyFlags(flags, "test:e2e:agent:web", ["--services-ready", "--debug"]);
+applyJourneyFlags(flags, "test:e2e:agent:web", [
+  "--services-ready",
+  "--debug",
+  "--update-snapshots",
+  "--strict-cache",
+]);
 process.env.E2E_TELEMETRY_DISABLED = "1";
 if (flags.includes("--debug")) process.env.TESTER_ARMY_DEBUG = "1";
 const { output, rawOutput } = laneOutput("web");
 const tracker = childTracker();
-const selected = selectedJourneys(journeys, "web");
+const mode = z
+  .enum(["agent", "visual", "explore"])
+  .parse(process.env.TESTER_ARMY_WEB_MODE ?? "agent");
+const updateSnapshots =
+  flags.includes("--update-snapshots") ||
+  process.env.TESTER_ARMY_UPDATE_SNAPSHOTS === "1";
+const strictCache =
+  flags.includes("--strict-cache") ||
+  process.env.TESTER_ARMY_STRICT_CACHE === "1";
+if (strictCache && mode === "explore")
+  throw new Error("Exploration does not use replay");
+process.env.TESTER_ARMY_UPDATE_SNAPSHOTS = updateSnapshots ? "1" : "0";
+process.env.TESTER_ARMY_STRICT_CACHE = strictCache ? "1" : "0";
+if (updateSnapshots && mode !== "visual")
+  throw new Error("Snapshot updates require visual mode");
+if (mode !== "agent" && process.env.TESTER_ARMY_HARNESS === "coupled")
+  throw new Error("Web checks require the standard harness");
+const selected = selectedJourneys(
+  mode === "agent"
+    ? journeys
+    : journeys.filter((journey) =>
+        ["field-source-claim", "finance-split-expense"].includes(journey.id),
+      ),
+  "web",
+);
 if (selected.length === 0) throw new Error("No Tester Army journey selected");
 const harnesses = (["standard", "coupled"] as const).filter((harness) =>
   selected.some((journey) => harnessOf(journey) === harness),
@@ -84,7 +113,22 @@ async function runJourneys(harness: Harness, runtime: Runtime) {
       [
         "exec",
         "e2e",
-        "run",
+        ...(mode === "explore"
+          ? [
+              "explore",
+              "Explore generic record editing, searchable pickers and expense split validation in this synthetic household. Every record is disposable: create, edit or delete any records as useful. Report broken controls or incorrect values with steps to reproduce.",
+              "--session",
+              "synthetic",
+              "--agent",
+              "explorer",
+              "--max-steps",
+              "4",
+              "--timeout",
+              "300000",
+            ]
+          : ["run"]),
+        ...(updateSnapshots ? ["--update-snapshots"] : []),
+        ...(strictCache ? ["--strict-cache"] : []),
         "--output",
         phaseOutput(harness),
         ...(process.env.TESTER_ARMY_DEBUG === "1" ? ["--debug"] : []),
@@ -97,6 +141,7 @@ async function runJourneys(harness: Harness, runtime: Runtime) {
           ...process.env,
           DATABASE_URL: runtime.databaseUrl,
           TESTER_ARMY_TARGET: "web",
+          TESTER_ARMY_WEB_MODE: mode,
           TESTER_ARMY_ORIGIN: runtime.origin,
           TESTER_ARMY_IDS_FILE: idsFile,
           TESTER_ARMY_WEB_STATE: state,

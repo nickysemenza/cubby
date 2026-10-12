@@ -298,6 +298,47 @@ only when a later on-screen check (a `check.visible` or the journey's
 so a step followed by neither runs live every time. A warm run may still hand
 off when its recorded controls or end state no longer match.
 
+## Web coverage additions
+
+The existing web harness supports `TESTER_ARMY_WEB_MODE=visual` for three SDK
+`toHaveScreenshot` assertions: the structured source-claim editor, cent-short
+split refusal, and phone-width Inventory empty state. Normal model-driven and hybrid SDK
+steps reach these states; exact values/disabled controls and PNG comparisons
+establish the result. Baselines live beside `web-visuals.e2e.ts`, keyed by target
+and OS. Missing or changed baselines fail and retain candidates/diffs. Capture
+on the CI OS/device, mask only dynamic values, review images, and commit them.
+Only explicit `--update-snapshots` in visual mode replaces baselines.
+
+`TESTER_ARMY_WEB_MODE=explore` restores a `synthetic` setup session using cookie
+injection, then uses the built-in text-model explorer rather than Jev. The charter focuses on editing, pickers and expense validation; all seeded
+records are disposable and may be created, edited or deleted. It has four
+exploration steps and a five-minute budget. Findings need a failing reproduction before being called
+product defects. Exploration does not use action replay.
+
+```sh
+TESTER_ARMY_WEB_MODE=visual pnpm test:e2e:agent:web -- --harness standard
+TESTER_ARMY_WEB_MODE=visual pnpm test:e2e:agent:web -- --update-snapshots
+TESTER_ARMY_WEB_MODE=explore pnpm test:e2e:agent:web -- --harness standard
+pnpm test:e2e:agent:web -- --journey field-source-claim,finance-split-expense
+pnpm test:e2e:agent:web -- --journey field-source-claim,finance-split-expense --replay
+pnpm test:e2e:agent:web -- --journey field-source-claim,finance-split-expense --replay --strict-cache
+```
+
+The existing E2E journeys workflow exposes visual and explore as manual choices.
+Its existing synthetic artifact allowlist also retains missing PNG candidates.
+Use the normal SDK reports/summary for durations, calls, tokens and replay;
+no separate benchmark runner, report schema or model-free policy is introduced.
+Strict-cache can still invoke models for new/gapped steps and judgments.
+
+For migration evaluation, run the existing named Playwright source-claim and
+cent-conservation regressions and the two matching agent journeys on the same
+frozen revision with fresh state, then repeat the agent command with replay.
+Separate setup from scenario time using existing bundles and SDK reports.
+Retain every named regression and deliberately wrong expectation check. A
+small passing sample does not establish long-term flake rates. Existing required
+checks remain the merge gate until measurements support promoting a small
+subset. Native-condition and WebKit expansion remain deferred.
+
 ## Coupled import journeys
 
 Journeys tagged `coupled` (web only) run on the purchase-agent workerd harness
