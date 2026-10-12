@@ -4,6 +4,7 @@ import { entitySourceRead } from "@cubby/schemas/entity-source";
 import { z } from "zod";
 
 import { formatInstant } from "~/lib/date-format";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Badge } from "~/ui/primitives/badge";
 
 /** Dates arrive serialized on some transports; the read shape otherwise matches. */
@@ -47,60 +48,71 @@ export function EntitySourcesSection({
     entityFieldModels[entity].fields.find((field) => field.key === fieldPath)
       ?.label ?? fieldPath;
   return (
-    <ul className="flex flex-col gap-3">
+    <RecordList aria-label="Sources">
       {sources.map((source) => (
-        <li
+        <RecordRow
           key={[
             source.createdAt.toISOString(),
             source.fieldPath,
             source.url,
             source.quote,
           ].join("|")}
-          className="flex flex-col gap-1 text-sm"
-        >
-          <div className="flex flex-wrap items-center gap-1.5">
-            {source.fieldPath ? (
-              <>
-                <span className="font-medium">{labelOf(source.fieldPath)}</span>
-                <Badge
-                  variant={source.supportsCurrentValue ? "positive" : "slate"}
-                >
-                  {source.supportsCurrentValue
-                    ? "Current value"
-                    : "Earlier value"}
-                </Badge>
-              </>
+          primary={
+            <span className="flex flex-wrap items-center gap-1.5">
+              {source.fieldPath ? (
+                <>
+                  <span className="font-medium">
+                    {labelOf(source.fieldPath)}
+                  </span>
+                  <Badge
+                    variant={source.supportsCurrentValue ? "positive" : "slate"}
+                  >
+                    {source.supportsCurrentValue
+                      ? "Current value"
+                      : "Earlier value"}
+                  </Badge>
+                </>
+              ) : (
+                <span className="font-medium">Record</span>
+              )}
+              {source.selectedVariant ? (
+                <Badge variant="outline">{source.selectedVariant}</Badge>
+              ) : null}
+            </span>
+          }
+          secondary={
+            source.url ? (
+              <a
+                href={source.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary hover:underline"
+                title={source.url}
+              >
+                {source.url}
+              </a>
             ) : (
-              <span className="font-medium">Record</span>
-            )}
-            {source.selectedVariant ? (
-              <Badge variant="outline">{source.selectedVariant}</Badge>
-            ) : null}
-          </div>
-          {source.quote ? (
-            <blockquote className="border-l-2 border-border pl-2 text-muted-foreground">
-              {source.quote}
-            </blockquote>
-          ) : null}
-          {source.url ? (
-            <a
-              href={source.url}
-              target="_blank"
-              rel="noreferrer"
-              className="truncate text-xs text-primary hover:underline"
+              `by ${recorderLabel(source.recorder)}`
+            )
+          }
+          trailing={
+            <span
+              title={`Recorded ${formatInstant(source.createdAt, "dateShort")} by ${recorderLabel(source.recorder)}`}
             >
-              {source.url}
-            </a>
-          ) : null}
-          <span className="text-xs text-muted-foreground">
-            {source.observedAt
-              ? `Seen ${formatInstant(source.observedAt, "dateShort")} · `
-              : ""}
-            Recorded {formatInstant(source.createdAt, "dateShort")} by{" "}
-            {recorderLabel(source.recorder)}
-          </span>
-        </li>
+              {source.observedAt
+                ? `Seen ${formatInstant(source.observedAt, "dateShort")}`
+                : formatInstant(source.createdAt, "dateShort")}
+            </span>
+          }
+          detail={
+            source.quote ? (
+              <blockquote className="border-l-2 border-border pl-2 text-xs/5 text-muted-foreground">
+                {source.quote}
+              </blockquote>
+            ) : null
+          }
+        />
       ))}
-    </ul>
+    </RecordList>
   );
 }

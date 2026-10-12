@@ -24,7 +24,7 @@ import {
   recommendations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { Ledger } from "~/ui/common/ledger";
+import { RecordList } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -442,7 +442,7 @@ function ProductRelatednessRecommendation({
           refs={productRefs}
           queryOptions={operations.displayImages}
         >
-          <Ledger>
+          <RecordList aria-label="Related product recommendations">
             {items.map((item) => (
               <WorkbenchRelatedProductRow
                 key={item.shortcode}
@@ -456,7 +456,7 @@ function ProductRelatednessRecommendation({
                 }
               />
             ))}
-          </Ledger>
+          </RecordList>
         </EntityDisplayImagesProvider>
       )}
     </Stack>
@@ -483,7 +483,7 @@ function WorkbenchRelatedProductRow({
       product={{ id: item.shortcode, name: item.title }}
       displayImage={displayImage}
       evidence={item.evidence.map((evidence) => evidence.signal).join(" · ")}
-      action={
+      actions={
         <Button
           type="button"
           size="sm"

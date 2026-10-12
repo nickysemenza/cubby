@@ -9,6 +9,7 @@ import { entities } from "~/entity/entities";
 import { formatInstant } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
+import { RecordList } from "~/ui/common/record-list";
 import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
@@ -418,7 +419,7 @@ function RecordsRows({
     return <RecordLedger rows={block.rows} day={day} commands={commands} />;
   const keys = rowKeys(block.rows);
   return (
-    <Ledger>
+    <RecordList>
       {block.rows.map((row, index) => (
         <RecordRow
           key={keys[index]}
@@ -433,7 +434,7 @@ function RecordsRows({
           large={block.thumbnail === "large"}
         />
       ))}
-    </Ledger>
+    </RecordList>
   );
 }
 

@@ -27,7 +27,7 @@ import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-o
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
-import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
+import { RecordDetail, RecordList, RecordRow } from "~/ui/common/record-list";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import RTable from "~/ui/data-table/Table";
 import {
@@ -601,20 +601,19 @@ export function RunHistory({
         {attention.data?.total === 0 ? (
           <p className="text-sm">No matching attempts need attention.</p>
         ) : null}
-        <Ledger>
+        <RecordList aria-label="Attempts needing attention">
           {attention.data?.items.map((run) => (
-            <LedgerRow key={run.id}>
-              <LedgerCell slot="primary">
-                <RunSubject run={run} />
-              </LedgerCell>
-              <LedgerCell
-                slot="secondary"
-                className="flex flex-wrap items-center gap-2"
-              >
-                <Badge variant="secondary">{label(run.state)}</Badge>
-                <span className="text-muted-foreground">{run.workLabel}</span>
-              </LedgerCell>
-              <LedgerCell slot="actions">
+            <RecordRow
+              key={run.id}
+              primary={<RunSubject run={run} />}
+              clip={false}
+              secondary={
+                <span className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">{label(run.state)}</Badge>
+                  <span>{run.workLabel}</span>
+                </span>
+              }
+              actions={
                 <Button
                   type="button"
                   variant="outline"
@@ -623,29 +622,28 @@ export function RunHistory({
                 >
                   Open Run
                 </Button>
-              </LedgerCell>
-              <LedgerCell as="div" slot="detail">
-                <p className="text-xs break-words">
-                  {run.currentStep ??
-                    (run.error
-                      ? "Failure details retained below."
-                      : "No reason recorded; inspect the Run for retained context.")}
-                </p>
-                {run.error ? (
-                  <details>
-                    <summary className="cursor-pointer">
-                      Failure details
-                    </summary>
-                    <pre className="max-h-48 overflow-auto text-xs break-words whitespace-pre-wrap">
-                      {run.error}
-                    </pre>
-                  </details>
-                ) : null}
-                <RunTargetChips run={run} wrap />
-              </LedgerCell>
-            </LedgerRow>
+              }
+              detail={
+                <>
+                  <p className="text-xs break-words">
+                    {run.currentStep ??
+                      (run.error
+                        ? "Failure details retained below."
+                        : "No reason recorded; inspect the Run for retained context.")}
+                  </p>
+                  {run.error ? (
+                    <RecordDetail summary="Failure details">
+                      <pre className="max-h-48 overflow-auto text-xs break-words whitespace-pre-wrap">
+                        {run.error}
+                      </pre>
+                    </RecordDetail>
+                  ) : null}
+                  <RunTargetChips run={run} wrap />
+                </>
+              }
+            />
           ))}
-        </Ledger>
+        </RecordList>
         {attention.data &&
         attention.data.total > attention.data.items.length ? (
           <p className="text-sm text-muted-foreground">

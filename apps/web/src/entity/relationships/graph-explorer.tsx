@@ -23,6 +23,7 @@ import {
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useIsMobile } from "~/ui/hooks/useMobile";
 import { Row, Stack } from "~/ui/layout";
@@ -349,26 +350,29 @@ export function GraphExplorer({
               className="absolute inset-0 overflow-auto rounded-md border border-border bg-card"
               aria-label="Map records"
             >
-              <ul className="divide-y">
-                {matches.map((node) => (
-                  <li key={graphRefKey(node)}>
-                    <Button
-                      variant="ghost"
-                      className="h-auto min-h-11 w-full justify-start text-left whitespace-normal"
-                      onClick={() => {
-                        select(graphRefKey(node), true);
-                        setQuery("");
-                        setShowList(false);
-                      }}
-                    >
-                      {node.label}
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        {entityLabel(node.entityKind)}
-                      </span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <div className="px-3 py-1">
+                <RecordList>
+                  {matches.map((node) => (
+                    <RecordRow
+                      key={graphRefKey(node)}
+                      primary={
+                        <button
+                          type="button"
+                          className="min-w-0 truncate text-left hover:underline focus-visible:underline"
+                          onClick={() => {
+                            select(graphRefKey(node), true);
+                            setQuery("");
+                            setShowList(false);
+                          }}
+                        >
+                          {node.label}
+                        </button>
+                      }
+                      trailing={entityLabel(node.entityKind)}
+                    />
+                  ))}
+                </RecordList>
+              </div>
               {!matches.length && (
                 <p className="p-4 text-sm">No explored records match.</p>
               )}

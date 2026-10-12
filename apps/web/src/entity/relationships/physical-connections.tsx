@@ -10,9 +10,9 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
+import { RecordGroup, RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Row, Stack } from "~/ui/layout";
+import { Stack } from "~/ui/layout";
 
 /**
  * One-hop physical connections (the runtime edge source, ADR 0006)
@@ -67,32 +67,31 @@ function ConnectionDirectionList({
   return (
     <Stack gap="xs">
       <span className="text-xs font-medium text-muted-foreground">{title}</span>
-      {groups.map((group) => (
-        <section key={group.edgeKey} className="border-b border-border pb-2">
-          <Row gap="sm" align="center">
-            <h4 className="text-sm font-medium">{group.label}</h4>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {group.count}
-            </span>
-          </Row>
-          <Ledger className="mt-1">
+      <RecordList aria-label={title}>
+        {groups.map((group) => (
+          <RecordGroup
+            key={group.edgeKey}
+            label={group.label}
+            count={group.count}
+          >
             {group.items.map((item) => (
-              <LedgerRow key={`${item.kind}:${item.id}`}>
-                <LedgerCell slot="leading">
+              <RecordRow
+                key={`${item.kind}:${item.id}`}
+                leading={
                   <EntityIcon entity={item.kind} colored className="size-3.5" />
-                </LedgerCell>
-                <LedgerCell slot="primary">
+                }
+                primary={
                   <ConnectionItemLink
                     kind={item.kind}
                     id={item.id}
                     name={item.name}
                   />
-                </LedgerCell>
-              </LedgerRow>
+                }
+              />
             ))}
-          </Ledger>
-        </section>
-      ))}
+          </RecordGroup>
+        ))}
+      </RecordList>
     </Stack>
   );
 }

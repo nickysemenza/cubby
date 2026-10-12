@@ -41,7 +41,7 @@ import {
   entityGraph,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
-import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
@@ -850,23 +850,24 @@ function RelationshipBranches({
               />
             )}
             {current.view !== "graph" && (
-              <Ledger className="mt-1">
+              <RecordList className="mt-1">
                 {nodes.map((node) => (
-                  <LedgerRow key={graphRefKey(node)}>
-                    <LedgerCell slot="leading">
+                  <RecordRow
+                    key={graphRefKey(node)}
+                    leading={
                       <EntityIcon
                         entity={node.entityKind}
                         colored
                         className="size-3.5"
                       />
-                    </LedgerCell>
-                    <LedgerCell slot="primary">
+                    }
+                    primary={
                       <GraphRecordLink
                         node={node}
                         href={hrefFor(node, router)}
                       />
-                    </LedgerCell>
-                    <LedgerCell slot="actions">
+                    }
+                    actions={
                       <Button
                         variant="ghost"
                         size="sm"
@@ -875,10 +876,10 @@ function RelationshipBranches({
                       >
                         Explore
                       </Button>
-                    </LedgerCell>
-                  </LedgerRow>
+                    }
+                  />
                 ))}
-              </Ledger>
+              </RecordList>
             )}
             {branch.totalCount === 0 && (
               <p className="text-sm text-muted-foreground">
