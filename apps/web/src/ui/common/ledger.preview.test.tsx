@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { page } from "vitest/browser";
 
@@ -6,6 +6,45 @@ import { Image } from "~/ui/primitives/image";
 import { NativeSelect } from "~/ui/primitives/native-select";
 
 import { Ledger, LedgerCell, LedgerRow } from "./ledger";
+
+it("retains readable photo evidence when an image fails", async () => {
+  await page.viewport(1440, 900);
+  render(
+    <div style={{ width: 540 }}>
+      <Ledger>
+        <LedgerRow>
+          <LedgerCell slot="leading">
+            <Image
+              src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='160'/%3E"
+              alt="Synthetic reviewed photo"
+              unoptimized
+              className="h-40 w-32"
+            />
+          </LedgerCell>
+          <LedgerCell slot="primary">
+            Synthetic reviewed photo record with retained evidence
+          </LedgerCell>
+          <LedgerCell slot="secondary" data-testid="failed-photo-evidence">
+            Source evidence remains readable when the photo is unavailable.
+          </LedgerCell>
+          <LedgerCell slot="trailing">Oct 11, 12:38 PM</LedgerCell>
+        </LedgerRow>
+      </Ledger>
+    </div>,
+  );
+  fireEvent.error(screen.getByAltText("Synthetic reviewed photo"));
+  expect(
+    screen.getByRole("img", { name: "Synthetic reviewed photo" }).tagName,
+  ).toBe("DIV");
+  const evidence = screen
+    .getByTestId("failed-photo-evidence")
+    .getBoundingClientRect();
+  const title = screen
+    .getByText("Synthetic reviewed photo record with retained evidence")
+    .getBoundingClientRect();
+  expect(evidence.width).toBeGreaterThanOrEqual(240);
+  expect(evidence.top).toBeGreaterThanOrEqual(title.bottom);
+});
 
 // A photo, title, timestamp and choice can exhaust the tracks at an intermediate
 // container width. Choice controls must retain usable width beneath identity.

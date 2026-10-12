@@ -11,6 +11,41 @@ const columns = helper.columns([
 ]);
 const data = [{ id: "synthetic-row", name: "Example record" }];
 
+it("retains a stronger pinned boundary than interior column rules", async () => {
+  await page.viewport(1440, 900);
+  render(
+    <>
+      <div
+        data-testid="boundary-reference"
+        style={{ borderRight: "1px solid var(--brand-hairline)" }}
+      />
+      <table className="table-grid-lines">
+        <tbody>
+          <tr>
+            <td
+              className="table-pinned-boundary-start"
+              data-testid="pinned-boundary"
+            >
+              Pinned
+            </td>
+            <td data-testid="interior-rule">Other</td>
+            <td>Last</td>
+          </tr>
+        </tbody>
+      </table>
+    </>,
+  );
+  const pinned = getComputedStyle(
+    screen.getByTestId("pinned-boundary"),
+  ).borderRightColor;
+  expect(pinned).toBe(
+    getComputedStyle(screen.getByTestId("boundary-reference")).borderRightColor,
+  );
+  expect(pinned).not.toBe(
+    getComputedStyle(screen.getByTestId("interior-rule")).borderRightColor,
+  );
+});
+
 // A selected pinned cell must still occlude horizontally scrolled content.
 it("keeps a selected pinned cell's surface opaque", async () => {
   await page.viewport(1440, 900);

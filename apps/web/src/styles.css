@@ -500,8 +500,8 @@
   }
 
   /* Full-height column rules stay quieter than the header boundary. */
-  .table-grid-lines th:not(:last-child),
-  .table-grid-lines td:not(:last-child) {
+  .table-grid-lines th:not(:last-child):not(.table-pinned-boundary-start),
+  .table-grid-lines td:not(:last-child):not(.table-pinned-boundary-start) {
     border-right: 1px solid
       color-mix(in oklab, var(--brand-hairline) 40%, transparent);
   }

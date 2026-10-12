@@ -74,7 +74,7 @@
 }
 
 .ledger[data-ledger="facts"] > .ledger-row {
-  align-items: baseline;
+  align-items: center;
 }
 .ledger[data-ledger="facts"] > .ledger-row > [data-ledger-slot="primary"] {
   grid-column: 1;
@@ -147,7 +147,7 @@
      sharing the leftover width between a long title and timestamp. */
   .ledger[data-ledger="records"]
     > .ledger-row:has(
-      > [data-ledger-slot="leading"] img,
+      > [data-ledger-slot="leading"] :is(img, [role="img"]:not(svg)),
       > [data-ledger-slot="secondary"]
         :is(input, select, textarea, [role="combobox"])
     )
@@ -157,7 +157,7 @@
   }
   .ledger[data-ledger="records"]
     > .ledger-row:has(
-      > [data-ledger-slot="leading"] img,
+      > [data-ledger-slot="leading"] :is(img, [role="img"]:not(svg)),
       > [data-ledger-slot="secondary"]
         :is(input, select, textarea, [role="combobox"])
     )
@@ -165,7 +165,9 @@
     grid-column: 2 / 4;
   }
   .ledger[data-ledger="records"]
-    > .ledger-row:has(> [data-ledger-slot="leading"] img)
+    > .ledger-row:has(
+      > [data-ledger-slot="leading"] :is(img, [role="img"]:not(svg))
+    )
     > [data-ledger-slot="leading"] {
     grid-row: 1 / span 2;
   }

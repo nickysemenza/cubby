@@ -81,4 +81,38 @@ it("wraps a long fact within a narrow dossier without covering its actions", asy
   expect(dossier.scrollWidth).toBeLessThanOrEqual(dossier.clientWidth);
   expect(value.right).toBeLessThanOrEqual(button.left);
   expect(button.height).toBeGreaterThanOrEqual(44);
+  const label = screen.getByText("Manufacturer").getBoundingClientRect();
+  expect(value.height).toBeGreaterThan(18);
+  expect(
+    Math.abs((label.top + label.bottom) / 2 - (button.top + button.bottom) / 2),
+  ).toBeLessThanOrEqual(2);
+});
+
+it("centers short phone facts beside their touch controls", async () => {
+  await page.viewport(402, 874);
+  render(
+    <div style={{ width: 360 }}>
+      <BasicInfo
+        fields={[
+          {
+            label: "Model",
+            value: <span data-testid="phone-value">Example</span>,
+            filterAction: action("Explain model"),
+          },
+        ]}
+      />
+    </div>,
+  );
+  const control = screen.getByRole("button").getBoundingClientRect();
+  for (const text of [
+    screen.getByText("Model"),
+    screen.getByTestId("phone-value"),
+  ]) {
+    const bounds = text.getBoundingClientRect();
+    expect(
+      Math.abs(
+        (bounds.top + bounds.bottom) / 2 - (control.top + control.bottom) / 2,
+      ),
+    ).toBeLessThanOrEqual(2);
+  }
 });
