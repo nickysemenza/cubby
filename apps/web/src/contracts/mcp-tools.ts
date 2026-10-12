@@ -760,7 +760,7 @@ export const MCP_TOOLS = defineMcpTools({
       import: mcpAction({
         op: purchaseImportContract.ops.emailImport,
         description:
-          "Explicitly authorize paid Pi import for this selected Email and exact checksum. Automatic discovery remains classification-only. Review its cost estimate and relevance first; no other Email is admitted.",
+          "Start Luna import for this selected Email and exact checksum without a dollar allowance. Ownership, evidence and review gates still apply. An existing automatic admission retains its original authority. Automatic discovery remains classification-only; no other Email is admitted. Other paid models need their own authorization.",
       }),
       search: mcpAction({
         op: purchaseImportContract.ops.mailSearch,

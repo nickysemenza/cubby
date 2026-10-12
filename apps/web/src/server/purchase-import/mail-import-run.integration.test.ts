@@ -3,10 +3,11 @@ import { parseEntityId, runShortcode } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
+import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
 import {
@@ -27,15 +28,17 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
 import { executionAuthorizationFromInput } from "~/server/runs/execution-context";
+import { paidResearchPreflight } from "~/server/runs/execution-transport";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { startAgentRunFixture } from "./import-run.fixtures";
 import { startMailImport } from "./mail-import-run";
 import { transferMailRunSources } from "./mail-run-membership";
+import * as sourceIdentity from "./mail-source-identity";
 import { settleMail } from "./mail-tool";
 import { retainedMailFixture } from "./order-import.fixtures";
 import { writeOutcomeReceipts } from "./run-outcome.fixtures";
-import { loadRunDetail } from "./run-service";
+import { controlRun, loadRunDetail } from "./run-service";
 
 // Admission must bind original sources without a known Vendor, order, or Mac;
 // replay cannot create a second Run, and stale/foreign sources cannot enter it.
@@ -316,6 +319,487 @@ describe("mail research admission", () => {
       );
     },
   );
+  it("refuses selected Luna when cancellation completes during source validation", async () => {
+    const { party, mail } = await source();
+    if (!mail.rawChecksum) throw new Error("Synthetic checksum missing");
+    const [admitted] = await startMailImport(
+      ctx.db,
+      {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id],
+        expectedChecksums: [
+          { orderMailId: mail.id, checksum: mail.rawChecksum },
+        ],
+      },
+      { send: async () => {} },
+    );
+    if (!admitted) throw new Error("Synthetic Run missing");
+    const [saved] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", admitted.runId)));
+    if (!saved) throw new Error("Synthetic Run missing");
+    const original = sourceIdentity.assertMailSourceIdentityReady;
+    // Preserve the real source read and place the public cancellation at its boundary.
+    const interleaving = vi
+      .spyOn(sourceIdentity, "assertMailSourceIdentityReady")
+      .mockImplementation(async (...args) => {
+        await original(...args);
+        await controlRun(ctx.db, ctx.actor, {
+          runPublicId: saved.shortcode,
+          action: "cancel",
+        });
+      });
+    let transmissions = 0;
+    const paid = gatewayFetchThrough({
+      provider: "openai",
+      beforePaidRequest: paidResearchPreflight(
+        ctx.db,
+        parseEntityId("run", admitted.runId),
+      ),
+      gateway: async () => {
+        transmissions += 1;
+        return Response.json({});
+      },
+    });
+    try {
+      await expect(
+        paid("https://ai-gateway.invalid/openai/responses", {
+          method: "POST",
+          body: JSON.stringify({ model: "gpt-6-luna", input: [] }),
+        }),
+      ).rejects.toThrow(/executable/iu);
+      expect(transmissions).toBe(0);
+    } finally {
+      interleaving.mockRestore();
+    }
+  });
+
+  it("permits only Luna inference for a member-selected source without a dollar grant", async () => {
+    const { party, mail } = await source();
+    const [admitted] = await startMailImport(
+      ctx.db,
+      {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id],
+        expectedChecksums: [
+          { orderMailId: mail.id, checksum: mail.rawChecksum! },
+        ],
+      },
+      { send: async () => {} },
+    );
+    if (!admitted) throw new Error("Selected mail Run missing");
+    let transmissions = 0;
+    const paid = gatewayFetchThrough({
+      provider: "openai",
+      beforePaidRequest: paidResearchPreflight(
+        ctx.db,
+        parseEntityId("run", admitted.runId),
+      ),
+      gateway: async () => {
+        transmissions += 1;
+        return Response.json({});
+      },
+    });
+    const request = (model: string) =>
+      paid("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: JSON.stringify({ model, input: [] }),
+      });
+    await expect(request("gpt-6-luna")).resolves.toBeInstanceOf(Response);
+    await expect(request("gpt-6-sol")).rejects.toThrow(/authorization/iu);
+    expect(transmissions).toBe(1);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "user_cancelled" })
+      .where(eq(run.id, parseEntityId("run", admitted.runId)));
+    await expect(request("gpt-6-luna")).rejects.toThrow(/executable/iu);
+    expect(transmissions).toBe(1);
+    const [previous] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", admitted.runId)));
+    if (!previous) throw new Error("Selected Run missing");
+    const successor = await controlRun(ctx.db, ctx.actor, {
+      runPublicId: previous.shortcode,
+      action: "retry",
+    });
+    if (!("successorRunId" in successor))
+      throw new Error("Selected retry missing");
+    const [retryScope] = await getDb(ctx.db)
+      .select({
+        trigger: run.trigger,
+        cause: run.cause,
+        predecessorRunId: run.predecessorRunId,
+        input: run.input,
+      })
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", successor.successorRunId)));
+    expect(retryScope?.predecessorRunId).toBe(admitted.runId);
+    expect(mailResearchRunInput.parse(retryScope?.input).sources).toEqual([
+      { orderMailId: mail.id, checksum: mail.rawChecksum },
+    ]);
+    const retryPaid = gatewayFetchThrough({
+      provider: "openai",
+      beforePaidRequest: paidResearchPreflight(
+        ctx.db,
+        parseEntityId("run", successor.successorRunId),
+      ),
+      gateway: async () => {
+        transmissions += 1;
+        return Response.json({});
+      },
+    });
+    await expect(
+      retryPaid("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-luna", input: [] }),
+      }),
+    ).resolves.toBeInstanceOf(Response);
+    expect(transmissions).toBe(2);
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mail.mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    const historicalApproval = await issueExecutionAuthorization(
+      ctx.db,
+      ctx.actor,
+      executionAuthorizationInput.parse({
+        kind: "execution_authorization",
+        version: 1,
+        owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
+        scope: {
+          kind: "backfill",
+          mailboxId: mail.mailboxId,
+          discovery: "all_history",
+        },
+        meteredBudget: { period: "lifetime", limitMicroUSD: 500_000 },
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      }),
+    );
+    const [approvalRoot] = await getDb(ctx.db)
+      .select({ input: run.input })
+      .from(run)
+      .where(eq(run.id, historicalApproval.runId));
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        input: {
+          ...executionAuthorizationInput.parse(approvalRoot?.input),
+          expiresAt: "2020-01-01T00:00:00.000Z",
+        },
+      })
+      .where(eq(run.id, historicalApproval.runId));
+    const successorId = parseEntityId("run", successor.successorRunId);
+    const [priorSuccessor] = await getDb(ctx.db)
+      .select({ input: run.input, shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, successorId));
+    if (!priorSuccessor) throw new Error("Selected successor missing");
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "failed",
+        input: {
+          ...mailResearchRunInput.parse(priorSuccessor.input),
+          executionAuthorization: historicalApproval,
+        },
+      })
+      .where(eq(run.id, successorId));
+    const expiredRetry = await controlRun(ctx.db, ctx.actor, {
+      runPublicId: priorSuccessor.shortcode,
+      action: "retry",
+    });
+    if (!("successorRunId" in expiredRetry))
+      throw new Error("Expired-allowance retry missing");
+    const expiredPaid = gatewayFetchThrough({
+      provider: "openai",
+      beforePaidRequest: paidResearchPreflight(
+        ctx.db,
+        parseEntityId("run", expiredRetry.successorRunId),
+      ),
+      gateway: async () => {
+        transmissions += 1;
+        return Response.json({});
+      },
+    });
+    await expect(
+      expiredPaid("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-luna", input: [] }),
+      }),
+    ).resolves.toBeInstanceOf(Response);
+    expect(transmissions).toBe(3);
+  });
+
+  it.each(["retry", "restart"] as const)(
+    "refuses Luna on a discovery %s after its grant expires",
+    async (action) => {
+      const { party, mail } = await source();
+      await getDb(ctx.db).insert(account).values({
+        id: crypto.randomUUID(),
+        accountId: mail.mailboxId,
+        providerId: "google",
+        userId: ctx.actor.userId,
+        updatedAt: new Date(),
+      });
+      const approval = await issueExecutionAuthorization(
+        ctx.db,
+        ctx.actor,
+        executionAuthorizationInput.parse({
+          kind: "execution_authorization",
+          version: 1,
+          owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
+          scope: {
+            kind: "backfill",
+            mailboxId: mail.mailboxId,
+            discovery: "all_history",
+          },
+          meteredBudget: { period: "lifetime", limitMicroUSD: 500_000 },
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        }),
+      );
+      const parentRunId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_discovery",
+        trigger: "scheduled",
+        input: {
+          mailboxId: mail.mailboxId,
+          scopedQueries: [],
+          executionPolicy: "import",
+          executionAuthorization: approval,
+        },
+      });
+      const [admitted] = await startMailImport(
+        ctx.db,
+        {
+          ledgerPartyId: party.id,
+          userId: ctx.actor.userId,
+          messageIds: [mail.id],
+          parentRunId,
+        },
+        { send: async () => {} },
+      );
+      if (!admitted) throw new Error("Synthetic discovery child missing");
+      const [root] = await getDb(ctx.db)
+        .select({ input: run.input })
+        .from(run)
+        .where(eq(run.id, approval.runId));
+      const expiredInput = executionAuthorizationInput.parse({
+        ...executionAuthorizationInput.parse(root?.input),
+        expiresAt: "2020-01-01T00:00:00.000Z",
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          input: expiredInput,
+        })
+        .where(eq(run.id, approval.runId));
+      const admittedId = parseEntityId("run", admitted.runId);
+      const [child] = await getDb(ctx.db)
+        .select({ input: run.input })
+        .from(run)
+        .where(eq(run.id, admittedId));
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          status: "failed",
+          input: {
+            ...mailResearchRunInput.parse(child?.input),
+            executionAuthorization: {
+              ...approval,
+              approvalFingerprint: await sha256Hex(
+                JSON.stringify(expiredInput),
+              ),
+            },
+          },
+        })
+        .where(eq(run.id, admittedId));
+      const [previous] = await getDb(ctx.db)
+        .select({ shortcode: run.shortcode })
+        .from(run)
+        .where(eq(run.id, admittedId));
+      if (!previous) throw new Error("Synthetic discovery child missing");
+      const successor = await controlRun(ctx.db, ctx.actor, {
+        runPublicId: previous.shortcode,
+        action,
+      });
+      if (!("successorRunId" in successor))
+        throw new Error("Synthetic discovery successor missing");
+      let transmissions = 0;
+      const paid = gatewayFetchThrough({
+        provider: "openai",
+        beforePaidRequest: paidResearchPreflight(
+          ctx.db,
+          parseEntityId("run", successor.successorRunId),
+        ),
+        gateway: async () => {
+          transmissions += 1;
+          return Response.json({});
+        },
+      });
+      await expect(
+        paid("https://ai-gateway.invalid/openai/responses", {
+          method: "POST",
+          body: JSON.stringify({ model: "gpt-6-luna", input: [] }),
+        }),
+      ).rejects.toThrow(/expired/iu);
+      expect(transmissions).toBe(0);
+      if (!successor.successorRunPublicId)
+        throw new Error("Synthetic successor missing");
+      const [parent] = await getDb(ctx.db)
+        .select({ shortcode: run.shortcode })
+        .from(run)
+        .where(eq(run.id, parentRunId));
+      expect(
+        (await loadRunDetail(ctx.db, successor.successorRunPublicId))
+          .parentRunId,
+      ).toBe(parent?.shortcode);
+    },
+  );
+
+  it.each([
+    "retained checksum",
+    "Email checksum",
+    "Email ownership",
+    "excluded Email",
+  ])(
+    "refuses selected Luna retries when current source changes: %s",
+    async (change) => {
+      const { party, mail } = await source();
+      const [admitted] = await startMailImport(
+        ctx.db,
+        {
+          ledgerPartyId: party.id,
+          userId: ctx.actor.userId,
+          messageIds: [mail.id],
+          expectedChecksums: [
+            { orderMailId: mail.id, checksum: mail.rawChecksum! },
+          ],
+        },
+        { send: async () => {} },
+      );
+      if (!admitted) throw new Error("Synthetic selection missing");
+      const admittedId = parseEntityId("run", admitted.runId);
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status: "failed" })
+        .where(eq(run.id, admittedId));
+      const [previous] = await getDb(ctx.db)
+        .select({ shortcode: run.shortcode })
+        .from(run)
+        .where(eq(run.id, admittedId));
+      if (!previous) throw new Error("Synthetic selection missing");
+      const successor = await controlRun(ctx.db, ctx.actor, {
+        runPublicId: previous.shortcode,
+        action: "retry",
+      });
+      if (!("successorRunId" in successor))
+        throw new Error("Synthetic retry missing");
+      if (change === "retained checksum")
+        await getDb(ctx.db)
+          .update(orderMail)
+          .set({ rawChecksum: "b".repeat(64) })
+          .where(eq(orderMail.id, mail.id));
+      else
+        await getDb(ctx.db)
+          .update(emailTable)
+          .set(
+            change === "Email checksum"
+              ? { checksum: "b".repeat(64) }
+              : change === "Email ownership"
+                ? { runId: admittedId }
+                : { status: "excluded" },
+          )
+          .where(eq(emailTable.orderMailId, mail.id));
+      let transmissions = 0;
+      const paid = gatewayFetchThrough({
+        provider: "openai",
+        beforePaidRequest: paidResearchPreflight(
+          ctx.db,
+          parseEntityId("run", successor.successorRunId),
+        ),
+        gateway: async () => {
+          transmissions += 1;
+          return Response.json({});
+        },
+      });
+      await expect(
+        paid("https://ai-gateway.invalid/openai/responses", {
+          method: "POST",
+          body: JSON.stringify({ model: "gpt-6-luna", input: [] }),
+        }),
+      ).rejects.toThrow(/source|ownership|evidence/iu);
+      expect(transmissions).toBe(0);
+    },
+  );
+
+  it("admits a member-selected checksum without inheriting an expired backfill allowance", async () => {
+    const { party, mail } = await source();
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mail.mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    const approval = await issueExecutionAuthorization(
+      ctx.db,
+      ctx.actor,
+      executionAuthorizationInput.parse({
+        kind: "execution_authorization",
+        version: 1,
+        owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
+        scope: {
+          kind: "backfill",
+          mailboxId: mail.mailboxId,
+          discovery: "all_history",
+        },
+        meteredBudget: { period: "lifetime", limitMicroUSD: 500_000 },
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      }),
+    );
+    const [root] = await getDb(ctx.db)
+      .select({ input: run.input })
+      .from(run)
+      .where(eq(run.id, approval.runId));
+    // An expired approval fixture must not become authority for this new selection.
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        input: {
+          ...executionAuthorizationInput.parse(root?.input),
+          expiresAt: "2020-01-01T00:00:00.000Z",
+        },
+      })
+      .where(eq(run.id, approval.runId));
+    const [admitted] = await startMailImport(
+      ctx.db,
+      {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id],
+        expectedChecksums: [
+          { orderMailId: mail.id, checksum: mail.rawChecksum! },
+        ],
+      },
+      { send: async () => {} },
+    );
+    if (!admitted) throw new Error("Selected mail Run missing");
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", admitted.runId)));
+    expect(executionAuthorizationFromInput(saved?.input)).toBeUndefined();
+    expect(await frozenSources(admitted.runId)).toEqual([
+      { orderMailId: mail.id, checksum: mail.rawChecksum },
+    ]);
+  });
+
   it("refuses a historical ownership block before admitting or dispatching mail", async () => {
     const { party, mail } = await source();
     await getDb(ctx.db)

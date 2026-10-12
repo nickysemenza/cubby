@@ -139,6 +139,12 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
+- 🤔 🛠️ **Clarify explicit selection of an already-admitted Email.** A member's
+  selection can reuse an automatic Run through existing source ownership or
+  replay identity, retaining that Run's original execution authority. Surface
+  the existing owner or offer a bounded reviewed handoff without unpausing its
+  whole discovery batch; preserve source history and frozen scope.
+
 - ⏳ 🐛 **Gmail discovery re-authentication.** Promote when production Gmail
   returns 401/403 after refresh-token expiry or revocation: actionable
   reconnect, resumable Problem, never an "empty mailbox".
