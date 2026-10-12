@@ -4,23 +4,27 @@ import SwiftUI
 /// Server provenance is shown as a link only when the response supplies one concrete source entity.
 struct EntityFieldResolutionLabel: View {
     let resolved: FieldResolutionPresentation
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         if let source = resolved.sourceEntity,
             let entity = EntityKey(rawValue: source.entityKind.rawValue)
         {
-            LabeledContent {
-                NavigationLink(value: Route.entityDetail(entity, id: source.entityId)) {
+            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
+                Text(resolved.sourceText).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: FieldGuideTokens.Space.sm)
+                Button {
+                    appModel.navigator.openRecord(RecordSelection(key: entity, id: source.entityId))
+                } label: {
                     Label(source.name ?? source.entityId, systemImage: "chevron.right")
                         .font(.caption)
                         .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .trailing)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-            } label: {
-                Text(resolved.sourceText).font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity)
         } else {
             Text(resolved.sourceText).font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -41,5 +45,6 @@ struct EntityFieldResolutionLabel: View {
         ]
     ]
     EntityFieldResolutionLabel(resolved: FieldResolutionPresentation(raw: raw, field: field)!)
+        .environment(PreviewFixtures.signedInModel())
         .padding()
 }

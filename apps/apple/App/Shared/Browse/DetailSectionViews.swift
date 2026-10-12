@@ -213,7 +213,8 @@ struct FieldsSectionView<Inline: View>: View {
                         bottom: 0, trailing: FieldGuideTokens.Space.md))
             } else {
                 ForEach(group.fields, id: \.key) { field in
-                    dossierField(field)
+                    fieldRow(field)
+                    fieldSuffix(field)
                 }
             }
         }
@@ -262,23 +263,28 @@ struct FieldsSectionView<Inline: View>: View {
                         ? FieldGuideTokens.touchTarget : 32
                 )
                 .fixedSize(horizontal: false, vertical: true)
-            if let resolved = FieldResolutionPresentation(raw: row.raw, field: field) {
-                EntityFieldResolutionLabel(resolved: resolved)
-                if resolved.resetPayload(field: field) != nil,
-                    descriptor.key.nativeActions.contains(.update)
-                {
-                    Button {
-                        resetReview = ResetReview(field: field.key)
-                    } label: {
-                        Text("Review reset: \(resolved.resetLabel.lowercased())")
-                            .font(.subheadline)
-                            .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            if field.key == inlineFieldKey { inline }
+            fieldSuffix(field)
         }
+    }
+
+    @ViewBuilder
+    private func fieldSuffix(_ field: FieldDescriptor) -> some View {
+        if let resolved = FieldResolutionPresentation(raw: row.raw, field: field) {
+            EntityFieldResolutionLabel(resolved: resolved)
+            if resolved.resetPayload(field: field) != nil,
+                descriptor.key.nativeActions.contains(.update)
+            {
+                Button {
+                    resetReview = ResetReview(field: field.key)
+                } label: {
+                    Text("Review reset: \(resolved.resetLabel.lowercased())")
+                        .font(.subheadline)
+                        .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        if field.key == inlineFieldKey { inline }
     }
 
     private var rows: [FieldDescriptor] {
@@ -333,11 +339,18 @@ struct FieldsSectionView<Inline: View>: View {
             recipeSourceRow(field, source: source)
         } else if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
             let value = reference.name ?? reference.id
-            LabeledContent {
-                NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
+            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
+                FieldExplanationLabel(
+                    field: field,
+                    subject: EntityRef(entity: descriptor.key, id: row.id))
+                Spacer(minLength: FieldGuideTokens.Space.sm)
+                Button {
+                    appModel.navigator.openRecord(RecordSelection(key: reference.entity, id: reference.id))
+                } label: {
                     HStack(spacing: FieldGuideTokens.Space.xs) {
                         if let emoji = reference.emoji { Text(emoji).accessibilityHidden(true) }
                         Text(value).fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.trailing)
                         Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
                     }
                     .foregroundStyle(.tint)
@@ -345,11 +358,8 @@ struct FieldsSectionView<Inline: View>: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-            } label: {
-                FieldExplanationLabel(
-                    field: field,
-                    subject: EntityRef(entity: descriptor.key, id: row.id))
             }
+            .frame(maxWidth: .infinity)
         } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
             ?? (FieldResolutionPresentation(raw: row.raw, field: field) == nil ? nil : "None")
         {
@@ -1312,6 +1322,7 @@ private struct RecordReferenceList: View {
     let field: FieldDescriptor
     let row: EntityRow
     let subject: EntityRef
+    @Environment(AppModel.self) private var appModel
     @State private var expanded = false
     private var items: [JSONValue] { row.raw[field.readKey ?? field.key]?.arrayValue ?? [] }
     private var target: EntityKey? { field.reference?.entity }
@@ -1339,7 +1350,9 @@ private struct RecordReferenceList: View {
                             .enumerated()), id: \.offset
                 ) { _, item in
                     if let id = item["id"]?.stringValue ?? item.stringValue {
-                        NavigationLink(value: Route.entityDetail(target, id: id)) {
+                        Button {
+                            appModel.navigator.openRecord(RecordSelection(key: target, id: id))
+                        } label: {
                             HStack {
                                 if let emoji = item["emoji"]?.stringValue {
                                     Text(emoji).accessibilityHidden(true)
@@ -1364,7 +1377,16 @@ private struct RecordReferenceList: View {
                     .buttonStyle(.plain)
                 }
                 if !filters.isEmpty {
-                    NavigationLink(value: Route.entityList(target, filters: filters)) {
+                    Button {
+                        #if os(macOS)
+                            appModel.navigator.paths[appModel.navigator.section, default: []].append(
+                                .entityList(target, filters: filters))
+                        #else
+                            appModel.navigator.paths[appModel.navigator.phoneTab.rootSection, default: []]
+                                .append(
+                                    .entityList(target, filters: filters))
+                        #endif
+                    } label: {
                         Label("View all", systemImage: "chevron.right")
                             .frame(minHeight: FieldGuideTokens.touchTarget)
                     }
