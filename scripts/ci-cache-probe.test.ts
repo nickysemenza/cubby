@@ -8,22 +8,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:http";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-
-const require = createRequire(import.meta.url);
-const yaml = require(
-  require.resolve("@zkochan/js-yaml", {
-    paths: [require.resolve("nx/package.json")],
-  }),
-);
+import { readYamlFile } from "nx/src/utils/fileutils.js";
 
 // Exercise the workflow's real Nx hasher and HTTP cache client. The fake
 // external cache stores actual Nx archives; no lane command may run on a probe.
 test("CI probe requires a passing archive for the exact inputs, shard and dependency outputs; errors and nightly run lanes", async () => {
-  const workflow = yaml.load(readFileSync(".github/workflows/ci.yaml", "utf8"));
+  const workflow = readYamlFile(".github/workflows/ci.yaml");
   const script = workflow.jobs["cache-probe"].steps.find(
     (step: { id?: string }) => step.id === "probe",
   ).run;
@@ -170,7 +163,9 @@ test("CI probe requires a passing archive for the exact inputs, shard and depend
     writeFileSync(path.join(root, "wasm"), "different bytes\n");
     assert.deepEqual(await probe(), []);
     writeFileSync(path.join(root, "wasm"), "ready\n");
-    const [archiveKey, passingArchive] = [...archives.entries()][0];
+    const entry = [...archives.entries()][0];
+    assert.ok(entry);
+    const [archiveKey, passingArchive] = entry;
     // Nx's HTTP writer can encode any exit code; the probe must inspect it
     // even though normal task execution publishes successful results only.
     await run(
