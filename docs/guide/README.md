@@ -10,4 +10,6 @@ Documentation.
   Research queue.
 - [How values are determined](how-values-are-determined.md) lists every field
   explanation. It is generated from entity declarations.
+- [Import a wardrobe from photos](wardrobe-import.md) walks through
+  photographing clothes, agent grouping, and approving Products and Inventory.
 - [Connect Calendar](caldav.md) subscribes a calendar app to Cubby over CalDAV.

@@ -1219,5 +1219,6 @@ this list: attribution prefill now reads it.)
   into a `photo_inventory` run with that member as owner; an agent proposes
   groups with `photo_run.propose_groups` and a human approves them. Then import
   the matching vendor orders and work the product match queue
-  (`/recommendations/workbench?kind=product-match`). Playbook:
+  (`/recommendations/workbench?kind=product-match`). Walkthrough:
+  [wardrobe import](guide/wardrobe-import.md); second-member onboarding:
   [photo-inventory pilot](runbooks/photo-inventory-pilot.md).

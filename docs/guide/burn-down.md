@@ -9,8 +9,9 @@ prepare a bounded batch when each record is independently settled.
 
 ## Start from the queue
 
-1. Connect the Claude or Codex session to Cubby's MCP server using the client's
-   normal MCP connection flow.
+1. Connect the session to Cubby through a connector: Claude Code uses Cubby's
+   claude.ai connector and Codex uses Cubby's ChatGPT connector, each signed in
+   once with OAuth.
 2. Open the derived **Research queue** saved view. It is available on Products,
    Purchases and Expenses; it is a view over current data, not a separate task
    list.

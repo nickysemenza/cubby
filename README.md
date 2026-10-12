@@ -280,11 +280,12 @@ pnpm check      # generate, types, lint, format, knip
 pnpm test       # fast tests
 ```
 
-**MCP.** On claude.ai, add a custom connector at
-`https://cubby.nickysemenza.com/api/mcp`. In Claude Code or Codex, copy
-`.mcp.json.example` to `.mcp.json`, then run
-`claude mcp login cubby-localhost` or `codex mcp login cubby-localhost`. It uses
-OAuth, so never add a static `Authorization` header.
+**MCP.** Agents reach production Cubby through connectors at
+`https://cubby.nickysemenza.com/api/mcp`: Claude Code uses the claude.ai custom
+connector and Codex uses the ChatGPT connector. Both use OAuth, so never add a
+static `Authorization` header. Only local development talks to
+`cubby-localhost`: copy `.mcp.json.example` to `.mcp.json`, then run
+`claude mcp login cubby-localhost` or `codex mcp login cubby-localhost`.
 
 Further docs:
 
