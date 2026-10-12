@@ -190,6 +190,7 @@ struct FieldsSectionView<Inline: View>: View {
     @ViewBuilder let inline: Inline
     @Environment(AppModel.self) private var appModel
     @State private var resetReview: ResetReview?
+    @State private var destination: Route?
 
     private struct ResetReview: Identifiable {
         let field: String
@@ -218,6 +219,7 @@ struct FieldsSectionView<Inline: View>: View {
                 }
             }
         }
+        .navigationDestination(item: $destination) { RouteDestinationView(route: $0) }
         .sheet(item: $resetReview) { review in
             EntityEditorSheet(
                 key: descriptor.key, mode: .update(id: row.id), original: row.raw,
@@ -345,7 +347,7 @@ struct FieldsSectionView<Inline: View>: View {
                     subject: EntityRef(entity: descriptor.key, id: row.id))
                 Spacer(minLength: FieldGuideTokens.Space.sm)
                 Button {
-                    appModel.navigator.openRecord(RecordSelection(key: reference.entity, id: reference.id))
+                    destination = .entityDetail(reference.entity, id: reference.id)
                 } label: {
                     HStack(spacing: FieldGuideTokens.Space.xs) {
                         if let emoji = reference.emoji { Text(emoji).accessibilityHidden(true) }
@@ -1322,7 +1324,7 @@ private struct RecordReferenceList: View {
     let field: FieldDescriptor
     let row: EntityRow
     let subject: EntityRef
-    @Environment(AppModel.self) private var appModel
+    @State private var destination: Route?
     @State private var expanded = false
     private var items: [JSONValue] { row.raw[field.readKey ?? field.key]?.arrayValue ?? [] }
     private var target: EntityKey? { field.reference?.entity }
@@ -1351,7 +1353,7 @@ private struct RecordReferenceList: View {
                 ) { _, item in
                     if let id = item["id"]?.stringValue ?? item.stringValue {
                         Button {
-                            appModel.navigator.openRecord(RecordSelection(key: target, id: id))
+                            destination = .entityDetail(target, id: id)
                         } label: {
                             HStack {
                                 if let emoji = item["emoji"]?.stringValue {
@@ -1378,14 +1380,7 @@ private struct RecordReferenceList: View {
                 }
                 if !filters.isEmpty {
                     Button {
-                        #if os(macOS)
-                            appModel.navigator.paths[appModel.navigator.section, default: []].append(
-                                .entityList(target, filters: filters))
-                        #else
-                            appModel.navigator.paths[appModel.navigator.phoneTab.rootSection, default: []]
-                                .append(
-                                    .entityList(target, filters: filters))
-                        #endif
+                        destination = .entityList(target, filters: filters)
                     } label: {
                         Label("View all", systemImage: "chevron.right")
                             .frame(minHeight: FieldGuideTokens.touchTarget)
@@ -1393,6 +1388,7 @@ private struct RecordReferenceList: View {
                     .buttonStyle(.plain)
                 }
             }
+            .navigationDestination(item: $destination) { RouteDestinationView(route: $0) }
         }
     }
 }
