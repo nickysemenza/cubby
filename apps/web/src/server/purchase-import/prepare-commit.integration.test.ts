@@ -604,7 +604,7 @@ describe("caller-driven purchase import writes", () => {
   it.each(["new", "existing", "ambiguous", "source_owned"] as const)(
     "honors %s Product choices on existing itemized spend or returns review",
     async (mode) => {
-      const { vendor } = await scope();
+      const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
       const lines: ExtractedOrderCandidate["lines"] = [
         {
           title: "Synthetic brass trowel",
