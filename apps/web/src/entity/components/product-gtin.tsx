@@ -29,6 +29,7 @@ export function ProductGtin({
   if (isbn) {
     return dense ? (
       <MiddleTruncate
+        code
         text={isbn.isbn13}
         className={cn("font-mono tabular-nums", className)}
       />
@@ -48,7 +49,7 @@ export function ProductGtin({
         className,
       )}
     >
-      {dense ? <MiddleTruncate text={shown} /> : shown}
+      {dense ? <MiddleTruncate code text={shown} /> : shown}
     </Link>
   );
 }

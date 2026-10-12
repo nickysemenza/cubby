@@ -67,10 +67,11 @@ export function RelatedPreviewCell({
         key: `${item.entity}:${item.id}`,
         label: item.label,
         node: (
-          <span className="flex min-w-0 items-center gap-0.5 text-xs">
+          <span className="flex h-3 min-w-0 items-center gap-0.5 text-xs leading-3">
             <EntityIdentityMark
               entity={item.entity}
               displayImage={item.displayImage}
+              className="size-3!"
             />
             <RelatedEntityLink item={item} className="min-w-0 truncate" />
           </span>

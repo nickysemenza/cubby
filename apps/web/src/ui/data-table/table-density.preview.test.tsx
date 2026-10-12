@@ -36,7 +36,11 @@ import { useCellSpill } from "./useCellSpill";
 //   spot so one control is unreachable;
 // - a value wrapped in its own in-flow frame (a suggestion mark) spills over
 //   the outer ⓘ without copying it;
-// - a two-line name or header clamps away its end with no way to read it.
+// - a two-line name or header clamps away its end with no way to read it;
+// - a copied rail glyph swallows the click meant for its cell (a header's
+//   sort), or screen-reader text makes a fitting value spill;
+// - tall chips overflow two lines without counting toward "+N";
+// - a plain long word is abbreviated like a code although it fits.
 
 function Fixture({
   cells,
@@ -465,6 +469,7 @@ describe("table density", () => {
             width: 88,
             content: (
               <MiddleTruncate
+                code
                 text="113-2171451-2151435"
                 className="font-mono"
               />
@@ -512,6 +517,116 @@ describe("table density", () => {
     await waitFor(() => expect(overlay()?.textContent).toBe(LONG_NAME));
     await userEvent.hover(view.getByTestId("head-0"));
     await waitFor(() => expect(overlay()?.textContent).toBe(header));
+  });
+
+  it("lets a copied rail glyph pass clicks through", async () => {
+    await page.viewport(1440, 900);
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c15",
+            width: 96,
+            content: (
+              <CellFrame overlay trailing={<span data-testid="glyph">↕</span>}>
+                <span className="block truncate">{LONG_NAME}</span>
+              </CellFrame>
+            ),
+          },
+        ]}
+      />,
+    );
+    await userEvent.hover(view.getByTestId("cell-0"));
+    await waitFor(() => expect(overlay()).not.toBeNull());
+    const glyph = overlay()?.querySelector<HTMLElement>(
+      "[data-cell-spill-rail] [data-testid='glyph']",
+    );
+    if (!glyph) throw new Error("missing rail copy");
+    expect(getComputedStyle(glyph).pointerEvents).toBe("none");
+  });
+
+  it("does not spill a fitting value for its screen-reader text", async () => {
+    await page.viewport(1440, 900);
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c16",
+            width: 200,
+            content: (
+              <span className="flex flex-col">
+                <span
+                  data-stacked-line=""
+                  className="block truncate leading-[15px]"
+                >
+                  Shelf
+                </span>
+                <span
+                  data-stacked-line=""
+                  className="block truncate text-[0.6875rem] leading-[13px]"
+                >
+                  <span className="sr-only"> · </span>1 each
+                </span>
+              </span>
+            ),
+          },
+        ]}
+      />,
+    );
+    await userEvent.hover(view.getByTestId("cell-0"));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(overlay()).toBeNull();
+  });
+
+  it("drops chips taller than two lines into the count", async () => {
+    await page.viewport(1440, 900);
+    const chip = (label: string) => ({
+      key: label,
+      label,
+      node: <span style={{ display: "block", height: 16 }}>{label}</span>,
+    });
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c17",
+            width: 64,
+            content: (
+              <ChipCluster
+                items={["alpha", "beta", "gamma", "delta"].map(chip)}
+              />
+            ),
+          },
+        ]}
+      />,
+    );
+    const cluster = view
+      .getByTestId("cell-0")
+      .querySelector<HTMLElement>("[data-cell-wrap]");
+    if (!cluster) throw new Error("missing cluster");
+    await waitFor(() =>
+      expect(cluster.scrollHeight).toBeLessThanOrEqual(cluster.clientHeight),
+    );
+    expect(cluster.querySelector("[data-chip-overflow]")).not.toBeNull();
+  });
+
+  it("shows a long unspaced label in full when it fits", async () => {
+    await page.viewport(1440, 900);
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c18",
+            width: 240,
+            content: <MiddleTruncate text="Maintenance-schedules" />,
+          },
+        ]}
+      />,
+    );
+    expect(view.getByTestId("cell-0").textContent).toBe(
+      "Maintenance-schedules",
+    );
+    expect(view.queryByText("…")).toBeNull();
   });
 
   it("wraps a long header to two lines inside a narrow column", async () => {

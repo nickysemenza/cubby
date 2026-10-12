@@ -13,7 +13,10 @@ import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 import { z } from "zod";
 
-import { RecordMarkByReference } from "~/entity/components/record-mark";
+import {
+  RecordMarkByReference,
+  useResolvedRecordEmoji,
+} from "~/entity/components/record-mark";
 import { EntityIcon } from "~/entity/entities";
 import { usdaRouteId } from "~/entity/entity-query";
 import { LocationIcon } from "~/features/locations/location-icons";
@@ -269,9 +272,11 @@ export function InlineRefLink(props: InlineRefLinkProps) {
     .object({ emoji: z.string().nullish() })
     .parse(props.data).emoji;
   // The header already paints this entity's icon; a record's own image or
-  // emoji still identifies it.
-  const generic =
-    useHeaderEntity() === entity && displayImage === null && !emoji;
+  // emoji still identifies it. Regression: relation adapters omit emoji, so
+  // treating that as empty hid a record's emoji with the generic icon.
+  const hoisted = useHeaderEntity() === entity && displayImage === null;
+  const resolvedEmoji = useResolvedRecordEmoji(entity, id, emoji, hoisted);
+  const generic = hoisted && !resolvedEmoji;
   const detail = [context, metadata].filter(Boolean).join(" · ");
 
   return (

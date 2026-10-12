@@ -50,7 +50,7 @@ const orderLink: ListRenderer<"purchase"> = (helper) =>
         renderValue: (value, purchase) =>
           value ? (
             <Row align="center" gap="xs">
-              <MiddleTruncate text={value} className="min-w-0" />
+              <MiddleTruncate code text={value} className="min-w-0" />
               <EntityRefLink
                 variant="order"
                 orderUrl={purchase.orderUrl}

@@ -20,10 +20,14 @@ const TYPOGRAPHY = [
 
 const RAIL_GAP_PX = 2;
 
-/** Cut off sideways, or below its last line when clamped to two. */
+/**
+ * Cut off sideways, or below its last line when clamped to two. Screen-reader
+ * text is clipped on purpose; counting it spilled values that fit.
+ */
 const isClipped = (element: Element) =>
-  element.scrollWidth > element.clientWidth + 1 ||
-  element.scrollHeight > element.clientHeight + 1;
+  !element.matches(".sr-only") &&
+  (element.scrollWidth > element.clientWidth + 1 ||
+    element.scrollHeight > element.clientHeight + 1);
 
 const railsOf = (cell: HTMLElement) => [
   ...cell.querySelectorAll<HTMLElement>("[data-cell-rail]"),
@@ -145,12 +149,15 @@ function railCopy(
     [start ? "left" : "right"]: `${EDGE_PX}px`,
     background: "var(--popover, var(--card))",
     boxShadow: "none",
-    pointerEvents: "auto",
+    pointerEvents: "none",
     visibility: "visible",
   });
   const controls = [...rail.querySelectorAll<HTMLElement>("button, a")];
+  // Only copied controls take the pointer: a decorative glyph (a header's
+  // sort arrow) passes clicks through to the cell, which sorts.
   clone.querySelectorAll<HTMLElement>("button, a").forEach((copy, index) => {
     copy.tabIndex = -1;
+    copy.style.pointerEvents = "auto";
     copy.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();

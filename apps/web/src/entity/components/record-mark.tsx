@@ -50,6 +50,36 @@ export function useRecordEmojiById(
   return { emojiById, isLoading };
 }
 
+const isShortcodeEntity = (value: Entity): value is ShortcodeEntity =>
+  shortcodeEntities.some((candidate) => candidate === value);
+
+/**
+ * A record's emoji: `emoji` when the caller has it (`null` = known-empty),
+ * else the lightweight options query's answer, `null` until it loads.
+ */
+export function useResolvedRecordEmoji(
+  entity: Entity,
+  recordId: string,
+  emoji: string | null | undefined,
+  enabled = true,
+) {
+  const shortcode = isShortcodeEntity(entity) ? entity : null;
+  const { data } = useQuery({
+    ...entityFilterOptions.filterOptions.queryOptions({
+      source: "entity",
+      entity: shortcode ?? "product",
+      search: "",
+      selectedIds: [recordId],
+      include: ["emoji"],
+      limit: 1,
+    }),
+    enabled: enabled && shortcode !== null && emoji === undefined,
+  });
+  return emoji === undefined
+    ? (data?.items.find((item) => item.id === recordId)?.emoji ?? null)
+    : emoji;
+}
+
 /**
  * Resolves relation-only links through the lightweight options query.
  * Explicit emoji values skip the lookup.
@@ -70,21 +100,7 @@ export function RecordMarkById({
   className?: string;
   fallback?: ReactNode;
 }) {
-  const { data } = useQuery({
-    ...entityFilterOptions.filterOptions.queryOptions({
-      source: "entity",
-      entity,
-      search: "",
-      selectedIds: [recordId],
-      include: ["emoji"],
-      limit: 1,
-    }),
-    enabled: emoji === undefined,
-  });
-  const resolvedIcon =
-    emoji === undefined
-      ? (data?.items.find((item) => item.id === recordId)?.emoji ?? null)
-      : emoji;
+  const resolvedIcon = useResolvedRecordEmoji(entity, recordId, emoji);
 
   if (!resolvedIcon && fallback) return fallback;
   return (
@@ -171,9 +187,7 @@ export function RecordMarkByReference({
   size?: RecordMarkSize;
   fallback?: ReactNode;
 }) {
-  const isShortcode = (value: Entity): value is ShortcodeEntity =>
-    shortcodeEntities.some((candidate) => candidate === value);
-  return isShortcode(entity) ? (
+  return isShortcodeEntity(entity) ? (
     <RecordMarkById
       entity={entity}
       recordId={recordId}
