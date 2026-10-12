@@ -25,9 +25,6 @@ import type { Database } from "~/server/db";
 
 import { suggestFields } from "./suggest-fields";
 
-// SAFETY: every case below resolves through a real registry entry (pure
-// vocabulary/rules, no DB) or a `ports.registry` fake, and label resolution
-// goes through `ports.resolveLabels` — nothing in this file ever touches `db`.
 const fakeDb = {} as Database;
 const fixtureRunId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 

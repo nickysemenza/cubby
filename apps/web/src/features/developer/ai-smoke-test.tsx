@@ -69,7 +69,6 @@ const missingSourceRun = (scenario: AiSmokeScenario, input: SmokeFormValue) =>
   scenario === "purchaseAudit" && input.source === "run" && !input.runId;
 
 // Each probe keeps independent input, validation, execution, and result state.
-// eslint-disable-next-line complexity
 function ScenarioCard({
   spec,
   operations,

@@ -1,4 +1,4 @@
-/* eslint-disable anti-slop/no-object-parameters, anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns, anti-slop/no-known-value-widening, anti-slop/no-runtime-typeof, anti-slop/no-unsafe-dictionary-type, anti-slop/require-safety-comment-for-type-assertion -- This deterministic fake implements and recursively inspects the external OpenAI Responses wire shape. */
+/* eslint-disable anti-slop/no-object-parameters, anti-slop/no-unknown-returns, anti-slop/no-known-value-widening, anti-slop/no-unsafe-dictionary-type -- This deterministic fake implements and recursively inspects the external OpenAI Responses wire shape. */
 import type {
   ScriptStep,
   ScriptValue,

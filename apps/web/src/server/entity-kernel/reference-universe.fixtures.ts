@@ -52,11 +52,9 @@ export const prefixOf = (code: string): string | undefined =>
  * concrete domain type to assign it ahead of time. This block is the one
  * generic reflection layer that walks and rebuilds that data (path
  * collection, in-place patching, and integer rounding); everywhere else in
- * this file works with concrete, named types. Mirrors the same trade-off
- * `packages/schemas/src/entity-definitions/definition.ts`'s
- * `valueIsMissingAt` parser-boundary walker makes for the same reason.
+ * this file works with concrete, named types.
  */
-/* oxlint-disable anti-slop/no-runtime-typeof, anti-slop/no-unknown-parameters, anti-slop/no-unsafe-dictionary-type -- see block comment above */
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- see block comment above */
 
 /** Walk any mock()-generated value, reporting every shortcode-shaped string. */
 export function collectShortcodePaths(
@@ -91,14 +89,12 @@ export function setAtPath(
     const existing = cursor[key];
     if (existing === null || typeof existing !== "object")
       cursor[key] = typeof next === "number" ? [] : {};
-    // SAFETY: the branch above just assigned an array or a plain object when
-    // `cursor[key]` wasn't already one, so it is always walkable here.
     cursor = cursor[key] as Record<string, unknown>;
   }
   const lastKey = path.at(-1);
   if (lastKey !== undefined) cursor[String(lastKey)] = value;
 }
-/* oxlint-enable anti-slop/no-runtime-typeof, anti-slop/no-unknown-parameters, anti-slop/no-unsafe-dictionary-type */
+/* oxlint-enable anti-slop/no-unsafe-dictionary-type */
 
 /**
  * Drizzle wraps the real Postgres error (e.g. `invalid reference to
@@ -286,10 +282,6 @@ export async function seedReferenceUniverse(
       ...buildReferenceOverrides(entity, shortcodeByPrefix),
       ...extraOverrides,
     };
-    // SAFETY: `overrides` is a sparse patch keyed by the entity's own
-    // createInput shape (see buildReferenceOverrides); seedEntity/mock()
-    // merges it against a freshly generated sample and re-validates through
-    // the entity's real createInput schema before the kernel ever sees it.
     const created = await seedEntity(db, entity, overrides as never);
     record(created.id);
     return created;

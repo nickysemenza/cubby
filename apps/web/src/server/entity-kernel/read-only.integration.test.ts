@@ -79,7 +79,6 @@ describe("kernel read-only boundaries", () => {
       entity: "cookbook",
       data: { name: "x" },
     };
-    // SAFETY: a deliberately invalid command exercises the kernel refusal.
     await expect(executeEntity(context(), create as never)).rejects.toThrow(
       /cookbook|invalid/i,
     );

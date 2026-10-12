@@ -30,7 +30,6 @@ test("workflow routing covers PR changes and labels, skips forks/prose, and sele
   );
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- node:http returns a numeric TCP address or a Unix socket path.
   assert(address && typeof address !== "string");
   const event = {
     action: "labeled",
@@ -147,7 +146,6 @@ test("CI completion dispatches an open current same-repository PR and accepts Gi
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- The test owns a TCP listener.
   assert(address && typeof address !== "string");
   const apiUrl = `http://127.0.0.1:${address.port}`;
   const event = {

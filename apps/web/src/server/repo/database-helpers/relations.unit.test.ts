@@ -50,10 +50,6 @@ const ALLOWLIST: Record<string, string> = {};
 type PresetNode = true | { readonly where?: SQL; readonly with?: PresetBlock };
 type PresetBlock = Readonly<Record<string, PresetNode>>;
 
-// SAFETY: every preset in `relations` is a Drizzle RQB config, so it already
-// satisfies this view — which keeps only the `where`/`with` pair the guard reads
-// and ignores `columns`/`orderBy`/`extras`. Widening the entity key to `string`
-// is what needs the assertion; the node shape is structurally compatible.
 const presets = relations as Readonly<
   Record<string, Readonly<Record<string, PresetNode>>>
 >;

@@ -25,7 +25,6 @@ beforeAll(async () => {
     res.end("ok");
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  // SAFETY: a server listening on a TCP port reports an AddressInfo.
   origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 

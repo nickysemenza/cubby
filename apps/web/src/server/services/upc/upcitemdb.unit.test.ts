@@ -30,12 +30,9 @@ describe("lookupUPCitemdb status mapping", () => {
     const result = await lookupUPCitemdb("012345678905", runtime);
 
     expect(result.status).toBe("found");
-    if (result.status === "found") {
-      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
-      expect(result.data.name).toBe("Widget");
-      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
-      expect(result.data.brand).toBe("Acme");
-    }
+    if (result.status !== "found") return;
+    expect(result.data.name).toBe("Widget");
+    expect(result.data.brand).toBe("Acme");
   });
 
   it("parses offers whose list_price is a number (real upstream shape)", async () => {
@@ -75,12 +72,9 @@ describe("lookupUPCitemdb status mapping", () => {
     const result = await lookupUPCitemdb("049206116313", runtime);
 
     expect(result.status).toBe("found");
-    if (result.status === "found") {
-      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
-      expect(result.data.name).toBe("Jackson Steel Wheelbarrow");
-      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
-      expect(result.data.priceDollars).toBeGreaterThan(0);
-    }
+    if (result.status !== "found") return;
+    expect(result.data.name).toBe("Jackson Steel Wheelbarrow");
+    expect(result.data.priceDollars).toBeGreaterThan(0);
   });
 
   it("returns error (not a miss) on a malformed 200 payload", async () => {

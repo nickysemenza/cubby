@@ -446,7 +446,6 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
     >;
   const router = implementAll(httpContract);
 
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- the adapter's errorHandler contract hands over whatever a route threw
   const errorHandler = (error: unknown, request: TsRestRequest) => {
     if (request.signal.aborted) throw error;
     const validation =

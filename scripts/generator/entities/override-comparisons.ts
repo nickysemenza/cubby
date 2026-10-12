@@ -54,7 +54,6 @@ const withoutInput = (
 
 type ComparisonValue = string | number | boolean | null | object | undefined;
 
-// oxlint-disable-next-line eslint/complexity -- Each branch reads one finite manifest override path.
 const effectiveValue = (
   entity: CompiledEntity,
   path: string,

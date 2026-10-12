@@ -1,4 +1,4 @@
-/* oxlint-disable anti-slop/no-unknown-parameters, anti-slop/no-runtime-typeof -- a thrown value has no schema; only its constructor name is recorded on the span. */
+/* oxlint-disable anti-slop/no-unknown-parameters -- a thrown value has no schema; only its constructor name is recorded on the span. */
 /**
  * The one implementation of "run work inside a Cloudflare span": attribute
  * handling, error marking and the lifecycle variants. `withSpan` (this

@@ -182,8 +182,6 @@ describe("list manifest and deferred rows", () => {
       if (!override || override.mode === "client") return;
       harness = createBrowserTestHarness();
       const { result } = renderHook(
-        // SAFETY: a source-mode override reads neither slot prop before
-        // returning its parts; only whether it supplies a source is checked.
         () => override.use({ search: {}, navigate: () => {} } as never),
         { wrapper: harness.wrapper },
       );
