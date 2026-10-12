@@ -1,17 +1,32 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { createContext, useContext } from "react";
 
 import { cn } from "~/lib/utils";
 
 /**
- * True inside a desktop table cell. Dates and timestamps stack there by
- * default; phone cards, ledgers and prose keep their one-line forms.
+ * Set inside a desktop table cell, where values take their dense form: dates,
+ * timestamps and entity links stack in two lines and a quality score drops
+ * its "/100". Phone cards, ledgers and prose keep their one-line forms;
+ * another surface opts in with the component's `stacked` prop. `linksTo` is
+ * the entity whose icon the column header already paints.
  */
-export const StackedCellContext = createContext(false);
+export const DenseCellContext = createContext<{
+  linksTo: Entity | null;
+} | null>(null);
 
-export function useStackedCell(stacked: boolean | undefined) {
-  const inCell = useContext(StackedCellContext);
-  return stacked ?? inCell;
+/** Whether a value takes its dense form: `stacked` if given, else in a cell. */
+export function useDenseCell(stacked?: boolean) {
+  const cell = useContext(DenseCellContext);
+  return stacked ?? cell !== null;
 }
+
+/** The entity whose icon this cell's column header paints, if any. */
+export const useHeaderEntity = () =>
+  useContext(DenseCellContext)?.linksTo ?? null;
+
+/** A stacked value's muted second line: 11px on 13px. */
+export const STACKED_SECONDARY_CLASS =
+  "block truncate text-[0.6875rem] leading-[13px] font-normal text-muted-foreground no-underline";
 
 /**
  * A value over a muted secondary line, both fitting one 32px table row
@@ -37,10 +52,7 @@ export function StackedValue({
         {primary}
       </span>
       {secondary && (
-        <span
-          data-stacked-line=""
-          className="block truncate text-[0.6875rem] leading-[13px] text-muted-foreground"
-        >
+        <span data-stacked-line="" className={STACKED_SECONDARY_CLASS}>
           {secondary}
         </span>
       )}

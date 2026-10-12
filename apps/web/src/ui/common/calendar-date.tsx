@@ -1,5 +1,5 @@
 import { formatDateSpan, stackedDateSpan } from "~/lib/date-span";
-import { StackedValue, useStackedCell } from "~/ui/common/stacked-value";
+import { StackedValue, useDenseCell } from "~/ui/common/stacked-value";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 
 /**
@@ -19,7 +19,7 @@ export function CalendarDate({
   stacked?: boolean;
 }) {
   const today = useHouseholdToday();
-  const stack = useStackedCell(stacked);
+  const stack = useDenseCell(stacked);
   const label = formatDateSpan(start, end, today);
   if (stack) {
     const parts = stackedDateSpan(start, end, today);

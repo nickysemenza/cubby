@@ -343,6 +343,7 @@ export function createInventoryEntriesColumn<
       filterConfig: options?.filterConfig,
       provenance: options?.provenance,
       readFields: [String(accessor)],
+      linksTo: entity,
       entityRefs: (row) =>
         row[accessor].flatMap((entry) => {
           const related = getRelatedEntity(entry);

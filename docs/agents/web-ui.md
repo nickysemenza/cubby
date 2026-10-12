@@ -60,11 +60,12 @@ Use `RTable` for interactive lists, Table primitives for static tables, and raw
 tables only for matrices/debug/external content. `useTableColumnLayout` owns
 table order/pinning/visibility/sizing. Decorated cells render through
 `CellFrame`; don't append icons beside a cell value by hand. Hover-only
-controls (explanation, relation workbench) use `CellFrame overlay` and reserve
-no width; status marks stay in flow. Table headers paint a field's
-`display.columnLabel` or count icon (`entity/column-header.ts`). Two-line cell
-content uses `StackedValue` or `ChipCluster`, and clipped codes use
-`MiddleTruncate`. Rendered entity names are linked and
+controls (explanation, relation workbench, resolution marks) use `CellFrame
+overlay` and reserve no width; a derived value reads muted and suggestion marks
+stay in flow. Table headers paint a field's `display.columnLabel`, count icon
+(`entity/column-header.ts`), or linked entity's icon (`meta.linksTo`). Two-line
+cell content uses `StackedValue`, `ChipCluster`, or a shared component's dense
+form (`DenseCellContext`), and clipped codes use `MiddleTruncate`. Rendered entity names are linked and
 readable: use `EntityRefLink` (all record links, one component with variants), a titled truncated link, or `createNameColumn`
 in RTable. Audit history can retain retired entity kinds; icon lookup tolerates
 absent metadata and leaves those references unlinked. Pages use the `Page`

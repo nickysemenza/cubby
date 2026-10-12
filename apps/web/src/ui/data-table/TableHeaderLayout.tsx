@@ -83,7 +83,8 @@ export function HeaderLabel({
 
 /**
  * What a header paints for its label: the counted entity's icon and "#"
- * when no other visible column counts the same entity, else its short label.
+ * when no other visible column counts the same entity, else its short label,
+ * led by the linked entity's icon when every cell links to one entity.
  */
 function headerContent<TData extends RowData>(
   header: Header<typeof cubbyTableFeatures, TData, unknown>,
@@ -108,9 +109,21 @@ function headerContent<TData extends RowData>(
         <span aria-hidden="true">#</span>
       </span>
     );
-  return (
+  const label =
     meta?.shortHeader ??
-    flexRender(header.column.columnDef.header, header.getContext())
+    flexRender(header.column.columnDef.header, header.getContext());
+  if (!meta?.linksTo) return label;
+  return (
+    <>
+      <span data-header-entity="" className="mr-1 inline-flex align-[-2px]">
+        <EntityIcon
+          entity={meta.linksTo}
+          aria-hidden="true"
+          className="size-3.5"
+        />
+      </span>
+      {label}
+    </>
   );
 }
 
@@ -150,6 +163,8 @@ function HeaderHoverChrome({
   return (
     <span
       data-header-chrome=""
+      // A rail, so a clipped label's spill-over draws it past the label.
+      data-cell-rail=""
       className={cn(
         // Pointer-transparent so a click still sorts; the source icon keeps
         // its own pointer for its phrase.

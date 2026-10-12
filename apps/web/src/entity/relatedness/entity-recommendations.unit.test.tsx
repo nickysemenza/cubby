@@ -1,5 +1,5 @@
 import { testShortcode } from "@cubby/schemas/testing";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -75,9 +75,12 @@ describe("EntityRecommendations", () => {
     const unpicturedLink = screen.getByRole("link", {
       name: "No product photo",
     });
-    expect(picturedLink.querySelector("img")).toHaveAttribute(
-      "src",
-      "https://images.example/pictured.jpg",
+    // Display images load separately from the proposals.
+    await waitFor(() =>
+      expect(picturedLink.querySelector("img")).toHaveAttribute(
+        "src",
+        "https://images.example/pictured.jpg",
+      ),
     );
     expect(unpicturedLink.querySelector("img")).toBeNull();
     expect(unpicturedLink.querySelector("svg")).not.toBeNull();

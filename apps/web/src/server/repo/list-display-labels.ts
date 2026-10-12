@@ -20,7 +20,7 @@ import {
 import { formatEstimate } from "~/lib/nutrition-format";
 import type { PerUnitPrices } from "~/lib/price-mapping-utils";
 import { formatRecipeTime } from "~/lib/recipe-time";
-import { formatUnitPrice } from "~/lib/unit-price-format";
+import { formatPerUnitPrice } from "~/lib/unit-price-format";
 
 /**
  * Server-owned list-cell text for figures a client would otherwise re-derive.
@@ -92,9 +92,7 @@ export const recipeListLabels = (recipe: {
 export const unitPriceLabel = (
   prices: PerUnitPrices | null | undefined,
 ): string | null =>
-  prices?.natural
-    ? `${formatUnitPrice(prices.natural.price)}/${prices.natural.unit}`
-    : null;
+  prices?.natural ? formatPerUnitPrice(prices.natural) : null;
 
 /**
  * A $0.00 total means "empty" or "nothing priced", never a real value, so the

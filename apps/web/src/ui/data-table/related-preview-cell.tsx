@@ -3,6 +3,7 @@ import type { RelatedPreviewGroup } from "@cubby/schemas/related-view";
 import { EntityIdentityMark } from "~/entity/components/entity-identity-mark";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
+import { ChipCluster } from "~/ui/common/chip-cluster";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 function RelatedEntityLink({
@@ -58,27 +59,24 @@ export function RelatedPreviewCell({
   }
   if (error) return <span className="text-destructive">{error.message}</span>;
   if (!group || group.totalCount === 0) return <NoneValue />;
-  const overflow = group.totalCount - group.items.length;
+  // Wraps to two short lines and counts the rest, like every chip list.
   return (
-    <span className="flex min-w-0 items-center gap-1 overflow-hidden text-sm">
-      {group.items.map((item, index) => (
-        <span
-          key={`${item.entity}:${item.id}`}
-          className="flex min-w-0 items-center gap-1"
-        >
-          {index > 0 && <span className="text-muted-foreground">·</span>}
-          <EntityIdentityMark
-            entity={item.entity}
-            displayImage={item.displayImage}
-          />
-          <RelatedEntityLink item={item} className="max-w-36 truncate" />
-        </span>
-      ))}
-      {overflow > 0 && (
-        <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
-          +{overflow}
-        </span>
-      )}
-    </span>
+    <ChipCluster
+      more={group.totalCount - group.items.length}
+      items={group.items.map((item) => ({
+        key: `${item.entity}:${item.id}`,
+        label: item.label,
+        node: (
+          <span className="flex h-3 min-w-0 items-center gap-0.5 text-xs leading-3">
+            <EntityIdentityMark
+              entity={item.entity}
+              displayImage={item.displayImage}
+              className="size-3!"
+            />
+            <RelatedEntityLink item={item} className="min-w-0 truncate" />
+          </span>
+        ),
+      }))}
+    />
   );
 }

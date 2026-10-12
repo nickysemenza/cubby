@@ -50,6 +50,9 @@ function naturalCell(cell: HTMLElement) {
   // left a column with a lasting busy mark at its header's width.
   for (const busy of clone.querySelectorAll("[aria-busy='true']"))
     busy.remove();
+  // A code's middle is hidden behind a drawn "…"; fit that form.
+  for (const elided of clone.querySelectorAll("[data-fit-elide]"))
+    elided.remove();
   for (const element of clone.querySelectorAll<HTMLElement>("*")) {
     element.removeAttribute("id");
     element.style.maxWidth = "none";

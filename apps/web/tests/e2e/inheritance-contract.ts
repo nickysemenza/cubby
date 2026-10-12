@@ -66,10 +66,15 @@ export function inheritanceContract() {
     await expectViewportBounded(page);
     await gotoAuthenticatedPage(page, `/purchases/${fixture.purchase.id}#work`);
     const projectCell = page
-      .locator('[data-cell-col="projectId"]')
-      .filter({ has: page.getByText("purchase default", { exact: true }) })
-      .first();
-    await expect(projectCell).toBeVisible();
+      .getByRole("row")
+      .filter({ hasText: /Inheritance \d+ item/ })
+      .first()
+      .locator('[data-cell-col="projectId"]');
+    // Its source mark overlays the active row only, as a person sees it.
+    await projectCell.hover();
+    await expect(
+      projectCell.getByText("purchase default", { exact: true }),
+    ).toBeAttached();
     await expect
       .poll(() =>
         projectCell.evaluate(

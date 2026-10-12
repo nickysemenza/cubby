@@ -4,7 +4,8 @@ const SPILL_DELAY_MS = 250;
 const SPILL_MAX_PX = 480;
 const EDGE_PX = 4;
 /** What a cell can spill, outermost first in document order. */
-const SOURCES = "[data-cell-spill], [data-cell-value], .truncate";
+const SOURCES =
+  "[data-cell-spill], [data-cell-value], [data-stacked-line], [data-header-label], .truncate";
 const TYPOGRAPHY = [
   "color",
   "font-family",
@@ -19,13 +20,39 @@ const TYPOGRAPHY = [
 
 const RAIL_GAP_PX = 2;
 
+/**
+ * Cut off sideways, or below its last line when clamped to two. Screen-reader
+ * text is clipped on purpose; counting it spilled values that fit.
+ */
 const isClipped = (element: Element) =>
-  element.scrollWidth > element.clientWidth + 1;
+  !element.matches(".sr-only") &&
+  (element.scrollWidth > element.clientWidth + 1 ||
+    element.scrollHeight > element.clientHeight + 1);
+
+const railsOf = (cell: HTMLElement) => [
+  ...cell.querySelectorAll<HTMLElement>("[data-cell-rail]"),
+];
 
 /** The active row's rail when it floats over the cell instead of in flow. */
 function floatingRail(cell: HTMLElement) {
-  const rail = cell.querySelector<HTMLElement>("[data-cell-rail]");
-  return rail && getComputedStyle(rail).position === "absolute" ? rail : null;
+  return (
+    railsOf(cell).find(
+      (rail) => getComputedStyle(rail).position === "absolute",
+    ) ?? null
+  );
+}
+
+/**
+ * The rail beside the spilled value, which the overlay would paint over.
+ * Regression: a value inside its own in-flow frame (a suggestion mark) put
+ * that frame's rail first, so the outer ⓘ was neither copied nor cleared.
+ */
+function outerRail(cell: HTMLElement, source: HTMLElement) {
+  return (
+    railsOf(cell).find(
+      (rail) => !source.contains(rail) && rail.getClientRects().length > 0,
+    ) ?? null
+  );
 }
 
 /** Whether a floating rail paints over the value's text. */
@@ -54,7 +81,10 @@ function clippedSource(cell: HTMLElement): HTMLElement | null {
       isClipped(candidate) ||
       [...candidate.querySelectorAll("*")].some(isClipped)
     )
-      return candidate;
+      // A stacked line spills with its partner line, as the cell shows them.
+      return candidate.matches("[data-stacked-line]") && candidate.parentElement
+        ? candidate.parentElement
+        : candidate;
   }
   // A value that exactly fits still loses its tail (or a number its leading
   // digits) under the active row's ⓘ.
@@ -74,6 +104,9 @@ function clippedSource(cell: HTMLElement): HTMLElement | null {
 function unclippedClone(source: HTMLElement) {
   const clone = source.cloneNode(true);
   if (!(clone instanceof HTMLElement)) return null;
+  // Stand-ins for hidden text (a code's "…") give way to the text itself.
+  for (const omitted of clone.querySelectorAll("[data-spill-omit]"))
+    omitted.remove();
   for (const element of [clone, ...clone.querySelectorAll<HTMLElement>("*")]) {
     element.removeAttribute("id");
     element.removeAttribute("title");
@@ -83,13 +116,14 @@ function unclippedClone(source: HTMLElement) {
     element.style.minWidth = "0";
     element.style.flexShrink = "0";
     element.style.whiteSpace = "nowrap";
+    element.style.setProperty("-webkit-line-clamp", "none");
   }
   clone.style.width = "max-content";
   return clone;
 }
 
 /**
- * The active row's floating rail (its ⓘ) drawn at the spill-over's end, or
+ * The cell's rail (its ⓘ) drawn at the spill-over's end, or
  * its start beside a number, where padding keeps it clear of the full text.
  * Regression: drawn at its own spot, it hid the characters it sat on. The
  * copy forwards clicks to the real controls.
@@ -115,11 +149,15 @@ function railCopy(
     [start ? "left" : "right"]: `${EDGE_PX}px`,
     background: "var(--popover, var(--card))",
     boxShadow: "none",
-    pointerEvents: "auto",
+    pointerEvents: "none",
+    visibility: "visible",
   });
   const controls = [...rail.querySelectorAll<HTMLElement>("button, a")];
+  // Only copied controls take the pointer: a decorative glyph (a header's
+  // sort arrow) passes clicks through to the cell, which sorts.
   clone.querySelectorAll<HTMLElement>("button, a").forEach((copy, index) => {
     copy.tabIndex = -1;
+    copy.style.pointerEvents = "auto";
     copy.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -189,7 +227,7 @@ export function useCellSpill(
         boxShadow:
           "0 2px 10px rgb(23 26 33 / 0.14), 0 0 0 1px rgb(23 26 33 / 0.08)",
       });
-      const rail = floatingRail(cell);
+      const rail = outerRail(cell, source);
       const railBox = rail?.getBoundingClientRect();
       const start =
         !!railBox &&
@@ -231,7 +269,7 @@ export function useCellSpill(
 
     const cellOf = (target: EventTarget | null) =>
       target instanceof Element
-        ? target.closest<HTMLElement>("td[data-column-id]")
+        ? target.closest<HTMLElement>("td[data-column-id], th[data-column-id]")
         : null;
 
     const onPointerOver = (event: PointerEvent) => {

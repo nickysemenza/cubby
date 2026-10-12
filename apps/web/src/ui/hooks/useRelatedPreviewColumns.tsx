@@ -85,7 +85,7 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
         return columnHelper.display({
           id: columnId,
           header: view.label,
-          size: 256,
+          size: 160,
           enableSorting:
             supportsServerSorting &&
             getSortableFields(entity).includes(columnId),

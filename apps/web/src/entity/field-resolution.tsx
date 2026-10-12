@@ -141,6 +141,12 @@ export function resolutionIsInformative(resolution: FieldResolution): boolean {
   }
 }
 
+/** A value this record takes from elsewhere rather than stores itself. Table
+ * cells read it muted, so derived and stored values differ without a rail. */
+export const resolutionIsDerived = (resolution: FieldResolution) =>
+  (resolution.mode === "inherit" && resolution.value !== null) ||
+  resolution.mode === "allocated";
+
 export type ResolutionTone =
   | "set"
   | "override"

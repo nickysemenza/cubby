@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatUnitPrice } from "./unit-price-format";
+import { formatPerUnitPrice, formatUnitPrice } from "./unit-price-format";
 
 describe("formatUnitPrice", () => {
   it("keeps sub-cent unit prices legible instead of rounding them to $0.00", () => {
@@ -9,5 +9,12 @@ describe("formatUnitPrice", () => {
     expect(formatUnitPrice(0.0030086)).toBe("$0.00301");
     expect(formatUnitPrice(0.0853125)).toBe("$0.085");
     expect(formatUnitPrice(15.29)).toBe("$15.29");
+  });
+
+  it("abbreviates a count basis so a table column stays narrow", () => {
+    expect(formatPerUnitPrice({ price: 3.49, unit: "each" })).toBe("$3.49/ea");
+    expect(formatPerUnitPrice({ price: 0.0853125, unit: "fl oz" })).toBe(
+      "$0.085/fl oz",
+    );
   });
 });

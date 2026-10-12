@@ -9,6 +9,7 @@ import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import type { ReactNode } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { useDenseCell } from "~/ui/common/stacked-value";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { NoneValue } from "~/ui/primitives/none-value";
@@ -108,8 +109,13 @@ export function InventoryEntriesCell<
   inlineEdit,
 }: InventoryEntriesCellProps<T, TEntry, TEntity>) {
   const displayImages = useEntityDisplayImageMap();
+  // A dense cell stacks the amount under the name instead of "1 each @".
+  const dense = useDenseCell();
 
-  const renderRelatedEntity = (related: InventoryRelatedEntity["data"]) => {
+  const renderRelatedEntity = (
+    related: InventoryRelatedEntity["data"],
+    context?: string,
+  ) => {
     const displayImage =
       displayImages[
         entityDisplayImageKey({ entityKind: entity, entityId: related.id })
@@ -120,6 +126,7 @@ export function InventoryEntriesCell<
           displayImage={displayImage}
           entity="location"
           data={related}
+          context={context}
           compact
         />
       );
@@ -130,6 +137,7 @@ export function InventoryEntriesCell<
           displayImage={displayImage}
           entity="product"
           data={related}
+          context={context}
           compact
         />
       );
@@ -140,6 +148,12 @@ export function InventoryEntriesCell<
   const renderEntry = (entry: TEntry) => {
     const related = getRelatedEntity(entry);
     if (!related) return null;
+    if (dense)
+      return (
+        <span key={entry.id} className="flex min-w-0">
+          {renderRelatedEntity(related, tryFormatAmount(entry.amount))}
+        </span>
+      );
     return (
       <span key={entry.id} className="inline-flex items-center gap-1">
         <span className="text-muted-foreground">
@@ -212,6 +226,22 @@ export function InventoryEntriesCell<
             // {id,name} known from a paste) renders as plain text until the
             // invalidated query restores the location summary.
             const linkData = related && v.id === related.id ? related : null;
+            if (dense && linkData)
+              return (
+                <EntityRefLink
+                  displayImage={
+                    displayImages[
+                      entityDisplayImageKey({
+                        entityKind: "location",
+                        entityId: linkData.id,
+                      })
+                    ] ?? null
+                  }
+                  entity="location"
+                  data={linkData}
+                  context={tryFormatAmount(entry.amount)}
+                />
+              );
             return (
               <span className="inline-flex items-center gap-1">
                 <span className="text-muted-foreground">

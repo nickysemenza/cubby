@@ -66,6 +66,6 @@ describe("UnitPriceLine", () => {
 
   it("falls back to per-each when nothing measurable is known", () => {
     render(<UnitPriceLine mappings={mappingsFor(178.29)} />);
-    expect(screen.getByText("$178.29/each")).toBeInTheDocument();
+    expect(screen.getByText("$178.29/ea")).toBeInTheDocument();
   });
 });

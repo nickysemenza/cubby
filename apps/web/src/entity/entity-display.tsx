@@ -1,6 +1,10 @@
 import type { AuditEntityKind } from "@cubby/schemas/audit";
 import { amount as amountSchema } from "@cubby/schemas/codec";
-import type { Entity, EntityRef } from "@cubby/schemas/entity";
+import {
+  type Entity,
+  type EntityRef,
+  entitySchema,
+} from "@cubby/schemas/entity";
 import {
   entityFieldModels,
   type EntityFieldModel,
@@ -1673,6 +1677,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
               className: widthClassName(field.display.width, field.kind),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
+              linksTo: referenceEntity,
               entityRefs: (row) => referenceMediaRefs(row, field),
             }),
             cell: ({ row }) => (
@@ -1774,6 +1779,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
                 : undefined,
               className: widthClassName(field.display.width, field.kind),
               mobile: toMobileColumnMeta(field.display.mobile),
+              linksTo: entitySchema.safeParse(field.reference?.entity).data,
               entityRefs: field.reference
                 ? (row) => referenceMediaRefs(row, field)
                 : undefined,

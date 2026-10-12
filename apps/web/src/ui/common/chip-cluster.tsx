@@ -17,12 +17,15 @@ const MAX_LINES = 2;
  */
 export function ChipCluster({
   items,
+  more = 0,
   limit = null,
   leading,
   trailing,
   className,
 }: {
   items: readonly ChipClusterItem[];
+  /** Items past a bounded preview's `items`; they count toward "+N". */
+  more?: number;
   /** A declared most-chips bound; the rest count toward "+N" as well. */
   limit?: number | null;
   /** Muted state word before the chips ("Partial"). */
@@ -60,9 +63,10 @@ export function ChipCluster({
     const lines = tops.filter(
       (top, index) => index === 0 || top - (tops[index - 1] ?? top) > 4,
     ).length;
-    if (lines <= MAX_LINES || shown === 0) return;
-    // Something sits on a third line: drop one chip and measure again until
-    // the chips and their "+N" fit two lines.
+    const overflows = element.scrollHeight > element.clientHeight + 1;
+    if ((lines <= MAX_LINES && !overflows) || shown === 0) return;
+    // Something sits on a third line, or two tall lines overflow the row:
+    // drop one chip and measure again until the chips and their "+N" fit.
     setFit({ key: layoutKey, shown: shown - 1 });
   }, [shown, layoutKey]);
 
@@ -87,13 +91,13 @@ export function ChipCluster({
           {item.node}
         </span>
       ))}
-      {hidden.length > 0 && (
+      {hidden.length + more > 0 && (
         <span
           data-chip-overflow=""
           className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums"
-          title={hidden.map((item) => item.label).join(", ")}
+          title={hidden.map((item) => item.label).join(", ") || undefined}
         >
-          +{hidden.length}
+          +{hidden.length + more}
         </span>
       )}
       {trailing && (
