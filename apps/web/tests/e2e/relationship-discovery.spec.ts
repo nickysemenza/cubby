@@ -112,7 +112,6 @@ test("a large planting branch shows its first page without an expansion click", 
   );
 
   await gotoAuthenticatedPage(page, `/tasks/${task.id}#relationships`);
-  await page.getByRole("button", { name: "Graph view", exact: true }).click();
 
   await expect(page.getByText("12 of 13", { exact: true })).toBeVisible();
   await page

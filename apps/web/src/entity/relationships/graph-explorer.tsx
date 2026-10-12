@@ -159,6 +159,7 @@ export function GraphExplorer({
   const inspector = (
     <Stack gap="md">
       <GraphRecordInspector
+        embedded={embedded}
         model={model}
         root={root}
         operations={operations}
@@ -424,9 +425,11 @@ function GraphRecordInspector({
   onRootChange,
   onResetCamera,
   onClearPath,
+  embedded,
 }: {
   model: ReturnType<typeof useGraphExplorer>;
   root: EntityRef;
+  embedded: boolean;
   operations: GraphExplorerOperations;
   onRootChange: (root: EntityRef) => void;
   onResetCamera: () => void;
@@ -438,6 +441,7 @@ function GraphRecordInspector({
   const selected = model.data.nodes.find(
     (node) => graphRefKey(node) === model.selected,
   );
+  const Title = embedded && model.selected === rootKey ? "p" : "h2";
   const branches = model.data.branches.filter(
     (branch) =>
       graphRefKey(branch.root) === model.selected && branch.totalCount > 0,
@@ -462,9 +466,10 @@ function GraphRecordInspector({
             <span className="text-xs text-muted-foreground">
               {entityLabel(selected.entityKind)} · {selected.entityId}
             </span>
-            <h2 className="text-base font-semibold break-words">
+            {/* On its own detail page the root record is already the page heading. */}
+            <Title className="text-base font-semibold break-words">
               {selected.label}
-            </h2>
+            </Title>
             {recordLink(selected) && (
               <Link
                 to={recordLink(selected)}
