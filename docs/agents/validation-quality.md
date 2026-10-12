@@ -47,6 +47,25 @@ maintained source, CSS, Markdown, MDX, YAML, and TOML; generated files,
 the pnpm lockfile, and vendored/build output remain excluded. Do not weaken a
 gate to accommodate a change.
 
+Lint policy the exceptions follow:
+
+- `complexity` allows 50; a function above that keeps a one-line disable
+  naming why its branches belong together.
+- `anti-slop/no-unknown-parameters` checks exported signatures only (module
+  boundaries); private helpers, callbacks, and test files may take `unknown`.
+- `anti-slop/require-safety-comment-for-type-assertion` needs a `SAFETY:`
+  comment on every assertion except `as const`, narrowing to literal types
+  (`as "open" | "closed"`), and test files. `as never`, `as unknown as`, and
+  other widening casts always need one.
+- `vitest/no-conditional-expect` stays on. Assert the discriminant, then
+  narrow with an early return instead of wrapping expectations in a branch:
+
+  ```ts
+  expect(result.isOk()).toBe(true);
+  if (!result.isOk()) return;
+  expect(result.value.unit).toBe("$");
+  ```
+
 Generated output is never committed. `pnpm install`, `build`, `typecheck` and
 every test entry point run `scripts/generator/ensure.ts`, which reruns
 `pnpm generate` when its inputs changed; `pnpm generate` forces a run. The
