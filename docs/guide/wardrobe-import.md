@@ -28,8 +28,8 @@ keeps one owner and a short list of locations.
 
 - One person's clothes per session. A Run belongs to exactly one owner.
 - For each garment, take a full shot, then its size and care tags **right
-  after it**. The agent groups photos by shot order, so a tag must sit next to
-  its garment.
+  after it**. The agent groups photos in the order they were taken, so a tag
+  must be shot right after its garment.
 - Extra angles are fine; they attach to the same garment. Two identical
   garments in the same size and color become one Product with quantity 2.
 - A pair of shoes is one item. Skip videos; they are not imported.
@@ -49,6 +49,10 @@ then **Add to import run…**.
 The note can only be written here, when the Run is created. If you forget it,
 give the same locations to the agent in step 3.
 
+To add more photos later, choose the same Run under **Open runs** instead of
+**New run**. The Run keeps every photo in the order it was taken, so a later
+batch slots in correctly.
+
 Keep the app open until it shows **Photos uploaded**: the device reads tag text
 from each photo while it uploads.
 
@@ -59,6 +63,7 @@ and never expires while waiting for you.
 
 - **On your device, during upload**: text recognition reads tags and labels.
 - **In Cubby**: each photo gets a written description, when image work is on.
+  While it is paused, the Run's page says so and grouping waits.
 - **On a connected Apple device**: each garment photo gets a background-removed
   cutout, when a device is available. Tag photos are never cut out.
 
@@ -74,7 +79,7 @@ Either:
   grouping**. It starts once every photo has its description, and requires the
   Cubby agent to be connected for your login.
 
-The agent reads the photos in shot order, checks each garment against existing
+The agent reads the photos in the order they were taken, checks each garment against existing
 Products (including ones from past orders), and proposes one group per garment:
 a name such as `Brand Model — Color, Size`, the tag text copied verbatim into
 notes, the owner, and a Location from your note. Where the owner or location is

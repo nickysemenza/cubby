@@ -21,7 +21,8 @@ struct RunPhotoReviewSections: View {
                 photoProcessing(review.images)
                 if proposed.isEmpty, review.review.proposals.isEmpty {
                     let readiness = PhotoReviewPolicy.groupingReadiness(
-                        images: review.images, runStatus: session.snapshot?.status)
+                        images: review.images, runStatus: session.snapshot?.status,
+                        processingPaused: review.imageProcessingPaused)
                     Text(readiness.message).foregroundStyle(.secondary)
                     switch readiness {
                     case .needsReviewOnWeb:
@@ -36,7 +37,7 @@ struct RunPhotoReviewSections: View {
                             Label("Start grouping", systemImage: "sparkles")
                         }
                         .disabled(session.busy)
-                    case .waitingForPhotos, .processing, .working:
+                    case .waitingForPhotos, .processing, .processingPaused, .working:
                         EmptyView()
                     }
                 }

@@ -62,7 +62,8 @@ struct PhotoImportFlowTests {
     // description. Both must wait for at least one settled (ready/skipped/failed) description.
     @Test func groupingReadinessWaitsForPhotosBeforeOfferingToStart() {
         #expect(
-            PhotoReviewPolicy.groupingReadiness(images: [], runStatus: .running) == .waitingForPhotos)
+            PhotoReviewPolicy.groupingReadiness(images: [], runStatus: .running, processingPaused: false)
+                == .waitingForPhotos)
     }
 
     @Test func groupingReadinessWaitsForDescriptionsToSettleBeforeOfferingToStart() {
@@ -74,9 +75,21 @@ struct PhotoImportFlowTests {
             describe: .leased, localAnalysisReady: false, deviceWorkAttempts: 0)
 
         #expect(
-            PhotoReviewPolicy.groupingReadiness(images: [pending], runStatus: .running) == .processing)
+            PhotoReviewPolicy.groupingReadiness(
+                images: [pending], runStatus: .running, processingPaused: false) == .processing)
         #expect(
-            PhotoReviewPolicy.groupingReadiness(images: [working], runStatus: .running) == .processing)
+            PhotoReviewPolicy.groupingReadiness(
+                images: [working], runStatus: .running, processingPaused: false) == .processing)
+    }
+
+    @Test func groupingReadinessNamesPausedImageProcessingWhileDescriptionsWait() {
+        let queued = PhotoRunImage(
+            id: ImageCode("IMG-2345"), targetState: .pending, originalUrl: "synthetic://shirt",
+            describe: .pending, localAnalysisReady: true, deviceWorkAttempts: 0)
+
+        #expect(
+            PhotoReviewPolicy.groupingReadiness(
+                images: [queued], runStatus: .running, processingPaused: true) == .processingPaused)
     }
 
     @Test func groupingReadinessOffersStartOnceSettledAndRunning() {
@@ -88,10 +101,12 @@ struct PhotoImportFlowTests {
             describe: .skipped, localAnalysisReady: true, deviceWorkAttempts: 0)
 
         #expect(
-            PhotoReviewPolicy.groupingReadiness(images: [ready, skipped], runStatus: .running)
+            PhotoReviewPolicy.groupingReadiness(
+                images: [ready, skipped], runStatus: .running, processingPaused: false)
                 == .readyToStart)
         #expect(
-            PhotoReviewPolicy.groupingReadiness(images: [ready], runStatus: .completed) == .working)
+            PhotoReviewPolicy.groupingReadiness(
+                images: [ready], runStatus: .completed, processingPaused: false) == .working)
     }
 
     @Test func groupingReadinessSendsToWebWhenRunNeedsReviewAndPhotosExist() {
@@ -100,7 +115,8 @@ struct PhotoImportFlowTests {
             describe: .ready, localAnalysisReady: true, deviceWorkAttempts: 0)
 
         #expect(
-            PhotoReviewPolicy.groupingReadiness(images: [ready], runStatus: .needsReview)
+            PhotoReviewPolicy.groupingReadiness(
+                images: [ready], runStatus: .needsReview, processingPaused: false)
                 == .needsReviewOnWeb)
     }
 
@@ -108,7 +124,7 @@ struct PhotoImportFlowTests {
     // waiting message (not a dead-end web link) is what belongs on screen.
     @Test func groupingReadinessStaysWaitingForPhotosEvenWhenRunNeedsReview() {
         #expect(
-            PhotoReviewPolicy.groupingReadiness(images: [], runStatus: .needsReview)
+            PhotoReviewPolicy.groupingReadiness(images: [], runStatus: .needsReview, processingPaused: false)
                 == .waitingForPhotos)
     }
 

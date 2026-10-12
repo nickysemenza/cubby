@@ -414,7 +414,7 @@ export const photoImportContract = defineContract("photoImport", {
   }),
   // Agent-facing (MCP `imports_read`, `photo_run`): the photo agent's reads
   // and bounded writers, off the HTTP API.
-  /** One bounded page of a run's photos in shot order, with owner and notes. */
+  /** One bounded page of a run's photos in capture order, with owner and notes. */
   runContext: query({
     http: false,
     input: z.object({

@@ -87,7 +87,7 @@ struct PhotoImportRunBatch: Identifiable {
 
 struct LibraryPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let maxSelectionCount: Int
+    let maxSelectionCount: Int?
     let onSelection: ([PhotoSelectionItem]) -> Void
     var body: some View {
         NavigationStack {
@@ -414,7 +414,7 @@ private struct PhotoLibraryBrowser: View {
                     )
                     .foregroundStyle(.secondary)
                 }
-                PhotoSourceButtons(maxSelectionCount: maxSelectionCount ?? 100, onSelection: onSelection)
+                PhotoSourceButtons(maxSelectionCount: maxSelectionCount, onSelection: onSelection)
             }.padding(FieldGuideTokens.Space.lg).frame(maxWidth: 560)
         }
     }

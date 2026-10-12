@@ -121,8 +121,10 @@ function descriptionsInFlight(review: PhotoRunReview | undefined) {
   );
 }
 
-function groupingHint(pending: number, analyzing: boolean) {
+function groupingHint(pending: number, analyzing: boolean, paused: boolean) {
   if (!pending) return "Upload and finalize photos in the Cubby app first.";
+  if (analyzing && paused)
+    return "Image processing is paused, so photo descriptions are queued. Resume queued work under Problems → Image processing to start grouping.";
   if (analyzing)
     return "Photos are processing. Grouping starts once descriptions are ready.";
   return "The agent proposes items; you approve each one before anything is created.";
@@ -147,7 +149,11 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
               <PhotoRunGroupingAction run={run} />
             </DetailAction>
             <p className="text-sm text-muted-foreground">
-              {groupingHint(pending, analyzing)}
+              {groupingHint(
+                pending,
+                analyzing,
+                review.data?.imageProcessingPaused ?? false,
+              )}
             </p>
           </div>
         ) : null}

@@ -107,7 +107,10 @@ import {
 } from "~/server/repo/database-helpers";
 import { createImageProcessingSubmission } from "~/server/repo/image-processing-history";
 import { persistImageProcessingSubmission } from "~/server/repo/image-processing-submission";
-import { withPhotoImportTransaction } from "~/server/repo/photo-import";
+import {
+  photoRunImageOrder,
+  withPhotoImportTransaction,
+} from "~/server/repo/photo-import";
 import { getRunByShortcode } from "~/server/repo/run";
 import {
   DEBUG_EVENT_KIND,
@@ -267,7 +270,7 @@ function selectPhotoRestartTargets(
     .from(photoRunImage)
     .innerJoin(image, eq(image.id, photoRunImage.imageId))
     .where(eq(photoRunImage.runId, runId))
-    .orderBy(asc(photoRunImage.position), asc(photoRunImage.createdAt));
+    .orderBy(...photoRunImageOrder());
 }
 
 export type StartPhotoInventoryRunInput = {
@@ -1682,7 +1685,7 @@ export async function loadRunDetail(
           .from(photoRunImage)
           .innerJoin(image, eq(image.id, photoRunImage.imageId))
           .where(eq(photoRunImage.runId, run.id))
-          .orderBy(asc(photoRunImage.createdAt))
+          .orderBy(...photoRunImageOrder())
       : selectNonPhotoTargets(database, run.id),
     database
       .select({

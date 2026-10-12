@@ -565,6 +565,45 @@ describe("photo group proposals", () => {
     ]);
   });
 
+  // Regression: each upload numbers its photos from 0, so a second batch
+  // appended to an open run interleaved with the first when the run sorted by
+  // `position`, separating tags from their garments.
+  it("orders run photos by capture time across appended batches, undated last", async () => {
+    const { run, codes } = await seedRun(5);
+    const batches = [
+      { code: codes[0]!, position: 0, capturedAt: "2026-09-20T09:00:00.000Z" },
+      { code: codes[1]!, position: 1, capturedAt: "2026-09-20T09:02:00.000Z" },
+      { code: codes[2]!, position: 0, capturedAt: "2026-09-20T09:01:00.000Z" },
+      { code: codes[3]!, position: 1, capturedAt: "2026-09-20T09:03:00.000Z" },
+      { code: codes[4]!, position: 0, capturedAt: null },
+    ];
+    for (const photo of batches) {
+      const [row] = await getDb(ctx.db)
+        .update(image)
+        .set({
+          capturedAt: photo.capturedAt ? new Date(photo.capturedAt) : null,
+        })
+        .where(eq(image.shortcode, photo.code))
+        .returning({ id: image.id });
+      await getDb(ctx.db)
+        .update(photoRunImage)
+        .set({ position: photo.position })
+        .where(eq(photoRunImage.imageId, parseEntityId("image", row!.id)));
+    }
+
+    const listed = await listPhotoRunImages(ctx.db, run.shortcode);
+    expect(listed.map((photo) => photo.id)).toEqual([
+      codes[0],
+      codes[2],
+      codes[1],
+      codes[3],
+      codes[4],
+    ]);
+    expect(listed[1]).toMatchObject({
+      capturedAt: "2026-09-20T09:01:00.000Z",
+    });
+  });
+
   it("reports description attempt time separately from queue time", async () => {
     const { run, codes } = await seedRun(1);
     const [source] = await getDb(ctx.db)

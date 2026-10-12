@@ -77,6 +77,7 @@ import {
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { loadImageRepresentations } from "~/server/repo/image-processing";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
+import { photoRunImageOrder } from "~/server/repo/photo-import";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
@@ -156,7 +157,7 @@ async function loadRunImages(db: Database, runId: RunId) {
     .from(photoRunImage)
     .innerJoin(image, eq(image.id, photoRunImage.imageId))
     .where(eq(photoRunImage.runId, runId))
-    .orderBy(photoRunImage.position)
+    .orderBy(...photoRunImageOrder())
     .limit(RUN_IMAGE_LIMIT);
   const ordered: RunImage[] = rows.map((row) => ({
     ...row,
@@ -1136,6 +1137,8 @@ export async function listPhotoRunImages(
       shortcode: image.shortcode,
       sha256: image.sha256,
       position: photoRunImage.position,
+      capturedAt: image.capturedAt,
+      capturedAtOffsetMinutes: image.capturedAtOffsetMinutes,
       state: photoRunImage.state,
       deviceWorkState: photoRunImage.deviceWorkState,
       deviceWorkError: photoRunImage.deviceWorkError,
@@ -1144,7 +1147,7 @@ export async function listPhotoRunImages(
     .from(photoRunImage)
     .innerJoin(image, eq(image.id, photoRunImage.imageId))
     .where(eq(photoRunImage.runId, run.id))
-    .orderBy(photoRunImage.position, image.shortcode)
+    .orderBy(...photoRunImageOrder())
     .limit(RUN_IMAGE_LIMIT);
   if (!rows.length) return [];
   const shortcodes = rows.map((row) => row.shortcode);
@@ -1217,6 +1220,8 @@ export async function listPhotoRunImages(
     return {
       id: parseShortcodeFor("image", row.shortcode),
       position: row.position,
+      capturedAt: row.capturedAt?.toISOString() ?? null,
+      capturedAtOffsetMinutes: row.capturedAtOffsetMinutes,
       targetState: photoRunImageState.parse(row.state),
       originalUrl: rendition.original,
       cutoutUrl: rendition.transparent,

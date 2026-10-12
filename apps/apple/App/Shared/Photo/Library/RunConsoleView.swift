@@ -213,7 +213,7 @@ struct RunPhotoBatchSlot: View {
             let review = PhotoRunReviewResponse(
                 review: PhotoGroupProposalList(
                     runId: runID, runStatus: .running, proposals: [group], unassignedImageIds: []),
-                images: images)
+                images: images, imageProcessingPaused: false)
             let run = RunWorkSnapshotOutput(
                 runId: runID, purpose: .photoInventory, status: .running,
                 startedAt: .now.addingTimeInterval(-12), endedAt: nil,

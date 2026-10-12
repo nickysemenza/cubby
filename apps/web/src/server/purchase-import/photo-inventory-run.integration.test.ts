@@ -171,7 +171,7 @@ describe("photo import finalize", () => {
 
   // Every page stays in the coordinator's context for the rest of the run, so
   // a large run must be readable in bounded pages without URLs or timings.
-  it("pages the agent's photo context in shot order", async () => {
+  it("pages the agent's photo context in capture order", async () => {
     const run = await startRun();
     for (const position of [0, 1, 2]) {
       const photo = await createImageFixture(ctx.db, `page-${position}`, {
@@ -216,6 +216,8 @@ describe("photo import finalize", () => {
     expect(first).toMatchObject({ totalImages: 3, nextCursor: 2 });
     expect(first.images.map((image) => image.position)).toEqual([0, 1]);
     expect(Object.keys(first.images[0] ?? {}).sort()).toEqual([
+      "capturedAt",
+      "capturedAtOffsetMinutes",
       "describe",
       "description",
       "id",
