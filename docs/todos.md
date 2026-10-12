@@ -472,6 +472,15 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Native app
 
+- 🟢 🧪 **Check the RecordList parity screens in a simulator.** The merged
+  Connected records section ("+N more" into the paged per-view list,
+  kind-labelled paths, per-row hops) and folded "N updates · M fields" rows
+  in Changes and Today passed host tests and a simulator build but were never
+  viewed or covered by `test:e2e:sim`.
+- 🤔 ✨ **Add per-record History on native.** Web History hides the record's
+  own name and folds update bursts; native has no per-record History view, so
+  only Changes and Today fold (`AuditEntryFolding`). Decide whether a record
+  detail needs one.
 - 🤔 🐛 **Cluster and reproduce the native app-hang corpus before changing
   code.** Collect sanitized release, duration, foreground state, and top
   symbolicated main-thread frames per Sentry family; group by shared frames.
@@ -582,6 +591,25 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Web UI
 
+- 🟢 ✨ **Give the detail-page explorer a depth control.** A detail page's
+  Relationships section is the graph explorer alone (`EntityRelations
+  placement="detail"`), with a find box and list toggle but no depth picker.
+  Offer depth 2–3 there; depth 1 repeats the record's relation tables.
+- 🤔 🐛 **Review behaviour changes from the RecordList migration.**
+  - The home meals card links only the meal label rather than the whole row
+    (`features/home/MealsCard.tsx`); decide whether the row is the target.
+  - Lists in narrow popovers (recipe totals gaps, smart-collection match
+    evidence) sit below the ledger's 32rem two-column width, so the totals-gap
+    fix link drops beneath its suggestion.
+  - `record-list.css` sets row `min-height`, which overrides a row's Tailwind
+    `min-h-*`; decide whether rows may opt into a taller floor.
+- 🤔 🛠️ **Revisit the hand-rolled record list baseline.** The
+  `cubby/no-hand-rolled-record-list` exemptions in `.oxlintrc.json`: recipe
+  ingredient prose (`RecipeMagazineView.tsx`, `recipe-live-preview.tsx`) and
+  the meal nutrition workspace are likely permanent; the collection
+  assignment matrix (per-row toggles) and the application directory
+  (navigation) move to `RecordList` only if they become read-only record
+  lists.
 - 🟢 ✨ **Filter Activity by action and writer.** The RecordList timeline
   folds bursts and links the Run behind a write; chips for create/update/
   delete and for people versus agents would narrow a long History without a
