@@ -1,0 +1,25 @@
+apps/web/src/features/work-queue/work-queue-page.tsx
+  s_47e8488e80f940::t_ba563174e7ac05 198-204
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_47e8488e80f940::t_4b85e03b7460a1 1052-1054,1107-1117
+apps/web/src/server/repo/work-queue.ts
+  s_47e8488e80f940::t_aeb937ac27743a 294-307,391-393
+packages/schemas/src/work-queue.ts
+  s_47e8488e80f940::t_05eb23fc37d2a5 48-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ec94394553f01b7e579190a0c3b054fda4b35802",
+  "prompts": {},
+  "sessions": {
+    "s_47e8488e80f940": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "25917b2c-6e6c-4bb4-9f67-0487df1850a0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
