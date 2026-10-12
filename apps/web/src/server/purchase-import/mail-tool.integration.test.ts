@@ -312,7 +312,57 @@ describe("public mail tool", () => {
     ).rejects.toThrow("different reviewed refund set");
     const readInput = { mailboxId, messageId: source.messageId };
     const codes = purchases.map((row) => row.shortcode).sort();
+    const firstPurchaseForSource = purchases[0];
+    if (!firstPurchaseForSource)
+      throw new Error("Synthetic accepted Purchase missing");
+    const acceptedRun = await insertWithShortcode(ctx.db, "run", {
+      purpose: "file_import",
+      trigger: "manual",
+      status: "completed",
+      ledgerPartyId: party.id,
+      actorUserId: ctx.actor.userId,
+      actorName: "Synthetic accepted member",
+      actorEmail: "mail@example.test",
+      actorLedgerPartyShortcode: party.shortcode,
+      actorLedgerPartyName: party.name,
+      actorLedgerPartyKind: "member",
+    });
+    const [acceptedClaim] = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: party.id,
+        kind: "mail_message",
+        externalKey: `gmail:${mailboxId}:${source.messageId}`,
+        checksum: source.rawChecksum,
+        firstRunId: acceptedRun.id,
+        lastRunId: acceptedRun.id,
+      })
+      .returning();
+    if (!acceptedClaim) throw new Error("Synthetic accepted source missing");
+    const [acceptedOrder] = await getDb(ctx.db)
+      .insert(importSourceOrder)
+      .values({
+        sourceClaimId: acceptedClaim.id,
+        orderKey: "synthetic-review-handle",
+        purchaseId: firstPurchaseForSource.id,
+        checksum: source.rawChecksum,
+        outputFingerprint: "0".repeat(64),
+      })
+      .returning();
+    if (!acceptedOrder) throw new Error("Synthetic accepted order missing");
     const beforeDeletion = await readMail(ctx.db, readInput, ctx.actor);
+    expect(beforeDeletion).toHaveProperty("acceptedSourceOrders", [
+      {
+        sourceOrderId: acceptedOrder.id,
+        purchaseId: firstPurchaseForSource.shortcode,
+        purchaseDeleted: false,
+        source: {
+          kind: "mail_message",
+          externalKey: acceptedClaim.externalKey,
+          checksum: source.rawChecksum,
+        },
+      },
+    ]);
     expect(beforeDeletion).toMatchObject({
       purchaseIds: codes,
       purchaseAssociations: codes.map((purchaseId) => ({

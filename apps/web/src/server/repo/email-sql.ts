@@ -20,7 +20,7 @@ export const automatedStagesSql = sql`(${rule}, ${jev}, ${model})`;
  * disposal and historical aliases; active lifecycle decisions remain separate.
  */
 export const emailAcceptedEvidenceSql = (includeDeleted = false): SQL => sql`
-  SELECT accepted."purchaseId", accepted."checksum" AS "evidenceChecksum", accepted."createdAt" AS "acceptedAt"
+  SELECT accepted."id" AS "sourceOrderId", accepted."purchaseId", accepted."checksum" AS "evidenceChecksum", accepted."createdAt" AS "acceptedAt"
   FROM "ImportSourceClaim" identity
   INNER JOIN "ImportSourceClaim" root
     ON root."id" = coalesce(identity."canonicalClaimId", identity."id")
