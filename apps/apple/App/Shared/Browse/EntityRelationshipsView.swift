@@ -589,25 +589,18 @@ private struct RelationshipRecordButton: View {
 
     var body: some View {
         Button(action: open) {
-            HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
-                DomainMark(node.reference.entity)
-                    .padding(.top, FieldGuideTokens.Space.xs)
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    Text(node.label)
-                        .font(.fieldGuideTitle)
-                        .foregroundStyle(FieldGuideTokens.graphite)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("\(EntityCatalog[node.reference.entity].singular) · \(node.reference.id)")
-                        .font(.fieldGuideCode)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: FieldGuideTokens.Space.sm)
+            RecordListRow(
+                title: node.label, imageURL: node.imageURL,
+                symbol: EntityCatalog[node.reference.entity].sfSymbol
+            ) {
+                Text("\(EntityCatalog[node.reference.entity].singular) · \(node.reference.id)")
+                    .font(.fieldGuideCode)
+            } rail: {
                 Image(systemName: nativeDestination ? "chevron.right" : "safari")
-                    .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
+            } supplement: {
+                EmptyView()
             }
-            .frame(minHeight: FieldGuideTokens.touchTarget)
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(node.label), \(EntityCatalog[node.reference.entity].singular)")

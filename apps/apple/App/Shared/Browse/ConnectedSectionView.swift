@@ -61,7 +61,16 @@ struct ConnectedSectionView: View {
                                     value: Route.entityDetail(
                                         item.target.entityKind, id: item.target.entityId)
                                 ) {
-                                    Text(item.target.label).font(.body.weight(.medium))
+                                    RecordListRow(
+                                        title: item.target.label,
+                                        symbol: EntityCatalog[item.target.entityKind].sfSymbol
+                                    ) {
+                                        Text(EntityCatalog[item.target.entityKind].singular)
+                                    } rail: {
+                                        EmptyView()
+                                    } supplement: {
+                                        EmptyView()
+                                    }
                                 }
                                 RecordPathView(paths: item.paths)
                             }

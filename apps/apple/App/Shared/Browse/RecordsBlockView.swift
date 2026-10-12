@@ -27,35 +27,23 @@ struct RecordRowView: View {
     }
 
     private var content: some View {
-        HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
-            if let url = row.imageURL {
-                Thumb(
-                    url: url, size: large ? 112 : 48,
-                    symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "photo")
+        RecordListRow(
+            title: row.title, imageURL: row.imageURL,
+            symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "square.dashed",
+            thumbnailSize: large ? 112 : 36
+        ) {
+            if let subtitle = row.subtitle, !subtitle.isEmpty { Text(subtitle) }
+        } rail: {
+            if row.listLink == nil, let trailing = row.trailing, !trailing.isEmpty { Text(trailing) }
+            if let at = row.at {
+                Text(at.formatted(date: .abbreviated, time: .shortened))
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.title)
-                if let subtitle = row.subtitle, !subtitle.isEmpty {
-                    Text(subtitle).font(.fieldGuideLabel).foregroundStyle(.secondary)
-                }
-                ForEach(row.badges, id: \.self) { badge in
-                    Label(badge, systemImage: "exclamationmark.triangle")
-                        .font(.fieldGuideLabel).foregroundStyle(.orange)
-                }
-                extras
+        } supplement: {
+            ForEach(row.badges, id: \.self) { badge in
+                Label(badge, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
             }
-            Spacer(minLength: FieldGuideTokens.Space.sm)
-            VStack(alignment: .trailing, spacing: 2) {
-                // A trailing figure that links to a list is shown by the row's own link instead.
-                if row.listLink == nil, let trailing = row.trailing, !trailing.isEmpty {
-                    Text(trailing).font(.fieldGuideLabel).foregroundStyle(.secondary)
-                }
-                if let at = row.at {
-                    Text(at.formatted(date: .abbreviated, time: .shortened))
-                        .font(.fieldGuideLabel).foregroundStyle(.secondary)
-                }
-            }
-            .multilineTextAlignment(.trailing)
+            extras
         }
         .accessibilityElement(children: .combine)
     }
@@ -63,7 +51,7 @@ struct RecordRowView: View {
     /// Toned status chips, lines, the raw block and commands a row carries beyond its title.
     @ViewBuilder private var extras: some View {
         if !row.statuses.isEmpty {
-            HStack(spacing: FieldGuideTokens.Space.xs) {
+            WrappingFactsLayout(spacing: FieldGuideTokens.Space.xs) {
                 ForEach(Array(row.statuses.enumerated()), id: \.offset) { _, status in
                     StatusChip(text: status.label, tone: status.tone?.chipTone ?? .neutral)
                 }

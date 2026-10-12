@@ -7,6 +7,7 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
     var imageURL: URL? = nil
     var symbol: String = "square.dashed"
     var emoji: String? = nil
+    var thumbnailSize: CGFloat = 36
     var previewImage: Image? = nil
     var titleIdentifier: String = ""
     @ViewBuilder var context: () -> Context
@@ -19,11 +20,11 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
         HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
             if let previewImage {
                 previewImage.resizable().scaledToFill()
-                    .frame(width: 36, height: 36)
+                    .frame(width: thumbnailSize, height: thumbnailSize)
                     .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
                     .accessibilityHidden(true)
             } else {
-                Thumb(url: imageURL, size: 36, symbol: symbol, emoji: emoji)
+                Thumb(url: imageURL, size: thumbnailSize, symbol: symbol, emoji: emoji)
             }
             VStack(alignment: .leading, spacing: 2) {
                 let layout =
