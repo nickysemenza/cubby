@@ -209,9 +209,28 @@ same outcome without prescribing an agent runtime.
 5. Call `purchase_import.commit` with the preparation revision and every line
    resolution. Do not use generic entity creation for imported Products or
    Expenses. A commit never starts Product research; unresolved Product facts
-   wait in the Research queue.
+   wait in the Research queue. For an existing Purchase with exact manual
+   item Expenses, explicit `new` or `existing` choices bind uniquely matching,
+   unbound, unclaimed principal rows and retain the original source-line
+   associations. Amounts, dates, purpose and adjustment rows stay intact.
+   Ambiguous rows, conflicting Products and previously accepted sources require
+   source-order reconciliation review. A known accepted original with missing
+   Product bindings uses `purchase_import.prepare_reconciliation` and
+   `commit_accepted_reconciliation`. Each reviewed line names an existing
+   `productId`, or sets `productId: null` and deliberate `newProduct: {kind:
+   "new"}`. New creation requires the known immutable original and its exact
+   original preparation, a unique unbound item Expense, and no competing source
+   ownership. Prepare returns the host's `newProduct.preparedFingerprint` for
+   its stored identity, identifiers and candidates; commit the complete returned
+   review unchanged. Creation rechecks exact identities and retains the source
+   line and reviewed current binding; the original snapshot stays immutable.
+   Unknown historical observations or missing preparations require evidence
+   review and cannot use this path. Re-importing an accepted original with
+   changed Product choices returns a review finding.
 6. Inspect every ordered result. `created`, `updated`, and `replayed` are
-   terminal; `conflict` requires review.
+   terminal; `conflict` requires review. Read back every requested principal
+   Product binding and its source association, and compare the Expense total
+   and row count with the original ledger before reporting completion.
 7. Report every conflict or open finding; resolve it through the Problems UI.
 
 Mail import is Pi's version of this flow; [mail-import.md](references/mail-import.md)

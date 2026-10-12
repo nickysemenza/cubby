@@ -287,6 +287,11 @@ export async function loadSourceReconciliationState(
   for (const binding of resolution?.lines ?? [])
     if (binding.productId)
       allProductIds.add(await resolveOrThrow(tx, "product", binding.productId));
+  for (const binding of resolution?.lines ?? [])
+    for (const distinct of binding.newProduct?.distinctFrom ?? [])
+      allProductIds.add(
+        await resolveOrThrow(tx, "product", distinct.productId),
+      );
   const products = allProductIds.size
     ? await tx
         .select()

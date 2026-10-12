@@ -39,6 +39,15 @@ const distinctFromProduct = <Id extends z.ZodType<string>>(productId: Id) =>
     quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
   });
 
+const newProductResolution = z
+  .object({
+    kind: z.literal("new"),
+    distinctFrom: z
+      .array(distinctFromProduct(productShortcode.describe("Product")))
+      .optional(),
+  })
+  .describe("Create a Product; an exact match must be listed in distinctFrom.");
+
 export const importSourceKind = z.enum([
   "browser_order",
   "mail_message",
@@ -399,6 +408,15 @@ const sourceReconciliationLineBinding = z.object({
   lineIndex: z.number().int().nonnegative(),
   expenseId: expenseShortcode.nullable(),
   productId: productShortcode.nullable(),
+  /** Known accepted originals only; the host freezes the original preparation. */
+  newProduct: newProductResolution
+    .extend({
+      preparedFingerprint: z
+        .string()
+        .regex(/^[a-f0-9]{64}$/)
+        .optional(),
+    })
+    .optional(),
 });
 export const sourceOrderReconciliationResolution = z.discriminatedUnion(
   "kind",
@@ -819,16 +837,7 @@ export const preparedProductResolution = z.discriminatedUnion("kind", [
     .describe(
       "Reuse an existing Product whose exact item and variant match the source without contradicting its recorded facts. productId is the public Product shortcode returned by Cubby search.",
     ),
-  z
-    .object({
-      kind: z.literal("new"),
-      distinctFrom: z
-        .array(distinctFromProduct(productShortcode.describe("Product")))
-        .optional(),
-    })
-    .describe(
-      "Create a Product; an exact match must be listed in distinctFrom.",
-    ),
+  newProductResolution,
   z
     .object({
       kind: z.literal("unresolved"),

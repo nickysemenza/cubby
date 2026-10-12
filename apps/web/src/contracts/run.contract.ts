@@ -11,7 +11,12 @@ import {
   productShortcode,
   purchaseShortcode,
 } from "@cubby/schemas/identifiers";
-import { mailboxDiscoveryStartOutput } from "@cubby/schemas/mailbox-research";
+import {
+  mailboxDiscoveryStartOutput,
+  mailboxDiscoveryInput,
+  mailboxDiscoveryProgress,
+  mailboxCoverage,
+} from "@cubby/schemas/mailbox-research";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
   proposedImportFix,
@@ -330,6 +335,47 @@ export const runContract = defineContract("run", {
       operations: z.array(
         runDetail.shape.operations.element.omit({ operationId: true }),
       ),
+      /** Persisted Workflow evidence; mailbox coverage may advance after this Run. */
+      mailDiscovery: z
+        .object({
+          scope: mailboxDiscoveryInput.omit({ executionAuthorization: true }),
+          checkpoint: mailboxDiscoveryProgress.nullable(),
+          mailbox: z.object({
+            historyId: z.string().nullable(),
+            coverage: mailboxCoverage.nullable(),
+          }),
+          failureCode: z.string().nullable(),
+          error: z.string().nullable(),
+          authorization: executionAuthorizationApprovalInput
+            .extend({
+              runId: runShortcode,
+              approvalFingerprint:
+                executionAuthorizationRef.shape.approvalFingerprint,
+              status: runStatus,
+              deletedAt: z.iso.datetime().nullable(),
+              retiredAt: z.iso.datetime().nullable(),
+              expired: z.boolean(),
+              reservations: z.array(
+                z.object({
+                  periodKey: z.string(),
+                  reservedMicroUSD: z.number().int().positive(),
+                  reservedAt: z.iso.datetime(),
+                }),
+              ),
+              candidateClaims: z.number().int().nonnegative(),
+              productClaims: z.number().int().nonnegative(),
+              revokedAt: z.iso.datetime().nullable(),
+            })
+            .nullable(),
+          /** Recorded AI calls only; reservations are separate from priced usage. */
+          usage: aiRunUsageOut
+            .pick({ pricedSubtotal: true, unpricedCount: true })
+            .extend({
+              callCount: z.number().int().nonnegative(),
+              retryCount: z.number().int().nonnegative(),
+            }),
+        })
+        .nullable(),
     }),
     cache: { tags: [] },
   }),

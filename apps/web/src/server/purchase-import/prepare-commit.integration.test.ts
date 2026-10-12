@@ -24,6 +24,7 @@ import {
   financialTransactionAllocation,
   importSourceClaim,
   importSourceOrder,
+  importSourceProduct,
   inventoryEntry,
   email as emailTable,
   orderMail,
@@ -596,6 +597,164 @@ describe("caller-driven purchase import writes", () => {
       10,
     ]);
   });
+
+  // Exact money replay must not erase deliberate Product choices. Binding
+  // manual item rows is safe only when each source line has one unclaimed row;
+  // duplicated item rows and previously accepted sources require review.
+  it.each(["new", "existing", "ambiguous", "source_owned"] as const)(
+    "honors %s Product choices on existing itemized spend or returns review",
+    async (mode) => {
+      const { vendor } = await scope();
+      const lines: ExtractedOrderCandidate["lines"] = [
+        {
+          title: "Synthetic brass trowel",
+          amount: 18,
+          quantity: 2,
+          lineKind: "principal",
+        },
+        {
+          title:
+            mode === "ambiguous"
+              ? "Synthetic brass trowel"
+              : "Synthetic steel fork",
+          amount: mode === "ambiguous" ? 18 : 12,
+          quantity: 2,
+          lineKind: "principal",
+        },
+        { title: "Synthetic sales tax", amount: 3, lineKind: "tax" },
+      ];
+      const target = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        orderId: "SYNTHETIC-ITEMIZED-CHOICES",
+        date: "2026-09-01",
+        defaultTrade: "other",
+        itemizationEvidence: true,
+      });
+      for (const line of lines)
+        await insertWithShortcode(ctx.db, "expense", {
+          purchaseId: target.id,
+          name: line.title,
+          cost: line.amount,
+          date: target.date,
+          lineKind: line.lineKind,
+          lineBasis: "item_line",
+          costType: "materials",
+          trade: "other",
+          projectId: null,
+          economicRole: "vendor",
+          productId: null,
+          productQuantity: null,
+        });
+      const database = getDb(ctx.db);
+      const before = await database.select().from(expense).orderBy(expense.id);
+      if (mode === "source_owned")
+        await memberImport(ctx.db, ctx.actor, {
+          key: "accepted-itemized-source",
+          orders: [
+            {
+              stableOrderId: "accepted-itemized-source",
+              vendorId: vendor.shortcode,
+              targetPurchaseId: target.shortcode,
+              source: source("accepted-itemized-source", "a"),
+              extraction: {
+                status: "ready",
+                candidate: candidate(target.orderId, lines),
+              },
+            },
+          ],
+        });
+      const products =
+        mode === "existing"
+          ? await Promise.all(
+              lines
+                .slice(0, 2)
+                .map((line) =>
+                  createProductFixture(
+                    ctx.db,
+                    makeProductInput({ name: line.title }),
+                    ctx.actor,
+                  ),
+                ),
+            )
+          : [];
+      const resolutions =
+        mode === "existing"
+          ? products.map((row) => ({
+              kind: "existing" as const,
+              productId: row.id,
+            }))
+          : [{ kind: "new" as const }, { kind: "new" as const }];
+      const { committed } = await memberImport(ctx.db, ctx.actor, {
+        key: "itemized-product-choice",
+        orders: [
+          {
+            stableOrderId: "itemized-product-choice",
+            vendorId: vendor.shortcode,
+            targetPurchaseId: target.shortcode,
+            source: source("itemized-product-choice", "b"),
+            extraction: {
+              status: "ready",
+              candidate: candidate(target.orderId, lines),
+            },
+            resolutions,
+          },
+        ],
+      });
+      const item = committed.items[0];
+      const after = await database.select().from(expense).orderBy(expense.id);
+      const needsReview = mode === "ambiguous" || mode === "source_owned";
+      expect(item).toMatchObject({
+        outcome: needsReview ? "conflict" : "updated",
+        purchaseId: target.shortcode,
+        findingCount: needsReview ? 1 : 0,
+      });
+      const principals = after.filter((row) => row.lineKind === "principal");
+      expect(
+        principals.every(
+          (row) => row.productId !== null && row.productQuantity === 2,
+        ),
+      ).toBe(!needsReview);
+      expect(principals.map((row) => row.productQuantity)).toEqual(
+        needsReview ? [null, null] : [2, 2],
+      );
+      expect(
+        after.map(
+          ({
+            productId: _productId,
+            productQuantity: _quantity,
+            updatedAt: _updatedAt,
+            ...row
+          }) => row,
+        ),
+      ).toEqual(
+        before.map(
+          ({
+            productId: _productId,
+            productQuantity: _quantity,
+            updatedAt: _updatedAt,
+            ...row
+          }) => row,
+        ),
+      );
+      const bindings = await database.select().from(importSourceProduct);
+      expect(bindings).toHaveLength(needsReview ? 0 : 2);
+      expect(bindings.map((row) => row.lineIndex).sort()).toEqual(
+        needsReview ? [] : [0, 1],
+      );
+      expect(bindings.map((row) => row.productId).sort()).toEqual(
+        principals
+          .flatMap((row) => (row.productId ? [row.productId] : []))
+          .sort(),
+      );
+      expect(await database.select().from(product)).toHaveLength(
+        needsReview ? 0 : 2,
+      );
+      expect(await database.select().from(runFinding)).toHaveLength(
+        needsReview ? 1 : 0,
+      );
+      expect(await database.select().from(inventoryEntry)).toHaveLength(0);
+    },
+  );
 
   // A null Purchase trade can intentionally inherit a selected Project or
   // line purpose. The member's import default must not override that

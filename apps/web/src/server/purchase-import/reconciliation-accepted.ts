@@ -213,7 +213,7 @@ export async function prepareAcceptedSourceOrderReconciliation(
       input.sourceOrderId,
       actor,
       undefined,
-      true,
+      !input.resolution.lines.some((binding) => binding.newProduct),
     );
     const state = await loadSourceReconciliationState(
       tx,

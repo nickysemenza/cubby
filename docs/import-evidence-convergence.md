@@ -74,6 +74,29 @@ deletion as history, exposes later account drift, and never writes financial
 allocations. `mail.resolve` can link a lifecycle Email to several existing
 Purchases through `purchaseIds`.
 
+### Prepared changes awaiting delivery and live acceptance
+
+- Owned discovery status reads expose frozen mailbox scope, current checkpoints,
+  retained authorization evidence and recorded AI usage without executing the
+  coordinator. Missing historical transport or cumulative coverage evidence
+  stays unknown; the remaining durable evidence work is in `docs/todos.md`.
+- Existing-Purchase imports bind deliberate Product choices to uniquely matching
+  unbound manual item Expenses. Accepted originals instead use an exact reviewed
+  reconciliation; a new Product requires the retained original preparation and
+  its frozen identity fingerprint. Ambiguous, claimed or changed rows refuse.
+  Neither path receives inventory or adds booked spend during attach-only repair.
+- These changes need deployment and public writer/readback acceptance before
+  blocked source bindings or historical restart readiness can be declared done.
+
+Private financial acceptance now includes original Apple Card statements and
+order-specific installment settlement. Separate orders and trade-ins remain
+distinct even when devices share a model. Estimated confirmation tax yields to
+the exact current order and independently matched posted charge; conflicting
+trade-in notices require the final order/device identity and actual adjustment.
+Unbilled installment principal remains an explained future balance, never a
+fabricated posted transaction. Original statements and preservation evidence
+remain outside repository content.
+
 ## Validation boundaries
 
 `import-order-convergence.integration.test.ts` exercises all 24 arrival

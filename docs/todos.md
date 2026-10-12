@@ -139,6 +139,14 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
+- 🤔 🧪 **Complete durable historical discovery coverage and transport evidence.**
+  Owned discovery reads expose the frozen scope, current cursor/checkpoint,
+  retained approval receipts and recorded AI usage. Historical readiness still
+  lacks a cumulative coverage ledger and persisted Gmail request/retry history.
+  Record these through the owning Workflow; distinguish current coverage from
+  each Run's observations and unpriced usage from measured spend. Reading
+  readiness must never restart scanning or admit imports.
+
 - 🤔 🛠️ **Clarify explicit selection of an already-admitted Email.** A member's
   selection can reuse an automatic Run through existing source ownership or
   replay identity, retaining that Run's original execution authority. Surface

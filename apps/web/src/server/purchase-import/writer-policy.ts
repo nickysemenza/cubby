@@ -70,6 +70,22 @@ export type LineWriteDecision =
 const linesTotal = (lines: ExtractedPurchaseLine[]): number =>
   lines.reduce((total, line) => total + cents(line.amount), 0);
 
+export const importedLineMatchesExpense = (
+  row: Pick<
+    ExistingExpenseSnapshot,
+    "title" | "amount" | "lineKind" | "productQuantity"
+  >,
+  line: ExtractedPurchaseLine,
+) =>
+  line.title.trim().replace(/\s+/gu, " ") ===
+    row.title.trim().replace(/\s+/gu, " ") &&
+  row.amount !== null &&
+  cents(line.amount) === cents(row.amount) &&
+  line.lineKind === row.lineKind &&
+  (row.productQuantity == null ||
+    line.quantity === undefined ||
+    line.quantity === row.productQuantity);
+
 /**
  * Import lines may replace only the one legacy aggregate shape that the human
  * purchase workflow created. Anything linked, split, source-claimed, or with a
@@ -105,16 +121,8 @@ export const decideLineWrite = (
   ) {
     const unused = [...extracted];
     for (const row of existing) {
-      const match = unused.findIndex(
-        (line) =>
-          line.title.trim().replace(/\s+/gu, " ") ===
-            row.title.trim().replace(/\s+/gu, " ") &&
-          row.amount !== null &&
-          cents(line.amount) === cents(row.amount) &&
-          line.lineKind === row.lineKind &&
-          (row.productQuantity == null ||
-            line.quantity === undefined ||
-            line.quantity === row.productQuantity),
+      const match = unused.findIndex((line) =>
+        importedLineMatchesExpense(row, line),
       );
       if (match < 0) return { kind: "conflict", reason: "duplicate_lines" };
       unused.splice(match, 1);

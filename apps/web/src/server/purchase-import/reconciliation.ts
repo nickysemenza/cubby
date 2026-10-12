@@ -45,6 +45,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { redistributeReplacementAttributions } from "./aggregate-replacement";
 import { prepareAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
+import { reviewPreparedNewProducts } from "./reconciliation-new-product";
 import {
   reconciliationFingerprint,
   recordSourceOrderObservation,
@@ -56,6 +57,7 @@ import {
   type ReconciliationFix,
   type ReconciliationState,
 } from "./reconciliation-state";
+import { receiptProductQuantity, resolveLineProduct } from "./writer";
 import { matchCompletePaymentSet, sourceFinancialFacts } from "./writer-policy";
 export { commitAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
 
@@ -90,6 +92,7 @@ export async function reviewResolution(
   fix: ReconciliationFix,
   resolution: SourceOrderReconciliationResolution,
 ) {
+  resolution = await reviewPreparedNewProducts(tx, state, resolution);
   const candidate = fix.proposedExtraction.candidate;
   if (!candidate) throw new Error("Reconciliation needs a readable candidate.");
   if (candidate.currency !== "USD")
@@ -575,6 +578,8 @@ export async function commitSourceOrderReconciliation(
   const resolution = current.resolution;
   const audit = [];
   const reused = new Set<typeof expense.$inferSelect.id>();
+  const resolvedBindings = [];
+  const productsByExternalIdentity = new Map<string, string>();
   const selected =
     resolution.kind === "replace_lines"
       ? state.expenses.filter((row) =>
@@ -586,9 +591,44 @@ export async function commitSourceOrderReconciliation(
     const existing = binding.expenseId
       ? state.expenses.find((row) => row.shortcode === binding.expenseId)!
       : null;
-    const productId = binding.productId
-      ? await resolveOrThrow(tx, "product", binding.productId)
-      : null;
+    const distinctFrom = [];
+    for (const distinct of binding.newProduct?.distinctFrom ?? [])
+      distinctFrom.push({
+        ...distinct,
+        productId: await resolveOrThrow(tx, "product", distinct.productId),
+      });
+    const productId = binding.newProduct
+      ? await resolveLineProduct(
+          tx,
+          line,
+          {
+            productId: null,
+            promote: true,
+            variantDoubt: false,
+            unresolvedReason: null,
+            probability: 1,
+            lineKind: "principal",
+            kitKind: "single",
+            reversalKind: null,
+            distinctFrom,
+          },
+          state.target.vendorId,
+          productsByExternalIdentity,
+          {
+            recorder: actor,
+            onCreated: (id) =>
+              audit.push({
+                entityKind: "product" as const,
+                entityId: id,
+                action: "create" as const,
+                changes: { name: { from: null, to: line.title } },
+              }),
+          },
+        )
+      : binding.productId
+        ? await resolveOrThrow(tx, "product", binding.productId)
+        : null;
+    resolvedBindings.push({ lineIndex: binding.lineIndex, productId });
     if (resolution.kind === "attach_only") {
       if (
         existing &&
@@ -601,7 +641,13 @@ export async function commitSourceOrderReconciliation(
             productId,
             productQuantity:
               existing.productQuantity ??
-              (productId ? (line.quantity ?? 1) : null),
+              (binding.newProduct
+                ? receiptProductQuantity(productId, line, {
+                    reversalKind: null,
+                  })
+                : productId
+                  ? (line.quantity ?? 1)
+                  : null),
             updatedAt: new Date(),
           })
           .where(eq(expense.id, existing.id));
@@ -815,12 +861,7 @@ export async function commitSourceOrderReconciliation(
       primaryDocumentImageId: state.observation.primaryDocumentImageId,
       screenshotImageId: state.observation.screenshotImageId,
     },
-    resolution.lines.map((binding) => ({
-      lineIndex: binding.lineIndex,
-      productId:
-        state.products.find((row) => row.shortcode === binding.productId)?.id ??
-        null,
-    })),
+    resolvedBindings,
   );
   const [association] = await tx
     .insert(importSourceOrder)

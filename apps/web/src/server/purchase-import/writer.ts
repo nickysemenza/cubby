@@ -47,6 +47,7 @@ import {
   purchasePaymentEvidence,
   run as runTable,
   runFinding,
+  sourceOrderObservation,
   vendorAccount,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -91,6 +92,7 @@ import {
   recordSourceOrderObservation,
   promoteHistoricalAcceptedObservation,
   mergedVendorSourceOrder,
+  sourceObservationIdentityMatches,
 } from "./reconciliation-observations";
 import {
   loadSourceReconciliationState,
@@ -109,6 +111,7 @@ import {
 import { sourceOrderKey } from "./source-order-key";
 import {
   decideLineWrite,
+  importedLineMatchesExpense,
   sourceFinancialFacts,
   type ExistingExpenseSnapshot,
 } from "./writer-policy";
@@ -523,7 +526,7 @@ export async function explicitLineDecisions(
 export function receiptProductQuantity(
   productId: string | null,
   line: ExtractedPurchaseLine,
-  decision: LineIdentityDecision,
+  decision: Pick<LineIdentityDecision, "reversalKind">,
 ): number | null {
   if (!productId || line.quantity === undefined) return null;
   if (line.amount >= 0) return Math.abs(line.quantity);
@@ -566,6 +569,22 @@ async function assertNoExactIdentity(
         `A distinct Product cannot take the identical name of ${match.shortcode} ("${match.name}"); give ${match.shortcode} its manufacturer or a distinguishing name first.`,
       );
   }
+}
+
+/** Preview the same creation guard commit enforces against current identities. */
+export async function assertNewLineProductIdentity(
+  tx: DrizzleTransaction,
+  line: ExtractedPurchaseLine,
+  vendorId: string,
+  distinctFrom: readonly ExplicitDistinctFrom[],
+) {
+  const source = lineIdentifiers(line).length
+    ? await resolveProductIdentifierSource(tx, {
+        url: line.productUrl,
+        vendorId: parseEntityId("vendor", vendorId),
+      })
+    : "";
+  await assertNoExactIdentity(tx, line, source, distinctFrom);
 }
 
 export async function resolveLineProduct(
@@ -1173,6 +1192,71 @@ export async function importVendorOrder(
           sourceFinancialFacts(acceptedSnapshot.extraction.candidate),
         ) === JSON.stringify(sourceFinancialFacts(candidate))
       : true;
+    if (existingOrder) {
+      const [observation] = existingOrder.acceptedObservationId
+        ? await tx
+            .select()
+            .from(sourceOrderObservation)
+            .where(
+              eq(
+                sourceOrderObservation.id,
+                existingOrder.acceptedObservationId,
+              ),
+            )
+        : [];
+      const bindings =
+        observation?.productBindings ??
+        (await tx
+          .select()
+          .from(importSourceProduct)
+          .where(eq(importSourceProduct.sourceOrderId, existingOrder.id)));
+      const current = await existingExpenses(tx, existingOrder.purchaseId);
+      let changedProductChoice = false;
+      for (const resolution of explicitResolutions) {
+        const line = candidate.lines[resolution.lineIndex];
+        if (!line || line.lineKind !== "principal") continue;
+        const acceptedProduct = bindings.find(
+          (binding) => binding.lineIndex === resolution.lineIndex,
+        )?.productId;
+        if (
+          resolution.kind === "new" ||
+          resolution.kind === "unresolved" ||
+          (resolution.kind === "expense_only" && acceptedProduct) ||
+          (resolution.kind === "existing" &&
+            (!acceptedProduct ||
+              !(await sourceObservationIdentityMatches(
+                tx,
+                "product",
+                acceptedProduct,
+                resolution.productId,
+              )) ||
+              !current.some(
+                (row) =>
+                  importedLineMatchesExpense(row, line) &&
+                  row.productId === resolution.productId,
+              )))
+        ) {
+          changedProductChoice = true;
+          break;
+        }
+      }
+      if (changedProductChoice) {
+        const findingId = await fileSourceReconciliation(
+          tx,
+          input,
+          existingOrder.purchaseId,
+          existingOrder.sourceClaimId,
+          orderKey,
+          existingOrder,
+        );
+        return importWriterOutput.parse({
+          outcome: "conflict",
+          purchaseId: existingOrder.purchaseId,
+          findingIds: [findingId],
+          outputFingerprint: existingOrder.outputFingerprint,
+        });
+      }
+    }
     if (
       existingOrder &&
       existingOrder.checksum === input.source.checksum &&
@@ -1309,8 +1393,60 @@ export async function importVendorOrder(
     let target = chosen ?? ordered;
     const created = target == null;
     if (target && !identityOnly) {
+      const [lockedTarget] = await tx
+        .select()
+        .from(purchase)
+        .where(and(eq(purchase.id, target.id), notDeleted(purchase)))
+        .for("update");
+      if (
+        !lockedTarget ||
+        lockedTarget.vendorId !== target.vendorId ||
+        lockedTarget.orderId !== target.orderId
+      )
+        throw new Error("The reviewed Purchase target changed during import.");
+      target = lockedTarget;
+      // Match and attach under the same row locks; a concurrent manual edit
+      // must not change the unbound ledger row between validation and binding.
+      await tx
+        .select({ id: expense.id })
+        .from(expense)
+        .where(
+          and(
+            eq(expense.purchaseId, target.id),
+            eq(expense.economicRole, "vendor"),
+            notDeleted(expense),
+          ),
+        )
+        .for("update");
       const current = await existingExpenses(tx, target.id);
       const decision = decideLineWrite(current, candidate.lines);
+      const [priorSourceOrder] =
+        decision.kind === "no_op"
+          ? await tx
+              .select({ id: importSourceOrder.id })
+              .from(importSourceOrder)
+              .where(eq(importSourceOrder.purchaseId, target.id))
+              .limit(1)
+          : [];
+      const bindingNeedsReview =
+        decision.kind === "no_op" &&
+        explicitResolutions.some((resolution) => {
+          if (resolution.kind !== "new" && resolution.kind !== "existing")
+            return false;
+          const line = candidate.lines[resolution.lineIndex];
+          if (!line || line.lineKind !== "principal") return false;
+          const matches = current.filter((row) =>
+            importedLineMatchesExpense(row, line),
+          );
+          if (matches.length !== 1) return true;
+          const row = matches[0]!;
+          if (row.productId)
+            return (
+              resolution.kind === "new" ||
+              row.productId !== resolution.productId
+            );
+          return row.sourceClaimed || Boolean(priorSourceOrder);
+        });
       const retainedPayments = await tx
         .select()
         .from(purchasePaymentEvidence)
@@ -1345,7 +1481,8 @@ export async function importVendorOrder(
         decision.kind === "conflict" ||
         decision.kind === "review_aggregate" ||
         incompatiblePayments ||
-        changedBinding
+        changedBinding ||
+        bindingNeedsReview
       ) {
         const findingId = await fileSourceReconciliation(
           tx,
@@ -1637,6 +1774,68 @@ export async function importVendorOrder(
           );
         } else {
           replacementExpenseId = decision.aggregate.id;
+        }
+      } else if (decision.kind === "no_op") {
+        const productsByExternalIdentity = new Map<string, string>();
+        for (const [lineIndex, line] of lines.entries()) {
+          const identity = identityDecisions[lineIndex];
+          if (!identity || identity.lineKind !== "principal") continue;
+          if (identity.unresolvedReason) {
+            findingIds.push(
+              await fileFinding(
+                tx,
+                input,
+                purchaseId,
+                "product_unresolved",
+                `Product resolution is required for “${line.title}”: ${identity.unresolvedReason}`,
+                null,
+              ),
+            );
+            continue;
+          }
+          if (!identity.productId && !identity.promote) continue;
+          const productId = await resolveLineProduct(
+            tx,
+            line,
+            identity,
+            input.vendorId,
+            productsByExternalIdentity,
+            {
+              recorder: importActor,
+              onCreated: (createdId) =>
+                rowMutations.push({
+                  targetKind: "product",
+                  targetId: createdId,
+                  mutationKind: "create",
+                  fields: ["name", "externalIds"],
+                }),
+            },
+          );
+          if (!productId) continue;
+          const matches = current.filter((row) =>
+            importedLineMatchesExpense(row, line),
+          );
+          const row = matches[0];
+          if (matches.length !== 1 || !row)
+            throw new Error(
+              "Reviewed item Expense binding changed during import.",
+            );
+          if (!row.productId) {
+            const productQuantity =
+              row.productQuantity ??
+              receiptProductQuantity(productId, line, identity);
+            await tx
+              .update(expense)
+              .set({ productId, productQuantity })
+              .where(eq(expense.id, parseEntityId("expense", row.id)));
+            rowMutations.push({
+              targetKind: "expense",
+              targetId: row.id,
+              mutationKind: "update",
+              fields: ["productId", "productQuantity"],
+            });
+          }
+          productLines.push({ lineIndex, productId });
         }
       } else if (decision.kind === "insert") {
         const productsByExternalIdentity = new Map<string, string>();
