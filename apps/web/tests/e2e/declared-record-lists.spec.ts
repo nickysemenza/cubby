@@ -431,17 +431,23 @@ test("record dates retain their calendar label with present and future context",
     await expect(label).toBeVisible();
     expect(
       await label.evaluate((element) => {
+        // Editor hover padding deliberately bleeds into the cell gutter; only
+        // clipping the readable calendar text violates this date contract.
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const text = range.getBoundingClientRect();
         for (
           let node = element instanceof HTMLElement ? element : null;
           node;
           node = node.parentElement
         ) {
           const overflow = getComputedStyle(node).overflowX;
-          if (
-            (overflow === "hidden" || overflow === "clip") &&
-            node.scrollWidth > node.clientWidth + 1
-          )
-            return false;
+          if (overflow === "hidden" || overflow === "clip") {
+            const bounds = node.getBoundingClientRect();
+            const left = bounds.left + node.clientLeft;
+            const right = left + node.clientWidth;
+            if (text.left < left - 1 || text.right > right + 1) return false;
+          }
           if (node.hasAttribute("data-cell-col")) break;
         }
         return true;

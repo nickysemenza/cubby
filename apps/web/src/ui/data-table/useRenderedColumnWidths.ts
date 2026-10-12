@@ -6,6 +6,23 @@ import type { CubbyTable } from "./table-features";
 
 const SAMPLE_ROWS = 12;
 const HEADER_CAP = 160;
+const INHERITED_TYPOGRAPHY = [
+  "font-family",
+  "font-size",
+  "font-weight",
+  "font-style",
+  "font-stretch",
+  "font-variant",
+  "font-variant-numeric",
+  "font-variant-ligatures",
+  "font-feature-settings",
+  "font-variation-settings",
+  "letter-spacing",
+  "word-spacing",
+  "text-transform",
+  "direction",
+  "white-space",
+];
 
 /** Measure painted primitives without editing live cells or their drafts. */
 function naturalCell(cell: HTMLElement) {
@@ -14,6 +31,12 @@ function naturalCell(cell: HTMLElement) {
   clone.removeAttribute("id");
   clone.style.cssText =
     "display:block;position:static;width:max-content;min-width:0;max-width:none;inset:auto;";
+  // Offscreen clones leave the live table's ancestor chain. Keep resolved
+  // typography, including footer weight and numeric variants, for honest fit.
+  const typography = getComputedStyle(cell);
+  for (const property of INHERITED_TYPOGRAPHY) {
+    clone.style.setProperty(property, typography.getPropertyValue(property));
+  }
   // Hover-only controls must never change the column fit. Value edits keep the
   // previous fit until their display renderer returns.
   for (const pencil of clone.querySelectorAll(

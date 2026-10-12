@@ -49,3 +49,38 @@ it("keeps photo-report choices readable in a 540px container", async () => {
   expect(choice.top).toBeGreaterThanOrEqual(title.bottom);
   expect(report.scrollWidth).toBeLessThanOrEqual(report.clientWidth);
 });
+
+it("keeps expanded action forms beneath the check in a popover", async () => {
+  await page.viewport(1440, 900);
+  render(
+    <div style={{ width: 540 }} data-testid="exception-report">
+      <Ledger>
+        <LedgerRow>
+          <LedgerCell slot="primary">Manufacturer identity</LedgerCell>
+          <LedgerCell slot="secondary">Missing data</LedgerCell>
+          <LedgerCell slot="actions" as="div" data-testid="exception-form">
+            <label htmlFor="exception-reason">
+              Reason
+              <NativeSelect id="exception-reason">
+                <option>Not applicable</option>
+              </NativeSelect>
+            </label>
+            <label htmlFor="exception-note">
+              Note
+              <input id="exception-note" aria-label="Note" />
+            </label>
+            <button type="button">Accept exception</button>
+          </LedgerCell>
+        </LedgerRow>
+      </Ledger>
+    </div>,
+  );
+  const report = screen.getByTestId("exception-report");
+  const form = screen.getByTestId("exception-form").getBoundingClientRect();
+  const check = screen
+    .getByText("Manufacturer identity")
+    .getBoundingClientRect();
+  expect(form.top).toBeGreaterThanOrEqual(check.bottom);
+  expect(form.width).toBeGreaterThanOrEqual(320);
+  expect(report.scrollWidth).toBeLessThanOrEqual(report.clientWidth);
+});

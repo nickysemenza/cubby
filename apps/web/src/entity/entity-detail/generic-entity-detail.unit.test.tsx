@@ -314,10 +314,12 @@ describe("GenericEntityDetail", () => {
     expect(screen.queryByText("UPC", { exact: true })).not.toBeInTheDocument();
     const labels = Array.from(
       container.querySelectorAll(
-        '#overview .basic-info-ledger [data-slot="basic-info-label"]',
+        '#overview [data-ledger="facts"] [data-slot="basic-info-label"]',
       ),
       (element) => element.textContent,
     );
+    expect(labels).toContain("Name");
+    expect(labels).toContain("ISBN-13");
     const section = entitySummary.product.detail.sections.find(
       (candidate) => candidate.id === "overview",
     );

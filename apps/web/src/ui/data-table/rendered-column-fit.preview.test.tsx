@@ -1,8 +1,10 @@
+import { flexRender } from "@tanstack/react-table";
 import { render, waitFor, fireEvent } from "@testing-library/react";
 import { useRef } from "react";
 import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
+import { householdDaysFromNow } from "~/lib/household-date";
 import { Badge } from "~/ui/primitives/badge";
 import {
   Table,
@@ -15,14 +17,20 @@ import {
 } from "~/ui/primitives/table";
 
 import { CellFrame, CELL_RAIL_BUTTON_CLASS } from "./cell-frame";
+import { useTableColumnLayout } from "./column-layout";
 import {
   columnWidthVariables,
   columnWidthValue,
   columnOffsetValue,
   resolvedTableColumnWidths,
 } from "./column-layout";
+import { createPlainDateColumn } from "./columnHelpers";
 import { ROW_DENSITY } from "./density";
-import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+  useCubbyTable,
+} from "./table-features";
 import { useRenderedColumnWidths } from "./useRenderedColumnWidths";
 
 const helper = createCubbyColumnHelper<{ id: string }>();
@@ -187,9 +195,120 @@ function FitFixture({
   );
 }
 
+const dateHelper = createCubbyColumnHelper<{ id: string; date: string }>();
+const dateColumns = createCubbyColumnCollection<{ id: string; date: string }>(
+  (add) => {
+    add(
+      createPlainDateColumn(dateHelper, "date", {
+        header: "Date",
+        editable: { onSave: async () => {} },
+      }),
+    );
+  },
+);
+
+function DateFitFixture({ inherited = false }: { inherited?: boolean }) {
+  const normalized = useTableColumnLayout({ columns: dateColumns });
+  const table = useCubbyTable({
+    data: [{ id: "synthetic", date: householdDaysFromNow(26) }],
+    columns: normalized.columns,
+    getRowId: (row) => row.id,
+  });
+  const ref = useRef<HTMLDivElement>(null);
+  const measured = useRenderedColumnWidths(table, ref, "date", true);
+  const column = table.getVisibleLeafColumns()[0];
+  const cell = table.getRowModel().rows[0].getVisibleCells()[0];
+  const fitted = measured.date ?? column.getSize();
+  return (
+    <div
+      ref={ref}
+      style={
+        inherited
+          ? { fontFamily: "monospace", fontWeight: 600, letterSpacing: "0.5px" }
+          : undefined
+      }
+    >
+      <Table
+        className="table-fixed border-separate border-spacing-0 text-[0.8125rem] tabular-nums"
+        style={{
+          ...columnWidthVariables(
+            table.getVisibleLeafColumns(),
+            0,
+            new Set(),
+            measured,
+          ),
+          width: fitted + 400,
+        }}
+      >
+        <TableHeader>
+          <TableRow>
+            <TableHead
+              data-column-id="date"
+              className="px-1 text-xs"
+              style={{ width: columnWidthValue("date") }}
+            >
+              Date
+            </TableHead>
+            <TableHead style={{ width: 400 }} />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow data-cell-row="0">
+            <TableCell
+              data-column-id="date"
+              data-testid="date"
+              className={`${ROW_DENSITY.cellClass} overflow-hidden text-ellipsis`}
+              style={{ width: columnWidthValue("date") }}
+            >
+              <div className={ROW_DENSITY.cellContentClass}>
+                <div className="min-w-0">
+                  {flexRender(column.columnDef.cell, cell.getContext())}
+                </div>
+              </div>
+            </TableCell>
+            <TableCell style={{ width: 400 }} />
+          </TableRow>
+        </TableBody>
+      </Table>
+      <output data-testid="date-fit">{measured.date ?? "pending"}</output>
+    </div>
+  );
+}
+
 const width = (element: Element) => element.getBoundingClientRect().width;
 
 describe("rendered column fit", () => {
+  it.each([false, true])(
+    "keeps a future editable calendar label unclipped with inherited typography %s",
+    async (inherited) => {
+      await page.viewport(1440, 900);
+      const view = render(<DateFitFixture inherited={inherited} />);
+      await waitFor(() =>
+        expect(view.getByTestId("date-fit").textContent).not.toBe("pending"),
+      );
+      const label = view.getByTestId("date").querySelector("[title]");
+      if (!label) throw new Error("missing future calendar label");
+      const range = document.createRange();
+      range.selectNodeContents(label);
+      const text = range.getBoundingClientRect();
+      const clippingBounds: Array<{ left: number; right: number }> = [];
+      for (let node: Element | null = label; node; node = node.parentElement) {
+        const overflow = getComputedStyle(node).overflowX;
+        if (overflow === "hidden" || overflow === "clip") {
+          const clip = node.getBoundingClientRect();
+          const left = clip.left + node.clientLeft;
+          clippingBounds.push({ left, right: left + node.clientWidth });
+        }
+        if (node.hasAttribute("data-column-id")) break;
+      }
+      expect(
+        clippingBounds.every(
+          (clip) => text.left >= clip.left - 1 && text.right <= clip.right + 1,
+        ),
+      ).toBe(true);
+    },
+  );
+
   it("counts visible icons within editable values", async () => {
     await page.viewport(1440, 900);
     const view = render(<FitFixture icon location="Workshop" />);

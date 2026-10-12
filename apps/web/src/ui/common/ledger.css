@@ -178,6 +178,22 @@
   }
 }
 
+/* Expanded controls and recorded exception prose cannot occupy an icon rail. */
+.ledger[data-ledger="records"]
+  > .ledger-row
+  > [data-ledger-slot="actions"]:has(
+    form,
+    input,
+    select,
+    textarea,
+    [role="combobox"],
+    .basis-full
+  ) {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  justify-self: stretch;
+}
+
 @media (max-width: 767px) {
   .ledger-row:has(a, button, input, summary) {
     min-height: 2.75rem;

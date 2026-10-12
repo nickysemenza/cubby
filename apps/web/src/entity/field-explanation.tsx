@@ -521,7 +521,7 @@ export function FieldExplanation({
             className={
               surface === "list"
                 ? CELL_RAIL_BUTTON_CLASS
-                : "text-muted-foreground"
+                : "relative z-[1] text-muted-foreground"
             }
             aria-label={`How ${label.toLowerCase()} is determined`}
           />
