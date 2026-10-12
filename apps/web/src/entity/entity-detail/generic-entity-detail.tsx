@@ -635,6 +635,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     sections.push({
       id: "images",
       title: "Photos",
+      empty: images.length === 0,
       icon: ImageIcon,
       placement: "supporting",
       content: (
@@ -645,7 +646,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         />
       ),
     });
-  } else if (images.length > 0) {
+  } else {
     sections.push({
       id: "images",
       title: "Images",
@@ -655,26 +656,26 @@ function FullEntityDetail<E extends GenericDetailEntity>({
       content: <EntityImageList images={images} />,
     });
   }
-  if (documents.length > 0) {
-    sections.push({
-      id: "documents",
-      title: "Documents",
-      icon: FileTextIcon,
-      placement: "primary",
-      content: <DocumentViewerList documents={documents} />,
-    });
-  }
+  sections.push({
+    id: "documents",
+    title: "Documents",
+    empty: documents.length === 0,
+    icon: FileTextIcon,
+    placement: "primary",
+    content:
+      documents.length > 0 ? (
+        <DocumentViewerList documents={documents} />
+      ) : null,
+  });
   const sources = recordSources(record);
-  {
-    sections.push({
-      id: "sources",
-      title: "Sources",
-      empty: sources.length === 0,
-      icon: QuotesIcon,
-      placement: "supporting",
-      content: <EntitySourcesSection entity={entity} sources={sources} />,
-    });
-  }
+  sections.push({
+    id: "sources",
+    title: "Sources",
+    empty: sources.length === 0,
+    icon: QuotesIcon,
+    placement: "supporting",
+    content: <EntitySourcesSection entity={entity} sources={sources} />,
+  });
 
   // `edit` is the page's own affordance (the hero button); every other
   // declared verb is offered from the registry, on the plate.

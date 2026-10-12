@@ -66,9 +66,9 @@ and a generic `notes` textarea. A product-linked Location (a bought raised
 bed) still carries a `type` — the product supplies identity and price, and
 `type` separately states the form factor (`bed`, in that case); the two are
 independent, not mutually exclusive. Growing-area-ness is derived: a
-location with plantings shows Plantings/Garden-entries relation sections;
-`hideWhenEmpty` sections skip themselves when their first page is empty, so
-a non-growing location shows neither.
+location with plantings shows populated Plantings/Garden-entries relation sections.
+Full record details also show these sections on non-growing locations, with muted
+titles and an Empty cue; their create actions remain available.
 
 ## Guides and the household microclimate
 

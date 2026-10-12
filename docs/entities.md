@@ -268,7 +268,7 @@ id/idMulti descriptor on the target whose `brandRef` points back here, with
 optional `columns`/`sort`/`limit`), `timeline` (the entity's timeline
 capability) and `slot` (the one per-platform hand-written fill, rendered
 only where a registry provides it — `DetailSlotId<E>` / `ListSlotId<E>` in
-`entity-manifest.ts` type those registries). Full record relation sections stay visible after an empty first read on web and Apple, with a secondary heading, explicit Empty cue and usable create action. The declaration's historical `hideWhenEmpty` and `collapseWhenEmpty` metadata still travels through the manifest for specialized renderers, but full detail pages no longer hide or fold those sections. Pagination and show-more behavior remain declaration-owned.
+`entity-manifest.ts` type those registries). Full record relation sections stay visible after an empty first read on web and Apple, with a secondary heading, explicit Empty cue and usable create action. The declaration's retired `hideWhenEmpty` and `collapseWhenEmpty` metadata still travels through the manifest pending the shrink-only cleanup in `docs/todos.md`; full detail pages ignore it. Pagination and show-more behavior remain declaration-owned.
 
 Run import report eligibility comes from `IMPORT_REPORT_RUN_PURPOSES` in the
 shared Run schema, including `mail_import`. Web and server use its shared

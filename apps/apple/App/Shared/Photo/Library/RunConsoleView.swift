@@ -78,7 +78,12 @@ struct RunConsoleView: View {
                     if let view = DetailSlotRegistry.view(slot: section.id, row: row) {
                         // A full-width slot draws its own sections.
                         if section.placement == .full {
-                            view.detailContentsAnchor(section.id)
+                            Section {
+                            } header: {
+                                Text(section.title ?? section.id)
+                                    .detailContentsHeader().detailContentsAnchor(section.id)
+                            }
+                            view
                         } else {
                             ContinuousDetailSection(title: section.title ?? "") { view }.detailContentsAnchor(
                                 section.id)

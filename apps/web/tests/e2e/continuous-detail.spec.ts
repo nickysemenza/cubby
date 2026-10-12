@@ -43,6 +43,20 @@ for (const width of [1440, 390]) {
     await expect
       .poll(() => page.evaluate(() => document.activeElement?.id))
       .toBe("history");
+    if (width >= 800) {
+      await expect(
+        page
+          .getByRole("navigation", { name: "Section index" })
+          .getByRole("link", { name: "History", exact: true }),
+      ).toHaveAttribute("aria-current", "location");
+    } else {
+      await expect(
+        page.getByRole("button", { name: "Jump to: History" }),
+      ).toBeVisible();
+    }
+    await expect(
+      page.locator("#documents").getByText("Empty", { exact: true }),
+    ).toBeVisible();
     await expect(emptySection).toBeVisible();
     await page.goBack();
     await expect(page).toHaveURL(/#plantings$/u);

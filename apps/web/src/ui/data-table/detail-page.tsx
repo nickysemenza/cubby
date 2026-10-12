@@ -9,6 +9,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -626,9 +627,11 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const workspaceRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [wide, setWide] = useState(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = workspaceRef.current;
-    if (!element || !("ResizeObserver" in window)) return;
+    if (!element) return;
+    setWide(element.getBoundingClientRect().width >= 800);
+    if (!("ResizeObserver" in window)) return;
     const observer = new ResizeObserver((entries) =>
       setWide((entries[0]?.contentRect.width ?? 0) >= 800),
     );
@@ -701,6 +704,13 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     );
   }, []);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
+  const jumpTargetRef = useRef<
+    | {
+        id: string;
+        positions: Map<Element, number>;
+      }
+    | undefined
+  >(undefined);
   const locationHash = useLocation({ select: (location) => location.hash });
   const navigate = useNavigate();
   const targetForHash = useCallback((hash: string) => {
@@ -715,6 +725,14 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     if (!target || !workspaceRef.current?.contains(target)) return;
     target.scrollIntoView({ behavior: "instant", block: "start" });
     target.focus({ preventScroll: true });
+    const positions = new Map<Element, number>();
+    for (
+      let ancestor: HTMLElement | null = target;
+      ancestor;
+      ancestor = ancestor.parentElement
+    )
+      positions.set(ancestor, ancestor.scrollTop);
+    jumpTargetRef.current = { id, positions };
     setActiveId(id);
   }, []);
   const selectSection = (id: string) => {
@@ -747,13 +765,43 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       const top = targets[0]
         ? parseFloat(getComputedStyle(targets[0]).scrollMarginTop) || 88
         : 88;
+      // A clamped jump can leave its heading below the reading line. Preserve
+      // the explicit destination until scrolling moves away or the user scrolls.
+      const jumped = targets.find(
+        (target) => target.id === jumpTargetRef.current?.id,
+      );
+      const jumpedRect = jumped?.getBoundingClientRect();
+      if (
+        jumped &&
+        jumpedRect &&
+        jumpedRect.bottom > 0 &&
+        jumpedRect.top < window.innerHeight
+      ) {
+        setActiveId(jumped.id);
+        return;
+      }
+      jumpTargetRef.current = undefined;
       const current =
-        targets
-          .filter((target) => target.getBoundingClientRect().top <= top + 1)
-          .at(-1) ?? targets[0];
+        body.getBoundingClientRect().bottom <= window.innerHeight + 1
+          ? targets.at(-1)
+          : (targets
+              .filter((target) => target.getBoundingClientRect().top <= top + 1)
+              .at(-1) ?? targets[0]);
       if (current) setActiveId(current.id);
     };
-    const schedule = () => {
+    const schedule = (event?: Event) => {
+      const scroller =
+        event?.target instanceof Element
+          ? event.target
+          : document.scrollingElement;
+      const prior = scroller && jumpTargetRef.current?.positions.get(scroller);
+      if (
+        event?.type === "scroll" &&
+        scroller &&
+        prior != null &&
+        Math.abs(scroller.scrollTop - prior) > 1
+      )
+        jumpTargetRef.current = undefined;
       if (!frame) frame = requestAnimationFrame(update);
     };
     update();
@@ -763,7 +811,9 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     });
     window.addEventListener("resize", schedule);
     const observer =
-      "ResizeObserver" in window ? new ResizeObserver(schedule) : undefined;
+      "ResizeObserver" in window
+        ? new ResizeObserver(() => schedule())
+        : undefined;
     observer?.observe(body);
     return () => {
       document.removeEventListener("scroll", schedule, true);

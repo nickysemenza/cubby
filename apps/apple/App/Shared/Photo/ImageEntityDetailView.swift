@@ -42,7 +42,9 @@ struct ImageEntityDetailView: View {
                         )
                     }
                 }
-                ImageDiagnosticsCompareView(model: diagnostics).detailContentsAnchor("diagnostics")
+                Text("Diagnostics").font(.headline).accessibilityAddTraits(.isHeader)
+                    .detailContentsHeader().detailContentsAnchor("diagnostics")
+                ImageDiagnosticsCompareView(model: diagnostics)
             } else if let error {
                 LoadFailureView(title: "Couldn't load image", message: error) { await load() }
             } else {
@@ -208,7 +210,7 @@ private struct PhotoTab: View {
                 Button("View all \(totalJobs)") { showingAllJobs = true }
             }
         }.detailContentsAnchor("processing-jobs")
-        Section("Provenance") {
+        ContinuousDetailSection(title: "Provenance") {
             ProvenanceRows(detail: detail)
         }.detailContentsAnchor("provenance")
         ContinuousDetailSection(title: "In libraries") {
@@ -392,6 +394,10 @@ private struct ImageAnalysisHistoryRow: View {
         case .unparsed(let analysis):
             VStack(alignment: .leading, spacing: 4) {
                 Text("Unsupported historical result").font(.subheadline.weight(.medium))
+                Text(
+                    "\(analysis.provider ?? "Unknown provider") · \(analysis.model ?? "Unknown model") · \(analysis.createdAt.formatted(.relative(presentation: .named)))"
+                )
+                .font(.caption).foregroundStyle(.secondary)
                 LabeledContent("Prompt version", value: analysis.promptVersion)
                 if let revision = analysis.resultSchemaRevision {
                     LabeledContent("Result schema", value: String(revision))

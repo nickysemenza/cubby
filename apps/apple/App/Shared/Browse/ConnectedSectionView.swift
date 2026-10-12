@@ -96,7 +96,7 @@ struct ConnectedSectionView: View {
                         Text(recordHopLabel(min: range.min, max: range.max))
                             .font(.caption.monospaced()).foregroundStyle(.secondary)
                     }
-                }
+                }.detailContentsHeader(empty: model.loaded && model.items.isEmpty && model.error == nil)
             }
         }
         .task { await model.loadInitial() }

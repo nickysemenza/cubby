@@ -12,7 +12,6 @@ wait text "Synthetic Atlas Lantern" 30000
 
 click "id=detail.contents"
 wait text "Contents" 30000
-wait text "Provenance" 30000
 scroll down 0.6 --until "id=detail.contents.sources"
 click "id=detail.contents.sources"
 wait text "No sources" 30000

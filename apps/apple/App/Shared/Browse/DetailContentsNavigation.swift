@@ -41,38 +41,60 @@ private extension EnvironmentValues {
     }
 }
 
-private struct DetailContentsAnchor: ViewModifier {
-    let id: String
-    @State private var empty = false
+private struct DetailContentsSectionIDKey: EnvironmentKey {
+    static let defaultValue: String? = nil
+}
+
+private extension EnvironmentValues {
+    var detailContentsSectionID: String? {
+        get { self[DetailContentsSectionIDKey.self] }
+        set { self[DetailContentsSectionIDKey.self] = newValue }
+    }
+}
+
+/// Only a single header owns scroll identity and focus. Section modifiers otherwise propagate
+/// to each List child, producing duplicate destinations and last-row scroll positions.
+private struct DetailContentsHeader: ViewModifier {
+    var empty: Bool
+    @Environment(\.detailContentsSectionID) private var id
     @Environment(\.detailContentsDestination) private var destination
     @AccessibilityFocusState private var accessibilityFocused: Bool
     @FocusState private var keyboardFocused: Bool
+
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content.id(DetailContentsAnchorID(id: id))
-            .accessibilityElement(children: .contain)
-            .accessibilityFocused($accessibilityFocused)
-            .focusable()
-            .focused($keyboardFocused)
-            .onChange(of: destination, initial: true) { _, destination in
-                guard destination?.id == id else { return }
-                accessibilityFocused = true
-                keyboardFocused = true
-            }
-            .onPreferenceChange(DetailSectionEmpty.self) { empty = $0 }
-            .preference(key: DetailContentsEmptyStates.self, value: [id: empty])
-            .background {
-                GeometryReader { geometry in
-                    Color.clear.preference(
-                        key: DetailContentsPositions.self,
-                        value: [id: geometry.frame(in: .named("detail.contents")).minY])
+        if let id {
+            content.id(DetailContentsAnchorID(id: id))
+                .accessibilityElement(children: .contain)
+                .accessibilityFocused($accessibilityFocused)
+                .focusable()
+                .focused($keyboardFocused)
+                .onChange(of: destination, initial: true) { _, destination in
+                    guard destination?.id == id else { return }
+                    accessibilityFocused = true
+                    keyboardFocused = true
                 }
-            }
+                .preference(key: DetailContentsEmptyStates.self, value: [id: empty])
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear.preference(
+                            key: DetailContentsPositions.self,
+                            value: [id: geometry.frame(in: .named("detail.contents")).minY])
+                    }
+                }
+        } else {
+            content
+        }
     }
 }
 
 extension View {
     func detailContentsAnchor(_ id: String) -> some View {
-        modifier(DetailContentsAnchor(id: id))
+        environment(\.detailContentsSectionID, id)
+    }
+
+    func detailContentsHeader(empty: Bool = false) -> some View {
+        modifier(DetailContentsHeader(empty: empty))
     }
 }
 
@@ -186,11 +208,14 @@ struct DetailContentsNavigation: ViewModifier {
 }
 
 #Preview {
-    List { Section("Details") { Text("Example").detailContentsAnchor("example") } }
-        .modifier(
-            DetailContentsNavigation(entries: [
-                .init(id: "example", title: "Details", group: "Overview")
-            ]))
+    List {
+        ContinuousDetailSection(title: "Details") { Text("Example") }
+            .detailContentsAnchor("example")
+    }
+    .modifier(
+        DetailContentsNavigation(entries: [
+            .init(id: "example", title: "Details", group: "Overview")
+        ]))
 }
 
 struct DetailSectionEmpty: PreferenceKey {
@@ -210,7 +235,7 @@ struct ContinuousDetailSection<Content: View>: View {
             HStack {
                 Text(title).foregroundStyle(empty ? .secondary : .primary)
                 if empty { Text("Empty").font(.caption).foregroundStyle(.secondary) }
-            }
+            }.detailContentsHeader(empty: empty)
         }
         .onPreferenceChange(DetailSectionEmpty.self) { empty = $0 }
     }
@@ -237,4 +262,33 @@ struct OpenDetailGroup<Content: View>: View {
 
 #Preview("Open detail group") {
     OpenDetailGroup(title: "Evidence") { Text("Example") }.padding()
+}
+
+/// The explanation button retains its normal control contrast beside empty title metadata.
+struct ExplainedDetailSection<Content: View, Header: View>: View {
+    @ViewBuilder let content: Content
+    @ViewBuilder let header: (Bool) -> Header
+    @State private var empty = false
+
+    var body: some View {
+        Section {
+            content
+        } header: {
+            HStack {
+                header(empty)
+                if empty { Text("Empty").font(.caption).foregroundStyle(.secondary) }
+            }.detailContentsHeader(empty: empty)
+        }
+        .onPreferenceChange(DetailSectionEmpty.self) { empty = $0 }
+    }
+}
+
+#Preview("Explained section") {
+    List {
+        ExplainedDetailSection {
+            Text("No items")
+        } header: { _ in
+            Text("Evidence")
+        }
+    }
 }

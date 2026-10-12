@@ -481,7 +481,7 @@ struct EntityDetailContent: View {
                 }.detailContentsAnchor("physical-connections")
             }
             if let relationshipsModel {
-                Section("Relationships") {
+                ContinuousDetailSection(title: "Relationships") {
                     EntityRelationshipsSection(
                         model: relationshipsModel, onAccepted: onRelationshipAccepted)
                 }.detailContentsAnchor("relationships")
@@ -502,7 +502,8 @@ struct EntityDetailContent: View {
                 }
             }
             .detailContentsAnchor("sources")
-            Section { RawRecordDisclosure(raw: row.raw) }.detailContentsAnchor("raw-record")
+            ContinuousDetailSection(title: "Raw record") { RawRecordDisclosure(raw: row.raw) }
+                .detailContentsAnchor("raw-record")
         }
         .listStyle(.plain)
         .listRowBackground(Color.clear)
@@ -568,13 +569,13 @@ struct EntityDetailContent: View {
                 if let explanationField = section.explanationField,
                     let field = descriptor.field(explanationField)
                 {
-                    Section {
+                    ExplainedDetailSection {
                         view
-                    } header: {
+                    } header: { empty in
                         FieldExplanationLabel(
                             field: field,
                             subject: EntityRef(entity: descriptor.key, id: row.id),
-                            labelOverride: section.title
+                            labelOverride: section.title, emptyLabel: empty
                         )
                     }
                 } else {

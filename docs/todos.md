@@ -442,6 +442,13 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Tasks, projects & garden
 
+- 🟢 🛠️ **Delete retired full-detail visibility metadata.** Continuous details
+  ignore declaration `hideWhenEmpty`, `collapseWhenEmpty`, and `collapsed`.
+  Shrink-only remainder: seven authored values across Product, Location,
+  Purchase, Project, and Run declarations, plus their schema/wire/generated
+  descriptor fields. Remove and regenerate together; do not add new values.
+  The separate connected-records table's standalone empty behavior remains useful.
+
 - 🔭 ✨ **Grow-to-table loop.** Beds and plantings, harvests received into pantry
   inventory, and what the yard can supply this week.
 

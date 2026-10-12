@@ -422,6 +422,7 @@ struct FieldExplanationLabel: View {
     let field: FieldDescriptor
     let subject: EntityRef
     var labelOverride: String? = nil
+    var emptyLabel = false
     var surface = "detail"
     var iconOnly = false
     @Environment(AppModel.self) private var appModel
@@ -439,6 +440,7 @@ struct FieldExplanationLabel: View {
                 HStack(spacing: FieldGuideTokens.Space.xs) {
                     if !iconOnly {
                         Text(labelOverride ?? field.label)
+                            .foregroundStyle(emptyLabel ? .secondary : .primary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Image(systemName: "info.circle")
@@ -467,6 +469,7 @@ struct FieldExplanationLabel: View {
             }
         } else {
             Text(labelOverride ?? field.label)
+                .foregroundStyle(emptyLabel ? .secondary : .primary)
         }
     }
 
@@ -956,7 +959,7 @@ struct RelationSectionView: View {
                                 minWidth: FieldGuideTokens.touchTarget,
                                 minHeight: FieldGuideTokens.touchTarget)
                     }
-                }
+                }.detailContentsHeader(empty: model.list.phase == .loaded && model.list.rows.isEmpty)
             }
         }
         .task(id: "\(model.source.key.rawValue):\(model.recordID):\(model.id)") {
@@ -1130,7 +1133,7 @@ struct EntityJournalSectionView: View {
                         .frame(minHeight: FieldGuideTokens.touchTarget)
                         .accessibilityIdentifier("detail.journal.logEntry")
                 }
-            }
+            }.detailContentsHeader(empty: model.list.phase == .loaded && model.list.rows.isEmpty)
         }
         .task {
             await model.list.loadInitial()

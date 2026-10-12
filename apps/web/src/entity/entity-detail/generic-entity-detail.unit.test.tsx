@@ -133,10 +133,8 @@ describe("GenericEntityDetail", () => {
   // section renders under its declared id and title, so a declaration the
   // page silently drops fails here rather than in the browser. Slot sections
   // are registry-dependent and covered by their own `applies` predicates. A
-  // `hideWhenEmpty` relation section is deliberately excluded — the shared
-  // `operations.list` transport below always resolves empty, so it correctly
-  // renders nothing; its own behavior is covered by the dedicated
-  // "hideWhenEmpty relation sections" cases further down.
+  // Retired `hideWhenEmpty` relation declarations are covered by the focused
+  // visible-empty-section cases below rather than repeating them here.
   const cases = genericDetailEntities.flatMap((entity) =>
     entitySummary[entity].detail.sections
       .filter(
