@@ -7,7 +7,6 @@ import { useMemo, useState } from "react";
 import { z } from "zod";
 
 import { entityListFor } from "~/entity/entity-list";
-import { image } from "~/integrations/tanstack-query/generated/catalog.gen";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { EntityPicker } from "~/ui/combobox/entity-picker";
 import type { PickerSearchEntity } from "~/ui/combobox/entity-search-hooks";
@@ -92,7 +91,7 @@ function ImagePicker({
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<ComboboxItem | null>(null);
   const query = useQuery({
-    ...image.list.queryOptions({
+    ...entityListFor("image").queryOptions({
       filters: search ? { nameFilter: search } : {},
       pagination: { pageIndex: 0, pageSize: 50 },
     }),

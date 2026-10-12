@@ -37,6 +37,7 @@ import {
 } from "@cubby/schemas/import-recipe";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
+  CookbookFilters,
   CookbookSummary,
   CookbookUpdateInput,
 } from "@cubby/schemas/recipe";
@@ -73,6 +74,10 @@ import {
 } from "~/server/repo/import-recipe-convert";
 import { type ListPage, listScaffold } from "~/server/repo/list";
 import { listAll } from "~/server/repo/list-all";
+import {
+  hydrateListRead,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import {
   deleteRecipesByCookbookTx,
@@ -381,10 +386,15 @@ const hydrateCookbookSummaries = async (
   );
 };
 
-/** Cookbook declares no list filters beyond the scaffold's own. */
-type CookbookFilters = Readonly<Record<string, never>>;
-
 const cookbookScaffold = listScaffold("cookbook", cookbook);
+
+// `recipeCount` is the grouped count, not a column.
+const resolveCookbookSort = (sort: SortParams) =>
+  sort.orderBy === "recipeCount"
+    ? sort.direction === "asc"
+      ? [asc(recipeCountSql)]
+      : [desc(recipeCountSql)]
+    : null;
 
 /** The kernel list: declared filters, the generated sort roster, paging. */
 export const cookbookList = (
@@ -399,13 +409,36 @@ export const cookbookList = (
     {
       select: (page) => selectCookbookSummaryRows(db, page),
       hydrate: (rows) => hydrateCookbookSummaries(db, rows),
-      // `recipeCount` is the grouped count, not a column.
-      resolveSort: (sort) =>
-        sort.orderBy === "recipeCount"
-          ? sort.direction === "asc"
-            ? [asc(recipeCountSql)]
-            : [desc(recipeCountSql)]
-          : null,
+      resolveSort: resolveCookbookSort,
+    },
+  );
+
+/**
+ * The progressive read every client browses: the same page as `cookbookList`,
+ * with the generic loader owning the deferred quality and media groups.
+ */
+export const cookbookListRead = (
+  db: Database,
+  filters: CookbookFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  projection: ListProjection,
+) =>
+  cookbookScaffold.list(
+    db,
+    { filters, sorts, pagination, projection },
+    {
+      select: (page) => selectCookbookSummaryRows(db, page),
+      hydrate: (rows, selected) =>
+        hydrateListRead(db, "cookbook", rows, selected, {
+          media: true,
+          load: async () => {
+            const hydrated = await hydrateCookbookSummaries(db, rows);
+            return new Map(rows.map((row, index) => [row.id, hydrated[index]]));
+          },
+          mapRow: (row, { loaded }) => ({ ...loaded.get(row.id) }),
+        }),
+      resolveSort: resolveCookbookSort,
     },
   );
 
@@ -423,10 +456,7 @@ export const getCookbookSummary = async (
   return (await hydrateCookbookSummaries(db, rows))[0] ?? null;
 };
 
-/**
- * Every cookbook, by title. Backs the `cookbook.list` contract until
- * read-only entities join the generic browser list roster.
- */
+/** Every cookbook, by title: the `cookbook.list` roster the recipe pickers read. */
 export const listCookbooks = async (db: Database): Promise<CookbookSummary[]> =>
   (
     await listAll((pagination) =>

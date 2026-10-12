@@ -1776,29 +1776,21 @@ describe("typed entity compiler", () => {
     ]);
   });
 
-  it("moves a read-only entity off the kernel list only for declared custom rows", async () => {
-    const run = (await loadEntityDeclarations()).find(
-      (entity) => entity.key === "run",
-    );
-    if (!run?.route) throw new Error("run must be routed");
-    const columns = {
-      module: "~/entity/list-columns/run",
-      export: "runColumns",
+  it("lists every routed entity with a contract, read-only or not", async () => {
+    const declarations = await loadEntityDeclarations();
+    const listed = (key: string) => {
+      const entity = declarations.find((candidate) => candidate.key === key);
+      if (!entity) throw new Error(`${key} must be declared`);
+      return hasGenericListOperation(entity);
     };
-    expect(hasGenericListOperation(run)).toBe(true);
-    // Specialist columns alone never change where rows come from.
-    expect(
-      hasGenericListOperation({
-        ...run,
-        route: { ...run.route, listColumns: columns },
-      }),
-    ).toBe(true);
-    expect(
-      hasGenericListOperation({
-        ...run,
-        route: { ...run.route, listColumns: columns, listRows: "custom" },
-      }),
-    ).toBe(false);
+    // Read-only (no create) entities, including a hand-written index (image).
+    expect(["run", "cookbook", "image"].map(listed)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    // The external USDA catalog has no kernel contract.
+    expect(listed("usda-food")).toBe(false);
   });
 });
 

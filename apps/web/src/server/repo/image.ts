@@ -121,6 +121,10 @@ import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list";
 import {
+  hydrateListRead,
+  type ListProjection,
+} from "~/server/repo/list-projection";
+import {
   lookupEntityReferences,
   resolveAllPresent,
   resolveFilterIds,
@@ -1259,14 +1263,61 @@ const loadImportTargets = async (
   return byImage;
 };
 
-export const imageList = async (
+const loadImageRows = (db: Database, where: SQL) =>
+  getDb(db).query.image.findMany({ where, with: imageEntityRelations });
+type ImageRelationRow = Awaited<ReturnType<typeof loadImageRows>>[number];
+
+/** Batched API projection of a page of image rows (representations, issues, targets, …). */
+const hydrateImageRows = async (db: Database, images: ImageRelationRow[]) => {
+  const imageShortcodes = images.map((item) => item.shortcode);
+  const [
+    representations,
+    processingIssues,
+    importTargets,
+    analysisSummaries,
+    capturedByParties,
+    dataQualities,
+  ] = await Promise.all([
+    loadImageRepresentations(db, imageShortcodes),
+    loadImageProcessingIssues(db, imageShortcodes),
+    loadImportTargets(db, imageShortcodes),
+    loadImageAnalysisSummaries(db, imageShortcodes),
+    loadCapturedByParties(
+      db,
+      images.map((item) => item.capturedByPartyId),
+    ),
+    loadDataQualities(
+      db,
+      "image",
+      images.map((item) => parseEntityId("image", item.id)),
+    ),
+  ]);
+  return images.map((item) => ({
+    ...imageWithRelationsToAPI(
+      item,
+      item.capturedByPartyId
+        ? (capturedByParties.get(item.capturedByPartyId) ?? null)
+        : null,
+    ),
+    representations: representations.get(item.shortcode),
+    processingIssue: processingIssues.get(item.shortcode) ?? null,
+    importTarget: importTargets.get(item.shortcode) ?? null,
+    analysisSummary: analysisSummaries.get(item.shortcode) ?? null,
+    dataQuality: dataQualities.get(parseEntityId("image", item.id)),
+  }));
+};
+
+const imageListWith = async <Out>(
   db: Database,
   filters: ImageListFilters,
   sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
   pagination: { pageIndex: number; pageSize: number },
-  readIntent: ListReadIntent = "page",
+  request: { readIntent?: ListReadIntent; projection?: ListProjection },
+  hydrate: (
+    images: ImageRelationRow[],
+    projection: ListProjection,
+  ) => Promise<Out[]>,
 ) => {
-  const dbClient = getDb(db);
   const [whereClause, runIdsForOrder] = await Promise.all([
     buildImageWhere(db, filters),
     resolveFilterIds(db, "run", filters.runId),
@@ -1289,56 +1340,54 @@ export const imageList = async (
 
   return imageScaffold.list(
     db,
-    { filters, sorts, pagination, readIntent },
+    { filters, sorts, pagination, ...request },
     {
       where: whereClause,
       orderBy: runOrder,
-      load: (where) =>
-        dbClient.query.image.findMany({
-          where,
-          with: imageEntityRelations,
-        }),
-      hydrate: async (images) => {
-        const imageShortcodes = images.map((item) => item.shortcode);
-        const [
-          representations,
-          processingIssues,
-          importTargets,
-          analysisSummaries,
-          capturedByParties,
-          dataQualities,
-        ] = await Promise.all([
-          loadImageRepresentations(db, imageShortcodes),
-          loadImageProcessingIssues(db, imageShortcodes),
-          loadImportTargets(db, imageShortcodes),
-          loadImageAnalysisSummaries(db, imageShortcodes),
-          loadCapturedByParties(
-            db,
-            images.map((item) => item.capturedByPartyId),
-          ),
-          loadDataQualities(
-            db,
-            "image",
-            images.map((item) => parseEntityId("image", item.id)),
-          ),
-        ]);
-        return images.map((item) => ({
-          ...imageWithRelationsToAPI(
-            item,
-            item.capturedByPartyId
-              ? (capturedByParties.get(item.capturedByPartyId) ?? null)
-              : null,
-          ),
-          representations: representations.get(item.shortcode),
-          processingIssue: processingIssues.get(item.shortcode) ?? null,
-          importTarget: importTargets.get(item.shortcode) ?? null,
-          analysisSummary: analysisSummaries.get(item.shortcode) ?? null,
-          dataQuality: dataQualities.get(parseEntityId("image", item.id)),
-        }));
-      },
+      load: (where) => loadImageRows(db, where),
+      hydrate,
     },
   );
 };
+
+export const imageList = (
+  db: Database,
+  filters: ImageListFilters,
+  sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
+  pagination: { pageIndex: number; pageSize: number },
+  readIntent: ListReadIntent = "page",
+) =>
+  imageListWith(db, filters, sorts, pagination, { readIntent }, (images) =>
+    hydrateImageRows(db, images),
+  );
+
+/**
+ * The progressive read every client browses; the generic loader owns the
+ * deferred quality and media groups (an uploaded image displays itself).
+ */
+export const imageListRead = (
+  db: Database,
+  filters: ImageListFilters,
+  sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
+  pagination: { pageIndex: number; pageSize: number },
+  projection: ListProjection,
+) =>
+  imageListWith(
+    db,
+    filters,
+    sorts,
+    pagination,
+    { projection },
+    (images, selected) =>
+      hydrateListRead(db, "image", images, selected, {
+        media: true,
+        load: async () => {
+          const hydrated = await hydrateImageRows(db, images);
+          return new Map(images.map((row, index) => [row.id, hydrated[index]]));
+        },
+        mapRow: (row, { loaded }) => ({ ...loaded.get(row.id) }),
+      }),
+  );
 
 export const getImageById = async (
   db: Database,

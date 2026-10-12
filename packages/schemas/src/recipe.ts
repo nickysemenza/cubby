@@ -1,9 +1,16 @@
 import { z } from "zod";
 import { listLabel } from "./entity-definitions/label-field";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { numericRangeFields, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  numericRangeFields,
+  timestampedFields,
+} from "./base-entity";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
-import { generatedCookbookFieldSchemas } from "./generated/entity-field-schemas.cookbook.gen";
+import {
+  generatedCookbookFieldSchemas,
+  generatedCookbookFilterFields,
+} from "./generated/entity-field-schemas.cookbook.gen";
 import { generatedRecipeFieldSchemas } from "./generated/entity-field-schemas.recipe.gen";
 import { amount } from "./codec";
 import {
@@ -242,6 +249,12 @@ export const cookbookSummary = z.object({
   displayImages: displayImagesField,
 });
 export type CookbookSummary = z.infer<typeof cookbookSummary>;
+
+export const cookbookFilterFields = {
+  ...auditDateFilterFields,
+  ...generatedCookbookFilterFields,
+};
+export type CookbookFilters = z.infer<z.ZodObject<typeof cookbookFilterFields>>;
 
 export const cookbookUpdateInput = z.object(
   generatedCookbookFieldSchemas.update,

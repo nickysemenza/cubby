@@ -17,12 +17,16 @@ export const hasBrowserListPage = (entity: CompiledEntity): boolean =>
 
 /**
  * The generated entity-list operation over the kernel list read, consumed by
- * the generated index and inline relation tables. Every entity the browser
- * creates and edits has one; a read-only entity has one unless its route
- * declares its own rows (`route.listRows: "custom"`) or hand-writes its index.
+ * every client's list (web index, native browse, HTTP/MCP) and inline
+ * relation tables: every routed entity with a contract has one, whether or
+ * not the browser writes it or hand-writes its index.
  */
 export const hasGenericListOperation = (entity: CompiledEntity): boolean =>
-  hasBrowserListPage(entity) &&
-  entity.contract !== null &&
-  ((entity.contract.create !== null && entity.contract.update !== null) ||
-    (entity.route?.list === true && entity.route.listRows === "kernel"));
+  hasBrowserListPage(entity) && entity.contract !== null;
+
+/**
+ * Only a generated index's columns make an inline relation table; a
+ * hand-written index (image's gallery) keeps its rows to its own page.
+ */
+export const feedsRelationTables = (entity: CompiledEntity): boolean =>
+  hasGenericListOperation(entity) && entity.route?.list === true;

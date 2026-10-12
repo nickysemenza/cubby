@@ -2,6 +2,7 @@ import {
   cookbookDiffInput,
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
+import type { CookbookFilters } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -12,6 +13,8 @@ import {
   recipe,
   recipeSection,
 } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
+import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import {
   deleteCookbookWorkflow,
   getCookbookDiffWorkflow,
@@ -547,5 +550,82 @@ describe("cookbook repository", () => {
       const survivors = await listCookbooks(ctx.db);
       expect(survivors.map((c) => c.id)).toContain(cb.output.id);
     });
+  });
+
+  // Regression: cookbooks were browsed from a client-side copy that only some
+  // sorts survived. The kernel list now filters subjects, sorts by
+  // every declared field (audit dates included) and pages on the server.
+  it("lists cookbooks through the kernel with subject filters and audit-date sorts", async () => {
+    const raw = makeCookbookExtraction([
+      makeCookbookRecipe("Pancakes", ["2 cups flour"]),
+    ]);
+    const older = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Kernel Bread",
+        rawJson: raw,
+        subjects: ["Bread"],
+        sourceLabel: "b.epub",
+      },
+      ctx.actor,
+    );
+    const newer = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Kernel Soup",
+        rawJson: raw,
+        subjects: ["Soup", "Bread"],
+        sourceLabel: "s.epub",
+      },
+      ctx.actor,
+    );
+    await upsertCookbook(
+      ctx.db,
+      {
+        name: "Kernel Cake",
+        rawJson: raw,
+        subjects: ["Cake"],
+        sourceLabel: "c.epub",
+      },
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(cookbook)
+      .set({ createdAt: sql`now() - interval '1 day'` })
+      .where(eq(cookbook.id, older.entityId));
+    const context = buildKernelContext(ctx.db);
+
+    const list = async (
+      sort: { orderBy: string; direction: "asc" | "desc" }[],
+      filters: CookbookFilters,
+    ) => {
+      const result = await executeEntity(context, {
+        action: "list",
+        entity: "cookbook",
+        filters,
+        sort,
+        pagination: { pageIndex: 0, pageSize: 10 },
+      });
+      if (result.action !== "list") throw new Error("expected list");
+      return result.items.map((item) => item.id);
+    };
+
+    for (const orderBy of ["createdAt", "updatedAt"]) {
+      expect(
+        await list([{ orderBy, direction: "desc" }], {
+          subjectFilters: ["Bread"],
+        }),
+      ).toHaveLength(2);
+    }
+    expect(
+      await list([{ orderBy: "createdAt", direction: "desc" }], {
+        subjectFilters: ["Bread"],
+      }),
+    ).toEqual([newer.output.id, older.output.id]);
+    expect(
+      await list([{ orderBy: "createdAt", direction: "asc" }], {
+        subjectFilters: ["Bread"],
+      }),
+    ).toEqual([older.output.id, newer.output.id]);
   });
 });

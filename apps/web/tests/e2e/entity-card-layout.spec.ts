@@ -129,7 +129,7 @@ test("card density adapts to the work surface and stays temporary through filter
   await expect(grid).toHaveAttribute("data-compact", "false");
 });
 
-test("complete-list cookbooks keep local search across card and list presentations", async ({
+test("cookbooks keep server search across card and list presentations", async ({
   page,
 }) => {
   const name = `Cookbook cards ${Date.now()}`;

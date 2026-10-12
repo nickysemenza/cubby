@@ -6,9 +6,8 @@ import { imageListOverride } from "~/entity/list-columns/image";
 import { listPage } from "~/entity/routing/list-page";
 import { pageTitle } from "~/lib/page-title";
 
-// Hand-written: the image list is not a kernel list (no create contract), so
-// `route.list` is null; the generic list reads it through the image override
-// module's own source, and the upload dialog is this route's create trigger.
+// Hand-written (`route.list: null`) only for the upload dialog, this route's
+// create trigger; the generic list reads the kernel image list.
 const ImagesPage = listPage({
   entity: "image",
   override: imageListOverride,

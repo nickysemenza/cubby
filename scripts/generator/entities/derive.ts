@@ -9,7 +9,7 @@ import {
 } from "./declarations.ts";
 import {
   hasBrowserListPage,
-  hasGenericListOperation,
+  feedsRelationTables,
 } from "./list-capabilities.ts";
 
 /**
@@ -475,7 +475,7 @@ export const deriveRelationSections = (
       if (relation.cardinality !== "many") continue;
       if (declared.has(relation.key) || relation.key in omitRelations) continue;
       const target = byKey.get(relation.target);
-      if (target === undefined || !hasGenericListOperation(target)) {
+      if (target === undefined || !feedsRelationTables(target)) {
         omitRelations[relation.key] = missingRelationTableReason(
           target,
           relation.target,

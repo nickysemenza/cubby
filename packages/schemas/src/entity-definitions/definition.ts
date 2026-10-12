@@ -842,12 +842,6 @@ const buildMetadataSchemas = () => {
       /** Specialist columns are imported only by this route component. */
       listColumns: sourceRefMetadataSchema.optional(),
       /**
-       * Where a read-only entity's generated index gets its rows: the kernel
-       * list (the default), or `custom` — its `listColumns` module supplies
-       * them. An entity the browser creates and edits always reads the kernel.
-       */
-      listRows: z.enum(["kernel", "custom"]).optional().default("kernel"),
-      /**
        * Which detail page renders: `true` the generic page over the kernel
        * `get` (the default), or `null` a hand-written detail route.
        */
@@ -861,7 +855,6 @@ const buildMetadataSchemas = () => {
         createOverride,
         list,
         listColumns,
-        listRows,
         detail,
       }) => ({
         basePath,
@@ -869,7 +862,6 @@ const buildMetadataSchemas = () => {
         create: createOverride,
         list,
         listColumns,
-        listRows,
         detail,
       }),
     );

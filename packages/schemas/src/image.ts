@@ -8,18 +8,11 @@ import {
   ALLOWED_IMAGE_TYPES,
   type AllowedImageType,
 } from "@cubby/shared/image-types";
-import { generatedEntitySort } from "./generated/entity-sort.gen";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { nonEmptyTuple } from "./identifiers";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { entityRecordSourceInputs } from "./entity-source";
-import {
-  createPaginatedResponseSchemaWithContext,
-  createSortPaginationFields,
-  entityFilterList,
-  oneOrMany,
-  presenceFilter,
-} from "./pagination";
+import { entityFilterList, oneOrMany, presenceFilter } from "./pagination";
 import { auditDateFilterFields } from "./base-entity";
 import { imageCaptureLocation } from "./image-capture-fields";
 import { imageSightingCamera } from "./image-sighting-fields";
@@ -637,18 +630,6 @@ export const imageWithEntitySchema = z
   });
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;
-
-export const imageBrowserListInput = z.object({
-  filters: imageListFiltersSchema,
-  ...createSortPaginationFields({
-    sortableFields: generatedEntitySort.image.fields,
-    defaultSort: "createdAt",
-  }),
-});
-export const imageBrowserListOut = createPaginatedResponseSchemaWithContext(
-  imageWithEntitySchema,
-  "image",
-);
 
 export const imageBrowserUpdateInput = z.object({
   id: imageShortcode,
