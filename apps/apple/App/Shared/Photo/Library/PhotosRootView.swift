@@ -15,7 +15,7 @@ struct PhotosRootView: View {
 
     var body: some View {
         PhotoLibraryBrowser(
-            maxSelectionCount: nil, picker: false,
+            maxSelectionCount: SharedConstants.photoRunImageLimit, picker: false,
             analysisStore: analysisReady ? appModel.photoAnalysisStore : nil,
             sweep: analysisReady ? appModel.photoClassificationSweep : nil
         ) { items in
@@ -137,14 +137,14 @@ private struct PhotoLibraryBrowser: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.developerOverlays) private var developerOverlays
-    let maxSelectionCount: Int?
+    let maxSelectionCount: Int
     let picker: Bool
     let analysisStore: PhotoAnalysisStore?
     let sweep: PhotoClassificationSweep?
     let onSelection: ([PhotoSelectionItem]) -> Void
 
     init(
-        maxSelectionCount: Int?, picker: Bool, analysisStore: PhotoAnalysisStore? = nil,
+        maxSelectionCount: Int, picker: Bool, analysisStore: PhotoAnalysisStore? = nil,
         sweep: PhotoClassificationSweep? = nil, onSelection: @escaping ([PhotoSelectionItem]) -> Void
     ) {
         self.maxSelectionCount = maxSelectionCount
@@ -414,7 +414,7 @@ private struct PhotoLibraryBrowser: View {
                     )
                     .foregroundStyle(.secondary)
                 }
-                PhotoSourceButtons(maxSelectionCount: maxSelectionCount ?? 100, onSelection: onSelection)
+                PhotoSourceButtons(maxSelectionCount: maxSelectionCount, onSelection: onSelection)
             }.padding(FieldGuideTokens.Space.lg).frame(maxWidth: 560)
         }
     }
@@ -496,10 +496,10 @@ private struct PhotoLibraryBrowser: View {
         var selection = ids
         if selection.contains(id) {
             selection.removeAll { $0 == id }
-        } else if maxSelectionCount == nil || selection.count < maxSelectionCount! {
+        } else if selection.count < maxSelectionCount {
             selection.append(id)
         } else {
-            selectionError = "Choose up to \(maxSelectionCount!) photos."
+            selectionError = "Choose up to \(maxSelectionCount) photos."
         }
         if picker { pickerIDs = selection } else { library.selectedIDs = selection }
     }

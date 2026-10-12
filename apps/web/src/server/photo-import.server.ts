@@ -20,6 +20,7 @@ import {
   finalizePhotoRun,
   startPhotoInventoryRun,
 } from "~/server/purchase-import/run-service";
+import { readImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import {
   findPhotoProductCandidates,
   photoProductCandidates,
@@ -48,11 +49,12 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
         input.runId,
       );
-      const [review, images] = await Promise.all([
+      const [review, images, settings] = await Promise.all([
         listPhotoGroupProposals(context.db, input.runId),
         listPhotoRunImages(context.db, input.runId),
+        readImageProcessingSettings(context.db),
       ]);
-      return { review, images };
+      return { review, images, imageProcessingPaused: settings.paused };
     },
     candidates: async (context, input) => {
       await assertPhotoRunReviewer(
@@ -178,6 +180,8 @@ export const photoImportHandlers = implementOperationDomain(
           const summary: z.infer<typeof photoRunContextImage> = {
             id: image.id,
             position: image.position,
+            capturedAt: image.capturedAt,
+            capturedAtOffsetMinutes: image.capturedAtOffsetMinutes,
             targetState: image.targetState,
             describe: image.describe,
             description: clip(image.description, DESCRIPTION_CHARS),

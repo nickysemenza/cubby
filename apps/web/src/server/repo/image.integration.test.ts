@@ -124,12 +124,19 @@ const mkPhotoInventoryRun = async (db: Database) => {
 
 const mkRunTargetRow = (
   db: Database,
-  values: { runId: string; imageId: string; position?: number; state?: string },
+  values: {
+    runId: string;
+    imageId: string;
+    position?: number;
+    state?: string;
+    createdAt?: Date;
+  },
 ) =>
   insertAndReturn(db, photoRunImage, {
     runId: runEntityId.parse(values.runId),
     imageId: parseEntityId("image", values.imageId),
     position: values.position,
+    createdAt: values.createdAt,
     state: photoRunImageState.parse(values.state ?? "pending"),
     targetFingerprint: uniqRunLabel("target-fingerprint"),
   });
@@ -758,28 +765,33 @@ describe("image repository — import-run targets", () => {
     });
   });
 
-  it("orders a run's images by RunTarget.position, then createdAt", async () => {
+  it("orders one upload's undated run images by RunTarget.position", async () => {
     const run = await mkPhotoInventoryRun(ctx.db);
     const first = await makeImage("position-first.jpg");
     const second = await makeImage("position-second.jpg");
     const third = await makeImage("position-third.jpg");
 
-    // Inserted out of position order, so a pass without the position ORDER BY
-    // would come back in this insertion/createdAt order instead.
+    // One finalize stamps a chunk with one time, so position decides among
+    // its undated photos. Inserted out of position order, so a pass without
+    // the position ORDER BY would come back in insertion order instead.
+    const finalizedAt = new Date("2026-09-20T09:00:00.000Z");
     await mkRunTargetRow(ctx.db, {
       runId: run.id,
       imageId: third.id,
       position: 3,
+      createdAt: finalizedAt,
     });
     await mkRunTargetRow(ctx.db, {
       runId: run.id,
       imageId: first.id,
       position: 1,
+      createdAt: finalizedAt,
     });
     await mkRunTargetRow(ctx.db, {
       runId: run.id,
       imageId: second.id,
       position: 2,
+      createdAt: finalizedAt,
     });
 
     const listed = await imageList(

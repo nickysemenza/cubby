@@ -124,6 +124,7 @@ import {
   hydrateListRead,
   type ListProjection,
 } from "~/server/repo/list-projection";
+import { photoRunImageOrder } from "~/server/repo/photo-import";
 import {
   lookupEntityReferences,
   resolveAllPresent,
@@ -1333,20 +1334,24 @@ const imageListWith = async <Out>(
     resolveFilterIds(db, "run", filters.runId),
   ]);
 
-  // A photo-inventory run's picker order overrides the caller's own sort:
-  // an agent working `filters.runId` wants the run's physical capture
-  // order, not whatever default/requested sort the generic image list uses.
+  // A photo-inventory run's capture order overrides the caller's own sort:
+  // an agent working `filters.runId` wants the order the photos were taken,
+  // not whatever default/requested sort the generic image list uses.
   const runOrder =
     runIdsForOrder === undefined
       ? undefined
-      : [
-          sql`(
-            SELECT "position" FROM "PhotoRunImage"
+      : photoRunImageOrder({
+          addedAt: sql`(
+            SELECT min("createdAt") FROM "PhotoRunImage"
             WHERE "PhotoRunImage"."imageId" = ${image.id}
               AND "PhotoRunImage"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
-          ) asc nulls last`,
-          asc(image.createdAt),
-        ];
+          )`,
+          position: sql`(
+            SELECT min("position") FROM "PhotoRunImage"
+            WHERE "PhotoRunImage"."imageId" = ${image.id}
+              AND "PhotoRunImage"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
+          )`,
+        });
 
   return imageScaffold.list(
     db,

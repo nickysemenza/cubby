@@ -168,6 +168,7 @@ beforeEach(() => {
             unassignedImageIds: [],
           },
           images: [],
+          imageProcessingPaused: false,
         },
       };
     throw new Error(`Unexpected operation: ${operation}`);

@@ -635,7 +635,7 @@ export const MCP_TOOLS = defineMcpTools({
       photo_context: mcpAction({
         op: photoImportContract.ops.runContext,
         description:
-          "One photo-inventory run's owner, notes, and one page of its photos in shot order with their cloud descriptions and recognized text. Pass `nextCursor` back as `cursor` until it is null; an item photographed across a page boundary continues on the next page. Set `withImageUrls` only if you can open images. Read this before proposing groups.",
+          "One photo-inventory run's owner, notes, and one page of its photos in capture order (undated photos last) with their capture time, cloud descriptions and recognized text. Pass `nextCursor` back as `cursor` until it is null; an item photographed across a page boundary continues on the next page. Set `withImageUrls` only if you can open images. Read this before proposing groups.",
       }),
       photo_candidates: mcpAction({
         op: photoImportContract.ops.productCandidates,

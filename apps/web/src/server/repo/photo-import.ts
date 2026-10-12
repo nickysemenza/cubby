@@ -16,6 +16,7 @@ import {
   isNull,
   sql,
   type AnyColumn,
+  type SQL,
 } from "drizzle-orm";
 import { z } from "zod";
 
@@ -52,6 +53,28 @@ import {
   type SingularRole,
   singularAttachmentImageIds,
 } from "~/server/repo/singular-attachment";
+
+/**
+ * The one order every photo-run read uses: capture time, because grouping a
+ * tag with its garment depends on the order the photos were taken. `position`
+ * is only per-upload picker order — appending a batch to an open run restarts
+ * it at 0 — so photos with tied or missing capture times fall back to the
+ * order their uploads were finalized, then to `position` within one upload.
+ * Undated photos sort last. A read that does not join `PhotoRunImage` passes
+ * subqueries for both target columns.
+ */
+export const photoRunImageOrder = (
+  target: { addedAt: AnyColumn | SQL; position: AnyColumn | SQL } = {
+    addedAt: photoRunImage.createdAt,
+    position: photoRunImage.position,
+  },
+) => [
+  sql`${image.capturedAt} asc nulls last`,
+  sql`${target.addedAt} asc nulls last`,
+  sql`${target.position} asc nulls last`,
+  sql`${image.createdAt} asc`,
+  sql`${image.shortcode} asc`,
+];
 
 export interface ImportImageRow {
   id: string;

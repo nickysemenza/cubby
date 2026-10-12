@@ -272,7 +272,7 @@ export const imageFilterFields = {
   runId: entityFilterList(runShortcode)
     .optional()
     .describe(
-      "Only images that are a target of one of these import runs. Sets list order to the run's picker position (see importTarget.position) instead of the default sort.",
+      "Only images that are a target of one of these import runs. Sets list order to the run's capture order (capturedAt, undated last, then importTarget.position) instead of the default sort.",
     ),
   targetState: oneOrMany(runTargetState)
     .optional()

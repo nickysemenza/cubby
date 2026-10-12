@@ -6,7 +6,7 @@ grouping, ownership, and location rules.
 
 1. Report preparing and call `claim_next_import_work`. Pass `{{runId}}` as the
    public run code to `imports_read.photo_context`. It returns the owner, notes,
-   and one page of photos in shot order with their analysis summaries; pass
+   and one page of photos in capture order with their analysis summaries; pass
    `nextCursor` back as `cursor` until it is null. For a multi-page run,
    propose each page's groups as you go, but hold back a page's last group
    until the next page shows whether the item continues.

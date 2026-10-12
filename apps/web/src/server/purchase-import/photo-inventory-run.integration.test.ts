@@ -5,6 +5,7 @@ import {
   shortcode,
 } from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
+import { PHOTO_RUN_IMAGE_LIMIT } from "@cubby/shared/client-constants";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -171,7 +172,7 @@ describe("photo import finalize", () => {
 
   // Every page stays in the coordinator's context for the rest of the run, so
   // a large run must be readable in bounded pages without URLs or timings.
-  it("pages the agent's photo context in shot order", async () => {
+  it("pages the agent's photo context in capture order", async () => {
     const run = await startRun();
     for (const position of [0, 1, 2]) {
       const photo = await createImageFixture(ctx.db, `page-${position}`, {
@@ -216,6 +217,8 @@ describe("photo import finalize", () => {
     expect(first).toMatchObject({ totalImages: 3, nextCursor: 2 });
     expect(first.images.map((image) => image.position)).toEqual([0, 1]);
     expect(Object.keys(first.images[0] ?? {}).sort()).toEqual([
+      "capturedAt",
+      "capturedAtOffsetMinutes",
       "describe",
       "description",
       "id",
@@ -447,6 +450,59 @@ describe("photo import finalize", () => {
       .from(photoRunImage)
       .where(eq(photoRunImage.imageId, parseImageId.parse(staged.id)));
     expect(targets).toHaveLength(1);
+  });
+
+  // Review and the grouping agent stop reading a Run at the limit, so a photo
+  // past it must be refused at finalize rather than uploaded and never seen.
+  it("refuses photos past the per-run limit", async () => {
+    const run = await startRun();
+    const filled = await Promise.all(
+      Array.from({ length: PHOTO_RUN_IMAGE_LIMIT }, (_, index) =>
+        createImageFixture(ctx.db, `limit-${index}`, { status: "UPLOADED" }),
+      ),
+    );
+    await getDb(ctx.db)
+      .insert(photoRunImage)
+      .values(
+        filled.map((photo, position) => ({
+          runId: run.id,
+          imageId: parseImageId.parse(photo.id),
+          position,
+          state: "pending" as const,
+          targetFingerprint: `limit-${position}`,
+        })),
+      );
+    const sha256 = "d".repeat(64);
+    const extra = await createImageFixture(ctx.db, "limit-extra", {
+      status: "PENDING",
+      size: 16,
+      sha256,
+      width: 16,
+      height: 16,
+      renderStatus: null,
+      storageStatus: "unverified",
+      verifiedAt: new Date(),
+    });
+
+    await expect(
+      finalizePhotoRun(
+        ctx.db,
+        {
+          runId: run.publicId,
+          images: [
+            {
+              imageId: extra.shortcode,
+              position: 0,
+              sha256,
+              width: 16,
+              height: 16,
+            },
+          ],
+        },
+        ctx.actor,
+        pendingImagePorts(sha256, 16),
+      ),
+    ).rejects.toThrow(`holds at most ${PHOTO_RUN_IMAGE_LIMIT} photos`);
   });
 
   it("refuses a completed run", async () => {

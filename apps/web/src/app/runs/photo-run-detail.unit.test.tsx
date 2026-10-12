@@ -135,6 +135,8 @@ const photo = (
 ): PhotoRunImage => ({
   id: imageShortcode.parse(id),
   position,
+  capturedAt: null,
+  capturedAtOffsetMinutes: null,
   targetState,
   originalUrl: `https://img.example.com/${id}.jpg`,
   cutoutUrl: text.cutout ? `https://img.example.com/${id}-cutout.png` : null,
@@ -155,6 +157,7 @@ const photo = (
 });
 
 const review: PhotoRunReview = {
+  imageProcessingPaused: false,
   review: {
     runId: RUN_ID,
     runStatus: "completed",
@@ -190,6 +193,7 @@ afterEach(() => {
 describe("PhotoImportRunView", () => {
   it("keeps approval available for unresolved photos on a stopped review run", async () => {
     const stoppedReview: PhotoRunReview = {
+      imageProcessingPaused: false,
       review: {
         ...review.review,
         runStatus: "needs_review",
@@ -306,6 +310,41 @@ describe("PhotoImportRunView", () => {
     expect(
       operations.filter((name) => name === "photoImport.startGrouping"),
     ).toHaveLength(0);
+  });
+
+  it("names paused image processing as the reason grouping waits", async () => {
+    harness.queryClient.setQueryData(
+      photoImport.review.queryKey({ runId: RUN_ID }),
+      {
+        ...review,
+        imageProcessingPaused: true,
+        review: { ...review.review, proposals: [] },
+        images: review.images.map((image) => ({
+          ...image,
+          targetState: "pending" as const,
+          describe: "pending" as const,
+        })),
+      } satisfies PhotoRunReview,
+    );
+
+    render(
+      <PhotoImportRunView
+        run={{
+          ...run,
+          status: "running",
+          endedAt: null,
+          targets: run.targets.map((target) => ({
+            ...target,
+            state: "pending",
+          })),
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      await screen.findByText(/Image processing is paused/),
+    ).toBeInTheDocument();
   });
 
   // The run's status, owner, times and notes render in the generic Run
@@ -432,6 +471,7 @@ describe("PhotoImportRunView", () => {
 
   it("holds approval while cloud description runs, then enables it without waiting for device analysis or cutout", async () => {
     const pendingReview: PhotoRunReview = {
+      imageProcessingPaused: false,
       review: {
         ...review.review,
         runStatus: "running",

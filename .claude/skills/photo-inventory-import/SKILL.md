@@ -21,11 +21,14 @@ party. Free-text `notes` gives context such as a location by time window
 
 Call `imports_read.photo_context { runId }` for `ledgerPartyId`, `notes`, and the
 run's photos, one page at a time: pass `nextCursor` back as `cursor` until it
-is null. Filter its images to `targetState: "pending"`; the pages are ordered
-by the run's picker `position`, which reflects capture order. Each image
-carries `targetState`, `position`, `description`, and `recognizedText`
-(on-device Vision OCR plus the cloud description, when either has run). Read
-those summaries and `position` adjacency first. If you can view images, pass
+is null. Filter its images to `targetState: "pending"`; the pages are in
+capture order (`capturedAt`, undated photos last), even across batches
+appended to the same run. Each image carries `targetState`, `capturedAt` with
+its `capturedAtOffsetMinutes`, `position` (picker order within one upload),
+`description`, and `recognizedText` (on-device Vision OCR plus the cloud
+description, when either has run). Read those summaries and capture-order
+adjacency first; match `capturedAt`, read as local time through its offset,
+against time windows in the run's `notes` to place each item. If you can view images, pass
 `withImageUrls: true` and open an image (`originalUrl` or `cutoutUrl`) only
 when the summary leaves the item, its label text, or a group boundary
 genuinely unclear — most groups resolve from the summary alone. Background
@@ -39,8 +42,8 @@ Record a legible barcode with an `entity.update product` `externalIds` add patch
 
 ## Group and identify
 
-Group adjacent-position images into one physical item using position order,
-OCR text, and description together — a run of positions with consistent OCR
+Group adjacent images into one physical item using capture order, OCR text,
+and description together — a run of photos with consistent OCR
 (a size tag, a care label) or matching description is one item; a jump in
 subject is a new item. Every close-up of a size tag, care label, box, or
 other identifying label is `purpose: "label"`, never `item`. Distinguish

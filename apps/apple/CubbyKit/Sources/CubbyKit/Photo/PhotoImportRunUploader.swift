@@ -17,8 +17,8 @@ public struct PhotoImportRunPhoto: Sendable {
     }
 }
 
-/// Bulk-uploads 1–1000 photos into one `photo_inventory` import run: creates the run (or attaches
-/// to an existing one), chunks the ordered selection by the server's 100-image cap, stages and PUTs
+/// Bulk-uploads up to `SharedConstants.photoRunImageLimit` photos into one `photo_inventory`
+/// import run: creates the run (or attaches to an existing one), chunks the ordered selection by the server's 100-image cap, stages and PUTs
 /// each chunk, finalizes it, and then runs on-device Vision analysis in the background and posts
 /// each result. There is no grouping or per-photo review — the manifest-based
 /// `PhotoImportTransaction` owns that flow; this is the plain "select N photos, done" path.

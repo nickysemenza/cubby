@@ -393,6 +393,10 @@ export type ReviewPhotoGroupsOutput = z.infer<typeof reviewPhotoGroupsOutput>;
 export const photoRunImage = z.object({
   id: imageShortcode,
   position: z.number().int().nullable(),
+  /** When the photo was taken, the run's sort key; null sorts last. */
+  capturedAt: z.iso.datetime().nullable(),
+  /** The camera's UTC offset at capture, for reading `capturedAt` as local time. */
+  capturedAtOffsetMinutes: z.number().int().nullable(),
   targetState: runTargetState,
   originalUrl: z.string(),
   cutoutUrl: z.string().nullable(),
@@ -429,6 +433,8 @@ export const photoRunContextImage = photoRunImage
   .pick({
     id: true,
     position: true,
+    capturedAt: true,
+    capturedAtOffsetMinutes: true,
     targetState: true,
     describe: true,
     description: true,
@@ -520,6 +526,8 @@ export const photoProductCandidateSearchInput = z.object({
 export const photoRunReviewResponse = z.object({
   review: photoGroupProposalList,
   images: z.array(photoRunImage),
+  /** Household image work is paused, so queued descriptions wait and grouping cannot start. */
+  imageProcessingPaused: z.boolean(),
 });
 export type PhotoRunReview = z.infer<typeof photoRunReviewResponse>;
 

@@ -8,6 +8,9 @@ public enum PhotoGroupingReadiness: Equatable, Sendable {
     case waitingForPhotos
     /// Photos arrived but device/description processing hasn't settled for all of them.
     case processing
+    /// Descriptions are queued but household image work is paused, so they will not settle until
+    /// someone resumes it.
+    case processingPaused
     /// Photos are uploaded and described; the agent can be started.
     case readyToStart
     /// The agent already stopped short of proposing groups; review continues on the web.
@@ -19,6 +22,8 @@ public enum PhotoGroupingReadiness: Equatable, Sendable {
         switch self {
         case .waitingForPhotos: "Waiting for photos to upload."
         case .processing: "Photos are processing. Grouping starts once descriptions are ready."
+        case .processingPaused:
+            "Image processing is paused, so photo descriptions are queued. Resume queued work under Problems → Image processing on the web to start grouping."
         case .readyToStart: "Photos are ready for the agent to propose item groups."
         case .needsReviewOnWeb: "The agent stopped before proposing groups. Review these photos on the web."
         case .working: "Photos uploaded; the agent is preparing item groups."
@@ -41,14 +46,14 @@ public enum PhotoReviewPolicy {
     /// (ready, skipped, or failed) — `.pending`/`.leased`/`.waitingForDevice` mean grouping would
     /// start from incomplete evidence.
     public static func groupingReadiness(
-        images: [PhotoRunImage], runStatus: RunStatus?
+        images: [PhotoRunImage], runStatus: RunStatus?, processingPaused: Bool
     ) -> PhotoGroupingReadiness {
         guard !images.isEmpty else { return .waitingForPhotos }
         if runStatus == .needsReview { return .needsReviewOnWeb }
         let settled = images.allSatisfy {
             $0.describe == .ready || $0.describe == .skipped || $0.describe == .failed
         }
-        guard settled else { return .processing }
+        guard settled else { return processingPaused ? .processingPaused : .processing }
         return runStatus == .running ? .readyToStart : .working
     }
 
