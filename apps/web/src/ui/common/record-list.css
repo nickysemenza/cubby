@@ -39,6 +39,14 @@
   color: var(--muted-foreground);
 }
 
+.ledger[data-record-list="timeline"]
+  > .ledger-row[data-record-heading]
+  > [data-ledger-slot="group"] {
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: 0.75rem;
+}
+
 /* Timeline: the leading column carries a continuous rail through each dot. */
 .ledger[data-record-list="timeline"]
   > .ledger-row:not(
