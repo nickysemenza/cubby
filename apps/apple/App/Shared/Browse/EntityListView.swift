@@ -857,7 +857,7 @@ struct EntityListView: View {
                 if field.explanation != nil {
                     FieldExplanationLabel(
                         field: field, subject: EntityRef(entity: key, id: row.id),
-                        labelOverride: "About \(field.label)", surface: "list")
+                        labelOverride: fact.value, surface: "list", iconOnly: true)
                 }
             }
         } else if row.pendingFields.contains(field.key) {
@@ -1011,22 +1011,52 @@ struct EntityRowView: View {
             descriptor: EntityCatalog[key], row: row, columns: columns, photoMode: photoMode)
     }
 
-    private var thumbnailSize: CGFloat {
-        #if os(iOS)
-            36
-        #else
-            36
-        #endif
+    private var railFacts: [EntityRowPresentation.Fact] {
+        let descriptor = EntityCatalog[key]
+        let dated = presentation.facts.first { $0.isDate }
+        let leading = presentation.facts.filter { !$0.isDate }.sorted { left, right in
+            func priority(_ fact: EntityRowPresentation.Fact) -> Int {
+                guard let field = descriptor.field(fact.id) else { return .max }
+                if field.key == descriptor.presentation.heroChip { return -1 }
+                if field.mobileSlot == "trailing" { return field.mobilePriority ?? 0 }
+                return fact.id == "dataQuality" ? 1000 : .max
+            }
+            return priority(left) < priority(right)
+        }.first { fact in
+            let field = descriptor.field(fact.id)
+            return field?.key == descriptor.presentation.heroChip
+                || field?.mobileSlot == "trailing" || fact.id == "dataQuality"
+        }
+        return [leading, dated].compactMap { $0 }
+    }
+
+    private var contextFact: EntityRowPresentation.Fact? {
+        let railIDs = Set(railFacts.map(\.id))
+        return presentation.facts.filter {
+            !railIDs.contains($0.id) && EntityCatalog[key].field($0.id)?.mobileSlot == "subtitle"
+        }.min {
+            (EntityCatalog[key].field($0.id)?.mobilePriority ?? .max)
+                < (EntityCatalog[key].field($1.id)?.mobilePriority ?? .max)
+        }
+    }
+
+    private var supportingFacts: [EntityRowPresentation.Fact] {
+        let headerIDs = Set(railFacts.map(\.id) + [contextFact?.id].compactMap { $0 })
+        return presentation.facts.filter { !headerIDs.contains($0.id) }
     }
 
     @ViewBuilder
-    private func factView(_ fact: EntityRowPresentation.Fact) -> some View {
+    private func factView(_ fact: EntityRowPresentation.Fact, isRail: Bool = false) -> some View {
         let field = EntityCatalog[key].field(fact.id)
         HStack(spacing: FieldGuideTokens.Space.xs) {
             if fact.id == "dataQuality", let field {
                 FieldExplanationLabel(
                     field: field, subject: EntityRef(entity: key, id: row.id),
                     labelOverride: fact.value, surface: "list")
+            } else if isRail {
+                Text(fact.value)
+                    .monospacedDigit()
+                    .accessibilityLabel("\(fact.label ?? field?.label ?? fact.id): \(fact.value)")
             } else if let field,
                 let color = FieldGuideMetrics.optionColor(
                     EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list"))
@@ -1054,11 +1084,11 @@ struct EntityRowView: View {
 
     @ViewBuilder
     private var supportingBand: some View {
-        if presentation.facts.isEmpty && row.pendingFields.isEmpty && row.failedFields.isEmpty && !photoMode {
+        if supportingFacts.isEmpty && row.pendingFields.isEmpty && row.failedFields.isEmpty && !photoMode {
             EmptyView()
         } else {
             WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm) {
-                ForEach(presentation.facts) { fact in factView(fact) }
+                ForEach(supportingFacts) { fact in factView(fact) }
                 if !row.pendingFields.isEmpty {
                     Text("Loading details…").font(.caption).foregroundStyle(.secondary)
                 } else if !row.failedFields.isEmpty {
@@ -1074,33 +1104,17 @@ struct EntityRowView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
-            if let previewImage {
-                previewImage
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: thumbnailSize, height: thumbnailSize)
-                    .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
-                    .accessibilityHidden(true)
-            } else {
-                Thumb(
-                    url: presentation.imageURL, size: thumbnailSize,
-                    symbol: EntityCatalog[key].recordSymbol(in: row),
-                    emoji: EntityCatalog[key].recordEmoji(in: row))
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(presentation.title)
-                    .accessibilityIdentifier("entity.row.title.\(key.rawValue).\(row.id)")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(FieldGuideTokens.graphite)
-                    .fixedSize(horizontal: false, vertical: true)
-                supportingBand
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        RecordListRow(
+            title: presentation.title, imageURL: presentation.imageURL,
+            symbol: EntityCatalog[key].recordSymbol(in: row), emoji: EntityCatalog[key].recordEmoji(in: row),
+            previewImage: previewImage, titleIdentifier: "entity.row.title.\(key.rawValue).\(row.id)"
+        ) {
+            if let contextFact { factView(contextFact) }
+        } rail: {
+            ForEach(railFacts) { fact in factView(fact, isRail: true) }
+        } supplement: {
+            supportingBand
         }
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .top)
-        .contentShape(Rectangle())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             (photoMode

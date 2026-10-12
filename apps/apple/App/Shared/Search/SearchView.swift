@@ -338,26 +338,17 @@ private struct SearchHitRow: View {
     let hit: SearchHit
 
     var body: some View {
-        HStack(spacing: FieldGuideTokens.Space.md) {
-            Thumb(
-                url: hit.imageURL, size: 48, symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square",
-                emoji: hit.emoji
-            )
-            VStack(alignment: .leading, spacing: 2) {
-                Text(hit.title)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(FieldGuideTokens.graphite)
-                    .lineLimit(2)
-                if let subtitle = hit.subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.fieldGuideBody)
-                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: FieldGuideTokens.Space.sm)
+        RecordListRow(
+            title: hit.title, imageURL: hit.imageURL,
+            symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square", emoji: hit.emoji
+        ) {
+            if let subtitle = hit.subtitle, !subtitle.isEmpty { Text(subtitle) }
+            if let key = hit.key { Text(EntityCatalog[key].singular) }
+        } rail: {
+            EmptyView()
+        } supplement: {
+            EmptyView()
         }
-        .padding(.vertical, FieldGuideTokens.Space.xs)
     }
 }
 

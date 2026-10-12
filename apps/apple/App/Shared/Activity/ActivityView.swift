@@ -572,36 +572,20 @@ struct ActivityRunRow: View {
     let run: ActivityRun
 
     var body: some View {
-        HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
-            Thumb(
-                url: run.subjectImage.flatMap { URL(string: $0.representations?.preferred ?? $0.url) },
-                size: 36, symbol: EntityCatalog[run.iconEntity].sfSymbol)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(run.subjectName).font(.subheadline.weight(.semibold))
-                Text("\(run.workLabel) · \(run.state.replacingOccurrences(of: "_", with: " ").capitalized)")
-                    .font(.caption).foregroundStyle(.secondary)
-                if let progress = run.progressLine {
-                    Text(progress).font(.caption).monospacedDigit()
-                }
-                Text(contextLine).font(.caption).foregroundStyle(.secondary)
-                if let error = run.error {
-                    Text(error).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
-                }
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .layoutPriority(1)
+        RecordListRow(
+            title: run.subjectName,
+            imageURL: run.subjectImage.flatMap { URL(string: $0.representations?.preferred ?? $0.url) },
+            symbol: EntityCatalog[run.iconEntity].sfSymbol
+        ) {
+            Text(([run.workLabel] + run.executors.map(\.name)).joined(separator: " · "))
+        } rail: {
+            Text(run.state.replacingOccurrences(of: "_", with: " ").capitalized)
+                .foregroundStyle(run.active ? FieldGuideTokens.interaction : Color.secondary)
+            Text(run.createdAt, style: .relative).monospacedDigit()
+        } supplement: {
+            if let progress = run.progressLine { Text(progress).monospacedDigit() }
+            if let error = run.error { Text(error).foregroundStyle(FieldGuideTokens.destructive) }
         }
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.vertical, FieldGuideTokens.Space.xs)
-        .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
-        .contentShape(Rectangle())
-    }
-
-    private var contextLine: String {
-        let time = run.createdAt.formatted(.relative(presentation: .named))
-        let executors = run.executors.map(\.name).joined(separator: ", ")
-        return executors.isEmpty ? time : "\(executors) · \(time)"
     }
 }
 

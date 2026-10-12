@@ -192,19 +192,17 @@ struct EntityPickerSheet: View {
                 dismiss()
             }
         } label: {
-            HStack(spacing: FieldGuideTokens.Space.md) {
-                Thumb(url: imageURL, size: 40, symbol: symbol ?? descriptor.sfSymbol, emoji: emoji)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(pick.title).foregroundStyle(FieldGuideTokens.graphite)
-                    Text(pick.id).font(.fieldGuideCode).foregroundStyle(.secondary)
-                }
-                Spacer()
+            RecordListRow(
+                title: pick.title, imageURL: imageURL, symbol: symbol ?? descriptor.sfSymbol, emoji: emoji
+            ) {
+                Text(pick.id).font(.fieldGuideCode)
+            } rail: {
                 if isSelected {
                     Image(systemName: "checkmark").foregroundStyle(FieldGuideTokens.interaction)
                 }
+            } supplement: {
+                EmptyView()
             }
-            .frame(minHeight: FieldGuideTokens.touchTarget)
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])

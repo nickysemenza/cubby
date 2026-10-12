@@ -420,6 +420,7 @@ struct FieldExplanationLabel: View {
     let subject: EntityRef
     var labelOverride: String? = nil
     var surface = "detail"
+    var iconOnly = false
     @Environment(AppModel.self) private var appModel
     @State private var showingExplanation = false
     @State private var resolved: FieldExplanationOutput?
@@ -433,8 +434,10 @@ struct FieldExplanationLabel: View {
                 showingExplanation = true
             } label: {
                 HStack(spacing: FieldGuideTokens.Space.xs) {
-                    Text(labelOverride ?? field.label)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if !iconOnly {
+                        Text(labelOverride ?? field.label)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Image(systemName: "info.circle")
                         .accessibilityHidden(true)
                 }
@@ -1145,26 +1148,9 @@ struct EntityJournalEntryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             NavigationLink(value: Route.entityDetail(descriptor.key, id: row.id)) {
-                HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(row.title).font(.fieldGuideBody.weight(.semibold))
-                        if let field = descriptor.field("observedOn"),
-                            let day = EntityFieldValue.text(row.raw["observedOn"], field: field)
-                        {
-                            Text(day).font(.fieldGuideLabel).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    if let field = descriptor.field("kind"),
-                        let kind = EntityFieldValue.text(row.raw["kind"], field: field)
-                    {
-                        StatusChip(
-                            text: kind,
-                            color: FieldGuideMetrics.optionColor(
-                                EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail")))
-                    }
-                }
+                EntityRowView(key: descriptor.key, row: row)
             }
+
             if let note = row.raw["notes"]?.stringValue, !note.isEmpty {
                 Text(note).font(.fieldGuideBody).fixedSize(horizontal: false, vertical: true)
             }
