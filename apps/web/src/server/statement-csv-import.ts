@@ -35,7 +35,7 @@ const firstHeader = (headers: string[], pattern: RegExp) =>
   headers.find((header) => pattern.test(header)) ?? "";
 
 /** The one column guesser for an unfamiliar CSV; web and native prefill from it. */
-export function suggestStatementCsvMapping(
+function suggestStatementCsvMapping(
   headers: string[],
 ): StatementCsvColumnMapping {
   return {

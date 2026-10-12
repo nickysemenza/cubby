@@ -40,7 +40,7 @@ type CrossLinkSearchValue =
   | readonly string[]
   | readonly number[];
 
-export type CrossLink = {
+type CrossLink = {
   to: EntityDetailRoute;
   // `{ id }` covers usda-food — the one detail route that stays keyed on
   // something other than a shortcode (`String(fdc_id)`); every other entity's
