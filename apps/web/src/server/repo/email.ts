@@ -4,7 +4,7 @@ import {
   type EmailFilters,
   type EmailOut,
 } from "@cubby/schemas/email";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   mailboxClassification,
   mailboxClassificationStage,
@@ -22,12 +22,15 @@ import {
   emailClassificationObservation,
   ledgerParty,
   email as emailTable,
+  emailFinancialAssociation,
 } from "~/server/db/schema";
 import {
   householdDayRangeConditions,
   notDeleted,
   unwrapDb,
 } from "~/server/repo/database-helpers";
+import { readEmailFinancialAssociations } from "~/server/repo/email-financial-associations";
+import { readEmailPurchaseAssociations } from "~/server/repo/email-purchase-associations";
 import {
   emailLifecyclePurchasesSql,
   emailLinkedSql,
@@ -94,8 +97,13 @@ export async function readEmailAssociations(
         ),
       )
       .orderBy(desc(purchase.date), purchase.id);
-  const purchases = await purchasesFor(emailPurchaseAssociationsSql());
-  const purchaseIds = purchases.map((row) => row.id);
+  const purchases = await readEmailPurchaseAssociations(
+    db,
+    parseEntityId("email", selected.email.id),
+  );
+  const purchaseIds = purchases
+    .filter((row) => !row.purchaseDeleted)
+    .map((row) => row.id);
   const expenses = purchaseIds.length
     ? await client
         .select({
@@ -171,6 +179,10 @@ export async function readEmailAssociations(
     emailLifecyclePurchasesSql("dismissed"),
   );
   return {
+    financialAssociations: await readEmailFinancialAssociations(
+      db,
+      parseEntityId("email", selected.email.id),
+    ),
     purchases,
     expenses,
     products,
@@ -180,7 +192,7 @@ export async function readEmailAssociations(
   };
 }
 
-/** Accepted source or lifecycle association; Gmail-thread context never authorizes retention. */
+/** Accepted source, lifecycle or reviewed financial evidence protects its original. */
 export async function hasAcceptedEmailAssociation(
   db: Database | DrizzleTransaction,
   input: {
@@ -190,8 +202,14 @@ export async function hasAcceptedEmailAssociation(
     provider?: string;
   },
 ): Promise<boolean> {
+  // Literal qualification preserves the outer correlation in a single-table projection.
   const [record] = await unwrapDb(db)
-    .select({ linked: emailLinkedSql() })
+    .select({
+      linked: sql<boolean>`(${emailLinkedSql()} OR EXISTS (
+      SELECT 1 FROM ${emailFinancialAssociation} reviewed_financial_evidence
+      WHERE reviewed_financial_evidence."emailId" = "Email"."id"
+    ))`,
+    })
     .from(emailTable)
     .where(
       and(

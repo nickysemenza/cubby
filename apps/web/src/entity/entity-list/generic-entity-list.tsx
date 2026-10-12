@@ -285,7 +285,6 @@ export function GenericEntityList({
   );
 }
 
-// oxlint-disable-next-line complexity -- one server list owns its shared query, inspector, and three manifest renderers so their state cannot drift.
 function ServerListBody({
   entity,
   view,

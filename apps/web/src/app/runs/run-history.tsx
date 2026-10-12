@@ -103,7 +103,6 @@ const subscribe = (callback: () => void) => {
   };
 };
 
-// oxlint-disable-next-line complexity -- one list owns the flat and grouped queries, expansion, and three inspector presentations.
 export function RunHistory({
   filters,
   onFilterChange,

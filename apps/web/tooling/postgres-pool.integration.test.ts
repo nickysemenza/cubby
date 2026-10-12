@@ -60,6 +60,45 @@ describe("PostgreSQL pool shutdown", () => {
     }
   });
 
+  it.each(["checked out", "query in flight"])(
+    "handles reset termination with a client %s before its lease is released",
+    async (mode) => {
+      const pool = createPostgresPool({ connectionString: ctx.databaseUrl });
+      const client = await pool.connect();
+      const { rows } = await client.query<{ pid: number }>(
+        "SELECT pg_backend_pid() AS pid",
+      );
+      const query =
+        mode === "query in flight"
+          ? client.query("SELECT pg_sleep(30)").catch((error: Error) => error)
+          : undefined;
+      try {
+        if (query)
+          await pollUntil(
+            async () => {
+              const activity = await pool.query(
+                "SELECT 1 FROM pg_stat_activity WHERE pid = $1 AND query = 'SELECT pg_sleep(30)' AND state = 'active'",
+                [rows[0]?.pid],
+              );
+              return activity.rowCount ? true : undefined;
+            },
+            { label: "active reset target", timeoutMs: 1000 },
+          );
+        await terminateOtherPostgresConnections(pool);
+        const refusedQuery = expect.objectContaining({ code: "57P01" });
+        expect(await query).toEqual(
+          mode === "query in flight" ? refusedQuery : undefined,
+        );
+        await expect(pool.query("SELECT 1")).resolves.toMatchObject({
+          rowCount: 1,
+        });
+      } finally {
+        client.release();
+        await pool.end();
+      }
+    },
+  );
+
   it("delivers repeated shutdown errors to the callback", async () => {
     const pool = createPostgresPool({ connectionString: ctx.databaseUrl });
     await pool.end();

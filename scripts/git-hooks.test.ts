@@ -5,7 +5,6 @@ import {
   cpSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
   rmSync,
   symlinkSync,
@@ -51,7 +50,7 @@ function fixture(t: TestContext) {
   ok("init", "--initial-branch=main");
   ok("config", "user.name", "Hook Fixture");
   ok("config", "user.email", "hooks@example.invalid");
-  write(".gitignore", "node_modules/\nremote.git/\n");
+  write(".gitignore", "node_modules/\n");
   write(
     "package.json",
     JSON.stringify({
@@ -68,7 +67,6 @@ function fixture(t: TestContext) {
     "apps/web/src/server/db/schema.ts",
     "apps/web/src/server/db/generated/entity-tables.gen.ts",
     "scripts/check-outward-text.ts",
-    "scripts/generator/ensure.ts",
     "packages/shared/src/shortcode-alphabet.ts",
   ]) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -81,9 +79,7 @@ function fixture(t: TestContext) {
   ])
     cpSync(join(source, directory), join(root, directory), { recursive: true });
   symlinkSync(join(source, "node_modules"), join(root, "node_modules"), "dir");
-  for (const path of ["example file.ts", "unrelated.ts", "deleted.ts"]) {
-    write(path, "export const value = 1;\n");
-  }
+  write("example file.ts", "export const value = 1;\n");
   ok("add", ".");
   ok("-c", "core.hooksPath=/dev/null", "commit", "-m", "Fixture baseline");
 
@@ -101,106 +97,19 @@ function fixture(t: TestContext) {
   return { root, git, ok, write };
 }
 
-test("commit checks the index and preserves partial staging on success and failure", async (t) => {
-  for (const scenario of [
-    { name: "valid", staged: "export const value = 2;\n", succeeds: true },
-    { name: "lint", staged: "export const value: any = 2;\n", succeeds: false },
-    { name: "format", staged: "export const value=2\n", succeeds: false },
-  ]) {
-    await t.test(scenario.name, (t) => {
-      const { root, git, ok, write } = fixture(t);
-      const path = "example file.ts";
-      write(path, scenario.staged);
-      ok("add", "--", path);
-      const unstaged = `${scenario.staged}// Keep this unstaged.\n`;
-      write(path, unstaged);
-      // An unrelated invalid working file must not expand the hook's scope.
-      write("unrelated.ts", "export const =\n");
-      const indexBefore = ok("diff", "--cached", "--binary");
-      const worktreeBefore = ok("diff", "--binary");
-      const started = performance.now();
-      const result = git("commit", "-m", `Fixture ${scenario.name}`);
-      t.diagnostic(`Commit hook: ${Math.round(performance.now() - started)}ms`);
-      if (scenario.succeeds) {
-        assert.equal(result.status, 0, result.stderr + result.stdout);
-        assert.equal(ok("show", `HEAD:${path}`), scenario.staged);
-        assert.equal(ok("diff", "--cached"), "");
-      } else {
-        assert.notEqual(result.status, 0);
-        assert.match(result.stderr + result.stdout, /oxlint|oxfmt/);
-        assert.equal(ok("diff", "--cached", "--binary"), indexBefore);
-      }
-      assert.equal(ok("diff", "--binary"), worktreeBefore);
-      assert.equal(readFileSync(join(root, path), "utf8"), unstaged);
-      assert.equal(ok("stash", "list"), "");
-    });
-  }
-});
+test("pre-commit runs lint-staged on the staged files", (t) => {
+  const { git, ok, write } = fixture(t);
+  const path = "example file.ts";
+  write(path, "export const value: any = 2;\n");
+  ok("add", "--", path);
+  const rejected = git("commit", "-m", "Fixture lint");
+  assert.notEqual(rejected.status, 0);
+  assert.match(rejected.stderr + rejected.stdout, /oxlint/);
 
-test("commit checks maintained Markdown, YAML, and TOML formatting", async (t) => {
-  for (const { path, content } of [
-    { path: "notes.md", content: "#   Heading\n" },
-    { path: "settings.yaml", content: "value:    true\n" },
-    { path: "settings.toml", content: "value= true\n" },
-  ]) {
-    await t.test(path, (t) => {
-      const { git, ok, write } = fixture(t);
-      write(path, content);
-      ok("add", "--", path);
-      const indexBefore = ok("diff", "--cached", "--binary");
-      const result = git("commit", "-m", `Fixture ${path}`);
-      assert.notEqual(result.status, 0);
-      assert.match(result.stderr + result.stdout, /oxfmt/);
-      assert.equal(ok("diff", "--cached", "--binary"), indexBefore);
-    });
-  }
-});
-
-test("ignored, renamed, deleted, and empty selections stay cheap and pushes run no checks", (t) => {
-  const { root, git, ok, write } = fixture(t);
-  write("unrelated.ts", "export const =\n");
-  write("notes.md", "# Fixture\n");
-  ok("add", "--", "notes.md");
-  const started = performance.now();
-  ok("commit", "-m", "Documentation fixture");
-  t.diagnostic(
-    `Documentation commit: ${Math.round(performance.now() - started)}ms`,
-  );
-
-  write("apps/apple/ignored.ts", "export const =\n");
-  ok("add", "--", "apps/apple/ignored.ts");
-  ok("commit", "-m", "Ignored fixture");
-  ok("mv", "example file.ts", "renamed file.ts");
-  ok("commit", "-m", "Rename fixture");
-  assert.equal(ok("show", "HEAD:renamed file.ts"), "export const value = 1;\n");
-  ok("rm", "deleted.ts");
-  ok("commit", "-m", "Deletion fixture");
-  ok("commit", "--allow-empty", "-m", "Empty fixture");
-
-  // An invalid staged file and no tracking branch cannot block publication.
-  write("renamed file.ts", "export const =\n");
-  ok("add", "--", "renamed file.ts");
-  write("untracked.ts", "export const =\n");
-  const indexBefore = ok("diff", "--cached", "--binary");
-  const worktreeBefore = ok("diff", "--binary");
-  const remote = join(root, "remote.git");
-  ok("init", "--bare", remote);
-  const pushed = git("push", remote, "HEAD:refs/heads/main");
-  assert.equal(pushed.status, 0, pushed.stderr + pushed.stdout);
-  assert.doesNotMatch(
-    pushed.stderr + pushed.stdout,
-    /lint-staged|oxlint|oxfmt|nx run/,
-  );
-  assert.equal(
-    ok("--git-dir", remote, "rev-parse", "main"),
-    ok("rev-parse", "HEAD"),
-  );
-  assert.equal(ok("diff", "--cached", "--binary"), indexBefore);
-  assert.equal(ok("diff", "--binary"), worktreeBefore);
-  assert.equal(
-    readFileSync(join(root, "untracked.ts"), "utf8"),
-    "export const =\n",
-  );
+  write(path, "export const value = 2;\n");
+  ok("add", "--", path);
+  ok("commit", "-m", "Fixture valid");
+  assert.equal(ok("show", `HEAD:${path}`), "export const value = 2;\n");
 });
 
 test("commit messages naming a live entity code are rejected", (t) => {

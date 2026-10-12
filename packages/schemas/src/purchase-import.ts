@@ -29,7 +29,7 @@ export const vendorOrderEvidence = z.enum([
 ]);
 /** Every stored source kind; `browser_order` is retired and only read. */
 /**
- * A Distinct-from decision (GLOSSARY): the line is a different Product from
+ * A Distinct-from decision (terminology): the line is a different Product from
  * this exact name match, shown by the Source's url and quoted difference.
  */
 const distinctFromProduct = <Id extends z.ZodType<string>>(productId: Id) =>

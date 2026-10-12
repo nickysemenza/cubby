@@ -198,9 +198,6 @@ describe("entity manifest", () => {
       const genModuleNamespace: unknown = await import(
         /* @vite-ignore */ `./generated/entity-field-schemas.${entity}.gen`
       );
-      // SAFETY: the dynamically imported namespace's shape is unknown ahead
-      // of time; it is only enumerated via `Object.keys` below, never
-      // trusted as any concrete shape.
       // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- dynamic import target is computed, so its namespace shape is unknown ahead of time; only enumerated via Object.keys below, never trusted as any concrete shape.
       const genModule = genModuleNamespace as Record<string, unknown>;
       const [fieldSchemasExportName] = Object.keys(genModule).filter((key) =>
@@ -210,10 +207,6 @@ describe("entity manifest", () => {
         fieldSchemasExportName,
         `entity "${entity}" -> no generated*FieldSchemas export found in entity-field-schemas.${entity}.gen.ts`,
       ).toBeDefined();
-      // SAFETY: `fieldSchemasExportName` was just asserted defined above,
-      // and every `generated*FieldSchemas` export follows this `{ read:
-      // Record<string, ZodTypeAny> }` shape by construction (see the
-      // generator referenced above).
       const generatedFieldSchemas = genModule[fieldSchemasExportName!] as {
         read: Record<string, z.ZodTypeAny>;
       };

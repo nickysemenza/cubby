@@ -68,23 +68,31 @@ const rect = (element: Element | null) => {
 };
 
 describe("cell frame layout", () => {
-  it("keeps the explanation beside a short value rather than at the far cell edge", async () => {
+  // Rails line up at the column's end edge on every row; fitting makes the
+  // column hug its widest value plus rail, so there is no dead space after it.
+  it("lines every row's explanation up at the cell's end edge", async () => {
     await page.viewport(DESKTOP.width, DESKTOP.height);
     const { getByTestId } = render(
       <Grid
         cells={[
-          <CellFrame key="quality" trailing={rail()}>
-            <span data-short-value>Good</span>
+          <CellFrame key="short" trailing={rail()}>
+            Ok
+          </CellFrame>,
+          <CellFrame key="long" trailing={rail()}>
+            Unclassified
           </CellFrame>,
         ]}
       />,
     );
-    const cell = getByTestId("cell-0");
-    const gap =
-      rect(cell.querySelector("button")).left -
-      rect(cell.querySelector("[data-short-value]")).right;
-    expect(gap).toBeGreaterThanOrEqual(0);
-    expect(gap).toBeLessThanOrEqual(2);
+    for (const id of ["cell-0", "cell-1"]) {
+      const cell = getByTestId(id);
+      const end =
+        rect(cell).right -
+        Number.parseFloat(getComputedStyle(cell).paddingRight);
+      const button = rect(cell.querySelector("button"));
+      expect(Math.round(button.right)).toBe(Math.round(end));
+      expect(Math.round(button.width)).toBe(16);
+    }
   });
 
   it("makes the thumbnail frame exactly as tall as the data row", async () => {

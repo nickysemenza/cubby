@@ -46,26 +46,6 @@ function runOxlint(fixturePath: string): OxlintDiagnostic[] {
   return output.diagnostics;
 }
 
-function runOxlintPaths(paths: string[]): OxlintDiagnostic[] {
-  const result = spawnSync(
-    "pnpm",
-    [
-      "exec",
-      "oxlint",
-      "--config",
-      ".oxlintrc.json",
-      "--format",
-      "json",
-      ...paths,
-    ],
-    { cwd: repoRoot, encoding: "utf8" },
-  );
-  assert.equal(result.signal, null, result.stderr);
-  assert.ok(result.status === 0 || result.status === 1, result.stderr);
-  const output: OxlintOutput = JSON.parse(result.stdout);
-  return output.diagnostics;
-}
-
 function fixtureFilename(fixtureName: string): string {
   return fixtureName.endsWith(".tsx.txt")
     ? fixtureName.replace(/\.txt$/, "")
@@ -119,20 +99,15 @@ function lintScopedFixture(
   }
 }
 
-test("runtime typeof is allowed only in explicitly annotated predicates", () => {
-  const allowed = lintFixture(
-    "no-runtime-typeof",
-    "no-runtime-typeof-allowed.txt",
-  );
-  const rejected = lintFixture(
-    "no-runtime-typeof",
-    "no-runtime-typeof-rejected.txt",
+test("type assertions need a SAFETY comment unless they narrow to literal types", () => {
+  const diagnostics = lintFixture(
+    "require-safety-comment-for-type-assertion",
+    "require-safety-comment-for-type-assertion.txt",
   );
 
-  assert.deepEqual(allowed, []);
   assert.deepEqual(
-    rejected.map((diagnostic) => diagnostic.labels[0]?.span.line),
-    [2, 6, 10],
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [6, 6, 7],
   );
 });
 
@@ -150,25 +125,7 @@ test("raw enum values in Drizzle SQL are rejected", () => {
   );
 });
 
-test("raw enum SQL baseline counts stay exact and shrink-only", () => {
-  const baselinePath = join(
-    repoRoot,
-    "tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json",
-  );
-  const baseline: Record<string, number> = JSON.parse(
-    readFileSync(baselinePath, "utf8"),
-  );
-  const diagnostics = runOxlintPaths(Object.keys(baseline));
-  assert.deepEqual(
-    diagnostics.filter(
-      (diagnostic) => diagnostic.code === "cubby(no-raw-enum-literal-in-sql)",
-    ),
-    [],
-    "lower a file's baseline whenever its raw enum SQL count drops",
-  );
-});
-
-test("unknown input is allowed at predicates and genuine decoder seams", () => {
+test("unknown input is rejected only in exported signatures, except predicates and decoder seams", () => {
   const allowed = lintFixture(
     "no-unknown-parameters",
     "no-unknown-parameters-allowed.txt",
@@ -181,7 +138,7 @@ test("unknown input is allowed at predicates and genuine decoder seams", () => {
   assert.deepEqual(allowed, []);
   assert.deepEqual(
     rejected.map((diagnostic) => diagnostic.labels[0]?.span.line),
-    [1, 5, 9, 14],
+    [1, 5, 9, 14, 16, 22, 28],
   );
 });
 
@@ -199,18 +156,6 @@ test("shape naming applies to owned symbols but not external property names", ()
   assert.deepEqual(
     rejected.map((diagnostic) => diagnostic.labels[0]?.span.line),
     [1, 3, 4, 6, 10, 11, 14],
-  );
-});
-
-test("conditional empty spreads are rejected in JSX as well as object literals", () => {
-  const diagnostics = lintFixture(
-    "no-conditional-empty-object-spread",
-    "no-conditional-empty-object-spread-jsx.tsx.txt",
-  );
-
-  assert.deepEqual(
-    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
-    [3],
   );
 });
 

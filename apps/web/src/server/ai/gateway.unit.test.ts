@@ -435,7 +435,6 @@ describe("gatewayFetch metadata contract", () => {
     ])
       expect(() =>
         gatewayFetch("openai", {
-          // SAFETY: deliberately outside the declared contract.
           metadata: { ...metadata, ...extra } as typeof metadata,
         }),
       ).toThrow(/Unrecognized key/);

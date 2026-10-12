@@ -17,7 +17,7 @@ import { en, Faker } from "@faker-js/faker";
 /** The Playwright annotation type that records a test's Faker seed. */
 export const FAKER_SEED_ANNOTATION = "faker-seed";
 
-/** The dev corpus seed: the same synthetic household on every `dev:seed`. */
+/** The dev corpus seed: the same synthetic household on every `pnpm dev seed`. */
 export const DEV_FAKER_SEED = 1;
 
 /** A stable 32-bit hash of the parts, so equal inputs always pick one seed. */

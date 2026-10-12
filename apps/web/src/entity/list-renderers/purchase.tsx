@@ -2,6 +2,7 @@ import { FinancialSettlementCell } from "~/app/purchases/financial-settlement";
 import { ReconciliationStatus } from "~/app/purchases/purchase-reconciliation";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { VendorCell } from "~/entity/components/vendor-cell";
+import { MiddleTruncate } from "~/ui/common/middle-truncate";
 import { createTextColumn } from "~/ui/data-table/columnHelpers";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { Row } from "~/ui/layout";
@@ -49,7 +50,7 @@ const orderLink: ListRenderer<"purchase"> = (helper) =>
         renderValue: (value, purchase) =>
           value ? (
             <Row align="center" gap="xs">
-              <span className="min-w-0 truncate">{value}</span>
+              <MiddleTruncate text={value} className="min-w-0" />
               <EntityRefLink
                 variant="order"
                 orderUrl={purchase.orderUrl}

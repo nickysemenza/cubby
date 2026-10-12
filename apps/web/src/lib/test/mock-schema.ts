@@ -108,8 +108,6 @@ type RuntimeDefinition = {
   getter?: () => z.ZodType;
 };
 
-// SAFETY: Zod 4 exposes the discriminated runtime definition through `_zod.def`;
-// RuntimeDefinition names only the fields this generator reads from that public core contract.
 const defOf = (s: z.ZodType): RuntimeDefinition =>
   s._zod.def as RuntimeDefinition;
 
@@ -519,8 +517,6 @@ const mockRecord = (
   def: RuntimeDefinition,
   recurse: (schema: z.ZodType) => MockValue,
 ) => {
-  // SAFETY: the record key's def is read for its `type`/`entries` only;
-  // both are optional here and checked before use.
   const keyDef = def.keyType?._zod.def as EnumKeyDef | undefined;
   if (keyDef?.type === "enum" && keyDef.entries) {
     return Object.fromEntries(

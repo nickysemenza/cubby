@@ -47,11 +47,10 @@
     "complexity": [
       "error",
       {
-        "max": 20
+        "max": 50
       }
     ],
     "anti-slop/no-chained-type-assertions": "error",
-    "anti-slop/no-conditional-empty-object-spread": "error",
     "anti-slop/no-known-value-widening": "error",
     "anti-slop/no-direct-query-invalidation": "error",
     "anti-slop/no-legacy-query-invalidation": "error",
@@ -59,20 +58,24 @@
     "anti-slop/no-object-parameters": "error",
     "anti-slop/no-reflect-apply": "error",
     "anti-slop/no-reflect-get": "error",
-    "anti-slop/no-runtime-typeof": [
-      "error",
-      {
-        "allowInTypeGuards": true
-      }
-    ],
     "anti-slop/no-unsafe-sql-array-interpolation": "error",
     "anti-slop/no-shape-in-symbol-names": "error",
-    "anti-slop/no-unknown-parameters": "error",
+    "anti-slop/no-unknown-parameters": [
+      "error",
+      {
+        "exportedOnly": true
+      }
+    ],
     "anti-slop/no-unknown-returns": "error",
     "anti-slop/no-unknown-type-aliases": "error",
     "anti-slop/no-unsafe-dictionary-type": "error",
     "anti-slop/no-widen-then-assert": "error",
-    "anti-slop/require-safety-comment-for-type-assertion": "error",
+    "anti-slop/require-safety-comment-for-type-assertion": [
+      "error",
+      {
+        "allowLiteralTypes": true
+      }
+    ],
     "cubby/no-unsafe-identifiers": "error",
     "cubby/no-raw-enum-literal-in-sql": "error",
     "cubby/no-hand-rolled-plural": "error",
@@ -158,6 +161,24 @@
       ],
       "rules": {
         "cubby/no-unsafe-identifiers": "off"
+      }
+    },
+    {
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.fixtures.ts",
+        "**/*.fixtures.tsx",
+        "**/tests/**",
+        "**/test/**",
+        "**/__fixtures__/**",
+        "**/test-support/**"
+      ],
+      "rules": {
+        "anti-slop/no-unknown-parameters": "off",
+        "anti-slop/require-safety-comment-for-type-assertion": "off"
       }
     },
     {

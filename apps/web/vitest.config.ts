@@ -9,12 +9,14 @@ import wasm from "vite-plugin-wasm";
 import { defineConfig, type TestProjectConfiguration } from "vitest/config";
 import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
 
-// Generated output is never committed; bring it current before any module
-// graph (or TanStack's route scan) reads it. A no-op when inputs are unchanged.
-execFileSync(process.execPath, ["../../scripts/generator/ensure.ts"], {
-  cwd: import.meta.dirname,
-  stdio: "inherit",
-});
+// Generated output and the @cubby/recipebridge WASM are never committed; bring
+// them current before any module graph (or TanStack's route scan) reads them.
+// Each is an Nx cache hit when its inputs are unchanged.
+for (const ensure of ["ensure-wasm.ts", "generator/ensure.ts"])
+  execFileSync(process.execPath, [`../../scripts/${ensure}`], {
+    cwd: import.meta.dirname,
+    stdio: "inherit",
+  });
 
 const gitCommit = execSync("git rev-parse --short HEAD", {
   encoding: "utf-8",

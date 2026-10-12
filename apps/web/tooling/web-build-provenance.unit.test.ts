@@ -201,10 +201,12 @@ describe("web build freshness", () => {
       matchesSource: false,
     });
   });
-  it("treats docs the in-app docs route bundles as source", () => {
+  it("treats only the guide the in-app docs route bundles as source", () => {
     const { root, put } = fixture();
     writeWebBuildProvenance(root);
-    put("docs/synthetic.md");
+    put("docs/agents/synthetic.md");
+    expect(readWebBuildProvenance(root).sourceFresh).toBe(true);
+    put("docs/guide/synthetic.md");
     expect(readWebBuildProvenance(root).details.reason).toBe("source-changed");
   });
   // The purchase agent's workflows ship inside the web Worker (#1581); a

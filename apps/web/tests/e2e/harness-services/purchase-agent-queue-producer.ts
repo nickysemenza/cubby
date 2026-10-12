@@ -1,4 +1,3 @@
-/* eslint-disable anti-slop/no-unknown-parameters -- This workerd-only transport shim receives Cloudflare Queue wire payloads. */
 import type { DurableObjectNamespace } from "@cloudflare/workers-types";
 import { z } from "zod";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";

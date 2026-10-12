@@ -27,7 +27,6 @@ describe("Run detail slots", () => {
     Object.entries(slots)
       .filter(
         ([, slot]) =>
-          // SAFETY: the erased map takes `never`; this is a Run record.
           slot.applies?.(fromPartial<RunOut>({ purpose, status }) as never) !==
           false,
       )

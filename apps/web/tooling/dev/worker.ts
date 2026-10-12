@@ -242,12 +242,12 @@ export default {
               metrics: () => env.PURCHASE_AGENT_QUEUE.metrics(),
               send: async () => {
                 throw new Error(
-                  "Purchase agent unavailable in offline development; use pnpm dev:integrations",
+                  "Purchase agent unavailable in offline development; use pnpm dev integrations",
                 );
               },
               sendBatch: async () => {
                 throw new Error(
-                  "Purchase agent unavailable in offline development; use pnpm dev:integrations",
+                  "Purchase agent unavailable in offline development; use pnpm dev integrations",
                 );
               },
             },

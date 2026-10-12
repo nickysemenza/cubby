@@ -336,8 +336,8 @@ export function useEntityListSource<E extends EntitySearchEntity>(
         <EntityEditDialog
           open
           onOpenChange={setIsDialogOpen}
-          // SAFETY: gated on `dialogCreateEntities`, the three editable
-          // entities whose configs declare `createNew: "dialog"`.
+          // Gated on `dialogCreateEntities`, the three editable entities
+          // whose configs declare `createNew: "dialog"`.
           request={captureRequest(entity as "ingredient", {
             name: pendingName,
           })}

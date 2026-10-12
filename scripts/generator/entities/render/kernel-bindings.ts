@@ -24,7 +24,7 @@ const adapterName = (entity: CompiledEntity): string =>
  * The check lives in its own file that nothing imports: several ports are
  * client modules, and type-importing them from the server bindings tied every
  * server module to the route tree, so any edit re-checked most of the program
- * (docs/local-check-performance.md#typechecking).
+ * (docs/reports/local-check-performance.md#typechecking).
  */
 export const renderKernelBindingsArtifacts = (
   entities: readonly CompiledEntity[],

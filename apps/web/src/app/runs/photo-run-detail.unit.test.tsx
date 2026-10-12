@@ -316,9 +316,6 @@ describe("PhotoImportRunView", () => {
     expect(await screen.findByText("Progress")).toBeInTheDocument();
 
     // Progress tally derived from `run.targets`, not from the review fetch.
-    // SAFETY: the "Progress" heading always renders inside its own `Card`
-    // (see `PhotoRunProgress`), so the nearest `[data-slot="card"]` ancestor
-    // is never null.
     const progress = screen
       .getByText("Progress")
       .closest('[data-slot="card"]') as HTMLElement;

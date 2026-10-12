@@ -19,6 +19,7 @@ import {
 } from "~/entity/field-resolution";
 import { RecordFieldSuggestion } from "~/features/ai/record-suggestions";
 import { cn } from "~/lib/utils";
+import { StackedCellContext } from "~/ui/common/stacked-value";
 import { Button } from "~/ui/primitives/button";
 import { TableCell, TableRow } from "~/ui/primitives/table";
 
@@ -193,13 +194,15 @@ function DesktopDataCell<TItem extends RowData>({
     >
       <div className={ROW_DENSITY.cellContentClass}>
         <div className="min-w-0">
-          <RecordFieldSuggestion
-            record={cell.row.original}
-            field={cell.column.id}
-            surface="cell"
-          >
-            {explained}
-          </RecordFieldSuggestion>
+          <StackedCellContext value>
+            <RecordFieldSuggestion
+              record={cell.row.original}
+              field={cell.column.id}
+              surface="cell"
+            >
+              {explained}
+            </RecordFieldSuggestion>
+          </StackedCellContext>
         </div>
       </div>
     </TableCell>

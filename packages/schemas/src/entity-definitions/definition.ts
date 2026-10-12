@@ -2404,7 +2404,6 @@ export type EntityDeclarationMetadata = z.output<
 const pathAt = (context: string, path: readonly PropertyKey[]) =>
   path.length === 0 ? context : `${context}.${path.join(".")}`;
 
-/* oxlint-disable anti-slop/no-runtime-typeof, anti-slop/no-unknown-parameters -- This parser-boundary walker only distinguishes omitted input from an explicit invalid value so Zod errors retain their declaration path. */
 const valueIsMissingAt = (value: unknown, path: readonly PropertyKey[]) => {
   let current = value;
   for (const key of path) {
@@ -2415,7 +2414,6 @@ const valueIsMissingAt = (value: unknown, path: readonly PropertyKey[]) => {
   }
   return current === undefined;
 };
-/* oxlint-enable anti-slop/no-runtime-typeof, anti-slop/no-unknown-parameters */
 
 /**
  * Preserve declaration-local diagnostic paths while centralizing strict shape

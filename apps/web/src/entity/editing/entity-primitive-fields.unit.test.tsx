@@ -26,8 +26,6 @@ import { entitySelectOptionsFor } from "./select-options";
 /** A minimal synthetic field — `buildFieldGroups` only reads `key`, so a
  * grouping test doesn't need a real manifest field's full generated shape. */
 function syntheticField(key: string): PrimitiveFieldModel {
-  // SAFETY: `buildFieldGroups` only reads `key`; a synthetic key can't be a
-  // member of the generated literal key union, so widen past it.
   return { key } as PrimitiveFieldModel;
 }
 
@@ -715,7 +713,6 @@ describe("edit intent reference pickers", () => {
       ([entity, intents]) =>
         Object.entries(intents.fields).flatMap(([intent, keys]) =>
           keys.flatMap((key: string) => {
-            // SAFETY: edit intents are generated only for manifest entities.
             const model = entityFieldModels[entity as Entity] as {
               fields: readonly PrimitiveFieldModel[];
             };

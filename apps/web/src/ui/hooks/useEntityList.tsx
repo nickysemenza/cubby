@@ -320,7 +320,6 @@ export function useEntityList<
   options: TreeEntityListOptions<TData, TFilters, TRow>,
 ): UseEntityListReturn<TData, TFilters, TRow>;
 
-// oxlint-disable-next-line complexity -- The shared list owner also guards deferred mappings and subject actions through the existing lifecycle.
 export function useEntityList<
   TData extends BaseListRow,
   TFilters extends object,

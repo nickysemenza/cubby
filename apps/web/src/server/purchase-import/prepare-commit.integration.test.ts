@@ -256,14 +256,17 @@ describe("caller-driven purchase import", () => {
       checksum: shipment.rawChecksum,
       disposition: {
         kind: "linked" as const,
-        purchaseId,
+        purchaseIds: [purchaseId],
         event: "shipped" as const,
       },
     };
     const first = await resolveMail(ctx.db, input, ctx.actor);
     const replay = await resolveMail(ctx.db, input, ctx.actor);
     expect(replay).toEqual(first);
-    expect(first).toMatchObject({ status: "completed", purchaseId });
+    expect(first).toMatchObject({
+      status: "completed",
+      purchaseIds: [purchaseId],
+    });
 
     const events = await getDb(ctx.db)
       .select({ event: orderMailEvent.event })
@@ -311,7 +314,7 @@ describe("caller-driven purchase import", () => {
       },
       ctx.actor,
     );
-    expect(resolved).toMatchObject({ status: "completed", purchaseId: null });
+    expect(resolved).toMatchObject({ status: "completed", purchaseIds: [] });
     // Content disposal preserves the original's identity and checksum.
     const [cleared] = await getDb(ctx.db)
       .select()
@@ -826,13 +829,13 @@ describe("caller-driven purchase import writes", () => {
           checksum: mail.rawChecksum,
           disposition: {
             kind: "linked",
-            purchaseId: existing.shortcode,
+            purchaseIds: [existing.shortcode],
             event: "refunded",
           },
         },
         ctx.actor,
       ),
-    ).resolves.toMatchObject({ purchaseId: existing.shortcode });
+    ).resolves.toMatchObject({ purchaseIds: [existing.shortcode] });
     expect(
       (await getDb(ctx.db).select().from(expense)).map(({ cost }) => cost),
     ).toEqual([10]);
@@ -872,7 +875,7 @@ describe("caller-driven purchase import writes", () => {
           checksum: mail.rawChecksum,
           disposition: {
             kind: "linked",
-            purchaseId: existing.shortcode,
+            purchaseIds: [existing.shortcode],
             event: "refunded",
           },
         },

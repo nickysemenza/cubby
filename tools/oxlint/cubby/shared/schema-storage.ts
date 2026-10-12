@@ -86,7 +86,6 @@ export function softDeleteTableCatalog(
     const [name, columns] = init.arguments;
     if (
       name?.type !== "Literal" ||
-      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Oxc Literal is a primitive union; pgTable requires a string literal.
       typeof name.value !== "string" ||
       !columns ||
       columns.type === "SpreadElement"

@@ -17,8 +17,6 @@ import {
 import { controlRendererCoverage } from "./editing/entity-primitive-fields";
 import { listRendererCoverage } from "./list-field-renderers";
 
-// SAFETY: `entitySummary` is the closed per-entity roster; its keys are
-// entity keys.
 const entities = Object.keys(entitySummary) as Array<
   keyof typeof entitySummary
 >;

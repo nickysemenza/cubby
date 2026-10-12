@@ -745,7 +745,7 @@ const senderAddress = (sender: string | null): string | null => {
 };
 
 /**
- * An imported order's Vendor (GLOSSARY "Sender proof", "Vendor alias"): an
+ * An imported order's Vendor (terminology "Sender proof", "Vendor alias"): an
  * Email from an exact sender address one Vendor records proves that Vendor,
  * and the merchant name it shows becomes an alias with the Email as its
  * Source. Otherwise the exact name or alias, else a new Vendor. A shared

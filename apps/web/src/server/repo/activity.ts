@@ -456,7 +456,6 @@ const failedAttempt = failedAttemptFor(sql`state`);
 export const activityAttentionStatePredicate = (state: SQL): SQL =>
   sql`(${waitingAttemptFor(state)} OR ${reviewAttemptFor(state)} OR ${failedAttemptFor(state)})`;
 
-// oxlint-disable-next-line complexity -- independent optional scopes share one predicate across flat, grouped and attention reads.
 function listPredicate(input: ActivityListInput): SQL {
   const clauses: SQL[] = [sql`true`];
   if (input.recordType) clauses.push(sql`"recordType" = ${input.recordType}`);

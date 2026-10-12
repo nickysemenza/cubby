@@ -16,11 +16,11 @@ prepare a bounded batch when each record is independently settled.
    list.
 3. Choose one record or a small bounded batch, then load the skill that owns
    the work:
-   - [Product enrichment](../.claude/skills/product-enrichment/SKILL.md) for
+   - [Product enrichment](../../.claude/skills/product-enrichment/SKILL.md) for
      verified Product identity facts, identifiers, images and Sources.
-   - [Purchase import](../.claude/skills/purchase-import/SKILL.md) for order,
+   - [Purchase import](../../.claude/skills/purchase-import/SKILL.md) for order,
      receipt, Email and settlement evidence.
-   - [Photo inventory import](../.claude/skills/photo-inventory-import/SKILL.md)
+   - [Photo inventory import](../../.claude/skills/photo-inventory-import/SKILL.md)
      for belongings and wardrobe photos.
 
 Use the member's browser session when the work depends on a logged-in retailer
@@ -90,7 +90,7 @@ partial research distinct from verified completion. For photo work, also report
 matched versus created Products, skipped images and reasons, and unresolved
 ownership or location.
 
-This workflow follows [ADR 0011](adr/0011-email-as-a-first-class-entity.md)
-and [ADR 0012](adr/0012-import-convergence-through-burn-down.md). Those ADRs
+This workflow follows [ADR 0011](../adr/0011-email-as-a-first-class-entity.md)
+and [ADR 0012](../adr/0012-import-convergence-through-burn-down.md). Those ADRs
 describe accepted direction; use only actions available in the connected
 client, since parts of the UI workflow may still be in progress.

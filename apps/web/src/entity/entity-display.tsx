@@ -211,7 +211,6 @@ function listItems(value: ScalarDisplayValue): readonly unknown[] | null {
  * the value's runtime kind doesn't match the declared formatter (an "empty"
  * value always short-circuits, regardless of format).
  */
-// oxlint-disable-next-line eslint/complexity -- One exhaustive dispatcher over the declared display formats.
 function renderFormattedScalar(
   format: DisplayField["display"]["format"],
   value: ScalarDisplayValue,
@@ -495,7 +494,11 @@ function referenceBrowse<TRecord extends object>(
   ) : null;
 }
 
-function referenceLink(entity: string, item: ReferenceItem): ReactNode {
+function referenceLink(
+  entity: string,
+  item: ReferenceItem,
+  compact = false,
+): ReactNode {
   const routed = referenceMediaEntity(entity);
   if (routed === null)
     return <span className="font-mono text-xs">{item.name ?? item.id}</span>;
@@ -506,6 +509,7 @@ function referenceLink(entity: string, item: ReferenceItem): ReactNode {
       id={item.id}
       name={item.name}
       emoji={item.emoji}
+      compact={compact}
     />
   );
 }
@@ -651,7 +655,7 @@ export function renderCompactFieldValue<TRecord extends object>(
         <ReferencePreview
           items={reference.items}
           limit={field.display.referencePreviewLimit}
-          renderItem={(item) => referenceLink(reference.entity, item)}
+          renderItem={(item) => referenceLink(reference.entity, item, true)}
           singleLine
           trailing={
             reference.incomplete ? (

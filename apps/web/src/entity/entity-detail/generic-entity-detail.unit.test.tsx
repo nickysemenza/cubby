@@ -79,8 +79,7 @@ function recordFor<E extends GenericDetailEntity>(
 ): DetailRecordOf<E> {
   const seed = 7;
   const overrides = Object.hasOwn(fixtureOverrides, entity)
-    ? // SAFETY: `hasOwn` proves `entity` is one of the override map's keys.
-      fixtureOverrides[entity as keyof typeof fixtureOverrides]
+    ? fixtureOverrides[entity as keyof typeof fixtureOverrides]
     : NO_ATTACHMENTS;
   const schema =
     entity === "image"
@@ -89,11 +88,7 @@ function recordFor<E extends GenericDetailEntity>(
         ? cookbookSummary
         : entity === "run"
           ? runOut
-          : // SAFETY: every other generic detail entity is a kernel detail entity.
-            getEntityDetailOutputSchema(entity as never);
-  // SAFETY: `schema` is the detail output schema of exactly `entity`, and the
-  // overrides only pin fields that schema declares; `mock` re-parses the
-  // result with that same schema before returning it.
+          : getEntityDetailOutputSchema(entity as never);
   return mock(schema, {
     seed,
     overrides: overrides as never,

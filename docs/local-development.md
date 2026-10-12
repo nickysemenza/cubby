@@ -16,14 +16,14 @@ its own volume; switching does not transfer existing local data. Then run:
 
 ```sh
 pnpm dev
-pnpm dev:status -- --json
-pnpm dev:doctor -- --json
+pnpm dev status --json
+pnpm dev doctor --json
 ```
 
 The startup output names the app, synthetic login, local resource explorer,
 inspector, database, and discovery file. `.cubby-dev/session.json` records the
 selected origin, database, profile, process identity, readiness, startup phase
-timings, and inspection URLs. Use that file or `dev:status` to discover the
+timings, and inspection URLs. Use that file or `pnpm dev status` to discover the
 running origin; ports can differ between checkouts. `/__dev/health` reports
 runtime identity, while `/__dev/ready` checks database connectivity, committed
 migrations, the completed core fixture marker, and that the synthetic USDA
@@ -55,9 +55,9 @@ credential through `localSecret` (`apps/web/tooling/local-secret.ts`): shell,
 then this checkout's `apps/web/.env`, then the primary checkout's. Use it
 instead of grepping another checkout's `.env`.
 
-Ctrl-C stops the owned runtime and keeps persistent data. `pnpm dev:down` stops
-that checkout's supervisor. `pnpm dev:reset` stops it and resets its database and
-Worker state; start `pnpm dev` again to recreate the corpus (`pnpm dev:seed`
+Ctrl-C stops the owned runtime and keeps persistent data. `pnpm dev down` stops
+that checkout's supervisor. `pnpm dev reset` stops it and resets its database and
+Worker state; start `pnpm dev` again to recreate the corpus (`pnpm dev seed`
 reseeds without resetting). Low-level `db:dev:up`, `migrate`, and `down` manage
 the shared PostgreSQL service.
 
@@ -85,12 +85,12 @@ projects, tasks, purchases, expenses, and a photo-inventory run. Optional packs
 add small synthetic graphs to the running session:
 
 ```sh
-pnpm dev:seed recipes
-pnpm dev:seed images
-pnpm dev:seed purchase
-pnpm dev:seed garden
-pnpm dev:seed calendar
-pnpm dev:seed problems
+pnpm dev seed recipes
+pnpm dev seed images
+pnpm dev seed purchase
+pnpm dev seed garden
+pnpm dev seed calendar
+pnpm dev seed problems
 ```
 
 The Problems pack adds incomplete entities, a failed photo-processing Run/job,
@@ -100,7 +100,7 @@ image pack uploads and finalizes real
 synthetic bytes through the local storage API. A development-only PostgreSQL
 table, `cubby_dev_fixture`, records the pack version and `seeding`, `complete`,
 or `failed` state. A completed current pack skips reseeding. Partial or outdated
-packs require `dev:reset`, so a failed seed cannot silently duplicate its graph
+packs require `pnpm dev reset`, so a failed seed cannot silently duplicate its graph
 or report ready based on an unrelated Product count. This marker table is
 created by development tooling and has no production migration.
 
@@ -114,7 +114,7 @@ Purchase-agent starts fail immediately with `dispatch_failed` before an offline
 producer can enqueue work. Unexpected queue deliveries are retried and throw
 rather than acknowledged as successful work. Telemetry is off unless `CUBBY_DEV_TELEMETRY=true` is explicit.
 
-For billed AI/provider work, use `pnpm dev:integrations`. AI requests use the
+For billed AI/provider work, use `pnpm dev integrations`. AI requests use the
 shared `cubby` gateway with `environment=development`; the Vectorize binding
 remains isolated: `CUBBY_DEV_VECTORIZE_INDEX` must start with `cubby-dev-<id>`.
 Set `CUBBY_DEV_AI_GATEWAY_API_KEY` explicitly when REST authentication requires
@@ -145,12 +145,12 @@ Validate those transformations against the deployed boundary when relevant.
 
 The printed resource explorer exposes local bindings; the inspector URL exposes
 the Worker debugging target. To inspect PostgreSQL directly, use the connection
-shown by `dev:status`. `pnpm --filter @cubby/web preview:cf` builds and runs the
+shown by `pnpm dev status`. `pnpm --filter @cubby/web preview:cf` builds and runs the
 same offline profile through Wrangler with its persistent resources.
 
 ## Native iteration and validation
 
-Start the web session, then run `pnpm dev:sim -- --sim <name>` to build, install,
+Start the web session, then run `pnpm dev sim --sim <name>` to build, install,
 and launch the simulator app against the session's discovered origin. The
 launcher sets a development server marker and persists that server choice.
 Manual Settings exploration uses the same synthetic account and database.
@@ -207,14 +207,13 @@ focused file or the last failed selection:
 
 ```sh
 pnpm --dir apps/web build:cf
-CUBBY_TEST_SERVICES=warm pnpm --dir apps/web test:e2e tests/e2e/http-api.spec.ts --workers=2
-CUBBY_TEST_SERVICES=warm pnpm --dir apps/web test:e2e --last-failed
-CUBBY_TEST_SERVICES=warm pnpm --dir apps/web test:e2e:affected
+pnpm --dir apps/web test:e2e tests/e2e/http-api.spec.ts --workers=2
+pnpm --dir apps/web test:e2e --last-failed
+pnpm --dir apps/web test:e2e:affected
 pnpm --dir apps/web test:e2e:watch
 ```
 
-`warm` services are a macOS option; see [test tiers](agents/validation-tests.md)
-for external services on Linux. `test:e2e:affected` reuses the current
+`test:e2e:affected` reuses the current
 fingerprint-checked web build or rebuilds it, then runs Playwright's
 `--only-changed=origin/main`, which selects spec
 files that changed or import a changed file. It is a local heuristic: specs
@@ -228,72 +227,4 @@ iteration. HMR and watch results serve different validation boundaries.
 Read the failed scenario and artifact summary before rerunning. Use
 `--last-failed` after a relevant fix; do not repeat an unchanged failure merely
 to retrieve its diagnostics. Browser execution remains uncached even when a
-matching build and warm services are reused.
-
-## Measured feedback
-
-Local acceptance samples on 2026-09-29 (dirty source, macOS, warm PostgreSQL
-service) measured a fresh development session at 26.2 seconds, a later warm
-session at 23.5 seconds, and a browser HMR update at 250 ms. The focused built
-Worker HTTP/API run passed four scenarios with two browser workers in 15.3
-seconds; warm service discovery and database-template reuse took 46 ms and
-13 ms respectively.
-
-The WASM cache key previously changed with inherited logging settings. After
-normalizing the build environment and excluding `RUST_LOG`, the warm freshness
-phase reused its matching artifact in 740 ms instead of restoring it through
-Nx in the earlier 6.4-second sample. Compiler flags still invalidate it.
-Runtime startup and initial application loading remain the largest development
-phases (about 8 and 10 seconds in the warm sample).
-
-Native acceptance verified real login, search, editing, image rendering, and a
-bare relaunch retaining the selected local server. Its cold sample took 22.3
-seconds for FFI and 221.4 seconds for Xcode; authenticated requests after bare
-relaunch took 96–120 ms. These samples preserve useful baselines, but do not
-establish a controlled overall before/after speedup. Concurrent host workloads
-produced substantially slower startup samples. Physical-device networking,
-live provider quality, CDN transformations, and production signature enforcement
-need separate validation.
-
-`apps/apple/Package.resolved` owns the app graph (including Nuke and Sentry);
-`CubbyKit/Package.resolved` owns only the Swift package graph. XcodeGen links the
-app lockfile into the generated workspace, so app resolution leaves the Kit
-file unchanged and deliberate app pin changes appear in Git. CI dependency
-caches include both lockfiles. Local simulator runs build through the cached
-`apple:simulator-build` Nx target, which restores the same app as CI when its
-inputs and Xcode version match; run bundles report build time separately. The composed Mac import
-lane retains its Kit-pin verification wrapper as a defensive acceptance check.
-
-Mac fixture apps retain their stable Developer ID identity. The presentation
-accessibility helper also runs from one stable signed cache path; archived
-copies are evidence, not executables for driving the app. Its source, compiler
-and signed bytes determine reuse. Initial Accessibility consent is still a
-host setting, but new run directories no longer create a new helper identity.
-`pnpm apple mac --replace-signing-identity` explicitly transitions an installed
-TestFlight app to the development signing identity. Expect possible one-time
-privacy reapproval. It retains team/bundle verification and app data, but skips
-the old privacy requirement check for this invocation. Use plain `pnpm apple mac`
-for subsequent installs to preserve the development identity.
-
-`pnpm apple mac` builds and signs incrementally, checks the app's marketing
-version against `APPLE_CLIENT_COMPATIBILITY_VERSION`, installs it at
-`/Applications/Cubby.app`, and relaunches that installed copy without LLDB.
-It verifies both the built app and any existing installed app against the
-project team and bundle ID, and checks the candidate against the installed
-app's designated privacy requirement. The copied candidate is verified before stopping
-Cubby or replacing the installed app. Stop only processes launched from the
-installed executable, and await their exit before renaming its bundle: signalling
-termination alone can let a final capture resolve the app at an installer backup
-path. A process exiting before the termination signal counts as successful shutdown;
-other signal errors remain visible. A shutdown timeout refuses replacement
-without moving the installed bundle.
-A failed replacement restores the old
-bundle. If the previous bundle is root-owned and cannot be removed, its
-sibling backup path is reported after successful relaunch for manual cleanup.
-App data is retained; privacy grants persist while the signing requirement stays compatible.
-This preserves development rebuilds, not a TestFlight-to-development signing
-transition. Notarization does not grant screen capture permission or suppress
-macOS permission requests. A retained backup must not be launched for household
-automation; the running executable should be `/Applications/Cubby.app/Contents/MacOS/Cubby`.
-The command requires write
-access to `/Applications`; it never invokes sudo or resets permissions.
+matching build and the shared services are reused.

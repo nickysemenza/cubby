@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 
 import { formatInstant } from "~/lib/date-format";
+import { StackedValue, useStackedCell } from "~/ui/common/stacked-value";
 import {
   Tooltip,
   TooltipContent,
@@ -10,6 +11,11 @@ import {
 
 type HoverableTimestampProps = {
   timestamp: string | Date;
+  /**
+   * Table-cell form: the household day over its compact age ("3mo ago").
+   * Defaults on inside a desktop table cell.
+   */
+  stacked?: boolean;
 };
 
 /** Compact relative time: `now`, `5m`, `3h`, `2d`, `4w`, `6mo`, `1y`. */
@@ -29,21 +35,42 @@ export function formatCompactRelative(date: Date): string {
   return `${Math.round(days / 365)}y`;
 }
 
-export function HoverableTimestamp({ timestamp }: HoverableTimestampProps) {
+/** "Oct 11" this year, "May 14, 2025" otherwise, in the household zone. */
+function instantDay(date: Date): string {
+  const year = (value: Date) => formatInstant(value, "monthYear").slice(-4);
+  const thisYear = year(date) === year(new Date());
+  return formatInstant(date, thisYear ? "monthDay" : "dateShort");
+}
+
+export function HoverableTimestamp({
+  timestamp,
+  stacked,
+}: HoverableTimestampProps) {
   const tooltipId = useId();
   const [open, setOpen] = useState(false);
+  const stack = useStackedCell(stacked);
   const date = new Date(timestamp);
   const formattedDate = formatInstant(date, "isoDateTimeSeconds");
   const relativeTime = formatCompactRelative(date);
-
   return (
     <TooltipProvider>
       <Tooltip open={open} onOpenChange={setOpen}>
         <TooltipTrigger
           aria-describedby={open ? tooltipId : undefined}
-          className="inline-flex min-h-11 min-w-11 cursor-default items-center justify-center md:min-h-0 md:min-w-0"
+          className={
+            stack
+              ? "block max-w-full min-w-0 cursor-default text-left"
+              : "inline-flex min-h-11 min-w-11 cursor-default items-center justify-center md:min-h-0 md:min-w-0"
+          }
         >
-          <span className="font-mono text-2xs">{relativeTime}</span>
+          {stack ? (
+            <StackedValue
+              primary={instantDay(date)}
+              secondary={relativeTime === "now" ? "now" : `${relativeTime} ago`}
+            />
+          ) : (
+            <span className="font-mono text-2xs">{relativeTime}</span>
+          )}
         </TooltipTrigger>
         <TooltipContent id={tooltipId} role="tooltip">
           <p>{formattedDate}</p>

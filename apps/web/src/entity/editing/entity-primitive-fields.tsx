@@ -765,7 +765,7 @@ function specializedRendererFor(
  * callers outside this module need before they can pass a `PrimitiveFieldModel`
  * to it. Throws rather than returning `undefined` so the field's presence is a
  * load-time invariant, not a per-render null check: the generator would have
- * already failed (`pnpm generate:check`) had the manifest dropped this key. */
+ * already failed (`pnpm generate`) had the manifest dropped this key. */
 export function requiredFieldModel(
   entity: Entity,
   key: string,

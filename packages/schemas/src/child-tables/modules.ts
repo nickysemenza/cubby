@@ -1,5 +1,6 @@
 import { emailObservationChildren } from "./email-observations.js";
 import { emailAccuracyChildren } from "./email-accuracy.js";
+import { emailFinancialAssociationChildren } from "./email-financial-associations.js";
 import { importObservationChildren } from "./import-observations.js";
 import { imageProcessingChildren } from "./image-processing.js";
 import { AUDIT_CHANNELS } from "../context.js";
@@ -16,9 +17,10 @@ export const modulesChildren = [
   ...importObservationChildren,
   ...emailObservationChildren,
   ...emailAccuracyChildren,
+  ...emailFinancialAssociationChildren,
   ...imageProcessingChildren,
   /**
-   * Where a fact about any entity was seen (GLOSSARY "Source"), written in the
+   * Where a fact about any entity was seen (terminology "Source"), written in the
    * same transaction as the mutation it supports. History: a merge moves the
    * rows to the survivor, a delete leaves them on the tombstone. `runId` and
    * `deviceId` deliberately carry no FK, like `oauthClientId`: the recorder

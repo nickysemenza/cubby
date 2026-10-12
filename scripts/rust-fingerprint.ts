@@ -144,7 +144,12 @@ export const rustFingerprint = (
 // Runs one cached Nx target of the root `cubby-checks` project. The daemon is
 // off so the run is self-contained; without node_modules the nx entry cannot
 // resolve, which is the "run pnpm install first" case.
-export const runNxTarget = (target: string) => {
+export const runNxTarget = (target: string, args: string[] = []) => {
+  // Inside an Nx task the enclosing graph owns this dependency (each target
+  // that runs tests or builds declares `wasm` and `generate` in dependsOn).
+  // Re-entering Nx from a task is refused as a recursive invocation, e.g. when
+  // knip loads vitest.config.ts during the `knip` target.
+  if (process.env.NX_TASK_TARGET_PROJECT !== undefined) return;
   let nx: string;
   try {
     nx = fileURLToPath(import.meta.resolve("nx/bin/nx.js"));
@@ -153,9 +158,13 @@ export const runNxTarget = (target: string) => {
       `cannot resolve nx; run \`pnpm install --frozen-lockfile\` before ${target}`,
     );
   }
-  execFileSync(process.execPath, [nx, "run", `cubby-checks:${target}`], {
-    cwd: ROOT,
-    stdio: "inherit",
-    env: { ...process.env, NX_DAEMON: "false" },
-  });
+  execFileSync(
+    process.execPath,
+    [nx, "run", `cubby-checks:${target}`, ...args],
+    {
+      cwd: ROOT,
+      stdio: "inherit",
+      env: { ...process.env, NX_DAEMON: "false" },
+    },
+  );
 };

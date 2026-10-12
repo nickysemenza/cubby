@@ -122,7 +122,6 @@ export function collectEntityOverrides(
 ): CompiledEntity["overrides"] {
   const overrides: { path: string; value: string }[] = [];
   // A declaration includes Zod schemas, so only plain JSON metadata is traversed.
-  /* oxlint-disable anti-slop/no-runtime-typeof -- narrow the declaration value union before traversing JSON metadata */
   const visit = (value: DeclarationValue, path: string) => {
     if (Array.isArray(value)) {
       for (const [index, item] of value.entries()) {
@@ -155,7 +154,6 @@ export function collectEntityOverrides(
       }
     }
   };
-  /* oxlint-enable anti-slop/no-runtime-typeof */
   visit(raw, "");
   return overrides;
 }
@@ -356,7 +354,6 @@ const compileFieldProvenance = (
  * the list-grouping contract; see `entity-definitions/definition.ts`
  * and `docs/entities.md`).
  */
-// oxlint-disable-next-line eslint/complexity -- Sort compilation enforces cross-property roster invariants in one pass.
 const compileSort = (
   sortValue: EntityFieldModelMetadata["sort"],
   fieldKeys: readonly string[],
@@ -466,7 +463,6 @@ const compileFieldModel = (
     };
   }
   const model = value;
-  // oxlint-disable-next-line eslint/complexity -- This pass validates and compiles interdependent field properties together.
   const fields = model.fields.map((field, index): EntityField => {
     const fieldContext = `${context}.fields[${index}]`;
     const key = field.key;
@@ -528,7 +524,6 @@ const compileFieldModel = (
                 field.description ??
                 `Derived from ${provenance.sources.map((source) => source.label ?? source.relation ?? source.entity).join(" and ")}.`,
               resolver: "field",
-              // oxlint-disable-next-line anti-slop/no-conditional-empty-object-spread -- the optional explanation key is absent, not undefined, when no path is declared.
               ...(field.display.readPath
                 ? { readPath: field.display.readPath }
                 : {}),
@@ -576,7 +571,6 @@ const compileFieldModel = (
   validateFieldSuggestions(fields, context);
   const isStored = (key: string): boolean =>
     model.storage.some(
-      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Parsed declaration storage deliberately allows a bare key or a specialized descriptor.
       (entry) => (typeof entry === "string" ? entry : entry.key) === key,
     );
   for (const field of fields) {
@@ -1284,7 +1278,6 @@ const compileMcpActions = (
 };
 
 const opaqueRelationProvenance = (
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- relation graph provenance is intentionally compiler-semantic opaque data.
   value: unknown,
   context: string,
 ): DeclarationObject => objectValue(value, context);
@@ -1623,7 +1616,6 @@ type SavedView = CompiledEntity["inspector"]["list"]["savedViews"][number];
  * expands to nothing would leave the view lit while selecting every row; the
  * layout and sort may only name columns the list actually has.
  */
-// oxlint-disable-next-line eslint/complexity -- One pass checks every filter kind's value shape plus layout and sort columns for a view.
 const validateSavedViews = (
   views: readonly SavedView[],
   fieldModel: EntityFieldModel,

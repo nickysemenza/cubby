@@ -1,0 +1,10 @@
+declare const raw: string;
+declare const value: { kind: string };
+
+export const status = raw as "open" | "closed";
+export const answer = 42 as 42;
+export const widened = value as unknown as { kind: "open" };
+export const narrowed = value as { kind: "open" };
+// SAFETY: the caller only passes open records.
+export const justified = value as { kind: "open" };
+export const fixed = raw as const;

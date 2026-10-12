@@ -100,9 +100,6 @@ for (const order of BROWSER_SOURCE_ORDERS) {
       page.getByText(harness.orderId, { exact: true }).first(),
     ).toBeVisible();
     if (!result.productCode) throw new Error("No reviewed Product identity");
-    await page
-      .getByRole("heading", { level: 2, name: "Work", exact: true })
-      .scrollIntoViewIfNeeded();
     const productLink = page
       .getByRole("link", { name: harness.productName, exact: true })
       .and(page.locator(`a[href="/products/${result.productCode}"]`))

@@ -154,7 +154,6 @@ const pathEdges = (
  */
 // The budgets, pagination, and two BFS sides must share one state machine so a
 // limit cannot be checked after advancing only part of a depth frontier.
-// eslint-disable-next-line complexity
 export async function searchEntityGraphPaths(
   start: EntityRef,
   destination: EntityRef,

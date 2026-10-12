@@ -68,7 +68,6 @@ export async function lockFindingSettlement(
 }
 
 // One locked snapshot covers source ownership, ledger and Product dependencies.
-// eslint-disable-next-line complexity
 export async function loadSourceReconciliationState(
   tx: DrizzleTransaction,
   fix: ReconciliationFix,

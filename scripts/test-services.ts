@@ -1,8 +1,19 @@
 import type { ChildProcess } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import path from "node:path";
+
+import { z } from "zod";
 
 import {
   containerAddress,
+  containerCli,
   findContainer,
   httpReady,
   listContainers,
@@ -11,6 +22,7 @@ import {
   tcpReady,
   waitFor,
 } from "./lib/apple-container.ts";
+import { holdLock, ownerIsAlive, worktreeRoot } from "./lib/harness-lock.ts";
 import { spawnToExit } from "./lib/run.ts";
 
 const postgresImage = "docker.io/pgvector/pgvector:pg17";
@@ -18,91 +30,328 @@ const postgresImage = "docker.io/pgvector/pgvector:pg17";
 const integresqlImage =
   "ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a";
 
-// Fixed names reused by `warm` mode so repeat runs find (and reuse) the same
-// containers instead of paying full startup + template-rebuild cost per run.
-export const WARM_POSTGRES_NAME = "cubby-test-pg";
-export const WARM_INTEGRESQL_NAME = "cubby-test-integresql";
+const postgresArgs = [
+  // Every worktree's runs share this one server.
+  "--cpus",
+  "6",
+  "--memory",
+  "4G",
+  "--env",
+  "POSTGRES_USER=postgres",
+  "--env",
+  "POSTGRES_PASSWORD=password",
+  "--env",
+  "POSTGRES_DB=cubby",
+  "--env",
+  "PGDATA=/cubby-testdata",
+  postgresImage,
+  "postgres",
+  "-c",
+  "fsync=off",
+  "-c",
+  "synchronous_commit=off",
+  "-c",
+  "full_page_writes=off",
+  "-c",
+  "shared_buffers=512MB",
+  "-c",
+  "max_connections=400",
+  // Production (Neon) has no JIT provider (`pg_jit_available()` is false),
+  // but this image ships LLVM. The data-quality status/coverage SQL costs
+  // far above `jit_above_cost`, so JIT compiled thousands of expressions:
+  // one `dataStatus: "complete"` FinancialTransaction list took ~25 s and
+  // >1.5 GB here, OOM-killing PostgreSQL and stalling other files' hooks.
+  "-c",
+  "jit=off",
+  "-c",
+  "log_destination=stderr",
+];
 
-interface Options {
-  env?: NodeJS.ProcessEnv;
-  platform?: NodeJS.Platform;
-  warm?: boolean;
+const integresqlArgs = (postgresHost: string) => [
+  "--cpus",
+  "1",
+  "--memory",
+  "256M",
+  "--env",
+  `PGHOST=${postgresHost}`,
+  "--env",
+  "PGUSER=postgres",
+  "--env",
+  "PGPASSWORD=password",
+  "--env",
+  "INTEGRESQL_TEST_INITIAL_POOL_SIZE=8",
+  "--env",
+  "INTEGRESQL_TEST_MAX_POOL_SIZE=16",
+  "--env",
+  "INTEGRESQL_POOL_MAX_PARALLEL_TASKS=4",
+  integresqlImage,
+];
+
+/**
+ * The shared pair is named for its configuration, so a checkout on another
+ * revision of this file starts its own pair instead of reusing or recreating
+ * one that live runs depend on.
+ */
+const configuration = createHash("sha256")
+  .update(JSON.stringify([postgresArgs, integresqlArgs("")]))
+  .digest("hex")
+  .slice(0, 8);
+const pairName = (config: string, service: "postgres" | "integresql") =>
+  `cubby-test-${config}-${service}`;
+const POSTGRES = pairName(configuration, "postgres");
+const INTEGRESQL = pairName(configuration, "integresql");
+const PAIR_NAME = /^cubby-test-([0-9a-f]{8})-(?:postgres|integresql)$/;
+
+/**
+ * Machine-wide state: a lock serializing service startup and teardown, and one
+ * record per live run naming the pair it uses.
+ */
+const STATE = "/tmp/cubby-test-services";
+const RUNS = path.join(STATE, "runs");
+// Startup never blocks the event loop, so a killed starter's lock goes stale fast.
+const STATE_LOCK = { path: STATE, label: "test services", staleMs: 30_000 };
+
+/**
+ * Templates and their pools accumulate per worktree and schema revision
+ * (about 14 MB each); an idle pair holding more databases than this is
+ * recreated empty.
+ */
+const RECYCLE_DATABASE_COUNT = 250;
+
+const runRecord = z.object({
+  pid: z.number(),
+  // The command's detached process group; it can outlive a SIGKILLed wrapper.
+  group: z.number().optional(),
+  configuration: z.string(),
+  root: z.string(),
+});
+type RunRecord = z.infer<typeof runRecord>;
+
+/**
+ * Pair containers that no live run uses. `keep` names the configuration the
+ * caller is about to use; teardown passes none.
+ */
+export function removablePairContainers(
+  containers: readonly string[],
+  live: readonly Pick<RunRecord, "configuration">[],
+  keep?: string,
+): string[] {
+  const used = new Set(live.map((run) => run.configuration));
+  if (keep) used.add(keep);
+  return containers.filter((id) => {
+    const config = PAIR_NAME.exec(id)?.[1];
+    return config !== undefined && !used.has(config);
+  });
 }
 
-export type ServiceMode = "apple" | "external" | "warm";
-
-export function serviceMode(
-  env: NodeJS.ProcessEnv,
-  warmFlag: boolean,
-): ServiceMode {
-  const mode = env.CUBBY_TEST_SERVICES;
-  if (mode && mode !== "external" && mode !== "apple" && mode !== "warm") {
-    throw new Error("CUBBY_TEST_SERVICES must be apple, external, or warm");
+/** Whether any process in a process group still runs. */
+function groupIsAlive(group: number): boolean {
+  try {
+    process.kill(-group, 0);
+    return true;
+  } catch (error) {
+    return error instanceof Error && "code" in error && error.code === "EPERM";
   }
-  if (warmFlag) return "warm";
-  // SAFETY: the guard above already rejected every string value other than
-  // "external", "apple", "warm", or undefined.
-  return (mode as ServiceMode | undefined) ?? "apple";
 }
 
-function usesAppleServices(
-  env: NodeJS.ProcessEnv,
-  platform: NodeJS.Platform,
-  mode: ServiceMode,
-): boolean {
-  const managed = mode !== "external" && !env.CI && platform === "darwin";
-  if (mode === "warm" && (env.CI || platform !== "darwin")) {
-    throw new Error(
-      "CUBBY_TEST_SERVICES=warm (or --warm) needs macOS Apple `container` outside CI; use the default mode instead",
-    );
-  }
-  return managed;
+/**
+ * Live run records; a dead or unreadable record is deleted. A run stays live
+ * while its wrapper or its command's process group runs.
+ */
+function liveRuns(): RunRecord[] {
+  mkdirSync(RUNS, { recursive: true });
+  return readdirSync(RUNS).flatMap((file) => {
+    let record: ReturnType<typeof runRecord.safeParse> | undefined;
+    try {
+      record = runRecord.safeParse(
+        JSON.parse(readFileSync(path.join(RUNS, file), "utf8")),
+      );
+    } catch {
+      // Unreadable: removed below.
+    }
+    if (
+      record?.success &&
+      (ownerIsAlive(record.data.pid) ||
+        (record.data.group !== undefined && groupIsAlive(record.data.group)))
+    )
+      return [record.data];
+    rmSync(path.join(RUNS, file), { force: true });
+    return [];
+  });
+}
+
+const serviceModeSchema = z.enum(["apple", "external"]);
+type ServiceMode = z.infer<typeof serviceModeSchema>;
+
+function serviceMode(env: NodeJS.ProcessEnv): ServiceMode {
+  return serviceModeSchema
+    .default("apple")
+    .parse(env.CUBBY_TEST_SERVICES || undefined);
 }
 
 function logPhase(label: string, startedAt: number): void {
   console.log(`[test-services] ${label} in ${Date.now() - startedAt}ms`);
 }
 
-/** SIGKILL cannot run finally. Recover only unmounted disposable test services
- * whose owner PID is gone; persistent dev/warm services and live runs survive. */
-export async function pruneAbandonedServices(): Promise<void> {
-  for (const entry of await listContainers()) {
-    const match = /^cubby-([1-9]\d*)-[0-9a-f]{8}-(postgres|integresql)$/.exec(
-      entry.id,
+/** The shared pair's PostgreSQL address when both services answer. */
+async function healthyPair(): Promise<string | undefined> {
+  const [postgres, integresql] = await Promise.all([
+    findContainer(POSTGRES),
+    findContainer(INTEGRESQL),
+  ]);
+  if (
+    postgres?.status.state !== "running" ||
+    integresql?.status.state !== "running"
+  )
+    return undefined;
+  try {
+    const postgresHost = await containerAddress(POSTGRES);
+    const integresqlHost = await containerAddress(INTEGRESQL);
+    // Generous: another worktree's suite may be loading the pair.
+    await waitFor("PostgreSQL", () => tcpReady(postgresHost, 5432), {
+      timeoutMs: 15_000,
+    });
+    await waitFor(
+      "IntegreSQL",
+      () => httpReady(`http://${integresqlHost}:5000`),
+      {
+        timeoutMs: 15_000,
+      },
     );
-    if (!match) continue;
-    const image = match[2] === "postgres" ? postgresImage : integresqlImage;
-    if (
-      entry.configuration?.image?.reference !== image ||
-      !Array.isArray(entry.configuration.mounts) ||
-      entry.configuration.mounts.length !== 0
-    )
-      continue;
-    try {
-      process.kill(Number(match[1]), 0);
-      continue;
-    } catch (error) {
-      // EPERM also means a process exists. Unknown errors cannot prove abandonment.
-      if (
-        !(error instanceof Error && "code" in error && error.code === "ESRCH")
-      )
-        continue;
-    }
-    await stopAndRemove(entry.id);
-    console.log(`[test-services] Recovered abandoned ${entry.id}`);
+    return postgresHost;
+  } catch {
+    console.log("[test-services] Shared services are unhealthy");
+    return undefined;
   }
 }
 
-/** Remove the fixed-name warm containers. Used by `pnpm test:services:down`. */
-export async function stopWarmServices(): Promise<void> {
-  for (const name of [WARM_INTEGRESQL_NAME, WARM_POSTGRES_NAME]) {
-    const existing = await findContainer(name);
-    if (!existing) {
-      console.log(`[test-services] ${name} is not running`);
-      continue;
+async function databaseCount(): Promise<number> {
+  return Number(
+    await containerCli([
+      "exec",
+      POSTGRES,
+      "psql",
+      "-U",
+      "postgres",
+      "-tAc",
+      "SELECT count(*) FROM pg_database",
+    ]),
+  );
+}
+
+async function createPair(): Promise<string> {
+  await stopAndRemove(INTEGRESQL);
+  await stopAndRemove(POSTGRES);
+  const startedAt = Date.now();
+  console.log(`[test-services] Starting ${POSTGRES}`);
+  await runDetached(POSTGRES, postgresArgs);
+  const postgresHost = await containerAddress(POSTGRES);
+  // IntegreSQL needs only PostgreSQL's address to start; its connections
+  // retry until PostgreSQL accepts them.
+  console.log(`[test-services] Starting ${INTEGRESQL}`);
+  await runDetached(INTEGRESQL, integresqlArgs(postgresHost));
+  await waitFor("PostgreSQL", () => tcpReady(postgresHost, 5432));
+  logPhase("PostgreSQL ready", startedAt);
+  const integresqlUrl = `http://${await containerAddress(INTEGRESQL)}:5000`;
+  await waitFor("IntegreSQL", () => httpReady(integresqlUrl));
+  logPhase("IntegreSQL ready", startedAt);
+  return postgresHost;
+}
+
+/**
+ * Register this run and make the shared pair healthy, under the machine-wide
+ * startup lock: two starters never create, recycle, or remove a pair at once,
+ * and a pair a live run uses is recreated only when it no longer answers.
+ * Returns the environment overlay and this run's deregistration.
+ */
+async function joinSharedServices(env: NodeJS.ProcessEnv) {
+  mkdirSync(RUNS, { recursive: true });
+  const release = await holdLock(STATE_LOCK);
+  const record = path.join(RUNS, `${process.pid}.json`);
+  const leave = () => rmSync(record, { force: true });
+  const write = (group?: number) =>
+    writeFileSync(
+      record,
+      JSON.stringify({
+        pid: process.pid,
+        group,
+        configuration,
+        root: worktreeRoot,
+      } satisfies RunRecord),
+    );
+  try {
+    const others = liveRuns();
+    write();
+    for (const name of removablePairContainers(
+      (await listContainers()).map((entry) => entry.id),
+      others,
+      configuration,
+    )) {
+      await stopAndRemove(name);
+      console.log(`[test-services] Removed idle ${name}`);
     }
-    await stopAndRemove(name);
-    console.log(`[test-services] Removed ${name}`);
+    let postgresHost = await healthyPair();
+    const sharing = others.filter((run) => run.configuration === configuration);
+    // Recreating the pair would destroy databases a live run is using; a
+    // transient outage is the newcomer's failure, not a reason to reset.
+    if (!postgresHost && sharing.length > 0)
+      throw new Error(
+        `Shared test services are unhealthy while live runs use them (${sharing
+          .map((run) => `pid ${run.pid} in ${run.root}`)
+          .join(", ")}); retry after they finish`,
+      );
+    if (
+      postgresHost &&
+      sharing.length === 0 &&
+      (await databaseCount()) > RECYCLE_DATABASE_COUNT
+    ) {
+      console.log(
+        `[test-services] Recycling idle ${POSTGRES} past ${RECYCLE_DATABASE_COUNT} databases`,
+      );
+      postgresHost = undefined;
+    }
+    postgresHost ??= await createPair();
+    const integresqlUrl = `http://${await containerAddress(INTEGRESQL)}:5000`;
+    console.log(
+      `[test-services] Ready: PostgreSQL ${postgresHost}:5432, IntegreSQL ${integresqlUrl}`,
+    );
+    const overlay: NodeJS.ProcessEnv = {
+      CUBBY_TEST_SERVICES: "external",
+      INTEGRESQL_URL: integresqlUrl,
+      INTEGRESQL_DATABASE_HOST: postgresHost,
+      INTEGRESQL_DATABASE_PORT: "5432",
+      VITEST_MAX_WORKERS: env.VITEST_MAX_WORKERS ?? "6",
+      // A report server after a failed browser run would keep the run live.
+      PLAYWRIGHT_HTML_OPEN: env.PLAYWRIGHT_HTML_OPEN ?? "never",
+    };
+    return { overlay, leave, adopt: (group: number) => write(group) };
+  } catch (error) {
+    leave();
+    throw error;
+  } finally {
+    await release();
+  }
+}
+
+/** Remove every shared pair no live run uses (`pnpm test:services:down`). */
+async function stopIdleServices(): Promise<void> {
+  mkdirSync(RUNS, { recursive: true });
+  const release = await holdLock(STATE_LOCK);
+  try {
+    const live = liveRuns();
+    for (const name of removablePairContainers(
+      (await listContainers()).map((entry) => entry.id),
+      live,
+    )) {
+      await stopAndRemove(name);
+      console.log(`[test-services] Removed ${name}`);
+    }
+    for (const run of live)
+      console.log(
+        `[test-services] Kept ${pairName(run.configuration, "postgres")} for live run ${run.pid} in ${run.root}`,
+      );
+  } finally {
+    await release();
   }
 }
 
@@ -111,23 +360,22 @@ export async function runWithTestServices(
   {
     env = process.env,
     platform = process.platform,
-    warm = false,
-  }: Options = {},
+  }: { env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform } = {},
 ): Promise<number> {
   if (!command.length) {
     throw new Error(
       "Usage: node scripts/test-services.ts -- <command> [arguments]",
     );
   }
-  const mode = serviceMode(env, warm);
-  const managed = usesAppleServices(env, platform, mode);
-  const detachedCommand = managed && platform !== "win32";
-  const isWarm = mode === "warm";
-  const owned: string[] = [];
-  const prefix = `cubby-${process.pid}-${randomUUID().slice(0, 8)}`;
+  const managed =
+    serviceMode(env) === "apple" && !env.CI && platform === "darwin";
+  // Managed means macOS, where the command runs as its own process group.
+  const detachedCommand = managed;
   let child: ChildProcess | undefined;
   let interrupted: NodeJS.Signals | undefined;
   let killTimer: NodeJS.Timeout | undefined;
+  let leave = () => {};
+  let adopt = (_group: number) => {};
   let exitCode = 1;
 
   function signalGroup(signal: NodeJS.Signals) {
@@ -155,228 +403,36 @@ export async function runWithTestServices(
   process.on("SIGINT", onInt);
   process.on("SIGTERM", onTerm);
 
-  function checkInterrupted() {
+  try {
+    let childEnv = env;
+    if (managed) {
+      // Startup is not interrupted mid-create: the pair is shared, and a
+      // finished create leaves it usable for the next run.
+      const joined = await joinSharedServices(env);
+      leave = joined.leave;
+      adopt = joined.adopt;
+      childEnv = { ...env, ...joined.overlay };
+    }
     if (interrupted) throw new Error(`Interrupted by ${interrupted}`);
-  }
-
-  /** Ephemeral (cold) container: always created fresh, always torn down after. */
-  async function startEphemeral(
-    suffix: string,
-    args: string[],
-  ): Promise<string> {
-    checkInterrupted();
-    const name = `${prefix}-${suffix}`;
-    owned.push(name);
-    console.log(`[test-services] Starting ${name}`);
-    await runDetached(name, args);
-    checkInterrupted();
-    return name;
-  }
-
-  /** Warm container: reused across runs if already present and healthy. */
-  async function startWarm(
-    name: string,
-    args: string[],
-    healthy: () => Promise<string | void>,
-    { forceRecreate = false }: { forceRecreate?: boolean } = {},
-  ): Promise<{ name: string; reused: boolean }> {
-    checkInterrupted();
-    const existing = await findContainer(name);
-    if (existing?.status.state === "running" && !forceRecreate) {
-      try {
-        await healthy();
-        console.log(`[test-services] Reusing warm ${name}`);
-        return { name, reused: true };
-      } catch {
-        console.log(`[test-services] Warm ${name} unhealthy; recreating`);
-        await stopAndRemove(name);
-      }
-    } else if (existing) {
-      await stopAndRemove(name);
-    }
-    console.log(`[test-services] Starting warm ${name}`);
-    await runDetached(name, args, { rm: false });
-    checkInterrupted();
-    return { name, reused: false };
-  }
-
-  async function cleanupEphemeral() {
-    for (const name of owned.toReversed()) {
-      try {
-        const existing = await findContainer(name);
-        if (!existing) continue;
-        await stopAndRemove(name, {
-          logsOnFailure: exitCode !== 0 || !!interrupted,
-        });
-        console.log(`[test-services] Removed ${name}`);
-      } catch (error) {
-        exitCode = 1;
-        console.error(
-          `[test-services] Cleanup failed for ${name}; run container stop ${name}`,
-          error,
-        );
-      }
-    }
-  }
-
-  /** Start (or reuse, in warm mode) PostgreSQL + IntegreSQL and return the env overlay. */
-  async function startDatabaseServices(): Promise<NodeJS.ProcessEnv> {
-    const pgArgs = [
-      "--cpus",
-      "4",
-      "--memory",
-      "2G",
-      "--env",
-      "POSTGRES_USER=postgres",
-      "--env",
-      "POSTGRES_PASSWORD=password",
-      "--env",
-      "POSTGRES_DB=cubby",
-      "--env",
-      "PGDATA=/cubby-testdata",
-      postgresImage,
-      "postgres",
-      "-c",
-      "fsync=off",
-      "-c",
-      "synchronous_commit=off",
-      "-c",
-      "full_page_writes=off",
-      "-c",
-      "shared_buffers=512MB",
-      "-c",
-      "max_connections=200",
-      // Production (Neon) has no JIT provider (`pg_jit_available()` is false),
-      // but this image ships LLVM. The data-quality status/coverage SQL costs
-      // far above `jit_above_cost`, so JIT compiled thousands of expressions:
-      // one `dataStatus: "complete"` FinancialTransaction list took ~25 s and
-      // >1.5 GB here, OOM-killing PostgreSQL and stalling other files' hooks.
-      "-c",
-      "jit=off",
-      "-c",
-      "log_destination=stderr",
-    ];
-
-    const pgStart = Date.now();
-    let pg: string;
-    let pgReused = false;
-    if (isWarm) {
-      // The container has no published port yet at this point, so probe
-      // readiness through its internal address once it exists.
-      const result = await startWarm(WARM_POSTGRES_NAME, pgArgs, async () => {
-        const ip = await containerAddress(WARM_POSTGRES_NAME);
-        await tcpReady(ip, 5432);
-      });
-      pg = result.name;
-      pgReused = result.reused;
-    } else {
-      pg = await startEphemeral("postgres", pgArgs);
-    }
-
-    // Start IntegreSQL concurrently with waiting for PostgreSQL: IntegreSQL
-    // only needs PostgreSQL's *address*, not full readiness, to be created —
-    // its own connections retry until PostgreSQL accepts them.
-    const pgHost = await containerAddress(pg);
-    const pgReadyPromise = pgReused
-      ? Promise.resolve()
-      : waitFor("PostgreSQL", () => tcpReady(pgHost, 5432));
-
-    const igArgs = [
-      "--cpus",
-      "1",
-      "--memory",
-      "256M",
-      "--env",
-      `PGHOST=${pgHost}`,
-      "--env",
-      "PGUSER=postgres",
-      "--env",
-      "PGPASSWORD=password",
-      "--env",
-      "INTEGRESQL_TEST_INITIAL_POOL_SIZE=8",
-      "--env",
-      "INTEGRESQL_TEST_MAX_POOL_SIZE=16",
-      "--env",
-      "INTEGRESQL_POOL_MAX_PARALLEL_TASKS=4",
-      integresqlImage,
-    ];
-
-    const igStart = Date.now();
-    let ig: string;
-    if (isWarm) {
-      const result = await startWarm(
-        WARM_INTEGRESQL_NAME,
-        igArgs,
-        async () => {
-          const ip = await containerAddress(WARM_INTEGRESQL_NAME);
-          await httpReady(`http://${ip}:5000`);
-        },
-        // IntegreSQL bakes PostgreSQL's address into its env at creation
-        // time. A freshly (re)started PostgreSQL container almost always
-        // has a new address, so a stale IntegreSQL container must be
-        // recreated rather than reused even if it still answers HTTP.
-        { forceRecreate: !pgReused },
-      );
-      ig = result.name;
-      if (!result.reused) {
-        await pgReadyPromise;
-        logPhase("PostgreSQL ready", pgStart);
-        await waitFor("IntegreSQL", async () =>
-          httpReady(`http://${await containerAddress(ig)}:5000`),
-        );
-      }
-    } else {
-      ig = await startEphemeral("integresql", igArgs);
-      await pgReadyPromise;
-      logPhase("PostgreSQL ready", pgStart);
-      await waitFor("IntegreSQL", async () =>
-        httpReady(`http://${await containerAddress(ig)}:5000`),
-      );
-    }
-    logPhase(isWarm ? "IntegreSQL ready (warm)" : "IntegreSQL ready", igStart);
-
-    const url = `http://${await containerAddress(ig)}:5000`;
-    console.log(
-      `[test-services] Ready: PostgreSQL ${pgHost}:5432, IntegreSQL ${url}`,
-    );
-    return {
-      CUBBY_TEST_SERVICES: "external",
-      INTEGRESQL_URL: url,
-      INTEGRESQL_DATABASE_HOST: pgHost,
-      INTEGRESQL_DATABASE_PORT: "5432",
-      VITEST_MAX_WORKERS: env.VITEST_MAX_WORKERS ?? "6",
-      // A report server after a failed browser run would keep the pair alive.
-      PLAYWRIGHT_HTML_OPEN: env.PLAYWRIGHT_HTML_OPEN ?? "never",
-    };
-  }
-
-  function runCommand(childEnv: NodeJS.ProcessEnv): Promise<number> {
-    checkInterrupted();
     const [executable, ...args] = command;
     if (!executable) throw new Error("Missing test command");
-    return spawnToExit(executable, args, {
+    exitCode = await spawnToExit(executable, args, {
       env: childEnv,
       stdio: "inherit",
       detached: detachedCommand,
       onSpawn: (spawned) => {
         child = spawned;
+        // A detached child leads its own process group.
+        if (detachedCommand && spawned.pid) adopt(spawned.pid);
       },
     });
-  }
-
-  try {
-    if (managed) await pruneAbandonedServices();
-    const childEnv = managed
-      ? { ...env, ...(await startDatabaseServices()) }
-      : env;
-    exitCode = await runCommand(childEnv);
   } catch (error) {
     console.error("[test-services]", error);
   } finally {
     if (interrupted) signalGroup("SIGKILL");
-    // Do not interrupt an in-flight create: its server operation may still
-    // complete after the CLI dies. Finish it, then clean up by the known name.
-    if (!isWarm) await cleanupEphemeral();
+    // A descendant can outlive the group leader; its still-live group keeps
+    // the record, and liveRuns deletes it once the group is gone.
+    if (!(detachedCommand && child?.pid && groupIsAlive(child.pid))) leave();
     if (killTimer) clearTimeout(killTimer);
     process.off("SIGINT", onInt);
     process.off("SIGTERM", onTerm);
@@ -386,27 +442,12 @@ export async function runWithTestServices(
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  if (args[0] === "--down" || args[0] === "--prune") {
-    process.exitCode = await (
-      args[0] === "--down" ? stopWarmServices() : pruneAbandonedServices()
-    ).then(
-      () => 0,
-      (error) => {
-        console.error(error);
-        return 1;
-      },
-    );
-  } else {
-    const warm = args[0] === "--warm";
-    const rest = warm ? args.slice(1) : args;
-    process.exitCode = await runWithTestServices(
-      rest[0] === "--" ? rest.slice(1) : rest,
-      {
-        warm,
-      },
-    ).catch((error) => {
-      console.error(error);
-      return 1;
-    });
-  }
+  process.exitCode = await (
+    args[0] === "--down"
+      ? stopIdleServices().then(() => 0)
+      : runWithTestServices(args[0] === "--" ? args.slice(1) : args)
+  ).catch((error) => {
+    console.error(error);
+    return 1;
+  });
 }

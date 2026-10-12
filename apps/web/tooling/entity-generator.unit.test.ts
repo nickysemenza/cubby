@@ -1809,7 +1809,6 @@ describe("photo categories (B1)", () => {
   // key and a missing key parse identically here, so this also covers the "field omitted
   // entirely" declaration shape without needing a second, statically-rejected fixture —
   // exercised through `compileEntityDeclarations`'s `readonly unknown[]` parameter.
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- exercises compileEntityDeclarations's readonly unknown[] boundary with an invalid wire value
   const withCategory = (category: unknown) => ({
     ...base,
     model,

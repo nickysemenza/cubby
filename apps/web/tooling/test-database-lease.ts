@@ -1,5 +1,7 @@
 import { createPostgresPool } from "./postgres-pool";
 import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { IntegreSQLClient } from "@devoxa/integresql-client";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client } from "pg";
@@ -10,6 +12,7 @@ import {
   assertSimulatorDatabaseName,
 } from "./sim-db-guard";
 import { testServiceConfig } from "./test-service-config";
+import { holdLock, worktreeRoot } from "../../../scripts/lib/harness-lock.ts";
 
 /**
  * Disposable databases for Vitest, browser E2E and native runners.
@@ -18,8 +21,8 @@ import { testServiceConfig } from "./test-service-config";
  * `tests/e2e/e2e-database.ts`) keep their own seeding and reset policies;
  * this module owns template preparation, checkout, and release.
  *
- * Browser acceptance and Vitest can share one IntegreSQL service (a warm local
- * service, or two terminals). Each namespace gets its own template, so one
+ * Browser acceptance and Vitest share one IntegreSQL service (every worktree's
+ * runs use one local pair). Each namespace gets its own template, so one
  * process's template initialization cannot invalidate a database the other
  * has checked out.
  */
@@ -41,7 +44,10 @@ const integreSQL = () =>
   (client ??= new IntegreSQLClient({ url: testServiceConfig().url }));
 
 /**
- * The template hash: the schema inputs plus the namespace. The hash is read
+ * The template hash: the schema inputs, the namespace, and the checkout. Every
+ * worktree shares one IntegreSQL service, so each gets its own templates and
+ * pools: another worktree's failed migration (which discards its template)
+ * or pool exhaustion never reaches this one. The hash is read
  * from disk on each call, and a lease releases under the hash it was checked
  * out with, so a migration edited mid-run cannot turn a release into a 404.
  */
@@ -50,6 +56,8 @@ function templateHash(namespace: TemplateNamespace): string {
     .update(hashSchemaTemplateInputs())
     .update("\0")
     .update(namespace)
+    .update("\0")
+    .update(worktreeRoot)
     .digest("hex");
 }
 
@@ -72,33 +80,74 @@ function connectionUrl(config: {
 export async function prepareTemplate(
   namespace: TemplateNamespace,
 ): Promise<void> {
+  const hash = templateHash(namespace);
+  // A run killed between creating and finalizing the template leaves it
+  // unfinished: IntegreSQL answers the next initialize with 423 (which the
+  // client treats as "someone else is initializing") and holds every checkout
+  // until a finalize that never comes. Preparation holds a per-hash lock, so a
+  // marker seen under it was left by an initialization that never finished;
+  // discard that template and start over.
+  const markers = join(
+    worktreeRoot,
+    "node_modules/.cache/cubby-test-templates",
+  );
+  const marker = join(markers, `${hash}.pending`);
+  mkdirSync(markers, { recursive: true });
+  const release = await holdLock({
+    path: join(markers, hash),
+    label: `${namespace} template preparation`,
+  });
+  try {
+    await initializeOwnedTemplate(namespace, hash, marker);
+  } finally {
+    await release();
+  }
+}
+
+async function initializeOwnedTemplate(
+  namespace: TemplateNamespace,
+  hash: string,
+  marker: string,
+): Promise<void> {
+  if (existsSync(marker)) {
+    console.log(
+      `[test database] Discarding the abandoned ${namespace} template`,
+    );
+    await integreSQL()
+      .api.discardTemplate(hash)
+      .catch(() => {});
+  }
+  writeFileSync(marker, "");
   // The client discards the template after a failed migration and rethrows,
   // but a failed discard replaces the migration error; keep both.
   let migrationError: unknown;
   try {
-    await integreSQL().initializeTemplate(
-      templateHash(namespace),
-      async (config) => {
-        console.log(`[test database] Migrating the ${namespace} template`);
-        const pool = createPostgresPool({
-          connectionString: connectionUrl(config),
-        });
-        try {
-          await migrateDatabase(drizzle(pool));
-        } catch (error) {
-          migrationError = error;
-          console.error(
-            `[test database] Migrating the ${namespace} template failed`,
-            error,
-          );
-          throw error;
-        } finally {
-          await pool.end();
-        }
-        console.log(`[test database] Migrated the ${namespace} template`);
-      },
-    );
+    await integreSQL().initializeTemplate(hash, async (config) => {
+      console.log(`[test database] Migrating the ${namespace} template`);
+      const pool = createPostgresPool({
+        connectionString: connectionUrl(config),
+      });
+      try {
+        await migrateDatabase(drizzle(pool));
+      } catch (error) {
+        migrationError = error;
+        console.error(
+          `[test database] Migrating the ${namespace} template failed`,
+          error,
+        );
+        throw error;
+      } finally {
+        await pool.end();
+      }
+      console.log(`[test database] Migrated the ${namespace} template`);
+    });
+    // Finalized, or already initialized by an earlier run.
+    rmSync(marker, { force: true });
   } catch (error) {
+    // The client discarded the template after the failed migration. Any other
+    // failure (e.g. finalize never reached IntegreSQL) keeps the marker so the
+    // next preparation discards the unfinished template.
+    if (error === migrationError) rmSync(marker, { force: true });
     if (migrationError !== undefined && error !== migrationError) {
       throw new AggregateError(
         [migrationError, error],

@@ -189,8 +189,6 @@ describe("recipe list display columns", () => {
   it("resolves the fuller detail Recipe Source renderer from the manifest", () => {
     const renderer = detailFieldRenderersFor("recipe")?.source;
     if (!renderer) throw new Error("Expected recipe.source detail renderer");
-    // SAFETY: the generated registry resolved this renderer from the recipe
-    // manifest, and the fixture is a recipe detail record.
     const rendered = renderer(RECIPE_ROW as never);
     render(<>{rendered.value}</>);
     expect(screen.getByRole("link", { name: /example\.com/i })).toHaveAttribute(

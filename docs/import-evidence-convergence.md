@@ -67,6 +67,13 @@ recorded that judgment expose `exactNameMatch: null`, rather than a fabricated
 non-match or a reconstruction from today's catalog. Reading a review does not
 rewrite its saved snapshot; commit independently rechecks current identities.
 
+A member-reviewed refund reference from an Email is an
+`EmailFinancialAssociation`. It retains the exact Email checksum, the original
+account label, the reviewed account and decision provenance; it survives
+deletion as history, exposes later account drift, and never writes financial
+allocations. `mail.resolve` can link a lifecycle Email to several existing
+Purchases through `purchaseIds`.
+
 ## Validation boundaries
 
 `import-order-convergence.integration.test.ts` exercises all 24 arrival

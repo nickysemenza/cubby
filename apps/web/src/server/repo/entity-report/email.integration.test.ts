@@ -14,6 +14,7 @@ import {
   orderMailCandidateDecision,
   email as emailTable,
   orderMail,
+  purchase as purchaseTable,
   run,
 } from "~/server/db/schema";
 import { startAgentRunFixture } from "~/server/purchase-import/import-run.fixtures";
@@ -263,6 +264,27 @@ describe("Email review report", () => {
     await expect(report(foreign.email.shortcode)).rejects.toThrow(
       "Email was not found for this member",
     );
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(purchaseTable.id, purchase.id));
+    const historical = await report(selected.email.shortcode);
+    expect(rows(historical, "Accepted Purchases")).toContainEqual(
+      expect.objectContaining({
+        entity: null,
+        id: null,
+        statuses: [{ label: "Purchase deleted", tone: "warning" }],
+      }),
+    );
+    expect(
+      rows(historical, "Email pipeline").find(
+        (row) => row.title === "Linked Purchase",
+      ),
+    ).toMatchObject({
+      entity: null,
+      id: null,
+      subtitle: expect.stringContaining("Deleted Purchase"),
+    });
   });
   it("offers checksum-fenced import only for retained related content and distinguishes an unknown cost", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {

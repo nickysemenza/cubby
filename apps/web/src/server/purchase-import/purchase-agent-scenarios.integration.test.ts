@@ -1146,7 +1146,7 @@ describe("current purchase-agent system boundaries", () => {
     );
     expect(
       mailResearchRunInput.parse(importRun.input).executionAuthorization,
-    ).toEqual(approval);
+    ).toBeUndefined();
     expect(await mailRuns()).toHaveLength(1);
 
     // Only the related original is retained; the unrelated message keeps
@@ -1262,7 +1262,11 @@ describe("current purchase-agent system boundaries", () => {
         .map((entry) => entry.matched),
     ).toEqual(["unrelated", "related"]);
 
-    // Each paid call reserves once against the backfill approval.
+    // Member-selected Luna leaves the discovery grant unspent.
+    expect(importRun).toMatchObject({
+      trigger: "foreground",
+      cause: "member_request",
+    });
     const reservations = (
       await database
         .select({ result: runOperation.result })
@@ -1276,13 +1280,7 @@ describe("current purchase-agent system boundaries", () => {
     )
       .map(({ result }) => executionAuthorizationReceipt.parse(result))
       .filter((receipt) => receipt.kind === "metered_reservation");
-    expect(reservations.length).toBeGreaterThan(0);
-    expect(
-      new Set(reservations.map((receipt) => receipt.physicalAttemptId)).size,
-    ).toBe(reservations.length);
-    expect(reservations.every((receipt) => receipt.reservedMicroUSD > 0)).toBe(
-      true,
-    );
+    expect(reservations).toEqual([]);
   }, 120_000);
 });
 

@@ -24,8 +24,9 @@
 // *also* a file the override never covers, so it fails here too, by the same
 // mechanism.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, matchesGlob, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readJsonFile } from "nx/src/utils/fileutils";
 import { z } from "zod";
 import { EntityDeclarationError } from "./declarations.ts";
 
@@ -37,63 +38,6 @@ const ENTITY_DEFINITIONS_DIR = join(SRC_ROOT, "entity-definitions");
 const OXLINTRC_PATH = resolve(REPO_ROOT, ".oxlintrc.json");
 const SELF_PACKAGE_NAME = "@cubby/schemas";
 const OVERRIDE_MARKER_GLOB = "packages/schemas/src/entity-definitions/**/*.ts";
-
-// -- Tolerant JSONC parsing (no dependency: strip comments, string-aware) --
-
-/**
- * Strips `//` line comments and `/* *\/` block comments from JSON source,
- * leaving string contents (including one that happens to contain `//` or
- * `/*`) untouched. Good enough for `.oxlintrc.json`'s own JSONC dialect;
- * this file deliberately avoids a comment-aware JSON parsing dependency
- * since none is already installed where this script resolves modules from.
- */
-function stripJsonComments(source: string): string {
-  let out = "";
-  let i = 0;
-  let inString = false;
-  let stringQuote = "";
-  while (i < source.length) {
-    const ch = source[i];
-    const next = source[i + 1];
-    if (inString) {
-      out += ch;
-      if (ch === "\\") {
-        // Preserve the escaped character verbatim (e.g. `\"`).
-        out += next ?? "";
-        i += 2;
-        continue;
-      }
-      if (ch === stringQuote) inString = false;
-      i += 1;
-      continue;
-    }
-    if (ch === '"') {
-      inString = true;
-      stringQuote = ch;
-      out += ch;
-      i += 1;
-      continue;
-    }
-    if (ch === "/" && next === "/") {
-      while (i < source.length && source[i] !== "\n") i += 1;
-      continue;
-    }
-    if (ch === "/" && next === "*") {
-      i += 2;
-      while (
-        i < source.length &&
-        !(source[i] === "*" && source[i + 1] === "/")
-      ) {
-        i += 1;
-      }
-      i += 2;
-      continue;
-    }
-    out += ch;
-    i += 1;
-  }
-  return out;
-}
 
 /**
  * The one shape this file reads out of `.oxlintrc.json`: an `overrides` array
@@ -135,8 +79,7 @@ function loadDeclarationOverrideGlobs(
   oxlintrcPath: string,
   markerGlob: string,
 ): OxlintOverride {
-  const raw = readFileSync(oxlintrcPath, "utf8");
-  const config = oxlintrcSchema.parse(JSON.parse(stripJsonComments(raw)));
+  const config = oxlintrcSchema.parse(readJsonFile(oxlintrcPath));
   const match = config.overrides.find((override) =>
     override.files.includes(markerGlob),
   );
@@ -149,48 +92,6 @@ function loadDeclarationOverrideGlobs(
     );
   }
   return match;
-}
-
-// -- Minimal glob matching (no dependency: `**`, `*`, literal segments) --
-
-/**
- * Converts one glob pattern to a `RegExp` anchored over a whole
- * repo-relative, forward-slash path. Supports exactly what this repo's
- * override globs use: `**` (any number of path segments, including zero),
- * `*` (any run of characters excluding `/`), and literal text otherwise.
- * Not a general-purpose glob engine — matches oxlint's own override
- * semantics closely enough for this narrow, checked-in pattern set.
- */
-function globToRegExp(glob: string): RegExp {
-  let pattern = "";
-  let i = 0;
-  while (i < glob.length) {
-    const rest = glob.slice(i);
-    if (rest.startsWith("**/")) {
-      pattern += "(?:.*/)?";
-      i += 3;
-      continue;
-    }
-    if (rest.startsWith("**")) {
-      pattern += ".*";
-      i += 2;
-      continue;
-    }
-    const ch = glob[i] ?? "";
-    if (ch === "*") {
-      pattern += "[^/]*";
-    } else if (".+^${}()|[]\\".includes(ch)) {
-      pattern += `\\${ch}`;
-    } else {
-      pattern += ch;
-    }
-    i += 1;
-  }
-  return new RegExp(`^${pattern}$`);
-}
-
-function matchesAnyGlob(relPath: string, globs: readonly string[]): boolean {
-  return globs.some((glob) => globToRegExp(glob).test(relPath));
 }
 
 // -- Transitive import walk (regex-based; mirrors the removed unit test) --
@@ -299,8 +200,8 @@ function findBoundaryViolations(
 
       const relPath = toRelativePath(resolved);
       const covered =
-        matchesAnyGlob(relPath, overrideGlobs.files) &&
-        !matchesAnyGlob(relPath, overrideGlobs.excludeFiles);
+        overrideGlobs.files.some((glob) => matchesGlob(relPath, glob)) &&
+        !overrideGlobs.excludeFiles.some((glob) => matchesGlob(relPath, glob));
 
       if (!covered) {
         violations.push({ file: resolved, chain: [...chain, resolved] });

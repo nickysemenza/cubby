@@ -188,7 +188,6 @@ describe("operation cache tags", () => {
   it("refreshes slot reports when any record they are computed from changes", () => {
     // Purchase default-project and allocation edits, product price edits, and
     // ledger party edits all move report figures without touching a project.
-    // SAFETY: the contract declares its tags as plain string tuples.
     const reportTags = (entityReportContract.ops.get.cache?.tags ??
       []) as readonly (readonly string[])[];
     for (const entity of [

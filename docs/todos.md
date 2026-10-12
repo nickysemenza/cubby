@@ -139,19 +139,17 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
+- 🤔 🛠️ **Clarify explicit selection of an already-admitted Email.** A member's
+  selection can reuse an automatic Run through existing source ownership or
+  replay identity, retaining that Run's original execution authority. Surface
+  the existing owner or offer a bounded reviewed handoff without unpausing its
+  whole discovery batch; preserve source history and frozen scope.
+
 - ⏳ 🐛 **Gmail discovery re-authentication.** Promote when production Gmail
   returns 401/403 after refresh-token expiry or revocation: actionable
   reconnect, resumable Problem, never an "empty mailbox".
 
 ### Reconcile charges and refunds
-
-- 🤔 🛠️ **Resolve combined-credit Emails without false order attribution.**
-  A bank alert can describe one credit covering refunds from several orders.
-  `mail.resolve` currently links one Purchase. Investigate an evidence-backed
-  settlement association or explicit reviewed disposition that preserves the
-  Email and every constituent payment leg, without choosing one order to stand
-  for the combined credit or booking it again. Keep account identity proof and
-  source ownership as separate requirements.
 
 - 🧱 ✨ **Record points and miles redemptions.** An award ticket's fare is a $0
   principal Expense; only its taxes and fees are money. Record the loyalty
@@ -181,7 +179,7 @@ Sources. Both use the same public tools (`imports_read.mail`, `mail.search`,
 `mail.resolve`, `purchase_import.prepare/commit`, generic entity/image writes).
 The Mac browser bridge, account sync, charge and receipt hunts, unattended
 Product enrichment, the research service family and its independent assessor
-were deleted in the [caller-driven research plan](plans/caller-driven-research.md);
+were deleted under [ADR 0010](adr/0010-mail-import-unattended-burn-down-interactive.md);
 historical Runs stay readable through generic reports.
 
 - ⏳ 🛠️ **Reclaim retired research storage.** Migration
@@ -227,14 +225,6 @@ historical Runs stay readable through generic reports.
   counts rule, Jev and model results that disagree with a member's review, by
   stage and model. Use those conflicts to revise the triage and relevance
   prompts, and measure with an accuracy sample before and after each change.
-
-- 🟢 ✨ **Run finding-resolution connector contract delivered.**
-  [PR #1896](https://github.com/nickysemenza/cubby/pull/1896) publishes the
-  member's `apply`/`dismiss` choice as `operationAction`, preserving the outer
-  tool discriminator and domain validation. Persisted registered-tool
-  regressions cover apply, dismissal and invalid choices; a deployed public
-  dismissal has passed readback. Refresh a cached connector schema before using
-  a newly published input rather than dropping the required choice.
 
 - ⏳ 🧪 **Finish client acceptance of historical prepared-candidate review.**
   [PR #1892](https://github.com/nickysemenza/cubby/pull/1892) preserves missing
@@ -288,6 +278,16 @@ historical Runs stay readable through generic reports.
   historical backfill, $10/month continuous) with durable known-price admission
   before every paid transmission; prefer subscription inference. Populated
   fields and terminal Runs do not establish verification.
+
+- ⏳ 🧪 **Reconcile findings and measure abstention after Email convergence.**
+  Reconcile the evidence-backed financial and findings worklist through public
+  writers, preserving signed refunds, claims, party cents and stock; a healthy
+  detector count does not accept an older audit. A legacy finding without its
+  original message roster cannot be dismissed from sender identity or today's
+  Expenses. Measure rule-driven abstention (including oversized and multipart
+  evidence) separately from model uncertainty, with independent grades and exact
+  message availability before any accuracy claim. Present historical restart
+  readiness before requesting a new historical authorization.
 
 - 🟢 🧪 **Cover the `replace_aggregate_line` fix path.** No integration test
   applies an audit-proposed aggregate replacement; the first exact-identity
@@ -465,6 +465,14 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   ActivityKit push updates so the phone shows progress while suspended. Keep
   the local-work Live Activity feed separate.
 
+- 🤔 🧪 **Judge the hosted Run evidence pilot.** Run evidence (transcript,
+  logs, AI usage) is the one hosted native view
+  ([bridge contract](../apps/apple/DESIGN.md#run-evidence-pilot)). Measure cold
+  and warm opening on synthetic records against native detail and judge shared
+  implementation benefit together with the Apple experience before any broader
+  hosted detail adoption. Apple details still need a density pass that keeps
+  native hit targets and Dynamic Type.
+
 - ⏳ ✨ **Native workflow parity with web.** Promote when a recurring household
   task still needs the web. Coverage is declared once in
   `packages/schemas/src/native-coverage.ts` with a shrink-only unsupported
@@ -556,6 +564,21 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   the form but never shown: `entityEditBannerIssues`
   (`entity-edit-dialog-content.tsx`) excludes every field-scoped issue, so Save
   fails silently. Surface issues no registered control can display.
+- 🤔 🛠️ **RTable visual polish pass.** Quieter cells read as finished; the
+  mocked target has fewer marks and type-led hierarchy. Start with
+  `cubby-ui-design-audit` measuring live computed styles against the mock,
+  then land what holds up, updating `apps/web/DESIGN.md` (RTable):
+  - Drop the tag glyph on every category chip; the chip already says "tag".
+  - Show header provenance/link icons only on header hover or focus.
+  - Lighter status pills: 12px text, ~2px vertical padding, softer borders,
+    well short of the row height.
+  - Quieter headers: 12px medium muted label, one stronger bottom rule, no
+    icons at rest.
+  - Monospace only for codes and shortcodes, never timestamps or counts.
+  - Secondary values as a muted smaller line or tone, never in parentheses.
+  - Fainter column rules and row separators than the header boundary.
+  - Audit other per-cell icons (hierarchy, external link) for the same
+    every-row repetition; keep one only where it changes the action.
 - 🤔 ✨ **All-entities record interaction parity.** Reuse standard row inspection,
   selection, clipboard behavior, and actions in the Records tab. Decide which
   actions are eligible for mixed entity types before enabling batch work;
@@ -688,15 +711,6 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Classification in the manifest
 
-Shipped: option meanings and `suggest.rules` live on field declarations and
-the suggestion registry is generated; same-record and relation classification
-policies (Expense line kind and basis, Location furniture, GardenEntry kind,
-ProductCategory project-tool and Planting-source relations) drive writes,
-generated CHECKs, data quality, the editor and Suggestion targets; the
-Suggestion sweep, list field pills and `eval:decisions` exist; review happens
-in entity lists without a separate page
-([entities](entities.md#classification-field-policies)).
-
 - 🤔 🛠️ **Declare effective-value inheritance chains.** "Expense category =
   override → vendor food context → product mapping (category ancestors) →
   Purchase default → Vendor default" lives in hand SQL
@@ -708,6 +722,22 @@ in entity lists without a separate page
   classification preview hand-writes. Generated SQL must match hand-tuned
   performance; #1712's preview equivalence and scale tests are the guard.
   Decide the declaration shape first.
+- 🤔 🧪 **Calibrate Email relevance and reduce false uncertainty.** The bounded
+  HTML path marks every HTML message incomplete, so an unrelated Jev decision
+  becomes uncertain even when the readable evidence clearly establishes a
+  newsletter or promotion. Distinguish semantic evidence coverage from omitted
+  markup; retain purchase-bearing table, amount, order and attachment evidence.
+  Escalate only a material omitted-evidence risk, without sender-wide exclusions
+  that could hide subscription receipts. Evaluate broader evidence or a second
+  bounded pass on ambiguous cases; preserve original predictions and member
+  decisions. Grade an independent stratified sample including unrelated and
+  clipped messages, measure false negatives, false positives, abstention and
+  cost, and compare changes before enabling automatic disposal or import.
+  Separately audit Purchase Problems and Work queue receipt checks against the
+  effective evidence expectation and reviewed itemization: optional paperwork
+  must not create a missing-document task. Show the policy source so inherited
+  requirements and stale queue entries can be distinguished from real gaps.
+
 - 🤔 🧪 **Re-evaluate categories and Jev-backed dropdown options.** Review the
   category hierarchies and declared classification choices against actual usage
   and per-field decision misses. Identify overlapping, ambiguous, stale or
@@ -850,8 +880,10 @@ source/copy/declaration tests are removed. The shared T3
 device launcher is supported for finite simulator journeys.
 
 - 🤔 🧪 **Measure post-change routing speed and quality.** The
-  [2026-10-08 metadata recheck](agents/model-routing.md#routing-measurement-method)
-  records delegation and token shares, but mostly predates the routing rule.
+  2026-10-08 metadata recheck (UTC 2026-09-08 through 2026-10-07, message
+  snapshots deduplicated per parent session) recorded 44.6% of sessions
+  delegating and 56.2% of tokens in subagents, mostly before the routing rule;
+  the earlier 47% figure is a historical baseline.
   Repeat after a full post-change window using the same accounting and explicit
   latency/quality evidence; do not infer improvement from token shares alone.
 
@@ -860,9 +892,6 @@ device launcher is supported for finite simulator journeys.
   failure, and pathological LIKE/GLOB reports need sanitized
   name/message/stack/route evidence and an event-shaped regression test before
   changing filters; never hide unrelated transport or query errors.
-
-Fixture-backed generic list previews and optional warm HMR Playwright validation
-are implemented. See [local development](local-development.md#fixture-previews-and-warm-hmr-validation).
 
 - 🤔 🧪 **Evaluate off-the-shelf OpenAPI generation.** The HTTP/Swift emitters
   under `scripts/generator/http-api/` might be replaceable by
@@ -968,21 +997,6 @@ historical records and stay readable. `oauth_client.requirePKCE` and
   singly, so replaying two settled identical charges fails (pass the resolved
   occurrence ref through). Keep `statementRowExternalId` frozen: stored
   `settlement_ref` values derive from it.
-- 🟢 ✨ **Statement export membership delivered and verified.**
-  [PR #1898](https://github.com/nickysemenza/cubby/pull/1898) counts retained
-  export membership as well as first ownership.
-  [PR #1900](https://github.com/nickysemenza/cubby/pull/1900) supports reviewed
-  repeated-mask legacy membership. Public replay/readback preserved immutable
-  rows, settlement references, money, stock and claims. Unknown historical
-  physical occurrences remain unknown; new occurrence-ID ingest is not a
-  substitute for reviewing original source evidence.
-- 🟢 🐛 **Complete provider account masks delivered and verified.**
-  [PR #1894](https://github.com/nickysemenza/cubby/pull/1894) removes Copilot's
-  four-digit truncation and adds a public-parser regression for a five-digit
-  non-card mask. Focused parser checks and source replay passed; independent
-  review approved. The deployed writer accepted authentic replay with complete
-  masks and preserved stored identities. Do not infer a new account from an old
-  truncated descriptor or rewrite settlement references.
 - 🧱 🛠️ **Re-extract flat-array cookbooks, then delete their fallback.** A few
   cookbooks still store the retired flat-array extraction
   (`repo/cookbook.ts`, `isLegacyCookbookRawJson`); the list shows a

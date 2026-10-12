@@ -760,7 +760,7 @@ export const MCP_TOOLS = defineMcpTools({
       import: mcpAction({
         op: purchaseImportContract.ops.emailImport,
         description:
-          "Explicitly authorize paid Pi import for this selected Email and exact checksum. Automatic discovery remains classification-only. Review its cost estimate and relevance first; no other Email is admitted.",
+          "Start Luna import for this selected Email and exact checksum without a dollar allowance. Ownership, evidence and review gates still apply. An existing automatic admission retains its original authority. Automatic discovery remains classification-only; no other Email is admitted. Other paid models need their own authorization.",
       }),
       search: mcpAction({
         op: purchaseImportContract.ops.mailSearch,
@@ -770,7 +770,7 @@ export const MCP_TOOLS = defineMcpTools({
       resolve: mcpAction({
         op: purchaseImportContract.ops.mailResolve,
         description:
-          "Record what one retained Email means, using the checksum imports_read.mail returned: `linked` (a lifecycle event — shipped, delivered, cancelled, refunded … — of an existing Purchase; writes no Expenses), `unresolved` (an order whose Purchase cannot be established yet, with the gap), or `unrelated` (not a purchase; Cubby clears its unaccepted content while retaining Email metadata and provenance). An order Email you import with purchase_import.commit is linked automatically. Idempotent.",
+          "Resolve one retained Email at its checksum: `linked` names every supported Purchase in purchaseIds for a lifecycle event; optional settlement records a member-reviewed mapping to existing posted refunds and their accounts. Writes no money or stock. `unresolved` names the gap; `unrelated` clears unaccepted content while preserving metadata and provenance. Matching reviews replay while evidence remains current; conflicting reviews refuse.",
       }),
       decide_order_mail: mcpAction({
         op: vendorContract.ops.decideOrderMail,

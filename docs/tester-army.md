@@ -4,6 +4,11 @@ The background web and iOS lanes run one shared catalog of synthetic journeys.
 Agent steps navigate and edit; exact UI text and database read-backs decide
 correctness. Existing deterministic suites remain the merge gate.
 
+Keep browsers and simulators local; paid hosted infrastructure is out of scope.
+A full runner migration has no demonstrated CI speed advantage, so the
+deterministic merge gate stays until matched-coverage measurements justify
+changing it.
+
 ## Journeys
 
 Each journey is described once in `apps/web/tooling/tester-army/journeys.ts`:

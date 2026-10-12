@@ -88,17 +88,17 @@ Verified on `main` at `537d853c6`. Do not rebuild any of this.
 
 Settled; do not relitigate without new evidence.
 
-| Decision                                                                                      | Why                                                                                                                                                  |
-| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Scope is bulk attribution, bulk gap links, importer guidance, and backlog fixes               | Group trips are rare. The editors already exist on web and native.                                                                                   |
-| Code ships before the first real group-trip import, in one PR                                 | The import then exercises the finished tools.                                                                                                        |
-| Bulk is **replace per role**. Each role is optional; `[]` clears the role                     | Covers the real use ("these lines are shared by these people, equally"). Add/remove modes need a weight-conflict rule and have no use case yet.      |
-| Bulk goes through the **generic kernel**, with a narrow nested-field hook                     | One bulk path; MCP and web both inherit it. Not a bespoke tool.                                                                                      |
-| Bulk is the whole friction MVP                                                                | Funders are usually derived and beneficiaries default to household, so tagging is limited to shared costs. Project defaults and prefill are backlog. |
-| Name anyone who pays you back; use an unattributed share only for truly anonymous consumption | A `LedgerTransfer` cannot reference an unknown party. An unattributed share leaves household totals correct but shows a `partial_*` gap. No pools.   |
-| Repayment handling is guidance only                                                           | The pipeline never sees person-to-person payments. When discovery is built it must be review-only (`CONTEXT.md` avoids "automatic match").           |
-| The household page links per-expense gap codes only; the project section links every code     | On the household page, assumed-household is the designed default and covers most of the ledger. Inside a shared-cost project it is usually wrong.    |
-| The gap filter and the reports share **one** gap definition                                   | Two hand-written predicates would drift, and the links would open lists that disagree with the counts.                                               |
+| Decision                                                                                      | Why                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scope is bulk attribution, bulk gap links, importer guidance, and backlog fixes               | Group trips are rare. The editors already exist on web and native.                                                                                        |
+| Code ships before the first real group-trip import, in one PR                                 | The import then exercises the finished tools.                                                                                                             |
+| Bulk is **replace per role**. Each role is optional; `[]` clears the role                     | Covers the real use ("these lines are shared by these people, equally"). Add/remove modes need a weight-conflict rule and have no use case yet.           |
+| Bulk goes through the **generic kernel**, with a narrow nested-field hook                     | One bulk path; MCP and web both inherit it. Not a bespoke tool.                                                                                           |
+| Bulk is the whole friction MVP                                                                | Funders are usually derived and beneficiaries default to household, so tagging is limited to shared costs. Project defaults and prefill are backlog.      |
+| Name anyone who pays you back; use an unattributed share only for truly anonymous consumption | A `LedgerTransfer` cannot reference an unknown party. An unattributed share leaves household totals correct but shows a `partial_*` gap. No pools.        |
+| Repayment handling is guidance only                                                           | The pipeline never sees person-to-person payments. When discovery is built it must be review-only (`docs/guide/terminology.md` avoids "automatic match"). |
+| The household page links per-expense gap codes only; the project section links every code     | On the household page, assumed-household is the designed default and covers most of the ledger. Inside a shared-cost project it is usually wrong.         |
+| The gap filter and the reports share **one** gap definition                                   | Two hand-written predicates would drift, and the links would open lists that disagree with the counts.                                                    |
 
 ## 4. Phase 1 — Bulk attribution
 
@@ -119,7 +119,7 @@ bulk id cap applies.
    so nothing can route them into `.set()` — for example
    `bulkUpdate: { fields: [...], nested: ["beneficiaries", "funders"] }`. Teach
    the generator (`scripts/generator/`) to include declared nested fields in the
-   emitted bulk input schema. Run `pnpm generate`; `pnpm generate:check` must
+   emitted bulk input schema. Run `pnpm generate`; `pnpm check:clean` must
    pass.
 2. **Kernel.** The kernel stays unaware of nested semantics and passes the
    validated patch to the adapter. Audit any kernel step that assumes every bulk
@@ -251,13 +251,13 @@ consolidate same-shape cases into table-driven tests.
 
 ## 10. Validation and done
 
-Follow [validation](../agents/validation.md): `pnpm generate:check`,
+Follow [validation](../agents/validation.md): `pnpm generate`,
 `pnpm typecheck`, and `pnpm test:file` for touched tests while iterating; the
 integration tier provisions Apple `container` services on macOS; Linux uses
 externally managed PostgreSQL/IntegreSQL. Follow the validation policy for the
 required PR checks. All repository text uses synthetic data.
 
-- [ ] `pnpm generate:check` and `pnpm check` pass
+- [ ] `pnpm generate` leaves the tree clean and `pnpm check` passes
 - [ ] Bulk replace works from MCP `entity` `bulkUpdate` and from the web bulk
       dialog, for each role independently, with clear and no-op distinguished
 - [ ] The filter/report parity test passes for every code under both scopes

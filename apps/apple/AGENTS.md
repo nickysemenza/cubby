@@ -12,11 +12,9 @@ Ctrl-C when done. Run `test:e2e:sim` for search/detail smoke; editing, view swit
 
 ## Build order
 
-`node scripts/ensure-apple-ffi.ts` (Nx-cached `build-rust.sh`; restores the xcframework + shim
-across worktrees when Rust is unchanged) → `pnpm generate` (the gitignored generated Swift and the
-CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/project.yml --use-cache`. If a build fails with the literal text
-`artifact of binary target 'CubbyFFIBinary' not found`, the xcframework is missing — run
-`ensure-apple-ffi.ts` first.
+[README](README.md#build-order) owns build order, running, and TestFlight setup.
+`artifact of binary target 'CubbyFFIBinary' not found` means the xcframework is missing: run
+`node scripts/ensure-apple-ffi.ts`.
 
 ## Wire rules (non-negotiable)
 
@@ -132,63 +130,47 @@ and captured credential revisions across every await. See [DESIGN.md](DESIGN.md#
 
 ## Generated files (read-only)
 
-- `CubbyKit/Sources/CubbyKit/Generated/native-coverage.json` — which manifest renderer, slot, and
-  hero-action ids native draws, from `packages/schemas/src/native-coverage.ts` (the single
-  declaration; `NativePresentationCoverage` only reads it). A new web-only id must be classified
-  there (`unsupported` + reason, raising `NATIVE_UNSUPPORTED_CEILING` with a justification in
-  review); an `implemented` hero action needs a plan in `nativeHeroActionPlans` (the same file,
-  emitted as `heroActionPlan`): the verb names a generated operation, its input fields, and its
-  confirmation, and `HeroActionRunner` (CubbyKit) is the one generic path that runs it, so a new
-  verb is a plan plus (for a new RPC) a typed case in the runner, never per-entity Swift.
-  `pnpm generate` checks the plan against the contract (operation flagged `native:`, body keys
-  declared); an `implemented` slot or control needs its view path (`DetailSlotRegistry`,
-  `ListSlotRegistry`, `EntityFieldControl.drawing(for:)`), which `NativeCoverageViewPathTests`
-  checks in both directions. Report slots (`entityReport.get`) draw through the one
-  `ReportDetailSlot`; its `records` block (finance slots) shows the server's checkable rows and
-  verbs, every figure, candidate and disabled reason being the server's. A verb is a
-  `sectionAction` id: `implemented` ones are cases of `ReportRecordsView.handledVerbs`, run through
-  `SectionActionRunner`, `StatementMatchSession`, `ExpenseSplitSession`,
-  `PurchaseExpenseLinkSession` or `PurchaseProductLinkSession` (the same operations web calls,
-  behind the server's `disabledReason` and, for a write, a fresh server check of exactly what is
-  sent; a split needs an explicit confirmation, and attaching expenses that would move off another
-  purchase does too); `unsupported` ones show their reason. The structured renderers (`STRUCTURED_VALUE_RENDERERS`) are `generic`:
-  `FieldDescriptor.valueSchema`, derived from the field's Zod input schema, is drawn by the one
-  `StructuredValueControl`, so a new structured field is a declaration, not a view (a read payload
-  that nests an input's id declares `readFrom` on the Zod field; `project` applies the emitted
-  `readPath`; a key marked `opaque` is carried untouched, never drawn). Every `structured-field`
-  (`nativeCoverage.structuredField`) is drawn the same way, each with a generated read-to-input
-  vector; web draws the same description with `StructuredValueField`. A variant starts with no case
-  chosen (an account's identity kind is an explicit pick), and a source claim goes back under the
-  `sourceKey` its read carried, which the server holds it to. The `product-tags` control splits Tags from Collections with `CollectionTag`, which
-  reads the prefix and slug pattern from generated `SharedConstants` and is pinned to web's rule by
-  `golden-vectors/collection-tag.json`. A structured
-  detail field needs no view either: it declares where the record carries its server-composed text
-  (`display.detailLabelPath`) or worded rows (`display.itemsPath`, drawn by `DetailDisplayRows`), or
-  a nested value (`readPath` with `format`/`valueOptions`), and the generic detail row prints that —
-  never re-word a structure in Swift. A server report's `records` block (rows with a
-  thumbnail, badges and a record to open, plus verbs) is drawn by `RecordsBlockView`; each
-  verb is a plan in `nativeCollectionActionPlans` (emitted as `collectionActionPlan`) that
-  `HeroActionRunner` runs — a new verb is a plan plus a typed case in the runner, never a slot view.
-  A row `choice` and the block's `form` (approve prepared orders) are drawn by `ReportChoiceView` and
-  `ReportFormFooterView`; `ReportChoiceAnswers` (CubbyKit) holds the answers, never preselects one,
-  and assembles the `run.commitPrepared` body that `ReportSlotModel.approve` sends after the form's
-  confirmation, with a new operation id per answer change.
-- `CubbyKit/Sources/CubbyKit/Generated/{entity-manifest.json,EntityDescriptors.swift,EntityVocabulary.swift}`
-  and `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — from
-  `scripts/generator/entities/render/swift-catalog.ts`. The typed wire description in
-  `packages/schemas/src/manifest-wire.ts` owns descriptor storage, associated-value labels,
-  raw values, conformances, and public initializer defaults, including recursive `ValueSchema`.
-  Generation validates JSON against that description and emits synthesized `Codable` declarations;
-  the catalog remains a bundled JSON resource decoded once. Native conveniences live in extensions
-  in `Catalog/EntityManifest.swift`. Vocabulary enums and labels derive from the TS vocabulary.
-  Change the shared wire description, then run `pnpm generate`; preserve Codable envelopes and
-  decode defaults, and verify `EntityManifestTests` and the structured round-trip vectors.
-- `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — from `uniffi-bindgen`. Regenerate with
-  `node scripts/ensure-apple-ffi.ts` (or `apps/apple/scripts/build-rust.sh` directly).
+None is committed; edit the generator or its inputs, never the output. A missing one means
+`pnpm generate` (or `build-rust.sh`) has not run in this checkout.
+
+| Output                                                                                                                           | Generator                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `CubbyKit/Sources/CubbyKit/Generated/native-coverage.json`                                                                       | `packages/schemas/src/native-coverage.ts`                                                              |
+| `Generated/{entity-manifest.json,EntityDescriptors,EntityVocabulary}.swift`, `CubbyAPISupport/Generated/EntityKey.swift`         | `scripts/generator/entities/render/swift-catalog.ts`                                                   |
+| `Generated/{OperationRoutes,EntityOperations,ClientOperations,APITypes}.swift`, `Sources/CubbyAPI/openapi-generator-config.yaml` | `scripts/generator/http-api/native.ts`, `swift-operations.ts`                                          |
+| `Generated/SharedConstants.swift`                                                                                                | `packages/shared/src/client-constants.ts`, `apps/web/wrangler.jsonc`, `WAYFINDING_DOMAIN_PRESENTATION` |
+| `CubbyAPI` target                                                                                                                | swift-openapi-generator plugin, from `Sources/CubbyAPI/openapi.json` (written by `pnpm generate`)      |
+| `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`                                                                                      | `uniffi-bindgen` via `node scripts/ensure-apple-ffi.ts`                                                |
+| `App/Shared/Previews/Fixtures/*.json`                                                                                            | `apps/web/scripts/apple-preview-fixtures.ts` (edit its overrides)                                      |
+
+- **Native coverage.** `packages/schemas/src/native-coverage.ts` is the single declaration of
+  which manifest renderer, slot, and hero-action ids native draws. A new web-only id is
+  classified there (`unsupported` + reason, raising `NATIVE_UNSUPPORTED_CEILING` with a
+  justification in review). An `implemented` hero action needs a plan in `nativeHeroActionPlans`
+  that `HeroActionRunner` runs; a collection verb needs a plan in `nativeCollectionActionPlans`.
+  A new verb is a plan plus (for a new RPC) a typed case in the runner, never per-entity Swift or
+  a slot view. An `implemented` slot or control needs its view path (`DetailSlotRegistry`,
+  `ListSlotRegistry`, `EntityFieldControl.drawing(for:)`), checked both ways by
+  `NativeCoverageViewPathTests`.
+- **Server-owned reports.** Report slots draw through the one `ReportDetailSlot`; every figure,
+  candidate, verb and disabled reason is the server's. Writes go through the same operations web
+  calls, behind the server's `disabledReason` and a fresh server check of exactly what is sent.
+  `ReportChoiceAnswers` never preselects an answer and mints a new operation id per answer change.
+- **Structured values.** `FieldDescriptor.valueSchema` (from the field's Zod input schema) is
+  drawn by the one `StructuredValueControl`, so a new structured field is a declaration, not a
+  view. A structured detail field declares `display.detailLabelPath`, `display.itemsPath`, or a
+  `readPath` with `format`/`valueOptions`; never re-word a structure in Swift.
+- **Manifest wire.** `packages/schemas/src/manifest-wire.ts` owns descriptor storage, labels, raw
+  values, conformances, and initializer defaults. Change it, run `pnpm generate`, preserve
+  Codable envelopes and decode defaults, and verify `EntityManifestTests` and the structured
+  round-trip vectors. Native conveniences live in extensions in `Catalog/EntityManifest.swift`.
+- **Client methods.** A `CubbyClient` method that is exactly one call with its JSON body (or a
+  GET's generated `Input.Query`) is a `CLIENT_PASSTHROUGH_METHODS` entry in
+  `swift-operations.ts`, not hand-written Swift; anything that maps or branches stays in
+  `API/CubbyClient.swift`.
 - Rules that exist on both platforms but are not shared code are pinned by JSON vectors in
   `packages/shared/golden-vectors/` (`gtin.json`, `image-url.json`, `bin-plan.json`,
-  `display-format.json`, `household-day.json`). The Swift tests (`ScanCodeTests`,
-  `ImageTransformTests`, `BinPlanTests`, `DisplayFormatTests`, `HouseholdDayTests`) and the
+  `display-format.json`, `household-day.json`, `collection-tag.json`). The Swift tests and the
   web/Rust tests read the same files; change a rule by editing the vector first, then both
   implementations.
 - Value formatting is single-sourced in Rust (`recipebridge/src/display_format.rs` plus
@@ -206,37 +188,9 @@ and captured credential revisions across every await. See [DESIGN.md](DESIGN.md#
   web calls it as WASM, native through `cubby-ffi`'s `scale_*` exports wrapped by CubbyKit
   `RecipeScaling`/`RecipeCookPlan`. Swift never multiplies an amount or clamps a factor; which
   units scale (not a pan size or oven temperature) is Rust's call.
-- `CubbyKit/Sources/CubbyKit/Generated/SharedConstants.swift` — constants and vocabulary with one
-  TypeScript declaration: the image-transform rungs (`IMAGE_WIDTHS`) and household zone
-  (`HOUSEHOLD_TIMEZONE`) from `packages/shared/src/client-constants.ts`, the media origin from
-  `apps/web/wrangler.jsonc`, and each wayfinding domain's `title`/`sfSymbol` from
-  `WAYFINDING_DOMAIN_PRESENTATION`. Never restate one in Swift. The GTIN
-  rule itself is single-sourced in `recipebridge::scan_code_gtin14` (ISBN-10/13 or 8/12/13/14
-  digits; general GTIN check digits are not enforced).
-- The `CubbyAPI` target — swift-openapi-generator's typed client and schema types, generated at
-  build time by its SwiftPM plugin from `Sources/CubbyAPI/openapi.json` (a copy of
-  `apps/web/src/lib/generated/http-openapi.gen.json`) and `openapi-generator-config.yaml`, both
-  written by `pnpm generate`.
-- `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations,ClientOperations,APITypes}.swift` —
-  the runtime route table (`OperationRoute.all`), the per-entity `list`/`timeline`/`get`/`create`/
-  `update`/image-attach switches with `EntityKey.httpActions`/`nativeActions` and the generated
-  filter arms (one per list/timeline query parameter, from
-  `scripts/generator/http-api/swift-operations.ts`; a parameter schema shape outside its table
-  fails generation), the `CubbyClient` methods that are exactly one call with the JSON body — or, for a GET, the
-  generated `Input.Query` aliased `<Method>Query` (`client.runAiUsage(.init(runId: id))`) — as
-  their only argument (`CLIENT_PASSTHROUGH_METHODS` in the same file — a new such method is a
-  table entry, not hand-written Swift; anything that maps or branches stays in
-  `API/CubbyClient.swift`), and the public aliases for every generated type the native client carries,
-  from `scripts/generator/http-api/native.ts` reading the `native` flags on contracts. Regenerate
-  with `pnpm generate`. That same script also writes `Sources/CubbyAPI/openapi-generator-config.yaml`
-  from those flags.
-- `App/Shared/Previews/Fixtures/*.json` — wire JSON for `PreviewFixtures`' API-typed fixtures
-  (`PreviewFixtures.fixture(_:)`), built from the zod schemas by
-  `apps/web/scripts/apple-preview-fixtures.ts`. To change what a preview shows, edit that
-  script's overrides and run `pnpm generate`.
-
-None of these is committed; edit the generator or its inputs, never the output. A missing one
-means `pnpm generate` (or `build-rust.sh`) has not run in this checkout.
+- Never restate a `SharedConstants` value in Swift. The GTIN rule itself is single-sourced in
+  `recipebridge::scan_code_gtin14` (ISBN-10/13 or 8/12/13/14 digits; general GTIN check digits
+  are not enforced).
 
 ## Verification
 
@@ -249,16 +203,8 @@ means `pnpm generate` (or `build-rust.sh`) has not run in this checkout.
   `scripts/apple-check.sh`, the `apple:simulator-build` Nx target) gates
   formatting; run
   `swift format --in-place --configuration apps/apple/.swift-format --recursive` to fix.
-  `pnpm verify:local(:full)` runs `apple:check` locally when a full native
-  diagnostic is needed. GitHub Actions runs the native checks on every PR and
-  `main` push, replaying a cached pass for unchanged content (including one from
-  a local `pnpm apple check`). The Linux validation job probes each Apple lane
-  before queuing macOS; misses or probe failures fall back to native jobs.
-  `Apple checks` requires each lane's native success or verified cached pass:
-  host Swift tests with the OpenAPI warning gate, and iOS app formatting/build.
-  Nightly runs force both native lanes. Keep copied Markdown fixtures/resources
-  in `appleGate`; only named prose-only docs are excluded.
-  See [CI](../../docs/ci.md).
+  Keep copied Markdown fixtures/resources in `appleGate`; [CI](../../docs/ci.md) owns the
+  hosted Apple lanes and cached-pass replay.
 - **Visual and interaction checks:** the Xcode MCP renders `#Preview`s headlessly and drives a
   simulator (tap, swipe, type, capture) — setup, loops, and failure fixes in
   [docs/agents/xcode-mcp.md](../../docs/agents/xcode-mcp.md). Preferred over launching the app
@@ -295,14 +241,8 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
 - The API emits `.000Z` timestamps the generated client rejects; use `Configuration.cubby`
   (`LenientISO8601DateTranscoder`). Product list rows carry no image URLs (`coverImageUrl` is on
   detail only); image `status` is `PENDING|UPLOADED|FAILED`.
-- A generator must never emit one giant array literal: a ~900-line `EntityCatalog.all` literal
-  made Release/WMO spend ~650 s single-threaded in the SIL `COWArrayOpt` pass. Per-entity
-  `private static let` descriptors listed in `all` cut it to 13 s; the catalog is now bundled
-  JSON decoded at runtime, so it costs the compiler nothing. To find such a stall again:
-  `sample <swift-frontend pid>` shows the pass; `-Xllvm -sil-print-pass-name` is buffered, so
-  stream it through `script` under an `alarm` and demangle the last `Function:` line.
-  `xcodebuild archive` is not incremental — compare with `xcodebuild build -configuration Release`
-  and a `-derivedDataPath`.
+- A generator never emits one giant array literal: Release/WMO stalls single-threaded in the
+  SIL `COWArrayOpt` pass. Large catalogs ship as bundled JSON decoded at runtime.
 - `Cubby.xcodeproj` is generated and gitignored; the checkout hook regenerates it, but a rebase
   runs that hook before replaying your commits, so Swift files they add are missing from the
   project ("Cannot find … in scope"). Run `pnpm apple gen`.
@@ -314,12 +254,7 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
   from an init parameter. Gated by `apple-check.sh`'s `State(initialValue:`/
   `StateObject(wrappedValue:` grep (tag a deliberate exception `// state-init-ok: <reason>`).
 
-### Debugging on device
-
-Launching under LLDB indexes CubbyKit's ~60k generated lines and shows a 10-30s white screen on
-device. Use the `Cubby-iOS-NoDebugger` / `Cubby-macOS-NoDebugger` schemes for fast UI iteration;
-for the regular debugger schemes, copy `apps/apple/lldbinit-Xcode.example` to
-`~/.lldbinit-Xcode` to enable LLDB on-demand symbol loading.
+### Root scripts
 
 Do not run root `pnpm` scripts from here — `apps/apple/**` and `cubby-ffi/**` are excluded from
 oxfmt/oxlint (Swift is covered by its own `swift-format` gate above, not oxfmt/oxlint), and

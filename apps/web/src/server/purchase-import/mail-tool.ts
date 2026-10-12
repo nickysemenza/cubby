@@ -51,6 +51,8 @@ import {
   notDeleted,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
+import { readEmailFinancialAssociations } from "~/server/repo/email-financial-associations";
+import { readEmailPurchaseAssociations } from "~/server/repo/email-purchase-associations";
 import {
   readRetainedMail,
   retainedMailJoin,
@@ -72,6 +74,7 @@ import { gmailProviderForUser } from "./gmail/provider";
 import { GMAIL_PAGE_SIZE } from "./gmail/sync";
 import { GmailAuthorizationError } from "./gmail/tokens";
 import { GmailApiError } from "./gmail/types";
+import { recordMailFinancialReview } from "./mail-financial-review";
 import {
   assertMailRunMembership,
   readMailRunSources,
@@ -171,6 +174,37 @@ async function mailboxRow(db: Database, mail: RetainedMail) {
   return row;
 }
 
+async function associationsForMail(
+  db: Database,
+  mail: Pick<RetainedMail, "ledgerPartyId" | "mailboxId" | "messageId">,
+) {
+  const [message] = await getDb(db)
+    .select({ id: emailTable.id })
+    .from(emailTable)
+    .where(
+      and(
+        eq(emailTable.ledgerPartyId, mail.ledgerPartyId),
+        eq(emailTable.provider, "gmail"),
+        eq(emailTable.mailboxId, mail.mailboxId),
+        eq(emailTable.messageId, mail.messageId),
+        notDeleted(emailTable),
+      ),
+    )
+    .limit(1);
+  const id = message ? parseEntityId("email", message.id) : null;
+  const purchases = id ? await readEmailPurchaseAssociations(db, id) : [];
+  return {
+    purchaseIds: purchases.map((row) => row.shortcode),
+    purchaseAssociations: purchases.map((row) => ({
+      purchaseId: row.shortcode,
+      purchaseDeleted: row.purchaseDeleted,
+    })),
+    financialAssociations: id
+      ? await readEmailFinancialAssociations(db, id)
+      : [],
+  };
+}
+
 export async function readMail(
   db: Database,
   rawInput: MailReadInput,
@@ -200,7 +234,10 @@ export async function readMail(
         source.email.contentClearedAt)
     ) {
       const { readEmailOriginalTransient } = await import("./gmail/real-time");
-      return readEmailOriginalTransient(db, input, actor);
+      return mailReadOut.parse({
+        ...(await readEmailOriginalTransient(db, input, actor)),
+        ...(await associationsForMail(db, source.email)),
+      });
     }
   }
   const { mail, attachments, importRunId } = await withTransactionDatabase(
@@ -252,6 +289,7 @@ export async function readMail(
     attachments: attachments.map(({ id: _id, ...row }) => row),
     originalAttachment: original,
     boundToRun: importRunId !== null,
+    ...(await associationsForMail(db, mail)),
   });
 }
 
@@ -620,7 +658,7 @@ export async function resolveMail(
       if (disposed)
         return {
           mail: disposed,
-          purchaseId: null,
+          purchaseIds: [],
           status: "completed" as const,
         };
     }
@@ -630,16 +668,87 @@ export async function resolveMail(
         "This Email changed since it was read; read it again before resolving.",
       );
     if (disposition.kind === "linked") {
-      const chosen = await linkOrderMail(tdb, {
-        mail,
-        purchaseId: await resolveOrThrow(
-          tdb,
-          "purchase",
-          disposition.purchaseId,
+      if (disposition.settlement && disposition.event !== "refunded")
+        throw new Error(
+          "Settlement evidence requires a refunded lifecycle event.",
+        );
+      const ids = await Promise.all(
+        disposition.purchaseIds.map((code) =>
+          resolveOrThrow(tdb, "purchase", code),
         ),
-        event: disposition.event,
-        actorUserId: actor.userId,
-      });
+      );
+      if (new Set(ids).size !== ids.length)
+        throw new Error("Purchase links must resolve to distinct Purchases.");
+      const targets = await getDb(tdb)
+        .select({
+          id: purchase.id,
+          accountPartyId: vendorAccount.ledgerPartyId,
+        })
+        .from(purchase)
+        .leftJoin(
+          vendorAccount,
+          and(
+            eq(vendorAccount.id, purchase.vendorAccountId),
+            notDeleted(vendorAccount),
+          ),
+        )
+        .where(and(inArray(purchase.id, ids), notDeleted(purchase)))
+        .orderBy(purchase.id)
+        .for("update", { of: purchase });
+      if (targets.length !== ids.length)
+        throw new Error("A reviewed Purchase no longer exists.");
+      if (
+        targets.some(
+          (row) =>
+            row.accountPartyId && row.accountPartyId !== mail.ledgerPartyId,
+        )
+      )
+        throw new Error(
+          "The Email and a Purchase belong to different members.",
+        );
+      const [dismissed] = await getDb(tdb)
+        .select({ id: orderMailCandidateDecision.id })
+        .from(orderMailCandidateDecision)
+        .innerJoin(
+          orderMailEvent,
+          eq(orderMailEvent.id, orderMailCandidateDecision.eventId),
+        )
+        .where(
+          and(
+            eq(orderMailEvent.orderMailId, mail.id),
+            inArray(orderMailCandidateDecision.purchaseId, ids),
+            eq(orderMailCandidateDecision.decision, "dismissed"),
+          ),
+        )
+        .limit(1);
+      if (dismissed)
+        throw new Error(
+          "A member dismissed this Email for a reviewed Purchase.",
+        );
+      const chosen = [];
+      for (const id of [...ids].sort())
+        chosen.push(
+          await linkOrderMail(tdb, {
+            mail,
+            purchaseId: id,
+            event: disposition.event,
+            actorUserId: actor.userId,
+          }),
+        );
+      if (disposition.settlement) {
+        const message = await mailboxRow(tdb, mail);
+        if (!message) throw new Error("The reviewed Email no longer exists.");
+        await recordMailFinancialReview(
+          tdb,
+          {
+            emailId: parseEntityId("email", message.id),
+            checksum: input.checksum,
+            purchaseIds: ids,
+            review: disposition.settlement,
+          },
+          actor,
+        );
+      }
       await settleMail(tdb, {
         mail,
         importRunId,
@@ -648,7 +757,7 @@ export async function resolveMail(
       });
       return {
         mail,
-        purchaseId: chosen.shortcode,
+        purchaseIds: chosen.map((row) => row.shortcode),
         status: "completed" as const,
       };
     }
@@ -659,7 +768,7 @@ export async function resolveMail(
         status: "blocked",
         detail: disposition.reason,
       });
-      return { mail, purchaseId: null, status: "blocked" as const };
+      return { mail, purchaseIds: [], status: "blocked" as const };
     }
     await settleMail(tdb, {
       mail,
@@ -668,7 +777,7 @@ export async function resolveMail(
       classification: "unrelated",
       detail: `unrelated: ${disposition.reason}`,
     });
-    return { mail, purchaseId: null, status: "completed" as const };
+    return { mail, purchaseIds: [], status: "completed" as const };
   });
   // Disposal runs after the disposition commits; a protected original (one a
   // reviewed decision or import already uses) is kept. A disposal lost here
@@ -688,7 +797,9 @@ export async function resolveMail(
     messageId: settled.mail.messageId,
     status: settled.status,
     disposition: disposition.kind,
-    purchaseId: settled.purchaseId,
+    purchaseIds: settled.purchaseIds,
+    financialAssociations: (await associationsForMail(db, settled.mail))
+      .financialAssociations,
   });
 }
 

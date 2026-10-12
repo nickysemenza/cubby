@@ -36,3 +36,10 @@ amount. A trial return or refund is also not evidence that every trial item was 
 final purchase email may separately list **items to return**; exclude those
 specific lines even if they remain visible on the original order-detail page
 and the email reports a real total for other retained items.
+
+`imports_read.mail` returns the complete persisted accepted `purchaseIds` and
+`purchaseAssociations` with `purchaseDeleted` status. These combine accepted
+source claims and active explicit lifecycle decisions; thread context and
+dismissed candidates are excluded. Deleted Purchase identities remain readable
+as history, with disabled links in the shared Email report. Compare this
+readback with a multi-Purchase resolution; it creates no ledger or stock changes.

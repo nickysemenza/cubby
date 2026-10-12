@@ -99,7 +99,6 @@ const enumColumnExpression = (
 };
 
 const literalDefaultExpression = (value: DeclarationValue): string => {
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- String storage defaults have SQL-specific serialization.
   if (typeof value === "string") {
     if (value === "'{}'::text[]") return "sql`'{}'::text[]`";
     if (value === "'[]'::jsonb") return "[]";
@@ -118,7 +117,6 @@ const literalDefaultExpression = (value: DeclarationValue): string => {
  * One model storage column as a Drizzle column builder. `reference` renders
  * the FK target thunk for a referenced entity key.
  */
-// oxlint-disable-next-line eslint/complexity -- Ordered branches mirror the finite storage-column DSL.
 export const renderStorageColumn = (
   entity: CompiledEntity,
   field: EntityStorageField,

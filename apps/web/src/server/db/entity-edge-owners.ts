@@ -19,6 +19,7 @@
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import {
+  emailFinancialAssociation,
   entityAttachment,
   entityLink,
   expenseAttribution,
@@ -111,6 +112,8 @@ export const ENTITY_EDGE_OWNERS = {
     excluded: "Immutable Email classification history.",
   },
   EmailRetrievalFailure: { excluded: "Immutable Email retrieval history." },
+  // A reviewed association names the Email whose evidence it settles.
+  EmailFinancialAssociation: { owner: emailFinancialAssociation.emailId },
   RunApproval: { excluded: WORKFLOW },
   RunControlEvent: { excluded: WORKFLOW },
   RunOperation: { excluded: WORKFLOW },

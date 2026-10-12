@@ -51,8 +51,6 @@ describe("categoryFeatureSql", () => {
   });
 
   it("throws for a feature outside the validated enum", () => {
-    // SAFETY: exercising the runtime guard against a value that bypasses the
-    // compile-time `ProductCategoryFeature` union, so the cast is intentional.
     expect(() =>
       categoryFeatureSql(categoryIdExpr, "not-a-feature" as never),
     ).toThrow("Invalid product category feature");

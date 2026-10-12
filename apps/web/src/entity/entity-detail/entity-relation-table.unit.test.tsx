@@ -47,7 +47,6 @@ const relationSection = (entity: keyof typeof entitySummary, id: string) => {
 };
 
 const planFor = (entity: keyof typeof entitySummary, id: string) =>
-  // SAFETY: every fixture entity below is browser-routed.
   planRelationSection(entity as never, relationSection(entity, id));
 
 describe("planRelationSection", () => {
@@ -285,7 +284,6 @@ describe("EntityRelationTable", () => {
   it("issues the scoped list read, sorted and filtered per the plan", async () => {
     const inputs: EntityListInputByEntity["task"][] = [];
     const list = entityList.list.withTransport(async ({ input }) => {
-      // SAFETY: the test only mounts the project → tasks relation.
       inputs.push(input as EntityListInputByEntity["task"]);
       return {
         items: [],

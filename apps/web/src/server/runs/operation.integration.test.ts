@@ -58,7 +58,6 @@ describe("RunOperation rows written by earlier code", () => {
       .from(runOperation)
       .where(
         and(
-          // SAFETY: the run id came from a row this test inserted.
           eq(
             runOperation.runId,
             runId as typeof runOperation.$inferSelect.runId,

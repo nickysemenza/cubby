@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 
 import type { ReferenceItem } from "~/entity/entity-references";
+import { ChipCluster } from "~/ui/common/chip-cluster";
 import { Button } from "~/ui/primitives/button";
 
 /** A declaration bounds dense multi-reference cells without hiding the remaining records. */
@@ -15,8 +16,8 @@ export function ReferencePreview({
   limit: number | null;
   renderItem: (item: ReferenceItem) => ReactNode;
   /**
-   * Table rows have a fixed height: keep every chip on one line and show the
-   * remainder as a count instead of an expander that would grow the row.
+   * Table rows have a fixed height: wrap chips to at most two lines and count
+   * the remainder instead of an expander that would grow the row.
    */
   singleLine?: boolean;
   /** Rendered after the chips, on the same line (e.g. a "View all" link). */
@@ -24,28 +25,17 @@ export function ReferencePreview({
 }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded || limit === null ? items : items.slice(0, limit);
-  const hidden = limit !== null ? items.length - limit : 0;
   if (singleLine)
     return (
-      <span className="flex max-w-full min-w-0 items-center gap-x-2 overflow-hidden whitespace-nowrap">
-        {visible.map((item) => (
-          <span key={item.id} className="flex min-w-0 shrink">
-            {renderItem(item)}
-          </span>
-        ))}
-        {hidden > 0 && (
-          <span
-            className="shrink-0 text-xs text-muted-foreground"
-            title={items
-              .slice(limit!)
-              .map((item) => item.name ?? item.id)
-              .join(", ")}
-          >
-            +{hidden} more
-          </span>
-        )}
-        {trailing && <span className="shrink-0">{trailing}</span>}
-      </span>
+      <ChipCluster
+        items={items.map((item) => ({
+          key: item.id,
+          label: item.name ?? item.id,
+          node: renderItem(item),
+        }))}
+        limit={limit}
+        trailing={trailing}
+      />
     );
   return (
     <span className="flex max-w-full min-w-0 flex-wrap gap-x-2 gap-y-0.5">

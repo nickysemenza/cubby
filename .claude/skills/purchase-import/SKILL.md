@@ -53,6 +53,15 @@ never infer one. Respect an explicit member pause: do
 not retry or restart until imports are resumed. Follow the returned successor;
 the preceding attempt remains immutable.
 
+An explicit `mail.import` selection at its current checksum starts Luna without
+a dollar allowance or an inherited historical budget. Member-selected Vendor
+order Emails share this policy, within their existing selection limit.
+Member-controlled retries
+keep their frozen source scope. These selected Luna calls have no dollar ceiling;
+this does not authorize another paid model, historical discovery, unattended bulk admission,
+another member's sources, or receiving stock. Ownership, retained originals,
+checksums, replay, money conservation and unresolved-identity review still apply.
+
 ## Connect and converge evidence
 
 1. Connect Google with read-only Gmail access. Prioritize known Vendors and
@@ -103,7 +112,7 @@ Frontier AI can propose a mapping for an unfamiliar layout; a person verifies
 the columns and sign before saving. Jev can rank a bounded set of ambiguous
 account, transaction, or Purchase candidates using evidence. A choice is a
 proposal for review, not a settlement write or an inferred transaction.
-The [human journey](../../../docs/product-identity-journey.md) describes the
+The [human journey](../../../docs/guide/product-identity-journey.md) describes the
 same outcome without prescribing an agent runtime.
 
 ## Invariants
@@ -205,6 +214,13 @@ Mail import is Pi's version of this flow; [mail-import.md](references/mail-impor
 adds the Email dispositions (`mail.resolve`: a lifecycle `linked` event,
 `unresolved` with its gap, or `unrelated`). A member resolves an Email the same
 way.
+
+Lifecycle resolution names all supported `purchaseIds`. A combined refund
+may also carry a member-reviewed `settlement`: existing posted refund references,
+their reviewed accounts, literal source account labels and reasons. Verify the
+credit sum and each existing allocation before writing. These associations
+retain the checksum and account review through later deletion or account drift;
+they never change money, account aliases, allocations or stock.
 
 An interrupted mutation is recovered through
 `imports_read.purchase_status` with its original operation id. Repeating

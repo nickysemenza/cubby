@@ -11,9 +11,11 @@ share this formatter through `CalendarDate`. Mounted labels subscribe to
 `useHouseholdToday`, whose shared clock refreshes at household midnight, on
 focus, and on visibility changes; cached records must not need a query refetch
 to update relative context. Calendar metadata passes the same reactive day to
-the pure formatter. Date columns start at 232px and declared spans at 320px; shared rendered-content fitting preserves the full current labels so
-relative context stays visible by default; full labels remain available in the
-title when a column is resized narrower. Task summaries pass the optional end
+the pure formatter. Inside a desktop table cell, `CalendarDate` stacks the
+label over its compact distance from `dateSpanParts` ("Oct 7" / "5d ago",
+"in 7mo"), so date columns start at 96px and declared spans at 320px; shared
+rendered-content fitting preserves the full current labels, and the full
+`formatDateSpan` label remains in the title. Task summaries pass the optional end
 so an ongoing window cannot collapse to a past start day. Browser checks verify
 unclipped labels rather than only matching DOM text. `formatCalendarDay` remains the absolute primitive for
 editable date inputs, calendar axes/headings, and fixed-format diagnostics.
@@ -22,7 +24,7 @@ Use style tokens—never component hardcoded colors. Semantic color additions ge
 both `:root` and `@theme inline` mirrors. Use `size-N` icon sizing (inline/nav
 `size-3.5`, card/tile `size-5`) and the `Badge` primitive for categorical chips.
 A declared enum field renders as an `EnumPill` through one roster,
-`enumFieldOptions`/`enumFieldLabel` (`entities/enum-field-display.tsx`), on
+`enumFieldOptions`/`enumFieldLabel` (`apps/web/src/entity/enum-field-display.tsx`), on
 every surface — generic list cell, embedded relation table, detail value, hero
 chip, previews — and is inline-editable wherever the entity has an update
 command. Never read `control.options` directly for a label, and never add a
@@ -57,7 +59,9 @@ real dialog journey.
 Use `RTable` for interactive lists, Table primitives for static tables, and raw
 tables only for matrices/debug/external content. `useTableColumnLayout` owns
 table order/pinning/visibility/sizing. Decorated cells render through
-`CellFrame`; don't append icons beside a cell value by hand. Rendered entity names are linked and
+`CellFrame`; don't append icons beside a cell value by hand. Two-line cell
+content uses `StackedValue` or `ChipCluster`, and clipped codes use
+`MiddleTruncate`. Rendered entity names are linked and
 readable: use `EntityRefLink` (all record links, one component with variants), a titled truncated link, or `createNameColumn`
 in RTable. Audit history can retain retired entity kinds; icon lookup tolerates
 absent metadata and leaves those references unlinked. Pages use the `Page`

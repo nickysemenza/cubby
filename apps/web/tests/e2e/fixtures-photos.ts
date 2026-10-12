@@ -531,6 +531,8 @@ export async function seedMailImportReportRun(page: Page, name: string) {
       status: "completed",
       startedAt: new Date(),
       endedAt: new Date(),
+      // Report reads validate this frozen roster against its retained original
+      // and Email; a null input fails source validation first.
       input: {
         kind: "mail_research",
         sources: [{ orderMailId: original.id, checksum }],
