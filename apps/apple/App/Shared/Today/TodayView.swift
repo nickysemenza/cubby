@@ -79,6 +79,11 @@ struct AuditHistoryView: View {
                     .disabled(history.loading)
             }
         }
+        .listRowInsets(
+            EdgeInsets(
+                top: 0, leading: FieldGuideTokens.Space.md,
+                bottom: 0, trailing: FieldGuideTokens.Space.md)
+        )
         .navigationTitle("Changes")
         .task(id: appModel.host) { await history.load(client: appModel.client, reset: true) }
         .refreshable { await history.load(client: appModel.client, reset: true) }
@@ -110,27 +115,35 @@ struct AuditEntryRow: View {
                 content
             }
         }
+        .listRowInsets(
+            EdgeInsets(
+                top: 0, leading: FieldGuideTokens.Space.md,
+                bottom: 0, trailing: FieldGuideTokens.Space.md)
+        )
         .accessibilityElement(children: .combine)
     }
 
     private var content: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: entry.action == .delete ? "trash" : "clock.arrow.circlepath")
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
+            Thumb(
+                url: entry.displayImage.flatMap { URL(string: $0.representations?.preferred ?? $0.url) },
+                size: 36,
+                symbol: EntityKey(rawValue: entry.entityKind.rawValue).map { EntityCatalog[$0].sfSymbol }
+                    ?? "clock.arrow.circlepath")
+            VStack(alignment: .leading, spacing: 2) {
                 Text(entry.entityName ?? entry.entityKind.rawValue.capitalized)
                     .font(.subheadline.weight(.medium))
-                Text("\(entry.action.rawValue.capitalized) · \(entry.entityKind.rawValue)")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            // `style: .relative` renders compound durations ("4 min, 27 sec") for very recent
-            // times; the named relative format ("4 minutes ago") matches the rest of the app
-            // (see ActivityView's event rows and ImageEntityDetailView).
-            Text(entry.createdAt.formatted(.relative(presentation: .named)))
+                Text(
+                    "\(entry.action.rawValue.capitalized) · \(entry.entityKind.rawValue) · \(entry.createdAt.formatted(.relative(presentation: .named)))"
+                )
                 .font(.caption).foregroundStyle(.secondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
         }
-        .frame(minHeight: FieldGuideTokens.touchTarget)
+        .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 
@@ -277,17 +290,6 @@ struct TodayContent: View {
     #if os(iOS)
         private var iOSList: some View {
             List {
-                Section {
-                    HStack(spacing: FieldGuideTokens.Space.sm) {
-                        Circle()
-                            .fill(FieldGuideTokens.signal)
-                            .frame(width: 9, height: 9)
-                            .accessibilityHidden(true)
-                        Text("Your household at a glance")
-                            .font(.fieldGuideBody)
-                            .foregroundStyle(.secondary)
-                    }
-                }
                 Section("Activity inbox") {
                     NavigationLink(value: Route.activityList) {
                         Label("All activity", systemImage: "clock.arrow.circlepath")
@@ -296,16 +298,13 @@ struct TodayContent: View {
                         Button {
                             model.navigator.openActivity(.serverRun(run.id))
                         } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(run.subjectName).font(.headline)
-                                Text(
-                                    "\(run.workLabel) · \(run.state.replacingOccurrences(of: "_", with: " ").capitalized)"
-                                )
-                                .font(.caption).foregroundStyle(.secondary)
-                            }
-                            .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                            ActivityRunRow(run: run)
                         }
                         .buttonStyle(.plain)
+                        .listRowInsets(
+                            EdgeInsets(
+                                top: 0, leading: FieldGuideTokens.Space.md,
+                                bottom: 0, trailing: FieldGuideTokens.Space.md))
                     }
                     if highlights?.runs.isEmpty == true {
                         emptyStateText("No recent runs")
@@ -418,6 +417,12 @@ struct TodayContent: View {
                     }
                 }
             }
+            .listRowInsets(
+                EdgeInsets(
+                    top: 0, leading: FieldGuideTokens.Space.md,
+                    bottom: 0, trailing: FieldGuideTokens.Space.md)
+            )
+            .environment(\.defaultMinListRowHeight, FieldGuideTokens.touchTarget)
             .refreshControl(onRefresh)
             .accessibilityIdentifier("today.sections")
             .navigationSubtitle(dateText)
@@ -494,8 +499,12 @@ struct TodayContent: View {
             dashboardPanel("Activity inbox", systemImage: "clock.arrow.circlepath") {
                 Button("All activity") { model.navigator.section = .activity }
                 ForEach(highlights.runs, id: \.id) { run in
-                    Button(run.subjectName) { model.navigator.openActivity(.serverRun(run.id)) }
-                        .buttonStyle(.link)
+                    Button {
+                        model.navigator.openActivity(.serverRun(run.id))
+                    } label: {
+                        ActivityRunRow(run: run)
+                    }
+                    .buttonStyle(.plain)
                 }
                 if highlights.runs.isEmpty { emptyStateText("No recent runs") }
             }

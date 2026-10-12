@@ -47,7 +47,7 @@ struct StatusChip: View {
                         lineWidth: FieldGuideTokens.hairlineWidth
                     )
             )
-            .fixedSize()
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

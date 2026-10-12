@@ -66,7 +66,8 @@ struct Thumb: View {
             if let emoji, !emoji.isEmpty {
                 Text(emoji).font(.system(size: size * 0.34))
             } else {
-                Image(systemName: symbol).font(.system(size: size * 0.34))
+                Image(systemName: symbol.isEmpty ? "square.dashed" : symbol)
+                    .font(.system(size: size * 0.34))
             }
         }.foregroundStyle(FieldGuideTokens.graphiteSecondary)
     }

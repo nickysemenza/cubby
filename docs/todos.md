@@ -779,6 +779,15 @@ consume the declarations.
 
 ## Dev tooling, tests & CI
 
+- 🤔 **Seed a connected synthetic development household across every entity.**
+  Add a repeatable dev-server fixture pack with representative records for all
+  declared entities and meaningful cross-entity links, so Browse, details,
+  relationships and specialist workflows can be exercised without empty domains.
+  Include direct and related images, emoji/entity-icon fallbacks, missing-image
+  placeholders, long names and multiline facts, plus varied activity states.
+  Keep the pack deterministic, idempotent and confined to development databases;
+  derive coverage from the entity manifest and report unsupported seed cases.
+
 The developer loop now defaults to focused headless + simulator smoke, retains
 extended domain lanes by name, uses deterministic stored-outcome read-back with
 small Tester Army navigation, and reuses verified native builds. Low-signal

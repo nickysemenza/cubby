@@ -951,19 +951,24 @@ struct EntityListView: View {
     }
 
     @ViewBuilder private func rowContent(_ row: EntityRow) -> some View {
-        #if os(macOS)
-            if usesBrowseSelection {
-                EntityRowView(key: key, row: row).tag(RecordSelection(key: key, id: row.id))
-            } else {
+        Group {
+            #if os(macOS)
+                if usesBrowseSelection {
+                    EntityRowView(key: key, row: row).tag(RecordSelection(key: key, id: row.id))
+                } else {
+                    NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                        EntityRowView(key: key, row: row)
+                    }
+                }
+            #else
                 NavigationLink(value: Route.entityDetail(key, id: row.id)) {
                     EntityRowView(key: key, row: row)
                 }
-            }
-        #else
-            NavigationLink(value: Route.entityDetail(key, id: row.id)) {
-                EntityRowView(key: key, row: row)
-            }
-        #endif
+            #endif
+        }
+        .listRowInsets(
+            EdgeInsets(
+                top: 2, leading: FieldGuideTokens.Space.md, bottom: 2, trailing: FieldGuideTokens.Space.md))
     }
 }
 
@@ -1000,7 +1005,7 @@ struct EntityRowView: View {
     /// Preview-only image injection keeps the production row on the shared URL-backed Thumb
     /// while allowing previews to exercise the real image geometry and clipping.
     var previewImage: Image? = nil
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.layoutDirection) private var layoutDirection
 
     private var presentation: EntityRowPresentation {
         EntityRowPresentation.resolve(
@@ -1052,8 +1057,8 @@ struct EntityRowView: View {
     private var supportingBand: some View {
         if presentation.facts.isEmpty && row.pendingFields.isEmpty && row.failedFields.isEmpty && !photoMode {
             EmptyView()
-        } else if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+        } else {
+            WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm, layoutDirection: layoutDirection) {
                 ForEach(presentation.facts) { fact in factView(fact) }
                 if !row.pendingFields.isEmpty {
                     Text("Loading details…").font(.caption).foregroundStyle(.secondary)
@@ -1064,28 +1069,13 @@ struct EntityRowView: View {
                     Text(presentation.shortcode).font(.caption2.monospaced())
                 }
             }
+            .font(.caption)
             .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            ScrollView(.horizontal) {
-                HStack(spacing: FieldGuideTokens.Space.sm) {
-                    ForEach(presentation.facts) { fact in factView(fact) }
-                    if !row.pendingFields.isEmpty {
-                        Text("Loading details…").font(.caption).foregroundStyle(.secondary)
-                    } else if !row.failedFields.isEmpty {
-                        Text("Some details unavailable").font(.caption).foregroundStyle(.secondary)
-                    }
-                    if photoMode {
-                        Text(presentation.shortcode).font(.caption2.monospaced())
-                    }
-                }
-                .frame(minHeight: FieldGuideTokens.touchTarget)
-            }
-            .scrollIndicators(.hidden)
         }
     }
 
     var body: some View {
-        HStack(spacing: FieldGuideTokens.Space.md) {
+        HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
             if let previewImage {
                 previewImage
                     .resizable()
@@ -1093,34 +1083,23 @@ struct EntityRowView: View {
                     .frame(width: thumbnailSize, height: thumbnailSize)
                     .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
                     .accessibilityHidden(true)
-            } else if let imageURL = presentation.imageURL {
+            } else {
                 Thumb(
-                    url: imageURL, size: thumbnailSize, symbol: EntityCatalog[key].recordSymbol(in: row),
-                    emoji: EntityCatalog[key].recordEmoji(in: row))
-            } else if row.pendingFields.contains("displayImages") {
-                Thumb(
-                    url: nil, size: thumbnailSize, symbol: EntityCatalog[key].recordSymbol(in: row),
+                    url: presentation.imageURL, size: thumbnailSize,
+                    symbol: EntityCatalog[key].recordSymbol(in: row),
                     emoji: EntityCatalog[key].recordEmoji(in: row))
             }
             VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    if presentation.imageURL == nil, let emoji = EntityCatalog[key].recordEmoji(in: row) {
-                        Text(emoji).accessibilityHidden(true)
-                    } else if presentation.imageURL == nil, EntityCatalog[key].recordIconEntityField != nil {
-                        Image(systemName: EntityCatalog[key].recordSymbol(in: row)).accessibilityHidden(true)
-                    }
-                    Text(presentation.title)
-                        .accessibilityIdentifier("entity.row.title.\(key.rawValue).\(row.id)")
-                }
-                .font(.body.weight(.semibold))
-                .foregroundStyle(FieldGuideTokens.graphite)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                Text(presentation.title)
+                    .accessibilityIdentifier("entity.row.title.\(key.rawValue).\(row.id)")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(FieldGuideTokens.graphite)
+                    .fixedSize(horizontal: false, vertical: true)
                 supportingBand
             }
-            Spacer(minLength: FieldGuideTokens.Space.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, FieldGuideTokens.Space.xs)
-        .frame(minHeight: 48, alignment: .center)
+        .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .top)
         .contentShape(Rectangle())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(

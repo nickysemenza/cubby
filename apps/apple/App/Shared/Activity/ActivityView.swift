@@ -334,6 +334,11 @@ struct ActivityView: View {
                 Text(model.total == 1 ? "1 work group" : "\(model.total) work groups")
             }
         }
+        .listRowInsets(
+            EdgeInsets(
+                top: 0, leading: FieldGuideTokens.Space.md,
+                bottom: 0, trailing: FieldGuideTokens.Space.md)
+        )
         .navigationTitle("Activity")
         .refreshable { await model.refreshLoaded(client: appModel.client) }
         .task(id: "\(appModel.host):\(model.filterIdentity)") {
@@ -363,6 +368,11 @@ struct ActivityView: View {
             ActivityRunRow(run: run)
         }
         .buttonStyle(.plain)
+        .listRowInsets(
+            EdgeInsets(
+                top: 0, leading: FieldGuideTokens.Space.md,
+                bottom: 0, trailing: FieldGuideTokens.Space.md)
+        )
         .accessibilityIdentifier("activity.run.\(run.id)")
     }
 
@@ -558,39 +568,38 @@ private extension String {
     }
 }
 
-private struct ActivityRunRow: View {
+struct ActivityRunRow: View {
     let run: ActivityRun
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: EntityCatalog[run.iconEntity].sfSymbol)
-                .foregroundStyle(run.active ? FieldGuideTokens.interaction : Color.secondary)
-                .frame(width: 22)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(run.subjectName).font(.headline)
-                HStack(spacing: 6) {
-                    Text(run.workLabel)
-                    Text("·")
-                    Text(run.state.replacingOccurrences(of: "_", with: " ").capitalized)
-                    Text("·")
-                    Text(run.createdAt, style: .relative)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
+            Thumb(
+                url: run.subjectImage.flatMap { URL(string: $0.representations?.preferred ?? $0.url) },
+                size: 36, symbol: EntityCatalog[run.iconEntity].sfSymbol)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(run.subjectName).font(.subheadline.weight(.semibold))
+                Text("\(run.workLabel) · \(run.state.replacingOccurrences(of: "_", with: " ").capitalized)")
+                    .font(.caption).foregroundStyle(.secondary)
                 if let progress = run.progressLine {
-                    Text(progress).font(.caption).monospacedDigit().lineLimit(1)
+                    Text(progress).font(.caption).monospacedDigit()
                 }
-                if !run.executors.isEmpty {
-                    Text(run.executors.map(\.name).joined(separator: ", "))
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
+                Text(contextLine).font(.caption).foregroundStyle(.secondary)
                 if let error = run.error {
-                    Text(error).font(.caption).foregroundStyle(FieldGuideTokens.destructive).lineLimit(2)
+                    Text(error).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var contextLine: String {
+        let time = run.createdAt.formatted(.relative(presentation: .named))
+        let executors = run.executors.map(\.name).joined(separator: ", ")
+        return executors.isEmpty ? time : "\(executors) · \(time)"
     }
 }
 
