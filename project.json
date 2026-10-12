@@ -18,6 +18,8 @@
         "{workspaceRoot}/packages/**/*",
         "{workspaceRoot}/apps/web/src/**/*",
         "{workspaceRoot}/apps/web/scripts/apple-preview-fixtures.ts",
+        // Purchase-import prompt sources (scripts/generator/agent-prompts.ts).
+        "{workspaceRoot}/.claude/skills/purchase-import/references/*.md",
         // The R2 public origin generated into `SharedConstants.swift`.
         "{workspaceRoot}/apps/web/wrangler.jsonc",
         "{workspaceRoot}/apps/web/tooling/wrangler-public-config.ts",

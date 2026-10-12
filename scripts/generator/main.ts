@@ -1,13 +1,17 @@
 import { modulesChildren } from "../../packages/schemas/src/child-tables/modules.ts";
 import { retainedTableExports } from "../../packages/schemas/src/child-tables/retained.ts";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { validateRetainedTableBoundary } from "./entities/child-table-boundary.ts";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { connectedViews } from "../../packages/schemas/src/connected-view-definitions.ts";
 import type { CompiledEntity } from "./entities/declarations.ts";
-import { removeExtraArtifacts, writeArtifacts } from "./artifacts.ts";
+import {
+  ARTIFACT_MANIFEST,
+  removeExtraArtifacts,
+  writeArtifacts,
+} from "./artifacts.ts";
 import {
   EntityDeclarationError,
   loadEntityDeclarationBundle,
@@ -155,6 +159,10 @@ const main = async () => {
   // Extraneous files are judged once, over every stage: the stages share
   // output directories, so a per-stage scan would remove the others' files.
   const removed = await removeExtraArtifacts(ROOT, written);
+  await writeFile(
+    resolve(ROOT, ARTIFACT_MANIFEST),
+    `${JSON.stringify(written.map(({ relativePath }) => relativePath).sort(), null, 2)}\n`,
+  );
   await writeRouteTree(ROOT);
   console.log(
     changed.length === 0 && removed.length === 0
