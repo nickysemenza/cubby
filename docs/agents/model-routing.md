@@ -18,6 +18,9 @@ a known file, a small plan, a focused test. Measured over 30 days of Claude
 sessions, half spawned subagents and subagents consumed 47% of all context
 tokens, so each spawn should be a deliberate choice. Parallel lanes suit
 read-heavy work; write lanes own disjoint worktrees or stay in the main thread.
+Run at most two implementation lanes at once on one machine: each builds,
+typechecks and starts test services, and more lanes contend for CPU and the
+test harness instead of finishing sooner. Queue further units behind them.
 The per-PR review below is the one routine spawn.
 
 ## Lanes
