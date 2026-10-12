@@ -2443,6 +2443,41 @@ describe("shared purchase-import prepare and commit", () => {
     expect(result.items[0]?.outcome).toBe("updated");
     expect(result.items[0]?.findingCount).toBe(0);
 
+    const replayRun = await startImportRunFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const replayPreparation = {
+      ...prepareInput,
+      _runExecution: {
+        runId: replayRun.id,
+        operationId: "prepare:manual-order-2-replay",
+        itemOperationIds: ["prepare-item:manual-order-2-replay"],
+      },
+      orders: prepareInput.orders.map((order) => ({
+        ...order,
+        itemOperationId: "prepare-item:manual-order-2-replay",
+      })),
+    };
+    await preparePurchaseImport(ctx.db, replayPreparation, ctx.actor);
+    const replay = await commitPurchaseImport(
+      ctx.db,
+      {
+        ...commitInput,
+        _runExecution: {
+          runId: replayRun.id,
+          operationId: "commit:manual-order-2-replay",
+        },
+        prepareOperationId: replayPreparation._runExecution.operationId,
+      },
+      ctx.actor,
+    );
+    expect(replay.items[0]).toMatchObject({
+      outcome: "replayed",
+      findingCount: 0,
+    });
+
     const purchasesForOrder = await getDb(ctx.db)
       .select({ id: purchase.id })
       .from(purchase)

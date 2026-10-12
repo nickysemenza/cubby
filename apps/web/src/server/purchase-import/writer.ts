@@ -842,6 +842,7 @@ async function recordImportSourceAssociation(
   input: ImportSourceAssociationInput,
   purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
   outputFingerprint: string,
+  recordCanonicalProductBindings = true,
 ) {
   const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);
   const [owned] = await tx
@@ -955,7 +956,9 @@ async function recordImportSourceAssociation(
     })
     .returning({ id: importSourceOrder.id });
   if (!association) throw new Error("Import source order was not persisted");
-  if (!existing)
+  // Equivalent sources retain complete observation bindings below, while the
+  // first source keeps the Purchase's canonical original Product associations.
+  if (!existing && recordCanonicalProductBindings)
     await recordOriginalProductBindings(tx, association.id, null, input);
   if (input.originalOrder) {
     const observation = await recordSourceOrderObservation(
@@ -1393,6 +1396,7 @@ export async function importVendorOrder(
       );
     let target = chosen ?? ordered;
     const created = target == null;
+    let recordCanonicalProductBindings = true;
     if (target && !identityOnly) {
       const [lockedTarget] = await tx
         .select()
@@ -1429,6 +1433,7 @@ export async function importVendorOrder(
               .where(eq(importSourceOrder.purchaseId, target.id))
               .limit(1)
           : [];
+      recordCanonicalProductBindings = !priorSourceOrder;
       const bindingNeedsReview =
         decision.kind === "no_op" &&
         explicitResolutions.some((resolution) => {
@@ -1835,8 +1840,8 @@ export async function importVendorOrder(
               mutationKind: "update",
               fields: ["productId", "productQuantity"],
             });
-            productLines.push({ lineIndex, productId });
           }
+          productLines.push({ lineIndex, productId });
         }
       } else if (decision.kind === "insert") {
         const productsByExternalIdentity = new Map<string, string>();
@@ -2047,6 +2052,7 @@ export async function importVendorOrder(
       },
       purchaseId,
       claimFingerprint,
+      recordCanonicalProductBindings,
     );
     if (identityOnly && productLines.length)
       await attachPurchaseProducts(
