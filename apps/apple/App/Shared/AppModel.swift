@@ -397,6 +397,28 @@ final class AppModel {
         }
     }
 
+    /// The last `cubby auth login` handoff failure, shown once in an alert.
+    var cliAuthNotice: String?
+
+    /// Sends this install's bearer token to a waiting CLI handoff listener. The CLI stores its own
+    /// copy, but the session stays shared: a later `cubby auth logout` revokes it server-side.
+    func approveCliAuth(_ request: CliAuthRequest) async {
+        guard phase == .signedIn, case .bearer(let token) = await credentials.current(),
+            !token.isEmpty,
+            let origin = CliAuthOrigin.of(baseURL)
+        else {
+            cliAuthNotice = "Sign in to Cubby first, then approve the command line again."
+            return
+        }
+        do {
+            try await CliAuthSender.post(
+                token: token, to: request.port, nonce: request.nonce, origin: origin)
+        } catch {
+            cliAuthNotice = "Could not reach the command line: \(String(describing: error))"
+            Diagnostics.report(error, context: "auth.cliHandoff")
+        }
+    }
+
     private func finishSignIn(with credential: CubbyCredential) async {
         self.credential = credential
         phase = .signedIn

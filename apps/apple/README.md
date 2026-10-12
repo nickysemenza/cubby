@@ -65,6 +65,8 @@ time, and then:
 - `pnpm apple cli chatgpt connect --base-url https://cubby.example.com` — macOS
   ChatGPT plan setup, reusing the stored Cubby login and shared CubbyKit OAuth flow.
 - `pnpm apple cli <args…>` — incremental `swift build` of the `cubby` CLI and run it
+- `pnpm apple cli auth login` — approve sign-in in the running Mac app; the CLI
+  stores a copy of the app's session in its file store (pass `--email` for password sign-in)
 - `pnpm apple cli photo analyze <file> --json` — on-device Vision/routing debug dump for a local
   image, no network or auth
 - `pnpm apple cli companion [--once] [--verbose]` — run the app's image-processing companion
