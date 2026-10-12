@@ -79,6 +79,38 @@ describe("standard progressive list composition", () => {
       );
     }
   });
+  // Regression: the image list hydrated quality inside its core read, so a
+  // failed quality lookup failed the whole list. Image quality alone reads
+  // ImageSighting (the sighting check); core and media never do.
+  it("reads image core and media while image quality is unavailable", async () => {
+    await seedReferenceUniverse(ctx.db);
+    const context = buildKernelContext(ctx.db);
+    const operation = ENTITY_LIST_READ_OPERATIONS.image;
+    await getDb(ctx.db).execute(
+      sql`ALTER TABLE "ImageSighting" RENAME TO "UnavailableImageSighting"`,
+    );
+    try {
+      const base = await operation.base(context, {
+        filters: {},
+        pagination: { pageIndex: 0, pageSize: 25 },
+      });
+      expect(base.data.length).toBeGreaterThan(0);
+      const result = await operation.enrich(context, {
+        ids: base.data.map((row) => String(row.id)),
+        groups: ["media", "quality"],
+      });
+      expect(result.groups.find((group) => group.id === "quality")?.state).toBe(
+        "error",
+      );
+      expect(result.groups.find((group) => group.id === "media")?.state).toBe(
+        "ready",
+      );
+    } finally {
+      await getDb(ctx.db).execute(
+        sql`ALTER TABLE "UnavailableImageSighting" RENAME TO "ImageSighting"`,
+      );
+    }
+  });
   it("composes core and every advertised group to the complete public contract", async () => {
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
