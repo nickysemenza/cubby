@@ -44,6 +44,10 @@ alarm. Mutating attempt counters after a status read races real work and can
 turn the recovery regression into a successful load. In popover journeys,
 close the popover through its supported keyboard action and assert that the
 parent dialog remains open; do not click obscured instructional text.
+Selecting a `FilterableCombobox` option already closes its option popup. Toggle
+the parent filter chip to dismiss its editor; Escape on the closed combobox
+clears the committed selection. Do not add an incidental Escape that changes
+the filter being verified.
 
 Scripted multi-task decisions must use the task returned by Next or its declared
 stable ordering. Ordering fixture rows by a different column can apply a judgment

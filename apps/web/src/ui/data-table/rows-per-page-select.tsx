@@ -24,12 +24,14 @@ export function RowsPerPageSelect<TData extends RowData>({
   // label, so an off-scale size with no item shows a blank box — fold the
   // current size into the options so the control always reads its real value.
   const current = table.state.pagination.pageSize;
-  const sizes = PAGE_SIZES.includes(current)
-    ? PAGE_SIZES
-    : [...PAGE_SIZES, current].sort((a, b) => a - b);
+  const pageSizes = table.options.meta?.pageSizeOptions ?? PAGE_SIZES;
+  const sizes = pageSizes.includes(current)
+    ? pageSizes
+    : [...pageSizes, current].sort((a, b) => a - b);
 
   return (
     <FilterableCombobox
+      ariaLabel="Rows per page"
       items={sizes.map((pageSize) => ({
         value: `${pageSize}`,
         label: `${pageSize}`,

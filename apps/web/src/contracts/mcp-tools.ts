@@ -74,6 +74,7 @@ import {
   usdaSuggestionReason,
 } from "~/contracts/usda.contract";
 import { vendorContract } from "~/contracts/vendor.contract";
+import { workQueueContract } from "~/contracts/work-queue.contract";
 
 /**
  * The Cubby MCP surface: 24 tools, each a group of actions called as
@@ -677,6 +678,12 @@ export const MCP_TOOLS = defineMcpTools({
   activity: {
     description: "What changed recently, and what needs fixing.",
     actions: {
+      work_queue: mcpAction({
+        op: workQueueContract.ops.forMember,
+        strict: true,
+        description:
+          "Actionable research, review and repair work available to the connected member, including shared work. Private source and account work belonging only to another member is excluded before counts and pagination. Routing follows current evidence ownership; unresolved private ownership requires household review.",
+      }),
       recent: mcpAction({
         op: auditLogContract.ops.list,
         description:

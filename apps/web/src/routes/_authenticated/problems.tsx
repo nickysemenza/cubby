@@ -42,6 +42,14 @@ function ProblemsPage() {
       title="Data Problems"
       actions={
         <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            render={<Link to="/work-queue" />}
+            nativeButton={false}
+          >
+            Work queue
+          </Button>
           {/* Product matching has its own review workbench. */}
           <Button
             size="sm"

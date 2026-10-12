@@ -275,7 +275,7 @@ export const derivedProblemQueries = [
     freshness: { kind: "live" },
     title: "Duplicate vendors",
     description:
-      "Two or more vendor records for what looks like one business, so its purchases and spend are split between them.",
+      "Two or more vendor records for what looks like one business, so its purchases and spend are split between them. Review public vendor identity; verify source/account ownership and overlapping money before merging.",
     emptyMessage: "Each vendor has one record.",
     source: {
       kind: "derived",

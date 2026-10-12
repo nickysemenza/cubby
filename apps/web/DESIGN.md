@@ -41,6 +41,15 @@ Detail workspaces group declared sections into Overview, Work and Evidence. Rela
 
 Report `records` blocks of stage or log rows declare the `ledger` presentation: one aligned line per row with a state dot (its label stays readable), title, one-line result and evidence, time, and commands. Clipped text keeps its full text as a tooltip; failures and warnings wrap in full. A command that needs input opens beneath its own row rather than standing open. Timed rows that share a household day print the day once in the block heading.
 
+The dedicated Work queue inherits the list workbench and RTable. Record identity
+leads, followed by Waiting for, reason, next action, source and kind. Waiting for
+uses the current household member roster, Either for shared work and an explicit
+Unresolved state with its explanation. Its filters and pagination are URL state;
+record links open the existing source record and its review controls. Run titles
+link to the passive Problems overview until Run detail reads stop recovering
+execution. The shared pager can narrow its choices to the read contract. Problems
+and Research saved views link into this projection without creating assignments.
+
 Specialist workflows such as photo review, import, calendar, Gantt, camera, reconciliation, and matrices keep their task-specific controls inside the shared frame. Preserve status wording and raw diagnostics where the product contract requires them.
 
 RTable owns interactive record work: virtualization, pinned and resizable columns, saved layouts, filters, selection, clipboard, grouping, inline editing, and aggregate footers. Desktop data rows remain 32px by default. Every cell value gets the same 8px start padding; decorated cells render through `CellFrame`. Columns are as narrow as their content kind allows and spare width goes to the record's identity first ([column widths](../../docs/agents/web-ui-reference.md#column-widths)). A table view never becomes a stack of decorative cards on desktop. Phone rows use a semantic projection with a 44px minimum target.

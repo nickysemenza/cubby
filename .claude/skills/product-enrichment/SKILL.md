@@ -15,6 +15,12 @@ alone does not establish verification.
 
 ## Worklist and read shape
 
+For unified backlog triage, `activity.work_queue` offers the connected member's
+eligible work plus shared Product research. The Work queue page shows household
+routing metadata and links from Problems and Research. Public Product facts can
+be Either; private original/order/account work follows current source ownership.
+Queue membership grants no new source access or execution authorization.
+
 Use supplied `PRD-` identifiers regardless of inventory. Enrichment never
 decides whether an import line becomes a Product and never receives inventory.
 Enrichment never invents a price or date; a historical acquisition of unknown cost is an Expense with `cost: null` and no `date`.

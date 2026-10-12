@@ -131,6 +131,8 @@ export interface ServerTotals {
 }
 
 export interface CubbyTableMeta {
+  /** Bounded server contracts can narrow the shared pager choices. */
+  pageSizeOptions?: readonly number[];
   serverTotals?: ServerTotals;
   urlScopeCount?: number;
   rowContentVersion?: unknown;

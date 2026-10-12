@@ -21,6 +21,15 @@ ownership checks, retained-Email checksums, replay, money conservation and
 safe writes. Source-backed orders pass through `purchase_import` rather than
 generic entity mutation.
 
+Start backlog triage with `activity.work_queue`: it offers the connected
+member's current source/account work plus shared research. Its household UI is
+the Work queue page linked from Problems and Research, with a Waiting for
+filter. Unknown private ownership requires review; queue membership does not
+authorize imports, paid execution or access to another member's originals.
+Route paperwork and itemization research by source ownership. Paying for an
+order does not establish access to its originals; settlement reconciliation
+also requires the relevant financial-account authority.
+
 In a member's interactive Burn-down, resolve obvious duplicate Purchases and
 booked Expenses under [duplicate bookkeeping](references/duplicates.md).
 Its evidence and impact checks allow routine cleanup without another

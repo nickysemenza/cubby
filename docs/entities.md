@@ -1066,6 +1066,14 @@ The Research queue ([GLOSSARY](../GLOSSARY.md)) is no table: it is the
 ascending. A `DataException` bound to the evidence fingerprint removes an item
 until its inputs change.
 
+The dedicated `/work-queue` page combines those predicates with interactive
+Problems, Email attention, findings and account work. It derives a filterable
+Waiting for column from current source/account authority, with Either for
+shared research and unresolved for missing private ownership. This is a read
+projection, not a new entity or assignment ledger. MCP `activity.work_queue`
+uses the connected member implicitly and filters eligibility before counts
+and paging; the household UI's routing filters do not grant private access.
+
 The compiler (`scripts/generator/entities/data-quality.ts`) synthesizes two
 model fields (`dataQuality`, `dataGaps`) with the `data-quality` list
 renderer, the `dataStatus`/`dataGap` filter descriptors, and a `dataQuality`

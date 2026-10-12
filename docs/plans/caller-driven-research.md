@@ -43,12 +43,17 @@ Sources section with per-field hints. Burn-down writes are member-equivalent
 
 ## Research queue
 
-Saved view / thin `research.queue` read over existing manifest data-quality
-checks on Purchase-linked records (`product_*`, `expense_product_resolution`,
+Research saved views reuse existing manifest data-quality checks on
+Purchase-linked records (`product_*`, `expense_product_resolution`,
 `purchase_itemization`, `financial_transaction_*`, …), ordered by `dataQuality`
 asc. "Searched, not available" = `DataException` bound to its evidence
-fingerprint. Open `RunFinding`s stay in Problems. Any entity can also be targeted
-directly. Home/Activity shows the queue count linking to the view.
+fingerprint. The dedicated Work queue combines those views with interactive
+Problems, Email attention, open findings and account work. Its household table
+shows filterable current-member/Either/unresolved routing; MCP
+`activity.work_queue` applies authenticated member eligibility before counts
+and pagination. Existing Research and Problems views remain available and link
+to the unified page. Automatic maintenance keeps its existing controls. Any
+entity can also be targeted directly.
 
 ## Receipts
 

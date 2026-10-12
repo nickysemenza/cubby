@@ -1,0 +1,412 @@
+import type { Entity } from "@cubby/schemas/entity";
+import {
+  shortcodeEntities,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
+import { imageListFiltersSchema } from "@cubby/schemas/image";
+import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
+import { inventoryFiltersSchema } from "@cubby/schemas/inventory";
+import { locationFiltersSchema } from "@cubby/schemas/location";
+import { mealFiltersSchema } from "@cubby/schemas/meal";
+import { problemDetectors, type ProblemKey } from "@cubby/schemas/problems";
+import { productFiltersSchema } from "@cubby/schemas/product";
+import {
+  projectFiltersSchema,
+  taskFiltersSchema,
+  type ProjectAttentionItem,
+} from "@cubby/schemas/project";
+import { recipeFiltersSchema } from "@cubby/schemas/recipe";
+import { vendorFiltersSchema } from "@cubby/schemas/vendor";
+import {
+  workQueueHouseholdInput,
+  type WorkQueueRow,
+} from "@cubby/schemas/work-queue";
+import { type ParsedShortcode } from "@cubby/shared";
+import { sha256Hex } from "@cubby/shared/sha256";
+import { sql, type SQL } from "drizzle-orm";
+import { getTableName } from "drizzle-orm";
+import type { z } from "zod";
+
+import { compileProblemFilters } from "~/entity/problem-filter-semantics";
+import type {
+  EntityProblemSource,
+  FilterAssembly,
+} from "~/entity/problem-query";
+import { problemQueryDeclarations } from "~/entity/problem-registry";
+import type { Database } from "~/server/db";
+import { labelSql } from "~/server/repo/entity-graph";
+import { buildImageWhere } from "~/server/repo/image";
+import { buildIngredientListWhere } from "~/server/repo/ingredient/search";
+import { buildInventoryWhere } from "~/server/repo/inventory/crud";
+import { buildLocationWhere } from "~/server/repo/location/crud";
+import { buildMealWhere } from "~/server/repo/meal/crud";
+import { findIncompleteStatementImports } from "~/server/repo/problems/detectors-financial";
+import { buildProductWhere } from "~/server/repo/product/crud";
+import { computeAttentionItems } from "~/server/repo/project/attention";
+import { buildProjectWhere } from "~/server/repo/project/lookup";
+import { buildRecipeWhere } from "~/server/repo/recipe/crud";
+import { SHORTCODE_TABLE } from "~/server/repo/shortcode-tables";
+import { statementImportMembers } from "~/server/repo/statement-import-membership";
+import { buildTaskWhere } from "~/server/repo/task/lookup";
+import { buildVendorWhereClause } from "~/server/repo/vendor";
+import {
+  workDiagnosticCandidate,
+  workQueueCandidate,
+} from "~/server/repo/work-queue-projection";
+import {
+  workExpenseOwners,
+  workImageOwners,
+  workImageIsShared,
+  workPurchaseOwners,
+  workRunOwners,
+} from "~/server/repo/work-queue-routing";
+import { runDiagnostic } from "~/server/services/problem-diagnostics.service";
+
+type WhereBuilder = (
+  db: Database,
+  filters: FilterAssembly,
+  attentionItems?: readonly ProjectAttentionItem[],
+) => SQL | undefined | Promise<SQL | undefined>;
+const sharedProblemBuilders = {
+  product: (db, filters) =>
+    buildProductWhere(
+      db,
+      productFiltersSchema.parse(compileProblemFilters("product", filters)),
+    ),
+  ingredient: (db, filters) =>
+    buildIngredientListWhere(
+      db,
+      ingredientFiltersSchema.parse(
+        compileProblemFilters("ingredient", filters),
+      ),
+    ),
+  recipe: (db, filters) =>
+    buildRecipeWhere(
+      db,
+      recipeFiltersSchema.parse(compileProblemFilters("recipe", filters)),
+    ),
+  inventory: (db, filters) =>
+    buildInventoryWhere(
+      db,
+      inventoryFiltersSchema.parse(compileProblemFilters("inventory", filters)),
+    ),
+  location: (db, filters) =>
+    buildLocationWhere(
+      db,
+      locationFiltersSchema.parse(compileProblemFilters("location", filters)),
+    ),
+  meal: (db, filters) =>
+    buildMealWhere(
+      db,
+      mealFiltersSchema.parse(compileProblemFilters("meal", filters)),
+    ),
+  project: (db, filters, attentionItems) =>
+    buildProjectWhere(
+      db,
+      projectFiltersSchema.parse(compileProblemFilters("project", filters)),
+      attentionItems,
+    ),
+  task: (db, filters) =>
+    buildTaskWhere(
+      db,
+      taskFiltersSchema.parse(compileProblemFilters("task", filters)),
+    ),
+  vendor: (_db, filters) =>
+    buildVendorWhereClause(
+      vendorFiltersSchema.parse(compileProblemFilters("vendor", filters)),
+    ),
+  image: (db, filters) =>
+    buildImageWhere(
+      db,
+      imageListFiltersSchema.parse(compileProblemFilters("image", filters)),
+    ),
+} satisfies Partial<Record<Entity, WhereBuilder>>;
+
+/** Only automatic maintenance or external inference is outside the interactive queue. */
+const excludedDiagnostics = new Set([
+  "import-findings", // The queue owns the read-only open/unexpired relation.
+  "provisional-financial-accounts", // Uses its canonical gap SQL in the queue.
+  "entities-missing-embeddings",
+  "products-with-better-upc-data",
+  "stale-parent-recipes",
+  "referential-liveness-violations",
+  "incomplete-statement-imports", // Reviewed through current accounts below.
+]);
+const hasPublicRecord = (entity: Entity): entity is ShortcodeEntity =>
+  shortcodeEntities.some((kind) => kind === entity);
+
+/** Diagnostic schemas validate every value before public references enter the queue. */
+const privateDiagnosticKeys = new Set([
+  "duplicateFinancialTransactionSourceRefs",
+  "duplicateFinancialAccountSourceAliases",
+  "invalidFinancialJson",
+  "duplicateSpendCandidates",
+]);
+const privateProblemEntry = (
+  key: ProblemKey,
+  item: unknown,
+): Pick<WorkQueueRow, "reason"> & {
+  refs: ParsedShortcode[];
+  fingerprintPayload: string;
+} => {
+  switch (key) {
+    case "duplicateFinancialTransactionSourceRefs": {
+      const parsed =
+        problemDetectors.duplicateFinancialTransactionSourceRefs.item.parse(
+          item,
+        );
+      return {
+        refs: parsed.transactionIds.map((shortcode) => ({
+          type: "financialTransaction",
+          shortcode,
+        })),
+        fingerprintPayload: JSON.stringify({
+          ...parsed,
+          transactionIds: [...parsed.transactionIds].sort(),
+        }),
+        reason: `Repeated settlement reference from ${parsed.source}: ${parsed.externalId}.`,
+      };
+    }
+    case "duplicateFinancialAccountSourceAliases": {
+      const parsed =
+        problemDetectors.duplicateFinancialAccountSourceAliases.item.parse(
+          item,
+        );
+      return {
+        refs: parsed.accountIds.map((shortcode) => ({
+          type: "financialAccount",
+          shortcode,
+        })),
+        fingerprintPayload: JSON.stringify({
+          ...parsed,
+          accountIds: [...parsed.accountIds].sort(),
+        }),
+        reason: `Repeated account identity from ${parsed.source}: ${parsed.externalAccountId}.`,
+      };
+    }
+    case "invalidFinancialJson": {
+      const parsed = problemDetectors.invalidFinancialJson.item.parse(item);
+      return {
+        refs:
+          parsed.entity === "financialAccount"
+            ? [{ type: parsed.entity, shortcode: parsed.id }]
+            : [{ type: parsed.entity, shortcode: parsed.id }],
+        fingerprintPayload: JSON.stringify(parsed),
+        reason: `${parsed.field}: ${parsed.message}`,
+      };
+    }
+    case "duplicateSpendCandidates": {
+      const parsed = problemDetectors.duplicateSpendCandidates.item.parse(item);
+      return {
+        refs: [
+          { type: "expense", shortcode: parsed.id },
+          { type: "purchase", shortcode: parsed.purchaseId },
+        ],
+        fingerprintPayload: JSON.stringify(parsed),
+        reason: `Possible duplicate expense ${parsed.id} and purchase ${parsed.purchaseId} (${parsed.matchedOn}).`,
+      };
+    }
+    default:
+      throw new Error(
+        `Private Work diagnostic ${key} has no declared references`,
+      );
+  }
+};
+
+const privateOwnerRelation = (ref: ParsedShortcode): SQL | null => {
+  const table = SHORTCODE_TABLE[ref.type];
+  const id = sql`${table.id}`;
+  const scope = sql`${table.shortcode} = ${ref.shortcode} AND ${table.deletedAt} IS NULL`;
+  let owners: SQL;
+  switch (ref.type) {
+    case "purchase":
+      owners = workPurchaseOwners(id);
+      break;
+    case "expense":
+      owners = workExpenseOwners(id);
+      break;
+    case "run":
+      owners = workRunOwners(id);
+      break;
+    case "financialAccount":
+      owners = sql`ARRAY["FinancialAccount"."ledgerPartyId"]`;
+      break;
+    case "financialTransaction":
+      owners = sql`ARRAY(SELECT account."ledgerPartyId" FROM "FinancialAccount" account WHERE account.id = "FinancialTransaction"."accountId" AND account."deletedAt" IS NULL)`;
+      break;
+    case "vendorAccount":
+      owners = sql`ARRAY["VendorAccount"."ledgerPartyId"]`;
+      break;
+    case "email":
+      owners = sql`ARRAY["Email"."ledgerPartyId"]`;
+      break;
+    default:
+      return null;
+  }
+  // A missing private record or owner poisons the group, rather than making it shared.
+  return sql`coalesce((SELECT CASE WHEN cardinality(authority.owners) > 0 THEN authority.owners ELSE ARRAY[NULL::uuid] END FROM ${table} CROSS JOIN LATERAL (SELECT ${owners} AS owners) authority WHERE ${scope}), ARRAY[NULL::uuid])`;
+};
+
+type WorkSourceInput = Pick<
+  z.infer<typeof workQueueHouseholdInput>,
+  "source" | "kind"
+>;
+const includesWorkSource = (
+  input: WorkSourceInput,
+  source: WorkSourceInput["source"],
+  kind: WorkSourceInput["kind"],
+) =>
+  (!input.source || input.source === source) &&
+  (!input.kind || input.kind === kind);
+const needsProjectAttention = (source: EntityProblemSource) =>
+  source.entity === "project" &&
+  source.filters.some((filter) => filter.id === "attention");
+
+const sharedProblemScope = (entity: ShortcodeEntity, id: SQL) =>
+  entity === "image"
+    ? { owners: workImageOwners(id), shared: workImageIsShared(id) }
+    : { owners: sql`ARRAY[]::uuid[]`, shared: true };
+
+export async function additionalWorkProblemSelections(
+  db: Database,
+  input: WorkSourceInput,
+): Promise<SQL[]> {
+  const selections: SQL[] = [];
+  const includeProblems = includesWorkSource(input, "problem", "repair");
+  const includeAccounts = includesWorkSource(input, "account", "review");
+  if (!includeProblems && !includeAccounts) return selections;
+  let attentionPromise: Promise<ProjectAttentionItem[]> | undefined;
+  const attentionItems = () => (attentionPromise ??= computeAttentionItems(db));
+  for (const definition of problemQueryDeclarations()) {
+    if (!includeProblems) break;
+    const source = definition.source;
+    const details = {
+      source: "problem",
+      kind: "repair",
+      reason: definition.title,
+      nextAction: definition.description,
+    } as const;
+    if (source.kind === "entity") {
+      if (
+        ["purchase", "expense", "financialTransaction"].includes(source.entity)
+      )
+        continue;
+      const buildWhere = Object.entries(sharedProblemBuilders).find(
+        ([entity]) => entity === source.entity,
+      )?.[1];
+      if (!buildWhere)
+        throw new Error(
+          `Interactive Work has no canonical reader for ${source.entity}`,
+        );
+      if (!hasPublicRecord(source.entity))
+        throw new Error(
+          `Interactive Work requires a public record for ${source.entity}`,
+        );
+      const table = SHORTCODE_TABLE[source.entity];
+      const from =
+        source.entity === "inventory"
+          ? sql`${table} INNER JOIN "Product" ON "Product".id = "InventoryEntry"."productId" INNER JOIN "Location" ON "Location".id = "InventoryEntry"."locationId"`
+          : sql`${table}`;
+      const routing = sharedProblemScope(source.entity, sql`${table.id}`);
+      selections.push(
+        workQueueCandidate(
+          source.entity,
+          from,
+          sql`${table.shortcode}`,
+          labelSql(source.entity, `"${getTableName(table)}"`),
+          routing.owners,
+          await buildWhere(
+            db,
+            source.filters,
+            needsProjectAttention(source) ? await attentionItems() : undefined,
+          ),
+          details,
+          definition.key,
+          routing.shared,
+        ),
+      );
+      continue;
+    }
+    if (excludedDiagnostics.has(source.diagnostic)) continue;
+    if (!privateDiagnosticKeys.has(definition.key)) {
+      const result = await runDiagnostic(
+        db,
+        source.diagnostic,
+        source.diagnostic === "project-date-window-drift"
+          ? { attentionItems: await attentionItems() }
+          : {},
+        { kind: "count" },
+      );
+      if (result.count)
+        selections.push(
+          workDiagnosticCandidate(
+            definition.key,
+            `problem:${definition.key}`,
+            definition.title,
+            sql`ARRAY[]::uuid[]`,
+            {
+              ...details,
+              reason: `${result.count} work items. ${definition.description}`,
+            },
+            true,
+          ),
+        );
+      continue;
+    }
+    // These adapters compute their complete grouped relation once; no sample/count scan is repeated.
+    const result = await runDiagnostic(
+      db,
+      source.diagnostic,
+      {},
+      { kind: "sample", limit: Number.POSITIVE_INFINITY },
+    );
+    for (const item of result.items) {
+      const entry = privateProblemEntry(definition.key, item);
+      const privateOwners = entry.refs.flatMap((ref) => {
+        const relation = privateOwnerRelation(ref);
+        return relation ? [relation] : [];
+      });
+      const owners = privateOwners.length
+        ? sql.join(privateOwners, sql` || `)
+        : sql`ARRAY[]::uuid[]`;
+      selections.push(
+        workDiagnosticCandidate(
+          definition.key,
+          `problem:${definition.key}:${await sha256Hex(entry.fingerprintPayload)}`,
+          `${definition.title} · ${entry.refs.map((ref) => ref.shortcode).join(", ")}`,
+          owners,
+          { ...details, reason: entry.reason },
+          privateOwners.length === 0,
+        ),
+      );
+    }
+  }
+  for (const incomplete of includeAccounts
+    ? await findIncompleteStatementImports(db)
+    : []) {
+    const owners = sql`coalesce((
+      SELECT array_agg(DISTINCT account."ledgerPartyId")
+      FROM "StatementImport" batch
+      JOIN ${statementImportMembers} member ON member."importId" = batch.id
+      JOIN "StatementRow" row ON row.id = member."statementRowId" AND row."deletedAt" IS NULL
+      LEFT JOIN "FinancialAccount" account ON account.id = row."accountId" AND account."deletedAt" IS NULL
+      WHERE batch.source = ${incomplete.source} AND batch.fingerprint = ${incomplete.fingerprint} AND batch."deletedAt" IS NULL
+    ), ARRAY[NULL::uuid])`;
+    selections.push(
+      workDiagnosticCandidate(
+        "incompleteStatementImports",
+        `problem:incompleteStatementImports:${incomplete.source}:${incomplete.fingerprint}`,
+        incomplete.label,
+        owners,
+        {
+          source: "account",
+          kind: "review",
+          reason: `Statement import retained ${incomplete.rowCountStored} of ${incomplete.rowCountDeclared} declared rows.`,
+          nextAction:
+            "Open Problems to inspect the import and its current account evidence.",
+        },
+      ),
+    );
+  }
+  return selections;
+}

@@ -399,6 +399,13 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Inventory, products & locations
 
+- **Accept legitimate fractional acquisition quantities in Product pricing
+  reads.** A detailed Product read can fail validation because
+  `pricing.knownUnitCount` requires an integer even when acquiring Expenses
+  carry fractional quantities. Trace the quantity/unit contract and preserve
+  recorded money and physical stock; add a synthetic regression before fixing
+  the projection or schema. Do not round real quantities to satisfy validation.
+
 ---
 
 ## Tasks, projects & garden
