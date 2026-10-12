@@ -1,4 +1,7 @@
-import { createPostgresPool } from "./postgres-pool";
+import {
+  createPostgresPool,
+  terminateOtherPostgresConnections,
+} from "./postgres-pool";
 import { pollUntil } from "@cubby/shared/retry";
 import {
   type DatabaseLease,
@@ -285,10 +288,7 @@ async function resetTestDb() {
   // Nothing legitimate is in flight between tests, so killing those backends is
   // exactly right — and it is what the per-test database used to do implicitly
   // by simply never reusing a connection.
-  await pool.query(
-    `SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-      WHERE datname = current_database() AND pid <> pg_backend_pid()`,
-  );
+  await terminateOtherPostgresConnections(pool);
   await pool.query(`TRUNCATE ${truncateTargets} RESTART IDENTITY CASCADE`);
   await seedTestUser(rawDb);
   await seedBaseWorld(rawDb);

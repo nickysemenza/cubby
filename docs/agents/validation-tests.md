@@ -311,6 +311,14 @@ callback shutdown forms share this guarantee; errors remain observable.
 `postgres-pool.integration.test.ts` holds real termination packets to pin the
 ordering before database cleanup.
 
+Between-test resets use `terminateOtherPostgresConnections` and wait for the
+terminated pool clients' `end` events before issuing TRUNCATE or seeding. A
+successful `pg_terminate_backend` statement alone does not mean node-postgres
+has received the fatal message: checking out that idle client first removes
+its pool error listener and can turn the delayed `57P01` into an uncaught
+exception. The regression pauses a real idle socket's reads to enforce this
+ordering; unexpected query and pool errors retain their existing handling.
+
 A profile (`WORKERD_PROFILES` in `workerd-harness.ts`) routes each production
 queue consumer to one of:
 

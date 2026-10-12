@@ -1,3 +1,4 @@
+import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { createLogger } from "@cubby/worker-tracing";
@@ -97,7 +98,7 @@ type RunAgent =
   import("~/server/purchase-agent/run-agent").PurchaseImportRunAgent;
 
 /**
- * One import Run's coordinator Durable Object. Every entry point refuses a
+ * One import Run's coordinator Durable Object. Execution entry points refuse a
  * retired Run before loading the agent; its Lifecycle jobs wake it through
  * `alarm`. The SDK initializes the agent inside its own `fetch` and `alarm`
  * (the alarm's memory-limit circuit breaker covers boot hydration), so only
@@ -107,7 +108,7 @@ type RunAgent =
  * `Run.retiredAt` is stamped only after `retire` acknowledges empty storage,
  * so the database fence alone leaves a gap. Once `retire` is authorized it
  * writes a durable fence table (which survives a restart and is the only
- * storage an empty inventory keeps), admits no entry point, drains the ones
+ * storage an empty inventory keeps), admits no execution, drains the ones
  * already admitted, and inventories and deletes storage with no event
  * interleaved.
  */
@@ -183,11 +184,22 @@ class PurchaseImportRunAgentHost
       request.method === "GET" &&
       new URL(request.url).pathname === "/transcript"
     ) {
-      return this.admit(async () => {
-        const { readStoredAgentConversation } =
-          await import("./agent-transcript");
-        return Response.json(readStoredAgentConversation(this.ctx.storage.sql));
-      }, retired());
+      return this.admit(
+        async () => {
+          const { readStoredAgentConversation } =
+            await import("./agent-transcript");
+          return Response.json(
+            readStoredAgentConversation(this.ctx.storage.sql),
+          );
+        },
+        Response.json(
+          agentConversationSchema.parse({
+            status: "absent",
+            messages: [],
+            settlements: [],
+          }),
+        ),
+      );
     }
     return this.admit(async () => {
       if (await this.fenced()) return retired();

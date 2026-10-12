@@ -260,10 +260,9 @@ historical Runs stay readable through generic reports.
   internal contradiction. Preserve already supported identity and assignments.
 
 - ⏳ 🧪 **Accept live Mail import and Burn-down.** Live work stays paused until the
-  member resumes it. Remaining acceptance: the approved 26-Product scope, the
-  remaining evidence-supported facts, including unresolved packaging-brand
-  evidence,
-  live verification that imports refuse exact-identity Product forks and
+  member resumes it. The approved Product scope has completed source-backed
+  acceptance, including the member's packaging-label confirmations. Remaining
+  acceptance: live verification that imports refuse exact-identity Product forks and
   resolve Vendors by Sender proof or Vendor alias, known-vendor and
   unmatched-transaction backfills, full Gmail history excluding Spam/Trash, separately verified
   continuous new-mail processing, and persisted Purchases, Products, related

@@ -574,6 +574,24 @@ describe("coordinator host retirement", () => {
       actual: retiredFetch.status,
     });
     expect(retiredFetch.status).toBe(410);
+    const storage = await runtime.harness
+      .getWorker()
+      .getDurableObjectStorage("PurchaseImportRunAgent", { name: agentId });
+    const beforeRead = await storage.exec(
+      "SELECT name, sql FROM sqlite_master ORDER BY name",
+    );
+    const beforeRun = await readRun(runId);
+    const transcript = await request("/coordinator-transcript", { agentId });
+    expect(transcript.status).toBe(200);
+    expect(await transcript.json()).toEqual({
+      status: "absent",
+      messages: [],
+      settlements: [],
+    });
+    expect(
+      await storage.exec("SELECT name, sql FROM sqlite_master ORDER BY name"),
+    ).toEqual(beforeRead);
+    expect(await readRun(runId)).toEqual(beforeRun);
     const reconnect = await request("/coordinator-dispatch", {
       agentId,
       purpose: "mail_import",
