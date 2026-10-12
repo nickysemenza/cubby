@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Stored source identities are shared by retained-mail reads and import writers. */
+/** Stored source kinds; `browser_order` is retired and only read. */
 export const importSourceKind = z.enum([
   "browser_order",
   "mail_message",

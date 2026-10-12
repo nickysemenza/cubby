@@ -312,9 +312,6 @@ describe("public mail tool", () => {
     ).rejects.toThrow("different reviewed refund set");
     const readInput = { mailboxId, messageId: source.messageId };
     const codes = purchases.map((row) => row.shortcode).sort();
-    const firstPurchaseForSource = purchases[0];
-    if (!firstPurchaseForSource)
-      throw new Error("Synthetic accepted Purchase missing");
     const acceptedRun = await insertWithShortcode(ctx.db, "run", {
       purpose: "file_import",
       trigger: "manual",
@@ -344,7 +341,7 @@ describe("public mail tool", () => {
       .values({
         sourceClaimId: acceptedClaim.id,
         orderKey: "synthetic-review-handle",
-        purchaseId: firstPurchaseForSource.id,
+        purchaseId: secondPurchase.id,
         checksum: source.rawChecksum,
         outputFingerprint: "0".repeat(64),
       })
@@ -354,7 +351,7 @@ describe("public mail tool", () => {
     expect(beforeDeletion).toHaveProperty("acceptedSourceOrders", [
       {
         sourceOrderId: acceptedOrder.id,
-        purchaseId: firstPurchaseForSource.shortcode,
+        purchaseId: secondPurchase.shortcode,
         purchaseDeleted: false,
         source: {
           kind: "mail_message",
@@ -376,6 +373,18 @@ describe("public mail tool", () => {
       .where(eq(purchase.id, secondPurchase.id));
     expect(await readMail(ctx.db, readInput, ctx.actor)).toMatchObject({
       purchaseIds: codes,
+      acceptedSourceOrders: [
+        {
+          sourceOrderId: acceptedOrder.id,
+          purchaseId: secondPurchase.shortcode,
+          purchaseDeleted: true,
+          source: {
+            kind: "mail_message",
+            externalKey: acceptedClaim.externalKey,
+            checksum: source.rawChecksum,
+          },
+        },
+      ],
       purchaseAssociations: codes.map((purchaseId) => ({
         purchaseId,
         purchaseDeleted: purchaseId === secondPurchase.shortcode,

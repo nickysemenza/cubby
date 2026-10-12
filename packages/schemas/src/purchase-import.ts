@@ -29,7 +29,6 @@ export const vendorOrderEvidence = z.enum([
   "receipt_only",
   "not_expected",
 ]);
-/** Every stored source kind; `browser_order` is retired and only read. */
 /**
  * A Distinct-from decision (terminology): the line is a different Product from
  * this exact name match, shown by the Source's url and quoted difference.
