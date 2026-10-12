@@ -443,9 +443,18 @@ async function presentActivityRuns(db: Database, rows: readonly RunWire[]) {
   });
 }
 
-const waitingAttempt = sql`state IN ('paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')`;
-const reviewAttempt = sql`state = 'needs_review'`;
-const failedAttempt = sql`state IN ('failed', 'dispatch_failed')`;
+const waitingAttemptFor = (state: SQL) =>
+  sql`${state} IN ('paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')`;
+const reviewAttemptFor = (state: SQL) => sql`${state} = 'needs_review'`;
+const failedAttemptFor = (state: SQL) =>
+  sql`${state} IN ('failed', 'dispatch_failed')`;
+const waitingAttempt = waitingAttemptFor(sql`state`);
+const reviewAttempt = reviewAttemptFor(sql`state`);
+const failedAttempt = failedAttemptFor(sql`state`);
+
+/** Work and Activity share the same states requiring a person. */
+export const activityAttentionStatePredicate = (state: SQL): SQL =>
+  sql`(${waitingAttemptFor(state)} OR ${reviewAttemptFor(state)} OR ${failedAttemptFor(state)})`;
 
 // oxlint-disable-next-line complexity -- independent optional scopes share one predicate across flat, grouped and attention reads.
 function listPredicate(input: ActivityListInput): SQL {
@@ -471,9 +480,7 @@ function listPredicate(input: ActivityListInput): SQL {
     clauses.push(sql`"ledgerPartyId" = ${input.ledgerPartyId}`);
   if (input.state) clauses.push(sql`state = ${input.state}`);
   if (input.attentionOnly)
-    clauses.push(
-      sql`(${waitingAttempt} OR ${reviewAttempt} OR ${failedAttempt})`,
-    );
+    clauses.push(activityAttentionStatePredicate(sql`state`));
   if (input.from)
     clauses.push(
       sql`"createdAt" >= (${input.from}::timestamptz AT TIME ZONE 'UTC')`,

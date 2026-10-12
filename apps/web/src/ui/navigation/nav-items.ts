@@ -4,6 +4,7 @@ import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { PaletteIcon } from "@phosphor-icons/react/dist/csr/Palette";
@@ -135,6 +136,7 @@ export const desktopNav: NavNode[] = [
     children: [
       { to: "/labels", label: "Labels", icon: QrCodeIcon },
       { to: "/problems", label: "Problems", icon: WarningIcon },
+      { to: "/work-queue", label: "Work queue", icon: ListChecksIcon },
       { to: "/activity", label: "Activity", icon: PulseIcon },
       { to: "/collections", label: "Collections", icon: PaletteIcon },
       { to: "/entities", label: "Entity explorer", icon: NetworkIcon },

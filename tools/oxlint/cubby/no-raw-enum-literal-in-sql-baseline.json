@@ -61,7 +61,7 @@
   "apps/web/tooling/database-socket-lifecycle.integration.test.ts": 4,
   "apps/web/tests/e2e/import-order-convergence.helpers.ts": 1,
   "apps/web/src/server/repo/vendor-account.ts": 1,
-  "apps/web/src/server/repo/ledger-transfer.ts": 2,
+  "apps/web/src/server/repo/ledger-transfer.ts": 0,
   "apps/web/src/server/repo/upc-lookup-cache.ts": 1,
   "apps/web/src/server/repo/inventory/receive-expense.integration.test.ts": 1,
   "apps/web/src/server/repo/cookbook-source-count.ts": 2,

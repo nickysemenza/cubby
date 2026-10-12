@@ -20,3 +20,14 @@ browser and semantic judgment. The consequence is deliberate: with no caller,
 Products keep their gaps and the Research queue grows until the next Burn-down.
 Server-side web search for Mail import may return later, limited to logged-out
 pages.
+
+The dedicated Work queue combines interactive Research, Email attention,
+findings, reconciliation and account review from their existing predicates.
+Problems and Research views link to it. The household table shows filterable
+Waiting for routing: current members, Either for shared work, or unresolved
+private ownership. `activity.work_queue` offers only the authenticated member's
+eligible work plus shared work, before counts and pagination. Routing follows
+current source/account authority rather than inventory ownership or historical
+actor snapshots; private originals keep their existing access checks. Queue
+reads create no records, launch no inference and authorize no execution.
+Automatic maintenance remains in its existing controls.

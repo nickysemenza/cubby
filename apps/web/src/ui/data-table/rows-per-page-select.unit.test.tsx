@@ -11,6 +11,7 @@ import type { CubbyTable as Table } from "./table-features";
  */
 function tableWithPageSize(pageSize: number) {
   return fromPartial<Table<{ id: string }>>({
+    options: {},
     state: { pagination: { pageIndex: 0, pageSize } },
     setPageSize: vi.fn(),
   });

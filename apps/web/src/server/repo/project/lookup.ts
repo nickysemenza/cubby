@@ -6,7 +6,11 @@ import {
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { projectListItemOut } from "@cubby/schemas/project";
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
-import type { ProjectFilters, ProjectOptionsOut } from "@cubby/schemas/project";
+import type {
+  ProjectAttentionItem,
+  ProjectFilters,
+  ProjectOptionsOut,
+} from "@cubby/schemas/project";
 import { parseShortcode } from "@cubby/shared";
 import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -125,6 +129,7 @@ export const buildProjectListQuery = async (
   db: Database,
   filters: ProjectFilters,
   sorts: SortParams[],
+  attentionItems?: readonly ProjectAttentionItem[],
 ) => {
   // Whole-tree parent/child map — cheap single query — see subtree.ts's doc
   // comment. Loaded LAZILY and memoized: only two filters need it for the WHERE
@@ -152,7 +157,7 @@ export const buildProjectListQuery = async (
   // and blocked-next-action predicates in the ordinary entity list.
   const attentionFilter = filters.attention;
   const attentionCodes = attentionFilter
-    ? (await computeAttentionItems(db))
+    ? (attentionItems ?? (await computeAttentionItems(db)))
         .filter(
           (item) => item.type === projectAttentionFilterTypes[attentionFilter],
         )
@@ -305,7 +310,8 @@ export const buildProjectListQuery = async (
 export const buildProjectWhere = async (
   db: Database,
   filters: ProjectFilters,
-) => (await buildProjectListQuery(db, filters, [])).whereClause;
+  attentionItems?: readonly ProjectAttentionItem[],
+) => (await buildProjectListQuery(db, filters, [], attentionItems)).whereClause;
 
 /**
  * Footer total for the `costEstimate` column: `SUM` over the FULL filtered

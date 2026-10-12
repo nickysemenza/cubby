@@ -78,6 +78,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/statement-rows/import",
   "/terms",
   "/tools",
+  "/work-queue",
 ]);
 
 // Every entity whose detail route is keyed by shortcode; `usda-food` (`/usda/:id`)

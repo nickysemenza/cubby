@@ -166,6 +166,16 @@ function SavedViewsMenuItems({
                 </span>
               </Stack>
             </DropdownMenuItem>
+            {view.id === "research-queue" && (
+              <DropdownMenuItem
+                render={
+                  <Link to="/work-queue" search={{ source: "research" }} />
+                }
+              >
+                <ListChecksIcon className="size-3.5" />
+                <span>Work queue</span>
+              </DropdownMenuItem>
+            )}
             {view.flow && <ViewFlowMenuItem flow={view.flow} />}
           </Fragment>
         );
