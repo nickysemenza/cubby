@@ -1035,7 +1035,7 @@ scored entities whose gaps roll up into this one), and `listOrder`. `id` must
 be globally unique across every entity's checks — it doubles as the `dataGap`
 filter option value.
 
-The Research queue ([GLOSSARY](../GLOSSARY.md)) is no table: it is the
+The Research queue ([terminology](guide/terminology.md#purchase-research)) is no table: it is the
 `research-queue` saved views on Product, Purchase and Expense, which filter
 `dataGaps` to the checks research can close and sort by `dataQuality`
 ascending. A `DataException` bound to the evidence fingerprint removes an item
@@ -1224,7 +1224,7 @@ table each (ADR 0007):
   names one entity; rows soft-delete with their entity.
 - `EntitySource(entityId/entityKind, fieldPath, url, quote, observedAt,
   selectedVariant, valueFingerprint, recorder)` records where a fact about an
-  entity was seen ([GLOSSARY](../GLOSSARY.md) "Source";
+  entity was seen ([terminology](guide/terminology.md#purchase-research) "Source";
   `repo/entity-source.ts`). Every create/update command and image attach
   accepts `sources[]`; the kernel validates `fieldPath` against the manifest,
   writes the rows in the mutation's transaction, takes the recorder from the

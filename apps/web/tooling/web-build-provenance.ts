@@ -110,14 +110,14 @@ const WEB_BUILD_SOURCE = {
     "packages/**",
     "recipebridge/**",
     "scripts/**",
-    "docs/**/*.md",
+    "docs/guide/**/*.md",
     AGENT_SKILLS,
     "*.{json,jsonc,yaml,yml,toml,lock}",
     ".npmrc",
   ],
-  // The in-app docs route bundles docs/**/*.md (docs-registry.tsx); the
+  // The in-app docs route bundles docs/guide/**/*.md (docs-registry.tsx); the
   // purchase agent bundles its skills (purchase-agent/import-run-workflows.ts).
-  bundledMarkdown: ["docs/**/*.md", AGENT_SKILLS],
+  bundledMarkdown: ["docs/guide/**/*.md", AGENT_SKILLS],
   generatedRoots: [
     "apps/web/src",
     "apps/web/public",

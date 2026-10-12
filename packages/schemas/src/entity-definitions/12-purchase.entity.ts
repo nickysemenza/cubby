@@ -123,7 +123,7 @@ export default defineEntity({
           description:
             "Purchases whose lines or paperwork research could complete, weakest first",
           // A receipt photo or order Email that still needs itemizing, and
-          // orders missing their paperwork (GLOSSARY "Research queue").
+          // orders missing their paperwork (terminology "Research queue").
           filters: [
             {
               id: "dataGaps",

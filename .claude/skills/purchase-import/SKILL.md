@@ -103,7 +103,7 @@ Frontier AI can propose a mapping for an unfamiliar layout; a person verifies
 the columns and sign before saving. Jev can rank a bounded set of ambiguous
 account, transaction, or Purchase candidates using evidence. A choice is a
 proposal for review, not a settlement write or an inferred transaction.
-The [human journey](../../../docs/product-identity-journey.md) describes the
+The [human journey](../../../docs/guide/product-identity-journey.md) describes the
 same outcome without prescribing an agent runtime.
 
 ## Invariants

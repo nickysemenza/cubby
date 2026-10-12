@@ -228,19 +228,11 @@ the approving app's designated requirement; an ad-hoc build from a
 `CODE_SIGNING_ALLOWED=NO` command has a per-build requirement, so opening it
 resets those grants and the next signed build asks again.
 
-## Timing on one local Mac
-
-These are observations, not budgets: a full simulator run took 3m27s warm and
-7m32s after a branch switch and FFI rebuild. A one-shot headless run took
-75.5s warm, mostly setting up workerd and the database. Once headless watch
-was warm, the native scenario took 331ms with unchanged Swift and about 6s
-after a Swift edit. Those watch figures exclude the one-time setup and the
-small per-rerun seed step. The local warm simulator replay measured 16–28s
-from Enter through the database check after its initial setup. App build and
-runner preparation still dominate the first run. Xcode MCP preview timing
-varies by build state;
-the repository's [Xcode MCP guide](../../docs/agents/xcode-mcp.md) records
-roughly 15s for a warm render and 40–80s after a code edit.
+Mac fixture apps keep their stable Developer ID identity, and the presentation
+accessibility helper runs from one stable signed cache path (its source,
+compiler and signed bytes decide reuse), so a new run directory never creates a
+new Accessibility identity. Archived helper copies are evidence, not
+executables for driving the app.
 
 `pnpm apple check` and the normal PR checks remain the broader validation
 gates. The simulator flow is a targeted acceptance check for native UI

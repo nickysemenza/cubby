@@ -188,7 +188,7 @@ Warm web tests passed all 3,442 cases in 18.87 seconds; PostgreSQL passed all
 code commit `7f7f2c13d` with local Node 26.7.0 (hosted configuration pins Node
 24); this is one observation, not a controlled comparison or a measurement of
 aggregate process-tree memory. The typechecker RSS measurements above remain
-separate. Commands: [quality guide](agents/validation-quality.md).
+separate. Commands: [quality guide](../agents/validation-quality.md).
 
 ## Excluded claims
 
@@ -220,7 +220,7 @@ retained boundaries are:
 - Nx targets own checks and their declared inputs. The repository-wide static
   checks exclude Markdown and other files those tools do not inspect; Markdown
   changes receive their own link/format validation. The validation policy in
-  [agent guidance](agents/validation.md) is the current command authority.
+  [agent guidance](../agents/validation.md) is the current command authority.
 - `ensure-wasm.ts` fingerprints Rust sources, configuration, tool versions, and
   build environment, then restores the complete generated WASM package from
   Nx cache.

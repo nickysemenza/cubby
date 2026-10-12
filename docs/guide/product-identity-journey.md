@@ -75,7 +75,7 @@ outcomes and review commands. Interrupted acquisition and admitted research can
 resume through their durable cursors and task references.
 
 The replacement's complete web/native and live acceptance remains pending; see
-[todos](todos.md#runs-enrichment--browser-capture).
+[todos](../todos.md#runs-enrichment--browser-capture).
 
 | Part        | Current path                                                                                                                                                                                                                                                       | Next product step                                                                                       |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
@@ -85,8 +85,8 @@ The replacement's complete web/native and live acceptance remains pending; see
 | Settlement  | Purchase import can allocate a unique complete payment set to a transaction already recorded. Purchase detail reviews unallocated charges and refunds, including full split allocations across Purchases.                                                          | Cover refund and statement-before-order review in a joined browser journey.                             |
 | Activity    | The agent conversation streams; web and native run views show durable progress, known stages, elapsed time, and AI spend.                                                                                                                                          | Verify visual timing and browser handoff on device.                                                     |
 
-The [shared photo skill](../.claude/skills/photo-inventory-import/SKILL.md)
-and [purchase skill](../.claude/skills/purchase-import/SKILL.md) apply to
+The [shared photo skill](../../.claude/skills/photo-inventory-import/SKILL.md)
+and [purchase skill](../../.claude/skills/purchase-import/SKILL.md) apply to
 the import-run agent, Codex, and Claude. They encode source boundaries and review rules, not
 one model's private prompt.
 
@@ -169,7 +169,7 @@ sequenceDiagram
 
 ## Evidence traps from a synthetic wardrobe case
 
-The [regression corpus](../apps/web/tests/fixtures/product-identity-evidence.ts)
+The [regression corpus](../../apps/web/tests/fixtures/product-identity-evidence.ts)
 uses the fictional **ForgeWear** black small pocket tee.
 Its own label has a fit mark and a separate boxed size. The catalog also has
 navy small, white small, and black medium variants. A saved retailer page is
@@ -191,7 +191,7 @@ the repository.
 
 ## How to check the journey
 
-The [local journey coverage map](agents/core-journey-e2e.md) names each
+The [local journey coverage map](../agents/core-journey-e2e.md) names each
 executable Product path, its actual synthetic input, the few seeded
 prerequisites, and its remaining gap. The wardrobe check carries uploaded
 photos, synthetic retailer HTML, and a browser-uploaded Monarch CSV through grouping, approval, purchase import,

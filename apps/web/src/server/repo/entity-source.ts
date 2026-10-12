@@ -22,7 +22,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { unwrapDb } from "./database-helpers";
 
 /**
- * Sources (GLOSSARY "Source"): where a fact about an entity was seen. One
+ * Sources (terminology "Source"): where a fact about an entity was seen. One
  * generic child of every entity, written by the entity kernel in the same
  * transaction as the mutation, and by image attach.
  */

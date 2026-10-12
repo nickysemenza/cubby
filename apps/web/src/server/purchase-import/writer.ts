@@ -530,7 +530,7 @@ export function receiptProductQuantity(
 }
 
 /**
- * A created Product must not fork an Exact identity match (GLOSSARY). An
+ * A created Product must not fork an Exact identity match (terminology). An
  * identifier another Product owns always refuses; an exact name or alias match
  * refuses unless a Distinct-from decision names it. A distinct Product still
  * cannot take the identical name, which the (name, manufacturer) index holds.

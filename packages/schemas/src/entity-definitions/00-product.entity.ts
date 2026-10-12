@@ -149,7 +149,7 @@ export default defineEntity({
           label: "Research queue",
           description:
             "Products whose identity, image or category research could improve, weakest first",
-          // The Research queue (GLOSSARY): a Burn-down session works these with
+          // The Research queue (terminology): a Burn-down session works these with
           // its own browser and writes Sources. "Searched, not available" is a
           // DataException on the gap, so it leaves until new evidence appears.
           filters: [

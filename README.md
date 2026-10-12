@@ -190,7 +190,7 @@ flowchart TB
 | **Device** `DEV-`         | One install of the native app                                                    | N:1 LedgerParty; N:1 hardware Product                                        | Photo-library sightings                               |
 | **Run** `RUN-`            | A system-written background job: vendor sync, photo batch, mail search, AI calls | N:1 Vendor; predecessor Run; 1:N Purchase                                    | Import provenance and review                          |
 
-Field-level vocabulary is in [docs/terminology.md](docs/terminology.md). The
+Field-level vocabulary is in [docs/guide/terminology.md](docs/guide/terminology.md). The
 full compiled relationship graph, including delete and merge behavior, is at
 `/entities?tab=integrity` in the app.
 
@@ -271,7 +271,7 @@ Purchases arrive two ways ([ADR 0010](docs/adr/0010-mail-import-unattended-burn-
 Gmail discovery admits order Email into Mail import Runs that Pi works through
 the same public MCP tools a member uses, and a member's Claude or Codex session
 burns down the Research queue with its own browser. Follow the
-[Burn-down guide](docs/burn-down.md) for Sources, collection patches, purchase
+[Burn-down guide](docs/guide/burn-down.md) for Sources, collection patches, purchase
 reconciliation and wardrobe details.
 
 ```sh
@@ -299,10 +299,9 @@ Further docs:
 
 ## Import and Burn-down flows
 
-The agreed target flows below include the pending
+The flows below include the shipped
 [Email entity](docs/adr/0011-email-as-a-first-class-entity.md) and
-[import convergence](docs/adr/0012-import-convergence-through-burn-down.md)
-changes. Sources can arrive in any order: later evidence supports the same
+[import convergence](docs/adr/0012-import-convergence-through-burn-down.md). Sources can arrive in any order: later evidence supports the same
 Purchase and exact Product variant. Wardrobe uses apparel Products, Images and
 Inventory; Claude/Codex sessions also research wardrobe details through MCP.
 

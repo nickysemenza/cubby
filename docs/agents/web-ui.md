@@ -22,7 +22,7 @@ Use style tokens—never component hardcoded colors. Semantic color additions ge
 both `:root` and `@theme inline` mirrors. Use `size-N` icon sizing (inline/nav
 `size-3.5`, card/tile `size-5`) and the `Badge` primitive for categorical chips.
 A declared enum field renders as an `EnumPill` through one roster,
-`enumFieldOptions`/`enumFieldLabel` (`entities/enum-field-display.tsx`), on
+`enumFieldOptions`/`enumFieldLabel` (`apps/web/src/entity/enum-field-display.tsx`), on
 every surface — generic list cell, embedded relation table, detail value, hero
 chip, previews — and is inline-editable wherever the entity has an update
 command. Never read `control.options` directly for a label, and never add a

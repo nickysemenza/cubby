@@ -381,6 +381,8 @@ export function workerdHarnessOptions(
   };
 }
 
+// Snapshotted and restored process-wide, so a process runs one runtime at a
+// time: two concurrent runtimes would restore each other's environment.
 const databaseEnvironmentKeys = [
   // Test-side fixtures and helpers connect through this.
   "E2E_DATABASE_URL",

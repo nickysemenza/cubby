@@ -109,7 +109,7 @@ detail reads its sightings from the child table.
   floor; it now defaults `source` to `catalog` when a URL drove the
   attachment and records `provenanceEvidence: {basis: "import-url"}`,
   participating in the same precedence order derivation respects.
-- CONTEXT.md gains _Image Sighting_, _Capture Attribution_, and _Device_, and
+- The glossary (now docs/guide/terminology.md) gains _Image Sighting_, _Capture Attribution_, and _Device_, and
   extends _Ledger Party_ to name it as the identity behind both.
 - Not decided here: EXIF extraction itself (a server background task, PR6),
   `imageList` moving onto the generic `listScaffold` (PR3b, which is also

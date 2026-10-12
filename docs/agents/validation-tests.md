@@ -22,11 +22,7 @@ When removing shared UI bindings, render every affected header branch or run
 the app TypeScript check before handoff. Helper-only tests and lint do not
 establish that a list or detail header can render with its actual props.
 
-`pnpm test` runs fast unit, UI, contract, and auxiliary tests; `pnpm
-test:postgres` runs the `integration` and `integration-workerd` contract
-projects; `pnpm test:e2e` runs PostgreSQL-backed
-browser tests; `pnpm test:all` runs fast, PostgreSQL, then Playwright
-sequentially. Do not overlap PostgreSQL and E2E locally: they contend for
+Do not overlap PostgreSQL and E2E locally: they contend for
 containers, workerd, browsers, and database connections. Other workspace
 packages need `pnpm -r --filter '!@cubby/web' run test` after changing
 `packages/*`.
@@ -44,96 +40,10 @@ failure and the deleting commit in a `docs/todos.md` entry so it can be
 restored once fixed. Do not skip it in place: the test-run contract fails a
 lane that reports skipped or pending tests. Never raise the retry count.
 
-Plant Durable Object recovery state before the first RPC schedules an automatic
-alarm. Mutating attempt counters after a status read races real work and can
-turn the recovery regression into a successful load. In popover journeys,
-close the popover through its supported keyboard action and assert that the
-parent dialog remains open; do not click obscured instructional text.
-Selecting a `FilterableCombobox` option already closes its option popup. Toggle
-the parent filter chip to dismiss its editor; Escape on the closed combobox
-clears the committed selection. Do not add an incidental Escape that changes
-the filter being verified.
-
-Scripted multi-task decisions must use the task returned by Next or its declared
-stable ordering. Ordering fixture rows by a different column can apply a judgment
-to another task even when the issued references are valid. Inspect the task
-context and attempted resolution together before diagnosing a write failure.
-
-Before replaying a fixture correction, inspect the exact changed helper, the
-called API's output schema, external port signatures and the complete proposed
-operand's shared schema.
-Validate that operand before starting SQL or Worker infrastructure. Resolve work
-through the declared output or a durable ownership relation; do not assume an
-admission call returns a Run reference.
-Check evaluation budget overrides against the harness's declared limits before
-starting containers or inference. Rejected configuration executes no scenarios
-and supplies neither regression nor real-model acceptance evidence.
-When parsing an opaque tool reply with a partial Zod object, declare every field
-the regression later inspects: undeclared fields are stripped, so parsing only
-`status` can erase issued work and manufacture a missing-task failure. A fixture
-expecting a validation correction must contain a real discrepancy between the
-recorded values and the retained source; matching values do not require review.
-Before fixture writes and table assertions, inspect the declared row shape,
-ownership graph, and lifecycle transition. Use the real transition when the
-test is about its effect; otherwise use its actual status/failure-code pair,
-validated by the shared schema and database constraint. A user-facing label
-such as cancellation need not be a stored status. An admission's member
-reference does not imply a direct member column; assert the declared relation
-or attribution graph. Object matchers accept nonexistent expected keys at
-compile time. A constraint failure in fixture setup is not the intended RED.
-Run fixtures carry complete required actor attribution and trigger; copy those
-from an owned admitted scope, including its member shortcode, rather than
-inventing a minimally attributed row. A dispatch-failed Run uses the public
-`abort` action; `cancel` applies only to active Runs.
-Repository create fixtures retain the public shortcode in `id` and attach the
-branded database UUID as `entityId`. Use `entityId` for internal admissions,
-repository mutations and row predicates; use `id` for public operation inputs.
-Direct Drizzle fixtures need the table's branded UUID type too. Parse a generated
-UUID at fixture creation; a plain `crypto.randomUUID()` is not a branded Run ID.
-Create Products with `createProductFixture(db, makeProductInput({...}), actor)`;
-use its `entityId` internally and `id` in public calls. Do not construct a
-minimal Product with `insertWithShortcode`: database fields such as
-manufacturer have required values supplied by the input factory, and domain
-effects belong to the repository create path. Inspect the factory before
-adding a Product fixture, including in a harness-profile test.
-Derive source checksums from distinct synthetic content. Reusing a convenient
-constant can collide with a protected source association and exercise evidence
-preservation instead of the intended disposable-evidence failure. Inspect those
-associations before asserting that a checksum is disposable.
-Pre-admitted real-model cases that share a seller domain reuse one canonical
-Vendor, with independent order identities and retained mail. Check this before
-inference: duplicate fixture Vendors turn a supported SKU into a genuine issuer
-refusal and measure fixture corruption instead of research behavior. Keep the
-production ambiguity guard intact.
-Browser fixtures for independent synthetic retailers use their own Product-page
-hosts. Adding a shared real retailer domain to each fixture Vendor creates
-competing canonical issuers across the suite; an isolated replay can miss that
-collision. Use a shared canonical Vendor only when that retailer is the subject
-of the regression.
-Exact-identifier fixtures use the canonical issuer resolver and source
-registration. A familiar retailer name or a Vendor-shaped source slug does not
-establish domain authority or identifier ownership.
 Before a focused browser replay, run `pnpm --filter @cubby/web run build:cf
 --ensure` after changing the recorded source revision. The prebuilt provenance
 gate can reject a run after workflow or documentation edits too; a
 `source-changed` startup failure executed no scenarios and is not a test result.
-
-A shared-worktree Worker build starts after every source writer explicitly
-acknowledges a stable revision. Hold all repository source, test, documentation,
-and generated-file edits until the runner reports terminal completion. Send
-its live handle to every writer and release the hold after cleanup. A test-only
-edit also changes the build fingerprint; a rejected build supplies no scenario
-evidence.
-The `integration-workerd` project acquires the machine-wide harness lock once,
-in its global setup (`tooling/workerd-integration-setup.ts`), and releases it
-at teardown; its files inherit it and run in parallel. Queue waits belong to
-setup and must not consume a scenario's behavioral timeout.
-Use the shared E2E identity and bundle for source provenance. Keep acceptance
-tied to the exact revision and build fingerprint. Do not add a second recorder
-that buffers the entire Git diff: a large breaking change can overflow the
-subprocess buffer before the scenario and its cleanup begin, and the diff omits
-untracked replacement files. Fixture-specific hashes may remain in the scenario
-report.
 
 Target a browser spec as `pnpm test:e2e <spec>` without an extra `--`. E2E
 serves `dist/`, so build it before a standalone run; `verify:local` does. The
@@ -164,7 +74,11 @@ Playwright E2E and the coupled Workers harness share a machine-wide lock at
 suites on one machine from starving both of CPU; the library refreshes the lock
 while held and reclaims it after an interrupted process. Child processes inherit
 the owner marker and pass through. `test:e2e:watch` (`--ui`) skips the lock, since
-its idle session would otherwise hold it indefinitely. A spec's `test.use` of a
+its idle session would otherwise hold it indefinitely. Only the profiles marked
+"yes" below take it; a Playwright run and the `integration-workerd` project hold
+it from global setup, and their workers pass through.
+
+A spec's `test.use` of a
 worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
 even to its default, moves its tests into extra workers that each boot another
 browser, database, and Worker harness; only `workerdProfile` may split
@@ -210,24 +124,6 @@ the next keyboard activation. An action retry must require the complete order
 to remain unchanged and stop once the exact expected order is visible; never
 repeat a relative move after it has applied or weaken the ordering assertion.
 
-Keep the complete browser regression suite on PRs. Consolidate duplicated
-journeys and seed unrelated prerequisites rather than moving coverage after
-merge. The convergence sample-limit regression creates one background import
-through the writer, then seeds additional open findings from that valid row;
-all four foreground source orders still exercise their real import boundaries,
-browser approval, and persisted projections. The PostgreSQL convergence suite
-keeps all 24 source permutations and their projection assertions; the browser
-journey owns the sample-limit regression, so integration setup does not replay
-thirteen unrelated background imports. Finance category display fixtures
-use the shared entity-kernel factory, preserving all 28 linked expense lines
-without repeating unrelated HTTP create requests. Classification review also
-seeds prerequisites through that factory; preview/apply, stale-review refusal,
-explicit-purpose patches, refund quantities, and persisted classification still
-cross their real application boundaries. The dedicated explanation-recovery
-journey owns lazy loading, failure and retry, request counts, and phone evidence;
-classification retains successful field and inherited-label explanations without
-repeating the generic failure detour.
-
 ### Workerd test runtime and profiles
 
 A PostgreSQL test file that starts workerd belongs in
@@ -235,91 +131,13 @@ A PostgreSQL test file that starts workerd belongs in
 `integration-workerd` project; CI runs it in the Worker build job against
 that job's fresh bundle. An unlisted consumer fails in the ordinary integration
 job.
-The socket-lifecycle regression lives in that workerd integration project: it
-exercises HTTP reads and freshness writes against the real Worker and observes
-PostgreSQL socket expiry, without a browser. The runtime's
-`poolIdleTimeoutMs` shortens the request pools' idle timeout; preserve quiet
-windows longer than that timeout and the repeated-load assertions when
-changing its scheduling. Purchase-agent harness profiles likewise shorten the
-coordinator's settlement poll (`CUBBY_TEST_SETTLEMENT_POLL_MS`), so a
-scripted Run never waits out production's ten-second interval.
 
-Browser workers, Tester Army, native runners, the purchase-agent Vitest scenarios and the
-live evals start the built Worker through `openWorkerdRuntime`
-(`apps/web/tooling/workerd-runtime.ts`); a caller that runs work after
-startup uses `withWorkerdRuntime`, which closes the runtime even when that
-work throws. The runtime acquires the database (a lease it releases, or a
-borrowed database it never closes), owned or borrowed object storage,
-the profile's peers, and the harness into a native `AsyncDisposableStack`
-(`await using`, then `move()` on success). `close()` releases them newest
-first and runs every release even when one fails (failures chain as
-`SuppressedError`); a start that fails at any step releases everything
-acquired before it. Borrowed storage carries its S3
-endpoint and public URL separately; neither startup failure nor close stops
-caller-owned storage.
-
-Scripted purchase-agent peers own the external models.dev catalog transport as
-well as model responses. Their illustrative prices and complete token bounds
-exercise the real paid-admission reservation; they never bypass pricing or
-budget fences. Live-model peers forward catalog reads to models.dev. Keep this
-distinction when adding a peer so deterministic mail discovery does not depend
-on public catalog availability and live usage does not acquire fixture prices.
-
-Before a new Worker journey or a fixture-correction replay, compare the complete
-runtime options with the owning `WorkerdRuntimeOptions` and a working caller:
-profile, database ownership, storage endpoint/public URL, and required peers.
-Check the actor grant and retained-source authority through the existing fixture
-helpers. Scripted paid peers still require an explicit synthetic execution approval
-and complete synthetic pricing; bind the approval before dispatch and retain
-per-transmission reservation assertions. Never bypass paid admission for a fixture.
-Record startup failures as setup failures; behavioral red requires the
-scenario to reach its failing boundary.
-
-Native runners keep their build, process, simulator,
-watchdog, scenario and artifact boundaries outside the runtime. Native
-relation journeys scroll the navigation row back into view after inspecting
+Native relation journeys scroll the navigation row back into view after inspecting
 its badges, then wait for the destination detail marker before inspecting
 inverse evidence. A successful tap alone does not establish navigation.
 Rows with interactive facts expose a separate title identifier; navigation
 tests target that title rather than the aggregate row, whose center can land
 on a field explanation control.
-Their `leaseNamedDatabase` backend in `test-database-lease.ts` creates and migrates
-only `cubby_sim_<16 hex>` names on the guarded loopback admin server at port 55432. Normal close verifies the database was dropped; `retention: "retain"`
-explicitly leaves it available for debugging. Failed acquisition always drops
-the database it created, including in retain mode; a name collision never
-gives ownership of an existing database. The lease's `onCreated` hook runs
-right after CREATE succeeds and before migration. The Mac import runner and
-every `sim-e2e.ts` run start their detached database watchdog there, so a
-runner killed at any point after CREATE, including mid-migration, still has
-its database dropped; only the simulator watch lane (`sim-dev`) also has the
-watchdog close its agent-device session. Native scenario seeding stays in the
-runner's lease `setup` callback, which runs after migration. Both callbacks
-receive only the name and URL, never the lease's `close`. The lease
-regressions (`named-database-lease.integration.test.ts`) need the guarded
-55432 endpoint: CI publishes it from native PostgreSQL service containers, and locally the
-suite runs `scripts/dev-db.ts up` unless `CUBBY_SIM_DB_EXTERNAL=1`. A watchdog
-regression that holds a migration-blocking connection destroys that connection
-on release before waiting for the forced DROP; returning it to the idle pool
-races cleanup and emits an unhandled PostgreSQL `57P01` error. IntegreSQL
-namespaces and reset policies stay unchanged.
-
-Tooling and browser fixtures create PostgreSQL pools with `createPostgresPool`
-from `tooling/postgres-pool.ts`. Raw `pg.Pool.end()` can resolve before its
-clients' sockets close, allowing database recreation or reset to terminate a
-backend after its owner considers it closed. The factory retains the pool API
-and waits for every connected client's `end` event, including idle-evicted
-clients and connections that finish opening during shutdown. Its promise and
-callback shutdown forms share this guarantee; errors remain observable.
-`postgres-pool.integration.test.ts` holds real termination packets to pin the
-ordering before database cleanup.
-
-Between-test resets use `terminateOtherPostgresConnections` and wait for the
-terminated pool clients' `end` events before issuing TRUNCATE or seeding. A
-successful `pg_terminate_backend` statement alone does not mean node-postgres
-has received the fatal message: checking out that idle client first removes
-its pool error listener and can turn the delayed `57P01` into an uncaught
-exception. The regression pauses a real idle socket's reads to enforce this
-ordering; unexpected query and pool errors retain their existing handling.
 
 A profile (`WORKERD_PROFILES` in `workerd-harness.ts`) routes each production
 queue consumer to one of:
@@ -353,15 +171,6 @@ The visible purchase-research journey uses that seam for retained catalog-image
 reuse, real queue delivery, automatic child research, and UI provenance. Its
 model decisions and Mac captures are scripted; it does not evaluate live research
 quality, remote retailer image downloads, or Gmail discovery.
-
-The harness lock is the one machine-wide lock above; only the profiles marked
-"yes" take it (and rebuild a stale Worker). A Playwright run and the
-`integration-workerd` Vitest project already hold it from global setup, and
-their workers pass through; other `offline` and `gmail`
-callers run without it. Run one runtime per process at a time: it
-snapshots and restores `E2E_DATABASE_URL` and the Hyperdrive variables
-process-wide, and the lock is reentrant within a process, so two concurrent
-runtimes would restore each other's environment.
 
 The `Purchase import agent` Playwright project
 (`tests/e2e/purchase-import-run.spec.ts`,
@@ -398,42 +207,6 @@ keeps its workerd logs in `playwright-report`. Each Playwright worker prints
 `<origin>/cdn-cgi/local/explorer` at startup, so a paused (`PWDEBUG`, headed, or
 `--ui`) test can be inspected for Durable Object, queue, workflow, and R2 state.
 The URL is only valid while that worker is alive.
-
-Run `pnpm wasm` after WASM changes. The shared `CARGO_TARGET_DIR` can be
-written by another checkout, so confirm generated output is current. Generated
-API changes require the owning generated-surface workflow and affected native
-checks.
-
-Mapped database fixtures annotate the callback return with the table
-`$inferInsert` type so enum literals retain their insert contract; passing a
-runtime test does not verify TypeScript inference.
-`insertWithShortcode` only supplies identity; it does not fill required entity
-values, actor snapshots or execution identity. Prefer the existing admission
-fixtures. A directly inserted Run used by public controls needs the complete
-actor snapshot, agent session and dispatch identity. A cloned Run mints its own
-Run UUID, shortcode, dispatch event and agent session; copied identity is a
-fixture constraint failure. Researcher fixtures also
-need typed input and its matching admitted roster. A fixture constraint
-failure is not a behavior regression; correct it before implementing the fix.
-
-Pricing integration tests stub the catalog socket for every test and keep it
-separate from inference socket overrides. The runtime catalog client reads
-`fetch` when requesting; a hoisted stub alone stops protecting later tests once
-`unstubAllGlobals` runs. Integration files share a module graph, so reset it
-before installing a file-specific catalog and never let cached live rates leak
-into synthetic accounting assertions.
-
-## Affected-only E2E for local iteration
-
-`pnpm --dir apps/web test:e2e:affected` first ensures the fingerprint-checked
-web build is current, then runs Playwright's `--only-changed=origin/main`. Playwright selects
-changed spec files and specs that import changed files; append `--list` to
-preview that selection. This is a local heuristic, not a merge gate: browser
-routes and components need not be imported by a spec, so an app-only change
-can select nothing. Name the affected spec explicitly or run the full
-`test:e2e` for those changes. CI keeps running the full suite. Set
-`CUBBY_TEST_SERVICES=warm` to reuse local macOS services, as with direct
-Playwright runs.
 
 List URLs in browser fixtures use the filter descriptor's declared `urlKey`
 (for example, `q` for Expense and Purchase search). Assert the active filter
@@ -488,16 +261,6 @@ entity kernel. A factory never defaults a relation id; pass it. E2E specs call
 `createEntityFixture(page, entity, overrides)` from `tests/e2e/fixtures-core.ts`
 and keep domain seeders in `tests/e2e/fixtures-*.ts`. `seedBaseWorld` seeds Home
 and the taxonomy roots for every lane.
-
-Mail-import Run report fixtures persist a valid frozen `mail_research` source
-roster with its retained original and Email identity; a null Run input fails
-source validation before report behavior. Verified Email targets use research
-counts, so browser assertions check the current work unit and numeric outcome.
-
-Instruction-only Recipe fixture sections omit the optional `ingredients` input;
-when present, that input requires at least one ingredient. A cached Recipe Flow
-fingerprint still includes `ingredients: []`, matching the persisted section
-projection rather than the create input.
 
 Faker fills only fields nothing asserts on, from a per-test seed (E2E title
 path, Vitest test name via `testFaker()`, dev seed 1). A name a locator or

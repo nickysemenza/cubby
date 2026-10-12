@@ -68,7 +68,7 @@ export const EXPENSE_MONTH_BUCKET = sql<string>`to_char(${expense.date}, 'YYYY-M
  * returned, or discarded?
  *
  * The ledger's own rule, documented on `Expense.productQuantity` and in
- * `docs/terminology.md`: money direction wins, and the quantity's sign is
+ * `docs/guide/terminology.md`: money direction wins, and the quantity's sign is
  * consulted only when no money moved. So a row is an exit when its cost is
  * negative, or when it moved no money and its quantity is negative (a
  * discard). Everything else counts, deliberately including the $0 and

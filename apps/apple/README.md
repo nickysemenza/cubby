@@ -5,7 +5,8 @@ SwiftUI previews, simulator exploration, recorded E2E, and a real iPhone, see
 [Fast native iteration](ITERATION.md).
 
 SwiftUI household workflows backed by CubbyKit, the generated HTTP client, and
-shared Rust computation. The app includes Today, catalog/search, capture/recount,
+shared Rust computation. Agent rules, including the generated-file list, live in
+[AGENTS.md](AGENTS.md). The app includes Today, catalog/search, capture/recount,
 photos, Garden, links, and App Intents. See [DESIGN.md](DESIGN.md) for native UX
 contracts and [the backlog](../../docs/todos.md) for deeper inventory and web parity.
 
@@ -40,20 +41,6 @@ unchanged Rust restores both in seconds instead of recompiling the path crates f
 a matching fingerprint marker inside the xcframework skips Nx entirely. `build-rust.sh` itself
 always builds (cargo's fingerprints make an unchanged rerun cheap) — run it directly for one-slice
 iteration (`--targets sim`).
-
-## Generated files (read-only here)
-
-- `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations,ClientOperations,APITypes,PhotoImportCatalog,EntityVocabulary}.swift`,
-  `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json` (the entity catalog, a CubbyKit
-  resource decoded by `Catalog/EntityManifest.swift`),
-  `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift`, the `CubbyAPI` target's
-  `openapi.json` + `openapi-generator-config.yaml`, and `App/Shared/Previews/Fixtures/*.json` —
-  written by `scripts/generator/` (`pnpm generate`) from the entity spine and the OpenAPI document.
-- The `CubbyAPI` Swift — generated at build time by the swift-openapi-generator plugin.
-- `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — emitted by `uniffi-bindgen` from `cubby-ffi/`
-  (`apps/apple/scripts/build-rust.sh`).
-
-None is committed; edit the generator or its inputs, never the output.
 
 ## Running
 
@@ -153,9 +140,6 @@ launchd's SIGTERM-to-SIGKILL window (20s by default) is longer than the 10s stop
   (`apple:host-tests`, CubbyKit's package tests on the macOS host, no
   simulator) and `Apple simulator build` (`apple:simulator-build`, formatting
   and drift checks, then a generic-simulator `xcodebuild build` with no tests).
-  A merged job that also ran `xcodebuild test` on a concrete simulator took 13
-  minutes warm: a hosted runner's first simulator boot cost about 6 minutes
-  plus roughly 10 more of CPU starvation.
   `CubbyKit/Tests/CubbyKitTests/VisionHardware.swift`'s `.requiresVisionHardware`
   trait still matters for anyone running these tests on a simulator, e.g. via
   `xcodebuild test -scheme Cubby-iOS` locally (the scheme lists

@@ -4,7 +4,7 @@ Garden is `plant`, `planting` and `gardenEntry`, three generic manifest entities
 `/plantings` and `/plants` are the record entry points. `/garden-workbench` is a
 read-only view of guide timing, household practice, and planting plans; it has
 no write workflow or hand-registered MCP tools. `/garden` is gone. See
-[terminology.md](terminology.md#garden) for the naming glossary.
+[terminology.md](guide/terminology.md#garden) for the naming glossary.
 
 A **Plant** is a cultivar ("Sun Gold F1") or, without one, a species
 ("Fenugreek"). Its `gardenGuideKey` is the crop; `verdict` (`yes | maybe |

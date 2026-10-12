@@ -3,7 +3,7 @@
 // Worker entry (`import("./src/cf-server")`). worker-configuration.d.ts is a
 // global script, so that import put a global file in nearly every edit's
 // importer closure, and TypeScript then re-checks the whole program
-// (docs/local-check-performance.md#typechecking). Point the types at
+// (docs/reports/local-check-performance.md#typechecking). Point the types at
 // src/server/worker-bindings.ts, which exports exactly those classes.
 //
 // `--check` fails while the file still imports the entry. Wrangler's own

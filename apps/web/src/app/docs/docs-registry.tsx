@@ -50,9 +50,9 @@ const referenceSections: DocSection[] = [
   },
 ];
 
-const DOCS_PREFIX = "../../../../../docs/";
+const DOCS_PREFIX = "../../../../../docs/guide/";
 const markdownModules = import.meta.glob<string>(
-  "../../../../../docs/**/*.md",
+  "../../../../../docs/guide/**/*.md",
   { query: "?url", import: "default" },
 );
 
@@ -86,7 +86,7 @@ const markdownSections: DocSection[] = Object.entries(markdownModules)
     return {
       slug: docSlug(sourcePath),
       title: parts.at(-1)!,
-      group: parts.length > 1 ? parts[0]! : "docs",
+      group: parts.length > 1 ? parts[0]! : "Guide",
       sourcePath,
       render: () => <GuideSection />,
     };

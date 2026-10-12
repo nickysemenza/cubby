@@ -1,7 +1,7 @@
 // Types only, importing nothing but schema types: the global
 // worker-configuration.d.ts reaches this file through worker-bindings.ts, and
 // tsc re-checks the whole program after an edit to anything it reaches
-// (docs/local-check-performance.md#typechecking).
+// (docs/reports/local-check-performance.md#typechecking).
 import type { ProblemsCount } from "@cubby/schemas/problems";
 
 export interface DatabaseFreshness {

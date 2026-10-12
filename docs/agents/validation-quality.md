@@ -8,7 +8,7 @@ CI run. Tests use the configured TypeScript libraries; runtime support for an
 API does not establish that the configured libraries expose it.
 Use these rather than a raw `tsc`: the wrapper discards a stale incremental
 cache and holds one of two machine-wide slots, since each web check keeps
-5–7 GB resident ([measurements](../local-check-performance.md#typechecking)).
+5–7 GB resident ([measurements](../reports/local-check-performance.md#typechecking)).
 `pnpm check` runs the root
 static checks, type checking, entity freshness, Knip, and script types.
 `pnpm check:all` adds bindings, OpenAPI, orchestration tests, security checks,

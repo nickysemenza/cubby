@@ -182,7 +182,9 @@ const createProductWithResolvedIngredient = async (
  * Create a product for a repo integration test while retaining both sides of
  * the boundary. Public assertions use `id`; UUID-only repo writes use
  * `entityId`. A public ingredient id is resolved here so callers never cast a
- * shortcode into a FK brand.
+ * shortcode into a FK brand. Pass `makeProductInput({...})`: a minimal Product
+ * inserted through `insertWithShortcode` lacks required values (manufacturer)
+ * and skips the domain effects of the repository create path.
  */
 export const createProductFixture = retainEntityId(
   "product",

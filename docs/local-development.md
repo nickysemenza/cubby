@@ -213,8 +213,7 @@ CUBBY_TEST_SERVICES=warm pnpm --dir apps/web test:e2e:affected
 pnpm --dir apps/web test:e2e:watch
 ```
 
-`warm` services are a macOS option; see [test tiers](agents/validation-tests.md)
-for external services on Linux. `test:e2e:affected` reuses the current
+`warm` services are a macOS option. `test:e2e:affected` reuses the current
 fingerprint-checked web build or rebuilds it, then runs Playwright's
 `--only-changed=origin/main`, which selects spec
 files that changed or import a changed file. It is a local heuristic: specs
@@ -229,71 +228,3 @@ Read the failed scenario and artifact summary before rerunning. Use
 `--last-failed` after a relevant fix; do not repeat an unchanged failure merely
 to retrieve its diagnostics. Browser execution remains uncached even when a
 matching build and warm services are reused.
-
-## Measured feedback
-
-Local acceptance samples on 2026-09-29 (dirty source, macOS, warm PostgreSQL
-service) measured a fresh development session at 26.2 seconds, a later warm
-session at 23.5 seconds, and a browser HMR update at 250 ms. The focused built
-Worker HTTP/API run passed four scenarios with two browser workers in 15.3
-seconds; warm service discovery and database-template reuse took 46 ms and
-13 ms respectively.
-
-The WASM cache key previously changed with inherited logging settings. After
-normalizing the build environment and excluding `RUST_LOG`, the warm freshness
-phase reused its matching artifact in 740 ms instead of restoring it through
-Nx in the earlier 6.4-second sample. Compiler flags still invalidate it.
-Runtime startup and initial application loading remain the largest development
-phases (about 8 and 10 seconds in the warm sample).
-
-Native acceptance verified real login, search, editing, image rendering, and a
-bare relaunch retaining the selected local server. Its cold sample took 22.3
-seconds for FFI and 221.4 seconds for Xcode; authenticated requests after bare
-relaunch took 96–120 ms. These samples preserve useful baselines, but do not
-establish a controlled overall before/after speedup. Concurrent host workloads
-produced substantially slower startup samples. Physical-device networking,
-live provider quality, CDN transformations, and production signature enforcement
-need separate validation.
-
-`apps/apple/Package.resolved` owns the app graph (including Nuke and Sentry);
-`CubbyKit/Package.resolved` owns only the Swift package graph. XcodeGen links the
-app lockfile into the generated workspace, so app resolution leaves the Kit
-file unchanged and deliberate app pin changes appear in Git. CI dependency
-caches include both lockfiles. Local simulator runs build through the cached
-`apple:simulator-build` Nx target, which restores the same app as CI when its
-inputs and Xcode version match; run bundles report build time separately. The composed Mac import
-lane retains its Kit-pin verification wrapper as a defensive acceptance check.
-
-Mac fixture apps retain their stable Developer ID identity. The presentation
-accessibility helper also runs from one stable signed cache path; archived
-copies are evidence, not executables for driving the app. Its source, compiler
-and signed bytes determine reuse. Initial Accessibility consent is still a
-host setting, but new run directories no longer create a new helper identity.
-`pnpm apple mac --replace-signing-identity` explicitly transitions an installed
-TestFlight app to the development signing identity. Expect possible one-time
-privacy reapproval. It retains team/bundle verification and app data, but skips
-the old privacy requirement check for this invocation. Use plain `pnpm apple mac`
-for subsequent installs to preserve the development identity.
-
-`pnpm apple mac` builds and signs incrementally, checks the app's marketing
-version against `APPLE_CLIENT_COMPATIBILITY_VERSION`, installs it at
-`/Applications/Cubby.app`, and relaunches that installed copy without LLDB.
-It verifies both the built app and any existing installed app against the
-project team and bundle ID, and checks the candidate against the installed
-app's designated privacy requirement. The copied candidate is verified before stopping
-Cubby or replacing the installed app. Stop only processes launched from the
-installed executable, and await their exit before renaming its bundle: signalling
-termination alone can let a final capture resolve the app at an installer backup
-path. A process exiting before the termination signal counts as successful shutdown;
-other signal errors remain visible. A shutdown timeout refuses replacement
-without moving the installed bundle.
-A failed replacement restores the old
-bundle. If the previous bundle is root-owned and cannot be removed, its
-sibling backup path is reported after successful relaunch for manual cleanup.
-App data is retained; privacy grants persist while the signing requirement stays compatible.
-This preserves development rebuilds, not a TestFlight-to-development signing
-transition. Notarization does not grant screen capture permission or suppress
-macOS permission requests. A retained backup must not be launched for household
-automation; the running executable should be `/Applications/Cubby.app/Contents/MacOS/Cubby`.
-The command requires write
-access to `/Applications`; it never invokes sudo or resets permissions.

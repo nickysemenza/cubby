@@ -3,29 +3,18 @@
 ## Universal loop
 
 - Make the requested in-scope change and choose the narrowest checks that
-  verify its behavior. Follow [validation policy](docs/agents/validation.md)
-  for local feedback, cheap Git operations, and the required GitHub merge gate.
-- A failing test run already lists what failed, at the end of its output and in
-  `apps/web/.vitest-results.json`. Read failed tests from it instead of
-  re-running the tier —
-  measured, 24% of all test runs were a re-run of one that had just failed.
-- A subagent runs only focused tests and returns distilled evidence (result, command,
-  duration, relevant output, and limits). The root owns any needed broad
-  validation; others continue useful work while it runs. Reuse unchanged
-  results at handoff instead of rerunning checks for publication.
+  verify its behavior. [Validation policy](docs/agents/validation.md) owns test
+  choice and retention, failed-test read-back, subagent evidence, client
+  verification, and the merge gate.
 - Production migrations have one exclusive owner; establish that household data
   survives before pushing, then verify the schema afterward.
 - Update the doc that owns a behavior in the same change; docs agree with the
   code and with each other.
-- Keep edits disjoint across agents/worktrees. Claude main sessions default to
-  `opus` at medium effort (`.claude/settings.json`); Codex pins no model. A
-  session's explicit `/model` or effort choice wins. Work directly by default:
-  finish in the main session anything a handful of tool calls covers, including
-  lookups in a known file. Delegate only independent tracks that run in
-  parallel, a broad read-heavy sweep, or an approved multi-unit implementation
-  (the default lane). Each lane in [model routing](docs/agents/model-routing.md)
-  names an Anthropic and an OpenAI pair; every PR gets one independent review
-  by a different model, preferably the other provider.
+- Keep edits disjoint across agents/worktrees. Work directly by default; before
+  spawning (including a Codex hand-off), load [model
+  routing](docs/agents/model-routing.md) and use its lane, effort, review, and
+  handoff contract. Preserve an explicit user model choice and the current main
+  session.
 - Use synthetic data in repository content and outward-facing engineering text.
   Never include personal or household information, real Cubby entity identifiers
   or records, or private source material in docs, comments, fixtures, examples,
@@ -36,39 +25,15 @@
   documented example body `4K7M` is the one code they allow.
 - Comments preserve constraints, regressions, contracts, and active TODOs—not
   narration.
-- Prefer E2E tests for complex behavior when a real user or system boundary can
-  expose the failure. Keep a unit or integration test only for a specific,
-  plausible regression that E2E does not reasonably catch. Delete tests that
-  only assert types, declarations, constants, or mock behavior; consolidate
-  duplicate cases. Preserve a named regression in a stronger test before
-  removing its old assertion.
-- Keep the feedback loop outcome-driven: headless service/API checks establish
-  persisted state, money, provenance and ownership; automated client checks
-  establish supported visible outcomes. Assert semantic states and actions
-  rather than incidental copy, ordering or DOM structure. Use
-  fingerprint-verified builds for iteration and exact-revision disposable runs
-  for acceptance. Client verification uses Apple host tests, simulator builds,
-  TestFlight builds, and the server version-gate test; automated phone-width
-  browser checks may supplement them. See
-  [validation](docs/agents/validation.md) for test retention and deletion evidence.
-- Never write unit tests after writing the code they test. Before testing a
-  system in isolation, write down all plausible ways it could fail, then write a failing
-  test for the relevant behavior before implementation. Prefer E2E as the sole
-  automated test for a feature when it covers those failures.
-- Keep CI's Playwright HTML report and traces for web E2E, and local
-  `sim-e2e` artifacts for native runs. See
-  [test tiers and E2E artifacts](docs/agents/validation-tests.md).
+- Write the failure modes and any failing isolated test before the
+  implementation it guards; prefer E2E as the sole automated test when it
+  covers those failures.
 - Spend tool calls on bytes that earn their place. Batch independent read-only
   shell into one call, but prefer a targeted `Grep`/`Glob` over dumping a large
   file: the cost is calls x bytes returned, not calls alone. Re-read a file only
   if it changed since you read it, and read a region of a large one. Never `cd`
   — use absolute paths, `git -C`, and `pnpm --dir`, which also survives the
   per-call working directory reset.
-- **Model, delegation, and context routing:** before spawning (including a
-  Codex hand-off), load [model
-  routing](docs/agents/model-routing.md), select an explicit supported
-  model/effort pair, and use its compact handoff contract. Preserve an explicit
-  user model choice and the current main session.
 - The done report lists what the change deleted and names every check that did
   not run.
 - A correction becomes a rule in the doc that owns it. A repeated mistake means
@@ -154,7 +119,7 @@ owns a distinct concern.
   garden-plan, product-enrichment, or purchase-import skill for those
   household workflows.
 - **Engineering diagnosis:** Use `diagnosing-bugs` for hard regressions,
-  `domain-modeling` for terminology or durable model decisions, `tdd` when
+  `domain-modeling` for terminology ([glossary](docs/guide/terminology.md)) or durable model decisions, `tdd` when
   test-first is requested, and `code-review` for a requested review.
 
 ## Load when triggered

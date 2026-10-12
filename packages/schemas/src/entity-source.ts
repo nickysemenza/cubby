@@ -34,7 +34,7 @@ const hasUrlOrQuote = (source: { url?: string; quote?: string }) =>
 const urlOrQuote = { message: "A source needs a url or quote" };
 
 /**
- * One Source a caller supplies with a write (GLOSSARY "Source"): where a fact
+ * One Source a caller supplies with a write (terminology "Source"): where a fact
  * about the entity was seen. The recorder is never input; the kernel takes it
  * from the authenticated actor.
  */

@@ -117,7 +117,7 @@ apps/web/.e2e/
 # `pnpm db:generate` renders the derived DDL here; drizzle/derived.lock and
 # the migrations are the committed record.
 *.gen.sql
-/docs/how-values-are-determined.md
+/docs/guide/how-values-are-determined.md
 /apps/apple/CubbyKit/Sources/CubbyKit/Generated/
 /apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/
 /apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json

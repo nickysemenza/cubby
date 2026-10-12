@@ -20,30 +20,6 @@ tokens, so each spawn should be a deliberate choice. Parallel lanes suit
 read-heavy work; write lanes own disjoint worktrees or stay in the main thread.
 The per-PR review below is the one routine spawn.
 
-The 2026-10-08 recheck ([method](#routing-measurement-method)) recorded
-44.6% of sessions delegating and 56.2% of recorded token usage in subagents.
-It mostly predates this rule and does not establish a speed/quality improvement;
-the 47% figure above is the historical baseline, not a current measurement.
-
-### Routing measurement method
-
-The UTC window 2026-09-08 through 2026-10-07 included 289 parent sessions with
-assistant usage metadata; 129 (44.6%) contained a delegation tool call.
-142,733 unique assistant message IDs appeared in 270,586 assistant rows.
-Deduplicating message snapshots by parent session/message ID and taking the
-maximum recorded usage fields gives subagents 56.2% of summed input,
-cache-creation, cache-read and output tokens. Of 49,014,224 subagent output tokens,
-14,264,238 (29.1%) were Opus/Fable; older Sonnet runs dominate the remainder.
-Only timestamps, tool names, model names and usage metadata were aggregated;
-no prompt/response text, tool inputs, transcript paths or identities are retained.
-
-This mostly predates the routing change and its initial baseline did not retain
-an identical extractor/accounting definition. It does not establish a causal
-reduction, speed improvement or unchanged quality. Keep the current rule and
-repeat after a full post-change window, with the same accounting and explicit
-latency/quality evidence. The 47% baseline remains historical, not a claim about
-the current window.
-
 ## Lanes
 
 Preserve an explicit user model choice and the current main session. Provider
@@ -81,12 +57,11 @@ routing (#1803) is separate from this agent routing.
 
 Search and extraction lanes run at low effort; diagnosis and review lanes start
 at their table effort. Escalate when evidence conflicts or a diagnosis has a
-demonstrated gap. Do not escalate just because the repository is large. On
-Claude, raise effort before changing model; use `xhigh`/`max` only where a
-quality gain was measured. In Anthropic's testing Opus 5.5 at medium matched or
-beat Opus 5 at high, and it thinks more per turn at a given level, so a
-carried-over `high` costs more for little.
+demonstrated gap. Do not escalate just because the repository is large. Use
+`xhigh`/`max` only where a quality gain was measured.
 
+Claude main sessions default to `opus` at medium effort (`.claude/settings.json`);
+Codex pins no model. A session's explicit `/model` or effort choice wins.
 `.claude/settings.json` sets `CLAUDE_CODE_SUBAGENT_MODEL` to `opus`, so a Claude
 subagent spawned without an explicit model lands on the implementation lane;
 search lanes name haiku explicitly.

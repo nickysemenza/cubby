@@ -226,6 +226,11 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
   );
 }
 
+/**
+ * Supplies the shortcode identity only: required entity values, actor
+ * snapshots and execution identity stay the caller's job, so tests prefer the
+ * existing create/admission fixtures over a direct insert.
+ */
 export async function insertWithShortcode<T extends ShortcodeType>(
   db: Database | DrizzleTransaction,
   entity: T,
