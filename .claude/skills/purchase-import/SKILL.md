@@ -206,6 +206,13 @@ adds the Email dispositions (`mail.resolve`: a lifecycle `linked` event,
 `unresolved` with its gap, or `unrelated`). A member resolves an Email the same
 way.
 
+Lifecycle resolution names all supported `purchaseIds`. A combined refund
+may also carry a member-reviewed `settlement`: existing posted refund references,
+their reviewed accounts, literal source account labels and reasons. Verify the
+credit sum and each existing allocation before writing. These associations
+retain the checksum and account review through later deletion or account drift;
+they never change money, account aliases, allocations or stock.
+
 An interrupted mutation is recovered through
 `imports_read.purchase_status` with its original operation id. Repeating
 the source payload is replay, not a way to revise a reviewed decision; a

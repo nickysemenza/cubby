@@ -245,7 +245,7 @@ export async function ingestGmailEvidence(
         checksum: retained.rawChecksum,
         disposition: {
           kind: "linked",
-          purchaseId: purchaseShortcode.parse(purchaseRef),
+          purchaseIds: [purchaseShortcode.parse(purchaseRef)],
           event: "confirmation",
         },
       },

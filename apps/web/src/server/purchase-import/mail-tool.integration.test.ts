@@ -1,4 +1,7 @@
-import { MAIL_ATTACHMENT_MAX_BYTES } from "@cubby/schemas/mailbox-research";
+import {
+  MAIL_ATTACHMENT_MAX_BYTES,
+  mailResolveInput,
+} from "@cubby/schemas/mailbox-research";
 /**
  * Failures: search reaches a mailbox the member never connected, follows a
  * page into another mailbox, pages without Spam/Trash exclusion, or advances
@@ -14,7 +17,7 @@ import { MAIL_ATTACHMENT_MAX_BYTES } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -31,6 +34,9 @@ import {
   orderMailCandidateDecision,
   orderMailEvent,
   run,
+  financialAccount,
+  financialTransaction,
+  financialTransactionAllocation,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
@@ -74,6 +80,236 @@ describe("public mail tool", () => {
       userId: ctx.actor.userId,
       updatedAt: new Date(),
     });
+
+  it("atomically links a combined lifecycle Email to every Purchase and replays without duplicate evidence", async () => {
+    const party = await member();
+    const source = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "synthetic-combined-refund",
+      sender: "credits@bank.example.test",
+      subject: "Combined merchant credit",
+      receivedAt: new Date("2026-10-07T12:00:00Z"),
+      checksum: await sha256Hex("Synthetic combined credit"),
+      content: {
+        snippet: "Synthetic combined credit",
+        bodyText: "Synthetic combined credit",
+        bodyHtml: null,
+      },
+    });
+    if (!source) throw new Error("Synthetic source unavailable");
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic combined-credit seller",
+    });
+    const purchases = await Promise.all(
+      ["FIRST", "SECOND"].map((orderId) =>
+        insertWithShortcode(ctx.db, "purchase", {
+          vendorId: seller.id,
+          orderId,
+        }),
+      ),
+    );
+    const input = mailResolveInput.parse({
+      mailboxId,
+      messageId: source.messageId,
+      checksum: source.rawChecksum,
+      disposition: {
+        kind: "linked",
+        event: "refunded",
+        purchaseIds: purchases.map((row) => row.shortcode),
+      },
+    });
+    const secondPurchase = purchases[1];
+    if (!secondPurchase) throw new Error("Synthetic second Purchase missing");
+    const resolve = () => resolveMail(ctx.db, input, ctx.actor);
+    await expect(
+      resolveMail(ctx.db, { ...input, checksum: "f".repeat(64) }, ctx.actor),
+    ).rejects.toThrow("changed");
+    await getDb(ctx.db)
+      .insert(orderMailEvent)
+      .values({
+        orderMailId: source.id,
+        event: "refunded",
+        sourceKey: "synthetic-dismissal",
+      })
+      .returning()
+      .then(async ([event]) => {
+        if (!event) throw new Error("Synthetic event missing");
+        await getDb(ctx.db).insert(orderMailCandidateDecision).values({
+          eventId: event.id,
+          purchaseId: secondPurchase.id,
+          decision: "dismissed",
+          evidenceChecksum: source.rawChecksum,
+          decidedByUserId: ctx.actor.userId,
+        });
+      });
+    await expect(resolve()).rejects.toThrow("dismissed");
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(orderMailEvent)
+        .where(eq(orderMailEvent.orderMailId, source.id)),
+    ).toHaveLength(1);
+    await getDb(ctx.db)
+      .delete(orderMailCandidateDecision)
+      .where(eq(orderMailCandidateDecision.purchaseId, secondPurchase.id));
+    await getDb(ctx.db)
+      .delete(orderMailEvent)
+      .where(eq(orderMailEvent.sourceKey, "synthetic-dismissal"));
+    await expect(resolve()).resolves.toMatchObject({
+      status: "completed",
+      purchaseIds: expect.arrayContaining(
+        purchases.map((row) => row.shortcode),
+      ),
+    });
+    await expect(resolve()).resolves.toMatchObject({ status: "completed" });
+    const events = await getDb(ctx.db)
+      .select()
+      .from(orderMailEvent)
+      .where(eq(orderMailEvent.orderMailId, source.id));
+    expect(events).toHaveLength(2);
+    const decisions = await getDb(ctx.db)
+      .select()
+      .from(orderMailCandidateDecision)
+      .where(
+        inArray(
+          orderMailCandidateDecision.eventId,
+          events.map((row) => row.id),
+        ),
+      );
+    expect(new Set(decisions.map((row) => row.purchaseId))).toEqual(
+      new Set(purchases.map((row) => row.id)),
+    );
+    expect(decisions).toHaveLength(2);
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Synthetic refund account",
+      identity: {
+        kind: "credit_card",
+        issuer: "Synthetic bank",
+        network: "amex",
+      },
+      ledgerPartyId: party.id,
+    });
+    const refunds = await Promise.all(
+      purchases.map((_row, i) =>
+        insertWithShortcode(ctx.db, "financialTransaction", {
+          accountId: account.id,
+          amount: i === 0 ? -3 : -7,
+          kind: "refund",
+          status: "posted",
+          transactionDate: "2026-10-07",
+          postedDate: "2026-10-07",
+        }),
+      ),
+    );
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values(
+        refunds.map((row, i) => {
+          const purchased = purchases[i];
+          if (!purchased) throw new Error("Synthetic refund Purchase missing");
+          return {
+            transactionId: row.id,
+            purchaseId: purchased.id,
+            amount: row.amount,
+          };
+        }),
+      );
+    const financialBefore = await getDb(ctx.db)
+      .select()
+      .from(financialTransaction);
+    const allocationBefore = await getDb(ctx.db)
+      .select()
+      .from(financialTransactionAllocation);
+    const accountBefore = await getDb(ctx.db).select().from(financialAccount);
+    const reviewedInput = {
+      ...input,
+      disposition: {
+        ...input.disposition,
+        settlement: {
+          refundAmount: -10,
+          associations: refunds.map((row) => ({
+            transactionId: row.shortcode,
+            reviewedAccountId: account.shortcode,
+            sourceAccountLabel: "Account ending 54321",
+            reviewReason:
+              "Member confirmed the source label belongs to this account; original merchant orders and posted refunds establish both legs.",
+          })),
+        },
+      },
+    };
+    await expect(
+      resolveMail(
+        ctx.db,
+        fromPartial<Parameters<typeof resolveMail>[1]>(reviewedInput),
+        ctx.actor,
+      ),
+    ).resolves.toMatchObject({
+      financialAssociations: expect.arrayContaining(
+        refunds.map((row) =>
+          expect.objectContaining({
+            transactionId: row.shortcode,
+            reviewedAccountId: account.shortcode,
+          }),
+        ),
+      ),
+    });
+    await expect(
+      resolveMail(
+        ctx.db,
+        fromPartial<Parameters<typeof resolveMail>[1]>(reviewedInput),
+        ctx.actor,
+      ),
+    ).resolves.toMatchObject({ status: "completed" });
+    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual(
+      financialBefore,
+    );
+    expect(
+      await getDb(ctx.db).select().from(financialTransactionAllocation),
+    ).toEqual(allocationBefore);
+    expect(await getDb(ctx.db).select().from(financialAccount)).toEqual(
+      accountBefore,
+    );
+    const partialSource = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "synthetic-fixed-review",
+      checksum: await sha256Hex("Synthetic credit of three dollars"),
+      content: {
+        snippet: "Synthetic credit of three dollars",
+        bodyText: "Synthetic credit of three dollars",
+        bodyHtml: null,
+      },
+    });
+    if (!partialSource) throw new Error("Synthetic partial source missing");
+    const firstPurchase = purchases[0];
+    const firstReview = reviewedInput.disposition.settlement.associations[0];
+    if (!firstPurchase || !firstReview)
+      throw new Error("Synthetic first review missing");
+    const fixedInput = mailResolveInput.parse({
+      ...reviewedInput,
+      messageId: partialSource.messageId,
+      checksum: partialSource.rawChecksum,
+      disposition: {
+        kind: "linked",
+        event: "refunded",
+        purchaseIds: [firstPurchase.shortcode],
+        settlement: { refundAmount: -3, associations: [firstReview] },
+      },
+    });
+    await resolveMail(ctx.db, fixedInput, ctx.actor);
+    await expect(
+      resolveMail(
+        ctx.db,
+        mailResolveInput.parse({
+          ...reviewedInput,
+          messageId: partialSource.messageId,
+          checksum: partialSource.rawChecksum,
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow("different reviewed refund set");
+  });
 
   describe("search", () => {
     async function fixture() {
@@ -963,7 +1199,8 @@ describe("public mail tool", () => {
         messageId: f.source.messageId,
         status: "completed",
         disposition: "unrelated",
-        purchaseId: null,
+        purchaseIds: [],
+        financialAssociations: [],
       });
     });
 

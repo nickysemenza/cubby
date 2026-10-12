@@ -144,12 +144,16 @@ These supersede earlier sections where they conflict.
 - **Email resolution.** A public `mail` tool owns `search`, `read` and
   `resolve`. `mail.resolve` atomically records one message's disposition:
   imported (link to the committed Purchase), linked lifecycle event on an
-  existing Purchase (shipped, delivered, cancelled, refunded …) without
+  existing Purchases named by `purchaseIds` (shipped, delivered, cancelled, refunded …) without
   Expenses, unresolved with its gap, or unrelated. It writes `OrderMailEvent` +
   `OrderMailCandidateDecision`, transitions `MailboxMessage`, and is replayable
   by `operationId`. `purchase_import.commit` derives the confirmation link for a
   mail-sourced order itself. `mail.read` keeps ownership, checksum and mailbox
   eligibility checks.
+  Member-reviewed refund references use `EmailFinancialAssociation`, retaining
+  the exact Email checksum, original account label, reviewed account and
+  decision provenance. These associations preserve history through deletion
+  and expose later account drift; they never write financial allocations.
 - **Unrelated-mail disposal without a retention engine.** An unrelated
   disposition deletes the message's retained `OrderMail` content and
   attachment objects in the same operation; a Mail import Run's Pi storage is
