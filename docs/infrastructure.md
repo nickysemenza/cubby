@@ -223,7 +223,9 @@ Pi runs two purposes ([ADR 0010](adr/0010-mail-import-unattended-burn-down-inter
 `mail_import` and `photo_inventory`. Both mount the same three host tools in
 `server/purchase-agent/tools.ts` (`claim_next_import_work`,
 `report_agent_progress`, `stop_import_run_for_review`) plus the public MCP
-actions their manifest lists; Mail import reads Email (`imports_read.mail`),
+actions their manifest lists. Work claims take no model arguments: the host
+derives the operation identity from the durable tool task, so a new call sees
+current work and replay of the same task retains its result. Mail import reads Email (`imports_read.mail`),
 searches Gmail (`mail.search`), imports through `purchase_import.prepare/commit`
 and records Email dispositions (`mail.resolve`). Pi has no browser and no web
 search; browser research is a member's Claude/Codex Burn-down. Instructions

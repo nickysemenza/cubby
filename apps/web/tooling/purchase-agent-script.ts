@@ -42,7 +42,11 @@ export const call = (
   id: string,
   tool: string,
   args: Record<string, ScriptValue> = {},
-): ScriptStep => ({ call: id, tool, args: { operationId: id, ...args } });
+): ScriptStep => ({
+  call: id,
+  tool,
+  args: tool === "claim_next_import_work" ? args : { operationId: id, ...args },
+});
 
 /**
  * The run id from the coordinator's instructions, as a real model reads it:

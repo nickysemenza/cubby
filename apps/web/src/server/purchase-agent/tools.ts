@@ -1,5 +1,6 @@
 import { photoInventoryToolInputs } from "@cubby/schemas/purchase-agent-services";
 import type { RunProgressStamp } from "@cubby/schemas/run-fields";
+import { sha256Hex } from "@cubby/shared/sha256";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import { Type, type TSchema } from "@earendil-works/pi-ai";
 import {
@@ -176,12 +177,11 @@ export function runAgentTools(
     tool("claim_next_import_work", {
       description:
         "Claim and describe the run's next admitted work item (an Email for Mail import, a photo group for photo inventory). Call it again after resolving each item; continue until it returns done.",
-      execute: async (args, api, context) => {
-        const output = await step(
-          api,
-          context,
-          `claim-work:${args.operationId}`,
-          () => services().claimNextWork(args),
+      execute: async (_args, api, context) => {
+        // New tool tasks observe current work; replay of this task keeps its result.
+        const operationId = `claim:${await sha256Hex(String(api.taskId))}`;
+        const output = await step(api, context, "claim-work", () =>
+          services().claimNextWork({ operationId }),
         );
         // The run ended (for example an outdated Mac stopped it): nothing to claim.
         return result(output, claimStopped(output));

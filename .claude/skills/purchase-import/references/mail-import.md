@@ -7,6 +7,8 @@ Claude or Codex session researches it later through the Research queue.
 
 1. Call `claim_next_import_work`. It names the next admitted Email by
    `mailboxId` and `messageId`, or returns `none` when every Email is settled.
+   It takes no arguments. The host gives each call a durable identity; a new
+   call observes current work, while retrying that same call preserves its result.
 2. `mcp__cubby__imports_read` `mail` reads the Email. Read an attachment's original with
    `attachmentId` when the order details live in a PDF or image. Note the
    returned `checksum`.
