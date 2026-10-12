@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { cn } from "~/lib/utils";
 
@@ -20,6 +21,10 @@ import { useCoarsePointer, useRowActive } from "./row-activity";
  * end of text, where it covers a clipped tail that the hover spill-over then
  * shows in full. Reserved rails put 18px in every cell of 100 list columns.
  * Coarse pointers have no hover, so their rail stays in flow and visible.
+ *
+ * A floating frame nested in another (a relation workbench inside an
+ * explanation) portals its controls into the outer rail. Regression: both
+ * rails floated on the same spot and the ⓘ covered the workbench button.
  */
 export function CellFrame({
   children,
@@ -34,7 +39,15 @@ export function CellFrame({
 }) {
   const active = useRowActive();
   const coarse = useCoarsePointer();
+  const host = useContext(FloatingRail);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
   const floating = overlay && !coarse;
+  const nested = floating && host !== undefined;
+  const value = (
+    <span data-cell-value="" className="min-w-0 flex-1 truncate">
+      {children}
+    </span>
+  );
   return (
     <span
       data-cell-frame=""
@@ -43,24 +56,35 @@ export function CellFrame({
         className,
       )}
     >
-      <span data-cell-value="" className="min-w-0 flex-1 truncate">
-        {children}
-      </span>
-      {(!floating || active) && (
-        <span
-          data-cell-rail=""
-          className={cn(
-            "flex shrink-0 items-center",
-            floating &&
-              "absolute inset-y-0 end-0 my-auto h-fit rounded-sm bg-(--table-row-surface) shadow-[-6px_0_6px_var(--table-row-surface)] [td.text-right_&]:start-0 [td.text-right_&]:end-auto [td.text-right_&]:shadow-[6px_0_6px_var(--table-row-surface)]",
-          )}
-        >
-          {trailing}
-        </span>
+      {floating ? (
+        <FloatingRail.Provider value={slot}>{value}</FloatingRail.Provider>
+      ) : (
+        value
       )}
+      {nested
+        ? host && createPortal(trailing, host)
+        : (!floating || active) && (
+            <span
+              data-cell-rail=""
+              className={cn(
+                "flex shrink-0 items-center",
+                floating &&
+                  "absolute inset-y-0 end-0 my-auto h-fit rounded-sm bg-(--table-row-surface) shadow-[-6px_0_6px_var(--table-row-surface)] [td.text-right_&]:start-0 [td.text-right_&]:end-auto [td.text-right_&]:shadow-[6px_0_6px_var(--table-row-surface)]",
+              )}
+            >
+              {floating && <span ref={setSlot} className="contents" />}
+              {trailing}
+            </span>
+          )}
     </span>
   );
 }
+
+/**
+ * The rail slot of the enclosing floating frame: undefined outside one, null
+ * while its row is inactive and the rail unmounted.
+ */
+const FloatingRail = createContext<HTMLElement | null | undefined>(undefined);
 
 /** Width of one rail affordance plus its gap; column sizing reserves this. */
 export const CELL_RAIL_SLOT_PX = 18;

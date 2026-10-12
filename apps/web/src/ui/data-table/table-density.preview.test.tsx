@@ -30,7 +30,10 @@ import { useCellSpill } from "./useCellSpill";
 // - chips silently drop values instead of counting them;
 // - a code truncates its distinguishing tail;
 // - an explanation ⓘ widens every cell of its column, covers a number, or
-//   disappears under the spill-over it sits beside.
+//   disappears under the spill-over it sits beside;
+// - the ⓘ hides the tail of a value that exactly fits, or of its spill-over;
+// - nested rails (explanation around a relation workbench) stack on one
+//   spot so one control is unreachable.
 
 function Fixture({
   cells,
@@ -264,13 +267,103 @@ describe("table density", () => {
       Math.round(rect(numberFrame).left),
     );
 
-    // The spill-over keeps the ⓘ drawn where it sits.
+    // The spill-over draws the ⓘ after the full text and forwards clicks.
     await userEvent.hover(view.getByTestId("cell-0"));
     await waitFor(() => expect(overlay()).not.toBeNull());
-    const rail = overlay()?.querySelector("[data-cell-spill-rail]");
-    if (!rail) throw new Error("spill hid the explanation");
-    expect(Math.round(rect(rail).left)).toBe(Math.round(rect(text).left));
-    expect(Math.round(rect(rail).top)).toBe(Math.round(rect(text).top));
+    const spill = overlay();
+    const rail = spill?.querySelector("[data-cell-spill-rail]");
+    const textSpan = spill?.querySelector("[data-cell-value]");
+    if (!spill || !rail || !textSpan)
+      throw new Error("spill hid the explanation");
+    const range = document.createRange();
+    range.selectNodeContents(textSpan);
+    expect(range.getBoundingClientRect().right).toBeLessThanOrEqual(
+      rect(rail).left,
+    );
+    expect(rect(rail).right).toBeLessThanOrEqual(rect(spill).right);
+  });
+
+  it("spills a value the ⓘ covers even when it exactly fits", async () => {
+    await page.viewport(1440, 900);
+    const clicks: string[] = [];
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c11",
+            width: 64,
+            content: (
+              <CellFrame
+                overlay
+                trailing={
+                  <button
+                    type="button"
+                    aria-label="Explain"
+                    className={CELL_RAIL_BUTTON_CLASS}
+                    onClick={() => clicks.push("explain")}
+                  >
+                    i
+                  </button>
+                }
+              >
+                <span style={{ display: "inline-block", width: 56 }}>
+                  Fitted
+                </span>
+              </CellFrame>
+            ),
+          },
+        ]}
+      />,
+    );
+    await userEvent.hover(view.getByTestId("cell-0"));
+    await waitFor(() => expect(overlay()).not.toBeNull());
+    const copy = overlay()?.querySelector<HTMLElement>(
+      "[data-cell-spill-rail] button",
+    );
+    if (!copy) throw new Error("missing explanation copy");
+    copy.click();
+    expect(clicks).toEqual(["explain"]);
+  });
+
+  it("puts nested rails side by side", async () => {
+    await page.viewport(1440, 900);
+    const button = (label: string) => (
+      <button
+        type="button"
+        aria-label={label}
+        className={CELL_RAIL_BUTTON_CLASS}
+      >
+        i
+      </button>
+    );
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c12",
+            width: 96,
+            numeric: true,
+            content: (
+              <CellFrame overlay trailing={button("Explain")}>
+                <CellFrame overlay trailing={button("Open related")}>
+                  3
+                </CellFrame>
+              </CellFrame>
+            ),
+          },
+        ]}
+      />,
+    );
+    for (const label of ["Explain", "Open related"]) {
+      const target = view.getByRole("button", { name: label });
+      const box = rect(target);
+      expect(
+        document.elementFromPoint(
+          box.x + box.width / 2,
+          box.y + box.height / 2,
+        ),
+      ).toBe(target);
+    }
   });
 
   it("wraps chips to two lines and counts what does not fit", async () => {
