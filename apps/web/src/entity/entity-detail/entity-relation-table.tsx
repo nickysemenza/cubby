@@ -485,9 +485,18 @@ function RelationStaticSkeleton({ rows }: { rows: number }) {
  */
 export function EntityRelationTable(props: EntityRelationTableProps) {
   const hydrated = useHydrated();
+  // Above the live table: its row-action hooks read the scope while it renders.
+  const scope = useMemo(
+    () => ({ source: props.plan.source, recordId: props.recordId }),
+    [props.plan.source, props.recordId],
+  );
   if (!hydrated)
     return <RelationStaticSkeleton rows={skeletonRowsFor(props.plan)} />;
-  return <LiveEntityRelationTable {...props} />;
+  return (
+    <RelationScopeContext.Provider value={scope}>
+      <LiveEntityRelationTable {...props} />
+    </RelationScopeContext.Provider>
+  );
 }
 
 function LiveEntityRelationTable({
@@ -595,10 +604,6 @@ function LiveEntityRelationTable({
     }),
     enabled: !plan.derived,
   });
-  const scopeValue = useMemo(
-    () => ({ source: plan.source, recordId }),
-    [plan.source, recordId],
-  );
   const evidence = new Map(
     evidenceQuery.data?.items.map((item) => [item.target.entityId, item]),
   );
@@ -655,25 +660,23 @@ function LiveEntityRelationTable({
           refs={connectionRefs(evidenceQuery.data?.items ?? [])}
         >
           <EvidenceContext.Provider value={evidence}>
-            <RelationScopeContext.Provider value={scopeValue}>
-              <ListWorkbench
-                model={list.workbench}
-                mode="embedded"
-                toolbarMode="none"
-                ariaLabel={title}
-                renderMobileRowFooter={(row) => {
-                  const item = evidence.get(row.id);
-                  return item || movementSource !== null ? (
-                    <div className="border-t border-border/60 pt-2">
-                      {movementSource !== null ? (
-                        <RelationshipMovementBadges id={row.id} />
-                      ) : null}
-                      {item ? <RecordPaths paths={item.paths} /> : null}
-                    </div>
-                  ) : null;
-                }}
-              />
-            </RelationScopeContext.Provider>
+            <ListWorkbench
+              model={list.workbench}
+              mode="embedded"
+              toolbarMode="none"
+              ariaLabel={title}
+              renderMobileRowFooter={(row) => {
+                const item = evidence.get(row.id);
+                return item || movementSource !== null ? (
+                  <div className="border-t border-border/60 pt-2">
+                    {movementSource !== null ? (
+                      <RelationshipMovementBadges id={row.id} />
+                    ) : null}
+                    {item ? <RecordPaths paths={item.paths} /> : null}
+                  </div>
+                ) : null;
+              }}
+            />
           </EvidenceContext.Provider>
         </EntityDisplayImagesProvider>
         {evidenceQuery.isError ? (

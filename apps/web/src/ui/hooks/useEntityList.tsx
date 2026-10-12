@@ -20,7 +20,10 @@ import {
 import { formatCount } from "~/lib/utils";
 import { useDocumentTitle } from "~/ui/hooks/useDocumentTitle";
 
-import type { EntityActionSubject } from "../../entity/actions/entity-actions";
+import {
+  type EntityActionSubject,
+  rowActionReadFields,
+} from "../../entity/actions/entity-actions";
 import { DeferredListValue } from "../../entity/entity-list/deferred-list-value";
 import { listColumnReadFields } from "../../entity/entity-list/list-column-read-fields";
 import {
@@ -458,12 +461,14 @@ export function useEntityList<
   const requestedReadFields = useMemo(
     () => [
       ...visibleReadFields,
+      ...rowActionReadFields(entity),
       ...(additionalReadFields ?? []),
       ...(subject?.readFields ?? []),
       ...(mappingsReadFields ?? []),
     ],
     [
       additionalReadFields,
+      entity,
       mappingsReadFields,
       subject?.readFields,
       visibleReadFields,

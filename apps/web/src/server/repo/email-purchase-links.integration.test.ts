@@ -148,7 +148,12 @@ describe("Email Purchase links", () => {
           ? `:attachment:${attachmentKey}`
           : ""
       }`;
-      const checksum = "f".repeat(64);
+      // Accepted bytes match the current original: the attachment's own
+      // checksum, or the Email's for a message source.
+      const checksum =
+        sourceKind === "accepted_attachment"
+          ? "f".repeat(64)
+          : original.rawChecksum;
       if (sourceKind === "accepted_attachment")
         await getDb(ctx.db).insert(orderMailAttachment).values({
           orderMailId: original.id,
@@ -645,6 +650,63 @@ describe("Email Purchase links", () => {
       classification: "related",
       stage: "resolution",
     });
+  });
+
+  it("records the member's resolution when a model already said related", async () => {
+    const f = await retainedReviewFixture();
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ classification: "related", classificationStage: "model" })
+      .where(eq(emailTable.orderMailId, f.source.id));
+    await decide(f.email, f.purchase, f.checksum, "linked");
+    const [reviewed] = await getDb(ctx.db)
+      .select({
+        classification: emailTable.classification,
+        stage: emailTable.classificationStage,
+      })
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, f.source.id));
+    expect(reviewed).toEqual({
+      classification: "related",
+      stage: "resolution",
+    });
+  });
+
+  it("warns when an accepted original changed after its import", async () => {
+    const f = await retainedReviewFixture();
+    const [claim] = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: f.source.ledgerPartyId,
+        kind: "mail_message",
+        externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
+        checksum: "b".repeat(64),
+        firstRunId: f.runId,
+        lastRunId: f.runId,
+      })
+      .returning();
+    await getDb(ctx.db)
+      .insert(importSourceOrder)
+      .values({
+        sourceClaimId: claim!.id,
+        orderKey: "synthetic-earlier-original",
+        purchaseId: f.purchase.id,
+        checksum: "b".repeat(64),
+        outputFingerprint: "synthetic-earlier-original",
+      });
+    expect(
+      (
+        await list({
+          purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode),
+        })
+      ).flatMap((row) => row.purchaseLinks),
+    ).toEqual([
+      expect.objectContaining({
+        state: "linked",
+        accepted: true,
+        changedSinceReview: true,
+      }),
+    ]);
   });
 
   it("suggests a matching total only within 45 household days, never a nearby date alone", async () => {

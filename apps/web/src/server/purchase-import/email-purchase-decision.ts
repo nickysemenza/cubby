@@ -82,52 +82,40 @@ async function decideOnce(
     );
   const purchaseId = await resolveOrThrow(db, "purchase", input.purchaseId);
   return withTransaction(db, async (tx) => {
-    // Owner-first lock order, as every Email writer: the member's Email row,
-    // then its retained original, then the Purchase.
-    const [owned] = await tx
-      .select({ email: emailTable })
-      .from(emailTable)
-      .innerJoin(
-        ledgerParty,
-        and(
-          eq(ledgerParty.id, emailTable.ledgerPartyId),
-          eq(ledgerParty.userId, userId.parse(actor.userId)),
-          eq(ledgerParty.kind, "member"),
-          notDeleted(ledgerParty),
-        ),
-      )
-      .where(
-        and(
-          eq(emailTable.shortcode, parseShortcodeFor("email", input.id)),
-          notDeleted(emailTable),
-        ),
-      )
-      .for("update", { of: emailTable })
-      .limit(1);
-    if (!owned)
+    // The import writer's lock order: Purchase, then the retained original,
+    // then the Email (writer.ts locks the Purchase before linkImportedMail
+    // locks OrderMail and settleMail updates the Email). Ownership is read
+    // first without locks and rechecked once every row is held.
+    const ownedEmail = () =>
+      tx
+        .select({ email: emailTable })
+        .from(emailTable)
+        .innerJoin(
+          ledgerParty,
+          and(
+            eq(ledgerParty.id, emailTable.ledgerPartyId),
+            eq(ledgerParty.userId, userId.parse(actor.userId)),
+            eq(ledgerParty.kind, "member"),
+            notDeleted(ledgerParty),
+          ),
+        )
+        .where(
+          and(
+            eq(emailTable.shortcode, parseShortcodeFor("email", input.id)),
+            notDeleted(emailTable),
+          ),
+        )
+        .limit(1);
+    const [found] = await ownedEmail();
+    if (!found)
       throw new Error(
         "Only the Email's owner can link or dismiss it for a Purchase.",
       );
-    const email = owned.email;
-    if (email.checksum !== input.expectedChecksum)
-      throw new Error("Email evidence changed; refresh before deciding.");
-    if (!email.orderMailId)
+    const orderMailId = found.email.orderMailId;
+    if (!orderMailId)
       throw new Error(
         "This Email has no retained order events to link; retrieve its original first.",
       );
-    const [original] = await tx
-      .select({ rawChecksum: orderMail.rawChecksum })
-      .from(orderMail)
-      .where(
-        and(
-          eq(orderMail.id, email.orderMailId),
-          eq(orderMail.ledgerPartyId, email.ledgerPartyId),
-        ),
-      )
-      .for("update")
-      .limit(1);
-    if (!original || original.rawChecksum !== input.expectedChecksum)
-      throw new Error("Email evidence changed; refresh before deciding.");
     const [target] = await tx
       .select({
         vendorId: purchase.vendorId,
@@ -145,6 +133,27 @@ async function decideOnce(
       .for("update", { of: purchase })
       .limit(1);
     if (!target) throw new Error(`${input.purchaseId} no longer exists.`);
+    const [original] = await tx
+      .select({ rawChecksum: orderMail.rawChecksum })
+      .from(orderMail)
+      .where(
+        and(
+          eq(orderMail.id, orderMailId),
+          eq(orderMail.ledgerPartyId, found.email.ledgerPartyId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!original || original.rawChecksum !== input.expectedChecksum)
+      throw new Error("Email evidence changed; refresh before deciding.");
+    const [owned] = await ownedEmail().for("update", { of: emailTable });
+    if (
+      !owned ||
+      owned.email.orderMailId !== orderMailId ||
+      owned.email.checksum !== input.expectedChecksum
+    )
+      throw new Error("Email evidence changed; refresh before deciding.");
+    const email = owned.email;
     if (target.accountPartyId && target.accountPartyId !== email.ledgerPartyId)
       throw new Error(
         "The Email and the Purchase belong to different members.",
@@ -177,7 +186,7 @@ async function decideOnce(
         .from(orderMailEvent)
         .where(
           and(
-            eq(orderMailEvent.orderMailId, email.orderMailId),
+            eq(orderMailEvent.orderMailId, orderMailId),
             isNull(orderMailEvent.supersededAt),
           ),
         )
@@ -237,8 +246,16 @@ async function decideOnce(
           },
         });
 
-    // A member's link is relevance evidence (ADR 0011): the Email is related.
-    if (input.decision === "linked" && email.classification !== "related") {
+    // A member's link is relevance evidence (ADR 0011): it resolves the Email
+    // related, even when a rule or model already said so, so a rerun cannot
+    // replace it. Only an existing related member resolution is left alone.
+    if (
+      input.decision === "linked" &&
+      !(
+        email.classification === "related" &&
+        email.classificationStage === "resolution"
+      )
+    ) {
       const reason = `Linked to ${input.purchaseId} by the member.`;
       await snapshotStoredEmailPrediction(tx, email);
       await recordEmailClassificationObservation(databaseForTransaction(tx), {

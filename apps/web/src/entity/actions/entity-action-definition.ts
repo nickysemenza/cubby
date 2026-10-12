@@ -47,6 +47,11 @@ export interface EntityActionDefinition {
     context: EntityActionResolutionContext,
   ) => ReturnType<NonNullable<EntityActionHandles["availability"]>>;
   preserveSelection?: boolean;
+  /**
+   * Row fields a row action reads beyond the visible columns; every list of
+   * the entity requests them, so an embedded table's row menu still has them.
+   */
+  readFields?: readonly string[];
   use: (entity: never) => EntityActionHandles;
 }
 

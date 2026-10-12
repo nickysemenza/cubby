@@ -21,7 +21,17 @@ export const automatedStagesSql = sql`(${rule}, ${jev}, ${model})`;
  * disposal and historical aliases; active lifecycle decisions remain separate.
  */
 export const emailAcceptedEvidenceSql = (includeDeleted = false): SQL => sql`
-  SELECT accepted."id" AS "sourceOrderId", accepted."purchaseId", accepted."checksum" AS "evidenceChecksum", accepted."createdAt" AS "acceptedAt"
+  SELECT accepted."id" AS "sourceOrderId", accepted."purchaseId", accepted."checksum" AS "evidenceChecksum", accepted."createdAt" AS "acceptedAt",
+    -- The accepted bytes differ from the current original: the Email's own
+    -- checksum for a message source, the attachment's for an attachment.
+    accepted."checksum" IS DISTINCT FROM (CASE
+      WHEN identity."kind" = ${importSourceKind.enum.mail_message} THEN "Email"."checksum"
+      ELSE (
+        SELECT current_attachment."checksum" FROM "OrderMailAttachment" current_attachment
+        WHERE current_attachment."orderMailId" = "Email"."orderMailId"
+          AND identity."externalKey" = "Email"."provider" || ':' || "Email"."mailboxId" || ':' || "Email"."messageId" || ':attachment:' || current_attachment."providerAttachmentId"
+      )
+    END) AS "changed"
   FROM "ImportSourceClaim" identity
   INNER JOIN "ImportSourceClaim" root
     ON root."id" = coalesce(identity."canonicalClaimId", identity."id")

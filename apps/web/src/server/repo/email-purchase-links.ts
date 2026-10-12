@@ -51,7 +51,7 @@ const SUGGESTION_WINDOW_DAYS = 45;
  */
 const emailPurchaseEvidenceSql = (): SQL => sql`
   SELECT accepted."purchaseId", NULL::uuid AS "eventId", ${KIND.accepted}::text AS "kind",
-    false AS "changed", ${PROPOSER.import}::text AS "proposedBy"
+    accepted."changed", ${PROPOSER.import}::text AS "proposedBy"
   FROM (${emailAcceptedEvidenceSql()}) accepted
   UNION ALL
   SELECT decision."purchaseId", event."id", decision."decision",

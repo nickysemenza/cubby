@@ -110,6 +110,14 @@ export function useReclassifyEmailsAction(): EntityActionHandles {
   };
 }
 
+/** The Email row fields a pair action reads; every Email list requests them. */
+export const EMAIL_PAIR_READ_FIELDS = [
+  "checksum",
+  "ownedByViewer",
+  "ledgerPartyName",
+  "purchaseLinks",
+] as const;
+
 /** The Email row fields a pair action reads; the list hydrates them. */
 const pairRow = z.object({
   id: z.string(),
