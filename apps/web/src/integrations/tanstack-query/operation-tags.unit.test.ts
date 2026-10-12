@@ -1,4 +1,6 @@
 import { allEntities } from "@cubby/schemas/entity-manifest";
+import type { Query } from "@tanstack/react-query";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 import { z, type JSONType } from "zod";
 
@@ -12,6 +14,7 @@ import {
   type InvalidationTagSet,
 } from "./cache-tags";
 import * as catalog from "./generated/catalog.gen";
+import { matchesTags } from "./operation-cache";
 import type { OperationCacheTag } from "./operation-meta";
 
 /**
@@ -109,7 +112,43 @@ const liveDeclaredTags: readonly OperationCacheTag[] = [
 const invalidatesSomething = (tag: OperationCacheTag) =>
   liveDeclaredTags.some((candidate) => isPrefixOf(tag, candidate));
 
+const relatedDataTags: readonly OperationCacheTag[] = [["relatedData"]];
+
 describe("operation cache tags", () => {
+  it.each([
+    {
+      query: "entityMedia.displayImages",
+      tags: catalog.entityMedia.displayImages.definition.tags,
+      refreshedBy: [
+        ...allEntities.map((entity) => entityRipple(entity)),
+        relatedDataTags,
+      ],
+    },
+    ...[
+      catalog.entityGraph.explore,
+      catalog.entityGraph.graph,
+      catalog.entityGraph.graphPaths,
+    ].map((operation) => ({
+      query: operation.id,
+      tags: operation.definition.tags,
+      refreshedBy: allEntities.map((entity) => entityRipple(entity)),
+    })),
+    {
+      // Placement eligibility and labels change when locations change.
+      query: "recommendations.forEntity",
+      tags: catalog.recommendations.forEntity.definition.tags,
+      refreshedBy: [entityRipple("location")],
+    },
+  ])(
+    "refreshes $query after its source records change",
+    ({ tags, refreshedBy }) => {
+      const query = fromPartial<Query>({ meta: { cacheTags: tags } });
+      for (const invalidation of refreshedBy) {
+        expect(matchesTags(invalidation)(query)).toBe(true);
+      }
+    },
+  );
+
   it("invalidates field suggestions when an inheritance source changes", () => {
     for (const entity of [
       "project",
