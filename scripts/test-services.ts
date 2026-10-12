@@ -120,6 +120,8 @@ const RECYCLE_DATABASE_COUNT = 250;
 
 const runRecord = z.object({
   pid: z.number(),
+  // The command's detached process group; it can outlive a SIGKILLed wrapper.
+  group: z.number().optional(),
   configuration: z.string(),
   root: z.string(),
 });
@@ -142,7 +144,20 @@ export function removablePairContainers(
   });
 }
 
-/** Live run records; a dead or unreadable record is deleted. */
+/** Whether any process in a process group still runs. */
+function groupIsAlive(group: number): boolean {
+  try {
+    process.kill(-group, 0);
+    return true;
+  } catch (error) {
+    return error instanceof Error && "code" in error && error.code === "EPERM";
+  }
+}
+
+/**
+ * Live run records; a dead or unreadable record is deleted. A run stays live
+ * while its wrapper or its command's process group runs.
+ */
 function liveRuns(): RunRecord[] {
   mkdirSync(RUNS, { recursive: true });
   return readdirSync(RUNS).flatMap((file) => {
@@ -154,7 +169,12 @@ function liveRuns(): RunRecord[] {
     } catch {
       // Unreadable: removed below.
     }
-    if (record?.success && ownerIsAlive(record.data.pid)) return [record.data];
+    if (
+      record?.success &&
+      (ownerIsAlive(record.data.pid) ||
+        (record.data.group !== undefined && groupIsAlive(record.data.group)))
+    )
+      return [record.data];
     rmSync(path.join(RUNS, file), { force: true });
     return [];
   });
@@ -200,7 +220,7 @@ async function healthyPair(): Promise<string | undefined> {
     );
     return postgresHost;
   } catch {
-    console.log("[test-services] Shared services are unhealthy; recreating");
+    console.log("[test-services] Shared services are unhealthy");
     return undefined;
   }
 }
@@ -249,12 +269,19 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
   const release = await holdLock(STATE_LOCK);
   const record = path.join(RUNS, `${process.pid}.json`);
   const leave = () => rmSync(record, { force: true });
-  try {
-    const others = liveRuns();
+  const write = (group?: number) =>
     writeFileSync(
       record,
-      JSON.stringify({ pid: process.pid, configuration, root: worktreeRoot }),
+      JSON.stringify({
+        pid: process.pid,
+        group,
+        configuration,
+        root: worktreeRoot,
+      } satisfies RunRecord),
     );
+  try {
+    const others = liveRuns();
+    write();
     for (const name of removablePairContainers(
       (await listContainers()).map((entry) => entry.id),
       others,
@@ -264,9 +291,18 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
       console.log(`[test-services] Removed idle ${name}`);
     }
     let postgresHost = await healthyPair();
+    const sharing = others.filter((run) => run.configuration === configuration);
+    // Recreating the pair would destroy databases a live run is using; a
+    // transient outage is the newcomer's failure, not a reason to reset.
+    if (!postgresHost && sharing.length > 0)
+      throw new Error(
+        `Shared test services are unhealthy while live runs use them (${sharing
+          .map((run) => `pid ${run.pid} in ${run.root}`)
+          .join(", ")}); retry after they finish`,
+      );
     if (
       postgresHost &&
-      !others.some((run) => run.configuration === configuration) &&
+      sharing.length === 0 &&
       (await databaseCount()) > RECYCLE_DATABASE_COUNT
     ) {
       console.log(
@@ -288,7 +324,7 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
       // A report server after a failed browser run would keep the run live.
       PLAYWRIGHT_HTML_OPEN: env.PLAYWRIGHT_HTML_OPEN ?? "never",
     };
-    return { overlay, leave };
+    return { overlay, leave, adopt: (group: number) => write(group) };
   } catch (error) {
     leave();
     throw error;
@@ -339,6 +375,7 @@ export async function runWithTestServices(
   let interrupted: NodeJS.Signals | undefined;
   let killTimer: NodeJS.Timeout | undefined;
   let leave = () => {};
+  let adopt = (_group: number) => {};
   let exitCode = 1;
 
   function signalGroup(signal: NodeJS.Signals) {
@@ -373,6 +410,7 @@ export async function runWithTestServices(
       // finished create leaves it usable for the next run.
       const joined = await joinSharedServices(env);
       leave = joined.leave;
+      adopt = joined.adopt;
       childEnv = { ...env, ...joined.overlay };
     }
     if (interrupted) throw new Error(`Interrupted by ${interrupted}`);
@@ -384,6 +422,8 @@ export async function runWithTestServices(
       detached: detachedCommand,
       onSpawn: (spawned) => {
         child = spawned;
+        // A detached child leads its own process group.
+        if (detachedCommand && spawned.pid) adopt(spawned.pid);
       },
     });
   } catch (error) {

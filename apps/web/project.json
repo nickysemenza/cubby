@@ -67,6 +67,12 @@
     },
     "db-check": {
       "command": "pnpm run db:check",
+      "dependsOn": [
+        {
+          "projects": ["cubby-checks"],
+          "target": "generate"
+        }
+      ],
       "options": {
         "cwd": "apps/web"
       },
