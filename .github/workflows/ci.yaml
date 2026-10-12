@@ -37,10 +37,11 @@ jobs:
   cache-probe:
     name: Cache probe
     if: github.event_name != 'schedule'
+    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      hits: ${{ steps.probe.outputs.hits }}
+      hits: ${{ steps.probe.outcome == 'success' && steps.probe.outputs.hits || '[]' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: env.NX_CACHE_URL != '' && env.NX_CACHE_TOKEN != ''
