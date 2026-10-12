@@ -748,6 +748,25 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       focusTarget(targetForHash(locationHash));
   }, [hydrated, locationHash, onlyWorkspace, targetForHash, focusTarget]);
   useEffect(() => {
+    if (!hydrated || onlyWorkspace !== "evidence" || !locationHash) return;
+    const id = normalizedHash(locationHash);
+    if (
+      id === "evidence" ||
+      sections.some(
+        (section) => section.workspace === "evidence" && section.id === id,
+      )
+    )
+      return;
+    void navigate({
+      to: ".",
+      search: true,
+      hash: "",
+      replace: true,
+      resetScroll: false,
+      hashScrollIntoView: false,
+    });
+  }, [hydrated, onlyWorkspace, locationHash, sections, navigate]);
+  useEffect(() => {
     const body = bodyRef.current;
     if (!body || !hydrated) return;
     let frame = 0;

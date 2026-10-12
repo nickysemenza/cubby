@@ -44,7 +44,9 @@ discard the store and restoration state. Credentials never enter JavaScript.
 
 Run entry routes retain `nativeWorkspace=run-evidence` through canonical redirects and omit
 web app navigation chrome. The hosted surface renders only Evidence, without
-Overview/Work navigation or record hero commands. The flag has no effect on other
+Overview/Work navigation or record hero commands. Unsupported hosted fragments
+are cleared without removing the pilot query flag; this normalization is confined
+to the hosted surface. The flag has no effect on other
 entities. Native owns cross-record links, imperative record
 navigation and its Back/selection history. Web owns views, hashes, drafts and
 inline commands. The version-1 main-frame bridge validates the exact configured
