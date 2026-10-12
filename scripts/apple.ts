@@ -34,6 +34,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { localSimulatorServer } from "./lib/simulator-server.ts";
+import { selectIOSSimulator } from "./apple-simulator-selection.ts";
+import type { SimulatorInventory } from "../apps/web/tooling/simulator-inventory-schema.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const APPLE = join(ROOT, "apps/apple");
@@ -379,34 +381,17 @@ const ios = (options: Options) => {
   ]);
 };
 
-type SimulatorList = {
-  devices: Record<
-    string,
-    { udid: string; name: string; state: string; isAvailable: boolean }[]
-  >;
-};
-
 const pickSimulator = (name: string | undefined) => {
-  // SAFETY: simctl's JSON schema is Apple's; only the declared fields are read
-  // and a missing one surfaces as a TypeError.
-  const list = JSON.parse(
+  // SAFETY: simctl's JSON schema is Apple's; selectIOSSimulator reads only the
+  // declared fields. This script stays dependency-free, so no Zod parse here.
+  const inventory = JSON.parse(
     capture("xcrun", ["simctl", "list", "devices", "available", "-j"]),
-  ) as SimulatorList;
-  const simulators = Object.entries(list.devices)
-    .filter(([runtime]) => runtime.includes(".iOS-"))
-    .flatMap(([, devices]) => devices);
-  const simulator = name
-    ? simulators.find((candidate) => candidate.name === name)
-    : (simulators.find((candidate) => candidate.state === "Booted") ??
-      simulators.find((candidate) => candidate.name.includes("iPhone")));
-  if (!simulator) {
-    const known = simulators
-      .map((candidate) => `'${candidate.name}'`)
-      .join(", ");
+  ) as SimulatorInventory;
+  const simulator = selectIOSSimulator(inventory, name);
+  if (!simulator)
     throw new Error(
-      `no iOS simulator${name ? ` named '${name}'` : ""} (available: ${known || "none"})`,
+      `no iPhone 17 simulator${name ? ` named '${name}'` : ""}; create one with \`xcrun simctl create\``,
     );
-  }
   return simulator;
 };
 

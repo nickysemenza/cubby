@@ -11,11 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import {
-  cargoMetadataSchema,
-  sourceDigest,
-  sourceInputs,
-} from "./ensure-wasm.ts";
+import { sourceDigest, sourceInputs } from "./rust-fingerprint.ts";
 
 test("offline startup ignores inherited Rust logging but preserves compiler flag freshness", () => {
   const script = fileURLToPath(new URL("./ensure-wasm.ts", import.meta.url));
@@ -65,24 +61,4 @@ test("WASM inputs follow contents across checkouts, including local dependency a
   writeFileSync(join(first, ".claude", "settings.local.json"), "{}");
   assert.equal(sourceDigest(first), original);
   assert.throws(() => sourceDigest(join(root, "missing")));
-});
-
-test("cargo metadata ingress requires package source and manifest path", () => {
-  const parsed = cargoMetadataSchema.parse({
-    packages: [
-      {
-        manifest_path: "/workspace/recipebridge/Cargo.toml",
-        source: null,
-      },
-    ],
-  });
-  assert.equal(parsed.packages[0]?.source, null);
-  assert.equal(
-    cargoMetadataSchema.safeParse({ packages: [{ source: null }] }).success,
-    false,
-  );
-  assert.equal(
-    cargoMetadataSchema.safeParse({ packages: "not-an-array" }).success,
-    false,
-  );
 });

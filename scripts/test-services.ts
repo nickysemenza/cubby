@@ -12,6 +12,7 @@ import {
   waitFor,
 } from "./lib/apple-container.ts";
 import { spawnToExit } from "./lib/run.ts";
+import { z } from "zod";
 
 const postgresImage = "docker.io/pgvector/pgvector:pg17";
 // Keep this aligned with the Linux CI service image.
@@ -29,20 +30,15 @@ interface Options {
   warm?: boolean;
 }
 
-export type ServiceMode = "apple" | "external" | "warm";
+const serviceModeSchema = z.enum(["apple", "external", "warm"]);
+type ServiceMode = z.infer<typeof serviceModeSchema>;
 
-export function serviceMode(
-  env: NodeJS.ProcessEnv,
-  warmFlag: boolean,
-): ServiceMode {
-  const mode = env.CUBBY_TEST_SERVICES;
-  if (mode && mode !== "external" && mode !== "apple" && mode !== "warm") {
-    throw new Error("CUBBY_TEST_SERVICES must be apple, external, or warm");
-  }
-  if (warmFlag) return "warm";
-  // SAFETY: the guard above already rejected every string value other than
-  // "external", "apple", "warm", or undefined.
-  return (mode as ServiceMode | undefined) ?? "apple";
+// An invalid CUBBY_TEST_SERVICES fails loudly even with --warm.
+function serviceMode(env: NodeJS.ProcessEnv, warmFlag: boolean): ServiceMode {
+  const mode = serviceModeSchema
+    .default("apple")
+    .parse(env.CUBBY_TEST_SERVICES || undefined);
+  return warmFlag ? "warm" : mode;
 }
 
 function usesAppleServices(

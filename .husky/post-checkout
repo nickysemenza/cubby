@@ -6,9 +6,9 @@
 [ "$3" = "1" ] || exit 0
 ROOT="$(git rev-parse --show-toplevel)"
 # `git worktree add` fires this before the new tree has node_modules, and
-# ensure-wasm.ts imports zod; `pnpm agent:setup` builds the WASM right after
-# its install, so a fresh worktree skips instead of printing a module crash.
-if [ -d "$ROOT/node_modules/zod" ]; then
+# ensure-wasm.ts runs the Nx `wasm` target; `pnpm agent:setup` builds the WASM
+# right after its install, so a fresh worktree skips instead of failing.
+if [ -d "$ROOT/node_modules/nx" ]; then
   node "$ROOT/scripts/ensure-wasm.ts"
 fi
 # Cubby.xcodeproj is generated and gitignored; after a branch switch it can
