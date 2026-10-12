@@ -193,8 +193,10 @@ and captured credential revisions across every await. See [DESIGN.md](DESIGN.md#
   implementations.
 - Value formatting is single-sourced in Rust (`recipebridge/src/display_format.rs` plus
   `format_amount_labeled`): `currency`, `signedCurrency`, bare numbers, `{value, unit}` amounts, and
-  the compact nutrition cell run the same code as web (WASM) and native (UniFFI `format_*` in
-  `cubby-ffi`, wrapped by `CubbyKit` `ValueFormat`). The Rust tests read `display-format.json`
+  nutrition/cost estimates (the compact cell and the long `DisplayFormat.estimate` form) run the
+  same code as web (WASM) and native (UniFFI `format_*` in `cubby-ffi`, wrapped by `CubbyKit`
+  `ValueFormat`). Declared list totals arrive worded by the server (`ListPageMeta.totalLabels`);
+  `ListTotalsSummary` only prints them. The Rust tests read `display-format.json`
   directly; `DisplayFormatTests` and the web `display-format.unit.test.ts` are binding checks. Only
   `plainDate` stays per platform (no timezone database in Rust; `DisplayFormat.plainDate` /
   `formatCalendarDay`) and timestamps stay locale-aware platform code. Never format a catalog value
