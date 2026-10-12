@@ -1,0 +1,19 @@
+.github/workflows/ci.yaml
+  s_5844b4bd3bb15a::t_3887081d220080 40,44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5169eac1a1087b71bbe7b58eae7b5071629e7f42",
+  "prompts": {},
+  "sessions": {
+    "s_5844b4bd3bb15a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a131f7-51c6-78c3-8228-3caf5125b599",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
