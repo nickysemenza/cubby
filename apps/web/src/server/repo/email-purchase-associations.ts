@@ -1,10 +1,48 @@
 import type { EmailId } from "@cubby/schemas/identifiers";
-import { asc, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { purchase } from "~/server/db/schema";
+import {
+  importSourceClaim,
+  importSourceOrder,
+  purchase,
+} from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
-import { emailPurchaseAssociationsSql } from "~/server/repo/email-sql";
+import {
+  emailAcceptedEvidenceSql,
+  emailPurchaseAssociationsSql,
+} from "~/server/repo/email-sql";
+
+/** Review handles follow the same owned accepted-family policy as Purchase history. */
+export async function readEmailAcceptedSourceOrders(
+  db: Database | DrizzleTransaction,
+  emailId: EmailId,
+) {
+  // includes-deleted: a deleted target remains retained accepted history.
+  return unwrapDb(db)
+    .select({
+      sourceOrderId: importSourceOrder.id,
+      purchaseId: purchase.shortcode,
+      purchaseDeleted: sql<boolean>`${purchase.deletedAt} IS NOT NULL`,
+      source: {
+        kind: importSourceClaim.kind,
+        externalKey: importSourceClaim.externalKey,
+        checksum: importSourceOrder.checksum,
+      },
+    })
+    .from(importSourceOrder)
+    .innerJoin(
+      importSourceClaim,
+      eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
+    )
+    .innerJoin(purchase, eq(purchase.id, importSourceOrder.purchaseId))
+    .where(sql`"ImportSourceOrder"."id" IN (
+      SELECT evidence."sourceOrderId" FROM "Email"
+      CROSS JOIN LATERAL (${emailAcceptedEvidenceSql(true)}) evidence
+      WHERE "Email"."id" = ${emailId}
+    )`)
+    .orderBy(asc(purchase.shortcode), asc(importSourceOrder.id));
+}
 
 /** Accepted history retains deleted targets; thread and dismissed candidates never bind. */
 export async function readEmailPurchaseAssociations(

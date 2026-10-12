@@ -4,6 +4,8 @@ import { agentImportRunPurpose } from "./import-run-agent";
 import { plainDate } from "./base-entity";
 
 import { mailEvent } from "./mailbox-research";
+import { importSourceIdentity, importSourceKind } from "./import-source";
+export { importSourceIdentity, importSourceKind } from "./import-source";
 import { ENTITY_SOURCE_QUOTE_MAX } from "./child-tables/modules";
 import { money } from "./money";
 import { runPurpose, runStatus, runTrigger } from "./run-fields";
@@ -27,7 +29,6 @@ export const vendorOrderEvidence = z.enum([
   "receipt_only",
   "not_expected",
 ]);
-/** Every stored source kind; `browser_order` is retired and only read. */
 /**
  * A Distinct-from decision (terminology): the line is a different Product from
  * this exact name match, shown by the Source's url and quoted difference.
@@ -48,13 +49,6 @@ const newProductResolution = z
   })
   .describe("Create a Product; an exact match must be listed in distinctFrom.");
 
-export const importSourceKind = z.enum([
-  "browser_order",
-  "mail_message",
-  "mail_attachment",
-  "receipt_photo",
-  "vendor_export",
-]);
 export { runPurpose, runStatus, runTrigger } from "./run-fields";
 export type RunTrigger = z.infer<typeof runTrigger>;
 export type RunPurpose = z.infer<typeof runPurpose>;
@@ -129,11 +123,6 @@ export type PurchaseImportRunExecution = z.infer<
   typeof purchaseImportRunExecution
 >;
 
-export const importSourceIdentity = z.object({
-  kind: importSourceKind,
-  externalKey: z.string().trim().min(1).max(512),
-  checksum: z.string().regex(/^[a-f0-9]{64}$/),
-});
 const LINE_COST_TYPE =
   "The line's accounting role: materials for consumed or installed goods, tools for equipment that outlives the job, services for labor, travel, delivery, taxes, fees, and other non-material charges.";
 export const extractedPurchaseLine = z.object({

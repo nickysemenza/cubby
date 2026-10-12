@@ -214,7 +214,9 @@ same outcome without prescribing an agent runtime.
    unbound, unclaimed principal rows and retain the original source-line
    associations. Amounts, dates, purpose and adjustment rows stay intact.
    Ambiguous rows, conflicting Products and previously accepted sources require
-   source-order reconciliation review. A known accepted original with missing
+   source-order reconciliation review. `imports_read.mail.acceptedSourceOrders`
+   supplies accepted order handles and exact source identities; lifecycle-only
+   Purchase links do not supply a repair handle. A known accepted original with missing
    Product bindings uses `purchase_import.prepare_reconciliation` and
    `commit_accepted_reconciliation`. Each reviewed line names an existing
    `productId`, or sets `productId: null` and deliberate `newProduct: {kind:

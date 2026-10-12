@@ -596,7 +596,7 @@ export const MCP_TOOLS = defineMcpTools({
       mail: mcpAction({
         op: purchaseImportContract.ops.mailRead,
         description:
-          "Read one retained Email: sender, subject, received time, readable body, exact links, attachment list and its `checksum`. Pass `attachmentId` to receive that attachment's original bytes (PDF or image, at most 3 MiB). Start Product and Purchase research here, from the original order Email and its links.",
+          "Read one retained Email: headers, body, links, attachments and checksum. acceptedSourceOrders supplies owned accepted-order handles and source identities for prepare_reconciliation, separately from lifecycle Purchase links. Pass attachmentId for original PDF/image bytes (at most 3 MiB). Start research from this original and its links.",
       }),
       purchase_status: mcpAction({
         op: purchaseImportContract.ops.operationStatus,

@@ -65,7 +65,11 @@ caller's own browser. Record where each fact was seen with `sources` on
 `entity.update` (field-scoped) and `image.attach_files` (record-level); a
 quote and URL are enough, screenshots are optional. Read and resolve retained
 Email with `imports_read.mail` and `mail.resolve`; recover a missing original
-with `mail.search`. A member's search runs no paid classification: past Spam
+with `mail.search`. The retained read's `acceptedSourceOrders` provides owned
+source-order handles, exact source identities and deleted-target status for
+reviewed reconciliation. Lifecycle-only links supply no accepted-order handle;
+reading one neither promotes an unknown original nor authorizes its repair.
+A member's search runs no paid classification: past Spam
 and Trash every match is retained as `uncertain`, and the caller settles each
 with `mail.resolve` (`unrelated` disposes of it). Change identifier slots with `entity.update` collection
 patches on `externalIds` (`{op: "add"|"replace"|"remove", key, value?, expect?}`).

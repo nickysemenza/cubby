@@ -52,7 +52,10 @@ import {
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { readEmailFinancialAssociations } from "~/server/repo/email-financial-associations";
-import { readEmailPurchaseAssociations } from "~/server/repo/email-purchase-associations";
+import {
+  readEmailAcceptedSourceOrders,
+  readEmailPurchaseAssociations,
+} from "~/server/repo/email-purchase-associations";
 import {
   readRetainedMail,
   retainedMailJoin,
@@ -199,6 +202,7 @@ async function associationsForMail(
       purchaseId: row.shortcode,
       purchaseDeleted: row.purchaseDeleted,
     })),
+    acceptedSourceOrders: id ? await readEmailAcceptedSourceOrders(db, id) : [],
     financialAssociations: id
       ? await readEmailFinancialAssociations(db, id)
       : [],

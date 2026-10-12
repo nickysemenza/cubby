@@ -5,6 +5,7 @@ import {
   financialAccountShortcode,
 } from "./identifier-fields";
 import { executionAuthorizationRef } from "./execution-authorization.js";
+import { importSourceIdentity } from "./import-source";
 
 export const MAILBOX_RESEARCH_VERSION = "2026-10-11.1";
 /** One Reclassify request records at most this many Emails in its Run. */
@@ -319,6 +320,16 @@ export const mailReadOut = mailMessageRef.extend({
   boundToRun: z.boolean(),
   purchaseIds: z.array(purchaseShortcode).default([]),
   purchaseAssociations: z.array(mailPurchaseAssociation).default([]),
+  acceptedSourceOrders: z
+    .array(
+      z.object({
+        sourceOrderId: z.uuid(),
+        purchaseId: purchaseShortcode,
+        purchaseDeleted: z.boolean(),
+        source: importSourceIdentity,
+      }),
+    )
+    .default([]),
   financialAssociations: z.array(mailFinancialAssociation).default([]),
 });
 export const mailSearchOut = z.object({

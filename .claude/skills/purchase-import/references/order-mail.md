@@ -43,3 +43,11 @@ source claims and active explicit lifecycle decisions; thread context and
 dismissed candidates are excluded. Deleted Purchase identities remain readable
 as history, with disabled links in the shared Email report. Compare this
 readback with a multi-Purchase resolution; it creates no ledger or stock changes.
+
+The same read's `acceptedSourceOrders` separates accepted source orders from
+lifecycle-only links. Each carries its `sourceOrderId` review handle, Purchase
+code, deletion status and stored source identity. Use the handle with
+`purchase_import.prepare_reconciliation`; it grants no permission to repair an
+unknown original. A holding claim can use a historical alias key while the
+review normalizes it to the canonical family key. Commit the full returned
+review unchanged, rather than replacing its source identity from this read.
