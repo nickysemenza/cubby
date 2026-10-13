@@ -342,13 +342,13 @@ describe("stored suggestions in generic list cells", () => {
       id: testShortcode("financialTransaction", "suggestion-editor"),
       amount: 10,
       transactionDate: new Date("2025-01-01T00:00:00.000Z"),
-      evidenceExpectation: "receipt",
+      itemizationExpectation: "receipt",
     };
     const operations = validatedStoredOperations([
       suggestion({
         entity: "financialTransaction",
         recordId: transaction.id,
-        field: "evidenceExpectation",
+        field: "itemizationExpectation",
         currentValue: "receipt",
         suggestedValue: "invoice",
       }),
@@ -362,7 +362,7 @@ describe("stored suggestions in generic list cells", () => {
       <RecordSuggestionsProvider
         entity="financialTransaction"
         records={[transaction]}
-        fieldKeys={["evidenceExpectation"]}
+        fieldKeys={["itemizationExpectation"]}
         operations={{
           suggestFields: ai.suggestFields.withTransport(async () => ({
             suggestions: {},
@@ -371,7 +371,10 @@ describe("stored suggestions in generic list cells", () => {
         }}
         storedSuggestionOperations={operations}
       >
-        <RecordFieldSuggestion record={transaction} field="evidenceExpectation">
+        <RecordFieldSuggestion
+          record={transaction}
+          field="itemizationExpectation"
+        >
           <span>Current expectation</span>
         </RecordFieldSuggestion>
       </RecordSuggestionsProvider>,
@@ -383,7 +386,9 @@ describe("stored suggestions in generic list cells", () => {
       await screen.findByRole("button", { name: "Use a different value…" }),
     );
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByLabelText("Evidence expectation")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Itemization expectation"),
+    ).toBeInTheDocument();
     expect(screen.queryByLabelText("Amount")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
     await waitFor(() =>

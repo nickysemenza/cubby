@@ -81,7 +81,7 @@ describe("member actionable Work queue", () => {
     });
     const merchandise = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Synthetic merchandise requiring product resolution",
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
       productExpectation: "required",
     });
     const sourceAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
@@ -101,14 +101,14 @@ describe("member actionable Work queue", () => {
     const sourcePurchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       vendorAccountId: sourceAccount.id,
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
       displayLabel: "Synthetic source-owned order",
       spendingCategoryId: merchandise.id,
       date: "2026-09-20",
     });
     const paymentOnlyPurchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
       displayLabel: "Synthetic unknown original source order",
       spendingCategoryId: merchandise.id,
       date: "2026-09-20",
@@ -243,7 +243,7 @@ describe("member actionable Work queue", () => {
       vendorId: vendor.id,
       vendorAccountId: otherSourceAccount.id,
       spendingCategoryId: merchandise.id,
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
       displayLabel: "Synthetic other original source order",
       date: "2026-09-20",
     });
@@ -755,14 +755,14 @@ describe("member actionable Work queue", () => {
       vendorId: vendor.id,
       vendorAccountId: account.id,
       displayLabel: "Synthetic account-owned research order %_",
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
       date: "2026-09-20",
       runId: mine.id,
     });
     const unknownPurchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       displayLabel: "Synthetic unresolved research order",
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
       date: "2026-09-20",
     });
     const privateImage = await createImageFixture(
@@ -1197,7 +1197,7 @@ describe("member actionable Work queue", () => {
       );
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic receipt policy vendor",
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
     });
     const lumpOrder = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,

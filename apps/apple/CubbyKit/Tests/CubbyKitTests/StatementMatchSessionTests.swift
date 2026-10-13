@@ -86,7 +86,7 @@ struct StatementMatchSessionTests {
          "document":"missing","itemization":"missing","products":"missing"},
          "spendingCategorySummary":{"state":"unclassified","categories":[],"lineCount":0,
          "categorizedLineCount":0,"uncategorizedLineCount":0,"complete":false,"amountsKnown":false},
-         "spendingCategoryId":null,"spendingCategoryName":null,"evidenceExpectation":null,"id":"\(id)",
+         "spendingCategoryId":null,"spendingCategoryName":null,"itemizationExpectation":null,"id":"\(id)",
          "accountId":"FAC-4K7M","purchaseId":null,"kind":"purchase","status":"posted","amount":\(amount),
          "transactionDate":"2026-03-03","postedDate":"2026-03-04","merchant":"\(merchant)",
          "rawDescription":null,"sourceCategory":null,"sourceRefs":[],"notes":null,"allocations":[],

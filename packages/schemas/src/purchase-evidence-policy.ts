@@ -2,13 +2,13 @@ import { z } from "zod";
 
 import { fieldPolicyValues } from "./field-policy-fields";
 
-export const evidenceExpectationValues = [
+export const itemizationExpectationValues = [
   "unknown",
   "required",
   "not_expected",
 ] as const;
-export const evidenceExpectation = z.enum(evidenceExpectationValues);
-export type EvidenceExpectation = z.infer<typeof evidenceExpectation>;
+export const itemizationExpectation = z.enum(itemizationExpectationValues);
+export type ItemizationExpectation = z.infer<typeof itemizationExpectation>;
 /**
  * A SpendingCategory's Product expectation. `not_allowed` is stronger than
  * `not_expected`: an Expense in the category neither expects nor may link a
@@ -22,7 +22,7 @@ export const productExpectation = z.enum(productExpectationValues);
 export type ProductExpectation = z.infer<typeof productExpectation>;
 
 export const purchaseEvidenceCoverage = z.object({
-  expectation: evidenceExpectation,
+  expectation: itemizationExpectation,
   booking: z.enum(["missing", "partial", "recorded"]),
   document: z.enum(["missing", "present", "not_expected", "unknown"]),
   itemization: z.enum(["missing", "present", "not_expected", "unknown"]),
@@ -37,7 +37,7 @@ export const purchaseEvidenceCoverage = z.object({
 export type PurchaseEvidenceCoverage = z.infer<typeof purchaseEvidenceCoverage>;
 
 export const financialTransactionCoverage = z.object({
-  expectation: evidenceExpectation,
+  expectation: itemizationExpectation,
   booking: z.enum([
     "missing",
     "partial",

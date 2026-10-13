@@ -249,7 +249,7 @@ export default defineEntity({
         },
       },
       {
-        key: "evidenceExpectation",
+        key: "itemizationExpectation",
         kind: "enum",
         nullable: true,
         control: {
@@ -257,7 +257,7 @@ export default defineEntity({
           suggest: {
             basis: ["name", "website", "notes"],
             rules: [
-              `Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.`,
+              `Suggest whether the household expects these purchases to be itemized: recorded as the order's own item lines, each goods line naming its Product. Online orders with retrievable order history (Amazon, Home Depot) are expected (required). Restaurant meals, groceries, in-store shops whose receipts are usually not kept, one-amount services, subscriptions and friend reimbursements are not_expected. No policy ever requires a receipt document. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Return a reviewed proposal only; never overwrite explicit decisions.`,
             ],
           },
           options: [
@@ -265,18 +265,19 @@ export default defineEntity({
               value: "unknown",
               label: "Unclassified",
               description:
-                "Insufficient or mixed evidence; leave receipt expectation unclassified",
+                "Insufficient or mixed evidence; leave itemization expectation unclassified",
             },
             {
               value: "required",
               label: "Expected",
-              description: "Household expects a receipt or order evidence",
+              description:
+                "Household expects the order's item lines with their Products",
             },
             {
               value: "not_expected",
               label: "Not expected",
               description:
-                "Household does not expect receipt or order evidence",
+                "Household does not expect item lines; one amount is enough",
             },
           ],
         },
@@ -607,7 +608,10 @@ export default defineEntity({
         defaultValue: "unspecified",
       },
       { key: "defaultSpendingCategoryId", reference: "spendingCategory" },
-      { key: "evidenceExpectation", specialized: "enum:evidenceExpectation" },
+      {
+        key: "itemizationExpectation",
+        specialized: "enum:itemizationExpectation",
+      },
       {
         key: "id",
         specialized: "primary-key:VendorId",
@@ -647,7 +651,7 @@ export default defineEntity({
     create: [
       "spendingProfile",
       "defaultSpendingCategoryId",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "name",
       "aliases",
       "website",
@@ -662,7 +666,7 @@ export default defineEntity({
     update: [
       "spendingProfile",
       "defaultSpendingCategoryId",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "name",
       "aliases",
       "website",
@@ -678,7 +682,7 @@ export default defineEntity({
     audit: [
       "spendingProfile",
       "defaultSpendingCategoryId",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "name",
       "aliases",
       "website",
@@ -710,7 +714,7 @@ export default defineEntity({
         full: [
           "spendingProfile",
           "defaultSpendingCategoryId",
-          "evidenceExpectation",
+          "itemizationExpectation",
           "name",
           "aliases",
           "website",
@@ -735,7 +739,7 @@ export default defineEntity({
       "defaultSpendingCategoryEmoji",
       "spendingProfile",
       "defaultSpendingCategoryId",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "id",
       "name",
       "aliases",
@@ -1183,7 +1187,7 @@ export default defineEntity({
           exceptions: "forbidden",
           label: "Order evidence conflict",
           message:
-            "This vendor's order evidence contradicts its evidence expectation.",
+            "Itemization is expected, but this vendor leaves no order evidence.",
         },
         {
           id: "vendor_logo",

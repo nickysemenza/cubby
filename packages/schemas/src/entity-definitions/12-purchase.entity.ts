@@ -53,7 +53,7 @@ export default defineEntity({
             "defaultProjectId",
             "defaultTrade",
             "spendingCategoryId",
-            "evidenceExpectation",
+            "itemizationExpectation",
           ],
         },
       ],
@@ -333,7 +333,7 @@ export default defineEntity({
         explanation: {
           ruleId: "purchase.coverage",
           description:
-            "Booking, receipt, itemization, and Product coverage are evaluated independently against household expectations.",
+            "Booking, itemization, and Product coverage are evaluated independently against household expectations; documents are optional.",
         },
         validation: {
           read: purchaseEvidenceCoverage,
@@ -420,7 +420,7 @@ export default defineEntity({
         },
       },
       {
-        key: "evidenceExpectation",
+        key: "itemizationExpectation",
         kind: "enum",
         nullable: true,
         control: {
@@ -428,7 +428,7 @@ export default defineEntity({
           suggest: {
             basis: ["displayLabel", "vendorId", "spendingCategoryId", "notes"],
             rules: [
-              `Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.`,
+              `Suggest whether the household expects these purchases to be itemized: recorded as the order's own item lines, each goods line naming its Product. Online orders with retrievable order history (Amazon, Home Depot) are expected (required). Restaurant meals, groceries, in-store shops whose receipts are usually not kept, one-amount services, subscriptions and friend reimbursements are not_expected. No policy ever requires a receipt document. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Return a reviewed proposal only; never overwrite explicit decisions.`,
             ],
           },
           options: [
@@ -436,18 +436,19 @@ export default defineEntity({
               value: "unknown",
               label: "Unclassified",
               description:
-                "Insufficient or mixed evidence; leave receipt expectation unclassified",
+                "Insufficient or mixed evidence; leave itemization expectation unclassified",
             },
             {
               value: "required",
               label: "Expected",
-              description: "Household expects a receipt or order evidence",
+              description:
+                "Household expects the order's item lines with their Products",
             },
             {
               value: "not_expected",
               label: "Not expected",
               description:
-                "Household does not expect receipt or order evidence",
+                "Household does not expect item lines; one amount is enough",
             },
           ],
         },
@@ -457,29 +458,29 @@ export default defineEntity({
           detail: true,
         },
         resolution: {
-          reset: { evidenceExpectation: null },
+          reset: { itemizationExpectation: null },
           redundancy: "eligible",
         },
         explanation: {
           ruleId: "purchase.effective-evidence-expectation",
           description:
-            "An explicit Purchase receipt policy wins; otherwise the live Vendor policy supplies it, followed by the Purchase spending category.",
+            "An explicit Purchase itemization policy wins; otherwise the live Vendor policy supplies it, followed by the Purchase spending category.",
           projections: {
-            list: "fieldResolutions.evidenceExpectation.value",
-            detail: "fieldResolutions.evidenceExpectation.value",
-            summary: "fieldResolutions.evidenceExpectation.value",
+            list: "fieldResolutions.itemizationExpectation.value",
+            detail: "fieldResolutions.itemizationExpectation.value",
+            summary: "fieldResolutions.itemizationExpectation.value",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.evidenceExpectation.sourceEntity",
+              path: "fieldResolutions.itemizationExpectation.sourceEntity",
               label: "Source",
             },
             {
-              path: "fieldResolutions.evidenceExpectation.storedValue",
+              path: "fieldResolutions.itemizationExpectation.storedValue",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.evidenceExpectation.fallbackValue",
+              path: "fieldResolutions.itemizationExpectation.fallbackValue",
               label: "Inherited value",
             },
           ],
@@ -1056,7 +1057,10 @@ export default defineEntity({
         specialized: "enum:spendingCategoryOrigin",
         defaultValue: "legacy",
       },
-      { key: "evidenceExpectation", specialized: "enum:evidenceExpectation" },
+      {
+        key: "itemizationExpectation",
+        specialized: "enum:itemizationExpectation",
+      },
       {
         key: "id",
         specialized: "primary-key:PurchaseId",
@@ -1077,7 +1081,7 @@ export default defineEntity({
     ],
     create: [
       "spendingCategoryId",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "vendorId",
       "vendorAccountId",
       "defaultProjectId",
@@ -1091,7 +1095,7 @@ export default defineEntity({
     ],
     update: [
       "spendingCategoryId",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "vendorId",
       "vendorAccountId",
       "defaultProjectId",
@@ -1108,7 +1112,7 @@ export default defineEntity({
     bulk: [],
     audit: [
       "spendingCategoryId",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "vendorId",
       "vendorAccountId",
       "defaultProjectId",
@@ -1151,7 +1155,7 @@ export default defineEntity({
         ],
         full: [
           "spendingCategoryId",
-          "evidenceExpectation",
+          "itemizationExpectation",
           "vendorId",
           "vendorAccountId",
           "defaultProjectId",
@@ -1179,7 +1183,7 @@ export default defineEntity({
       "spendingCategoryId",
       "spendingCategoryName",
       "spendingCategoryOrigin",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "id",
       "vendorId",
       "vendorAccountId",
@@ -1777,13 +1781,13 @@ export default defineEntity({
             "This stored Purchase fallback predates classification provenance. Review it before treating it as a deliberate default.",
         },
         {
-          id: "purchase_evidence_expectation",
-          satisfiedLabel: "Receipt expectation classified",
-          placement: { field: "evidenceExpectation" },
+          id: "purchase_itemization_expectation",
+          satisfiedLabel: "Itemization expectation classified",
+          placement: { field: "itemizationExpectation" },
           facet: "paperwork",
           exceptions: "forbidden",
-          label: "Receipt expectation",
-          message: "Whether this Purchase needs a receipt is unclassified.",
+          label: "Itemization expectation",
+          message: "Whether this Purchase should be itemized is unclassified.",
         },
         {
           id: "purchase_itemization",

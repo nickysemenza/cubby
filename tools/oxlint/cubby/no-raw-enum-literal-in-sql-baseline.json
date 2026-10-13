@@ -15,7 +15,7 @@
   "apps/web/src/server/repo/data-quality/checks/purchase.ts": 3,
   "apps/web/src/server/repo/data-quality/checks/recipe.ts": 4,
   "apps/web/src/server/repo/data-quality/checks/spending-category.ts": 2,
-  "apps/web/src/server/repo/data-quality/checks/vendor.ts": 6,
+  "apps/web/src/server/repo/data-quality/checks/vendor.ts": 3,
   "apps/web/src/server/repo/entity-display-image.ts": 9,
   "apps/web/src/server/repo/entity-identity.integration.test.ts": 3,
   "apps/web/src/server/repo/expense-category-resolution.integration.test.ts": 3,

@@ -440,7 +440,7 @@ describe("entity display image resolver", () => {
           name: `Logo Vendor ${crypto.randomUUID()}`,
           website: null,
           orderUrlTemplate: null,
-          evidenceExpectation: null,
+          itemizationExpectation: null,
           orderEvidence: null,
           orderEmailSenders: [],
           browserDomains: [],

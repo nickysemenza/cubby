@@ -163,7 +163,7 @@ export async function createConvergenceFixtures(
   });
   const category = await create("spendingCategory", {
     name: `${name} clothing`,
-    evidenceExpectation: "required",
+    itemizationExpectation: "required",
     productExpectation: "required",
   });
   const productCategory = await create("productCategory", {

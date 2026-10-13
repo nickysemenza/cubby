@@ -550,6 +550,10 @@ _Avoid_: imported truth, automatic match
 A Purchase recorded as the order's own item lines, each goods line naming its Product, rather than one lump amount or a slice of an un-itemized total. It describes the line shape, not whether the lines were checked against a document.
 _Avoid_: reviewed lines, receipt itemization
 
+**Itemization expectation**:
+Whether the household expects a Purchase to be itemized: required for online orders with retrievable history, not expected for in-store shops, restaurants, groceries and one-amount services. It resolves from the transaction or Purchase, then the Vendor, then the Spending category, and an attached receipt or invoice makes it expected. No policy requires a document.
+_Avoid_: receipt expectation, evidence expectation, receipt policy
+
 **Lump**:
 A Purchase or charge booked as an amount without its item lines.
 _Avoid_: aggregate order, unitemized receipt

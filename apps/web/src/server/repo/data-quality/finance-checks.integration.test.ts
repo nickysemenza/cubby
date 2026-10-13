@@ -195,11 +195,11 @@ describe("data quality: finance and project entities", () => {
       name: string,
       values: {
         orderEvidence?: "online_account" | "receipt_only" | "not_expected";
-        evidenceExpectation?: "required" | "not_expected" | "unknown";
+        itemizationExpectation?: "required" | "not_expected" | "unknown";
       },
     ) => createRepoEntity(ctx, "vendor", { name, ...values });
     const noSource = await make("DQ conflict required, no source", {
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
     });
     const noPolicy = await make("DQ conflict not expected, no policy", {
       orderEvidence: "not_expected",
@@ -207,28 +207,28 @@ describe("data quality: finance and project entities", () => {
     const consistent = [
       await make("DQ conflict consistent a", {
         orderEvidence: "online_account",
-        evidenceExpectation: "required",
+        itemizationExpectation: "required",
       }),
       await make("DQ conflict consistent b", {
         orderEvidence: "not_expected",
-        evidenceExpectation: "not_expected",
+        itemizationExpectation: "not_expected",
       }),
       await make("DQ conflict consistent c", {
         orderEvidence: "online_account",
-        evidenceExpectation: "unknown",
+        itemizationExpectation: "unknown",
       }),
     ];
     const sourceOff = await make("DQ conflict source off", {
       orderEvidence: "not_expected",
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
     });
     const policyOffOnline = await make("DQ conflict policy off online", {
       orderEvidence: "online_account",
-      evidenceExpectation: "not_expected",
+      itemizationExpectation: "not_expected",
     });
     const policyOffReceipt = await make("DQ conflict policy off receipt", {
       orderEvidence: "receipt_only",
-      evidenceExpectation: "not_expected",
+      itemizationExpectation: "not_expected",
     });
 
     const hydrated = await loadDataQualities(
@@ -248,10 +248,17 @@ describe("data quality: finance and project entities", () => {
         .get(v.entityId)
         ?.gaps.map((g) => g.check)
         .includes("vendor_order_evidence_conflict");
-    for (const id of [noSource, noPolicy, ...consistent])
+    // An in-store shop whose receipts are sometimes kept, or an online
+    // account, with itemization not expected is ordinary, not a conflict.
+    for (const id of [
+      noSource,
+      noPolicy,
+      ...consistent,
+      policyOffOnline,
+      policyOffReceipt,
+    ])
       expect(conflict(id)).toBe(false);
-    for (const id of [sourceOff, policyOffOnline, policyOffReceipt])
-      expect(conflict(id)).toBe(true);
+    expect(conflict(sourceOff)).toBe(true);
 
     // Resolving either side clears it; no accepted-exception state exists.
     await updateVendor(

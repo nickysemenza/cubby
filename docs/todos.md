@@ -855,8 +855,8 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   override → vendor food context → product mapping (category ancestors) →
   Purchase default → Vendor default" lives in hand SQL
   (`repo/expense-category-resolution.ts`), as do project inheritance and
-  receipt-evidence expectation (Purchase override → Vendor → SpendingCategory
-  `evidenceExpectation`, `repo/purchase-evidence-policy.ts`). Declare each
+  itemization expectation (Purchase override → Vendor → SpendingCategory
+  `itemizationExpectation`, `repo/purchase-evidence-policy.ts`). Declare each
   chain and generate the resolution SQL, the "inherited from" explanation,
   and the set of Expenses a change can reach — the reach scope the reviewed
   classification preview hand-writes. Generated SQL must match hand-tuned

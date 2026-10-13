@@ -29,7 +29,7 @@ describe("reviewed booking category and refund capacity", () => {
   async function fixture() {
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Booking fixture dining",
-      evidenceExpectation: "not_expected",
+      itemizationExpectation: "not_expected",
       productExpectation: "not_expected",
     });
     const vendor = await insertWithShortcode(ctx.db, "vendor", {

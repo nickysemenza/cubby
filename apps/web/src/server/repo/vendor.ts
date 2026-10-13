@@ -323,7 +323,7 @@ const vendorColumns = {
     string | null
   >`(SELECT sc.emoji FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
   defaultSpendingCategoryId: sql<SpendingCategoryShortcode | null>`(SELECT sc.shortcode FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
-  evidenceExpectation: vendor.evidenceExpectation,
+  itemizationExpectation: vendor.itemizationExpectation,
   orderEvidence: vendor.orderEvidence,
   aliases: vendor.aliases,
   orderEmailSenders: vendor.orderEmailSenders,
@@ -379,7 +379,7 @@ type VendorRow = {
   defaultSpendingCategoryId: SpendingCategoryShortcode | null;
   defaultSpendingCategoryName: string | null;
   defaultSpendingCategoryEmoji: string | null;
-  evidenceExpectation: VendorOut["evidenceExpectation"];
+  itemizationExpectation: VendorOut["itemizationExpectation"];
   orderEvidence: string | null;
   orderEmailSenders: string[];
   browserDomains: string[];
@@ -468,7 +468,7 @@ const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
     orderUrlTemplate: row.orderUrlTemplate,
     spendingProfile: vendorSpendingProfile.parse(row.spendingProfile),
     defaultSpendingCategoryId: row.defaultSpendingCategoryId,
-    evidenceExpectation: row.evidenceExpectation,
+    itemizationExpectation: row.itemizationExpectation,
     orderEvidence: vendorOrderEvidence.nullable().parse(row.orderEvidence),
     orderEmailSenders: row.orderEmailSenders,
     browserDomains: row.browserDomains,
@@ -830,7 +830,7 @@ export const createVendor = async (
             data.defaultSpendingCategoryId,
           )
         : null,
-      evidenceExpectation: data.evidenceExpectation,
+      itemizationExpectation: data.itemizationExpectation,
       orderEvidence: data.orderEvidence,
       aliases: data.aliases,
       orderEmailSenders: data.orderEmailSenders,

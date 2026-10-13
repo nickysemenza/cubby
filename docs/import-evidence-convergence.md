@@ -6,7 +6,7 @@ links recorded Expenses or creates an aggregate allocation line. Purchases
 created from bank evidence have no invented order identifier or printed total.
 
 SpendingCategory is independent of ProductCategory. Purchase defaults flow to
-Expense lines unless a line has its own category. Evidence expectation resolves
+Expense lines unless a line has its own category. Itemization expectation resolves
 from transaction/Purchase overrides, Vendor, then spending category, and decides
 whether a Purchase should be itemized; a primary document (receipt, invoice,
 order confirmation, sales order) makes itemization expected whatever the

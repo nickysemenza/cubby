@@ -66,7 +66,7 @@ const EXCEPTION_REASONS = {
   financial_transaction_allocation: ["unavailable", "insufficient_detail"],
   financial_transaction_booking: ["unavailable", "insufficient_detail"],
   // Checks whose gap is closed by classifying the record (category origin,
-  // receipt expectation, transaction kind, duplicate ids) declare
+  // itemization expectation, transaction kind, duplicate ids) declare
   // `exceptions: "forbidden"` instead of carrying a reason list.
 } satisfies Partial<Record<DataCheck, readonly DataExceptionReason[]>>;
 

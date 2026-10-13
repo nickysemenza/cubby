@@ -15,11 +15,11 @@ import {
   vendorUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
 import {
-  purchaseEvidenceExpectationSql,
+  purchaseItemizationExpectationSql,
   purchaseEvidenceFingerprintSql,
   purchaseHasItemizationSql,
   purchaseHasPrimaryDocumentSql,
-  purchaseItemizationExpectationSql,
+  effectivePurchaseItemizationExpectationSql,
 } from "~/server/repo/purchase-evidence-policy";
 
 import { defineEntityChecks } from "../registry";
@@ -30,9 +30,9 @@ type Purchase = typeof purchase;
 const aliasOf = (t: Purchase) => `"${getTableName(t)}"`;
 
 const expectation = (t: Purchase) =>
-  purchaseEvidenceExpectationSql(getTableName(t));
+  purchaseItemizationExpectationSql(getTableName(t));
 const expectsItemization = (t: Purchase) =>
-  sql`(${purchaseItemizationExpectationSql(getTableName(t))} = 'required')`;
+  sql`(${effectivePurchaseItemizationExpectationSql(getTableName(t))} = 'required')`;
 const hasPrimaryDocument = (t: Purchase) =>
   purchaseHasPrimaryDocumentSql(getTableName(t));
 const hasItemization = (t: Purchase) =>
@@ -136,7 +136,7 @@ export const purchaseChecks = defineEntityChecks({
         sql`${t.spendingCategoryOrigin}`,
       ],
     },
-    purchase_evidence_expectation: {
+    purchase_itemization_expectation: {
       missing: (t) => sql`${expectation(t)} = 'unknown'`,
       fingerprint: (t) => [expectation(t)],
     },

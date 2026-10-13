@@ -16,7 +16,7 @@ struct FieldSuggestionReviewModelTests {
             client: CubbyClient(
                 baseURL: URL(string: "http://localhost:3000")!,
                 credentials: CredentialProvider(host: "localhost:3000", store: InMemorySessionTokenStore())),
-            original: ["spendingCategoryId": .null, "evidenceExpectation": .null, "notes": "Saved note"])
+            original: ["spendingCategoryId": .null, "itemizationExpectation": .null, "notes": "Saved note"])
     }
 
     private func response(finance: Bool = true) throws -> FieldSuggestionsReviewOut {
@@ -28,7 +28,7 @@ struct FieldSuggestionReviewModelTests {
         return try JSONDecoder().decode(
             FieldSuggestionsReviewOut.self,
             from: Data(
-                #"{"suggestions":[{"field":"spendingCategoryId","suggestion":{"value":"SPC-4K7M","label":"Fixture clothing","detail":null,"confidence":"high","probability":0.96,"reasoning":"Saved linked shirt","alternatives":[],"operation":"set","removals":[]\#(review)}},{"field":"evidenceExpectation","suggestion":{"value":"not_expected","label":"Not expected","detail":null,"confidence":"high","probability":0.96,"reasoning":"Fixture restaurant","alternatives":[],"operation":"set","removals":[]}},{"field":"productExpectation","suggestion":null}]}"#
+                #"{"suggestions":[{"field":"spendingCategoryId","suggestion":{"value":"SPC-4K7M","label":"Fixture clothing","detail":null,"confidence":"high","probability":0.96,"reasoning":"Saved linked shirt","alternatives":[],"operation":"set","removals":[]\#(review)}},{"field":"itemizationExpectation","suggestion":{"value":"not_expected","label":"Not expected","detail":null,"confidence":"high","probability":0.96,"reasoning":"Fixture restaurant","alternatives":[],"operation":"set","removals":[]}},{"field":"productExpectation","suggestion":null}]}"#
                     .utf8))
     }
 
@@ -45,9 +45,9 @@ struct FieldSuggestionReviewModelTests {
         try await review.request()
         #expect(editor.draft == initial)
         #expect(review.proposal("productExpectation") == nil)
-        #expect(try await review.apply("evidenceExpectation") == .draft)
-        #expect(editor.draft["evidenceExpectation"] == .string("not_expected"))
-        #expect(editor.original?["evidenceExpectation"] == .null)
+        #expect(try await review.apply("itemizationExpectation") == .draft)
+        #expect(editor.draft["itemizationExpectation"] == .string("not_expected"))
+        #expect(editor.original?["itemizationExpectation"] == .null)
     }
 
     @Test func delayedSavedCategoryPreservesNewerCategoryAndSiblingDraft() async throws {
@@ -111,7 +111,7 @@ struct FieldSuggestionReviewModelTests {
                     credentials: CredentialProvider(
                         host: "localhost:3000", store: InMemorySessionTokenStore())),
                 original: [
-                    "purchaseId": purchase.stored, "evidenceExpectation": .null, "notes": "Saved note",
+                    "purchaseId": purchase.stored, "itemizationExpectation": .null, "notes": "Saved note",
                 ])
             editor.draft["purchaseId"] = purchase.draft
             let review = FieldSuggestionReviewModel(
@@ -126,9 +126,9 @@ struct FieldSuggestionReviewModelTests {
                 },
                 saveCategory: { _ in throw CancellationError() })
             try await review.request()
-            #expect(review.proposal("evidenceExpectation") != nil)
+            #expect(review.proposal("itemizationExpectation") != nil)
             editor.draft["purchaseId"] = .string("PUR-9K7M")
-            #expect(review.proposal("evidenceExpectation") == nil)
+            #expect(review.proposal("itemizationExpectation") == nil)
         }
         #expect(masks == [[], ["purchaseId"], ["purchaseId"]])
     }

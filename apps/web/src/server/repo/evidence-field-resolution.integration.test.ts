@@ -24,12 +24,12 @@ it("preserves a saved multi-purchase policy until draft link intent explicitly c
   const required = await insertWithShortcode(ctx.db, "purchase", {
     vendorId: vendor.id,
     date: "2026-09-01",
-    evidenceExpectation: "required",
+    itemizationExpectation: "required",
   });
   const optional = await insertWithShortcode(ctx.db, "purchase", {
     vendorId: vendor.id,
     date: "2026-09-01",
-    evidenceExpectation: "not_expected",
+    itemizationExpectation: "not_expected",
   });
   const account = await createRepoEntity(ctx, "financialAccount", {
     name: "Synthetic draft allocations",
@@ -57,11 +57,11 @@ it("preserves a saved multi-purchase policy until draft link intent explicitly c
         entityId: transaction.output.id,
         basis: {
           purchaseId,
-          evidenceExpectation: null,
+          itemizationExpectation: null,
           __draftFields: JSON.stringify(fields),
         },
       }),
-    ).evidenceExpectation;
+    ).itemizationExpectation;
   expect(await resolve(null, [])).toMatchObject({
     value: "required",
     source: "linked purchase policies",
@@ -79,7 +79,7 @@ it("preserves a saved multi-purchase policy until draft link intent explicitly c
 it("resolves an unsaved transaction purchase link and honors explicit clearing", async () => {
   const vendor = await insertWithShortcode(ctx.db, "vendor", {
     name: "Synthetic draft linkage",
-    evidenceExpectation: "required",
+    itemizationExpectation: "required",
   });
   const purchase = await insertWithShortcode(ctx.db, "purchase", {
     vendorId: vendor.id,
@@ -89,9 +89,9 @@ it("resolves an unsaved transaction purchase link and honors explicit clearing",
     fieldResolutionsSchema.parse(
       await resolveDraftEvidenceFields(ctx.db, {
         entity: "financialTransaction",
-        basis: { purchaseId, evidenceExpectation: null },
+        basis: { purchaseId, itemizationExpectation: null },
       }),
-    ).evidenceExpectation;
+    ).itemizationExpectation;
   expect(await resolve(purchase.shortcode)).toMatchObject({
     mode: "inherit",
     value: "required",
@@ -105,14 +105,14 @@ it("resolves an unsaved transaction purchase link and honors explicit clearing",
     sourceEntity: null,
   });
 });
-it("resolves draft receipt policy against changed vendor and category dependencies without writes", async () => {
+it("resolves draft itemization policy against changed vendor and category dependencies without writes", async () => {
   const category = await insertWithShortcode(ctx.db, "spendingCategory", {
     name: "Synthetic required receipts",
-    evidenceExpectation: "required",
+    itemizationExpectation: "required",
   });
   const vendor = await insertWithShortcode(ctx.db, "vendor", {
     name: "Synthetic optional receipts",
-    evidenceExpectation: "not_expected",
+    itemizationExpectation: "not_expected",
   });
   const purchase = await insertWithShortcode(ctx.db, "purchase", {
     vendorId: vendor.id,
@@ -122,7 +122,7 @@ it("resolves draft receipt policy against changed vendor and category dependenci
   const basis: DraftEvidenceBasis = {
     vendorId: vendor.shortcode,
     spendingCategoryId: category.shortcode,
-    evidenceExpectation: null,
+    itemizationExpectation: null,
   };
   const resolve = (next: typeof basis) =>
     resolveDraftEvidenceFields(ctx.db, {
@@ -131,7 +131,7 @@ it("resolves draft receipt policy against changed vendor and category dependenci
       basis: next,
     });
   expect(
-    fieldResolutionsSchema.parse(await resolve(basis)).evidenceExpectation,
+    fieldResolutionsSchema.parse(await resolve(basis)).itemizationExpectation,
   ).toMatchObject({
     mode: "inherit",
     storedValue: null,
@@ -142,7 +142,7 @@ it("resolves draft receipt policy against changed vendor and category dependenci
   });
   expect(
     fieldResolutionsSchema.parse(await resolve({ ...basis, vendorId: null }))
-      .evidenceExpectation,
+      .itemizationExpectation,
   ).toMatchObject({
     mode: "inherit",
     value: "required",
@@ -156,9 +156,9 @@ it("resolves draft receipt policy against changed vendor and category dependenci
       await resolveDraftEvidenceFields(ctx.db, {
         entity: "purchase",
         entityId: purchase.shortcode,
-        basis: { ...basis, evidenceExpectation: "unknown" },
+        basis: { ...basis, itemizationExpectation: "unknown" },
       }),
-    ).evidenceExpectation,
+    ).itemizationExpectation,
   ).toMatchObject({
     mode: "explicit",
     storedValue: "unknown",
@@ -168,7 +168,7 @@ it("resolves draft receipt policy against changed vendor and category dependenci
   });
   expect(await getPurchaseByID(ctx.db, purchase.id)).toMatchObject({
     vendorId: parseShortcodeFor("vendor", vendor.shortcode),
-    evidenceExpectation: null,
+    itemizationExpectation: null,
   });
   expect(
     fieldResolutionsSchema.parse(
@@ -176,10 +176,10 @@ it("resolves draft receipt policy against changed vendor and category dependenci
         entity: "financialTransaction",
         basis: {
           purchaseId: purchase.shortcode,
-          evidenceExpectation: null,
+          itemizationExpectation: null,
         },
       }),
-    ).evidenceExpectation,
+    ).itemizationExpectation,
   ).toMatchObject({
     mode: "inherit",
     storedValue: null,

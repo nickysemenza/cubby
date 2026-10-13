@@ -28,12 +28,12 @@ test("moves an early reimbursement and converts reviewed booking atomically", as
   };
   const categoryId = await create("spending-categories", {
     name: "Synthetic optional paperwork",
-    evidenceExpectation: "not_expected",
+    itemizationExpectation: "not_expected",
     productExpectation: "not_expected",
   });
   const vendorId = await create("vendors", {
     name: "Synthetic event vendor",
-    evidenceExpectation: "not_expected",
+    itemizationExpectation: "not_expected",
   });
   const fromPartyId = await create("ledger-parties", {
     name: "Synthetic payer",

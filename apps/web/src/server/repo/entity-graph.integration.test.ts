@@ -231,7 +231,7 @@ describe("entity graph repository", () => {
         name: "Evidence graph vendor",
         website: null,
         orderUrlTemplate: null,
-        evidenceExpectation: null,
+        itemizationExpectation: null,
         orderEvidence: null,
         orderEmailSenders: [],
         browserDomains: [],

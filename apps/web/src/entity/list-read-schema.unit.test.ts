@@ -72,7 +72,7 @@ it("enrichment wire parsing keeps group ownership and explicit nullable values",
   for (const group of parsed.groups) {
     if (group.state !== "ready") throw new Error("Expected ready enrichment");
     expect(group.data[0]).not.toHaveProperty("spendingCategoryId");
-    expect(group.data[0]).not.toHaveProperty("evidenceExpectation");
+    expect(group.data[0]).not.toHaveProperty("itemizationExpectation");
   }
   expect(parsed.groups[1]).toMatchObject({
     id: "relations",

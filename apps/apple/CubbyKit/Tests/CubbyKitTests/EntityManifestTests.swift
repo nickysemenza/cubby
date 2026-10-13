@@ -10,7 +10,7 @@ import Testing
 struct EntityManifestTests {
     // The bundle used to strip option colors before decoding; web and native then disagreed.
     @Test func declaredOptionColorsSurviveTheCatalog() throws {
-        let field = try #require(EntityCatalog[.vendor].fields.first { $0.key == "evidenceExpectation" })
+        let field = try #require(EntityCatalog[.vendor].fields.first { $0.key == "itemizationExpectation" })
         let encoded = try JSONEncoder().encode(field.controlOptions)
         let options = try #require(JSONSerialization.jsonObject(with: encoded) as? [[String: Any]])
         #expect(
@@ -32,7 +32,7 @@ struct EntityManifestTests {
         let field = try JSONDecoder().decode(
             FieldDescriptor.self,
             from: Data(
-                #"{"key":"evidenceExpectation","label":"Receipt expectation","kind":"enum","nullable":true,"suggestion":{"basis":["name","notes"],"mode":"fill"},"inCreate":true,"requiredOnCreate":false,"inUpdate":true,"showInList":false,"showInDetail":true,"listHidden":false,"mobileInteractive":false}"#
+                #"{"key":"itemizationExpectation","label":"Receipt expectation","kind":"enum","nullable":true,"suggestion":{"basis":["name","notes"],"mode":"fill"},"inCreate":true,"requiredOnCreate":false,"inUpdate":true,"showInList":false,"showInDetail":true,"listHidden":false,"mobileInteractive":false}"#
                     .utf8))
         #expect(field.suggestion?.basis == ["name", "notes"])
         #expect(field.suggestion?.mode == "fill")

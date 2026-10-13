@@ -33,18 +33,18 @@ export const vendorChecks = defineEntityChecks({
       missing: (t) => sql`${t.orderEvidence} IS NULL`,
       fingerprint: (t) => [sql`${t.orderEvidence}`],
     },
-    // Source classification only guides where to look; the evidence
-    // expectation decides whether evidence is wanted. Either contradiction
-    // is resolved by changing one of the two, so no exception reason exists.
+    // Source classification only guides where to look; the itemization
+    // expectation decides whether item lines are wanted. Expecting item lines
+    // from a vendor that leaves no order evidence is the one contradiction;
+    // an in-store shop whose receipts are sometimes kept (`receipt_only`)
+    // with itemization `not_expected` is ordinary. Changing either value
+    // resolves it, so no exception reason exists.
     vendor_order_evidence_conflict: {
-      missing: (t) => sql`(
-        (${t.orderEvidence} = 'not_expected' AND ${t.evidenceExpectation} = 'required')
-        OR (${t.evidenceExpectation} = 'not_expected'
-          AND ${t.orderEvidence} IN ('online_account', 'receipt_only'))
-      )`,
+      missing: (t) =>
+        sql`(${t.orderEvidence} = 'not_expected' AND ${t.itemizationExpectation} = 'required')`,
       fingerprint: (t) => [
         sql`${t.orderEvidence}`,
-        sql`${t.evidenceExpectation}`,
+        sql`${t.itemizationExpectation}`,
       ],
     },
     vendor_logo: {
