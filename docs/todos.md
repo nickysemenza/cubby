@@ -139,6 +139,15 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
+- 🤔 🐛 **Expose actionable child-row integrity diagnostics.** A live outside
+  identifier can still point to a deleted Expense, but the public referential
+  liveness report exposes only the edge description, without affected source
+  or target handles. Expose member-eligible record handles and identifier
+  evidence before designing a reviewed public repair. Distinguish retiring
+  stale metadata from transferring a real source claim; preserve signed money,
+  provenance and historical associations, and never substitute direct SQL
+  cleanup for a supported writer.
+
 - 🤔 🐛 **Generalize accepted-original Product repair preparation lookup.**
   The reviewed mail repair requires one exact retained preparation. Non-mail
   sources can legitimately use different source and evidence checksums, and
