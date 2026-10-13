@@ -59,11 +59,14 @@ type CargoMetadata = { packages: CargoPackage[] };
 const parseCargoMetadata = (input: string): CargoMetadata =>
   JSON.parse(input) as CargoMetadata;
 
+// Nx hashes a runtime input's stderr with its stdout, so progress output
+// (Cargo's crate downloads, rustup's toolchain sync) must stay captured: it
+// varies between cold and warm runners. A failure throws with it attached.
 export const command = (program: string, args: string[]) =>
   execFileSync(program, args, {
     cwd: ROOT,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "inherit"],
+    stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 1 << 26,
   });
 
@@ -85,16 +88,7 @@ export const rustFingerprint = (
     // A restored graph needs no registry refresh. Locked mode rejects stale
     // manifests and local overrides that require a new resolution; a cold or
     // incomplete cache falls back to Cargo's existing resolver below.
-    metadata = execFileSync(
-      "cargo",
-      [...metadataArgs, "--locked", "--offline"],
-      {
-        cwd: ROOT,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-        maxBuffer: 1 << 26,
-      },
-    );
+    metadata = command("cargo", [...metadataArgs, "--locked", "--offline"]);
   } catch {
     metadata = command("cargo", metadataArgs);
   }
