@@ -642,7 +642,7 @@ A message Cubby scanned from a member's mailbox, including unrelated messages. E
 _Avoid_: OrderMail, order mail, receipt email, scanned message
 
 **Relevance**:
-Whether an Email is related, unrelated or uncertain to the household's purchases, with the stage that decided it (rule, decision model, relevance model or a member's resolution). Only a related or uncertain Email keeps its content.
+Whether an Email evidences an actual household acquisition, payment (including incoming marketplace seller payments), refund, subscription or order lifecycle, with the stage that decided it (rule, decision model, relevance model or a member's resolution). Product-specific feedback requests that confirm a real purchase or return are related even without an order number or price. Promotions and abandoned-cart or unfinished-checkout reminders are unrelated unless they independently confirm an actual purchase, completed payment or order lifecycle; product names, prices and checkout buttons alone are insufficient. Unreadable, incomplete or ambiguous evidence is uncertain. Only a related or uncertain Email keeps its content.
 _Avoid_: triage result, classification verdict
 
 **Mail discovery**:

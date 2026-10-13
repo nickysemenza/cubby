@@ -56,13 +56,15 @@ size samples deliberately (a few hundred calls, not thousands).
    (it keeps inclusion probabilities); `imports_read.email_accuracy_blind` reads
    it without predictions.
 2. Grade each item from `imports_read.mail` (or the member's Gmail
-   connector): related means it evidences a household purchase, refund,
-   subscription charge or order lifecycle. Missing originals are
-   unavailable, never guessed.
+   connector), using [Relevance](../../../docs/guide/terminology.md#purchase-research)
+   as the label contract. Missing originals are unavailable, never guessed.
+   Lock grades before opening predictions. If the member changes the label
+   contract after scoring, preserve the original blind grades and report the
+   policy-adjusted scores separately.
 3. `imports_read.mail_triage_preview` runs the deployed triage on one Email
    without writing (optionally `decisionModel`). Before/after a change:
    preview the same graded sample before and after it deploys.
-4. Report, weighted by inclusion probability: false negatives (purchase
+4. Report, weighted by inclusion probability: false negatives (related
    Email called unrelated — the costly error), false positives, uncertain
    rate, bounded-view size and which incompleteness reasons fired.
    After grades are locked, `imports_read.email_accuracy_report.items` joins
