@@ -481,9 +481,9 @@ export default defineEntity({
 
 Rules:
 1. Names containing "tax", "sales tax", "estimated tax" → tax
-2. Names containing "shipping", "delivery", "freight" → shipping
+2. Names containing "shipping", "delivery", "freight", or "shipping & handling" → shipping
 3. Names containing "discount", "coupon", "credit", "promo", or a negative cost with that wording → discount
-4. Names containing "fee", "processing", "handling" → fee
+4. Names containing "fee", "processing", or a standalone "handling" charge without shipping → fee
 5. Names containing "tip", "gratuity" → tip
 6. An explicit receipt adjustment none of the above covers (rounding, price adjustment) → other_adjustment
 7. Otherwise → principal (the main purchased item/service)`,
@@ -538,7 +538,7 @@ Rules:
 
 Rules:
 1. A consumed or installed physical good is "materials".
-2. Equipment that outlives the job and isn't consumed by it is "tools".
+2. Durable goods that outlast the job and aren't consumed or installed by it are "tools", including equipment, cases, and accessories.
 3. Paid labor, delivery fees, permits, and other non-material charges are "services".`,
             ],
           },

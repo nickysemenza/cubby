@@ -588,7 +588,7 @@ export const MCP_TOOLS = defineMcpTools({
       email_accuracy_report: mcpAction({
         op: purchaseImportContract.ops.emailAccuracyReport,
         description:
-          "Weighted pipeline and known Jev/Clef-only confusion matrices, conditional precision/recall, sampling probabilities and excluded/unknown denominators for an independently graded frozen Email sample.",
+          "Weighted pipeline and known Jev/Clef-only confusion matrices, conditional precision/recall, sampling probabilities and excluded/unknown denominators for an independently graded frozen Email sample. Each items row joins the blind roster by predictionId and supplies its frozen inclusionProbability and inverse-probability weight for session-only grades and fresh previews. Read after blind grading; this never records a member grade.",
       }),
       execution_mailboxes: mcpAction({
         op: runContract.ops.executionMailboxes,

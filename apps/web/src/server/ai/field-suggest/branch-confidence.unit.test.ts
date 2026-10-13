@@ -38,7 +38,32 @@ interface Case {
 }
 
 describe("placeByBranch", () => {
+  // A dominant leaf can be below the absolute confidence floor; rolling it up
+  // discards specificity even when sibling candidates carry little evidence.
   it.each<Case>([
+    {
+      name: "keeps a leaf that dominates a confident parent branch",
+      distribution: [
+        [prepared, 0.8],
+        [food, 0.1],
+        [snacks, 0.02],
+        [household, 0.08],
+      ],
+      selected: prepared,
+      probability: 0.8,
+      expected: null,
+    },
+    {
+      name: "keeps a leaf at the branch dominance boundary",
+      distribution: [
+        [prepared, 0.8],
+        [food, 0.1],
+        [snacks, 0.1],
+      ],
+      selected: prepared,
+      probability: 0.8,
+      expected: null,
+    },
     {
       name: "keeps a confident pick as-is",
       distribution: [

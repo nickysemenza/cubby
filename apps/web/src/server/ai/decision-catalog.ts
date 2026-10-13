@@ -111,6 +111,7 @@ function fieldPrompt(
         subject: spec.subject(basis),
         rules: spec.rules,
         values: spec.values,
+        allowNone: spec.allowNone,
         describe: (value) => spec.describe(value),
       });
     case "prune":

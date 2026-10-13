@@ -349,6 +349,7 @@ const buildMetadataSchemas = () => {
             )
             .optional(),
           rules: z.array(nonEmptyString()).optional(),
+          allowNone: z.boolean().optional().default(false),
           mode: z.enum(["fill", "prune"]).optional().default("fill"),
           reviewRequired: z.boolean().optional().default(false),
         })

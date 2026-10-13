@@ -176,6 +176,12 @@ export const emailAccuracyReport = z
     sampleSize: count,
     pipeline: emailAccuracyBinaryMetrics,
     modelOnly: emailAccuracyBinaryMetrics,
+    items: z.array(
+      emailAccuracyRosterItem.pick({ predictionId: true }).extend({
+        inclusionProbability: probability,
+        weight: z.number().positive(),
+      }),
+    ),
     counts: z
       .object({
         graded: count,

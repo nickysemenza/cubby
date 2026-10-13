@@ -24,6 +24,15 @@ sometimes wears three different names across layers.
 - An Expense's **line kind** is its receipt role. `principal` means merchandise
   or a service; tax, shipping, discount, fee, tip, and `other_adjustment` remain
   real productless spend lines rather than categories of merchandise.
+- **Logistics** is delivery, pickup, transport, hauling, storage, and job-site
+  coordination, regardless of the trade served. Appliance delivery is logistics;
+  appliance installation is appliances.
+- A **Garden project** grows or cares for plants. A **Renovation project**
+  changes a room, structure, or permanent outdoor infrastructure, including
+  paving, retaining walls, and irrigation infrastructure.
+- A **Workshop project** builds or maintains shop infrastructure, including
+  workbenches, jigs, and tool storage. These fixtures are workshop projects
+  rather than furniture projects.
 - A **FinancialTransaction** is settlement evidence (a statement charge, refund,
   payment, or adjustment), never a spend-ledger row. It relates to Purchases
   many-to-many through **Allocations**: one Purchase may have many settlement

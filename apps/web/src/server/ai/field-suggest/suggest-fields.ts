@@ -372,6 +372,7 @@ async function resolveEnumTarget(
     subject,
     rules: spec.rules,
     values,
+    allowNone: spec.allowNone,
     describe: spec.describe,
     usage,
     port: decisionPort,
@@ -384,6 +385,12 @@ async function resolveEnumTarget(
     detail: null,
     probability: alternative.probability,
   }));
+  if (result.value === null)
+    return declined({
+      confidence: result.confidence,
+      probability: result.probability,
+      alternatives,
+    });
   return {
     suggestion: {
       value: result.value,

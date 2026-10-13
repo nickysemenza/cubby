@@ -4,8 +4,9 @@
  * parent and its children, or sibling leaves, split the mass: "Food 0.10,
  * Food › Prepared 0.70, Food › Snacks 0.08" is a confident "Food" but a
  * medium leaf. Summing each node's subtree lets a suggestion stop at the
- * deepest node the evidence actually supports instead of reporting a
- * medium-confidence leaf or nothing.
+ * deepest node the evidence actually supports. A selected leaf that carries
+ * at least 80% of a confident ancestor branch keeps its own probability;
+ * aggregating its small alternatives must not erase that specificity.
  */
 export interface BranchPlacement<C> {
   node: C;
@@ -15,6 +16,7 @@ export interface BranchPlacement<C> {
 
 /** Guards a malformed parent chain; the category tree is at most 3 deep. */
 const MAX_WALK = 16;
+const BRANCH_DOMINANCE = 0.8;
 
 export function placeByBranch<C>(args: {
   distribution: readonly { candidate: C; probability: number }[];
@@ -44,6 +46,11 @@ export function placeByBranch<C>(args: {
     if (!node) return null;
     const branch = mass.get(id) ?? 0;
     if (branch >= threshold) {
+      if (
+        id !== idOf(selected) &&
+        args.selectedProbability / branch >= BRANCH_DOMINANCE
+      )
+        return null;
       return { node: node.candidate, probability: Math.min(branch, 1) };
     }
     id = parentIdOf(node.candidate);
