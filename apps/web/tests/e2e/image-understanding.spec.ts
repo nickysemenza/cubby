@@ -193,6 +193,7 @@ test("image results compare descriptions and require explicit attachment confirm
   await expectViewportBounded(page);
   await description.scrollIntoViewIfNeeded();
   await page.screenshot({ path: "/tmp/cubby-image-results-mobile.png" });
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page
     .getByRole("link", { name: "Image identification", exact: true })
     .click();
