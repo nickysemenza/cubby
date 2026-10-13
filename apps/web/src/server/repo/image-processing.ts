@@ -514,7 +514,14 @@ export async function claimImageProcessingJob(
             eq(imageProcessingJob.state, "pending"),
             eq(imageProcessingJob.state, "waiting_for_device"),
           ),
-          lte(imageProcessingJob.nextAttemptAt, now),
+          // The no-device cooldown throttles queue wakeups, not a capable device's reconnect.
+          // Pending retries still honor backoff; only capability-scoped pulls bypass waiting.
+          input.processorRevisions !== undefined
+            ? or(
+                lte(imageProcessingJob.nextAttemptAt, now),
+                eq(imageProcessingJob.state, "waiting_for_device"),
+              )
+            : lte(imageProcessingJob.nextAttemptAt, now),
         ),
       )
       .orderBy(

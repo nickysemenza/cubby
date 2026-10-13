@@ -414,6 +414,12 @@ checks embedded media and uses the existing gateway, retry, cache and usage
 paths. Media limits and payloads belong to `server/ai/decision-model.ts` and
 `server/services/image-identification.service.ts`.
 
+An available Apple companion claims compatible waiting image jobs immediately
+when it connects. The queue's no-device cooldown does not delay that claim;
+pending retries still honor backoff. Device participation and advertised image
+capabilities both gate execution. The claim policy belongs to
+`server/repo/image-processing.ts`.
+
 Field decision prompts are measured from a Claude/Codex session over Cubby
 MCP, following `.claude/skills/decision-grading`: reviewed Suggestions
 (`entity_read.suggestion_queue` with `status`) are the labels, and

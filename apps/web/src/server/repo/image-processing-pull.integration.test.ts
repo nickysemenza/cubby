@@ -17,12 +17,15 @@ import {
   createImageProcessingJob,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  markImageProcessingWaitingForDevice,
   releaseAssignedImageProcessingJob,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
 import { updateImageProcessingSettings } from "./image-processing-maintenance";
 
-// Background claims must not steal cloud jobs. An interrupted device must release only its own
+// A connected device must claim waiting work before the queue's no-device cooldown expires,
+// without bypassing pending retry backoff. Background claims must not steal cloud jobs.
+// An interrupted device must release only its own
 // attempt, retain execution history, and leave a subsequent attempt immune to late results.
 describe("background companion leases", () => {
   const ctx = withTestDb();
@@ -61,6 +64,28 @@ describe("background companion leases", () => {
       leaseMs: 60_000,
       processorRevisions: [IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION],
     });
+  it("claims waiting work immediately but preserves pending retry backoff", async () => {
+    const waiting = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const first = await claim();
+    if (!first) throw new Error("Expected initial lease");
+    await markImageProcessingWaitingForDevice(ctx.db, {
+      jobId: first.id,
+      attemptId: first.attemptId,
+    });
+    const pending = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({ nextAttemptAt: sql`now() + interval '1 hour'` })
+      .where(eq(imageProcessingJob.id, pending));
+    expect(
+      await claimImageProcessingJob(ctx.db, {
+        kinds: ["describe_image"],
+        leaseMs: 60_000,
+      }),
+    ).toBeNull();
+    expect((await claim())?.id).toBe(waiting);
+    expect(await claim()).toBeNull();
+  });
   it("filters processor revision and exclusively claims each device job", async () => {
     const cloud = await job(IMAGE_DESCRIPTION_PROCESSOR_REVISION);
     const apple = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
