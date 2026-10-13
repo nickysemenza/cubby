@@ -34,6 +34,68 @@ const gmail = (status: number): GmailProvider => ({
 });
 
 describe("transient original attachment relevance", () => {
+  it("accepts an unrelated newsletter verdict despite decorative images", async () => {
+    const normalized = {
+      ...original,
+      attachments: [],
+      mail: {
+        ...original.mail,
+        bodyText:
+          "Community newsletter: the spring meetup moves to the town hall. Read our latest gardening tips and upcoming events.",
+        bodyHtml:
+          '<p>Community newsletter: the spring meetup moves to the town hall. Read our latest gardening tips and upcoming events.</p><img src="https://newsletter.example.test/logo.png" alt="Community garden logo">',
+      },
+    };
+    await expect(
+      interpretMailRelevance(gmail(500), normalized, async () => ({
+        classification: "unrelated",
+      })),
+    ).resolves.toEqual({ classification: "unrelated" });
+  });
+  it("keeps unresolved inline image pixels and truncated preheaders uncertain", async () => {
+    for (const bodyHtml of [
+      '<p>Community newsletter with gardening tips and upcoming events.</p><div style="display:none"><img src="https://shop.example.test/receipt.png" alt="Receipt total $24"></div>',
+      '<p>Community newsletter with gardening tips and upcoming events.</p><a style="display:none" href="https://shop.example.test/receipt">Learn more</a>',
+      '<p>Community newsletter with gardening tips and upcoming events.</p><div style="display:none">Receipt for order #SYN-12345</div>',
+      '<img src="data:image/png;base64,c3ludGhldGlj">',
+      `<div style="display:none">${"x".repeat(1200)} Receipt for order #SYN-12345</div><p>Community newsletter with gardening tips and the upcoming neighborhood events.</p>`,
+    ]) {
+      await expect(
+        interpretMailRelevance(
+          gmail(500),
+          {
+            ...original,
+            attachments: [],
+            mail: { ...original.mail, bodyText: "", bodyHtml },
+          },
+          async () => ({ classification: "unrelated" }),
+        ),
+      ).resolves.toEqual({ classification: "uncertain" });
+    }
+  });
+
+  it("includes hidden preheader order evidence in the relevance request", async () => {
+    let evidence = "";
+    await interpretMailRelevance(
+      gmail(500),
+      {
+        ...original,
+        attachments: [],
+        mail: {
+          ...original.mail,
+          bodyText: "",
+          bodyHtml:
+            '<div style="display:none">Receipt for order #SYN-12345</div><p>See the latest updates in your account.</p>',
+        },
+      },
+      async (request) => {
+        evidence = JSON.stringify(request.messages);
+        return { classification: "related" };
+      },
+    );
+    expect(evidence).toContain("Receipt for order #SYN-12345");
+  });
+
   it("omits HTML layout bytes while keeping original visible order content and exact links", async () => {
     const normalized = {
       ...original,
