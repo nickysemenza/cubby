@@ -5,7 +5,10 @@ import { validateRetainedTableBoundary } from "./entities/child-table-boundary.t
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { connectedViews } from "../../packages/schemas/src/connected-view-definitions.ts";
+import {
+  connectedViews,
+  derivedConnectedRelationship,
+} from "../../packages/schemas/src/connected-view-definitions.ts";
 import type { CompiledEntity } from "./entities/declarations.ts";
 import {
   ARTIFACT_MANIFEST,
@@ -56,18 +59,22 @@ const validateConnectedViews = (entities: readonly CompiledEntity[]) => {
         );
       keys.add(view.key);
       for (const route of view.routes) {
-        if (route.length < 2)
+        if (route.length < ("evidence" in view && view.evidence ? 1 : 2))
           throw new EntityDeclarationError(
-            `Connected view ${source}.${view.key} needs at least two relations`,
+            `Connected view ${source}.${view.key} has too few relations for its presentation`,
           );
         let current = source;
-        for (const key of route) {
+        for (const [index, key] of route.entries()) {
           const relation = byKey
             .get(current)
             ?.relations.find((candidate) => candidate.key === key);
           if (
             !relation ||
-            !localPathProvenance.safeParse(relation.provenance).success
+            (!localPathProvenance.safeParse(relation.provenance).success &&
+              !(
+                derivedConnectedRelationship(current, key)?.target ===
+                  relation.target && index === route.length - 1
+              ))
           ) {
             throw new EntityDeclarationError(
               `Connected view ${source}.${view.key} has no local ${current}.${key} relation`,

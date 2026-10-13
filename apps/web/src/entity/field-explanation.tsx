@@ -54,6 +54,7 @@ import {
   ResolutionHeadline,
   sectionLabelClassName,
 } from "./field-resolution-explanation";
+import { SourceTargetLink } from "./source-target-link";
 
 type ExplanationSource = z.infer<typeof fieldExplanationSource>;
 export type ExplanationValue = ExplanationSource["value"];
@@ -768,9 +769,7 @@ export function FieldVerificationEvidence({
               “{source.quote}”
             </blockquote>
           ) : null}
-          {source.url ? (
-            <ExternalLinkText href={source.url}>{source.url}</ExternalLinkText>
-          ) : null}
+          <SourceTargetLink source={source} />
         </div>
       ))}
     </section>

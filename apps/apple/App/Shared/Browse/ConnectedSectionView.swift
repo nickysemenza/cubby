@@ -99,22 +99,35 @@ struct ConnectedRecordsSection: View {
 struct ConnectedRecordsPreviewContent: View {
     let source: EntityRef
     let preview: ConnectedRecordsPreviewOutput
+    var evidence = false
+    var excludedTargets: Set<String> = []
+    var showEmpty = true
 
     var body: some View {
-        if !preview.hasConnections {
-            Text("No connected records.").foregroundStyle(.secondary)
-                .preference(key: DetailSectionEmpty.self, value: true)
+        if !preview.views.contains(where: { $0.evidence == evidence && $0.totalCount > 0 }) {
+            if showEmpty {
+                Text(evidence ? "No sources" : "No connected records.").foregroundStyle(.secondary)
+                    .preference(key: DetailSectionEmpty.self, value: true)
+            }
         } else {
-            ForEach(preview.views.filter { $0.totalCount > 0 }, id: \.viewKey) { view in
+            ForEach(preview.views.filter { $0.evidence == evidence && $0.totalCount > 0 }, id: \.viewKey) {
+                view in
                 HStack {
                     Text(view.title).font(.subheadline.weight(.semibold))
+                    if evidence { Text("Derived").font(.caption).foregroundStyle(.secondary) }
                     Spacer()
                     Text(view.totalCount, format: .number)
                         .font(.fieldGuideData).foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)
                 ForEach(view.items, id: \.target.entityId) { item in
-                    ConnectedRecordRow(item: item)
+                    if excludedTargets.contains("\(item.target.entityKind.rawValue):\(item.target.entityId)")
+                    {
+                        Text("Related evidence for \(item.target.label)").font(.caption)
+                        RecordPathView(paths: item.paths)
+                    } else {
+                        ConnectedRecordRow(item: item)
+                    }
                 }
                 if view.totalCount > view.items.count {
                     NavigationLink(value: Route.connectedRecords(source, viewKey: view.viewKey)) {
@@ -123,10 +136,12 @@ struct ConnectedRecordsPreviewContent: View {
                     .accessibilityLabel("\(view.totalCount - view.items.count) more \(view.title)")
                 }
             }
-            let empty = preview.emptyViewTitles
+            let empty = preview.views.filter { $0.evidence == evidence && $0.totalCount == 0 }.map(\.title)
             if !empty.isEmpty {
-                Text("No connections: \(empty.joined(separator: ", "))")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(
+                    "\(evidence ? "No related evidence" : "No connections"): \(empty.joined(separator: ", "))"
+                )
+                .font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -185,13 +200,13 @@ struct ConnectedRecordsListView: View {
                 preview: PreviewFixtures.decode(
                     #"""
                     {"views":[
-                      {"viewKey":"recipes","title":"Recipes","targetEntity":"recipe","totalCount":5,
+                      {"viewKey":"recipes","evidence":false,"title":"Recipes","targetEntity":"recipe","totalCount":5,
                        "items":[{"target":{"entityKind":"recipe","entityId":"RCP-2345","label":"Weeknight soup"},
                          "shortestHops":2,
                          "paths":[[{"entityKind":"product","entityId":"PRD-4K7M","label":"Oat milk"},
                                    {"entityKind":"ingredient","entityId":"ING-2345","label":"Oat milk"},
                                    {"entityKind":"recipe","entityId":"RCP-2345","label":"Weeknight soup"}]]}]},
-                      {"viewKey":"projects","title":"Projects","targetEntity":"project","totalCount":0,"items":[]}
+                      {"viewKey":"projects","evidence":false,"title":"Projects","targetEntity":"project","totalCount":0,"items":[]}
                     ]}
                     """#)
             )

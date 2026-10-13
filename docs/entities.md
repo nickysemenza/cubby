@@ -1246,7 +1246,7 @@ table each (ADR 0007):
   `retailer_sku`, `gtin_14`, …), `settlement_ref` on financial transactions,
   `page` (Notion) and `folder` (Drive). A live `(source, kind, externalId)`
   names one entity; rows soft-delete with their entity.
-- `EntitySource(entityId/entityKind, fieldPath, url, quote, observedAt,
+- `EntitySource(entityId/entityKind, fieldPath, url, sourceEntityId/sourceEntityKind, quote, observedAt,
   selectedVariant, valueFingerprint, recorder)` records where a fact about an
   entity was seen ([terminology](guide/terminology.md#purchase-research) "Source";
   `repo/entity-source.ts`). Every create/update command and image attach
@@ -1255,7 +1255,19 @@ table each (ADR 0007):
   actor (never input) and fingerprints the post-write field value. Detail
   reads return `sources` with `supportsCurrentValue`, so a Source for an
   overwritten value reads as an earlier value. Merge moves and de-duplicates
-  Sources to the survivor (`finalizeMerge`); a soft delete keeps them.
+  Sources to the survivor (`finalizeMerge`); a soft delete keeps them. Internal
+  citations accept a `sourceEntity` shortcode and store a typed durable Entity
+  identity; recognized Cubby URLs normalize to that reference on writes. External
+  URLs stay URLs. Reads return `sourceEntity` with its kind, shortcode, name and
+  deletion state. A target merge repoints citations and de-duplicates them; target
+  deletion preserves the citation and quote as history. Sources group explicit
+  citations by document. Evidence-marked connected views supplement them with
+  live related documents and witnessed paths, without assigning field support
+  or persisting duplicate relationship-only Sources. Product evidence follows
+  declared purchase relationships to purchase documents and accepted/reviewed
+  Emails; Purchase evidence uses those same direct relationships. Derived Email
+  traversal reuses the association policy, excluding suggestions and thread-only
+  context. The generic preview reports counts and links to complete paged views.
 
 A field declared with `collection: { key }` accepts patch items on
 `entity.update` as well as a full replacement: `{op: "add" | "replace" |

@@ -83,6 +83,48 @@ export const emailPurchaseAssociationsSql = (
 `;
 
 /**
+ * Inverse association read. The candidate set is deliberately permissive;
+ * the existing association policy alone decides acceptance. Materializing
+ * purchase identities before the Email join prevents a mailbox × claims join;
+ * materializing eligible metadata keeps the final policy off the entire mailbox.
+ */
+export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
+  WITH accepted_identities AS MATERIALIZED (
+    SELECT DISTINCT identity."ledgerPartyId", identity."kind", identity."externalKey"
+    FROM "ImportSourceOrder" accepted
+    JOIN "ImportSourceClaim" family ON family."id" = accepted."sourceClaimId"
+    JOIN "ImportSourceClaim" identity
+      ON coalesce(identity."canonicalClaimId", identity."id") = coalesce(family."canonicalClaimId", family."id")
+    WHERE accepted."purchaseId" = ${purchaseId}
+  ), candidate_ids AS (
+    SELECT candidate."id"
+    FROM accepted_identities identity
+    JOIN "Email" candidate ON candidate."deletedAt" IS NULL
+      AND candidate."ledgerPartyId" = identity."ledgerPartyId"
+      AND (
+        (identity."kind" = ${importSourceKind.enum.mail_message}
+          AND identity."externalKey" = candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId")
+        OR (identity."kind" = ${importSourceKind.enum.mail_attachment}
+          AND starts_with(identity."externalKey", candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId" || ':attachment:'))
+      )
+    UNION
+    SELECT candidate."id"
+    FROM "OrderMailCandidateDecision" decision
+    JOIN "OrderMailEvent" event ON event."id" = decision."eventId"
+    JOIN "Email" candidate ON candidate."orderMailId" = event."orderMailId" AND candidate."deletedAt" IS NULL
+    WHERE decision."purchaseId" = ${purchaseId}
+  ), eligible AS MATERIALIZED (
+    SELECT candidate."id", candidate."shortcode", candidate."subject", candidate."deletedAt",
+      candidate."ledgerPartyId", candidate."provider", candidate."mailboxId", candidate."messageId",
+      candidate."orderMailId", candidate."checksum"
+    FROM candidate_ids ids JOIN "Email" candidate ON candidate."id" = ids."id" AND candidate."deletedAt" IS NULL
+  )
+  SELECT "Email".* FROM eligible "Email"
+  WHERE EXISTS (SELECT 1 FROM (${emailPurchaseAssociationsSql()}) association
+    WHERE association."purchaseId" = ${purchaseId})
+`;
+
+/**
  * The member's own Relevance for the current original: a resolution, else the
  * owner's latest independent review label on a prediction of this checksum.
  */

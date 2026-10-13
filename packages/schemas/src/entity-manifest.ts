@@ -167,17 +167,24 @@ export type LocalPathRelationship = EntityRelationship & {
   provenance: { kind: "local-path"; steps: readonly RelationshipPathStep[] };
 };
 
-export const localRelationshipByKey = (
+export const relationshipByKey = (
   source: Entity,
   key: string,
-): LocalPathRelationship => {
+): EntityRelationship => {
   const candidate = entityManifest[source].relationships.find(
     (relationship) => relationship.key === key,
   );
   if (candidate === undefined) {
     throw new Error(`Unknown local relationship ${source}.${key}`);
   }
-  const relationship = entityRelationshipSchema.parse(candidate);
+  return entityRelationshipSchema.parse(candidate);
+};
+
+export const localRelationshipByKey = (
+  source: Entity,
+  key: string,
+): LocalPathRelationship => {
+  const relationship = relationshipByKey(source, key);
   if (relationship.provenance.kind !== "local-path") {
     throw new Error(`Unknown local relationship ${source}.${key}`);
   }

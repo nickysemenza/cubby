@@ -22,7 +22,9 @@ export const modulesChildren = [
   /**
    * Where a fact about any entity was seen (terminology "Source"), written in the
    * same transaction as the mutation it supports. History: a merge moves the
-   * rows to the survivor, a delete leaves them on the tombstone. `runId` and
+   * rows and cited targets to the survivor, a delete leaves them on the tombstone.
+   * Cited targets reference durable Entity identity, preserving even hard-deleted
+   * records without making citations live payload dependencies. `runId` and
    * `deviceId` deliberately carry no FK, like `oauthClientId`: the recorder
    * outlives a Run or Device removal, and an FK would make every Run and
    * Device lifecycle policy own this table.
@@ -41,6 +43,8 @@ export const modulesChildren = [
       { key: "entityKind", kind: "text", notNull: true, type: "Entity" },
       { key: "fieldPath", kind: "text" },
       { key: "url", kind: "text" },
+      { key: "sourceEntityId", kind: "uuid" },
+      { key: "sourceEntityKind", kind: "text", type: "Entity" },
       { key: "quote", kind: "text" },
       { key: "observedAt", kind: "timestamp" },
       { key: "selectedVariant", kind: "text" },
@@ -74,11 +78,20 @@ export const modulesChildren = [
     ],
     indexes: [
       { name: "EntitySource_entity_idx", on: ["entityId", "createdAt"] },
+      { name: "EntitySource_target_idx", on: ["sourceEntityId"] },
     ],
     checks: [
       {
-        name: "EntitySource_url_or_quote_check",
-        sql: "{url} IS NOT NULL OR {quote} IS NOT NULL",
+        name: "EntitySource_target_pair_check",
+        sql: "({sourceEntityId} IS NULL) = ({sourceEntityKind} IS NULL)",
+      },
+      {
+        name: "EntitySource_one_target_check",
+        sql: "{url} IS NULL OR {sourceEntityId} IS NULL",
+      },
+      {
+        name: "EntitySource_target_or_quote_check",
+        sql: "{url} IS NOT NULL OR {sourceEntityId} IS NOT NULL OR {quote} IS NOT NULL",
       },
       {
         name: "EntitySource_field_fingerprint_check",
@@ -94,6 +107,12 @@ export const modulesChildren = [
       },
     ],
     foreignKeys: [
+      {
+        name: "EntitySource_target_fk",
+        columns: ["sourceEntityId", "sourceEntityKind"],
+        table: "entityIdentity",
+        references: ["id", "kind"],
+      },
       {
         name: "EntitySource_entity_fk",
         columns: ["entityId", "entityKind"],

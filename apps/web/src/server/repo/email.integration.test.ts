@@ -16,6 +16,7 @@ import {
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
+import { getConnectedRecords } from "~/server/repo/connected-records";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   createEmailAccuracyEvaluation,
@@ -283,6 +284,26 @@ describe("Email generic persisted reads", () => {
       filters: { ledgerPartyId: party.shortcode, linked: true },
       pagination: { pageIndex: 0, pageSize: 1 },
     });
+    // Derived Sources must reuse accepted/reviewed associations, never thread or dismissed candidates.
+    const evidence = await getConnectedRecords(ctx.db, {
+      source: { entityKind: "purchase", entityId: purchase.shortcode },
+      viewKey: "source-emails",
+    });
+    expect(new Set(evidence.items.map((item) => item.target.entityId))).toEqual(
+      new Set(
+        ["accepted", "attachment", "lifecycle"].map((key) => codes.get(key)),
+      ),
+    );
+    expect(evidence.items.map((item) => item.target.label)).toEqual([
+      "Workshop receipt",
+      "Workshop receipt",
+      "Workshop receipt",
+    ]);
+    expect(
+      evidence.items.every(
+        (item) => item.paths[0]?.[0]?.entityId === purchase.shortcode,
+      ),
+    ).toBe(true);
     expect(linked.meta.totalCount).toBe(3);
     expect(linked.items[0]).toMatchObject({ linked: true });
     const unlinked = await executeEntity(context, {

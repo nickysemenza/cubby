@@ -576,7 +576,13 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     count: sources.length,
     icon: QuotesIcon,
     placement: "primary",
-    content: <EntitySourcesSection entity={entity} sources={sources} />,
+    content: (
+      <EntitySourcesSection
+        entity={entity}
+        sourceId={bag.id}
+        sources={sources}
+      />
+    ),
   });
 
   // `edit` is the page's own affordance (the hero button); every other

@@ -2,20 +2,26 @@ import type { Entity } from "./entity";
 import {
   allEntities,
   entityManifest,
-  localRelationshipByKey,
+  relationshipByKey,
 } from "./entity-manifest";
 import type { RelationshipPathStep } from "./entity-integrity";
-import { connectedViews } from "./connected-view-definitions";
+import {
+  connectedViews,
+  derivedConnectedRelationship,
+  type DerivedConnectedRelationship,
+} from "./connected-view-definitions";
 
 export { connectedViews } from "./connected-view-definitions";
 export type {
   ConnectedView,
   ConnectedViewKey,
+  DerivedConnectedRelationship,
 } from "./connected-view-definitions";
 
 export interface ConnectedPathVariant {
   steps: readonly RelationshipPathStep[];
   target: Entity;
+  derived?: DerivedConnectedRelationship;
 }
 
 /** Expand named multi-source relations into the physical paths the server can query. */
@@ -25,8 +31,22 @@ export function connectedPathVariants(
 ): ConnectedPathVariant[] {
   let current = source;
   let variants: readonly (readonly RelationshipPathStep[])[] = [[]];
-  for (const key of route) {
-    const relationship = localRelationshipByKey(current, key);
+  for (const [index, key] of route.entries()) {
+    const relationship = relationshipByKey(current, key);
+    if (relationship.provenance.kind === "derived") {
+      const derived = derivedConnectedRelationship(current, key);
+      if (
+        index !== route.length - 1 ||
+        !derived ||
+        derived.target !== relationship.target
+      )
+        throw new Error(`Unsupported derived connection ${current}.${key}`);
+      return variants.map((steps) => ({
+        steps,
+        target: relationship.target,
+        derived,
+      }));
+    }
     const sources = [
       relationship.provenance,
       ...relationship.sources.map((item) => item.provenance),
@@ -51,7 +71,7 @@ export function validateConnectedViews(): void {
         throw new Error(`Duplicate connected view ${source}.${view.key}`);
       seen.add(view.key);
       for (const route of view.routes) {
-        if (route.length < 2)
+        if (route.length < ("evidence" in view && view.evidence ? 1 : 2))
           throw new Error(
             `Indirect view ${source}.${view.key} needs at least two relationships`,
           );

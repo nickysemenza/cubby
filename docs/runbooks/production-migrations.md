@@ -34,6 +34,19 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Typed Source references
+
+Apply expansion only through `0051_entity_source_targets`, then deploy the
+matching server and refreshed clients. Let old in-flight writes finish before
+applying `0052_normalize_entity_source_targets`: old Source merge deduplication
+ignores the new target identity, and old target merges cannot repoint citations.
+Do not apply both tags before deployment. Before and after normalization,
+verify the Source row count and all quote, field, fingerprint, observation,
+variant and recorder metadata are unchanged; only resolvable trusted internal
+URLs should become typed identities. Read back target foreign keys and confirm
+external and unresolved URLs survive. Normalization includes retained deleted
+identities and redirects from merged codes.
+
 ## Email convergence cutover
 
 This rollout uses one breaking migration. The member explicitly requests leaving

@@ -2,9 +2,29 @@ import { z } from "zod";
 
 import { auditChannelSchema } from "./context";
 import { ENTITY_SOURCE_QUOTE_MAX } from "./child-tables/modules";
-import { deviceShortcode, runShortcode } from "./identifiers";
+import { entityRefSchema } from "./entity";
+import { shortcodeEntities } from "./entity-manifest";
+import {
+  anyShortcodeSchema,
+  deviceShortcode,
+  nonEmptyTuple,
+  runShortcode,
+} from "./identifiers";
+
+const sourceEntityCode = anyShortcodeSchema(nonEmptyTuple(shortcodeEntities));
+
+export const entitySourceTarget = entityRefSchema.extend({
+  entityId: sourceEntityCode,
+  name: z.string().nullable(),
+  deleted: z.boolean(),
+});
 
 const sourceFields = {
+  sourceEntity: sourceEntityCode
+    .optional()
+    .describe(
+      "Cubby record where the fact was seen; use its shortcode instead of a Cubby URL.",
+    ),
   url: z
     .url()
     .max(2048)
@@ -29,9 +49,22 @@ const sourceFields = {
     .optional()
     .describe("The size, color, or pack variant the page had selected."),
 };
-const hasUrlOrQuote = (source: { url?: string; quote?: string }) =>
-  source.url !== undefined || source.quote !== undefined;
-const urlOrQuote = { message: "A source needs a url or quote" };
+const hasTargetOrQuote = (source: {
+  url?: string;
+  sourceEntity?: string;
+  quote?: string;
+}) =>
+  source.url !== undefined ||
+  source.sourceEntity !== undefined ||
+  source.quote !== undefined;
+const targetOrQuote = {
+  message: "A source needs a url, sourceEntity or quote",
+};
+const oneTarget = (source: { url?: string; sourceEntity?: string }) =>
+  source.url === undefined || source.sourceEntity === undefined;
+const exclusiveTarget = {
+  message: "Use either url or sourceEntity for a source",
+};
 
 /**
  * One Source a caller supplies with a write (terminology "Source"): where a fact
@@ -49,7 +82,8 @@ export const entitySourceInput = z
       ),
     ...sourceFields,
   })
-  .refine(hasUrlOrQuote, urlOrQuote);
+  .refine(hasTargetOrQuote, targetOrQuote)
+  .refine(oneTarget, exclusiveTarget);
 export type EntitySourceInput = z.infer<typeof entitySourceInput>;
 
 export const entitySourceInputs = z
@@ -61,12 +95,18 @@ export const entitySourceInputs = z
 
 /** A source about the whole record (image attach): no field scope. */
 export const entityRecordSourceInputs = z
-  .array(z.strictObject(sourceFields).refine(hasUrlOrQuote, urlOrQuote))
+  .array(
+    z
+      .strictObject(sourceFields)
+      .refine(hasTargetOrQuote, targetOrQuote)
+      .refine(oneTarget, exclusiveTarget),
+  )
   .max(50)
   .describe("Where this file was found; recorded on the target record.");
 
 export const entitySourceRead = z.object({
   fieldPath: z.string().nullable(),
+  sourceEntity: entitySourceTarget.nullable(),
   url: z.string().nullable(),
   quote: z.string().nullable(),
   observedAt: z.date().nullable(),

@@ -52,6 +52,7 @@ it("shows each field Source with whether it still supports the current value", (
     url: `https://maker.example.test/${key}`,
     quote,
     selectedVariant: key === "current" ? "Blue, 42" : null,
+    sourceEntity: null,
     supportsCurrentValue,
     recorder: {
       channel: "mcp",

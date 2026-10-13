@@ -26,6 +26,8 @@ import { unwrapDb } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
 
+import { LABEL_COLUMN_OVERRIDES } from "./shortcode-resolver";
+
 const rowSchema = z.object({
   rootShortcode: z.string(),
   relationshipKey: z.string(),
@@ -247,6 +249,8 @@ const graphRelationshipsFor = (
   ),
 ];
 
+const labelOverrides = new Map(Object.entries(LABEL_COLUMN_OVERRIDES));
+
 export const labelSql = (entity: Entity, alias: string) => {
   const prefix = alias ? `${alias}.` : "";
   const column = (name: string) => sql.raw(`${prefix}"${name}"`);
@@ -323,8 +327,10 @@ export const labelSql = (entity: Entity, alias: string) => {
       const stored = entityFieldModels[entity].storage.find(
         (field) => field.key === title,
       );
-      return stored
-        ? sql`COALESCE(${column(stored.column)}::text, ${column("shortcode")})`
+      const nameColumn =
+        labelOverrides.get(entity)?.column?.name ?? stored?.column;
+      return nameColumn
+        ? sql`COALESCE(${column(nameColumn)}::text, ${column("shortcode")})`
         : column("shortcode");
     }
   }
