@@ -92,7 +92,8 @@ struct FieldResolutionPresentationTests {
         let field = try field()
         #expect(
             FieldResolutionPresentation.readValue(
-                in: ["itemizationExpectation": "unknown"], field: field, surface: "detail") == .string("unknown")
+                in: ["itemizationExpectation": "unknown"], field: field, surface: "detail")
+                == .string("unknown")
         )
         #expect(
             FieldResolutionPresentation.readValue(in: row(), field: field, surface: "list")
