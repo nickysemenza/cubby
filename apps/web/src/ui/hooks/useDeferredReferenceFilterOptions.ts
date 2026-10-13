@@ -24,6 +24,19 @@ export function useDeferredReferenceFilterOptions(
       }),
     [entity],
   );
+  return useDeferredEntityRosters(references);
+}
+
+export type DeferredEntityRoster = {
+  key: string;
+  target: BrowserRoutedEntity;
+};
+
+/** Live, searchable shortcode rosters fetched only once their filter opens.
+ * `references` must be stable (a module constant or memoized value). */
+export function useDeferredEntityRosters(
+  references: readonly DeferredEntityRoster[],
+): RuntimeFilterOptions {
   const [active, setActive] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState<Record<string, string>>({});
   const [debouncedSearch] = useDebouncedValue(search, { wait: 250 });

@@ -25,6 +25,7 @@ import {
 import { isGeneratedBrowserCrudEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { RecordSuggestionsProvider } from "~/features/ai/record-suggestions";
+import { RecordWorkQueue } from "~/features/work-queue/record-work-queue";
 import { SectionHeading, Stack } from "~/ui/layout";
 import { PreviewQuery } from "~/ui/preview/preview-query";
 import { Button } from "~/ui/primitives/button";
@@ -114,6 +115,7 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
               </Button>
             </div>
           ) : null}
+          <RecordWorkQueue id={record.id} />
           {fieldSections.map((section) => (
             <section key={section.id} className="min-w-0">
               <SectionHeading title={section.title} />

@@ -1,6 +1,9 @@
+import { dataCheckLabel } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
+  workQueueGapChecks,
+  workQueueGapViews,
   workQueueHouseholdInput,
   workQueueKindSchema,
   workQueueSourceSchema,
@@ -9,7 +12,6 @@ import {
   type WorkQueueKind,
   type WorkQueueMember,
   type WorkQueueRow,
-  type WorkWaitingFor,
 } from "@cubby/schemas/work-queue";
 import { humanize } from "@cubby/shared";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
@@ -36,9 +38,14 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { type FilterSpecCore } from "~/entity/filters";
+import {
+  GapChipCluster,
+  memberOptionsOf,
+  WaitingForPill,
+  waitingForLabel,
+} from "~/features/work-queue/work-queue-display";
 import { workQueue } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyShortcodes } from "~/lib/clipboard";
-import { colorizeSelectOptions } from "~/lib/select-options";
 import { formatCount } from "~/lib/utils";
 import {
   bulkActionPreview,
@@ -47,7 +54,9 @@ import {
 import { BulkActionBar } from "~/ui/data-table/BulkActionBar";
 import { selectCellData, textCellData } from "~/ui/data-table/cell-data";
 import {
+  createCurrencyColumn,
   createImageColumn,
+  createPlainDateColumn,
   renderOptionCell,
 } from "~/ui/data-table/columnHelpers";
 import {
@@ -67,6 +76,14 @@ import {
   useTableState,
   type TableStateReturn,
 } from "~/ui/data-table/useTableState";
+import {
+  deferredFilterOptionSource,
+  type RuntimeFilterOptionSource,
+} from "~/ui/hooks/filter-option-types";
+import {
+  type DeferredEntityRoster,
+  useDeferredEntityRosters,
+} from "~/ui/hooks/useDeferredReferenceFilterOptions";
 import { useEntityPreview } from "~/ui/hooks/useEntityPreview";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
 import { useInfiniteTableList } from "~/ui/hooks/useInfiniteTableList";
@@ -76,15 +93,14 @@ import {
   domainWayfinding,
 } from "~/ui/navigation/domain-wayfinding";
 import { Page, usePageCount } from "~/ui/page/Page";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
-import { EnumPill } from "~/ui/primitives/enum-pill";
+import { NoneValue } from "~/ui/primitives/none-value";
 
 const EMPTY_MEMBERS: WorkQueueMember[] = [];
 const INITIAL_VISIBILITY = { nextAction: false };
 type QueueInput = z.infer<typeof workQueueHouseholdInput>;
 type QueueFilters = Pick<
   QueueInput,
-  "query" | "waitingFor" | "source" | "kind"
+  "query" | "waitingFor" | "source" | "kind" | "check" | "vendor"
 >;
 // A work row is identified by its reason, independently of its source record.
 type QueueTableRow = Omit<WorkQueueRow, "id"> & {
@@ -102,6 +118,8 @@ const FILTER_SPECS: readonly FilterSpecCore[] = [
   { columnId: "waitingFor", kind: "select" },
   { columnId: "source", kind: "select" },
   { columnId: "kind", kind: "select" },
+  { columnId: "reason", urlKey: "check", kind: "multiselect" },
+  { columnId: "vendor", kind: "select" },
 ];
 const COPY_ACTIONS: BulkActionsConfig<QueueTableRow> = {
   actions: [
@@ -126,12 +144,16 @@ const buildQueueFilters = (state: TableStateReturn): QueueFilters => {
     waitingFor: state.getColumnFilter("waitingFor"),
     source: state.getColumnFilter("source"),
     kind: state.getColumnFilter("kind"),
+    check: state.getColumnFilterValues("reason"),
+    vendor: state.getColumnFilter("vendor"),
   });
   return {
     query: parsed.query,
     waitingFor: parsed.waitingFor,
     source: parsed.source,
     kind: parsed.kind,
+    check: parsed.check,
+    vendor: parsed.vendor,
   };
 };
 const queueQueryPlan: ListQueryOptionsFn<
@@ -189,47 +211,17 @@ const SOURCE_OPTIONS = workQueueSourceSchema.options.map((value) => ({
   label: humanize(value),
 }));
 
-function waitingForLabel(waitingFor: WorkWaitingFor) {
-  switch (waitingFor.kind) {
-    case "either":
-      return "Either";
-    case "unresolved":
-      return "Unresolved";
-    case "members":
-      return waitingFor.members.map((member) => member.name).join(", ");
-  }
-}
-
-function WaitingForCell({
-  waitingFor,
-  memberOptions,
-}: {
-  waitingFor: WorkWaitingFor;
-  memberOptions: FilterableComboboxItem[];
-}) {
-  switch (waitingFor.kind) {
-    case "either":
-      return (
-        <EnumPill description="Either member can do this work">Either</EnumPill>
-      );
-    case "unresolved":
-      return (
-        <EnumPill color="var(--warning)" description={waitingFor.reason}>
-          Unresolved
-        </EnumPill>
-      );
-    case "members":
-      return (
-        <span className="flex min-w-0 gap-1">
-          {waitingFor.members.map((member) => (
-            <span key={member.id} className="min-w-0">
-              {renderOptionCell(member.id, memberOptions)}
-            </span>
-          ))}
-        </span>
-      );
-  }
-}
+// The check filter offers exactly the checks a gap row can carry; the entity
+// prefix disambiguates shared labels ("Category", "Name").
+const CHECK_OPTIONS = workQueueGapViews.flatMap((gapView) =>
+  workQueueGapChecks(gapView).map((check) => ({
+    value: check,
+    label: `${entitySummary[gapView.entity].singular} · ${dataCheckLabel[check]}`,
+  })),
+);
+const VENDOR_ROSTER: readonly DeferredEntityRoster[] = [
+  { key: "vendor", target: "vendor" },
+];
 
 function entityTypeOption(entity: Entity) {
   const domain = domainForEntity(entity);
@@ -304,10 +296,27 @@ function WorkRecordLink({ row }: { row: QueueTableRow }) {
   );
 }
 
-function queueColumns(members: WorkQueueMember[]) {
-  const memberOptions = colorizeSelectOptions(
-    members.map((member) => ({ value: member.id, label: member.name })),
+function VendorLink({ vendor }: { vendor: QueueTableRow["vendor"] }) {
+  if (!vendor) return <NoneValue />;
+  return (
+    <EntityRefLink
+      variant="table"
+      tone="identity"
+      to={entities.vendor.routes.detail}
+      params={entityDetailParams(vendor.id)}
+      title={vendor.name}
+    >
+      {vendor.name}
+    </EntityRefLink>
   );
+}
+
+function queueColumns(
+  members: WorkQueueMember[],
+  vendorRoster: RuntimeFilterOptionSource | undefined,
+) {
+  const memberOptions = memberOptionsOf(members);
+  const vendorOptions = deferredFilterOptionSource(vendorRoster);
   return createCubbyColumnCollection<QueueTableRow>((add) => {
     add(buildSelectColumn<QueueTableRow>());
     add(
@@ -385,14 +394,23 @@ function queueColumns(members: WorkQueueMember[]) {
         meta: attachCubbyColumnMeta<QueueTableRow>({
           mobile: { slot: "subtitle", priority: 0, label: "Reason" },
           cellData: textCellData<QueueTableRow>("text", (row) => row.reason),
+          filterConfig: {
+            placeholder: "Filter check",
+            filterType: "multiselect",
+            options: CHECK_OPTIONS,
+          },
         }),
-        // The rule's next action is the reason's description; its own column
-        // starts hidden because it repeats for every row of one rule.
-        cell: ({ row }) => (
-          <span className="block truncate" title={row.original.nextAction}>
-            {row.original.reason}
-          </span>
-        ),
+        // A gap row names each failed check; other rows keep their reason,
+        // titled with the rule's next action (its column starts hidden
+        // because it repeats for every row of one rule).
+        cell: ({ row }) =>
+          row.original.gaps.length > 0 ? (
+            <GapChipCluster gaps={row.original.gaps} />
+          ) : (
+            <span className="block truncate" title={row.original.nextAction}>
+              {row.original.reason}
+            </span>
+          ),
       }),
     );
     add(
@@ -434,11 +452,48 @@ function queueColumns(members: WorkQueueMember[]) {
           },
         }),
         cell: ({ row }) => (
-          <WaitingForCell
+          <WaitingForPill
             waitingFor={row.original.waitingFor}
             memberOptions={memberOptions}
           />
         ),
+      }),
+    );
+    add(
+      helper.accessor((row) => row.vendor?.name ?? null, {
+        id: "vendor",
+        header: "Vendor",
+        size: 160,
+        meta: attachCubbyColumnMeta<QueueTableRow>({
+          linksTo: "vendor",
+          mobile: { slot: "meta", priority: 4, label: "Vendor" },
+          cellData: textCellData<QueueTableRow>(
+            "text",
+            (row) => row.vendor?.name ?? "",
+          ),
+          filterConfig: {
+            placeholder: "Filter vendor",
+            filterType: "select",
+            options: vendorOptions?.options ?? [],
+            onActivate: vendorOptions?.onActivate,
+            onSearchChange: vendorOptions?.onSearchChange,
+            isLoading: vendorOptions?.isLoading,
+          },
+        }),
+        cell: ({ row }) => <VendorLink vendor={row.original.vendor} />,
+      }),
+    );
+    add(
+      createCurrencyColumn(helper, "amount", {
+        header: "Amount",
+        signedTone: true,
+        mobile: { slot: "trailing", priority: 0 },
+      }),
+    );
+    add(
+      createPlainDateColumn(helper, "date", {
+        header: "Date",
+        mobile: { slot: "meta", priority: 5, label: "Date" },
       }),
     );
     add(
@@ -497,7 +552,11 @@ function WorkQueueTable() {
     tableState,
   });
   const members = list.pages?.[0]?.members ?? EMPTY_MEMBERS;
-  const columns = useMemo(() => queueColumns(members), [members]);
+  const vendorRoster = useDeferredEntityRosters(VENDOR_ROSTER).vendor;
+  const columns = useMemo(
+    () => queueColumns(members, vendorRoster),
+    [members, vendorRoster],
+  );
   usePageCount(list.isLoading ? undefined : list.totalCount);
   const selection = useBulkActions({ config: COPY_ACTIONS });
   const { clearSelection, onRowSelectionChange } = selection;

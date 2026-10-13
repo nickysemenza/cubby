@@ -88,8 +88,13 @@ record-backed work independently of the source record inspector. Copy codes
 uses source shortcodes, deduplicating records with multiple work reasons;
 aggregate Problems rows have no shortcode and are not selectable. Pending
 Suggestions appear as one row per entity and field with their count, opening
-the filtered AI Review list; Email rows name their pipeline gaps and receipt
-rows name the policy that requires the receipt. Column
+the filtered AI Review list. Research and Email rows show one warning-toned
+chip per failed check (destructive for defects), its message as tooltip and
+screen-reader text, wrapping to two lines then "+N"; other rows keep reason
+text. Vendor links its record, Amount uses the sign-toned currency cell, and
+Date the plain-date cell. A record's own rows appear on its detail page and
+inspector as a compact Work queue ledger — chips or reason, muted next action,
+trailing Waiting for pill — absent when the record has no work. Column
 controls are session-only, matching entity lists. Reason is enriched after
 paging and remains unsortable; projected fields sort before paging. Record
 links open the existing source record and its review controls. Run titles
