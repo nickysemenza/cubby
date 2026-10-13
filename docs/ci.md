@@ -362,7 +362,11 @@ capacity or custom cleanup scheduler is needed.
 ## Hosted suite
 
 The `CI` workflow runs automatically for pull requests to `main` and pushes to
-`main`. Superseded PR runs are canceled. Main runs finish rather than being
+`main`. Superseded PR runs are canceled. Closing or merging a PR also cancels
+its remaining CI: the closure run shares the PR's concurrency group but skips
+all jobs, including `CI passed`. The group retains the PR number when a merge
+changes the event ref to `main`, keeping main's push run independent.
+Main runs finish rather than being
 canceled by later merges, so native checks can publish reusable caches.
 GitHub concurrency keeps
 one main run active and at most one pending; a newer push replaces the pending
@@ -475,9 +479,10 @@ settings in the fresh PostgreSQL 17 configuration. IntegreSQL retries its
 PostgreSQL connection during startup; its pinned distroless image has no
 `/bin/sh` for Docker shell health checks. The optional purchase-import and
 Tester Army Linux lanes use the same service definitions. The
-`@claude` mention workflow (`claude.yml`) remains on demand. There is no
-automatic PR review workflow. Preview deploys were removed; production is the
-only deployed environment.
+`@claude` mention workflow (`claude.yml`) remains on demand; a new mention on
+the same issue or PR supersedes its previous response, while unrelated comments
+do not cancel it. There is no automatic PR review workflow. Preview deploys
+were removed; production is the only deployed environment.
 
 ## Apple TestFlight release
 
