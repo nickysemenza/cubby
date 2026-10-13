@@ -75,7 +75,8 @@ function reappliesAcceptedObservation(
   return (
     intent === "product_binding" &&
     resolution.kind === "attach_only" &&
-    state.association?.acceptedObservationId === state.observation.id
+    (state.association?.acceptedObservationId === state.observation.id ||
+      state.currentOriginalReview)
   );
 }
 

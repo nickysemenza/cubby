@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   auditLog,
   email as emailTable,
+  orderMail,
   expense,
   expenseAttribution,
   financialTransactionAllocation,
@@ -16,6 +17,7 @@ import {
   importSourceOrder,
   importSourceProduct,
   importPreparedLine,
+  importPreparedOrder,
   inventoryEntry,
   ledgerParty,
   ledgerSourceClaim,
@@ -45,6 +47,7 @@ import {
   mailSource,
   memberImport,
   memberImportWorld,
+  prepareMemberImport,
   retainedMailFixture,
 } from "./order-import.fixtures";
 import {
@@ -60,7 +63,7 @@ import {
 // fabricated finding, a second spend line, or stock receiving.
 describe("reviewed accepted source Product association", () => {
   const ctx = withTestDb();
-  async function world(linked = false, multi = false) {
+  async function world(linked = false, multi = false, unboundSecond = false) {
     const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
       vendor: { name: "Synthetic photo retailer" },
     });
@@ -76,9 +79,10 @@ describe("reviewed accepted source Product association", () => {
       orders: [
         {
           stableOrderId: "accepted-photo-item",
-          resolutions: retainedProduct
-            ? [undefined, { kind: "existing", productId: retainedProduct.id }]
-            : undefined,
+          resolutions:
+            retainedProduct && !unboundSecond
+              ? [undefined, { kind: "existing", productId: retainedProduct.id }]
+              : undefined,
           vendorId: vendor.shortcode,
           source: {
             kind: "receipt_photo",
@@ -209,6 +213,261 @@ describe("reviewed accepted source Product association", () => {
   }
 
   type World = Awaited<ReturnType<typeof world>>;
+  it.each([true, false])(
+    "records a current retained-original review without inventing history (different payments: %s)",
+    async (differentPayments) => {
+      const w = await world(false, true, true);
+      const original = await w.db.query.sourceOrderObservation.findFirst({
+        where: eq(
+          sourceOrderObservation.id,
+          w.association.acceptedObservationId!,
+        ),
+      });
+      const target = await w.db.query.purchase.findFirst({
+        where: eq(purchase.id, w.association.purchaseId),
+      });
+      if (!original || !target) throw new Error("Synthetic original missing");
+      if (original.extraction.status !== "ready")
+        throw new Error("Synthetic original is not ready");
+      const reviewedExtraction = differentPayments
+        ? {
+            ...original.extraction,
+            candidate: { ...original.extraction.candidate, payments: [] },
+          }
+        : original.extraction;
+      const mail = await retainedMailFixture(ctx.db, {
+        ledgerPartyId: w.party.id,
+        messageId: "synthetic-reviewed-original",
+        checksum: original.checksum,
+      });
+      await w.db
+        .update(importSourceClaim)
+        .set({
+          kind: "mail_message",
+          externalKey: mailSource(mail).externalKey,
+        })
+        .where(eq(importSourceClaim.id, w.association.sourceClaimId));
+      const unknown = {
+        checksum: "f".repeat(64),
+        extraction: original.extraction,
+      };
+      await w.db
+        .update(importSourceOrder)
+        .set({ acceptedObservationId: null, originalOrder: unknown })
+        .where(eq(importSourceOrder.id, w.association.id));
+      if (!differentPayments) {
+        await w.db
+          .update(importSourceClaim)
+          .set({ externalKey: "synthetic:historical-mail-alias" })
+          .where(eq(importSourceClaim.id, w.association.sourceClaimId));
+        await linkCanonicalRoot(w, mailSource(mail).externalKey);
+      }
+      const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
+        key: "review-unknown-original",
+        orders: [
+          {
+            stableOrderId: "review-unknown-original",
+            vendorId: w.vendor.shortcode,
+            targetPurchaseId: parseShortcodeFor("purchase", target.shortcode),
+            source: mailSource(mail),
+            extraction: reviewedExtraction,
+          },
+        ],
+      });
+      const before = await w.snapshot();
+      await commitAcceptedSourceOrderReconciliation(
+        ctx.db,
+        {
+          sourceOrderId: w.association.id,
+          reviewedPreparation: {
+            run: preparation.prepared.runId,
+            stableOrderId: "review-unknown-original",
+          },
+          resolution: w.newProductResolution,
+        },
+        ctx.actor,
+      );
+      const after = await w.snapshot();
+      expect(
+        after.expenses.find((row) => row.id === w.item.id)?.productId,
+      ).not.toBeNull();
+      expect(after.expenses.find((row) => row.id === w.item.id)).toMatchObject({
+        cost: 40,
+        productQuantity: 2,
+      });
+      const receipts = await w.db.select().from(auditLog);
+      expect(
+        receipts.some((row) =>
+          JSON.stringify(row.changes).includes('"reviewedOriginalPreparation"'),
+        ),
+      ).toBe(true);
+      expect(after.attributions).toEqual(before.attributions);
+      expect(after.payments).toEqual(before.payments);
+      expect(after.stock).toEqual(before.stock);
+      expect(after.observations.find((row) => row.id === original.id)).toEqual(
+        original,
+      );
+      expect(
+        (
+          await w.db.query.importSourceOrder.findFirst({
+            where: eq(importSourceOrder.id, w.association.id),
+          })
+        )?.originalOrder,
+      ).toEqual(unknown);
+      expect(
+        await commitAcceptedSourceOrderReconciliation(
+          ctx.db,
+          {
+            sourceOrderId: w.association.id,
+            reviewedPreparation: {
+              run: preparation.prepared.runId,
+              stableOrderId: "review-unknown-original",
+            },
+            resolution: w.newProductResolution,
+          },
+          ctx.actor,
+        ),
+      ).toMatchObject({ alreadyApplied: true });
+      expect(await w.snapshot()).toEqual(after);
+      const alternate = await prepareMemberImport(ctx.db, ctx.actor, {
+        key: "alternate-reviewed-original",
+        orders: [
+          {
+            stableOrderId: "alternate-reviewed-original",
+            vendorId: w.vendor.shortcode,
+            targetPurchaseId: parseShortcodeFor("purchase", target.shortcode),
+            source: mailSource(mail),
+            extraction: reviewedExtraction,
+          },
+        ],
+      });
+      const alternateBefore = await refusalSnapshot(w);
+      await expect(
+        commitAcceptedSourceOrderReconciliation(
+          ctx.db,
+          {
+            sourceOrderId: w.association.id,
+            reviewedPreparation: {
+              run: alternate.prepared.runId,
+              stableOrderId: "alternate-reviewed-original",
+            },
+            resolution: w.newProductResolution,
+          },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/known accepted original/);
+      expect(await refusalSnapshot(w)).toEqual(alternateBefore);
+
+      if (!w.retainedItem || !w.retainedProduct)
+        throw new Error("Synthetic second item missing");
+      await w.commit({
+        kind: "attach_only",
+        lines: [
+          {
+            lineIndex: 1,
+            expenseId: parseShortcodeFor("expense", w.retainedItem.shortcode),
+            productId: w.retainedProduct.id,
+          },
+        ],
+      });
+      const laterBinding = await refusalSnapshot(w);
+      expect(
+        await commitAcceptedSourceOrderReconciliation(
+          ctx.db,
+          {
+            sourceOrderId: w.association.id,
+            reviewedPreparation: {
+              run: preparation.prepared.runId,
+              stableOrderId: "review-unknown-original",
+            },
+            resolution: w.newProductResolution,
+          },
+          ctx.actor,
+        ),
+      ).toMatchObject({ alreadyApplied: true });
+      expect(await refusalSnapshot(w)).toEqual(laterBinding);
+      await w.db
+        .update(orderMail)
+        .set({ rawChecksum: "b".repeat(64) })
+        .where(eq(orderMail.id, mail.id));
+      const changedOriginal = await refusalSnapshot(w);
+      await expect(
+        commitAcceptedSourceOrderReconciliation(
+          ctx.db,
+          {
+            sourceOrderId: w.association.id,
+            reviewedPreparation: {
+              run: preparation.prepared.runId,
+              stableOrderId: "review-unknown-original",
+            },
+            resolution: w.newProductResolution,
+          },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/retained Email unchanged/);
+      expect(await refusalSnapshot(w)).toEqual(changedOriginal);
+    },
+  );
+  it.each(["missing", "retained"] as const)(
+    "binds from a fresh owned preparation with the original preparation %s",
+    async (preparation) => {
+      const w = await world();
+      const original = await w.db.query.sourceOrderObservation.findFirst({
+        where: eq(
+          sourceOrderObservation.id,
+          w.association.acceptedObservationId!,
+        ),
+      });
+      if (!original) throw new Error("Synthetic accepted observation missing");
+      if (preparation === "missing") {
+        await w.db.delete(importPreparedLine);
+        await w.db.delete(importPreparedOrder);
+        await w.db
+          .update(sourceOrderObservation)
+          .set({ runId: null })
+          .where(eq(sourceOrderObservation.id, original.id));
+      }
+      const retained = await w.db.query.sourceOrderObservation.findFirst({
+        where: eq(sourceOrderObservation.id, original.id),
+      });
+      const target = await w.db.query.purchase.findFirst({
+        where: eq(purchase.id, w.item.purchaseId!),
+      });
+      if (!target) throw new Error("Synthetic accepted Purchase missing");
+      await prepareMemberImport(ctx.db, ctx.actor, {
+        key: "fresh-original-review",
+        orders: [
+          {
+            stableOrderId: "fresh-original-review",
+            vendorId: w.vendor.shortcode,
+            targetPurchaseId: parseShortcodeFor("purchase", target.shortcode),
+            source: {
+              kind: "receipt_photo",
+              externalKey: "synthetic:photo-association",
+              checksum: original.checksum,
+            },
+            extraction: original.extraction,
+          },
+        ],
+      });
+      const before = await w.snapshot();
+      await w.commit(w.newProductResolution);
+      const after = await w.snapshot();
+      expect(after.expenses.find((row) => row.id === w.item.id)).toMatchObject({
+        cost: 40,
+        productQuantity: 2,
+      });
+      expect(
+        after.expenses.find((row) => row.id === w.item.id)?.productId,
+      ).not.toBeNull();
+      expect(after.attributions).toEqual(before.attributions);
+      expect(after.payments).toEqual(before.payments);
+      expect(after.stock).toEqual(before.stock);
+      expect(after.observations.find((row) => row.id === original.id)).toEqual(
+        retained,
+      );
+    },
+  );
   const refusalSnapshot = async (w: World) => ({
     ledger: await w.snapshot(),
     products: await w.db.select().from(product),

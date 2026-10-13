@@ -74,6 +74,7 @@ import { assertRunCapability } from "./capabilities";
 import { ensureMailVendorAccount } from "./gmail/mail-account";
 import { attachOrderLineThumbnails } from "./line-thumbnails";
 import { assertMailRunMembership } from "./mail-run-membership";
+import { assertMailSourceIdentityReady } from "./mail-source-identity";
 import { linkImportedMail } from "./mail-tool";
 import {
   MODEL_STYLE_MATCH_REASON,
@@ -208,6 +209,46 @@ async function preparedOrderVendor(
 }
 
 type RetainedMailSource = RetainedMail;
+
+/** Reuse import ownership and current-original gates for an explicit review. */
+export async function assertReviewedPreparationOriginal(
+  db: Database,
+  order: typeof importPreparedOrder.$inferSelect,
+  actor: ActorContext,
+  expectedLedgerPartyId: ImportScope["ledgerPartyId"],
+) {
+  if (order.sourceKind !== "mail_message")
+    throw new Error(
+      "A current original review requires retained order Email evidence.",
+    );
+  const scope = await loadImportScope(
+    db,
+    runEntityId.parse(order.runId),
+    actor,
+  );
+  if (scope.ledgerPartyId !== expectedLedgerPartyId)
+    throw new Error(
+      "Reviewed preparation must belong to the original source owner.",
+    );
+  const original = await retainedMailSource(
+    db,
+    scope,
+    {
+      kind: "mail_message",
+      externalKey: order.sourceExternalKey,
+      checksum: order.sourceChecksum,
+    },
+    order.evidenceChecksum,
+  );
+  if (
+    !original?.content.bodyText?.trim() &&
+    !original?.content.bodyHtml?.trim()
+  )
+    throw new Error(
+      "A current original review requires the retained full message body.",
+    );
+  await assertMailSourceIdentityReady(getDb(db), original);
+}
 
 /**
  * A mail-sourced order must name the member's own retained Email unchanged,

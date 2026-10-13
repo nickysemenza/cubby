@@ -67,9 +67,28 @@ historical alias key while the writer resolves its canonical family.
 When a new-Product repair refuses an exact unbound item Expense, its diagnostic
 identifies the exact-item or claim conflict. Mere additional shipping, delivery
 or cash-back sources remain provenance, without separate quotes or clearance.
+When a known immutable original has lost its preparation, independently review
+the retained original and call `purchase_import.prepare` with that exact source,
+checksum and extraction, targeting the existing Purchase. Do not commit that
+preparation as another purchase import. The Product-only repair may use one
+owned equivalent preparation; changed extraction, ambiguous preparations and
+conflicting Expense or Product identity still refuse. The historical observation
+is preserved rather than reconstructed from the current ledger.
+
 Unknown historical observations remain unknown. Do not bypass a genuine
 source-ownership refusal with generic Product creation. Financial corrections
 that change spend or allocations retain their existing reviewed-preview checks.
+
+An authentic retained Email can support a new current review even when the
+historical extraction is unknown. Prepare the complete literal order against
+the existing Purchase, then pass `reviewedPreparation: {run, stableOrderId}` to
+`commit_accepted_reconciliation`. The preparation must name the same canonical
+source, checksum, Vendor and order; its owned full original is checked again.
+An audit receipt records the selected preparation; equivalent observation
+content may reuse an existing immutable observation. The historical
+`originalOrder` stays unchanged. Existing exact item Expenses alone are bound;
+spend, payment evidence, allocations and stock stay unchanged. A known accepted original uses the normal path, and changed or
+unavailable originals remain blocked.
 
 Every accepted binding validates the current Expense title, quantity, role,
 basis and claims across the complete source-line roster before either replay
