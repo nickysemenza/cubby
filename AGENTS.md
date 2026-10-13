@@ -35,8 +35,7 @@
   if it changed since you read it, and read a region of a large one. Never `cd`
   — use absolute paths, `git -C`, and `pnpm --dir`, which also survives the
   per-call working directory reset.
-- The done report lists what the change deleted and names every check that did
-  not run.
+- The done report lists what the change deleted.
 - A correction becomes a rule in the doc that owns it. A repeated mistake means
   that rule is unclear: rewrite it in place.
 
@@ -145,5 +144,7 @@ user asks for a draft.
 The Cloud Agent environment starts Docker and `pnpm dev` on boot. Readiness is
 `http://localhost:3000/__dev/ready`; sign in at `http://localhost:3000/__dev/login`.
 On this Linux image the dev server accepts `localhost` (IPv6) and refuses
-`127.0.0.1`. Test Postgres/IntegreSQL is separate from that dev database:
-`docker compose -p cubby up -d --wait`.
+`127.0.0.1`. Test Postgres/IntegreSQL is separate from that dev database. On
+Linux/CI start it with `docker compose -p cubby up -d --wait`; on macOS
+`pnpm test:postgres` starts its own Apple `container` services on first use
+([development](docs/development.md)), so do not pre-check for Docker.
