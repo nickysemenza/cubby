@@ -285,7 +285,10 @@ test("suggests an existing variant and previews every merge decision for a creat
       .first(),
   ).toBeVisible();
   await group.getByRole("button", { name: "Approve item" }).click();
-  await expect(page.getByRole("link", { name: createdName })).toBeVisible();
+  // The run's connections panel links the created Product too.
+  await expect(
+    page.getByRole("heading", { name: `Approved · ${createdName}` }),
+  ).toBeVisible();
   let createdId: string | undefined;
   await expect
     .poll(async () => {
