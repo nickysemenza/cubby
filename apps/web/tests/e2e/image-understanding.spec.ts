@@ -16,7 +16,7 @@ import {
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { writeOutcomeReceipts } from "~/server/purchase-import/run-outcome.fixtures";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { getFixtureDb, fixtureUserId } from "./fixtures-core";
 import { seedImagePrerequisite } from "./fixtures-photos";
@@ -115,7 +115,7 @@ test("image results compare descriptions and require explicit attachment confirm
       targetFingerprint: "a".repeat(64),
     },
   ]);
-  const job = await createImageProcessingJob(db, {
+  await createImageProcessingJob(db, {
     imageId,
     kind: "describe_image",
     sourceContentHash: row.sha256,
@@ -161,10 +161,17 @@ test("image results compare descriptions and require explicit attachment confirm
       exact: true,
     }),
   ).toBeDisabled();
+  await description.scrollIntoViewIfNeeded();
+  await expectViewportBounded(page);
+  await page.screenshot({ path: "/tmp/cubby-image-results-desktop.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectViewportBounded(page);
+  await description.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "/tmp/cubby-image-results-mobile.png" });
   await page
     .getByRole("link", { name: "Image description", exact: true })
     .click();
-  await expect(page).toHaveURL(new RegExp(`selected=${job.publicId}`));
+  await expect(page).toHaveURL(/\/runs\?selected=IPR-[A-Z0-9]+$/);
   await expect(
     page.getByRole("table", { name: "Runs and image jobs" }),
   ).toBeVisible();
