@@ -123,6 +123,10 @@ Drizzle raw-`sql` traps: an interpolated column renders **unqualified** on a
 single-table select, including inside a nested projection. A correlated
 subquery can silently compare its own columns instead of the outer row;
 use explicit table aliases and literal qualified names for that correlation.
+A repeated SELECT/GROUP BY expression must use identical constants: separate
+bind parameters make PostgreSQL treat its copies as different expressions.
+Inline compile-time schema enum values with `sql.raw`, keeping user input bound;
+Drizzle's relational extras rebuild SQL and drop `.inlineParams()` flags.
 A JS array interpolates as
 a **row constructor**, not a Postgres array (use `eqAny`/`inArray`/
 `arrayOverlaps`/`uuidArrayParam`; the `no-unsafe-sql-array-interpolation`

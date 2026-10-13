@@ -785,6 +785,10 @@ generation refuses an unsupported expansion rather than dropping its scope.
 Applying a native saved view replaces filters and sort in one refresh. Storage
 enum fields without a registered column expression derive their values from
 the field's Zod read/create/update schema, including inheritance modes.
+Native manual reference selection applies the declaration's explicit-intent
+patch before its selected value, so choosing a value after Use inherited
+replaces the staged reset. Every filtered task presentation, including Next,
+charts, board, and timeline, forwards the actor for My tasks resolution.
 
 Three generic display rules follow from declarations rather than code. A
 select option's `description` is shown as the tooltip of its pill wherever

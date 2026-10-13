@@ -27,6 +27,10 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 const assignmentMode = fieldResolutionSchema.shape.mode.enum;
+// SELECT/GROUP BY need identical constants; relational extras drop inlineParams flags.
+// Only these compile-time schema values reach raw SQL, never user input.
+const explicitModeSql = sql.raw(`'${assignmentMode.explicit}'`);
+const inheritModeSql = sql.raw(`'${assignmentMode.inherit}'`);
 
 const taskColumn = (alias: string, column: string) =>
   sql.raw(`"${alias}"."${column}"`);
@@ -73,7 +77,7 @@ export const effectiveProjectLocationsSql = (
     )
     SELECT "locations"
     FROM project_ancestors
-    WHERE "locationsMode" = ${assignmentMode.explicit}
+    WHERE "locationsMode" = ${explicitModeSql}
     ORDER BY depth
     LIMIT 1
   ), '{}'::text[])
@@ -91,7 +95,7 @@ const projectAssigneeResolutionSql = (
     SELECT p."id", p."parentProjectId", p."assigneeId", p."assigneeMode", ancestors.depth + 1
     FROM "Project" p JOIN ancestors ON p."id" = ancestors."parentProjectId"
     WHERE p."deletedAt" IS NULL AND ancestors.depth < 100
-  ) SELECT ${sql.identifier(field)} FROM ancestors WHERE "assigneeMode" = ${assignmentMode.explicit} ORDER BY depth LIMIT 1
+  ) SELECT ${sql.identifier(field)} FROM ancestors WHERE "assigneeMode" = ${explicitModeSql} ORDER BY depth LIMIT 1
 )`;
 export const effectiveProjectAssigneeSql = (
   projectId: SQL,
@@ -103,15 +107,15 @@ const projectAssigneeSourceSql = (projectId: SQL): SQL<ProjectId | null> =>
 const parentTaskAssigneeSql = (
   alias: string,
 ): SQL<LedgerPartyId | null> => sql`(
-  SELECT CASE WHEN parent."assigneeMode" = ${assignmentMode.explicit} THEN parent."assigneeId"
+  SELECT CASE WHEN parent."assigneeMode" = ${explicitModeSql} THEN parent."assigneeId"
     ELSE ${effectiveProjectAssigneeSql(effectiveTaskProjectSql("parent"))} END
   FROM "Task" parent WHERE parent."id" = ${taskColumn(alias, "parentTaskId")} AND parent."deletedAt" IS NULL
 )`;
 const parentTaskAssigneeIsNoneSql = (alias: string) => sql`EXISTS (
   SELECT 1 FROM "Task" parent WHERE parent."id" = ${taskColumn(alias, "parentTaskId")}
     AND parent."deletedAt" IS NULL AND (
-      (parent."assigneeMode" = ${assignmentMode.explicit} AND parent."assigneeId" IS NULL)
-      OR (parent."assigneeMode" = ${assignmentMode.inherit} AND ${projectAssigneeSourceSql(effectiveTaskProjectSql("parent"))} IS NOT NULL
+      (parent."assigneeMode" = ${explicitModeSql} AND parent."assigneeId" IS NULL)
+      OR (parent."assigneeMode" = ${inheritModeSql} AND ${projectAssigneeSourceSql(effectiveTaskProjectSql("parent"))} IS NOT NULL
         AND ${effectiveProjectAssigneeSql(effectiveTaskProjectSql("parent"))} IS NULL)
     )
 )`;
@@ -123,7 +127,7 @@ const fallbackTaskAssigneeSql = (
 export const effectiveTaskAssigneeSql = (
   alias = "Task",
 ): SQL<LedgerPartyId | null> => sql`CASE
-  WHEN ${taskColumn(alias, "assigneeMode")} = ${assignmentMode.explicit} THEN ${taskColumn(alias, "assigneeId")}
+  WHEN ${taskColumn(alias, "assigneeMode")} = ${explicitModeSql} THEN ${taskColumn(alias, "assigneeId")}
   ELSE ${fallbackTaskAssigneeSql(alias)} END`;
 
 /** Effective task project: an explicit value (including NULL) or live parent. */
@@ -134,9 +138,9 @@ export const effectiveTaskProjectSql = (
   const value = taskColumn(alias, "projectId");
   const parentId = taskColumn(alias, "parentTaskId");
   return sql`
-    CASE WHEN ${mode} = ${assignmentMode.explicit} OR ${value} IS NOT NULL THEN ${value}
+    CASE WHEN ${mode} = ${explicitModeSql} OR ${value} IS NOT NULL THEN ${value}
     ELSE (
-      SELECT CASE WHEN parent."projectMode" = ${assignmentMode.explicit} OR parent."projectId" IS NOT NULL THEN parent."projectId"
+      SELECT CASE WHEN parent."projectMode" = ${explicitModeSql} OR parent."projectId" IS NOT NULL THEN parent."projectId"
         ELSE NULL END
       FROM "Task" parent
       WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL
@@ -152,9 +156,9 @@ export const effectiveTaskSubjectProductSql = (
   const value = taskColumn(alias, "subjectProductId");
   const parentId = taskColumn(alias, "parentTaskId");
   return sql`
-    CASE WHEN ${mode} = ${assignmentMode.explicit} OR ${value} IS NOT NULL THEN ${value}
+    CASE WHEN ${mode} = ${explicitModeSql} OR ${value} IS NOT NULL THEN ${value}
     ELSE (
-      SELECT CASE WHEN parent."subjectProductMode" = ${assignmentMode.explicit} OR parent."subjectProductId" IS NOT NULL THEN parent."subjectProductId"
+      SELECT CASE WHEN parent."subjectProductMode" = ${explicitModeSql} OR parent."subjectProductId" IS NOT NULL THEN parent."subjectProductId"
         ELSE NULL END
       FROM "Task" parent
       WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL

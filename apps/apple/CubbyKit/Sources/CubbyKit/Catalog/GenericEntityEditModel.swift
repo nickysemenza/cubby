@@ -181,6 +181,15 @@ public final class GenericEntityEditModel {
         return stageResolutionPayload(payload)
     }
 
+    /// A manual reference choice replaces any staged reset with the declaration's explicit intent.
+    @discardableResult
+    public func stageReferenceSelection(_ key: String, value: JSONValue) -> Bool {
+        guard let field = descriptor.field(key), field.reference != nil else { return false }
+        var payload = field.resolution?.none ?? [:]
+        payload[key] = value
+        return stage(payload)
+    }
+
     private func stageResolutionPayload(_ payload: [String: JSONValue]) -> Bool {
         stage(payload)
     }

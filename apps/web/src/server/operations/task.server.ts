@@ -66,7 +66,7 @@ export const taskBulkReorderWorkflow = Object.assign(
 
 export const taskHandlers = implementOperationDomain(taskContract, {
   listActionable: (context, input) =>
-    listActionableTasks(context.db, input ?? {}),
+    listActionableTasks(context.db, input ?? {}, context.actorContext),
   chartData: async (context, input) =>
     (
       await listAll((pagination) =>
@@ -75,6 +75,8 @@ export const taskHandlers = implementOperationDomain(taskContract, {
           input,
           [{ orderBy: "createdAt", direction: "desc" }],
           pagination,
+          "page",
+          context.actorContext,
         ),
       )
     ).data,

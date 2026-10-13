@@ -8,6 +8,7 @@ import { ledgerParty } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
 import { updateLedgerParty } from "./ledger-party";
 import { getProjectByID, updateProject } from "./project/crud";
+import { listActionableTasks } from "./task/actionable";
 import { getTaskByShortcode, updateTask } from "./task/crud";
 import { taskList } from "./task/lookup";
 
@@ -228,6 +229,12 @@ describe("member assignee inheritance", () => {
       ctx.actor,
     );
     expect(mine.data.map((row) => row.id)).toContain(task.output.id);
+    const actionable = await listActionableTasks(
+      ctx.db,
+      { assignedToMe: true },
+      ctx.actor,
+    );
+    expect(actionable.next.map((row) => row.id)).toContain(task.output.id);
     const unassigned = await taskList(
       ctx.db,
       { assigneePresenceFilter: "none" },
