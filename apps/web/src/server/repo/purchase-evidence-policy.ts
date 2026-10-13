@@ -114,7 +114,7 @@ const purchaseHasAllocationSql = (alias: string): SQL => sql`EXISTS (
  * `financial_transaction_products` axis already reports unlinked goods; adding
  * the per-line Product policy here planned its category resolution twice more
  * per transaction score and broke the planner-memory budget. */
-export const purchaseHasItemLinesSql = (alias: string): SQL => sql`(
+const purchaseHasItemLinesSql = (alias: string): SQL => sql`(
   EXISTS (SELECT 1 FROM "Expense" ep_line
     WHERE ep_line."purchaseId" = ${column(alias, "id")} AND ep_line."deletedAt" IS NULL
       AND ep_line.future = false AND ep_line."economicRole" = 'vendor'
