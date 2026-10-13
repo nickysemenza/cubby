@@ -79,6 +79,8 @@ test("Apple formatting is available without FFI or an app build", (t) => {
 test("native pass replay needs no FFI; misses prepare once and execute sequentially", (t) => {
   const root = mkdtempSync(join(tmpdir(), "apple-replay-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
+  // Match the real workspace instead of relying on Node's module detection.
+  writeFileSync(join(root, "package.json"), '{"type":"module"}');
   mkdirSync(join(root, "bin"));
   mkdirSync(join(root, "scripts/generator"), { recursive: true });
   writeFileSync(
@@ -92,7 +94,7 @@ test("native pass replay needs no FFI; misses prepare once and execute sequentia
   const pnpm = join(root, "bin/pnpm");
   writeFileSync(
     pnpm,
-    `#!${process.execPath}\nconst fs = require('node:fs'); fs.appendFileSync('calls', JSON.stringify(process.argv.slice(2)) + '\\n'); if(process.env.CUBBY_NX_CACHE_PROBE === '1' && fs.existsSync('miss')) process.exit(1);`,
+    `#!${process.execPath}\nimport fs from 'node:fs'; fs.appendFileSync('calls', JSON.stringify(process.argv.slice(2)) + '\\n'); if(process.env.CUBBY_NX_CACHE_PROBE === '1' && fs.existsSync('miss')) process.exit(1);`,
   );
   chmodSync(pnpm, 0o755);
   const previous = process.env.PATH;

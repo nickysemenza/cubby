@@ -10,6 +10,8 @@ command and relevant output; tests added after implementation do not satisfy
 this requirement. For `.tsx` changes, choose browser E2E when it observes
 the behavior; use the UI or preview tier for distinct rendering or layout
 failures. Keep pure logic imported by node tests in alias-free `.ts` files.
+Temporary subprocess workspaces declare their module type explicitly, matching
+the real consumer; do not rely on the local Node version's module detection.
 
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,
