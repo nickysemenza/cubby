@@ -971,7 +971,12 @@ export function createCurrencyColumn<
     isEmpty(v) ? (
       <NoneValue />
     ) : (
-      <CurrencyValue value={v} decimals={decimals} className={toneClass(v)} />
+      <CurrencyValue
+        value={v}
+        decimals={decimals}
+        className={toneClass(v)}
+        interactive={!editable}
+      />
     );
   return columnHelper.accessor((row: T) => row[accessor] ?? null, {
     id: String(accessor),

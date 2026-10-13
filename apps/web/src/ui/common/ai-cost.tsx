@@ -6,12 +6,8 @@ import {
   formatExactCurrency,
 } from "~/lib/number-format";
 export { formatAiCost, formatAiCostSubtotal } from "~/lib/number-format";
+import { CurrencyTooltip } from "~/ui/common/currency-value";
 import { StackedValue } from "~/ui/common/stacked-value";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
 
 export function AiCost({
   cost,
@@ -94,37 +90,31 @@ export function AiCost({
           formatExactCurrency(cost.standardCost),
         );
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            aria-label={`${primary}. ${secondary}. Full amounts and pricing evidence`}
-            className="block min-w-0"
-            style={{ textAlign: "inherit" }}
-          />
+    <CurrencyTooltip
+      label={`${primary}. ${secondary}. Full amounts and pricing evidence`}
+      className="block min-w-0"
+      details={
+        <>
+          <div>Charged: {fullCharged}</div>
+          <div>Standard: {fullStandard}</div>
+          {provenance && <div>{provenance}</div>}
+        </>
+      }
+    >
+      <StackedValue
+        primary={primary}
+        secondary={secondary}
+        primarySpillText={
+          cost.chargedCost !== 0 && fullCharged !== charged
+            ? primary.replace(charged, fullCharged)
+            : undefined
         }
-      >
-        <StackedValue
-          primary={primary}
-          secondary={secondary}
-          primarySpillText={
-            cost.chargedCost !== 0 && fullCharged !== charged
-              ? primary.replace(charged, fullCharged)
-              : undefined
-          }
-          secondarySpillText={
-            cost.standardCost !== 0 && fullStandard !== standard
-              ? secondary.replace(standard, fullStandard)
-              : undefined
-          }
-        />
-      </TooltipTrigger>
-      <TooltipContent className="break-all">
-        <div>Charged: {fullCharged}</div>
-        <div>Standard: {fullStandard}</div>
-        {provenance && <div>{provenance}</div>}
-      </TooltipContent>
-    </Tooltip>
+        secondarySpillText={
+          cost.standardCost !== 0 && fullStandard !== standard
+            ? secondary.replace(standard, fullStandard)
+            : undefined
+        }
+      />
+    </CurrencyTooltip>
   );
 }

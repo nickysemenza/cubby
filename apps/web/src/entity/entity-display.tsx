@@ -1245,7 +1245,13 @@ function renderEditableField<TRecord extends object>(
           clipboard={clipboard}
           onSave={save}
           renderValue={(v) =>
-            displayed(v === null ? <NoneValue /> : formatCurrency(v))
+            displayed(
+              v === null ? (
+                <NoneValue />
+              ) : (
+                <CurrencyValue value={v} interactive={false} />
+              ),
+            )
           }
         />
       ) : (
