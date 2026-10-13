@@ -1,0 +1,47 @@
+.github/actions/setup-apple/action.yml
+  s_73fe69dd841a24::t_b30422b1105f95 1-47
+.github/workflows/apple-testflight.yaml
+  s_73fe69dd841a24::t_1ea0517b408873 153,156-158,216-229,241-248
+.github/workflows/ci.yaml
+  s_73fe69dd841a24::t_f00952ed22d39e 51,152-159,170,303-307,309,314,316,324-325,327-328,330-331,418,420,458-462,469-472,477-479
+.github/workflows/e2e-journeys.yaml
+  s_73fe69dd841a24::t_c4464acd9e0628 90-91,93,95,100,339
+apps/apple/scripts/testflight.sh
+  s_73fe69dd841a24::t_5b36093c79e8e2 152-153
+scripts/generator/http-api/native-document.ts
+  s_73fe69dd841a24::t_f6a5e233537639 3,13-36,41,59-63
+scripts/generator/http-api/openapi.ts
+  s_73fe69dd841a24::t_19a60e7b157a96 39,554,564,568
+.github/actions/start-native-postgres/action.yml
+  s_73fe69dd841a24::t_3c8eb3f0e317bd 1-16
+scripts/apple-check.sh
+  s_592d57463ec55d::t_350e667a2d9423 96-99,115-116
+apps/apple/CubbyKit/Sources/CubbyAPI/README.md
+  s_73fe69dd841a24::t_cb5790db071424 15-19
+docs/ci.md
+  s_73fe69dd841a24::t_179404a8fc2fbc 16-18,294-297,313-317,392-393,509-513
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "eaf64bc112effe6e27643bd0b3ae5df717cd79d7",
+  "prompts": {},
+  "sessions": {
+    "s_592d57463ec55d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6824d2e5-eeb4-4cfc-92ec-ee2de393b582",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_73fe69dd841a24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96d21c32-0fd2-4535-be08-daa98aa3f469",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
