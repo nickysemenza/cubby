@@ -82,36 +82,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.route.outputs.ref }}
-      - uses: ./.github/actions/setup-apple-toolchain
       - name: Set PR context for the GitHub reporter
         if: needs.route.outputs.pull-request != ''
         env:
           TESTER_ARMY_PULL_REQUEST: ${{ needs.route.outputs.pull-request }}
         run: node -e 'const fs = require("node:fs"); const path = process.env.GITHUB_EVENT_PATH; const event = JSON.parse(fs.readFileSync(path)); event.pull_request = JSON.parse(process.env.TESTER_ARMY_PULL_REQUEST); fs.writeFileSync(path, JSON.stringify(event));'
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: restore
-      - uses: ./.github/actions/setup-apple-ffi
-        with:
-          targets: sim
-      - uses: ./.github/actions/setup-apple-tools
-      - uses: ./.github/actions/setup-apple-build-cache
+      - uses: ./.github/actions/setup-apple
         id: derived-data
+        with:
+          ffi-targets: sim
+          wasm: restore
+          build-cache: "true"
       - uses: ./.github/actions/setup-apple-test-runner-cache
         id: test-runner
         with:
           toolchain-hash: ${{ steps.derived-data.outputs.toolchain-hash }}
-      - name: Start native PostgreSQL 17 with pgvector
-        shell: bash
-        run: |
-          set -euo pipefail
-          brew install postgresql@17 pgvector
-          pg_bin="$(brew --prefix postgresql@17)/bin"
-          echo "$pg_bin" >> "$GITHUB_PATH"
-          "$pg_bin/initdb" -D "$RUNNER_TEMP/cubby-sim-pg" -A trust -U postgres
-          "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/cubby-sim-pg" -l "$RUNNER_TEMP/cubby-sim-pg.log" -o '-h 127.0.0.1 -p 55432' start
-          "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "ALTER USER postgres WITH PASSWORD 'password'"
-          "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -Atc "SELECT name FROM pg_available_extensions WHERE name = 'vector'" | grep -qx vector
+      - uses: ./.github/actions/start-native-postgres
       - name: Run native read and write against a disposable database
         env:
           CUBBY_SIM_DB_EXTERNAL: "1"
@@ -350,17 +336,7 @@ jobs:
         id: test-runner
         with:
           toolchain-hash: ${{ steps.native-xcode.outputs.hash }}
-      - name: Start native PostgreSQL 17 with pgvector
-        shell: bash
-        run: |
-          set -euo pipefail
-          brew install postgresql@17 pgvector
-          pg_bin="$(brew --prefix postgresql@17)/bin"
-          echo "$pg_bin" >> "$GITHUB_PATH"
-          "$pg_bin/initdb" -D "$RUNNER_TEMP/cubby-sim-pg" -A trust -U postgres
-          "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/cubby-sim-pg" -l "$RUNNER_TEMP/cubby-sim-pg.log" -o '-h 127.0.0.1 -p 55432' start
-          "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "ALTER USER postgres WITH PASSWORD 'password'"
-          "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -Atc "SELECT name FROM pg_available_extensions WHERE name = 'vector'" | grep -qx vector
+      - uses: ./.github/actions/start-native-postgres
       - run: pnpm test:e2e:agent:ios
       - name: Save Apple test runner cache
         uses: ./.github/actions/save-apple-test-runner-cache

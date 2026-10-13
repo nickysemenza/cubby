@@ -13,8 +13,9 @@ lane at all. Merging to `main`
 independently deploys the web Worker, including after a
 documentation-only change; deployment never waits for post-merge CI.
 
-`ci.yaml` holds the required checks and an optional purchase-import browser
-lane. Validation exposes generation, tokens, TypeScript, lint, Knip, bindings,
+`ci.yaml` holds the required checks and one `optional` matrix job whose
+entries `Plan` builds: the purchase-import browser lane when its lane is
+selected, and the live Email decisions on a manual dispatch. Validation exposes generation, tokens, TypeScript, lint, Knip, bindings,
 tooling tests, routing drift and Worker tests as named
 steps on one runner. Once setup succeeds, independent steps run despite earlier
 check failures; their failures still fail the job. Cancellation stops further
@@ -290,8 +291,10 @@ The generated `CubbyAPI` target forwards `-gline-tables-only` directly to the
 Swift frontend, so the driver's default `-g` does not restore full debug type
 information. Handwritten Swift targets retain their normal debug information.
 
-The Xcode project and host package-test command enable Apple's compilation cache
-and its hit/miss remarks. Content-addressed results live in
+Both native `xcodebuild` commands enable Apple's compilation cache and its
+hit/miss remarks on the command line, so the SwiftPM package targets
+(`CubbyAPI`, `CubbyKit`) use it too; the Xcode project's own setting reaches
+only the app targets. Content-addressed results live in
 `DerivedData/CompilationCache.noindex` for the simulator and
 `CubbyKit/.build/xcode/CompilationCache.noindex` for the host, inside their
 successful-build caches. This can replay compiler work when
@@ -307,6 +310,11 @@ The earlier simulator-test job ran `xcodebuild test` on a concrete simulator:
 first boot cost about 6 minutes plus roughly 10 minutes of CPU starvation
 (a 5s script took 2.6 minutes, and compilation doubled). Host tests and the
 generic-simulator app build keep that simulator work excluded.
+`.github/actions/setup-apple` composes the native setup every macOS job but
+the Tester Army iOS lane uses: Xcode selection, the optional workspace
+install, the FFI slices, the Apple tools, and the optional simulator
+DerivedData restore. `.github/actions/start-native-postgres` starts the macOS
+E2E jobs' PostgreSQL, which cannot run service containers.
 `.github/actions/setup-apple-tools` installs XcodeGen and restores
 `apps/apple/SourcePackages`, the `xcodebuild`-resolved SPM clones for Sentry,
 GRDB, Nuke and swift-openapi-generator (previously an uncached "Resolve Package
@@ -381,8 +389,8 @@ lanes, and the exact jobs it skipped.
 `ubuntu-slim`). It needs every lane and fails on any failure or cancellation,
 and on any skip other than the jobs `Plan` skipped or an Apple job whose probe
 verified a cached pass. Manual CI dispatch also runs the informational live Email
-decision job outside `CI passed`, calling Jev and Clef on synthetic cases through
-the real gateway with `AI_GATEWAY_API_KEY`. Failures do not block the deterministic
+decision entry of the `optional` job outside `CI passed`, calling Jev and Clef on synthetic cases through
+the real gateway with `AI_GATEWAY_API_KEY` (passed only to that entry's step). Failures do not block the deterministic
 merge gate. Real member inputs are refused in CI. A failed probe is allowed: it only sends both Apple
 lanes to macOS. On success it uploads the `tested-tree-<tree>` artifact
 (retained 14 days) that lets a `main` push of the same tree skip every lane.
@@ -498,7 +506,11 @@ checkpoint JSON (`sha`, `version`, `build`, `uploadedAt`); only that job has
 upload, and `git tag --list 'testflight/*'` is the upload history. No-op and
 partial releases do not advance it. No tag rebuilds; a malformed or
 lightweight tag fails the plan. A partial failure's next fresh run rebuilds
-both platforms.
+both platforms. Each platform's archive enables Xcode's compilation cache for
+every target and restores `xcode-release-v1-<platform>`, the newest main
+release's content-addressed results (~1 GB each), so unchanged Swift, the
+generated client included, replays instead of compiling; a successful main
+release saves a new entry.
 
 Uploads are internal-only with automatic group distribution. Verify processing
 and installation in TestFlight after publishing: upload acceptance alone does

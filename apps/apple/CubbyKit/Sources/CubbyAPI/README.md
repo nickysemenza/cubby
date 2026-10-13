@@ -12,6 +12,11 @@ web document remains the complete HTTP API; edits to unused HTTP contracts do
 not rewrite the Apple document. The same operation selection writes the Swift
 generator config. Redocly bundles the projection and removes unused components,
 so reference and security handling follow the maintained OpenAPI tooling.
+The `entity.listBase`, `entity.listEnrichment`, and `entity.listSummary`
+responses are untyped objects here (`nativeComponents` in
+`native-document.ts`): native lists read them as `JSONValue` through the
+entity manifest, so their per-entity variants were compile cost only. The
+wire format is unchanged.
 
 Positional `_schemaNN` names are assigned at schema registration and can
 renumber when a new schema is added; `apps/apple/AGENTS.md` forbids naming

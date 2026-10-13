@@ -1,0 +1,16 @@
+name: Start native PostgreSQL
+description: Start a disposable PostgreSQL 17 with pgvector on 127.0.0.1:55432 for macOS jobs, which cannot run service containers.
+runs:
+  using: composite
+  steps:
+    - name: Start native PostgreSQL 17 with pgvector
+      shell: bash
+      run: |
+        set -euo pipefail
+        brew install postgresql@17 pgvector
+        pg_bin="$(brew --prefix postgresql@17)/bin"
+        echo "$pg_bin" >> "$GITHUB_PATH"
+        "$pg_bin/initdb" -D "$RUNNER_TEMP/cubby-sim-pg" -A trust -U postgres
+        "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/cubby-sim-pg" -l "$RUNNER_TEMP/cubby-sim-pg.log" -o '-h 127.0.0.1 -p 55432' start
+        "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "ALTER USER postgres WITH PASSWORD 'password'"
+        "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -Atc "SELECT name FROM pg_available_extensions WHERE name = 'vector'" | grep -qx vector

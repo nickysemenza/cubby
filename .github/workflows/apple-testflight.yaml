@@ -142,23 +142,20 @@ jobs:
           ref: ${{ needs.plan.outputs.sha }}
 
       # `runner` isn't available in a job-level `env:` block.
-      - uses: ./.github/actions/setup-apple-toolchain
       - name: Resolve output directory
         run: echo "TESTFLIGHT_OUTPUT_DIR=$RUNNER_TEMP/CubbyTestFlight" >> "$GITHUB_ENV"
-
-      - uses: ./.github/actions/setup-apple-ffi
-        with:
-          targets: ${{ matrix.platform == 'ios' && 'device' || 'mac' }}
-          profile: dist
 
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: apple-generated
           path: apps/apple
 
-      - uses: ./.github/actions/setup-apple-tools
+      - uses: ./.github/actions/setup-apple
         id: apple-tools
         with:
+          node: "false"
+          ffi-targets: ${{ matrix.platform == 'ios' && 'device' || 'mac' }}
+          ffi-profile: dist
           sentry-cli: "true"
 
       - name: Generate the Xcode project
@@ -216,6 +213,20 @@ jobs:
           api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
 
+      # The archive replays unchanged compiler work, packages included, from
+      # the newest main release's content-addressed cache; a local Release
+      # build measured 363s cold and 26s from a restored cache.
+      - name: Compute Xcode version hash
+        id: xcode-version
+        run: echo "hash=$(xcodebuild -version 2>&1 | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Restore release compilation cache
+        id: release-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ env.TESTFLIGHT_OUTPUT_DIR }}/DerivedData/CompilationCache.noindex
+          key: xcode-release-v1-${{ matrix.platform }}-${{ steps.xcode-version.outputs.hash }}-${{ needs.plan.outputs.sha }}
+          restore-keys: xcode-release-v1-${{ matrix.platform }}-${{ steps.xcode-version.outputs.hash }}-
+
       - name: Archive, verify, and upload ${{ matrix.platform }}
         env:
           RELEASE_VERSION: ${{ needs.plan.outputs.version }}
@@ -226,6 +237,14 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           GITHUB_TOKEN: ${{ github.token }}
         run: apps/apple/scripts/testflight.sh '${{ matrix.platform }}'
+
+      - name: Save release compilation cache
+        uses: ./.github/actions/save-cache-main-only
+        with:
+          path: ${{ env.TESTFLIGHT_OUTPUT_DIR }}/DerivedData/CompilationCache.noindex
+          key: ${{ steps.release-cache.outputs.cache-primary-key }}
+          cache-hit: ${{ steps.release-cache.outputs.cache-hit }}
+          matched-key: ${{ steps.release-cache.outputs.cache-matched-key }}
 
       # Dependency clones are advisory and can be reused after an archive
       # failure. This is not a compiled-output cache. A concurrent save of

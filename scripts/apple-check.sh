@@ -93,7 +93,10 @@ apps/apple/scripts/prepare-project.sh
 
 # Apple Silicon's native simulator slice only: project.yml's simulator
 # EXCLUDED_ARCHS covers only the app's own targets, so without ARCHS=arm64
-# every SPM package (CubbyAPI included) also compiles for x86_64. Package
+# every SPM package (CubbyAPI included) also compiles for x86_64. Likewise
+# project.yml's compilation-cache settings reach only the app targets; the
+# command line extends them to the packages so restored DerivedData replays
+# CubbyAPI and CubbyKit instead of recompiling them. Package
 # clones live in apps/apple/SourcePackages, which CI caches between runs.
 xcodebuild -showBuildTimingSummary \
   -project apps/apple/Cubby.xcodeproj \
@@ -109,4 +112,6 @@ xcodebuild -showBuildTimingSummary \
   ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO \
+  COMPILATION_CACHE_ENABLE_CACHING=YES \
+  COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES \
   build
