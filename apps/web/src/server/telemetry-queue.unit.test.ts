@@ -89,21 +89,19 @@ it("reconstructs only the legacy token-only billed message before persistence", 
       original: { estimatedCost: null },
     },
   };
-  const snapshot = vi
-    .fn<typeof snapshotAiUsagePrice>()
-    .mockResolvedValue({
-      amount: 0.003,
-      evidence: {
-        source: "estimate",
-        pricingSource: "models.dev",
-        pricingSnapshot: {
-          provider: "openai",
-          model: "gpt-6-sol",
-          capturedAt: "2026-01-01T00:00:00Z",
-          rates: { input: 1, output: 2 },
-        },
+  const snapshot = vi.fn<typeof snapshotAiUsagePrice>().mockResolvedValue({
+    amount: 0.003,
+    evidence: {
+      source: "estimate",
+      pricingSource: "models.dev",
+      pricingSnapshot: {
+        provider: "openai",
+        model: "gpt-6-sol",
+        capturedAt: "2026-01-01T00:00:00Z",
+        rates: { input: 1, output: 2 },
       },
-    });
+    },
+  });
   const persisted: TelemetryMessageV1[] = [];
   await processTelemetryQueueBatch(
     db,
@@ -139,21 +137,19 @@ it("reconstructs only the legacy token-only billed message before persistence", 
 });
 
 it("preserves numeric legacy figures and keeps unsupported or inconsistent billed usage unknown", async () => {
-  const snapshot = vi
-    .fn<typeof snapshotAiUsagePrice>()
-    .mockResolvedValue({
-      amount: 0.003,
-      evidence: {
-        source: "estimate",
-        pricingSource: "models.dev",
-        pricingSnapshot: {
-          provider: "openai",
-          model: "gpt-6-sol",
-          capturedAt: "2026-01-01T00:00:00Z",
-          rates: { input: 1, output: 2 },
-        },
+  const snapshot = vi.fn<typeof snapshotAiUsagePrice>().mockResolvedValue({
+    amount: 0.003,
+    evidence: {
+      source: "estimate",
+      pricingSource: "models.dev",
+      pricingSnapshot: {
+        provider: "openai",
+        model: "gpt-6-sol",
+        capturedAt: "2026-01-01T00:00:00Z",
+        rates: { input: 1, output: 2 },
       },
-    });
+    },
+  });
   const bodies = [
     { ...legacyAiEvent, transport: "direct", estimatedCost: 0.007 },
     { ...legacyAiEvent, transport: "chatgpt", estimatedCost: 0.009 },
