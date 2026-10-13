@@ -6,8 +6,8 @@ import { RunWorkFacts } from "~/app/runs/run-work-summary";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
-import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -72,9 +72,15 @@ export function ActivityRunDetail({
           <div>
             <CardTitle>{run?.workLabel ?? "Work detail"}</CardTitle>
             <CardDescription>
-              {run
-                ? `${run.id} · ${run.recordType === "run" ? "Run" : "Image job"} · ${workStateLabel(run.state)} · ${formatInstant(run.createdAt, "dateTime")}`
-                : id}
+              {run ? (
+                <>
+                  {run.id} · {run.recordType === "run" ? "Run" : "Image job"} ·{" "}
+                  {workStateLabel(run.state)} ·{" "}
+                  <DateDisplay timestamp={run.createdAt} />
+                </>
+              ) : (
+                id
+              )}
             </CardDescription>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
@@ -152,7 +158,7 @@ export function ActivityRunDetail({
                   <Row justify="between" gap="sm" wrap>
                     <span>
                       #{attempt.number} · {workStateLabel(attempt.state)} ·{" "}
-                      {formatInstant(attempt.startedAt, "dateTime")}
+                      <DateDisplay timestamp={attempt.startedAt} />
                     </span>
                     <Row gap="xs">
                       {attempt.diagnosticsJson ? (
@@ -234,7 +240,7 @@ export function ActivityRunDetail({
               >
                 <Row justify="between" gap="sm" wrap>
                   <span>
-                    {formatInstant(event.occurredAt, "dateTime")} ·{" "}
+                    <DateDisplay timestamp={event.occurredAt} /> ·{" "}
                     {event.source} · {event.event}
                   </span>
                   {event.detailsJson ? (

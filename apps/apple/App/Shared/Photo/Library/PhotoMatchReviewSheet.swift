@@ -124,7 +124,7 @@ struct PhotoMatchReviewContent: View {
                     Image(decorative: item.preview, scale: 1).resizable().scaledToFit()
                         .frame(maxHeight: 180).frame(maxWidth: .infinity)
                     if let date = item.capturedAt {
-                        Text(date.formatted(date: .abbreviated, time: .shortened)).font(.caption)
+                        DateDisplay(date: date).font(.caption)
                     }
                     let matches = candidates(item)
                     if matches.isEmpty {

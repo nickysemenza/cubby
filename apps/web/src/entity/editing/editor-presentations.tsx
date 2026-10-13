@@ -25,7 +25,7 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import type { PendingImage } from "~/entity/entity-media/PendingImageUpload";
-import { formatCalendarDay } from "~/lib/date-format";
+import { formatDateSpan } from "~/lib/date-span";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { AliasesField } from "~/ui/forms/aliases-field";
 import { Row, Stack } from "~/ui/layout";
@@ -513,7 +513,7 @@ const presentations = {
       if (result.name) {
         return `Added "${result.name}"`;
       }
-      return `Added meal for ${formatCalendarDay(result.date, "weekdayMonthDay")}`;
+      return `Added meal for ${formatDateSpan(result.date, null)}`;
     },
   },
   "task:create:capture": {

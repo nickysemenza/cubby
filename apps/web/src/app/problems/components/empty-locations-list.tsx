@@ -4,7 +4,7 @@ import { type ReactNode, useState } from "react";
 
 import { EntityCover } from "~/entity/components/entity-cover";
 import { entityDetailLink } from "~/entity/entities";
-import { formatRelative } from "~/lib/date-format";
+import { DateDisplay } from "~/ui/common/date-display";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -64,7 +64,8 @@ export function EmptyLocationsList({
                 className="text-sm text-muted-foreground"
               >
                 <CalendarIcon className="size-3" />
-                Last inventory {formatRelative(location.lastBulkInventory)}
+                Last inventory{" "}
+                <DateDisplay timestamp={location.lastBulkInventory} />
               </Row>,
             );
           }

@@ -48,7 +48,7 @@ struct AIReviewSheet: View {
     }
 
     private var provenance: String {
-        let age = review.analyzedAt.formatted(date: .abbreviated, time: .shortened)
+        let age = DatePresentation.timestamp(review.analyzedAt).text
         let source = review.cacheStatus == "hit" ? "Replayed a stored analysis" : "Read the photos again"
         return "\(source) · \(review.model) · \(age)"
     }

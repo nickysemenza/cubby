@@ -3,7 +3,8 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySourceRead } from "@cubby/schemas/entity-source";
 import { z } from "zod";
 
-import { formatInstant } from "~/lib/date-format";
+import { formatTimestamp } from "~/lib/date-format";
+import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Badge } from "~/ui/primitives/badge";
 
@@ -97,11 +98,10 @@ export function EntitySourcesSection({
           }
           trailing={
             <span
-              title={`Recorded ${formatInstant(source.createdAt, "dateShort")} by ${recorderLabel(source.recorder)}`}
+              title={`Recorded ${formatTimestamp(source.createdAt)} by ${recorderLabel(source.recorder)}`}
             >
-              {source.observedAt
-                ? `Seen ${formatInstant(source.observedAt, "dateShort")}`
-                : formatInstant(source.createdAt, "dateShort")}
+              {source.observedAt ? "Seen " : null}
+              <DateDisplay timestamp={source.observedAt ?? source.createdAt} />
             </span>
           }
           detail={

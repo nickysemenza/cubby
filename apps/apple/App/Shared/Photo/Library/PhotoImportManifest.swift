@@ -1345,7 +1345,7 @@ final class PhotoImportManifest {
     ) -> String {
         let classifications = analysis.classifications.prefix(4).map(\.identifier).joined(separator: ", ")
         let text = analysis.recognizedText.prefix(4).map(\.text).joined(separator: " ")
-        let date = analysis.capturedAt?.formatted(date: .abbreviated, time: .omitted) ?? "unknown date"
+        let date = analysis.capturedAt.map { DatePresentation.timestamp($0).absolute } ?? "unknown date"
         let identity =
             authoritativeOwners.isEmpty
             ? "" : " Matched authoritative image: \(authoritativeOwners.sorted().joined(separator: ", "))."

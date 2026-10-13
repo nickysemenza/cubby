@@ -14,7 +14,7 @@ import {
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { CalendarDate } from "~/ui/common/calendar-date";
+import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { SectionHeading } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -120,7 +120,7 @@ function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
       }
       trailing={
         <span className="font-mono text-2xs tabular-nums">
-          <CalendarDate start={item.dueDate} end={item.dueEndDate} />
+          <DateDisplay start={item.dueDate} end={item.dueEndDate} />
         </span>
       }
     />

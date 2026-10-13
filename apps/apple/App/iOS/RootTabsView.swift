@@ -108,7 +108,7 @@ private struct LibraryRecentThumbnail: View {
         }
         .frame(width: 112, height: 112)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .accessibilityLabel(asset.creationDate?.formatted(date: .abbreviated, time: .omitted) ?? "Photo")
+        .accessibilityLabel(asset.creationDate.map { DatePresentation.timestamp($0).text } ?? "Photo")
         .task(id: asset.localIdentifier) {
             thumbnail = try? await PhotoLibraryIO.shared.thumbnail(for: asset)
         }

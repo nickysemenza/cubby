@@ -4,8 +4,8 @@ import { useState } from "react";
 
 import { OrphanedClientMaintenance } from "~/app/account/orphaned-client-maintenance";
 import { oauth } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatInstant } from "~/lib/date-format";
 import { pageTitle } from "~/lib/page-title";
+import { DateDisplay } from "~/ui/common/date-display";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
@@ -129,14 +129,18 @@ function ConnectedAppsPage() {
                   </Row>
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
-                  {app.grantedAt
-                    ? formatInstant(app.grantedAt, "dateNumeric")
-                    : "—"}
+                  {app.grantedAt ? (
+                    <DateDisplay timestamp={app.grantedAt} stacked />
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
-                  {app.lastActiveAt
-                    ? formatInstant(app.lastActiveAt, "dateTime")
-                    : "never"}
+                  {app.lastActiveAt ? (
+                    <DateDisplay timestamp={app.lastActiveAt} stacked />
+                  ) : (
+                    "never"
+                  )}
                 </TableCell>
                 <TableCell className="font-mono text-xs">
                   {app.activeTokens}

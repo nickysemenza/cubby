@@ -30,8 +30,10 @@ import {
 import type { TimelineEntity } from "~/entity/generated/entity-timelines.gen";
 import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
+import { formatDateSpan } from "~/lib/date-span";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCount, formatCurrency } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import { RecordHeading, RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { DatePickerInput } from "~/ui/date-picker-input";
@@ -394,9 +396,11 @@ function EventGroup({
             <span className="flex flex-wrap items-baseline gap-2">
               {showDate ? (
                 <span className="tabular-nums">
-                  {group.date === null
-                    ? "Date unknown"
-                    : formatCalendarDay(group.date, "dateShort")}
+                  {group.date === null ? (
+                    "Date unknown"
+                  ) : (
+                    <DateDisplay start={group.date} />
+                  )}
                 </span>
               ) : null}
               {group.label && (
@@ -525,7 +529,9 @@ function LifecyclesView({
                       key={`${interval.start}:${interval.end ?? "open"}`}
                       title={
                         interval.confident
-                          ? `${formatCalendarDay(interval.start, "dateShort")} – ${interval.end ? formatCalendarDay(interval.end, "dateShort") : "open"}`
+                          ? interval.end
+                            ? formatDateSpan(interval.start, interval.end)
+                            : `${formatCalendarDay(interval.start, "dateShort")} – open`
                           : `Uncertain after ${formatCalendarDay(interval.start, "dateShort")}`
                       }
                       className={cn(
@@ -557,7 +563,7 @@ function LifecyclesView({
                       }
                     />
                     <TooltipContent>
-                      {formatCalendarDay(marker.date, "dateShort")} ·{" "}
+                      <DateDisplay start={marker.date} /> ·{" "}
                       {kindLabel(marker.kind)}
                     </TooltipContent>
                   </Tooltip>

@@ -16,7 +16,7 @@ import { householdLocalDate } from "~/lib/household-date";
 import { statusTone } from "~/lib/status-tone";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { cn } from "~/lib/utils";
-import { CalendarDate } from "~/ui/common/calendar-date";
+import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -266,7 +266,7 @@ export function TaskCard({
                 overdue && "text-destructive",
               )}
             >
-              <CalendarDate start={task.dueDate} end={task.dueEndDate} />
+              <DateDisplay start={task.dueDate} end={task.dueEndDate} />
             </span>
           )}
           {showStatus && (

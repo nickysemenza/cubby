@@ -2,7 +2,6 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import { formatInstant } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Skeleton } from "~/ui/primitives/skeleton";
@@ -269,24 +268,6 @@ export function RecordDot({
       />
       <span className="sr-only">{label}</span>
     </span>
-  );
-}
-
-/** A trailing instant; rows under a shared day heading print only their time. */
-export function RecordTime({
-  at,
-  dayShown = false,
-}: {
-  at: string | Date;
-  dayShown?: boolean;
-}) {
-  return (
-    <time
-      dateTime={typeof at === "string" ? at : at.toISOString()}
-      title={formatInstant(at, "dateShortTime")}
-    >
-      {formatInstant(at, dayShown ? "time" : "monthDayTime")}
-    </time>
   );
 }
 

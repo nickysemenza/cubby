@@ -13,8 +13,8 @@ import { type ReactNode, useId, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatInstant } from "~/lib/date-format";
 import { formatCount, formatCurrency } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import RTable from "~/ui/data-table/Table";
 import {
@@ -418,7 +418,7 @@ function RecentTable({
           header: "Created",
           size: 170,
           meta: { mono: true, mobile: { slot: "subtitle", priority: 0 } },
-          cell: ({ getValue }) => formatInstant(getValue(), "dateTime"),
+          cell: ({ getValue }) => <DateDisplay timestamp={getValue()} />,
         }),
       );
       add(

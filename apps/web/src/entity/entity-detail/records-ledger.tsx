@@ -4,14 +4,14 @@ import type {
 } from "@cubby/schemas/entity-report";
 import { type ReactNode, useState } from "react";
 
-import { formatInstant } from "~/lib/date-format";
+import { householdLocalDate } from "~/lib/household-date";
 import { cn } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import {
   RecordDetail,
   RecordDot,
   RecordList,
   RecordRow,
-  RecordTime,
 } from "~/ui/common/record-list";
 import { Badge } from "~/ui/primitives/badge";
 import { Button, buttonVariants } from "~/ui/primitives/button";
@@ -54,10 +54,14 @@ export function ledgerLayout(
   };
 }
 
-/** The household day every timed row shares, so rows print only their time; null when they differ. */
+/** A shared household day for the records heading; null when rows span days. */
 function ledgerDay(rows: readonly ReportRecordRow[]) {
   const days = new Set(
-    rows.flatMap((row) => (row.at ? [formatInstant(row.at, "dateShort")] : [])),
+    rows.flatMap((row) =>
+      row.at && !Number.isNaN(new Date(row.at).getTime())
+        ? [householdLocalDate(new Date(row.at))]
+        : [],
+    ),
   );
   return days.size === 1 ? [...days][0]! : null;
 }
@@ -115,11 +119,9 @@ function RowText({
 
 function LedgerRow({
   row,
-  day,
   commands,
 }: {
   row: ReportRecordRow;
-  day: string | null;
   commands: ReportCommands;
 }) {
   // A command that needs input opens beneath its row instead of standing open on every row.
@@ -154,7 +156,7 @@ function LedgerRow({
       trailing={
         <>
           {row.trailing ? <span>{row.trailing} </span> : null}
-          {row.at ? <RecordTime at={row.at} dayShown={day !== null} /> : null}
+          {row.at ? <DateDisplay timestamp={row.at} /> : null}
         </>
       }
       actions={
@@ -242,18 +244,16 @@ function LedgerCommands({
  */
 export function RecordLedger({
   rows,
-  day,
   commands,
 }: {
   rows: readonly ReportRecordRow[];
-  day: string | null;
   commands: ReportCommands;
 }) {
   const keys = rowKeys(rows);
   return (
     <RecordList>
       {rows.map((row, index) => (
-        <LedgerRow key={keys[index]} row={row} day={day} commands={commands} />
+        <LedgerRow key={keys[index]} row={row} commands={commands} />
       ))}
     </RecordList>
   );

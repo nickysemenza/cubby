@@ -756,7 +756,7 @@ private struct PhotoLibraryCell: View {
     }
 
     private var cellAccessibilityLabel: String {
-        let date = asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Undated photo"
+        let date = asset.creationDate.map { DatePresentation.timestamp($0).text } ?? "Undated photo"
         return "\(date), \(cellState.accessibilityStatus)"
     }
 }
@@ -822,7 +822,7 @@ private struct PhotoLibraryPreview: View {
         } else {
             LoadingIndicator(label: "Loading photo")
         }
-        if let date = asset.creationDate { Text(date.formatted(date: .complete, time: .shortened)) }
+        if let date = asset.creationDate { DateDisplay(date: date) }
         Section("Cubby") {
             let candidates = appModel.photoMatches.storedCandidates(for: asset.localIdentifier)
             if candidates.isEmpty {

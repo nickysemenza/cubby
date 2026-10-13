@@ -25,9 +25,8 @@ import {
   fieldExplanation,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
-import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
-import { CalendarDate } from "~/ui/common/calendar-date";
+import { DateDisplay } from "~/ui/common/date-display";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { CELL_RAIL_BUTTON_CLASS } from "~/ui/data-table/cell-frame";
 import { ExternalLinkText } from "~/ui/ExternalLink";
@@ -132,13 +131,9 @@ function readableExplanationText(value: string) {
       />
     );
   if (z.iso.datetime({ offset: true }).safeParse(value).success)
-    return (
-      <time dateTime={value} title={value}>
-        {formatInstant(value, "dateTime")}
-      </time>
-    );
+    return <DateDisplay timestamp={value} />;
   if (z.iso.date().safeParse(value).success)
-    return <CalendarDate start={value} />;
+    return <DateDisplay start={value} />;
   return null;
 }
 
@@ -763,12 +758,10 @@ export function FieldVerificationEvidence({
                 name={source.recorder.runId}
               />
             ) : null}
-            <time
-              dateTime={source.observedAt ?? source.createdAt}
+            <DateDisplay
+              timestamp={source.observedAt ?? source.createdAt}
               className="text-muted-foreground"
-            >
-              {formatInstant(source.observedAt ?? source.createdAt, "dateTime")}
-            </time>
+            />
           </div>
           {source.quote ? (
             <blockquote className="break-words text-muted-foreground">
@@ -828,7 +821,7 @@ function ExplanationTechnicalDetails({
         <div>
           <dt className="inline">Evaluated: </dt>
           <dd className="inline">
-            {formatInstant(data.evaluatedAt, "dateTime")}
+            <DateDisplay timestamp={data.evaluatedAt} />
           </dd>
         </div>
       </dl>

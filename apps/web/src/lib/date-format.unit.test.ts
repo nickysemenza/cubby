@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   formatCalendarDay,
+  formatCompactRelative,
+  formatTimestamp,
   formatInstant,
   formatRelative,
 } from "./date-format";
@@ -153,5 +155,30 @@ describe("formatRelative", () => {
     expect(formatRelative(Date.parse("2026-07-22T15:00:00Z"))).toBe(
       "in about 3 hours",
     );
+  });
+});
+
+// Future instants must not read as now, and minutes/months must be distinct.
+describe("compact timestamp distance", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("distinguishes minutes from months in both directions", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-13T19:00:00Z"));
+    expect(formatCompactRelative("2026-10-13T18:57:00Z")).toBe("3 min ago");
+    expect(formatCompactRelative("2026-07-13T19:00:00Z")).toBe("3 mo ago");
+    expect(formatCompactRelative("2026-10-13T19:03:00Z")).toBe("in 3 min");
+    expect(formatCompactRelative("2027-01-13T19:00:00Z")).toBe("in 3 mo");
+    expect(formatCompactRelative("2025-10-14T19:00:00Z")).toBe("11 mo ago");
+  });
+
+  it("preserves household time and handles malformed timestamps without crashing", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-13T19:00:00Z"));
+    expect(formatTimestamp("2026-10-13T18:57:00Z")).toBe(
+      "Oct 13, 2026, 11:57 AM · 3 minutes ago",
+    );
+    expect(formatTimestamp("not-a-date")).toBe("Invalid Date");
+    expect(formatCompactRelative("not-a-date")).toBe("Invalid Date");
   });
 });

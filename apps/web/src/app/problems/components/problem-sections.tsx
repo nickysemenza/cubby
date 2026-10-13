@@ -55,9 +55,11 @@ import {
   product as productOperations,
   maintenance,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCalendarDay, formatInstant } from "~/lib/date-format";
+import { formatCalendarDay, formatTimestamp } from "~/lib/date-format";
+import { formatDateSpan } from "~/lib/date-span";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
@@ -832,7 +834,7 @@ const DECLARED_SECTIONS = [
     renderItem: (finding) => ({
       key: finding.id,
       title: finding.summary,
-      subtitle: `${finding.kind.replaceAll("_", " ")} · ${formatInstant(finding.createdAt, "dateShort")}`,
+      subtitle: `${finding.kind.replaceAll("_", " ")} · ${formatTimestamp(finding.createdAt)}`,
       route: finding.purchaseId
         ? entityDetailLink("purchase", finding.purchaseId)
         : undefined,
@@ -1562,7 +1564,7 @@ const DECLARED_SECTIONS = [
           ...(purchase.date
             ? [
                 <Badge key="date" variant="outline">
-                  Ordered {formatCalendarDay(purchase.date, "dateShort")}
+                  Ordered <DateDisplay start={purchase.date} />
                 </Badge>,
               ]
             : []),
@@ -1629,10 +1631,10 @@ const DECLARED_SECTIONS = [
         <div key="dates" className="text-sm text-muted-foreground">
           {[
             item.expenseDate
-              ? `Expense ${formatCalendarDay(item.expenseDate, "dateShort")}`
+              ? `Expense ${formatDateSpan(item.expenseDate, null)}`
               : "Expense date unknown",
             item.purchaseDate
-              ? `purchase ${formatCalendarDay(item.purchaseDate, "dateShort")}`
+              ? `purchase ${formatDateSpan(item.purchaseDate, null)}`
               : "purchase date unknown",
           ].join(" · ")}
         </div>,
@@ -1746,7 +1748,7 @@ const DECLARED_SECTIONS = [
         formatCurrency(item.amount),
         `${countLabel(item.allocationCount, "allocation")} totalling ${formatCurrency(item.allocatedTotal)}`,
         item.postedDate
-          ? `posted ${formatCalendarDay(item.postedDate, "dateShort")}`
+          ? `posted ${formatDateSpan(item.postedDate, null)}`
           : null,
       ]
         .filter(Boolean)

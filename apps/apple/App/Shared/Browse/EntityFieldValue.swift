@@ -30,7 +30,7 @@ nonisolated enum EntityFieldValue {
         guard let value, value != .null else { return nil }
         switch field.format {
         case "currency", "signedCurrency": return money(value)
-        case "plainDate": return value.stringValue.map(DisplayFormat.plainDate)
+        case "plainDate": return value.stringValue.map { DatePresentation.plainDate($0)?.absolute ?? $0 }
         case "timestamp": return date(value)
         case "amount": return amount(value)
         case "external-link":
@@ -43,7 +43,7 @@ nonisolated enum EntityFieldValue {
         case .null: return nil
         case .string(let string):
             if string.isEmpty { return nil }
-            if field.kind == .date { return DisplayFormat.plainDate(string) }
+            if field.kind == .date { return DatePresentation.plainDate(string)?.absolute ?? string }
             if field.kind == .timestamp { return date(value) ?? string }
             if field.kind == .enum { return enumLabel(string, field: field) }
             // A non-enum field (a nested kind, a derived status) names its choices in `valueOptions`.
@@ -134,21 +134,20 @@ nonisolated enum EntityFieldValue {
         return formattedDate(string)
     }
 
-    /// ISO-8601 with or without fractional seconds, in the device's zone and locale (the web shows
-    /// a compact relative time instead), plus bare `yyyy-MM-dd` for date-only columns, which
-    /// keeps its calendar day regardless of the device zone.
     static func formattedDate(_ string: String) -> String? {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = withFraction.date(from: string) {
-            return date.formatted(date: .abbreviated, time: .shortened)
-        }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        if let date = plain.date(from: string) {
-            return date.formatted(date: .abbreviated, time: .shortened)
-        }
-        let day = DisplayFormat.plainDate(string)
-        return day == string ? nil : day
+        DatePresentation.value(string)?.absolute
+    }
+
+    static func dateValue(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
+        guard
+            field.kind == .date || field.kind == .timestamp || field.format == "plainDate"
+                || field.format == "timestamp"
+        else { return nil }
+        let value =
+            surface == "detail" && field.readPath != nil
+            ? field.detailValue(in: raw)
+            : FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface)
+        guard let string = value?.stringValue, DatePresentation.value(string) != nil else { return nil }
+        return string
     }
 }

@@ -11,9 +11,9 @@ import { useEffect, useState } from "react";
 
 import { TradeBadge } from "~/app/projects/trade-badge";
 import { copyShortcodes } from "~/lib/clipboard";
-import { formatCalendarDay } from "~/lib/date-format";
 import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
 import { cn } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import {
   Popover,
   PopoverContent,
@@ -159,7 +159,7 @@ export function ProductPurchasesPopover({
                   <span>Date unknown</span>
                 ) : (
                   <time dateTime={purchase.date}>
-                    {formatCalendarDay(purchase.date, "dateShort")}
+                    <DateDisplay start={purchase.date} />
                   </time>
                 )}
               </p>

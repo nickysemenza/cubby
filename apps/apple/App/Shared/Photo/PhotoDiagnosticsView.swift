@@ -129,7 +129,7 @@ private struct IdentitySection: View {
                     .font(Font.fieldGuideData)
             }
             LabeledContent("Captured") {
-                Text(report.file.capturedAt?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown")
+                if let date = report.file.capturedAt { DateDisplay(date: date) } else { Text("Unknown") }
             }
             LabeledContent("SHA-256") {
                 Text(report.identity.sha256).font(Font.fieldGuideCode).lineLimit(1)

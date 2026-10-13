@@ -34,7 +34,7 @@ import {
   project,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn, formatCurrency } from "~/lib/utils";
-import { CalendarDate } from "~/ui/common/calendar-date";
+import { DateDisplay } from "~/ui/common/date-display";
 import { SavedViewsMenu } from "~/ui/data-table/DataTableViews";
 import type { CubbyRow } from "~/ui/data-table/table-features";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -437,7 +437,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
             )}
             {task.dueDate && (
               <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                <CalendarDate start={task.dueDate} end={task.dueEndDate} />
+                <DateDisplay start={task.dueDate} end={task.dueEndDate} />
               </span>
             )}
           </Row>
@@ -645,7 +645,7 @@ export function ProjectCard({
             {(project.dates.effectiveStart || project.dates.effectiveEnd) && (
               <Badge variant="outline">
                 <CalendarIcon className="size-3" />
-                <CalendarDate
+                <DateDisplay
                   start={project.dates.effectiveStart}
                   end={project.dates.effectiveEnd}
                 />

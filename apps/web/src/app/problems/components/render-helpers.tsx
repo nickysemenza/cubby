@@ -1,7 +1,7 @@
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import type { ReactNode } from "react";
 
-import { formatRelative } from "~/lib/date-format";
+import { DateDisplay } from "~/ui/common/date-display";
 import { Row } from "~/ui/layout";
 
 /** `by {manufacturer}` — the standard product-card subtitle. */
@@ -19,7 +19,7 @@ export function createdAgoDetail(createdAt: Date | string | number): ReactNode {
       className="text-sm text-muted-foreground"
     >
       <CalendarIcon className="size-3" />
-      Created {formatRelative(createdAt)}
+      Created <DateDisplay timestamp={createdAt} />
     </Row>
   );
 }

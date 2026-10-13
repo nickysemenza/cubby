@@ -8,7 +8,7 @@ import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
 
 import { badgeToneTextClass, statusTone } from "~/lib/status-tone";
 import { cn } from "~/lib/utils";
-import { formatCompactRelative } from "~/ui/HoverableTimestamp";
+import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -48,18 +48,16 @@ export function AiProvenance({
   cacheStatus?: AiCacheStatus | null;
   className?: string;
 }) {
-  const parts: string[] = [];
-  if (model) parts.push(`Analyzed by ${model}`);
-  if (analyzedAt) {
-    const relative = formatCompactRelative(analyzedAt);
-    parts.push(relative === "now" ? "just now" : `${relative} ago`);
-  }
-  if (cacheStatus) parts.push(`cache ${cacheStatus}`);
-  if (parts.length === 0) return null;
+  if (!model && !analyzedAt && !cacheStatus) return null;
   return (
-    <p className={cn("font-mono text-2xs text-slate", className)}>
-      {parts.join(" · ")}
-    </p>
+    <Description size="xs" className={cn("text-muted-foreground", className)}>
+      {model ? `Analyzed by ${model}` : null}
+      {model && analyzedAt ? " · " : null}
+      {analyzedAt ? <DateDisplay timestamp={analyzedAt} /> : null}
+      {cacheStatus
+        ? `${model || analyzedAt ? " · " : ""}cache ${cacheStatus}`
+        : null}
+    </Description>
   );
 }
 

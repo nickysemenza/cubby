@@ -30,7 +30,7 @@ async function expectAuditTimestamps(page: Page, row: Locator) {
     // The household day stacked over its compact age: "Oct 12" / "3mo ago",
     // another year leading the age line ("’25 · 1y ago").
     await expect(timestamp).toHaveText(
-      /^[A-Z][a-z]{2} \d{1,2}(’\d{2} · )?(now|\d+(m|h|d|w|mo|y) ago)$/,
+      /^[A-Z][a-z]{2} \d{1,2}(’\d{2} · )?(now|\d+( min|h|d|w| mo|y) ago)$/,
     );
     const trigger = timestamp.getByRole("button");
     await trigger.hover();
@@ -40,7 +40,9 @@ async function expectAuditTimestamps(page: Page, row: Locator) {
       `[data-slot="tooltip-content"][id="${tooltipId}"]`,
     );
     await expect(tooltip).toBeVisible();
-    await expect(tooltip).toHaveText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    await expect(tooltip).toHaveText(
+      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} (PDT|PST|GMT-7|GMT-8)$/,
+    );
   }
 }
 

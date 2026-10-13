@@ -17,8 +17,8 @@ import { z } from "zod";
 import { EntityCover } from "~/entity/components/entity-cover";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { copyShortcodes } from "~/lib/clipboard";
-import { formatInstant } from "~/lib/date-format";
 import { cn, formatCount } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import {
   domainForEntity,
   domainWayfinding,
@@ -80,7 +80,6 @@ const heroStampVariant = {
 const detailRawDataSchema = z
   .object({ createdAt: z.union([z.string(), z.date()]).optional() })
   .passthrough();
-type DetailRawData = z.infer<typeof detailRawDataSchema>;
 
 /** Hairline separator for record navigation. */
 function EyebrowSeparator() {
@@ -89,16 +88,6 @@ function EyebrowSeparator() {
       /
     </span>
   );
-}
-
-/** Pull a created-at date out of the raw entity for the hero's record meta. */
-export function getOnFileSince(
-  rawData: DetailRawData | undefined,
-): string | null {
-  const createdAt = rawData?.createdAt;
-  if (createdAt === undefined) return null;
-  if (Number.isNaN(new Date(createdAt).getTime())) return null;
-  return formatInstant(createdAt, "dateShortPadded");
 }
 
 /**
@@ -302,9 +291,11 @@ function DetailPlate({
   heroImages,
 }: DetailPlateProps) {
   const parsedRawData = detailRawDataSchema.safeParse(rawData);
-  const onFileSince = getOnFileSince(
-    parsedRawData.success ? parsedRawData.data : undefined,
-  );
+  const createdAt = parsedRawData.success
+    ? parsedRawData.data.createdAt
+    : undefined;
+  const validCreatedAt =
+    createdAt !== undefined && !Number.isNaN(new Date(createdAt).getTime());
   const cover = heroImages?.[0];
   return (
     <header
@@ -351,7 +342,11 @@ function DetailPlate({
                   {heroStamp.label}
                 </Badge>
               )}
-              {onFileSince && <span>Added {onFileSince}</span>}
+              {validCreatedAt && (
+                <span>
+                  Added <DateDisplay timestamp={createdAt} />
+                </span>
+              )}
             </div>
           </div>
         </div>

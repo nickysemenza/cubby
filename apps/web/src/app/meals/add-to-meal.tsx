@@ -26,7 +26,7 @@ import {
   ai,
   meal,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCalendarDay } from "~/lib/date-format";
+import { formatDateSpan } from "~/lib/date-span";
 import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
 import { StaticPicker } from "~/ui/combobox/static-picker";
 import { DatePickerInput } from "~/ui/date-picker-input";
@@ -170,19 +170,16 @@ export function AddToMeal({
   const onSuccess = (meal: { id: string; date: string }) => {
     invalidate();
     setOpen(false);
-    toast.success(
-      `Added to a meal on ${formatCalendarDay(meal.date, "weekdayMonthDay")}`,
-      {
-        action: {
-          label: "View",
-          onClick: () =>
-            void navigate({
-              to: entities.meal.routes.detail,
-              params: entityDetailParams(meal.id),
-            }),
-        },
+    toast.success(`Added to a meal on ${formatDateSpan(meal.date, null)}`, {
+      action: {
+        label: "View",
+        onClick: () =>
+          void navigate({
+            to: entities.meal.routes.detail,
+            params: entityDetailParams(meal.id),
+          }),
       },
-    );
+    });
   };
 
   const createMeal = useMutation(

@@ -82,7 +82,7 @@ private struct PhotoAnalysisLogRow: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(entry.title).fontWeight(.medium)
                     Spacer(minLength: 8)
-                    Text(entry.timestamp.formatted(date: .omitted, time: .standard))
+                    Text(DatePresentation.timestamp(entry.timestamp).exact)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }

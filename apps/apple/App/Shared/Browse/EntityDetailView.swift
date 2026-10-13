@@ -670,7 +670,15 @@ struct EntityDetailContent: View {
                                     let value = EntityFieldValue.text(
                                         in: row.raw, field: field, surface: "detail")
                                 {
-                                    LabeledContent(field.label, value: value)
+                                    LabeledContent(field.label) {
+                                        if let date = EntityFieldValue.dateValue(
+                                            in: row.raw, field: field, surface: "detail")
+                                        {
+                                            DateDisplay(date)
+                                        } else {
+                                            Text(value)
+                                        }
+                                    }
                                 }
                             }
                         }

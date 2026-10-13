@@ -10,7 +10,8 @@ import { Fragment, useMemo } from "react";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
-import { formatInstant } from "~/lib/date-format";
+import { householdLocalDate } from "~/lib/household-date";
+import { DateDisplay } from "~/ui/common/date-display";
 import { RecordHeading, RecordList } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { useHydrated } from "~/ui/hooks/useHydrated";
@@ -108,7 +109,7 @@ export function AuditLogList({
   const days = useMemo(() => {
     const result: { label: string; groups: (typeof entries)[] }[] = [];
     for (const group of foldAuditEntries(entries)) {
-      const label = formatInstant(group[0]!.createdAt, "dateShort");
+      const label = householdLocalDate(new Date(group[0]!.createdAt));
       const day = result.at(-1);
       if (day?.label === label) day.groups.push(group);
       else result.push({ label, groups: [group] });
@@ -195,13 +196,12 @@ export function AuditLogList({
     >
       {days.map((day) => (
         <Fragment key={day.label}>
-          <RecordHeading label={day.label} />
+          <RecordHeading label={<DateDisplay start={day.label} />} />
           {day.groups.map((group) => (
             <AuditRecordRow
               key={group[0]?.entryKey}
               group={group}
               showEntityLink={showEntityLink}
-              dayShown
             />
           ))}
         </Fragment>

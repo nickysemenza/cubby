@@ -47,7 +47,7 @@ struct EntityTimelineView: View {
             } header: {
                 HStack {
                     if let date = group.date {
-                        Text(EntityFieldValue.formattedDate(date.rawValue) ?? date.rawValue)
+                        DateDisplay(date.rawValue)
                     } else {
                         Text("Date unknown")
                     }
