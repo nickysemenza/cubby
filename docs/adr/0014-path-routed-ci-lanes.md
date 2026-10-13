@@ -20,6 +20,8 @@ jobs, and a hard-coded job list in the Tester Army dispatcher had to agree.
   the newest successful `main` push run of `ci.yaml`, using
   `dorny/paths-filter` with git, and starts only the lanes whose filter
   matches. Nightly and manual runs, or no green main run, start every lane.
+  A `main` push whose exact tree already passed (a `tested-tree-<tree>`
+  artifact from a same-repository green run) starts no lane.
 - Each lane's filter is generated from the Nx inputs of the tasks it runs
   (`scripts/ci-lanes.ts` → `.github/ci-lanes.yml`). Runtime inputs are
   classified by exact command, so a new one fails generation instead of being

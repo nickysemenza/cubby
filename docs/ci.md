@@ -7,7 +7,9 @@ merge gate ([ADR 0009](adr/0009-content-hash-merge-gate.md),
 [validation policy](agents/validation.md)). Before any lane starts, the `Plan`
 job compares the tree with the last green `main` run and starts only the lanes
 whose tasks' inputs changed, so a documentation-only PR starts no test runner
-([ADR 0014](adr/0014-path-routed-ci-lanes.md)). Merging to `main`
+([ADR 0014](adr/0014-path-routed-ci-lanes.md)). A `main` push whose tree
+already passed CI, usually a squash merge onto an unmoved `main`, starts no
+lane at all. Merging to `main`
 independently deploys the web Worker, including after a
 documentation-only change; deployment never waits for post-merge CI.
 
@@ -16,8 +18,8 @@ lane. Validation exposes generation, tokens, TypeScript, lint, Knip, bindings,
 tooling tests, routing drift and Worker tests as named
 steps on one runner. Once setup succeeds, independent steps run despite earlier
 check failures; their failures still fail the job. Cancellation stops further
-work. The web matrix likewise keeps `fail-fast: false`. Formatting runs once in
-the docs job. This collects distinct failures without paying a fresh install
+work. The web matrix likewise keeps `fail-fast: false`. Formatting and the
+link check run in the same job when the docs lane is selected. This collects distinct failures without paying a fresh install
 for every static check. One status context, `CI passed`, owns the merge gate.
 Tester Army coverage lives in `e2e-journeys.yaml` and runs only by manual
 dispatch or explicit PR labels. `tester-army`, `tester-army:ios`,
@@ -313,7 +315,10 @@ invalidates those modules. App pins live in `apps/apple/Package.resolved`;
 Kit pins remain in `apps/apple/CubbyKit/Package.resolved`. Simulator dependency
 cache keys include both lockfiles and both specs.
 
-Compiled Apple caches are published only after successful work. GitHub cache
+Compiled Apple caches are published only after successful work, through
+`save-cache-main-only`: any run on `main` saves a new exact key over a partial
+restore, and a PR saves only on a full miss. Main pushes of a tested tree run
+no native job, so the nightly run refreshes `main`'s entries. GitHub cache
 entries are immutable: an interrupted compile saved under the final key makes
 later exact hits repeat unfinished work. Cache-generation names and keys belong
 in the setup actions. Retire obsolete generations and merged PRs' private entries
@@ -336,7 +341,14 @@ run. This does not add parallel main runs or jobs. The newest main CI result may
 wait for the active run; deployment remains independent.
 
 `Plan` runs on the `ubuntu-slim` container runner. It rejects live entity
-codes in PR text, finds the commit of the newest successful `main` push run of
+codes in PR text and records the tree it tests. On a `main` push it first asks
+the artifacts API for a same-repository `tested-tree-<tree>` artifact, which
+`CI passed` uploads only after a green run; if one exists, every lane is
+skipped. A PR run tests its merge commit, so a squash merge onto the `main` it
+was tested against pushes exactly that tree; if `main` moved, the trees differ
+and routing proceeds as usual, catching interactions between merged PRs. An
+API failure or missing artifact also falls through to routing. Otherwise it
+finds the commit of the newest successful `main` push run of
 `ci.yaml`, and runs `dorny/paths-filter` with git (`token: ""`) on the
 two-dot diff from that commit to the tested tree, matching
 `.github/ci-lanes.yml`. `scripts/ci-lanes.ts` generates that file from the Nx
@@ -363,15 +375,18 @@ verified a cached pass. Manual CI dispatch also runs the informational live Emai
 decision job outside `CI passed`, calling Jev and Clef on synthetic cases through
 the real gateway with `AI_GATEWAY_API_KEY`. Failures do not block the deterministic
 merge gate. Real member inputs are refused in CI. A failed probe is allowed: it only sends both Apple
-lanes to macOS.
+lanes to macOS. On success it uploads the `tested-tree-<tree>` artifact
+(retained 14 days) that lets a `main` push of the same tree skip every lane.
 
-`Validation` runs the cached generate, design-token, types, lint, Knip,
-CI-lane, bindings, script-test and Worker-test targets as individual steps.
+`Validation and docs` runs when either lane is selected; `Plan` allows it to
+skip only when neither is. With the validation lane it installs the workspace
+and runs the cached generate, design-token, types, lint, Knip, CI-lane,
+bindings, script-test and Worker-test targets as individual steps.
 `pnpm check:all` runs those targets plus formatting locally.
 Dependency advisory audits and deduplication are not CI or local validation
 gates; dependency maintenance is handled separately from code validation.
-`Docs and formatting` runs on `ubuntu-slim` with a root-only install: the
-`format` target and the offline relative-link check through the pinned Lychee
+With the docs lane it runs the `format` target and the offline relative-link
+check; a docs-only change installs only the root tools. The link check runs through the pinned Lychee
 action, a composite action that downloads the Lychee binary (no Docker).
 Paths written as inline code are informational; link a repository file when
 its existence should be checked.
@@ -396,7 +411,10 @@ Vitest projects of the web app, each a cached target. Node projects run first,
 then UI uses Vitest's standard project group ordering, keeping each phase's
 worker environment together. `Build Workers and runtime tests` runs the
 `db-check` migration drift check against disposable scratch databases and the
-`integration-workerd` Vitest project against a Worker it builds itself.
+`integration-workerd` Vitest project against a Worker it builds itself. When
+both lanes are selected they share one runner as `Auxiliary, Worker, and
+runtime tests`, two steps that each run despite the other's failure; together
+they take about as long as the slowest E2E shard and save a runner slot.
 Desktop Chromium runs as four Playwright shards (two workers each) through the
 `e2e` target, each building the Worker with the run's source commit and branch
 provenance. Phone-web and WebKit browser coverage was removed from PR CI and the
@@ -432,7 +450,9 @@ refuses to rebuild a missing or stale Worker. Jobs that need the databases
 declare native GitHub Actions service containers; a YAML anchor reuses the
 pgvector PostgreSQL and pinned IntegreSQL definitions. GitHub owns the network, container
 startup, PostgreSQL health wait, logs, and cleanup. PostgreSQL also maps port
-55432 for guarded named-database tests. `POSTGRES_INITDB_ARGS` sets the disposable
+55432 for guarded named-database tests, on loopback only: 55432 is inside
+Linux's ephemeral port range, and an all-interfaces bind failed container
+startup when an outgoing connection held it. `POSTGRES_INITDB_ARGS` sets the disposable
 settings in the fresh PostgreSQL 17 configuration. IntegreSQL retries its
 PostgreSQL connection during startup; its pinned distroless image has no
 `/bin/sh` for Docker shell health checks. The optional purchase-import and

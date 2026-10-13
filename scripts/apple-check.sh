@@ -39,7 +39,7 @@ if [ "$mode" = host ]; then
   # minutes of CPU starvation on a hosted runner (measured 2026-09-21).
   (
     cd apps/apple/CubbyKit
-    xcodebuild \
+    xcodebuild -showBuildTimingSummary \
       -scheme CubbyKit-Package -configuration Debug \
       -destination 'platform=macOS,arch=arm64' \
       -derivedDataPath .build/xcode \
@@ -90,7 +90,7 @@ apps/apple/scripts/prepare-project.sh
 # EXCLUDED_ARCHS covers only the app's own targets, so without ARCHS=arm64
 # every SPM package (CubbyAPI included) also compiles for x86_64. Package
 # clones live in apps/apple/SourcePackages, which CI caches between runs.
-xcodebuild \
+xcodebuild -showBuildTimingSummary \
   -project apps/apple/Cubby.xcodeproj \
   -scheme Cubby-iOS \
   -configuration Debug \
