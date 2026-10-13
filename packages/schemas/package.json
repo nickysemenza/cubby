@@ -177,7 +177,8 @@
     "./purchase-evidence-policy": "./src/purchase-evidence-policy.ts",
     "./classification-field-policy": "./src/classification-field-policy.ts",
     "./emoji": "./src/emoji.ts",
-    "./email-actions": "./src/email-actions.ts"
+    "./email-actions": "./src/email-actions.ts",
+    "./ai-evaluation": "./src/ai-evaluation.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/ensure.ts generate && tsc --noEmit",

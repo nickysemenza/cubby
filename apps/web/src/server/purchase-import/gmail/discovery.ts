@@ -670,6 +670,9 @@ export async function pruneRoutineRuns(
     sql.raw(
       `NOT EXISTS (SELECT 1 FROM "RunOperation" o WHERE o."runId" = "Run"."id")`,
     ),
+    sql.raw(
+      `NOT EXISTS (SELECT 1 FROM "AiEvaluation" e WHERE e."runId" = "Run"."id")`,
+    ),
   );
   return withTransaction(db, async (tx) => {
     const ids = (

@@ -33,9 +33,9 @@ it("configures Jev decisions with a separate gateway text model", () => {
 it.each([
   { ci: "true", environment: "ci" },
   { ci: undefined, environment: "development" },
-])("scopes the driver to cubby as $environment", ({ ci, environment }) => {
+])("scopes the driver to evaluation as $environment", ({ ci, environment }) => {
   const headers = testerArmyGatewayHeaders(ci);
-  expect(headers["cf-aig-gateway-id"]).toBe("cubby");
+  expect(headers["cf-aig-gateway-id"]).toBe("cubby-evaluation");
   expect(headers["cf-aig-skip-cache"]).toBe("true");
   expect(JSON.parse(headers["cf-aig-metadata"])).toEqual({
     environment,
@@ -103,7 +103,7 @@ it.each(["direct", "envelope", "run"])(
       expect(request.headers.get("authorization")).toBe(
         "Bearer synthetic-token",
       );
-      expect(request.headers.get("cf-aig-gateway-id")).toBe("cubby");
+      expect(request.headers.get("cf-aig-gateway-id")).toBe("cubby-evaluation");
       expect(request.headers.get("cf-aig-skip-cache")).toBe("true");
       expect(await request.json()).toEqual({
         model: "typesafe/jev",

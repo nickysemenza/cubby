@@ -125,7 +125,8 @@ export const getImageProcessingNamespace = () => cfEnv?.IMAGE_PROCESSING;
 export const getAi = () => cfEnv?.AI;
 
 /** The binding's Universal endpoint for Cubby's gateway (`env.AI.gateway("cubby")`). */
-export const getAiGateway = () => cfEnv?.AI?.gateway(CUBBY_AI_GATEWAY_ID);
+export const getAiGateway = (gatewayId: string = CUBBY_AI_GATEWAY_ID) =>
+  cfEnv?.AI?.gateway(gatewayId);
 
 /**
  * The deterministic gateway peer that exists only in the workerd harness's
@@ -157,3 +158,9 @@ export const getDatabaseFreshnessNamespace = () => cfEnv?.DB_FRESHNESS;
 
 export const getAiResponseCacheNamespace = () => cfEnv?.AI_RESPONSE_CACHE;
 export const getChatGptPlanNamespace = () => cfEnv?.CHATGPT_PLAN;
+
+export const getAiGatewayEgress = (gatewayId: string) =>
+  cfEnv?.AI_GATEWAY_EGRESS?.getByName(gatewayId);
+
+export const getAiRefreshWorkflow = () => cfEnv?.AI_REFRESH;
+export const getAiRefreshEnabled = () => cfEnv?.AI_REFRESH_ENABLED === "true";

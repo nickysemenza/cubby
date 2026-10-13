@@ -27,3 +27,5 @@ export { DatabaseFreshnessDurableObject } from "~/server/database-freshness/dura
 export { AiResponseCacheDurableObject } from "~/server/ai/response-cache-durable-object";
 export { ChatGptPlanDurableObject } from "~/server/ai/chatgpt/durable-object";
 export { UsdaReleaseDurableObject } from "~/server/usda-release/durable-object";
+
+export { AiGatewayEgressDurableObject } from "~/server/ai/gateway-egress-durable-object";

@@ -540,7 +540,14 @@ export const defineEntityOperations = <
             if (changedFields.length) {
               await getDb(writeContext.db)
                 .update(suggestionTable)
-                .set({ status: "superseded" })
+                .set({
+                  status: "superseded",
+                  supersessionReceipt: {
+                    reason: "target_changed",
+                    evaluationId: null,
+                    at: new Date().toISOString(),
+                  },
+                })
                 .where(
                   and(
                     eq(suggestionTable.entity, binding.entity),

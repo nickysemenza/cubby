@@ -79,6 +79,12 @@ export const emailObservationChildren = [
         kind: "uuid",
         reference: { table: "aiUsage", column: "id" },
       },
+      { key: "provenance", kind: "jsonb", type: "AiProvenance" },
+      {
+        key: "evaluationId",
+        kind: "uuid",
+        reference: { table: "aiEvaluation", column: "id" },
+      },
       { key: "conflict", kind: "jsonb", type: "EmailClassificationConflict" },
       {
         key: "createdAt",
@@ -88,6 +94,7 @@ export const emailObservationChildren = [
       },
     ],
     types: [
+      { module: "@cubby/schemas/ai-evaluation", exports: ["AiProvenance"] },
       {
         module: "@cubby/schemas/mailbox-research",
         exports: ["MailboxClassification", "MailboxClassificationStage"],
@@ -102,6 +109,10 @@ export const emailObservationChildren = [
     ],
     indexes: [
       { name: "EmailClassificationObservation_email_idx", on: ["emailId"] },
+      {
+        name: "EmailClassificationObservation_evaluation_idx",
+        on: ["evaluationId"],
+      },
     ],
     checks: [
       {

@@ -1,11 +1,12 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import type { RunControlAction } from "@cubby/schemas/run-fields";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { ledgerParty, run as runTable } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { systemActor } from "~/server/runs/ensure-run";
 
 import { workflowInstanceId, type WorkflowRunPurpose } from "./contract";
 import { productionWorkflowLauncher, type WorkflowLauncher } from "./launcher";
@@ -17,6 +18,7 @@ import {
 
 /** Progress a retry resets per purpose, so the Run reads as live again. */
 const RETRY_PROGRESS = {
+  ai_refresh: {},
   mail_discovery: {},
 } satisfies Record<WorkflowRunPurpose, RunProgressPatch>;
 
@@ -48,11 +50,51 @@ export async function controlWorkflowRun(
     .where(eq(runTable.shortcode, runShortcode.parse(input.runPublicId)))
     .limit(1);
   if (!row) throw new Error("Run was not found");
-  if (row.actorUserId !== actor.userId && row.memberUserId !== actor.userId)
+  if (
+    !(purpose === "ai_refresh" && row.actorUserId === systemActor().userId) &&
+    row.actorUserId !== actor.userId &&
+    row.memberUserId !== actor.userId
+  )
     throw new Error("Only the member this Run belongs to can control it");
   if (input.action === "retry") {
     if (row.status !== "failed")
       throw new Error(`Only a failed Run can be retried (${row.status})`);
+    if (purpose === "ai_refresh") {
+      const { aiEvaluation } = await import("~/server/db/schema");
+      const failed = await database
+        .select()
+        .from(aiEvaluation)
+        .where(
+          and(
+            eq(aiEvaluation.runId, row.id),
+            inArray(aiEvaluation.state, ["failed", "cancelled"]),
+            sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
+          ),
+        );
+      for (const item of failed) {
+        const retryId = crypto.randomUUID();
+        const [replacement] = await database
+          .insert(aiEvaluation)
+          .values({
+            id: retryId,
+            runId: item.runId,
+            workKey: `${item.workKey}:operator-retry:${row.attempt + 1}`,
+            feature: item.feature,
+            target: item.target,
+            provenance: item.provenance,
+            snapshot: item.snapshot,
+            result: item.result,
+            state: item.result ? "result_ready" : "queued",
+          })
+          .onConflictDoNothing()
+          .returning({ id: aiEvaluation.id });
+        if (replacement)
+          await database
+            .update(aiEvaluation)
+            .set({ receipt: { retryEvaluationId: replacement.id } })
+            .where(eq(aiEvaluation.id, item.id));
+      }
+    }
     await launchWorkflowRun(
       db,
       { runId: row.id, purpose, progressPatch: RETRY_PROGRESS[purpose] },
@@ -83,6 +125,28 @@ export async function controlWorkflowRun(
     )
     .returning({ id: runTable.id });
   if (!cancelled) throw new Error("The Run finished before it was cancelled");
+  if (purpose === "ai_refresh") {
+    const { aiEvaluation } = await import("~/server/db/schema");
+    await database
+      .update(aiEvaluation)
+      .set({
+        state: "cancelled",
+        deadlineAt: null,
+        error: "Cancelled by a member",
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(aiEvaluation.runId, row.id),
+          inArray(aiEvaluation.state, [
+            "queued",
+            "running",
+            "result_ready",
+            "retry_wait",
+          ]),
+        ),
+      );
+  }
   await recordRunProgress(db, row.id, "cancelled", "Cancelled by a member", {
     attempt: row.attempt,
     sequence: Number.MAX_SAFE_INTEGER,

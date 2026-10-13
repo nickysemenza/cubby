@@ -72,6 +72,8 @@ import {
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
 
+import { isGatewayAdmissionWait } from "./gateway-egress-client";
+
 /** One part of a user message's content: text, or an image/document fetched by URL. */
 interface AiTextPart {
   type: "text";
@@ -694,6 +696,18 @@ export async function runStructuredFeature<T>(
   ctx: AiRunContext<T>,
   ports: StructuredRunPorts = productionStructuredRunPorts,
 ): Promise<T> {
+  const { captureAiInput, preparingAiInputs } =
+    await import("./evaluation-inputs");
+  await captureAiInput(spec, ctx.operation, request);
+  if (preparingAiInputs()) {
+    if (spec.feature !== "selection-overflow")
+      throw new Error("Only field selection supports input-only preparation");
+    return spec.schema.parse({
+      selectedId: null,
+      confidence: "low",
+      reasoning: "Input preparation",
+    });
+  }
   const placeCall = async (
     callRequest: AiChatRequest,
     plan: StructuredRunPlan,
@@ -756,18 +770,19 @@ export async function runStructuredFeature<T>(
       // plan's failure stays `chatgpt` even when no response ever arrived —
       // and a response the forced tool call or schema rejected was still
       // billed, so its usage stays on the row.
-      await recordFeatureUsage(spec, callCtx, {
-        transport,
-        durationMs: Math.round(performance.now() - startedAt),
-        status: "failed",
-        ...(response
-          ? messageUsage(response, gateway)
-          : {
-              gatewayLogId: gateway?.gatewayLogId,
-              gatewayCacheStatus: gateway?.gatewayCacheStatus,
-            }),
-        applicationCacheStatus: callCtx.applicationCacheStatus,
-      });
+      if (!isGatewayAdmissionWait(error) || response || gateway)
+        await recordFeatureUsage(spec, callCtx, {
+          transport,
+          durationMs: Math.round(performance.now() - startedAt),
+          status: "failed",
+          ...(response
+            ? messageUsage(response, gateway)
+            : {
+                gatewayLogId: gateway?.gatewayLogId,
+                gatewayCacheStatus: gateway?.gatewayCacheStatus,
+              }),
+          applicationCacheStatus: callCtx.applicationCacheStatus,
+        });
       const model = getChatModelConfig(plan.model);
       throw wrapAiGatewayError(
         error,
@@ -880,7 +895,7 @@ export async function runEmbeddingFeature(
       },
     })
     .catch(async (error: UnparsedError) => {
-      if (usageCtx)
+      if (usageCtx && (!isGatewayAdmissionWait(error) || gateway))
         await recordFeatureUsage(spec, usageCtx, {
           transport,
           durationMs: Math.round(performance.now() - startedAt),

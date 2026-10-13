@@ -116,7 +116,7 @@ async function ownedEmails(
 const RECLASSIFY_TIME_BUDGET_MS = 150_000;
 
 /** Backfill, else continuous; an expired or revoked approval is unusable, not fatal. */
-async function mailboxApproval(
+export async function mailboxApproval(
   db: Database,
   owner: { userId: ActorContext["userId"]; ledgerPartyId: string },
   mailboxId: string,

@@ -6,6 +6,10 @@
   "durable_objects": {
     "bindings": [
       {
+        "name": "AI_GATEWAY_EGRESS",
+        "class_name": "AiGatewayEgressDurableObject",
+      },
+      {
         "name": "DB_FRESHNESS",
         "class_name": "DatabaseFreshnessDurableObject",
       },
@@ -32,6 +36,10 @@
     ],
   },
   "exports": {
+    "AiGatewayEgressDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite",
+    },
     "DatabaseFreshnessDurableObject": {
       "type": "durable-object",
       "storage": "sqlite",

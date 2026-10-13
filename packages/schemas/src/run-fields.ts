@@ -1,3 +1,8 @@
+import {
+  type AiRefreshRunInput,
+  aiRefreshProgress,
+  aiRefreshRunInput,
+} from "./ai-evaluation";
 import type { MailReclassificationCheckpoint } from "./email-actions.js";
 import { z } from "zod";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
@@ -338,6 +343,17 @@ export type MailReclassifyRunInput = z.infer<typeof mailReclassifyRunInput>;
 export const isMailReclassifyRun = (run: { purpose: string; input: unknown }) =>
   run.purpose === "background" &&
   mailReclassifyRunInput.safeParse(run.input).success;
+export const isAiRefreshMailRun = (run: {
+  purpose: string;
+  input: unknown;
+}) => {
+  const input = aiRefreshRunInput.safeParse(run.input);
+  return (
+    run.purpose === "ai_refresh" &&
+    input.success &&
+    Boolean(input.data.mailboxId && input.data.emails?.length)
+  );
+};
 export type RunInput =
   | ExecutionAuthorizationInput
   | MailReclassifyRunInput
@@ -349,11 +365,13 @@ export type RunInput =
   | z.infer<typeof orderMailImportRunInput>
   | OrderBackfillRunInput
   | z.infer<typeof chargeHuntRunInput>
-  | SuggestionSweepRunInput;
+  | SuggestionSweepRunInput
+  | AiRefreshRunInput;
 export type RunProgress =
   | MailDiscoveryRunProgress
   | SuggestionSweepRunProgress
-  | MailReclassificationCheckpoint;
+  | MailReclassificationCheckpoint
+  | z.infer<typeof aiRefreshProgress>;
 
 /**
  * What one run actually does, for every surface that names it (lists,

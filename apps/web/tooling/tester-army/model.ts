@@ -1,7 +1,7 @@
 import { inspect } from "node:util";
 import {
   CF_ACCOUNT_ID,
-  CUBBY_AI_GATEWAY_ID,
+  CUBBY_EVALUATION_GATEWAY_ID,
   testAiGatewayEnvironment,
 } from "@cubby/shared/ai/gateway-metadata";
 import { DECISION_MODEL, FAST_MODEL } from "@cubby/shared/ai/models";
@@ -73,7 +73,7 @@ export function modelConfiguration(
 /** The driver's gateway scoping: Cubby's gateway, never production-labelled. */
 export function testerArmyGatewayHeaders(ci: string | undefined) {
   return {
-    "cf-aig-gateway-id": CUBBY_AI_GATEWAY_ID,
+    "cf-aig-gateway-id": CUBBY_EVALUATION_GATEWAY_ID,
     "cf-aig-skip-cache": "true",
     "cf-aig-metadata": JSON.stringify({
       environment: testAiGatewayEnvironment(ci),
@@ -161,7 +161,7 @@ export function testerArmyDecisionModel(
         input: query,
         signal: request.signal,
         gateway: {
-          id: CUBBY_AI_GATEWAY_ID,
+          id: CUBBY_EVALUATION_GATEWAY_ID,
           skipCache: true,
           metadata: {
             environment: testAiGatewayEnvironment(process.env.CI),

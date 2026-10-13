@@ -344,6 +344,20 @@
       "when": 1791910945686,
       "tag": "0048_derived_ddl",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1791918951956,
+      "tag": "0049_ai_evaluation_refresh",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1791918957478,
+      "tag": "0050_derived_ddl",
+      "breakpoints": true
     }
   ]
 }

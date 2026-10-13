@@ -1,9 +1,11 @@
+import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import {
   emailExecutionPolicy,
   type EmailExecutionPolicy,
 } from "@cubby/schemas/email-fields";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
+import { isAiRefreshMailRun } from "@cubby/schemas/run-fields";
 import {
   isMailReclassifyRun,
   mailReclassifyRunInput,
@@ -39,6 +41,12 @@ export async function gmailExecutionPolicy(
     return emailExecutionPolicy.parse(input.executionPolicy);
   }
   if (current.purpose === "mail_import") return "import";
+  if (isAiRefreshMailRun(current)) {
+    const input = aiRefreshRunInput.parse(current.input);
+    if (expected && input.mailboxId !== expected.mailboxId)
+      throw new Error("AI refresh mailbox is outside its persisted Run");
+    return "classification_only";
+  }
   const reclassify = mailReclassifyRunInput.safeParse(current.input);
   if (current.purpose === "background" && reclassify.success) {
     if (expected && reclassify.data.mailboxId !== expected.mailboxId)
@@ -61,5 +69,8 @@ export async function gmailRelevanceAllowed(db: Database, runId: string) {
     .from(run)
     .where(eq(run.id, runEntityId.parse(runId)))
     .limit(1);
-  return current !== undefined && isMailReclassifyRun(current);
+  return (
+    current !== undefined &&
+    (isMailReclassifyRun(current) || isAiRefreshMailRun(current))
+  );
 }

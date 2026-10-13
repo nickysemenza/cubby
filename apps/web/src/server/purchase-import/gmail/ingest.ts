@@ -1,3 +1,4 @@
+import type { AiProvenance } from "@cubby/schemas/ai-evaluation";
 import type { EmailReclassifyOutcome } from "@cubby/schemas/email-actions";
 import { emailCandidateSource } from "@cubby/schemas/email-candidates";
 import type { EmailClassificationConflict } from "@cubby/schemas/email-observations";
@@ -252,6 +253,7 @@ async function observeClassification(
   decision: MailboxClassificationDecision,
   unchanged: boolean,
   call: GmailClassificationCall | null,
+  calls: (GmailClassificationCall | null)[] = [],
 ) {
   if (!prior) return;
   // A reused verdict records nothing new unless it now contradicts a Purchase.
@@ -264,6 +266,18 @@ async function observeClassification(
     unchanged,
   );
   if (unchanged && !conflict) return;
+  const { dependencyStamps } = await import("~/server/ai/refresh-policy");
+  const manifest = await (
+    await import("~/server/repo/ai-refresh")
+  ).producingAiManifest(db);
+  const dependencies = dependencyStamps(manifest, [
+    ...(input.refreshDependencies ?? []).map((stamp) => stamp.feature),
+    ...calls.flatMap((entry) => (entry?.operation ? [entry.operation] : [])),
+  ]);
+  for (const stamp of dependencies) {
+    const actual = calls.find((entry) => entry?.operation === stamp.feature);
+    if (actual?.promptVersion) stamp.promptVersion = actual.promptVersion;
+  }
   await recordEmailClassificationObservation(db, {
     emailId: prior.id,
     runId: input.runId ?? null,
@@ -276,6 +290,13 @@ async function observeClassification(
     promptVersion: call?.promptVersion ?? null,
     operation: call?.operation ?? null,
     conflict,
+    evaluationId: input.evaluation?.id ?? null,
+    provenance: {
+      dependencies,
+      inputFingerprint: checksum,
+      optionFingerprint: "",
+      model: call?.model ?? null,
+    },
   });
 }
 
@@ -565,6 +586,9 @@ async function acquireEligible(
     runId: input.runId,
     executionPolicy,
     expected: prior,
+    evaluation: input.evaluation
+      ? { ...input.evaluation, sourceChecksum: checksum }
+      : undefined,
   };
   const metadata = {
     ledgerPartyId: input.ledgerPartyId,
@@ -594,7 +618,11 @@ async function acquireEligible(
   });
   const transientAttachments = new Map<string, string>();
   const decision = await classifyMessage(
-    unchanged ? prior : null,
+    unchanged ||
+      (input.refreshStage === "mailbox-relevance" &&
+        prior?.checksum === checksum)
+      ? prior
+      : null,
     input.callerJudges
       ? async () => ({
           classification: "uncertain",
@@ -603,7 +631,8 @@ async function acquireEligible(
         })
       : async () =>
           (await routeGmailMessage(message, normalized, ports.triage)).decision,
-    !relevanceModelRuns(input, executionPolicy)
+    !relevanceModelRuns(input, executionPolicy) ||
+      (input.refreshSkipRelevance && prior?.checksum === checksum)
       ? null
       : () =>
           interpretMailRelevance(
@@ -675,6 +704,7 @@ async function acquireEligible(
             decision,
             unchanged,
             classificationCallFor(decision.stage, triageCall, relevanceCall),
+            [triageCall, relevanceCall],
           );
           const reclassified =
             input.reclassify && current
@@ -835,6 +865,10 @@ export async function ingestGmailMessages(
      * and publish through `reclassifyPublication`.
      */
     reclassify?: boolean;
+    refreshStage?: "mailbox-triage" | "mailbox-relevance";
+    refreshSkipRelevance?: boolean;
+    refreshDependencies?: AiProvenance["dependencies"];
+    evaluation?: { id: string; token: string };
     storage?: OrderMailAttachmentStorage;
     onMessage?: (handled: number) => Promise<void>;
   },

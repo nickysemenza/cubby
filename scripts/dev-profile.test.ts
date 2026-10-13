@@ -84,7 +84,7 @@ test("integrations require a checkout-isolated vector index", () => {
   assert.equal(live.vars.AI_GATEWAY_API_KEY, "synthetic-key");
 });
 
-// Billed AI traffic shares the `cubby` gateway, labelled `development` at
+// Billed development traffic uses the evaluation gateway, labelled `development` at
 // runtime; offline dev stays unable to bill because it carries no key.
 test("dev profiles never redirect the gateway, and offline dev carries no key", () => {
   const offline = resolveDevProfile("/tmp/cubby", {

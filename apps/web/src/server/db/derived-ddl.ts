@@ -105,7 +105,8 @@ const suggestionSupersedingTriggerSql = (): string => {
           watched,
         }) => `  IF OLD.${quoteIdentifier(watched)} IS DISTINCT FROM NEW.${quoteIdentifier(watched)} THEN
     UPDATE "Suggestion"
-    SET "status" = 'superseded', "updatedAt" = now()
+    SET "status" = 'superseded', "updatedAt" = now(),
+        "supersessionReceipt" = jsonb_build_object('reason', ${quoteLiteral(watched === field ? "target_changed" : "input_changed")}, 'evaluationId', NULL, 'at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
     WHERE "entity" = ${quoteLiteral(entity)}
       AND "recordId" = NEW."id"
       AND "field" = ${quoteLiteral(field)}
@@ -132,7 +133,7 @@ CREATE TRIGGER ${quoteIdentifier(triggerName)} AFTER UPDATE OF ${updatedColumns}
       return `CREATE OR REPLACE FUNCTION ${quoteIdentifier(functionName)}() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF OLD.${quoteIdentifier(column)} IS DISTINCT FROM NEW.${quoteIdentifier(column)} THEN
-    UPDATE "Suggestion" AS s SET "status" = 'superseded', "updatedAt" = now()
+    UPDATE "Suggestion" AS s SET "status" = 'superseded', "updatedAt" = now(), "supersessionReceipt" = jsonb_build_object('reason', 'input_changed', 'evaluationId', NULL, 'at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
     FROM ${quoteIdentifier(table)} AS r
     WHERE s."entity" = ${quoteLiteral(entity)} AND s."field" = ${quoteLiteral(field)}
       AND s."status" = 'pending' AND r."id" = s."recordId" AND r.${quoteIdentifier(via)} = NEW."id";

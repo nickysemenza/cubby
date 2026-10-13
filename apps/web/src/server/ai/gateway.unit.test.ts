@@ -219,7 +219,7 @@ describe("gatewayFetch on the dev REST fallback", () => {
 
     const [call] = sent;
     expect(call?.url).toBe(
-      "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby/compat/chat/completions",
+      "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby-evaluation/compat/chat/completions",
     );
     const headers = new Headers(call?.init?.headers);
     expect(headers.get("authorization")).toBeNull();
@@ -497,7 +497,7 @@ describe("gatewayFetch Workers AI", () => {
         decisionInput,
         {
           gateway: {
-            id: "cubby",
+            id: "cubby-evaluation",
             metadata: outbound,
             skipCache: undefined,
             cacheTtl: 604_800,
@@ -534,7 +534,7 @@ describe("gatewayFetch Workers AI", () => {
     );
     const headers = new Headers(call?.init?.headers);
     expect(headers.get("authorization")).toBe("Bearer dev-token");
-    expect(headers.get("cf-aig-gateway-id")).toBe("cubby");
+    expect(headers.get("cf-aig-gateway-id")).toBe("cubby-evaluation");
     expect(JSON.parse(headers.get("cf-aig-metadata") ?? "{}")).toEqual(
       outbound,
     );
@@ -620,4 +620,42 @@ describe("gatewayFetch response observation", () => {
       expect.objectContaining({ status: 500, body: "synthetic failure" }),
     ]);
   });
+});
+
+it("preserves sanitized provider headers through shared Gateway coordination", async () => {
+  const requests: unknown[] = [];
+  setCfEnv(
+    fromPartial<Env>({
+      AI_GATEWAY_EGRESS: {
+        getByName: () =>
+          fromPartial<ReturnType<Env["AI_GATEWAY_EGRESS"]["getByName"]>>({
+            fetch: async (request: Request) => {
+              requests.push(await request.json());
+              return new Response("synthetic stream");
+            },
+          }),
+      },
+    }),
+  );
+  const response = await gatewayFetch("anthropic", { metadata })(
+    `${gatewayBaseURL("anthropic")}/v1/messages`,
+    {
+      method: "POST",
+      headers: {
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "synthetic-beta",
+        "x-api-key": "synthetic-secret",
+      },
+      body: "{}",
+    },
+  );
+  expect(await response.text()).toBe("synthetic stream");
+  expect(requests[0]).toMatchObject({
+    provider: "anthropic",
+    headers: {
+      "anthropic-version": "2023-06-01",
+      "anthropic-beta": "synthetic-beta",
+    },
+  });
+  expect(JSON.stringify(requests[0])).not.toContain("synthetic-secret");
 });

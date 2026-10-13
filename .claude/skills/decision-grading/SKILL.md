@@ -32,15 +32,20 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 
 ## Field decisions (Jev vs Clef, prompts, options)
 
-1. Labels: `entity_read.suggestion_queue` with `status: "applied"` and
-   `status: "rejected"`, `minConfidence: 0`, filtered by `entity`/`field`.
-   Applied means the suggested value is correct; rejected with
-   `correctValue` makes that value the label; rejected without one only says
-   the suggestion was wrong.
-2. Replay: for each labeled record, call `entity_read.suggest_fields` with
+1. Sample `entity_read.suggestion_queue` across pending, applied, rejected
+   and superseded statuses, `minConfidence: 0`, filtered by `entity`/`field`.
+   Luna/Sol may grade any sample independently from its captured evidence.
+   Lock the model grade before revealing acceptance or rejection. Keep model
+   grades and member labels as separate evidence: automatic application is an
+   outcome, member acceptance is a member label, and a member correction records
+   their preferred value. Neither determines the model grade. Unknown legacy
+   acceptance has no trustworthy automatic/member attribution. Keep generating
+   provenance, supersession and acceptance receipts with the sampled outcome.
+2. Replay: for each sampled record, call `entity_read.suggest_fields` with
    `entityId`, `targets: [field]`, `basisMode: "suggested"` and
    `decisionModel` `typesafe/jev`, then `@cf/cloudflare/clef`.
-3. Score per field × model: accuracy on labeled rows, repeat misses (same
+3. Score per field × model: accuracy against independent grades and member
+   labels separately, repeat misses (same
    wrong value as the stored rejection), mean confidence when right vs wrong,
    and how often confidence ≥ 0.85 was wrong.
 4. Option health per field: value counts from `entity_read.list` (or

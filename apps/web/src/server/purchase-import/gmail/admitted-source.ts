@@ -90,6 +90,7 @@ export async function publishGmailEvidence<T>(
     runId?: string;
     executionPolicy: EmailExecutionPolicy;
     expected: typeof emailTable.$inferSelect | null;
+    evaluation?: { id: string; token: string; sourceChecksum?: string };
   },
   publish: (
     tx: Database,
@@ -97,6 +98,15 @@ export async function publishGmailEvidence<T>(
   ) => Promise<T>,
 ): Promise<T | null> {
   return withTransaction(db, async (tx) => {
+    const evaluation = input.evaluation;
+    if (evaluation)
+      await (
+        await import("~/server/repo/ai-evaluation")
+      ).guardAiEvaluation(
+        databaseForTransaction(tx),
+        evaluation.id,
+        evaluation.token,
+      );
     const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);
     const [party] = await tx
       .select({ id: ledgerParty.id })
@@ -142,6 +152,14 @@ export async function publishGmailEvidence<T>(
       )
     )
       return null;
-    return publish(txDb, current ?? null);
+    const result = await publish(txDb, current ?? null);
+    if (evaluation)
+      await (
+        await import("~/server/repo/ai-evaluation")
+      ).completeAiEvaluation(txDb, evaluation.id, evaluation.token, {
+        outcome: result,
+        sourceChecksum: evaluation.sourceChecksum ?? null,
+      });
+    return result;
   });
 }
