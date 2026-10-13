@@ -34,7 +34,10 @@ import {
   reconciliationFingerprint,
   sourceObservationIdentityMatches,
 } from "./reconciliation-observations";
-import { recordReviewedOriginal } from "./reconciliation-original-review";
+import {
+  canonicalizeReviewedLegacyOriginal,
+  recordReviewedOriginal,
+} from "./reconciliation-original-review";
 import {
   loadSourceReconciliationState,
   type ReconciliationFix,
@@ -97,7 +100,7 @@ async function acceptedFix(
   const [current] = await selectOwned();
   if (!current || current.claim.ledgerPartyId !== owner.claim.ledgerPartyId)
     throw new Error("Accepted source ownership changed; review it again.");
-  const family = await readImportSourceClaimFamily(
+  let family = await readImportSourceClaimFamily(
     tx,
     {
       ledgerPartyId: current.claim.ledgerPartyId,
@@ -110,6 +113,16 @@ async function acceptedFix(
     throw new Error(
       "Accepted source canonical family changed; review its ownership.",
     );
+  const legacyReview = reviewedPreparation
+    ? await canonicalizeReviewedLegacyOriginal(
+        tx,
+        current.association,
+        family,
+        reviewedPreparation,
+        actor,
+      )
+    : null;
+  family = legacyReview?.family ?? family;
   const association = reviewedPreparation
     ? (
         await readSourceFamilyOrder(
@@ -148,6 +161,7 @@ async function acceptedFix(
         family,
         reviewedPreparation,
         actor,
+        legacyReview?.reviewedLegacyChecksum,
       )
     : null;
   if (acceptedObservation && reviewedObservation && reviewedPreparation) {

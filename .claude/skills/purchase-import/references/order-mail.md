@@ -88,7 +88,14 @@ An audit receipt records the selected preparation; equivalent observation
 content may reuse an existing immutable observation. The historical
 `originalOrder` stays unchanged. Existing exact item Expenses alone are bound;
 spend, payment evidence, allocations and stock stay unchanged. A known accepted original uses the normal path, and changed or
-unavailable originals remain blocked.
+unavailable originals remain blocked. An unknown historical Gmail per-order key
+may become a read-only alias of a current mailbox source only when the writer
+finds exactly one owned legacy copy with the historical checksum and identical
+message identity, sender, subject, received time and full bodies. This proof can
+bridge storage-checksum differences; it preserves the old claim, association and
+historical extraction. Changed bodies, ambiguous copies and unresolved ownership
+still refuse. Ordinary canonical-source reviews retain the accepted checksum
+fence.
 
 Every accepted binding validates the current Expense title, quantity, role,
 basis and claims across the complete source-line roster before either replay
