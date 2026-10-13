@@ -257,9 +257,7 @@ describe("stored suggestions in generic list cells", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Suggestion actions" }),
-    );
+    fireEvent.click(await screen.findByText("Review", { selector: "summary" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Use a different value…" }),
     );
@@ -321,9 +319,7 @@ describe("stored suggestions in generic list cells", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Suggestion actions" }),
-    );
+    fireEvent.click(await screen.findByText("Review", { selector: "summary" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Use a different value…" }),
     );
@@ -382,9 +378,7 @@ describe("stored suggestions in generic list cells", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Suggestion actions" }),
-    );
+    fireEvent.click(await screen.findByText("Review", { selector: "summary" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Use a different value…" }),
     );
@@ -493,11 +487,9 @@ describe("stored suggestions in generic list cells", () => {
     );
 
     expect(
-      await screen.findByRole("button", { name: /^Accept suggested value/ }),
+      await screen.findByRole("button", { name: "Accept" }),
     ).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: /^Accept suggested value/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     await waitFor(() => expect(operations.accept).toHaveBeenCalledOnce());
     harness.dispose();
   });
@@ -552,7 +544,7 @@ describe("stored suggestions in generic list cells", () => {
 
     expect(await screen.findByText("Replacement product")).toBeInTheDocument();
     expect(screen.getAllByText("Synthetic product").length).toBeGreaterThan(1);
-    expect(screen.getByLabelText("Suggested replacement")).toBeInTheDocument();
+    expect(screen.getByLabelText("suggested replacement")).toBeInTheDocument();
     harness.dispose();
   });
 

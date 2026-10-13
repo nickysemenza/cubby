@@ -135,7 +135,7 @@ export default defineEntity({
           placement: "full",
         },
         { kind: "slot", id: "labels", title: "Labels" },
-        { kind: "slot", id: "nutrition", title: "Nutrition" },
+        { kind: "slot", id: "nutrition", title: "Nutrition summary" },
         { kind: "slot", id: "unit-mappings", title: "Unit mappings" },
         { kind: "slot", id: "fits-with", title: "Similar products" },
         { kind: "slot", id: "cookbooks", title: "Cookbooks" },
