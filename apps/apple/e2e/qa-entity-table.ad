@@ -18,6 +18,8 @@ click "label=Search"
 wait "role=SearchField editable=true" 30000
 fill "role=SearchField editable=true" "${PRODUCT_ID}"
 wait "id=browse.product.row.${PRODUCT_ID}" 60000
+click "label=Close"
+wait "label=\"List controls\"" 30000
 click "label=\"List controls\""
 click "label=View"
 click "label=Table"
