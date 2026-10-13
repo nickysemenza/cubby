@@ -283,7 +283,9 @@ export const imageIdentificationBlocks = (
 ): ReportBlock[] => {
   if (!identification) return [];
   const candidates =
-    identification.subject === "single_object" &&
+    (identification.identityScope === "single_identity" ||
+      (identification.identityScope === "unclear" &&
+        identification.subject === "single_object")) &&
     identification.outcome === "suggestions"
       ? identification.candidates
       : [];
@@ -293,8 +295,8 @@ export const imageIdentificationBlocks = (
       "Identification abstained: no eligible Product candidates were available.",
     no_match:
       "Identification abstained: no Product match was sufficiently supported.",
-    not_single_subject:
-      "Identification abstained: this image does not show a supported single object.",
+    not_single_identity:
+      "Identification abstained: this image does not support one catalog identity.",
   };
   const blocks: ReportBlock[] = candidates.length
     ? [
@@ -317,8 +319,9 @@ export const imageIdentificationBlocks = (
         {
           kind: "note",
           text:
+            identification.identityScope !== "single_identity" &&
             identification.subject !== "single_object"
-              ? abstentionNotes.not_single_subject
+              ? abstentionNotes.not_single_identity
               : abstentionNotes[identification.outcome],
           tone: "muted",
         },

@@ -33,7 +33,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import {
   runStatus,
-  runTargetEntityKind,
+  runTargetOutcomeReceipt,
   runWorkLabel,
 } from "@cubby/schemas/run-fields";
 import { parseShortcode } from "@cubby/shared";
@@ -285,7 +285,7 @@ const runFactsRow = z.object({
   targetCounts: activityRun.shape.targetCounts.unwrap(),
   targets: z.array(
     z.object({
-      entityKind: runTargetEntityKind,
+      entityKind: runTargetOutcomeReceipt.shape.target.shape.entityKind,
       entityId: z.string(),
       shortcode: z.string(),
       state: z.string(),

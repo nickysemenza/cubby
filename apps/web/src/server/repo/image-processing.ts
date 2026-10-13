@@ -15,6 +15,7 @@ import {
   imageProcessingJobKind,
   imageDescriptionResult,
   imageDescriptionAnalysis,
+  selectImageDescription,
   type ImageDescriptionResult,
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
@@ -1451,8 +1452,7 @@ export async function getImageProcessingReadProjection(
       })
     );
   };
-  // Keep history bounded but find the current cloud result independently: a
-  // run of Apple evaluations or older source versions must not hide it.
+  // Bounded history must not hide the preferred or available current-source result.
   const currentCandidates = await getDb(db)
     .select({
       provider: aiAnalysis.provider,
@@ -1470,23 +1470,18 @@ export async function getImageProcessingReadProjection(
         eq(aiAnalysis.entityKind, "image"),
         eq(aiAnalysis.entityId, imageId),
         eq(aiAnalysis.feature, "image-description"),
-        eq(aiAnalysis.provider, preferredImageDescriptionPolicy.provider),
-        eq(aiAnalysis.model, preferredImageDescriptionPolicy.model),
-        eq(
-          aiAnalysis.promptVersion,
-          String(preferredImageDescriptionPolicy.promptRevision),
-        ),
-        eq(
-          aiAnalysis.resultSchemaRevision,
-          preferredImageDescriptionPolicy.resultSchemaRevision,
-        ),
         notDeleted(aiAnalysis),
       ),
     )
     .orderBy(desc(aiAnalysis.createdAt));
-  const currentPreferred = currentCandidates
+  const available = currentCandidates
     .map((entry) => toAnalysis(entry))
-    .find((entry) => entry !== null && isPreferred(entry));
+    .filter((entry) => entry !== null);
+  const currentPreferred =
+    available.find(isPreferred) ??
+    available.find(
+      (entry) => selectImageDescription([entry], null, source.sha256) !== null,
+    );
   if (
     currentPreferred &&
     !analyses.some(

@@ -23,6 +23,7 @@ import { imageDescriptionInputFingerprint } from "~/server/services/image-descri
 
 import { getDb } from "./database-helpers";
 import { createUploadedImageRecord, deleteImages, imageList } from "./image";
+import { loadImageAnalysisSummaries } from "./image-analysis-summary";
 import {
   claimImageProcessingJob,
   completeImageProcessingJob,
@@ -326,10 +327,45 @@ describe("durable image representations", () => {
       },
     };
     await saveImageDescriptionAnalysis(ctx.db, analysis);
+    await saveImageDescriptionAnalysis(ctx.db, {
+      ...analysis,
+      provider: "apple",
+      model: "SystemLanguageModel.default",
+      inputFingerprint: imageDescriptionInputFingerprint({
+        sourceContentHash: hash,
+        contentType: "image/jpeg",
+        provider: "apple",
+        model: "SystemLanguageModel.default",
+      }),
+      result: { ...analysis.result, description: "Short device description" },
+    });
+    expect(
+      (await loadImageAnalysisSummaries(ctx.db, [row.shortcode])).get(
+        row.shortcode,
+      )?.description,
+    ).toBe(analysis.result.description);
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: "b".repeat(64) })
+      .where(eq(image.id, imageId));
+    expect(
+      (await loadImageAnalysisSummaries(ctx.db, [row.shortcode])).get(
+        row.shortcode,
+      ),
+    ).toBeUndefined();
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: hash })
+      .where(eq(image.id, imageId));
     await saveImageDescriptionCorrection(ctx.db, {
       imageId,
       description: "Confirmed navy cotton shirt",
     });
+    expect(
+      (await loadImageAnalysisSummaries(ctx.db, [row.shortcode])).get(
+        row.shortcode,
+      )?.description,
+    ).toBe("Confirmed navy cotton shirt");
     await saveImageDescriptionAnalysis(ctx.db, {
       ...analysis,
       result: {
@@ -349,7 +385,7 @@ describe("durable image representations", () => {
       result: { ...analysis.result, description: "Historical output" },
     });
     const projection = await getImageProcessingReadProjection(ctx.db, imageId);
-    expect(projection.analyses).toHaveLength(2);
+    expect(projection.analyses).toHaveLength(3);
     expect(
       projection.analyses.find((entry) => entry.preferred)?.result.description,
     ).toBe(analysis.result.description);

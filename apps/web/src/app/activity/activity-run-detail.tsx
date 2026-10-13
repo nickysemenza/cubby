@@ -151,7 +151,7 @@ export function ActivityRunDetail({
                 >
                   <Row justify="between" gap="sm" wrap>
                     <span>
-                      #{attempt.number} · {attempt.state} ·{" "}
+                      #{attempt.number} · {workStateLabel(attempt.state)} ·{" "}
                       {formatInstant(attempt.startedAt, "dateTime")}
                     </span>
                     <Row gap="xs">

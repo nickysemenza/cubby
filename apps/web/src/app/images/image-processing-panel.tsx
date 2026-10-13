@@ -3,20 +3,34 @@ import type { ImageWithEntity } from "@cubby/schemas/image";
 import {
   imageProcessingStatusOutput,
   scheduleImageProcessingInput,
+  selectImageDescription,
 } from "@cubby/schemas/image-processing";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 
-import { WorkState, workStateLabel } from "~/app/activity/work-state";
+import {
+  WorkState,
+  workIssueText,
+  workStateLabel,
+} from "~/app/activity/work-state";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import {
   image as imageOperations,
   activity,
   imageProcessing,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { formatInstant } from "~/lib/date-format";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Button, buttonVariants } from "~/ui/primitives/button";
@@ -42,7 +56,7 @@ function ImageAnalysisHistory({
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <h4 className="text-sm font-medium">Full AI history</h4>
+        <h4 className="text-sm font-medium">Analysis history</h4>
         <span className="text-xs text-muted-foreground">
           {pages[0]?.total ?? 0} analyses
         </span>
@@ -55,14 +69,19 @@ function ImageAnalysisHistory({
             className="border-b border-border py-2 text-sm"
           >
             <summary className="text-xs text-muted-foreground">
-              {analysis.provider} · {analysis.model} · {analysis.createdAt}
+              {analysis.provider} ·{" "}
+              {formatInstant(analysis.createdAt, "dateShortTime")}
             </summary>
-            <p>
-              <ShortcodeProse>{analysis.result.description}</ShortcodeProse>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {analysis.model}
+              {analysis.preferred ? " · Preferred description" : ""}
             </p>
-            <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
-              {JSON.stringify(analysis, null, 2)}
-            </pre>
+            <details className="mt-2">
+              <summary className="text-xs">Technical details</summary>
+              <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
+                {JSON.stringify(analysis, null, 2)}
+              </pre>
+            </details>
           </details>
         ))}
       {pages
@@ -76,9 +95,12 @@ function ImageAnalysisHistory({
               Unparsed result · {analysis.provider ?? "Unknown provider"} ·{" "}
               <ShortcodeProse>{analysis.reason}</ShortcodeProse>
             </summary>
-            <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
-              {analysis.rawResultJson}
-            </pre>
+            <details className="mt-2">
+              <summary className="text-xs">Technical details</summary>
+              <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
+                {analysis.rawResultJson}
+              </pre>
+            </details>
           </details>
         ))}
       {analyses.hasNextPage ? (
@@ -98,24 +120,148 @@ function ImageAnalysisHistory({
 
 function DescriptionSummary({
   status,
+  image,
 }: {
   status: z.infer<typeof imageProcessingStatusOutput>;
+  image: ImageWithEntity;
 }) {
-  const preferred = status.analyses.find((analysis) => analysis.preferred);
+  const description = selectImageDescription(
+    status.analyses,
+    status.correction,
+    image.sha256,
+  );
+  const selected = status.analyses.find(
+    (analysis) => analysis.result.description === description,
+  );
   return (
-    <>
-      {status.correction ? (
-        <p>
-          <strong>Confirmed correction:</strong>{" "}
-          <ShortcodeProse>{status.correction.description}</ShortcodeProse>
+    <section className="space-y-2" aria-label="Selected image description">
+      <h4 className="text-sm font-medium">Description</h4>
+      {description ? (
+        <>
+          <p className="text-sm">
+            <ShortcodeProse>{description}</ShortcodeProse>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {status.correction
+              ? "Confirmed correction"
+              : `${selected?.provider} description${selected?.preferred ? " · Preferred" : " · Available result"}`}
+          </p>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No description available yet.
         </p>
+      )}
+      {status.analyses.length > 0 ? (
+        <details className="text-sm">
+          <summary>Compare Apple and cloud descriptions</summary>
+          {status.analyses.map((analysis) => (
+            <div
+              key={`${analysis.provider}:${analysis.model}:${analysis.inputFingerprint}`}
+              className="border-b border-border py-2"
+            >
+              <p className="text-xs text-muted-foreground">
+                {analysis.provider} · {analysis.model}
+                {analysis.preferred ? " · Preferred" : ""}
+              </p>
+              <p>
+                <ShortcodeProse>{analysis.result.description}</ShortcodeProse>
+              </p>
+            </div>
+          ))}
+        </details>
       ) : null}
-      {preferred ? (
-        <p>
-          <ShortcodeProse>{preferred.result.description}</ShortcodeProse>
+    </section>
+  );
+}
+
+function IdentificationSummary({ image }: { image: ImageWithEntity }) {
+  const attach = useActionMutation({
+    mutationFn: imageOperations.attachExisting.mutationOptions,
+    success: "Confirmed Product image attachment saved",
+  });
+  const identification = image.analysisSummary?.identification;
+  if (!identification)
+    return (
+      <section className="space-y-2" aria-label="Product identification">
+        <h4 className="text-sm font-medium">Product identification</h4>
+        <p className="text-sm text-muted-foreground">
+          No current identification result. Queue missing processing to evaluate
+          this image.
         </p>
-      ) : null}
-    </>
+      </section>
+    );
+  const reason =
+    identification.outcome === "not_single_identity"
+      ? "Multiple or unclear identities: no Product identity suggested."
+      : identification.outcome === "no_candidates"
+        ? "No live Product suggestions are available."
+        : "No confident Product match found.";
+  return (
+    <section className="space-y-2" aria-label="Product identification">
+      <h4 className="text-sm font-medium">Product identification</h4>
+      <p className="text-xs text-muted-foreground">
+        Composition: {identification.subject.replaceAll("_", " ")} · Identity:{" "}
+        {(identification.identityScope ?? "unclear").replaceAll("_", " ")}
+      </p>
+      {identification.outcome === "suggestions" &&
+      identification.candidates.length ? (
+        <>
+          <RecordList aria-label="Unconfirmed Product suggestions">
+            {identification.candidates.map((candidate) => (
+              <RecordRow
+                key={candidate.productId}
+                primary={
+                  <EntityRefLink
+                    variant="preview"
+                    entity="product"
+                    id={candidate.productId}
+                    displayImage={null}
+                  >
+                    {candidate.name}
+                  </EntityRefLink>
+                }
+                trailing={`${Math.round(candidate.probability * 100)}% confidence`}
+                actions={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      attach.isPending ||
+                      image.associations.some(
+                        (association) =>
+                          association.entityId === candidate.productId,
+                      )
+                    }
+                    onClick={() =>
+                      attach.mutate({
+                        imageId: image.id,
+                        targetId: candidate.productId,
+                        purpose: "item",
+                      })
+                    }
+                  >
+                    {image.associations.some(
+                      (association) =>
+                        association.entityId === candidate.productId,
+                    )
+                      ? "Already attached"
+                      : "Confirm and attach"}
+                  </Button>
+                }
+              />
+            ))}
+          </RecordList>
+          <p className="text-xs text-muted-foreground">
+            Suggestions need confirmation. Review the Product, then confirm to
+            attach this image as an item photo. Confirmation does not change
+            inventory.
+          </p>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">{reason}</p>
+      )}
+    </section>
   );
 }
 
@@ -128,6 +274,16 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
       query.state.data?.items.some((run) => run.active) ? 15_000 : false,
     refetchIntervalInBackground: false,
   });
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!recentRuns.data) return;
+    // Background completion happens outside this browser's mutation cache.
+    // Refresh detail records without invalidating activity and triggering this effect again.
+    void invalidateOperationTags(
+      queryClient,
+      exactRippleTags([["entity", "detail"]]),
+    );
+  }, [id, queryClient, recentRuns.data]);
   const [correction, setCorrection] = useState("");
   const save = useActionMutation({
     mutationFn: imageProcessing.correctDescription.mutationOptions,
@@ -159,22 +315,73 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
               Transparent image unavailable
             </p>
           ) : null}
-          <DescriptionSummary status={status.data} />
-          <ImageAnalysisHistory id={id} />
+          <DescriptionSummary status={status.data} image={image} />
+          <IdentificationSummary image={image} />
+          <details>
+            <summary className="text-sm">Technical analysis history</summary>
+            <ImageAnalysisHistory id={id} />
+          </details>
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h4 className="text-sm font-medium">Recent jobs</h4>
             </div>
-            {(recentRuns.data?.items ?? []).map((run) => (
-              <a
-                key={run.id}
-                className="block border-b border-border py-2 text-sm hover:bg-muted/40"
-                href={`/runs?selected=${encodeURIComponent(run.id)}`}
-              >
-                {run.kind.replaceAll("_", " ")} ·{" "}
-                <WorkState state={run.state} />
-              </a>
-            ))}
+            <RecordList
+              empty="No processing jobs yet."
+              state={
+                recentRuns.isPending
+                  ? { status: "pending" }
+                  : recentRuns.error
+                    ? {
+                        status: "error",
+                        error: recentRuns.error,
+                        title: "recent image jobs",
+                        onRetry: () => void recentRuns.refetch(),
+                      }
+                    : undefined
+              }
+            >
+              {(recentRuns.data?.items ?? []).map((run) => (
+                <RecordRow
+                  key={run.id}
+                  primary={
+                    <a
+                      className="hover:underline"
+                      href={`/runs?selected=${encodeURIComponent(run.id)}`}
+                    >
+                      {run.workLabel}
+                    </a>
+                  }
+                  secondary={
+                    run.executors.length
+                      ? [
+                          ...new Set(
+                            run.executors.map((executor) =>
+                              executor.kind === "device" ? "Apple" : "Cloud",
+                            ),
+                          ),
+                        ].join(" · ")
+                      : "Executor not assigned"
+                  }
+                  trailing={
+                    <span className="flex flex-wrap items-center justify-end gap-2">
+                      <span>
+                        {formatInstant(run.createdAt, "dateShortTime")}
+                      </span>
+                      <WorkState state={run.state} />
+                    </span>
+                  }
+                  detail={
+                    workIssueText(run) ? (
+                      <p className="text-xs text-muted-foreground">
+                        <ShortcodeProse>
+                          {workIssueText(run) ?? ""}
+                        </ShortcodeProse>
+                      </p>
+                    ) : undefined
+                  }
+                />
+              ))}
+            </RecordList>
           </section>
         </>
       ) : status.error ? (
@@ -339,7 +546,7 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
         disabled={evaluate.isPending}
         onClick={() => evaluate.mutate({ id })}
       >
-        Evaluate this image on Apple
+        Queue Apple description
       </Button>
       <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
         <DialogContent size="xl">
@@ -374,6 +581,12 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
                   alt="Processed image"
                   displayWidth={640}
                   className="max-h-[60vh] w-full object-contain"
+                  style={{
+                    backgroundColor: "var(--color-card)",
+                    backgroundImage:
+                      "conic-gradient(var(--color-muted) 25%, transparent 0 50%, var(--color-muted) 0 75%, transparent 0)",
+                    backgroundSize: "16px 16px",
+                  }}
                 />
               </a>
             </figure>

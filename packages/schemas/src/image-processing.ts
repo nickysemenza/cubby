@@ -315,6 +315,37 @@ export const imageDescriptionCorrection = z.object({
   confirmedAt: isoDateTime,
 });
 
+/** Confirmed prose wins; machine observations must match the current source. */
+export function selectImageDescription(
+  analyses: readonly Pick<
+    z.infer<typeof imageDescriptionAnalysis>,
+    "result" | "preferred" | "inputFingerprint"
+  >[],
+  correction: Pick<
+    z.infer<typeof imageDescriptionCorrection>,
+    "description"
+  > | null,
+  sourceContentHash: string | null,
+) {
+  if (correction) return correction.description;
+  const current = analyses.filter((entry) => {
+    try {
+      const fingerprint: unknown = JSON.parse(entry.inputFingerprint);
+      return (
+        z.object({ sourceContentHash: z.string() }).safeParse(fingerprint).data
+          ?.sourceContentHash === sourceContentHash &&
+        sourceContentHash !== null
+      );
+    } catch {
+      return false;
+    }
+  });
+  return (
+    (current.find((entry) => entry.preferred) ?? current[0])?.result
+      .description ?? null
+  );
+}
+
 export const imageProcessingStatusInput = z.object({ id: imageShortcode });
 export const imageProcessingStatusOutput = z.object({
   representations: imageRepresentations,

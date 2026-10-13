@@ -48,17 +48,30 @@ describe("retained image identification report", () => {
     expect(entityReportOut.safeParse({ blocks }).success).toBe(true);
   });
 
+  it("retains one identity represented by multiple related objects", () => {
+    expect(
+      rowsOf(
+        imageIdentificationBlocks({
+          ...result,
+          subject: "multiple_objects",
+          identityScope: "single_identity",
+        }),
+      ),
+    ).toHaveLength(1);
+  });
+
   it("does not expose candidates when the retained result abstains or is missing", () => {
     expect(imageIdentificationBlocks(null)).toEqual([]);
     const blocks = imageIdentificationBlocks({
       ...result,
       subject: "multiple_objects",
-      outcome: "not_single_subject",
+      outcome: "not_single_identity",
     });
     expect(rowsOf(blocks)).toEqual([]);
     expect(
       blocks.some(
-        (block) => block.kind === "note" && /single object/.test(block.text),
+        (block) =>
+          block.kind === "note" && /one catalog identity/.test(block.text),
       ),
     ).toBe(true);
   });
