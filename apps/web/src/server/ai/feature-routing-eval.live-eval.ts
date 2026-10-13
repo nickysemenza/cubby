@@ -7,8 +7,9 @@ import {
   normalizeImportAuditModelOutput,
   normalizeImportExtractionModelOutput,
 } from "@cubby/schemas/purchase-import";
-import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import {
+  emptyEvalUsage,
+  meteredStructuredPorts,
   type EvalCandidate,
   evalCandidates,
   evalCostUsd,
@@ -195,65 +196,6 @@ const suites: Array<{
   },
 ];
 
-/** Production ports, tallying every completed call's tokens. */
-function meteredPorts(usage: EvalUsage): StructuredRunPorts {
-  return {
-    callTarget: (model, call) => {
-      const target = piCallTarget(model, call);
-      return {
-        ...target,
-        complete: async (context, options) => {
-          const started = Date.now();
-          usage.requests += 1;
-          // Counted before the call: a thrown transport failure never
-          // returns a message, and the run loop aborts on any failure.
-          usage.failedRequests += 1;
-          const message = await target.complete(context, options);
-          usage.failedRequests -= 1;
-          usage.modelMs += Date.now() - started;
-          if (
-            message.stopReason === "error" ||
-            message.stopReason === "aborted"
-          )
-            usage.failedRequests += 1;
-          // pi subtracts cache reads and writes from `input`; total them back
-          // as the Responses API reports them (writes bill at the input rate
-          // here, as in the decision eval's proxy).
-          usage.inputTokens +=
-            message.usage.input +
-            message.usage.cacheRead +
-            message.usage.cacheWrite;
-          usage.cachedInputTokens += message.usage.cacheRead;
-          usage.outputTokens += message.usage.output;
-          usage.reasoningTokens += message.usage.reasoning ?? 0;
-          const tokens = piTokenUsage(message);
-          if (tokens.inputTokens !== null)
-            usage.calls.push({
-              inputTokens:
-                message.usage.input +
-                message.usage.cacheRead +
-                message.usage.cacheWrite,
-              cachedInputTokens: message.usage.cacheRead,
-              outputTokens: message.usage.output,
-            });
-          return message;
-        },
-      };
-    },
-  };
-}
-
-const emptyUsage = (): EvalUsage => ({
-  requests: 0,
-  failedRequests: 0,
-  inputTokens: 0,
-  cachedInputTokens: 0,
-  outputTokens: 0,
-  reasoningTokens: 0,
-  modelMs: 0,
-  calls: [],
-});
-
 describe("structured feature routing eval", () => {
   it("scores candidate models on synthetic feature cases", async () => {
     const revision = execFileSync("git", ["rev-parse", "HEAD"], {
@@ -292,9 +234,12 @@ describe("structured feature routing eval", () => {
       for (const choice of candidates)
         for (const entry of cases)
           for (let attempt = 0; attempt < repeats; attempt += 1) {
-            const usage = emptyUsage();
+            const usage = emptyEvalUsage();
             const started = Date.now();
-            const score = await entry.run(choice, meteredPorts(usage));
+            const score = await entry.run(
+              choice,
+              meteredStructuredPorts(usage, piCallTarget),
+            );
             // A transport or provider failure says nothing about the model's
             // judgment: stop instead of scoring it as a miss.
             if (usage.failedRequests > 0)

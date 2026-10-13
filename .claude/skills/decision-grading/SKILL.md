@@ -98,6 +98,13 @@ budget. CI sets `MAIL_PROMPT_BASELINE_ONLY=1` and checks the production prompt
 through both models on manual CI dispatch only. The informational job is outside
 the required merge gate; fork PRs never receive the gateway credential.
 
+`MAIL_PROMPT_EVAL_STAGE=relevance` selects real Luna fallback calls;
+`both` also runs Jev/Clef, and the default `decision` keeps the CI suite small.
+Fallback reports distinguish raw model choices from completeness-guarded results.
+Calls use the production feature/schema with no database usage context; this is
+prompt measurement, not production execution-authorization or accounting parity.
+The stdin source format evaluates body/HTML only, not Gmail attachments.
+
 Read real originals via Cubby or Gmail MCP and lock session labels first. Remove
 identifying headers and addresses, preserving transaction evidence. Supply the
 JSON array of `{label, body, html?, subject?}` through the stdin wrapper
