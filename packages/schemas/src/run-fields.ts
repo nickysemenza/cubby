@@ -1,3 +1,4 @@
+import type { MailReclassificationCheckpoint } from "./email-actions.js";
 import { z } from "zod";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
@@ -349,7 +350,10 @@ export type RunInput =
   | OrderBackfillRunInput
   | z.infer<typeof chargeHuntRunInput>
   | SuggestionSweepRunInput;
-export type RunProgress = MailDiscoveryRunProgress | SuggestionSweepRunProgress;
+export type RunProgress =
+  | MailDiscoveryRunProgress
+  | SuggestionSweepRunProgress
+  | MailReclassificationCheckpoint;
 
 /**
  * What one run actually does, for every surface that names it (lists,

@@ -40,6 +40,23 @@ pending: nothing here starts Product research.
    Emails through the same ingest path in its `reclassify` mode: the result is
    history, it replaces Relevance only without dropping retained content or an
    import, and it never overrides a member resolution (ADR 0011).
+   Each relevance rerun stores a versioned publication-receipt checkpoint in
+   `Run.progress` before work, after every reached Email, and with the deferred
+   tail on completion. The frozen
+   selection and checksums remain in `Run.input`. `imports_read.run_status`
+   exposes `mailReclassification` through a narrow member-owned read: selected
+   Email codes/checksums, exact receipts, retained notes, and separately labeled
+   immutable classification observations. A client timeout does not imply the
+   Run stopped: recover its receipts before deciding whether to rerun only
+   deferred work. `complete` means the entire roster has receipts, including
+   deferred outcomes; it does not mean every Email was classified. Legacy Runs
+   have null receipts; notes can be truncated and observations do not establish
+   publication outcomes. A failed outcome can follow publication if read-back
+   fails, so it also requires reconciliation before retrying. Missing Email identities are null, never raw UUIDs.
+   Receipt persistence follows publication in a separate transaction: an abrupt
+   termination between them leaves an unknown outcome, not permission to rerun.
+   The status header reuses the canonical Run projection without entity-quality
+   hydration. Preview reruns and discovery retain their existing progress contracts.
 2. **Admission** (`mail-import-run.ts`) freezes up to 50 Emails' checksums into
    one `mail_import` Run with a RunTarget per Email, assigns ownership through
    `Email.runId`, and dispatches `start_or_resume` to

@@ -43,6 +43,7 @@ import {
   findOwnedMailDiscovery,
   loadMailDiscoveryRead,
 } from "~/server/repo/run-discovery-read";
+import { loadMailReclassificationRead } from "~/server/repo/run-reclassification-read";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
 import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
@@ -182,6 +183,11 @@ export const runHandlers = implementOperationDomain(runContract, {
       input.runId,
       party ? { userId: context.auth.userId, ledgerPartyId: party.id } : null,
     );
+    const mailReclassification = await loadMailReclassificationRead(
+      context.db,
+      input.runId,
+      party ? { userId: context.auth.userId, ledgerPartyId: party.id } : null,
+    );
     const run = await loadRunDetail(context.db, input.runId);
     return {
       runId: input.runId,
@@ -213,6 +219,7 @@ export const runHandlers = implementOperationDomain(runContract, {
       progress: run.progress,
       operations: run.operations,
       mailDiscovery,
+      mailReclassification,
     };
   },
   history: async (context, input) => {

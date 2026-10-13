@@ -11,6 +11,8 @@ import {
   mailboxClassificationStage,
 } from "./mailbox-research.js";
 
+import { emailClassificationObservationInput } from "./email-observations.js";
+
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
 
 /** One Email at the checksum the member reviewed. */
@@ -105,7 +107,8 @@ export const reclassifyEmailsInput = z
  * member's resolution or independent review, `frozen` is an admitted or unresolved historical
  * import source, `changed` means the Email changed during the rerun, and
  * `removed` is deleted or in Spam/Trash at Gmail. `deferred` Emails were not
- * reached within one request's time budget; reclassify them again.
+ * reached within one request's time budget; reclassify them again. `failed`
+ * can occur after publication during read-back; reconcile before retrying.
  */
 export const emailReclassifyOutcome = z.enum([
   "replaced",
@@ -148,3 +151,28 @@ export const rerunEmailPreviewOut = z
   })
   .strict();
 export type RerunEmailPreviewOut = z.infer<typeof rerunEmailPreviewOut>;
+
+/** Exact publication receipts; an observation alone cannot establish an outcome. */
+export const mailReclassificationCheckpoint = z.strictObject({
+  kind: z.literal("mail_reclassification"),
+  version: z.literal(1),
+  complete: z.boolean(),
+  results: reclassifyEmailsOut.shape.results,
+});
+export type MailReclassificationCheckpoint = z.infer<
+  typeof mailReclassificationCheckpoint
+>;
+export const mailReclassificationRead = z.strictObject({
+  selectedEmails: z.array(
+    z.strictObject({ id: emailShortcode.nullable(), checksum: z.string() }),
+  ),
+  receipts: mailReclassificationCheckpoint.nullable(),
+  /** Historical Run notes may have been truncated; they are not receipts. */
+  notes: z.string().nullable(),
+  /** Immutable model evidence, not proof that publication succeeded. */
+  classificationObservations: z.array(
+    emailClassificationObservationInput
+      .omit({ emailId: true, runId: true, usageId: true })
+      .extend({ id: emailShortcode.nullable(), createdAt: z.iso.datetime() }),
+  ),
+});

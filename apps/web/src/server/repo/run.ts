@@ -172,6 +172,21 @@ const reader = createEntityReader<
 
 export const getRunByShortcode = reader.getByShortcode;
 
+/** Import status needs the shared projection, without unrelated entity-quality hydration. */
+export async function getRunHeaderByShortcode(db: Database, shortcode: string) {
+  const [row] = await unwrapDb(db)
+    .select()
+    .from(runTable)
+    .where(
+      and(
+        eq(runTable.shortcode, parseShortcodeFor("run", shortcode)),
+        notDeleted(runTable),
+      ),
+    )
+    .limit(1);
+  return row ? (await hydrateProjection(db, [row]))[0] : undefined;
+}
+
 /** Declared `lifecycle: "readOnly"`: the run service and importers own writes. */
 export const runRepository = defineRepository("run", {
   get: onDb(getRunByShortcode),
