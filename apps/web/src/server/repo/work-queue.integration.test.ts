@@ -210,6 +210,41 @@ describe("Work queue gaps, typed columns, and record rows", () => {
       });
   });
 
+  // A Project record read scopes the attention rules to that project rather
+  // than computing them household-wide, and still finds its attention rows.
+  it("reads a Project's attention rows scoped to that project", async () => {
+    const name = "Synthetic attention project";
+    const project = await insertWithShortcode(ctx.db, "project", {
+      name,
+      status: "in_progress",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      name: `${name} spend`,
+      projectId: project.id,
+      cost: 40,
+      date: "2026-09-20",
+      costType: "materials",
+      trade: "other",
+      lineKind: "principal",
+      lineBasis: "allocation",
+      economicRole: "vendor",
+    });
+    const queue = await read({ query: name, pageSize: 100 });
+    const projectKeys = queue.items
+      .filter((row) => row.entity === "project")
+      .map((row) => row.key);
+    expect(projectKeys.length).toBeGreaterThan(0);
+    const strip = await readRecordWorkQueue(
+      ctx.db,
+      null,
+      project.shortcode,
+      false,
+    );
+    expect(strip.items.map((row) => row.key).sort()).toEqual(
+      [...projectKeys].sort(),
+    );
+  });
+
   it("reads one record's rows without suggestion groups or fenced work", async () => {
     const prefix = "Synthetic record strip";
     const { lines } = await merchandiseOrder(prefix);

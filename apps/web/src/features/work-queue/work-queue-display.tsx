@@ -10,6 +10,11 @@ import { ChipCluster } from "~/ui/common/chip-cluster";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";
 import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 import { EnumPill } from "~/ui/primitives/enum-pill";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 
 /** One roster, so a member keeps the same color on every queue surface. */
 export const memberOptionsOf = (members: readonly WorkQueueMember[]) =>
@@ -83,15 +88,60 @@ export function GapChip({
   );
 }
 
-/** Table form: two chip lines inside the 32px row, then "+N". */
+const gapText = (gap: WorkQueueGap) =>
+  `${dataCheckLabel[gap.check]}: ${gap.message}`;
+
+/**
+ * Table form: two chip lines inside the 32px row, then a "+N" disclosure that
+ * lists every hidden check with its message. Fitting drops chips from the
+ * DOM, so assistive tech reads one complete description instead of them.
+ */
 export function GapChipCluster({ gaps }: { gaps: readonly WorkQueueGap[] }) {
+  const byCheck = new Map<string, WorkQueueGap>(
+    gaps.map((gap) => [gap.check, gap]),
+  );
   return (
-    <ChipCluster
-      items={gaps.map((gap) => ({
-        key: gap.check,
-        label: dataCheckLabel[gap.check],
-        node: <GapChip gap={gap} dense />,
-      }))}
-    />
+    <span className="block min-w-0">
+      <span className="sr-only">{gaps.map(gapText).join(" ")}</span>
+      <ChipCluster
+        items={gaps.map((gap) => ({
+          key: gap.check,
+          label: dataCheckLabel[gap.check],
+          node: (
+            <span aria-hidden className="flex max-w-full min-w-0">
+              <GapChip gap={gap} dense />
+            </span>
+          ),
+        }))}
+        renderOverflow={(hidden, count) => (
+          <Popover>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={`Show ${count} more checks`}
+                  // The hit area extends past the glyph without widening the fit.
+                  className="relative rounded-sm text-[0.6875rem] leading-3 text-muted-foreground tabular-nums after:absolute after:-inset-x-1.5 after:-inset-y-2 after:content-[''] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                />
+              }
+            >
+              +{count}
+            </PopoverTrigger>
+            <PopoverContent side="bottom" align="start">
+              <ul className="space-y-1.5">
+                {hidden.map((item) => (
+                  <li key={item.key}>
+                    <span className="font-medium">{item.label}</span>{" "}
+                    <span className="text-muted-foreground">
+                      {byCheck.get(item.key)?.message}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </PopoverContent>
+          </Popover>
+        )}
+      />
+    </span>
   );
 }

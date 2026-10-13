@@ -27,6 +27,13 @@ export function useDeferredReferenceFilterOptions(
   return useDeferredEntityRosters(references);
 }
 
+type FilterOptionsPage = Awaited<
+  ReturnType<typeof entityFilterOptions.filterOptions.call>
+>;
+const rosterResults = (
+  results: readonly { data?: FilterOptionsPage; isFetching: boolean }[],
+) => results.map(({ data, isFetching }) => ({ data, isFetching }));
+
 export type DeferredEntityRoster = {
   key: string;
   target: BrowserRoutedEntity;
@@ -54,6 +61,9 @@ export function useDeferredEntityRosters(
       }),
       enabled: active[key] === true,
     })),
+    // A stable result keeps the returned rosters (and any column set built
+    // from them) unchanged across unrelated renders.
+    combine: rosterResults,
   });
   // FilterBar re-activates an active filter after every commit. Comparing
   // against the last request, not the updater's `current`, keeps that from

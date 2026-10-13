@@ -41,6 +41,7 @@ import { buildProductWhere } from "~/server/repo/product/crud";
 import { computeAttentionItems } from "~/server/repo/project/attention";
 import { buildProjectWhere } from "~/server/repo/project/lookup";
 import { buildRecipeWhere } from "~/server/repo/recipe/crud";
+import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-tables";
 import { statementImportMembers } from "~/server/repo/statement-import-membership";
 import { buildTaskWhere } from "~/server/repo/task/lookup";
@@ -273,7 +274,17 @@ export async function additionalWorkProblemSelections(
     includeUnrecorded && includesWorkSource(scope, "account", "review");
   if (scope.check || (!includeProblems && !includeAccounts)) return selections;
   let attentionPromise: Promise<ProjectAttentionItem[]> | undefined;
-  const attentionItems = () => (attentionPromise ??= computeAttentionItems(db));
+  // A Project record read evaluates the shared attention rules for that
+  // project only; non-project record reads never reach the project branch.
+  const scopedProjects = async () => {
+    if (scope.record?.entity !== "project") return undefined;
+    const ids = await resolveLiveShortcodes(db, [scope.record.id], "project");
+    return [...ids.values()];
+  };
+  const attentionItems = () =>
+    (attentionPromise ??= scopedProjects().then((projectIds) =>
+      computeAttentionItems(db, projectIds ? { projectIds } : undefined),
+    ));
   for (const definition of problemQueryDeclarations()) {
     if (!includeProblems) break;
     const source = definition.source;

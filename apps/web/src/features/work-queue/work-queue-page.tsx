@@ -403,17 +403,18 @@ function queueColumns(
             options: CHECK_OPTIONS,
           },
         }),
-        // A gap row names each failed check; other rows keep their reason,
-        // titled with the rule's next action (its column starts hidden
-        // because it repeats for every row of one rule).
-        cell: ({ row }) =>
-          row.original.gaps.length > 0 ? (
-            <GapChipCluster gaps={row.original.gaps} />
-          ) : (
-            <span className="block truncate" title={row.original.nextAction}>
-              {row.original.reason}
-            </span>
-          ),
+        // A gap row names each failed check; other rows keep their reason.
+        // Both are titled with the rule's next action (its column starts
+        // hidden because it repeats for every row of one rule).
+        cell: ({ row }) => (
+          <span className="block min-w-0" title={row.original.nextAction}>
+            {row.original.gaps.length > 0 ? (
+              <GapChipCluster gaps={row.original.gaps} />
+            ) : (
+              <span className="block truncate">{row.original.reason}</span>
+            )}
+          </span>
+        ),
       }),
     );
     add(

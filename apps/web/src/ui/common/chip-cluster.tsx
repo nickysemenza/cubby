@@ -21,9 +21,16 @@ export function ChipCluster({
   limit = null,
   leading,
   trailing,
+  renderOverflow,
   className,
 }: {
   items: readonly ChipClusterItem[];
+  /** Replaces the plain "+N" text, e.g. with a disclosure listing the hidden
+   * items; its node must stay as narrow as "+N" for the fit to hold. */
+  renderOverflow?: (
+    hidden: readonly ChipClusterItem[],
+    count: number,
+  ) => ReactNode;
   /** Items past a bounded preview's `items`; they count toward "+N". */
   more?: number;
   /** A declared most-chips bound; the rest count toward "+N" as well. */
@@ -91,15 +98,20 @@ export function ChipCluster({
           {item.node}
         </span>
       ))}
-      {hidden.length + more > 0 && (
-        <span
-          data-chip-overflow=""
-          className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums"
-          title={hidden.map((item) => item.label).join(", ") || undefined}
-        >
-          +{hidden.length + more}
-        </span>
-      )}
+      {hidden.length + more > 0 &&
+        (renderOverflow ? (
+          <span data-chip-overflow="" className="flex shrink-0">
+            {renderOverflow(hidden, hidden.length + more)}
+          </span>
+        ) : (
+          <span
+            data-chip-overflow=""
+            className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums"
+            title={hidden.map((item) => item.label).join(", ") || undefined}
+          >
+            +{hidden.length + more}
+          </span>
+        ))}
       {trailing && (
         <span className="shrink-0 text-[0.6875rem]">{trailing}</span>
       )}
