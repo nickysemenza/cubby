@@ -48,6 +48,7 @@ jobs:
       lanes: ${{ steps.select.outputs.lanes }}
       matrix: ${{ steps.select.outputs.matrix }}
       skips: ${{ steps.select.outputs.skips }}
+      tree: ${{ steps.tree.outputs.tree }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -67,11 +68,32 @@ jobs:
         run: |
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
             --jq '.title + "\n" + .body' | node scripts/check-outward-text.ts --stdin
+      # A PR run tests its merge commit, so a squash merge onto an unmoved main
+      # pushes the same tree. `CI passed` publishes it only after every job.
+      - name: Record the tested tree
+        id: tree
+        run: echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+      # A main push of a tree that already passed starts no lane. Fork runs
+      # don't count, and an API failure falls back to ordinary routing.
+      - name: Find a green run of this tree
+        id: tested
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TREE: ${{ steps.tree.outputs.tree }}
+        run: |
+          count="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=tested-tree-$TREE&per_page=100" \
+            --jq '[.artifacts[] | select((.expired | not) and .workflow_run.head_repository_id == .workflow_run.repository_id)] | length' \
+            || echo 0)"
+          if [[ "$count" =~ ^[1-9] ]]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tree $TREE already passed CI; no lane starts"
+          fi
       # Every lane passed on that tree, so a lane whose inputs match it would
       # replay the same pass. Nightly and manual runs have no baseline.
       - name: Find the last green main run
         id: base
-        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        if: (github.event_name == 'pull_request' || github.event_name == 'push') && steps.tested.outputs.found != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -94,9 +116,12 @@ jobs:
         env:
           CHANGES: ${{ steps.filter.outputs.changes }}
           BASE: ${{ steps.base.outputs.sha }}
+          TESTED: ${{ steps.tested.outputs.found }}
         run: |
           set -euo pipefail
-          if [[ -n "$BASE" ]]; then
+          if [[ "$TESTED" == true ]]; then
+            groups='[]'
+          elif [[ -n "$BASE" ]]; then
             groups="$CHANGES"
           else
             groups="$(grep -oE '^[^ #][^:]*' .github/ci-lanes.yml | jq -Rsc 'split("\n") - [""]')"
@@ -112,10 +137,20 @@ jobs:
             # Two Playwright workers per standard runner.
             (range(1; 5) | {lane: "e2e", name: "E2E tests (desktop \(.)/4)", db: true, browser: "desktop-\(.)",
              run: "CUBBY_E2E_SHARD=\(.)/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream"})
-          ] | map(select(.lane as $lane | $lanes | index($lane)))')"
+          ] | map(select(.lane as $lane | $lanes | index($lane)))
+            # Aux and Build Workers share one runner (two steps) when both run;
+            # together they take about as long as the slowest E2E shard.
+            | (map(select(.lane == "aux" or .lane == "build-worker"))) as $pair
+            | if ($pair | length) == 2 then
+                map(select(.lane != "aux" and .lane != "build-worker")) + [{
+                  lane: "aux+build-worker", name: "Auxiliary, Worker, and runtime tests", db: true,
+                  step: $pair[0].name, run: $pair[0].run, then_step: $pair[1].name, then: $pair[1].run
+                }]
+              else . end')"
           skips="$(jq -nr --argjson lanes "$lanes" --argjson matrix "$matrix" --arg event "$GITHUB_EVENT_NAME" '[
-            ("validation", "docs", "rust", "apple-lint") as $job | select($lanes | index($job) | not) | $job
-          ] + (if $matrix == [] then ["lanes"] else [] end)
+            ("rust", "apple-lint") as $job | select($lanes | index($job) | not) | $job
+          ] + (if ($lanes | index("validation")) or ($lanes | index("docs")) then [] else ["validation"] end)
+            + (if $matrix == [] then ["lanes"] else [] end)
             + (if $lanes | index("apple") | not then ["apple-probe", "apple-host", "apple-simulator"]
                elif $event == "schedule" then ["apple-probe"] else [] end)
           | join(",")')"
@@ -126,64 +161,59 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "::notice::Lanes: $(jq -r 'join(", ")' <<< "$lanes"); skipped jobs: ${skips:-none}"
 
+  # The validation and docs lanes share one runner. A docs-only change
+  # installs only the root tools and runs only the docs steps.
   validation:
-    name: Validation
+    name: Validation and docs
     needs: plan
-    if: contains(fromJSON(needs.plan.outputs.lanes), 'validation')
+    if: contains(fromJSON(needs.plan.outputs.lanes), 'validation') || contains(fromJSON(needs.plan.outputs.lanes), 'docs')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
       NX_PARALLEL: "2"
+      VALIDATE: ${{ contains(fromJSON(needs.plan.outputs.lanes), 'validation') }}
+      DOCS: ${{ contains(fromJSON(needs.plan.outputs.lanes), 'docs') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - id: setup
         uses: ./.github/actions/setup-node-with-deps
         with:
-          wasm: restore
+          wasm: ${{ env.VALIDATE == 'true' && 'restore' || 'false' }}
+          workspace-filter: ${{ env.VALIDATE != 'true' && 'cubby' || '' }}
       # Independent failures stay red but do not hide the remaining diagnostics.
       - name: Generated contracts
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && env.VALIDATE == 'true' }}
         run: pnpm exec nx run cubby-checks:generate --outputStyle=stream
       - name: Design tokens
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && env.VALIDATE == 'true' }}
         run: pnpm exec nx run cubby-checks:design-tokens --outputStyle=stream
       - name: TypeScript
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && env.VALIDATE == 'true' }}
         run: pnpm exec nx run cubby-checks:types --outputStyle=stream
       - name: Lint
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && env.VALIDATE == 'true' }}
         run: pnpm exec nx run cubby-checks:lint --outputStyle=stream
       - name: Unused code and dependencies
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && env.VALIDATE == 'true' }}
         run: pnpm exec nx run cubby-checks:knip --outputStyle=stream
       - name: Worker bindings
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && env.VALIDATE == 'true' }}
         run: pnpm exec nx run cubby-checks:bindings --outputStyle=stream
       - name: Tooling regressions
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && env.VALIDATE == 'true' }}
         run: pnpm exec nx run cubby-checks:script-tests --outputStyle=stream
       - name: CI routing drift
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && env.VALIDATE == 'true' }}
         run: pnpm exec nx run cubby-checks:ci-lanes --outputStyle=stream
       - name: Worker unit tests
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && env.VALIDATE == 'true' }}
         run: pnpm exec nx run @cubby/web:workers-tests --outputStyle=stream
-
-  docs:
-    name: Docs and formatting
-    needs: plan
-    if: contains(fromJSON(needs.plan.outputs.lanes), 'docs')
-    runs-on: ubuntu-slim
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      # The root tools only; fetching them beats restoring the whole store.
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          workspace-filter: cubby
-      - run: pnpm exec nx run cubby-checks:format --outputStyle=stream
+      - name: Formatting
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && env.DOCS == 'true' }}
+        run: pnpm exec nx run cubby-checks:format --outputStyle=stream
       - name: Check relative Markdown links
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && env.DOCS == 'true' }}
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
           args: >-
@@ -216,9 +246,11 @@ jobs:
           POSTGRES_INITDB_ARGS: >-
             --set=jit=off --set=fsync=off
             --set=synchronous_commit=off --set=full_page_writes=off
+        # Loopback only: 55432 is inside Linux's ephemeral port range, and on
+        # all interfaces an outgoing connection's source port can hold it.
         ports:
           - 5432:5432
-          - 55432:5432
+          - 127.0.0.1:55432:5432
         options: >-
           --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
           --health-interval 2s --health-timeout 5s
@@ -240,11 +272,17 @@ jobs:
       CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
+      - id: setup
+        uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - if: ${{ !matrix.browser }}
+      - name: ${{ matrix.step || 'Run lane' }}
+        if: ${{ !matrix.browser }}
         run: ${{ matrix.run }}
+      # A combined entry's second lane still runs after the first fails.
+      - name: ${{ matrix.then_step || 'Second lane' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && matrix.then }}
+        run: ${{ matrix.then }}
       - if: ${{ matrix.browser }}
         uses: ./.github/actions/playwright
         with:
@@ -459,7 +497,6 @@ jobs:
       [
         plan,
         validation,
-        docs,
         lanes,
         rust,
         apple-lint,
@@ -480,3 +517,15 @@ jobs:
             ${{ needs.plan.outputs.skips }},
             ${{ needs.apple-probe.outputs.host == 'success' && 'apple-host' || '' }},
             ${{ needs.apple-probe.outputs.simulator == 'success' && 'apple-simulator' || '' }}
+      # Records that this tree passed, so a main push of the same tree (a
+      # squash merge onto an unmoved main) starts no lane.
+      - name: Record the passing tree
+        run: echo "$TREE" > tested-tree
+        env:
+          TREE: ${{ needs.plan.outputs.tree }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tested-tree-${{ needs.plan.outputs.tree }}
+          path: tested-tree
+          retention-days: 14
+          overwrite: true

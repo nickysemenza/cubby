@@ -207,7 +207,8 @@ jobs:
             --set=synchronous_commit=off --set=full_page_writes=off
         ports:
           - 5432:5432
-          - 55432:5432
+          # Loopback only, as in ci.yaml: 55432 is an ephemeral port.
+          - 127.0.0.1:55432:5432
         options: >-
           --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
           --health-interval 2s --health-timeout 5s

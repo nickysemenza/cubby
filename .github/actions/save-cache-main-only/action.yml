@@ -1,8 +1,10 @@
 name: "Save cache (main only)"
 description: >-
   Saves a large build cache under the key its matching restore step produced,
-  by policy: only main saves once a restore-key prefix exists, and a PR saves
-  only on a full miss. A PR's cache is private to its ref, and a ~1 GB copy per
+  by policy: any run on main (push, nightly, or manual) saves a new exact key
+  over a partial restore, and a PR saves only on a full miss. Main pushes of
+  an already-tested tree skip their native jobs, so the nightly run is what
+  refreshes main's entries. A PR's cache is private to its ref, and a ~1 GB copy per
   PR evicts everyone else's caches (the repo sat at 13.4 GB of 10 GB on
   2026-09-22). A concurrent job may have saved the same key first; that 409 is
   harmless and never fails the check. Save only after successful work: immutable
@@ -28,7 +30,7 @@ runs:
     - name: Save cache
       if: >-
         success() && inputs.cache-hit != 'true' &&
-        (github.event_name == 'push' || inputs.matched-key == '')
+        (github.ref == 'refs/heads/main' || inputs.matched-key == '')
       continue-on-error: true
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
