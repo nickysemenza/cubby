@@ -26,7 +26,12 @@ export const LANES_FILE = ".github/ci-lanes.yml";
 // The Nx tasks (`project:target`, `*` for every project with the target) each
 // CI lane runs, and the files a lane's non-Nx steps read. Keep each lane's
 // tasks in step with its command in ci.yaml.
-export type LaneSpec = { tasks?: string[]; files?: string[] };
+// `deleted` patterns select the lane only when a matching file is deleted.
+export type LaneSpec = {
+  tasks?: string[];
+  files?: string[];
+  deleted?: string[];
+};
 export const LANES = {
   // `pnpm check:all`, less `format` (the docs lane) and the uncached `security`
   // audit, which runs whenever this lane does.
@@ -47,6 +52,8 @@ export const LANES = {
   docs: {
     tasks: ["cubby-checks:format"],
     files: [".lycheeignore"],
+    // A deleted or renamed file can be any relative link's target.
+    deleted: ["**"],
   },
   aux: { tasks: ["*:test"] },
   "build-worker": {
@@ -82,10 +89,11 @@ const RUNTIME = new Map<string, RuntimeRoute>([
   ],
   ["git hash-object docs/todos.md", { files: ["docs/todos.md"] }],
   [
-    "git ls-files -z -co --exclude-standard -- docs/README.md .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256",
+    "git ls-files -z -co --exclude-standard -- docs/README.md docs/guide .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256",
     {
       files: [
         "docs/README.md",
+        "docs/guide/**",
         ".claude/skills/purchase-import/**",
         ".claude/skills/product-enrichment/**",
         ".claude/skills/photo-inventory-import/**",
@@ -107,8 +115,9 @@ const RUNTIME = new Map<string, RuntimeRoute>([
 type Input = string | InputDefinition;
 type NamedInputs = Record<string, Input[]>;
 // One dorny filter group: some include matches and no exclude does, the same
-// rule Nx applies to one task's file inputs.
-type Group = { include: string[]; exclude: string[] };
+// rule Nx applies to one task's file inputs. `deleted` includes match only
+// deletions.
+type Group = { include: string[]; exclude: string[]; deleted?: string[] };
 
 export const splitTask = (task: string) => {
   const [project, name, ...rest] = task.split(":");
@@ -300,6 +309,8 @@ async function laneGroups(
       unique.set(JSON.stringify(normal), normal);
     }
     lanes[lane] = [...unique.values()];
+    if (spec.deleted)
+      lanes[lane].push({ include: [], exclude: [], deleted: spec.deleted });
   }
   return lanes;
 }
@@ -326,6 +337,8 @@ function render(lanes: Record<string, Group[]>) {
     lines.push(`${name}.${counts.get(name)}:`);
     for (const pattern of group.include)
       lines.push(`  - ${JSON.stringify(pattern)}`);
+    for (const pattern of group.deleted ?? [])
+      lines.push(`  - deleted: ${JSON.stringify(pattern)}`);
     for (const pattern of group.exclude)
       lines.push(`  - ${JSON.stringify(`!${pattern}`)}`);
   }

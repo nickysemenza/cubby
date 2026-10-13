@@ -21,6 +21,7 @@ validation.1:
   - "apps/web/wrangler.jsonc"
   - "cubby-ffi/**"
   - "docs/README.md"
+  - "docs/guide/**"
   - "docs/todos.md"
   - "nx.json"
   - "packages/**"
@@ -68,6 +69,8 @@ docs.2:
   - "**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,jsonc,json5,css,scss,less,graphql,gql,md,mdx,markdown,yaml,yml,toml}"
   - ".editorconfig"
   - "!apps/apple/**/*.{json,ts,tsx,js,jsx}"
+docs.3:
+  - deleted: "**"
 aux.1:
   - ".claude/skills/photo-inventory-import/**"
   - ".claude/skills/product-enrichment/**"
@@ -78,6 +81,7 @@ aux.1:
   - "apps/web/project.json"
   - "cubby-ffi/**"
   - "docs/README.md"
+  - "docs/guide/**"
   - "nx.json"
   - "package.json"
   - "packages/schemas/package.json"
@@ -106,6 +110,7 @@ build-worker+postgres+e2e+purchase-import.1:
   - "apps/web/project.json"
   - "cubby-ffi/**"
   - "docs/README.md"
+  - "docs/guide/**"
   - "nx.json"
   - "package.json"
   - "packages/wasm/.gitignore"

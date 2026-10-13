@@ -44,7 +44,7 @@ flowchart LR
 
 The required test lanes key on the `gate` named input in `nx.json`: every
 non-documentation file (the lockfile and `.github/` included), the Markdown
-that the Worker bundles (`docs/README.md` and the
+that the Worker bundles (`docs/README.md`, the `docs/guide` pages, and the
 purchase-import, product-enrichment, and
 photo-inventory-import skills). Platform, Node version, locale, and `CI`
 stay out, so a developer Mac's pass counts for the Linux lanes. Web targets add
@@ -354,7 +354,11 @@ inputs of the tasks each lane runs (`LANES`), resolving named inputs,
 runtime inputs classified by exact command; an unclassified runtime input
 fails generation, and `cubby-checks:ci-lanes` fails when the file is stale.
 `scripts/ci-lanes.test.ts` asserts that every file Nx's hash plan reads for a
-lane's tasks selects that lane. Any tree compared with a green tree is
+lane's tasks selects that lane, and that every Nx task a lane's `ci.yaml`
+commands run is one that lane routes. Any deleted or renamed file also
+selects the docs lane, because it may be a relative link's target. `Plan`
+runs the outward-text check on the slim image's own Node 24, without
+`setup-node`; a missing or older Node fails `Plan` closed. Any tree compared with a green tree is
 correct, ancestor or not: a lane whose inputs match would replay that tree's
 pass. Nightly and manual runs, and a repository with no green main run, start
 every lane. Lanes with identical groups share one filter entry, named
