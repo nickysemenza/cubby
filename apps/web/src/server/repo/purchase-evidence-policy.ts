@@ -99,13 +99,13 @@ export const purchaseHasPrimaryDocumentSql = (
     )})
 )`;
 
-/** A Purchase is itemized when its live, incurred vendor lines are the order's
- * own item lines: at least one principal `item_line`, no `allocation` slice of
- * an un-itemized total, and every principal line whose Product is expected
- * links one. A single productless goods line is a lump, not an itemization.
- * Totals stay with `paperwork_mismatch` and `settlement_mismatch`; this axis
- * is the line shape only. */
-export const purchaseHasItemizationSql = (alias: string): SQL => sql`(
+/** The order's own item lines, before Product identity: at least one live,
+ * incurred vendor principal `item_line` and no `allocation` slice of an
+ * un-itemized total. Transaction surfaces read this shape alone because their
+ * `financial_transaction_products` axis already reports unlinked goods; adding
+ * the per-line Product policy here planned its category resolution twice more
+ * per transaction score and broke the planner-memory budget. */
+export const purchaseHasItemLinesSql = (alias: string): SQL => sql`(
   EXISTS (SELECT 1 FROM "Expense" ep_line
     WHERE ep_line."purchaseId" = ${column(alias, "id")} AND ep_line."deletedAt" IS NULL
       AND ep_line.future = false AND ep_line."economicRole" = 'vendor'
@@ -114,6 +114,15 @@ export const purchaseHasItemizationSql = (alias: string): SQL => sql`(
     WHERE ep_lump."purchaseId" = ${column(alias, "id")} AND ep_lump."deletedAt" IS NULL
       AND ep_lump.future = false AND ep_lump."economicRole" = 'vendor'
       AND ep_lump."lineBasis" = 'allocation')
+)`;
+
+/** A Purchase is itemized when its lines have the item shape and every
+ * principal line whose Product is expected links one. A single productless
+ * goods line is a lump, not an itemization. Totals stay with
+ * `paperwork_mismatch` and `settlement_mismatch`; this axis is the line shape
+ * only. */
+export const purchaseHasItemizationSql = (alias: string): SQL => sql`(
+  ${purchaseHasItemLinesSql(alias)}
   AND NOT EXISTS (SELECT 1 FROM "Expense" ep_unlinked
     WHERE ep_unlinked."purchaseId" = ${column(alias, "id")} AND ep_unlinked."deletedAt" IS NULL
       AND ep_unlinked.future = false AND ep_unlinked."productId" IS NULL
@@ -328,7 +337,7 @@ export const financialTransactionCoverageAxisSql = (
       : axis === "document"
         ? documentPresence(purchaseHasPrimaryDocumentSql("ep_axis_purchase"))
         : evidencePresence(
-            purchaseHasItemizationSql("ep_axis_purchase"),
+            purchaseHasItemLinesSql("ep_axis_purchase"),
             purchaseItemizationExpectationSql(
               "ep_axis_purchase",
               column(alias, "evidenceExpectation"),

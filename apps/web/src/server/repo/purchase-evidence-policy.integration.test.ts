@@ -242,12 +242,11 @@ describe("purchase evidence policy", () => {
         ])
       ).get(transaction.entityId);
     const required = await quality();
-    expect(required?.gaps.map((gap) => gap.check)).toEqual(
-      expect.arrayContaining([
-        "financial_transaction_itemization",
-        "financial_transaction_products",
-      ]),
-    );
+    // An item-lined order missing a Product is one gap: the products axis,
+    // not itemization too.
+    expect(required?.gaps.map((gap) => gap.check)).toEqual([
+      "financial_transaction_products",
+    ]);
     expect(required?.score).toBeLessThan(100);
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "Purchase" SET "evidenceExpectation" = 'not_expected' WHERE id = ${purchase.id}`,
