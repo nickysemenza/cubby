@@ -8,7 +8,8 @@ on:
     branches: [main]
   schedule:
     # Nightly backstop: every lane runs uncached, so a pass reused from another
-    # platform, toolchain, or skipped lane is rechecked on CI's.
+    # platform, toolchain, or skipped lane is rechecked on CI's. A manual
+    # dispatch runs the same full pass (and seeds main's native caches).
     - cron: "23 8 * * *"
   workflow_dispatch:
 
@@ -28,7 +29,7 @@ permissions:
 env:
   # The nightly backstop bypasses the Nx cache for every command, nested ones
   # included; other runs replay passes for the same input hash.
-  NX_SKIP_NX_CACHE: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
+  NX_SKIP_NX_CACHE: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'true' || 'false' }}
   # Read by setup-node-with-deps, which connects Nx to the shared remote cache
   # only when both are present (a fork PR receives neither) and it responds.
   NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
@@ -152,7 +153,7 @@ jobs:
           ] + (if ($lanes | index("validation")) or ($lanes | index("docs")) then [] else ["validation"] end)
             + (if $matrix == [] then ["lanes"] else [] end)
             + (if $lanes | index("apple") | not then ["apple-probe", "apple-host", "apple-simulator"]
-               elif $event == "schedule" then ["apple-probe"] else [] end)
+               elif $event == "schedule" or $event == "workflow_dispatch" then ["apple-probe"] else [] end)
           | join(",")')"
           {
             echo "lanes=$lanes"
@@ -368,11 +369,12 @@ jobs:
     name: Swift formatting and state rules
     needs: plan
     if: contains(fromJSON(needs.plan.outputs.lanes), 'apple-lint')
-    runs-on: xcode-27
+    # The runner image's own Swift (its swift-format) keeps macOS slots for
+    # native builds.
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-apple-toolchain
       - uses: ./.github/actions/setup-node-with-deps
         with:
           workspace-filter: cubby
@@ -384,7 +386,7 @@ jobs:
   apple-probe:
     name: Apple cache probe
     needs: plan
-    if: contains(fromJSON(needs.plan.outputs.lanes), 'apple') && github.event_name != 'schedule'
+    if: contains(fromJSON(needs.plan.outputs.lanes), 'apple') && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -417,7 +419,6 @@ jobs:
         apps/apple/CubbyKit/.build/*
         !apps/apple/CubbyKit/.build/xcode
         apps/apple/CubbyKit/.build/xcode/CompilationCache.noindex
-        apps/apple/CubbyKit/.build/xcode/SourcePackages
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-apple-toolchain
@@ -425,6 +426,10 @@ jobs:
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: mac
+      # Package clones come from the simulator job's shared clone cache.
+      - uses: ./.github/actions/setup-apple-tools
+        with:
+          xcodegen: "false"
       # Build products are disposable; unchanged compiler inputs replay through
       # Xcode's compilation cache without forging checkout timestamps. Keep
       # SwiftPM's warning-generator products.

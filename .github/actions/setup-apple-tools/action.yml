@@ -1,6 +1,6 @@
 name: "Setup Apple Tools"
 description: >-
-  Installs XcodeGen (and optionally sentry-cli) and restores the
+  Installs XcodeGen (unless disabled, and optionally sentry-cli) and restores the
   cached SPM package clones used by the Apple jobs, so a warm cache never
   reclones Sentry/GRDB/Nuke.
 
@@ -16,6 +16,10 @@ outputs:
     value: ${{ steps.spm-cache.outputs.cache-primary-key }}
 
 inputs:
+  xcodegen:
+    description: "Install XcodeGen; the host package build doesn't need it"
+    required: false
+    default: "true"
   restore-spm-clones:
     description: Restore package checkouts for jobs that normally compile
     required: false
@@ -29,6 +33,7 @@ runs:
   using: "composite"
   steps:
     - name: Install XcodeGen
+      if: inputs.xcodegen == 'true'
       shell: bash
       run: brew install xcodegen
 

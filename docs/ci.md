@@ -70,12 +70,15 @@ complete. Unused HTTP contract changes no longer churn the native schema.
 `pnpm apple check [host|app|lint]` prepares generated sources, probes cached
 native passes, then prepares FFI only for misses. Full local checks run misses
 sequentially. Swift formatting/state rules have their own cheap `apple:lint`
-target and CI job with no FFI, SwiftPM resolution or app compilation.
+target and CI job with no FFI, SwiftPM resolution or app compilation; it needs
+only a Swift toolchain, so CI runs it on `ubuntu-latest` with the image's own
+Swift and `swift format`, keeping macOS slots for native builds. Its key omits
+the toolchain, so a Mac pass replays on Linux; the nightly run rechecks it.
 When `Plan` selects the Apple
 lane, the Linux `Apple cache probe` job probes both Apple passes in parallel
 with the other lanes before scheduling macOS. A miss or unavailable probe runs
 the corresponding native job; a skipped native job satisfies `CI passed` only
-with its successful probe. Nightly runs force both native jobs. Workflows that only deploy,
+with its successful probe. Nightly and manual runs force both native jobs. Workflows that only deploy,
 publish or review (`deploy.yaml`, `deploy-nx-cache.yaml`, `apple-testflight.yaml`,
 `claude.yml`) are outside every key. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
 the whole workflow, so every lane, nested Nx calls included, runs uncached on
@@ -198,8 +201,8 @@ fails before native setup and is never cached. `apple:host-tests` runs
 CubbyKit's package tests and the OpenAPI warning gate; `apple:simulator-build`
 compiles `Cubby-iOS` for a generic simulator and caches the built app. Neither
 boots a simulator. The independent `apple:lint` target runs Swift formatting
-and the state-initialization rule. Missing Xcode is a failure, never a cached
-successful skip. Build scripts retain the same native arm64 profile, package
+and the state-initialization rule without Xcode. For the native targets,
+missing Xcode is a failure, never a cached successful skip. Build scripts retain the same native arm64 profile, package
 pins and artifact preparation for local and hosted checks.
 The `rust` target runs fmt/clippy/test per
 crate (`recipebridge/project.json`, `cubby-ffi/project.json`). Clippy and tests
@@ -250,22 +253,27 @@ replays a cached pass for the same input hash, and on a miss the script fails
 before building (Nx never caches that failure). Only a miss or failed probe
 pays for a macOS runner, which installs the workspace (generating the Swift
 inputs), the FFI, XcodeGen, and Xcode build caches, and runs the target. The
-nightly run skips the probe and runs both with `--skip-nx-cache` on the
-runner's own Xcode.
+nightly run and a manual dispatch skip the probe and run both uncached on the
+runner's own Xcode; a dispatch on `main` therefore seeds `main`'s native caches
+without waiting for the nightly run.
 The host job runs the automatically generated
 `CubbyKit-Package` scheme with `xcodebuild test` on the ARM macOS host — no
 simulator. The aggregate package scheme includes all CubbyKit tests and the CLI
 product; the library-only `CubbyKit` scheme has no test action. The command uses
 `-onlyUsePackageVersionsFromResolvedFile` to keep the committed package pins.
 Its `xcode-host-v1` cache stores `apps/apple/CubbyKit/.build`, including the
-Xcode compilation cache and dependency checkouts under `.build/xcode` and the
-SwiftPM warning-generator products. Xcode's `Build` and `Logs` directories are
+Xcode compilation cache under `.build/xcode` and the SwiftPM
+warning-generator products. Package checkouts use the shared
+`apps/apple/SourcePackages` clone cache that the simulator job saves. Xcode's `Build` and `Logs` directories are
 excluded: tests rebuild products from cached compiler results rather than
 restoring timestamp-sensitive objects and test bundles. Keys include the Xcode
 toolchain, package pins, CubbyKit sources, and warning-check script. It then
 runs `apps/apple/scripts/check-openapi-warnings.sh`, which fails on any
 swift-openapi-generator warning (a schema the `CubbyAPI` build plugin would
-silently drop). A successful warning check records its content key inside
+silently drop). It reads the diagnostics the plugin printed into the test
+build's log, which every hosted host build contains because Xcode's `Build`
+directory is never restored; a build that skipped the plugin, typically a warm
+local one, generates again with the pinned generator. A successful warning check records its content key inside
 the cached `.build` directory; unchanged document, config, generator pin,
 toolchain, and check script reuse that pass without rebuilding or regenerating.
 Changed inputs run the full check, and warnings or generator failures never
@@ -302,7 +310,8 @@ generic-simulator app build keep that simulator work excluded.
 `.github/actions/setup-apple-tools` installs XcodeGen and restores
 `apps/apple/SourcePackages`, the `xcodebuild`-resolved SPM clones for Sentry,
 GRDB, Nuke and swift-openapi-generator (previously an uncached "Resolve Package
-Graph" on every run), used by `Apple simulator build`. It is separate from the
+Graph" on every run), used by both native jobs; `Apple host tests` skips
+XcodeGen. It is separate from the
 target-specific FFI output cache (`.github/actions/setup-apple-ffi`) and the
 host job's build cache described above. DerivedData keys explicitly exclude
 the host `.build` directory; its compiled products are not simulator source
