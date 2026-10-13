@@ -152,6 +152,53 @@ describe("recordAiUsage", () => {
     expect(event).not.toHaveProperty("gatewayCacheStatus");
   });
 
+  it("keeps a gateway hit with zero token placeholders unpriced without equivalent inference evidence", async () => {
+    const quote = {
+      source: "estimate" as const,
+      pricingSource: "models.dev" as const,
+      pricingSnapshot: {
+        provider: "openai",
+        model: "gpt-6-luna",
+        capturedAt: "2026-01-01T00:00:00Z",
+        rates: { input: 2, output: 0 },
+      },
+    };
+    snapshot.mockResolvedValue({ amount: 0, evidence: quote });
+    const placeholders = {
+      gatewayCacheStatus: "hit" as const,
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+    expect(await emitted(placeholders)).toMatchObject({
+      standardCost: null,
+      chargedCost: 0,
+      costEvidence: { standard: null, billingReason: "cache" },
+    });
+    expect(
+      await emitted({
+        ...placeholders,
+        standardCost: 0,
+        chargedCost: 0,
+        costEvidence: {
+          standard: { ...quote, pricingSource: "pi_sdk" },
+          charged: { source: "estimate" },
+          billingReason: "standard",
+        },
+      }),
+    ).toMatchObject({ standardCost: null, chargedCost: 0 });
+    expect(
+      await emitted({
+        ...placeholders,
+        standardCost: 0.003,
+        costEvidence: {
+          standard: quote,
+          charged: null,
+          billingReason: "cache",
+        },
+      }),
+    ).toMatchObject({ standardCost: 0.003, chargedCost: 0 });
+  });
+
   it("uses the same canonical standard rates for SDK and token-only calls", async () => {
     const canonical = {
       source: "estimate" as const,

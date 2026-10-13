@@ -77,14 +77,29 @@ async function usageBilling(
       : replayed || input.gatewayCacheStatus === "hit"
         ? "cache"
         : (input.costEvidence?.billingReason ?? "standard");
-  // Caller replay counts alone are not evidence of an equivalent inference.
-  const supportedComparison =
-    !replayed ||
-    (input.standardCost != null &&
-      input.costEvidence?.standard?.pricingSnapshot != null);
-  const snapshot = supportedComparison
-    ? await snapshotPrice(input.provider, input.model, input)
-    : null;
+  const gatewayReplay = input.gatewayCacheStatus === "hit";
+  const positiveTokens = [
+    input.inputTokens,
+    input.outputTokens,
+    input.cacheReadTokens,
+    input.cacheWriteTokens,
+  ].some((tokens) => tokens != null && tokens > 0);
+  // A rate snapshot calculated from zero placeholders is not evidence of an inference.
+  const retainedComparison =
+    input.standardCost != null &&
+    input.costEvidence?.standard?.pricingSnapshot != null &&
+    (!gatewayReplay ||
+      positiveTokens ||
+      input.standardCost !== 0 ||
+      input.costEvidence.standard.source === "provider_reported");
+  const supportedComparison = replayed
+    ? retainedComparison
+    : !gatewayReplay || positiveTokens || retainedComparison;
+  const quotableTokens = (!replayed && !gatewayReplay) || positiveTokens;
+  const snapshot =
+    supportedComparison && quotableTokens
+      ? await snapshotPrice(input.provider, input.model, input)
+      : null;
   const standardCost =
     snapshot?.amount ??
     (supportedComparison ? (input.standardCost ?? null) : null);

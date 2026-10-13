@@ -15,6 +15,7 @@ const historicalUsage = z.object({
   provider: z.string(),
   model: z.string(),
   transport: z.string(),
+  cacheStatus: z.string().nullable(),
   inputTokens: z.number().nullable(),
   outputTokens: z.number().nullable(),
   cacheReadTokens: z.number().nullable(),
@@ -40,7 +41,7 @@ export async function reconstructHistoricalAiCosts(
     // Includes deleted usage: reconstruction preserves the complete retained history.
     for (;;) {
       const result = await client.query(
-        `SELECT id, provider, model, transport, "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "costEvidence"
+        `SELECT id, provider, model, transport, "cacheStatus", "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "costEvidence"
         FROM "AiUsage" WHERE id > $1 AND "costEvidence" ? 'original'
           AND "costEvidence"->'standard' = 'null'::jsonb
           AND NOT "costEvidence" ? 'reconstruction'
@@ -51,7 +52,14 @@ export async function reconstructHistoricalAiCosts(
       if (rows.length === 0) break;
       for (const row of rows) {
         const quote =
-          row.transport === "cache"
+          row.transport === "cache" ||
+          (row.cacheStatus === "hit" &&
+            ![
+              row.inputTokens,
+              row.outputTokens,
+              row.cacheReadTokens,
+              row.cacheWriteTokens,
+            ].some((tokens) => tokens != null && tokens > 0))
             ? { amount: null, evidence: null }
             : priceAiUsage(pricing, row.provider, row.model, row);
         const standard =

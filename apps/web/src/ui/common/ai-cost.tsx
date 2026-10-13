@@ -120,7 +120,7 @@ export function AiCost({
           }
         />
       </TooltipTrigger>
-      <TooltipContent>
+      <TooltipContent className="break-all">
         <div>Charged: {fullCharged}</div>
         <div>Standard: {fullStandard}</div>
         {provenance && <div>{provenance}</div>}

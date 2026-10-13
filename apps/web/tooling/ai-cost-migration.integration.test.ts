@@ -48,10 +48,11 @@ it("preserves legacy charges and late writers across the AI cost expand/contract
       transport: string,
       amount: number | null,
       inputTokens = 100,
+      cacheStatus = "none",
     ) =>
       client.query(
-        `INSERT INTO "AiUsage" ("runId", provider, model, feature, operation, transport, "estimatedCost", "inputTokens", "durationMs") VALUES ($1, 'openai', 'gpt-6-luna', 'synthetic', 'synthetic', $2, $3, $4, 1)`,
-        [runId, transport, amount, inputTokens],
+        `INSERT INTO "AiUsage" ("runId", provider, model, feature, operation, transport, "estimatedCost", "inputTokens", "cacheStatus", "durationMs") VALUES ($1, 'openai', 'gpt-6-luna', 'synthetic', 'synthetic', $2, $3, $4, $5, 1)`,
+        [runId, transport, amount, inputTokens, cacheStatus],
       );
     await writeLegacy("gateway", 0.025);
     await writeLegacy("chatgpt", 0);
@@ -59,6 +60,7 @@ it("preserves legacy charges and late writers across the AI cost expand/contract
     await writeLegacy("cache", 0.01);
     await writeLegacy("cache", 0, 0);
     await writeLegacy("chatgpt", 0.02);
+    await writeLegacy("gateway", 0, 0, "hit");
     const before = (
       await client.query(
         `SELECT id, "estimatedCost", "inputTokens" FROM "AiUsage" ORDER BY id`,
@@ -88,7 +90,7 @@ it("preserves legacy charges and late writers across the AI cost expand/contract
         `SELECT id, "chargedCost", "inputTokens", "costEvidence" FROM "AiUsage" ORDER BY id`,
       )
     ).rows;
-    expect(after).toHaveLength(7);
+    expect(after).toHaveLength(8);
     for (const original of before) {
       expect(after.find((row) => row.id === original.id)).toMatchObject({
         chargedCost: original.estimatedCost,
@@ -141,7 +143,7 @@ it("preserves legacy charges and late writers across the AI cost expand/contract
     try {
       expect(
         await reconstructHistoricalAiCosts(connection, pricing, false),
-      ).toMatchObject({ scanned: 7, priced: 5, unknown: 2, applied: false });
+      ).toMatchObject({ scanned: 8, priced: 5, unknown: 3, applied: false });
       expect(
         (
           await client.query(
@@ -151,7 +153,7 @@ it("preserves legacy charges and late writers across the AI cost expand/contract
       ).toBe(0);
       expect(
         await reconstructHistoricalAiCosts(connection, pricing, true),
-      ).toMatchObject({ scanned: 7, priced: 5, unknown: 2, applied: true });
+      ).toMatchObject({ scanned: 8, priced: 5, unknown: 3, applied: true });
       expect(
         await reconstructHistoricalAiCosts(
           connection,
@@ -186,7 +188,7 @@ it("preserves legacy charges and late writers across the AI cost expand/contract
       ).toBe(true);
       expect(
         reconstructed.filter((row) => row.standardCost === null),
-      ).toHaveLength(2);
+      ).toHaveLength(3);
       expect(
         reconstructed.filter((row) => row.standardCost === 0.0001),
       ).toHaveLength(5);

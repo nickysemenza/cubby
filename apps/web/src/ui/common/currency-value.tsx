@@ -37,7 +37,9 @@ export function CurrencyValue({
       >
         {displayed}
       </TooltipTrigger>
-      <TooltipContent>Full stored amount: {exact}</TooltipContent>
+      <TooltipContent className="break-all">
+        Full stored amount: {exact}
+      </TooltipContent>
     </Tooltip>
   );
 }
