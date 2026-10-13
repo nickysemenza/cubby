@@ -81,10 +81,15 @@
       "{workspaceRoot}/cubby-ffi/**/*",
       "{workspaceRoot}/Cargo.{toml,lock}",
       "{workspaceRoot}/rust-toolchain.toml",
+      // Cargo, rustfmt, and Clippy read configuration from ancestor directories.
+      "{workspaceRoot}/.cargo/**/*",
+      "{workspaceRoot}/{.rustfmt,rustfmt,.clippy,clippy}.toml",
       "{workspaceRoot}/packages/shared/golden-vectors/**/*",
       "{workspaceRoot}/.github/workflows/ci.yaml",
       "{workspaceRoot}/.github/actions/**/*",
-      { "runtime": "rustc -V" }
+      { "runtime": "rustc -V" },
+      // Cargo never reads JavaScript dependencies, which Nx hashes by default.
+      { "externalDependencies": [] }
     ]
   },
   "analytics": false,

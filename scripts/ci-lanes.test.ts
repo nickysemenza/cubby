@@ -62,9 +62,12 @@ test("every file Nx hashes for a lane's tasks selects that lane", async () => {
           true,
         )[`${each}:${target}`];
         assert(inputs, `${each}:${target} has a hash plan`);
-        const missed = inputs.files.filter(
-          (file) => !lanesFor(file).includes(lane),
-        );
+        // Nx's external dependency hashes come from the lockfile.
+        const read =
+          inputs.external.length > 0
+            ? [...inputs.files, "pnpm-lock.yaml"]
+            : inputs.files;
+        const missed = read.filter((file) => !lanesFor(file).includes(lane));
         assert.deepEqual(
           missed,
           [],
@@ -101,6 +104,9 @@ test("changes route to the lanes whose tasks read them", () => {
     ["apple", ...web, "docs", "rust", "validation"].sort(),
   );
   assert.ok(lanesFor("recipebridge/src/lib.rs").includes("rust"));
+  // Cargo reads ancestor configuration but never JavaScript dependencies.
+  assert.ok(lanesFor(".cargo/config.toml").includes("rust"));
+  assert.ok(!lanesFor("pnpm-lock.yaml").includes("rust"));
   assert.deepEqual(lanesFor("pnpm-lock.yaml").includes("dependencies"), true);
   // A deploy-only workflow edit runs no test lane.
   assert.deepEqual(

@@ -225,7 +225,8 @@ jobs:
   # scripted model and gateway. Outside `CI passed` and allowed to fail, so a
   # failure never blocks a merge or the run's success.
   purchase-import:
-    name: E2E tests (purchase import agent, optional)
+    # The matrix expression stops GitHub appending matrix values to the name.
+    name: E2E tests (purchase import agent, optional)${{ matrix.db && '' }}
     needs: plan
     if: contains(fromJSON(needs.plan.outputs.lanes), 'purchase-import')
     continue-on-error: true
@@ -413,8 +414,8 @@ jobs:
           matched-key: ${{ steps.apple-tools.outputs.spm-clones-cache-matched-key }}
 
   # The one required check. A job may be skipped only when plan skipped its
-  # lane or the probe verified its cached Apple pass; any other skip, failure,
-  # or cancellation fails it.
+  # lane or the probe verified its cached Apple pass; any other skip, failure
+  # (except the probe's), or cancellation fails it.
   ci-passed:
     name: CI passed
     needs:
@@ -435,6 +436,8 @@ jobs:
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
           jobs: ${{ toJSON(needs) }}
+          # A failed probe only sends both Apple lanes to macOS.
+          allowed-failures: apple-probe
           allowed-skips: >-
             ${{ needs.plan.outputs.skips }},
             ${{ needs.apple-probe.outputs.host == 'success' && 'apple-host' || '' }},

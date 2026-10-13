@@ -362,7 +362,8 @@ the exact jobs it skipped.
 `CI passed` is the single required check (`re-actors/alls-green` on
 `ubuntu-slim`). It needs every lane and fails on any failure or cancellation,
 and on any skip other than the jobs `Plan` skipped or an Apple job whose probe
-verified a cached pass.
+verified a cached pass. A failed probe is allowed: it only sends both Apple
+lanes to macOS.
 
 `Validation` runs `pnpm check:all` (the cached generate, types, lint, format,
 knip, CI-lane, bindings, script, and Worker-test targets plus the uncached

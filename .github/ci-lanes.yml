@@ -47,11 +47,13 @@ validation.1:
   - "tsconfig.json"
 validation.2:
   - "**/*"
+  - "pnpm-lock.yaml"
   - "!**/*.{md,mdx,MD,markdown}"
   - "!.claude/**"
   - "!.github/workflows/{deploy.yaml,apple-testflight.yaml,claude.yml,claude-code-review.yml}"
 validation.3:
   - "**/*"
+  - "pnpm-lock.yaml"
   - "!**/*.lock"
   - "!**/*.md"
   - "!**/*.mdx"
@@ -62,6 +64,7 @@ validation.3:
   - "!cubby-ffi/**"
 validation.4:
   - "**/*"
+  - "pnpm-lock.yaml"
   - "!**/*.md"
   - "!.claude/**"
   - "!apps/apple/**/*.{json,ts,tsx,js,jsx}"
@@ -83,6 +86,7 @@ docs.2:
   - "**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,jsonc,json5,css,scss,less,graphql,gql,md,mdx,markdown,yaml,yml,toml}"
   - ".editorconfig"
   - ".oxfmtrc.json"
+  - "pnpm-lock.yaml"
   - "!apps/apple/**/*.{json,ts,tsx,js,jsx}"
 aux.1:
   - ".claude/skills/photo-inventory-import/**"
@@ -117,6 +121,7 @@ aux.1:
   - "tsconfig.json"
 aux.2:
   - "**/*"
+  - "pnpm-lock.yaml"
   - "!**/*.{md,mdx,MD,markdown}"
   - "!.claude/**"
   - "!.github/workflows/{deploy.yaml,apple-testflight.yaml,claude.yml,claude-code-review.yml}"
@@ -145,6 +150,7 @@ build-worker.1:
   - "tsconfig.json"
 build-worker.2:
   - "**/*"
+  - "pnpm-lock.yaml"
   - "!**/*.{md,mdx,MD,markdown}"
   - "!.claude/**"
   - "!.github/workflows/{deploy.yaml,apple-testflight.yaml,claude.yml,claude-code-review.yml}"
@@ -173,6 +179,7 @@ postgres.1:
   - "tsconfig.json"
 postgres.2:
   - "**/*"
+  - "pnpm-lock.yaml"
   - "!**/*.{md,mdx,MD,markdown}"
   - "!.claude/**"
   - "!.github/workflows/{deploy.yaml,apple-testflight.yaml,claude.yml,claude-code-review.yml}"
@@ -201,6 +208,7 @@ e2e.1:
   - "tsconfig.json"
 e2e.2:
   - "**/*"
+  - "pnpm-lock.yaml"
   - "!**/*.{md,mdx,MD,markdown}"
   - "!.claude/**"
   - "!.github/workflows/{deploy.yaml,apple-testflight.yaml,claude.yml,claude-code-review.yml}"
@@ -229,10 +237,12 @@ purchase-import.1:
   - "tsconfig.json"
 purchase-import.2:
   - "**/*"
+  - "pnpm-lock.yaml"
   - "!**/*.{md,mdx,MD,markdown}"
   - "!.claude/**"
   - "!.github/workflows/{deploy.yaml,apple-testflight.yaml,claude.yml,claude-code-review.yml}"
 rust.1:
+  - ".cargo/**/*"
   - ".github/actions/**/*"
   - ".github/workflows/ci.yaml"
   - ".gitignore"
@@ -247,6 +257,7 @@ rust.1:
   - "recipebridge/project.json"
   - "rust-toolchain.toml"
   - "tsconfig.json"
+  - "{.rustfmt,rustfmt,.clippy,clippy}.toml"
 apple.1:
   - ".claude/skills/purchase-import/references/*.md"
   - ".gitignore"
@@ -275,6 +286,7 @@ apple.2:
   - "apps/apple/**/*"
   - "cubby-ffi/**/*"
   - "packages/shared/golden-vectors/**/*"
+  - "pnpm-lock.yaml"
   - "recipebridge/**/*"
   - "rust-toolchain.toml"
   - "scripts/{apple-check.sh,ensure-apple-ffi.ts,rust-fingerprint.ts,lib/tree-digest.ts}"

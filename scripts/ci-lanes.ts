@@ -125,6 +125,14 @@ export const splitTask = (task: string) => {
   return { project, name };
 };
 
+// A task's inputs with named inputs expanded.
+const flatInputs = (inputs: readonly Input[], named: NamedInputs): Input[] =>
+  inputs.flatMap((input) =>
+    typeof input === "string" && input in named
+      ? flatInputs(named[input] ?? [], named)
+      : [input],
+  );
+
 const resolvePattern = (root: string, pattern: string) =>
   pattern.startsWith("{workspaceRoot}/")
     ? pattern.slice("{workspaceRoot}/".length)
@@ -237,6 +245,14 @@ async function laneGroups(
     };
     if (!config.inputs) throw new Error(`${task} declares no inputs`);
     expand(config.inputs, []);
+    // Without an explicit `externalDependencies` input, Nx hashes every
+    // external dependency.
+    if (
+      !flatInputs(config.inputs, named).some(
+        (input) => typeof input !== "string" && "externalDependencies" in input,
+      )
+    )
+      files.include.push("pnpm-lock.yaml");
     if (files.include.length > 0) groups.push(files);
     else if (files.exclude.length > 0)
       throw new Error(`${task}: exclusions without inclusions`);
