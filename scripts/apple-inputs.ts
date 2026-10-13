@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { ARTIFACT_MANIFEST } from "./generator/artifact-manifest.ts";
+import { ARTIFACT_MANIFEST } from "./generator/artifacts.ts";
 
 const scopeSchema = z.enum(["host", "app"]);
 

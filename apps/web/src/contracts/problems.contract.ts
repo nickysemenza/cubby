@@ -122,7 +122,6 @@ export const problemsContract = defineContract("problems", {
   resolveArrivedFindings: mutation({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
       note: "Closes a Purchase's arrived finding once receiving lands",
     },
     input: resolveArrivedFindingsInput,

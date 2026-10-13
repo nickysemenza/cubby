@@ -23,6 +23,7 @@ import {
 } from "~/server/ai/decision-model";
 import { externalIdKindSubject } from "~/server/ai/external-id-kind";
 import {
+  PURCHASE_LINE_DECISIONS,
   type AiDecisionFeature,
   FIELD_SUGGESTION_FEATURE,
   INGREDIENT_MERGE_FEATURE,
@@ -46,16 +47,7 @@ import {
   EXTERNAL_ID_KIND_RULES,
 } from "~/server/ai/vocabularies";
 import type { Database } from "~/server/db";
-import { mailTriagePrompt } from "~/server/purchase-import/gmail/triage";
-import {
-  lineDecisionSubject,
-  PURCHASE_LINE_DECISIONS,
-} from "~/server/purchase-import/writer";
 import { suggestionCounts } from "~/server/repo/suggestion-review";
-import { ingredientMergeSubject } from "~/server/services/ai-enrichment/ingredient-merge";
-import { ingredientMergeSpec } from "~/server/services/ai-enrichment/merge-shortlist";
-import { usdaMatchSubject } from "~/server/services/ai-enrichment/usda-match";
-import { usdaFoodSpec } from "~/server/services/ai-enrichment/usda-shortlist";
 
 type CatalogRow = Omit<DecisionCatalogRow, "counts">;
 type Option = DecisionCatalogRow["options"][number];
@@ -213,7 +205,7 @@ const syntheticLine = extractedPurchaseLine.parse({
 });
 
 function featureRows(): CatalogRow[] {
-  const triage = mailTriagePrompt(
+  const triage = MAILBOX_TRIAGE_FEATURE.prompt(
     JSON.stringify({
       headers: { subject: "Example order confirmation" },
       body: "Your order for a cordless drill kit is confirmed. Total $79.95 USD.",
@@ -223,16 +215,11 @@ function featureRows(): CatalogRow[] {
   const lineRows = Object.entries(PURCHASE_LINE_DECISIONS).map(
     ([stage, spec]) =>
       featureRow(
-        spec.feature.feature,
+        spec.feature,
         `Purchase line ${stage}`,
         "One purchase-import line decision",
-        spec.feature,
-        {
-          subject: lineDecisionSubject(syntheticLine),
-          rules: spec.rules,
-          choices: spec.choices,
-          allowNone: false,
-        },
+        spec,
+        spec.prompt(syntheticLine),
         { options: plainOptions(spec.choices) },
       ),
   );
@@ -298,8 +285,17 @@ function featureRows(): CatalogRow[] {
       "USDA food",
       "Choose one USDA food for an ingredient",
       USDA_FOOD_SUGGEST_FEATURE,
-      selectionPrompt(usdaFoodSpec, usdaMatchSubject("Example flour"), []),
-      { roster: { entity: null, maxCandidates: usdaFoodSpec.maxCandidates } },
+      selectionPrompt(
+        USDA_FOOD_SUGGEST_FEATURE.selection,
+        USDA_FOOD_SUGGEST_FEATURE.subject("Example flour"),
+        [],
+      ),
+      {
+        roster: {
+          entity: null,
+          maxCandidates: USDA_FOOD_SUGGEST_FEATURE.selection.maxCandidates,
+        },
+      },
     ),
     featureRow(
       INGREDIENT_MERGE_FEATURE.feature,
@@ -307,14 +303,14 @@ function featureRows(): CatalogRow[] {
       "Choose an existing ingredient to merge into",
       INGREDIENT_MERGE_FEATURE,
       selectionPrompt(
-        ingredientMergeSpec,
-        ingredientMergeSubject("Example flour"),
+        INGREDIENT_MERGE_FEATURE.selection,
+        INGREDIENT_MERGE_FEATURE.subject("Example flour"),
         [],
       ),
       {
         roster: {
           entity: "ingredient",
-          maxCandidates: ingredientMergeSpec.maxCandidates,
+          maxCandidates: INGREDIENT_MERGE_FEATURE.selection.maxCandidates,
         },
       },
     ),

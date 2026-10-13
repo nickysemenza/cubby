@@ -1,63 +1,6 @@
 ---
 name: Cubby Dense Utility
 description: Dense light desktop workspaces with open sections and continuous record navigation.
-colors:
-  foreground: "#1D1D1F"
-  graphite-secondary: "#636368"
-  canvas: "#F5F5F7"
-  surface: "#FFFFFF"
-  inset: "#EEEEF0"
-  hairline: "#DCDCE0"
-  interaction: "#1D1D1F"
-  interaction-hover: "#3A3A3E"
-  on-accent: "#FFFFFF"
-  signal: "#C9F45B"
-  domain-cook: "#A86C25"
-  domain-pantry: "#347A51"
-  domain-plan: "#675DAD"
-  domain-house: "#337687"
-  domain-finance: "#9D5A76"
-  positive: "#25734E"
-  warning: "#9B640D"
-  warning-ink: "#75500D"
-  destructive: "#B54336"
-  slate: "#636368"
-typography:
-  title:
-    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
-    fontSize: "20px"
-    fontWeight: 600
-    lineHeight: "28px"
-  body:
-    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
-  label:
-    fontFamily: '"SF Mono", ui-monospace, Menlo, Consolas, monospace'
-rounded:
-  control: "4px"
-  panel: "8px"
-  chip: "4px"
-spacing:
-  space-1: "4px"
-  space-2: "8px"
-  space-3: "12px"
-  space-4: "12px"
-  space-5: "16px"
-  space-6: "16px"
-components:
-  button-primary:
-    backgroundColor: "{colors.interaction}"
-    textColor: "{colors.on-accent}"
-    rounded: "{rounded.control}"
-    height: "32px"
-  button-primary-hover:
-    backgroundColor: "{colors.interaction-hover}"
-  input:
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.control}"
-    height: "32px"
-  chip:
-    rounded: "{rounded.chip}"
-    height: "20px"
 ---
 
 # Design System: Cubby
@@ -72,7 +15,7 @@ Cubby is a very dense, light desktop utility. Open content, compact contextual i
 - One continuous record column beside contents navigation.
 - Restrained color, system typography, and flat structural separators.
 
-The frontmatter records implemented tokens; `packages/design-tokens/tokens.json` owns the palette, spacing, fonts, and separate web geometry. Generation writes `packages/design-tokens/brand.css`; `src/styles.css` binds the web theme. Change those sources rather than generated outputs. Native geometry and appearance remain independent.
+The canonical token source is `packages/design-tokens/tokens.json` owns the palette, spacing, fonts, and separate web geometry. Generation writes `packages/design-tokens/brand.css`; `src/styles.css` binds the web theme. Change those sources rather than generated outputs. Native geometry and appearance remain independent.
 
 ## Colors
 
@@ -90,7 +33,7 @@ Canvas, white surface, gray inset, secondary ink, and hairline borders separate 
 
 ## Typography
 
-Use the platform system sans for identity, body, labels, controls, and tables. Hierarchy comes from size and weight. Detail titles use the frontmatter title role; section headings are compact semibold text (13px). Shortcodes use system mono; quantities and money use tabular figures. Stacked table values use a primary line (13px type, 15px line height) and muted secondary line (11px type, 13px line height).
+Use the platform system sans for identity, body, labels, controls, and tables. Hierarchy comes from size and weight. Detail titles use the shared title role; section headings are compact semibold text (13px). Shortcodes use system mono; quantities and money use tabular figures. Stacked table values use a primary line (13px type, 15px line height) and muted secondary line (11px type, 13px line height).
 
 ## Layout
 
@@ -106,7 +49,7 @@ Resting page and detail sections are open and flat, separated by tone and hairli
 
 ## Shapes
 
-Web controls and compact chips use the frontmatter control and chip radii; panels use the panel radius. These web tokens are independent of native geometry. Inputs use a white surface and hairline border; nested surfaces keep concentric corners. Images use a faint neutral outline.
+Web controls, chips and panels use their shared token radii. These web tokens are independent of native geometry. Inputs use a white surface and hairline border; nested surfaces keep concentric corners. Images use a faint neutral outline.
 
 ## Components
 

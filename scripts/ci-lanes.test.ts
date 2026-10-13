@@ -106,9 +106,8 @@ test("changes route to the lanes whose tasks read them", () => {
     lanesFor("apps/apple/scripts/example.sh", "deleted").includes("docs"),
   );
   assert.deepEqual(lanesFor("apps/apple/README.md"), ["docs"]);
-  // Generation reads deferred MCP capabilities from the TODO list, and the
-  // generated Swift is an Apple input.
-  assert.deepEqual(lanesFor("docs/todos.md"), ["apple", "docs", "validation"]);
+  // Backlog prose does not participate in generation.
+  assert.deepEqual(lanesFor("docs/todos.md"), ["docs"]);
   // The Worker bundles purchase-import prompts.
   assert.deepEqual(
     lanesFor(".claude/skills/purchase-import/references/vendor.md"),

@@ -2,7 +2,7 @@
 
 ## Decision
 
-Keep Cubby on Drizzle ORM 0.45.2. The 2026-10-05 local experiment used isolated
+Retain the currently pinned Drizzle release (see the workspace manifest and lockfile). The 2026-10-05 local experiment used isolated
 ORM/Kit/Seed 1.0.0-rc.4 dependencies and disposable PostgreSQL 17.11 databases.
 It did not access production or upgrade the application.
 

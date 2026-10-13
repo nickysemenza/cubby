@@ -19,7 +19,7 @@ fallbacks, and route parameters follow the same naming rule.
 
 ## Current boundary
 
-The 27 declarations already generate contracts, routes, manifest data, native
+The declarations already generate contracts, routes, manifest data, native
 descriptors, editor metadata, and relation tables. They still repeat many
 presentation and availability decisions: field list/detail membership, sort
 rosters and defaults, search flags, routes, and related-image sources. Web and

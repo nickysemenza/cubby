@@ -17,15 +17,12 @@ Connect read-only Gmail in Cubby Settings, import a Monarch CSV through the
 web or native statement review (or MCP), and capture own-item and label photos on iPhone or Mac.
 These sources can arrive in any order. Cubby should converge them on one exact
 Product, an itemized Purchase, and a truthful settlement allocation. A human
-reviews uncertain identity, grouped photos, and ambiguous charges. The import-run
-agent can coordinate the browser, mail, and photo jobs; the decision model can help rank bounded
-ambiguous choices. Neither agent substitutes for source evidence or approval.
-After an import commits, automatic Product research investigates the original
-ordered variant. Accepted category, Ingredient and grown-Plant claims pass
-through ordinary domain services and retain their supporting observations.
-Matching existing values gain proof; contradictory values remain for review.
-The purchase researcher can also verify a source-supported Purchase purpose.
-That source value does not change effective Expense classification. Every
+reviews uncertain identity, grouped photos, and ambiguous charges. Pi interprets retained Email for unattended Mail import. Browser research and
+Product enrichment are member-directed [Burn-down](burn-down.md), using Claude
+or Codex and ordinary source-backed writes. Photo grouping proposes changes
+for review; neither an agent nor a decision model substitutes for source
+evidence or approval.
+Every
 order is household spending, but not every line is a stocked item: the import
 resolves prepared food, tickets, rides, donations, and paid labor or delivery
 as `expense_only` (no Product); software and subscriptions the household
@@ -62,28 +59,12 @@ flowchart LR
 The statement does not identify an item, and a photo does not prove where it
 was bought. A delivered email and a card charge do not receive inventory.
 
-### What works today and what still needs work
+### Coverage and remaining work
 
-Known-Vendor and selected-charge research use ordinary Runs and shared mail
-reports. Targeted search leaves broad mailbox coverage progress separate.
-Discovery pages retained Gmail history excluding Spam and Trash; the decision model routes
-purchase-related and uncertain messages to the researcher. Unrelated mail keeps
-minimal scan metadata. Related originals and useful attachments become retained
-evidence, and repeat acquisition shares the canonical source instead of creating
-another order. Generic Vendor and Purchase reports expose source links, explicit
-outcomes and review commands. Interrupted acquisition and admitted research can
-resume through their durable cursors and task references.
-
-The replacement's complete web/native and live acceptance remains pending; see
-[todos](../todos.md#runs-enrichment--browser-capture).
-
-| Part        | Current path                                                                                                                                                                                                                                                       | Next product step                                                                                       |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| Gmail       | Read-only discovery prioritizes known Vendors and unmatched charges, then all retained history. The researcher can interpret unfamiliar Vendors, import supported orders, and attach related lifecycle mail. Mail-only Vendor accounts do not enable browser sync. | Verify the complete synthetic mail-to-visible-proof path, then measure an approved live backfill pilot. |
-| Monarch CSV | Web and native previews check account and duplicate states, require an explicit kind for each chosen transaction, and retain source rows; native review pages through long files. MCP remains available.                                                           | Add PDF/OFX extraction and a simulator review of unfamiliar mapping.                                    |
-| Photos      | Native upload creates a photo run; the agent proposes groups; web and native review can approve one or a selected batch. Direct native Product photo attachment also exists.                                                                                       | Run a physical iPhone review with live device analysis.                                                 |
-| Settlement  | Purchase import can allocate a unique complete payment set to a transaction already recorded. Purchase detail reviews unallocated charges and refunds, including full split allocations across Purchases.                                                          | Cover refund and statement-before-order review in a joined browser journey.                             |
-| Activity    | The agent conversation streams; web and native run views show durable progress, known stages, elapsed time, and AI spend.                                                                                                                                          | Verify visual timing and browser handoff on device.                                                     |
+The [local journey coverage map](../agents/core-journey-e2e.md) owns executable
+checks and their limits; the [work list](../todos.md) owns remaining software
+and live acceptance. A deterministic import test does not verify live Gmail,
+retailer changes, model quality or physical-device background behavior.
 
 The [shared photo skill](../../.claude/skills/photo-inventory-import/SKILL.md)
 and [purchase skill](../../.claude/skills/purchase-import/SKILL.md) apply to
@@ -137,14 +118,14 @@ flowchart LR
 
 ## Entry points
 
-| Start                       | Short path to the Product                                                                                                                                                                                                                                          | Human decision                                                                                          |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| iPhone or Mac photo, no run | Check for the same stored image, choose an existing Product or create the exact variant, then attach the photo with its role.                                                                                                                                      | Confirm the Product and, separately, whether to add inventory.                                          |
-| Photo inventory run         | Upload photos; the agent proposes item and label groups and existing Product matches; review each group.                                                                                                                                                           | Approve, edit, or discard groups before Product or inventory writes.                                    |
-| Retailer history or receipt | Capture stable order identity and exact itemized lines; resolve each line to a Product or a reviewable candidate.                                                                                                                                                  | Resolve uncertain variants and any purchase findings.                                                   |
-| Gmail                       | Read-only discovery prioritizes known Vendors and unmatched charges, then all retained history. The researcher can interpret unfamiliar Vendors, import supported orders, and attach related lifecycle mail. Mail-only Vendor accounts do not enable browser sync. | Verify the complete synthetic mail-to-visible-proof path, then measure an approved live backfill pilot. |
-| Card or export transaction  | Match a real posted charge or refund to its order or orders.                                                                                                                                                                                                       | Confirm ambiguous allocations; never invent a balancing transaction.                                    |
-| Manual Product creation     | Search existing Products, create the variant, then add photos, purchase, or inventory later.                                                                                                                                                                       | Confirm identity and optional inventory.                                                                |
+| Start                       | Short path to the Product                                                                                                       | Human decision                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| iPhone or Mac photo, no run | Check for the same stored image, choose an existing Product or create the exact variant, then attach the photo with its role.   | Confirm the Product and, separately, whether to add inventory.                            |
+| Photo inventory run         | Upload photos; the agent proposes item and label groups and existing Product matches; review each group.                        | Approve, edit, or discard groups before Product or inventory writes.                      |
+| Retailer history or receipt | Capture stable order identity and exact itemized lines; resolve each line to a Product or a reviewable candidate.               | Resolve uncertain variants and any purchase findings.                                     |
+| Gmail                       | Read-only discovery retains related/uncertain Email; Mail import interprets admitted originals into orders and lifecycle links. | Approve the specific import/discovery scope; inspect uncertain relevance and order links. |
+| Card or export transaction  | Match a real posted charge or refund to its order or orders.                                                                    | Confirm ambiguous allocations; never invent a balancing transaction.                      |
+| Manual Product creation     | Search existing Products, create the variant, then add photos, purchase, or inventory later.                                    | Confirm identity and optional inventory.                                                  |
 
 ```mermaid
 sequenceDiagram

@@ -1,6 +1,9 @@
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import type { EntityArtifacts } from "./entities/declarations.ts";
+export type EntityArtifacts = Readonly<{
+  relativePath: string;
+  source: string;
+}>;
 
 /**
  * The ownership header every `//`-commented artifact starts with (`.ts` and
@@ -91,7 +94,8 @@ export const removeExtraArtifacts = async (
  * does not list: a replayed cache entry writes its files but never deletes a
  * newer revision's extra ones.
  */
-export { ARTIFACT_MANIFEST } from "./artifact-manifest.ts";
+export const ARTIFACT_MANIFEST =
+  "apps/web/src/lib/generated/artifacts.gen.json";
 
 export const writeArtifacts = async (
   root: string,

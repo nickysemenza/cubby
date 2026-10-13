@@ -87,7 +87,6 @@ export const collectionContract = defineContract("collection", {
   set: mutation({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
       note: "`collection:*` tags are managed by Collections, so entity.update must not write them",
     },
     input: collectionTagSetInput,
@@ -97,7 +96,6 @@ export const collectionContract = defineContract("collection", {
   create: mutation({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
     },
     input: collectionCreateInput,
     output: collectionSummaryOut,

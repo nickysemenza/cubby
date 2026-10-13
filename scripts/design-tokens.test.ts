@@ -5,7 +5,7 @@ import {
   renderBrandCss,
   renderColorAsset,
   renderMetricsSwift,
-} from "./design-tokens/generate.mjs";
+} from "./design-tokens.ts";
 
 test("one signal role produces matching web and adaptive Apple colors", () => {
   const roles = {

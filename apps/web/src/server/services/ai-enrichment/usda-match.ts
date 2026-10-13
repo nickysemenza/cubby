@@ -1,3 +1,4 @@
+import type { Confidence } from "@cubby/schemas/ai";
 // AI-assisted USDA food matching
 //
 // Cookbook ingredients ("AP flour", "orange juice") rarely match the USDA
@@ -5,12 +6,11 @@
 // `usda-shortlist.ts` assembles a shortlist from a handful of WASM-derived
 // query variants; this asks the decision tier to pick exactly one candidate
 // in a single call via `runAiSelection` (no agentic search loop).
-
-import type { Confidence } from "@cubby/schemas/ai";
 import type { RunId, IngredientId } from "@cubby/schemas/identifiers";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { createLogger } from "@cubby/worker-tracing";
 
+import { USDA_FOOD_SUGGEST_FEATURE } from "~/server/ai/features";
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 
@@ -30,9 +30,6 @@ export interface UsdaMatchAiPort {
 }
 
 const productionUsdaMatchAiPort: UsdaMatchAiPort = { select: runAiSelection };
-
-export const usdaMatchSubject = (ingredientName: string) =>
-  `Find the best USDA food for the recipe ingredient: "${ingredientName}".`;
 
 export interface UsdaFoodSuggestion {
   food: UsdaFoodListRow | null;
@@ -63,7 +60,7 @@ export async function suggestUsdaFood(
   }
 
   const { selected, confidence, reasoning } = await ai.select(usdaFoodSpec, {
-    subject: usdaMatchSubject(ingredientName),
+    subject: USDA_FOOD_SUGGEST_FEATURE.subject(ingredientName),
     candidates: shortlist,
     usage: {
       db,
