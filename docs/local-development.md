@@ -128,11 +128,12 @@ household has its own `cubby_household_fixture` completion marker using the same
 the same refusal of partial or outdated seeds. Dev databases are ephemeral;
 fixture upgrades use `pnpm dev reset` followed by `pnpm dev`.
 
-Browser screenshot/exploration specs opt in with the worker-scoped
-`test.use({ household: true })` from `tests/e2e/e2e-test.ts`; this gives them
-their own Worker/database and leaves focused regression specs on the small base
-world. `household-exploration.spec.ts` exercises the graph through the browser and
-attaches a synthetic wardrobe screenshot to the normal Playwright report.
+Browser screenshot/exploration runs use the explicit `Household exploration`
+Playwright project via `pnpm test:e2e:household`. Its spec seeds the shared
+household in `beforeAll` on the existing runtime, without another worker-scoped
+option. Required desktop regression shards exclude this project and retain
+small fixtures. `household-exploration.spec.ts` exercises the graph through the
+browser and saves a synthetic wardrobe screenshot.
 `pnpm test:e2e:sim -- --qa` loads this same household before its journey-specific
 fixtures. The focused `--qa-photo-completion` guard keeps its small fixture.
 

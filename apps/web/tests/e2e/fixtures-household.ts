@@ -4,7 +4,7 @@ import { createPostgresPool } from "../../tooling/postgres-pool";
 import { seedCorpus } from "../../tooling/scenarios/corpus";
 import type { E2EWorkerRuntime } from "./e2e-worker-runtime";
 
-/** The worker option isolates this rich screenshot world from focused specs. */
+/** The exploration project keeps this rich world outside regression shards. */
 export async function seedHouseholdRuntime(runtime: E2EWorkerRuntime) {
   const client = await request.newContext({
     baseURL: runtime.baseURL,

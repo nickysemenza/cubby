@@ -10,6 +10,7 @@
     "test:postgres": "node ../../scripts/test-services.ts -- vitest run --project integration --project integration-workerd",
     "test:file": "vitest run",
     "test:e2e": "NODE_ENV=test node ../../scripts/test-services.ts -- playwright test",
+    "test:e2e:household": "pnpm build:cf --ensure && pnpm test:e2e --project=\"Household exploration\"",
     "eval:agent-models": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/purchase-import/agent-model-eval.live-eval.ts",
     "eval:features": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/ai/feature-routing-eval.live-eval.ts",
     "test:e2e:hmr": "playwright test --config=playwright.dev.config.ts",

@@ -33,6 +33,9 @@ is not a scenario result. Before declaring shared schema inputs ready, run the
 read-only `loadEntityDeclarationBundle` strict probe; do not infer readiness from
 field spelling. Root owns generation and migration readiness during parallel work. Measure CI's natural job timings before changing
 shards; keep test-lane cache keys broad.
+Playwright worker options split browser/database/storage/Worker harnesses. Keep
+spec-specific seeding in an intentional project or lane; do not add a worker
+option for one spec. `workerdProfile` owns intentional peer/queue differences.
 
 ## During implementation
 

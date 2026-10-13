@@ -109,10 +109,18 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
     {
       name: "Authenticated tests",
       testMatch: /\.spec\.ts$/,
-      testIgnore: /(^|\/)(gmail\.[^/]*|purchase-import-run)\.spec\.ts$/,
+      testIgnore:
+        /(^|\/)(gmail\.[^/]*|purchase-import-run|household-exploration)\.spec\.ts$/,
       use: {
         ...devices["Desktop Chrome"],
       },
+    },
+    /* Opt-in screenshot/exploration lane; never splits regression workers. */
+    {
+      name: "Household exploration",
+      testMatch: /(^|\/)household-exploration\.spec\.ts$/,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
     },
     /* The purchase agent with a scripted model: an informative CI lane
        (`test:e2e:ci:purchase-import`), outside the required desktop shards. */
