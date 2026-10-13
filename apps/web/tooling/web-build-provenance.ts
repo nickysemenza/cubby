@@ -68,7 +68,7 @@ function buildFingerprint(repoRoot: string): BuildFingerprint {
   const required = [
     path.join(webRoot, "dist/client"),
     path.join(webRoot, "dist/server/index.js"),
-    // The wasm packages (scripts/build-wasm.sh), bundled whole.
+    // The wasm packages (scripts/ensure.ts wasm --build), bundled whole.
     path.join(repoRoot, "packages/wasm/worker"),
     path.join(repoRoot, "packages/wasm/browser"),
     path.join(repoRoot, "packages/wasm/cookbook"),

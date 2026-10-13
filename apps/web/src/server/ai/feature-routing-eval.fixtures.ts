@@ -8,7 +8,7 @@ import {
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 
 import { formatCurrency } from "~/lib/number-format";
-import type { PurchaseAuditRenderedBatch } from "~/server/agents/purchase-import/prompts";
+import type { PurchaseAuditRenderedBatch } from "~/server/ai/prompts/purchase-import";
 
 import type {
   ExpectedAudit,

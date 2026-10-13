@@ -1,20 +1,16 @@
 # apps/apple agent rules
 
-Native app: SwiftUI (iOS 26 / macOS 26) + `CubbyKit` package + `cubby` CLI
+Native app: SwiftUI (deployment floors in `project.yml`) + `CubbyKit` package + `cubby` CLI
 harness. This document is the current native implementation guidance.
 
-For fast iteration, choose the loop in [ITERATION.md](ITERATION.md): focused
-Swift tests or previews for failures native E2E cannot observe,
-`test:e2e:sim -- --headless --watch` for API behavior, and
-`test:e2e:sim -- --watch` for repeated simulator UI interactions. The warm simulator
-runner owns its disposable database and agent-device session; stop it with
-Ctrl-C when done. Run `test:e2e:sim` for search/detail smoke; editing, view switching and filtering require `--extended-journey` (other flags: `--video`, `--layout`, `--headless [--photo [--purchase]]`, `--watch`).
+[ITERATION.md](ITERATION.md) owns focused tests, previews, headless and simulator
+loops. [Validation](../../docs/agents/validation.md) owns check selection and delivery.
 
 ## Build order
 
 [README](README.md#build-order) owns build order, running, and TestFlight setup.
 `artifact of binary target 'CubbyFFIBinary' not found` means the xcframework is missing: run
-`node scripts/ensure-apple-ffi.ts`.
+`pnpm apple gen` (which prepares the native artifacts).
 
 ## Wire rules (non-negotiable)
 
@@ -140,7 +136,7 @@ None is committed; edit the generator or its inputs, never the output. A missing
 | `Generated/{OperationRoutes,EntityOperations,ClientOperations,APITypes}.swift`, `Sources/CubbyAPI/openapi-generator-config.yaml` | `scripts/generator/http-api/native.ts`, `swift-operations.ts`                                          |
 | `Generated/SharedConstants.swift`                                                                                                | `packages/shared/src/client-constants.ts`, `apps/web/wrangler.jsonc`, `WAYFINDING_DOMAIN_PRESENTATION` |
 | `CubbyAPI` target                                                                                                                | swift-openapi-generator plugin, from `Sources/CubbyAPI/openapi.json` (written by `pnpm generate`)      |
-| `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`                                                                                      | `uniffi-bindgen` via `node scripts/ensure-apple-ffi.ts`                                                |
+| `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`                                                                                      | `uniffi-bindgen` via `scripts/ensure.ts apple-ffi`                                                     |
 | `App/Shared/Previews/Fixtures/*.json`                                                                                            | `apps/web/scripts/apple-preview-fixtures.ts` (edit its overrides)                                      |
 
 - **Native coverage.** `packages/schemas/src/native-coverage.ts` is the single declaration of
@@ -198,7 +194,7 @@ None is committed; edit the generator or its inputs, never the output. A missing
 - `swift build --package-path apps/apple/CubbyKit`
 - `swift test --package-path apps/apple/CubbyKit`
 - `xcodegen generate --spec apps/apple/project.yml` (when `project.yml` changes)
-- Full app build needs the xcframework from `ensure-apple-ffi.ts` first.
+- App builds prepare the xcframework through the shared preparation entrypoint.
 - `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see
   `scripts/apple-check.sh`, the `apple:lint` Nx target) gates
   formatting; run

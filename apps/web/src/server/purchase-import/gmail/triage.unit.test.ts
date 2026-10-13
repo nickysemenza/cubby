@@ -6,6 +6,7 @@ import * as recipebridge from "@cubby/recipebridge";
 import { describe, expect, it, vi } from "vitest";
 
 import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
+import { mailTriagePrompt } from "~/server/ai/prompts/mail";
 
 import {
   EMAIL_FIXTURE_SUMMARY,
@@ -13,7 +14,7 @@ import {
   summarizeEmailFixtures,
 } from "./email-html.fixtures";
 import { normalizeMessage } from "./normalize";
-import { mailTriagePrompt, routeGmailMessage } from "./triage";
+import { routeGmailMessage } from "./triage";
 import type { GmailMessage, GmailMessagePart } from "./types";
 
 const part = (body: string, mimeType = "text/plain"): GmailMessagePart => ({

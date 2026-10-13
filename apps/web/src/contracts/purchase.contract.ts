@@ -58,7 +58,6 @@ export const purchaseContract = defineContract("purchase", {
   settlementCandidates: query({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
     },
     native: "Review statement activity near a Purchase",
     input: purchaseSettlementCandidatesInput,

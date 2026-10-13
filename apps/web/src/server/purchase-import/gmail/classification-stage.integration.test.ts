@@ -3,13 +3,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
+import { mailTriagePrompt } from "~/server/ai/prompts/mail";
 import { email as emailTable, orderMail, run } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { syntheticMailImportRun } from "./execution.fixtures";
 import { ingestGmailMessages } from "./ingest";
-import { mailTriagePrompt } from "./triage";
 import type { GmailProvider } from "./types";
 
 const message =

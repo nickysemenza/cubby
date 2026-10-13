@@ -34,26 +34,11 @@ existing block. Extend the generic path when it almost fits. See
   `server/repo/classification-field-policy.ts` — never a feature literal at a
   call site. See [entities](../entities.md#classification-field-policies).
 - Detail pages: generic detail with declared slots (`app/*/slots.tsx`).
-- Slot reports: a slot that is figures, series, a table or dated rows reads
-  `entityReport.get` (`server/repo/entity-report/`; block kinds `stats`,
-  `chart`, `table`, `schedule`, `note`, `records` in `packages/schemas/src/entity-report.ts`).
-  Web draws them with `ReportBlocks` (`entity/entity-detail/report-slot.tsx`),
-  native with `ReportDetailSlot`/`ReportPresentation`; add a slot id and a
-  builder, never client-side derivation. A `table` block is display text under
-  column headings: clients right-align figure columns, open a row's `ref`, link
-  shortcodes in cells (web) and say when it is `truncated`. A row that is a
-  record of its own (a ledger party) is a `records` row instead, with its kind
-  as a neutral `statuses` chip (`badges` read as warnings). A `records` block is rows that are
-  records of their own (label, thumbnail, badges, a record to open) with verbs
-  from `COLLECTION_ACTION_SCOPES`: web fills each verb in
-  `entity-detail/collection-actions.tsx`, native runs its plan in
-  `nativeCollectionActionPlans` through `HeroActionRunner`. Rows are worded in
-  `server/repo/collection-items.ts`. The same block carries the finance slots: rows may be
-  checkable (`key`, `disabledReason`), with a `footer` and finance `verbs`
-  (`SECTION_ACTION_IDS`, each with the server's `disabledReason`). A verb that edits
-  a draft (split, attach expenses, attach products) asks the server before it writes:
-  `purchase.checkSplit` / `purchase.checkLinkExpenses` return the body to send or the
-  reason not to (`server/repo/purchase-split-draft.ts`, `purchase-link-draft.ts`).
+- Slot reports: `entityReport.get` and `server/repo/entity-report/` compose
+  shared server-owned blocks; web `ReportBlocks` and native `ReportDetailSlot`
+  render them. [Compiled entities](../entities.md#one-declaration-several-consumers)
+  owns block/command/choice semantics. Add a builder rather than deriving figures
+  or disabled reasons on a client.
 - Swift: generated OpenAPI client, `entity-manifest.json`, the generated manifest
   vocabulary enums (`Generated/EntityVocabulary.swift`) and descriptor types
   (`Generated/EntityDescriptors.swift`, including `ValueSchema`). The typed description in
@@ -148,6 +133,12 @@ existing block. Extend the generic path when it almost fits. See
 - GTIN and barcodes: recipebridge `scan_code_gtin14` and `@cubby/shared/upc`.
 
 ## AI
+
+- Prompt requests: `AI_FEATURES` typed `feature.request` renderers; pure prompt
+  definitions in `server/ai/prompts/`. `decisionCatalogRows` in the existing
+  `decision-catalog.ts` owns decision discovery; `AI_FEATURES` owns chat requests. Purchase-import Markdown remains
+  authoritative where the request mounts a shared skill; catalog rendering does
+  not create another prose prompt.
 
 - Model IDs, provider identities, capabilities, role schemas and defaults:
   `packages/shared/src/ai/models.ts`. Derive model lists from those declarations.

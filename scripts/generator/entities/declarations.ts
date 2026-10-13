@@ -409,10 +409,7 @@ export type CompiledEntity = Readonly<{
   classificationPolicies: EntityDeclarationMetadata["capabilities"]["classificationPolicies"];
 }>;
 
-export type EntityArtifacts = Readonly<{
-  relativePath: string;
-  source: string;
-}>;
+export type { EntityArtifacts } from "../artifacts.ts";
 
 export class EntityDeclarationError extends Error {
   constructor(message: string) {

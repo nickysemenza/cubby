@@ -129,7 +129,7 @@ links for the current Ledger filters:
    Other projects, and No project.
 3. **Root category**: from 4.1, plus Uncategorized and Receipt adjustments.
 
-Render with `@nivo/sankey` (same 0.99 line as the existing Nivo packages). A
+Render with `@nivo/sankey` aligned to the installed Nivo packages. A
 link click applies the corresponding funder/project/category filters to the
 Ledger. A note under the chart states the refund/credit total excluded from
 links.

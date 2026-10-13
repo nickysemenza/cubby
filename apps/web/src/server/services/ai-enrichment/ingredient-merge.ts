@@ -1,3 +1,4 @@
+import type { Confidence } from "@cubby/schemas/ai";
 // AI-assisted ingredient merge suggestions
 //
 // EPUB imports create near-duplicate ingredients that string matching can't
@@ -6,8 +7,6 @@
 // decision tier to pick exactly one target in a single call via
 // `runAiSelection` (no agentic search loop). Suggestions only — merge is
 // destructive, so the user confirms.
-
-import type { Confidence } from "@cubby/schemas/ai";
 import {
   type RunId,
   type IngredientId,
@@ -16,6 +15,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
+import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/features";
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 
@@ -35,9 +35,6 @@ export interface IngredientMergeAiPort {
 const productionIngredientMergeAiPort: IngredientMergeAiPort = {
   select: runAiSelection,
 };
-
-export const ingredientMergeSubject = (name: string) =>
-  `Is the recipe ingredient "${name}" the same purchasable item as an existing ingredient?`;
 
 export interface IngredientMergeSuggestion {
   target: {
@@ -81,7 +78,7 @@ export async function suggestIngredientMerge(
   const { selected, confidence, reasoning } = await ai.select(
     ingredientMergeSpec,
     {
-      subject: ingredientMergeSubject(source.name),
+      subject: INGREDIENT_MERGE_FEATURE.subject(source.name),
       candidates: shortlist,
       usage: {
         db,

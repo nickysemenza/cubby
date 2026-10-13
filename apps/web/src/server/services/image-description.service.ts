@@ -19,10 +19,7 @@ import { TIER1_NUTRIENTS } from "@cubby/usda";
 
 import { transformedImageUrl } from "~/lib/image-url";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
-import {
-  type AiImagePart,
-  runStructuredFeature,
-} from "~/server/ai/run-feature";
+import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { IMAGE_ANALYSIS_NORMALIZATION_REVISION } from "~/server/image-processing/description-policy";
 import {
@@ -101,31 +98,6 @@ export function imageDescriptionInputFingerprint(input: {
   });
 }
 
-export function descriptionRequest(imageUrl: string) {
-  const imagePart: AiImagePart = {
-    type: "image",
-    source: { type: "url", value: imageUrl },
-  };
-  return {
-    systemPrompts: [
-      "Describe this one image accurately for a household catalog. Return only what visual evidence supports. Claims must distinguish visible labels/OCR from visual inference. Never infer material composition from appearance. When a Nutrition Facts panel is legible, return nutritionFacts with its printed serving grams and per-serving nutrient amounts in the declared units (kcal for energy, g for macronutrients, mg or micrograms as declared for micronutrients). Use only numeric amounts printed on this panel; do not use percent daily values as amounts. Preserve omitted nutrients as unknown. An exception is a printed footnote explicitly naming a nutrient as not a significant source: include only those named nutrients in inferredZeroNutrients, quote the exact printed footnote verbatim in inferenceEvidence and in an OCR or label claim, and leave their numeric amounts absent. Never infer zero from an otherwise sparse panel, an omitted nutrient, USDA data, or appearance. If there is no such explicit footnote, leave inferredZeroNutrients empty and inferenceEvidence null. If the panel or serving grams are unreadable, return nutritionFacts null. Mark cutout eligibility eligible only for one clearly isolated object; labels, documents, people, room scenes, and ambiguous groups are ineligible or review.",
-    ],
-    messages: [
-      {
-        role: "user" as const,
-        content: [
-          imagePart,
-          {
-            type: "text" as const,
-            content:
-              "Analyze the original image. Do not describe a generated cutout.",
-          },
-        ],
-      },
-    ],
-  };
-}
-
 /**
  * Preferred cloud analysis through the mandatory AI Gateway. A matching
  * immutable AiAnalysis result is returned before any model request is placed.
@@ -164,7 +136,7 @@ export async function describeOriginalImage(
     promptRevision: IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
     schemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
     normalizationRevision: IMAGE_ANALYSIS_NORMALIZATION_REVISION,
-    request: descriptionRequest(
+    request: IMAGE_DESCRIPTION_FEATURE.request(
       imageAnalysisRenditionUrl(getR2PublicUrl(source.key)),
     ),
     cached: false,
@@ -216,7 +188,7 @@ export async function describeOriginalImage(
     promptRevision: IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
     schemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
     normalizationRevision: IMAGE_ANALYSIS_NORMALIZATION_REVISION,
-    request: descriptionRequest(analysisUrl),
+    request: IMAGE_DESCRIPTION_FEATURE.request(analysisUrl),
     cached: Boolean(exactCached),
     renditionKey: key,
     renditionHash: inspected.sha256,
@@ -229,7 +201,7 @@ export async function describeOriginalImage(
     };
   const raw = await runStructuredFeature(
     IMAGE_DESCRIPTION_FEATURE,
-    descriptionRequest(analysisUrl),
+    IMAGE_DESCRIPTION_FEATURE.request(analysisUrl),
     {
       db,
       runId: input.runId,
