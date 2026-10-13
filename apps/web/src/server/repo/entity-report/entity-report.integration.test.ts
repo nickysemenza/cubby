@@ -2,7 +2,7 @@ import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { entityReportOut } from "@cubby/schemas/entity-report";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb } from "tooling/test-setup";
+import { withTestDb, countTestDbQueries } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -14,7 +14,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { buildEntityReport } from "./index";
+import { buildEntityReport, buildEntityReports } from "./index";
 
 const blocksOf = <K extends ReportBlock["kind"]>(
   blocks: ReportBlock[],
@@ -86,6 +86,32 @@ describe("entity report", () => {
     const [chart] = blocksOf(blocks, "chart");
     expect(chart).toMatchObject({ mark: "stack", marker: 1000 });
     expect(chart?.series.map((entry) => entry.value)).toEqual([300, 50]);
+
+    // Batch reuse must work in either requested order and eliminate the second
+    // aggregate, while leaving a budget-only request on its cheaper path.
+    const separate = await countTestDbQueries(async () => {
+      await report("project.budget", parent.id);
+      await report("project.analytics", parent.id);
+    });
+    for (const slots of [
+      ["project.budget", "project.analytics"],
+      ["project.analytics", "project.budget"],
+    ] as const) {
+      const batch = await countTestDbQueries(() =>
+        buildEntityReports(
+          ctx.db,
+          { id: parent.id, slots: [...slots] },
+          async () => null,
+          ctx.actor,
+        ),
+      );
+      expect(batch.queryCount).toBeLessThan(separate.queryCount);
+      expect(batch.result.reports.map(({ slot }) => slot)).toEqual(slots);
+      expect(
+        batch.result.reports.find(({ slot }) => slot === "project.budget")
+          ?.report.blocks,
+      ).toEqual(blocks);
+    }
   });
 
   it("explains an empty budget instead of drawing zeros", async () => {

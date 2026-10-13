@@ -229,14 +229,10 @@
         // exceeded the Worker memory limit before a queued Run was claimed.
         "max_batch_size": 1,
         "max_batch_timeout": 0,
-        // Serial delivery is not what makes this safe — freshness gates are.
-        // Each invocation still holds one `pg.Client`. The binding constraints this
-        // concurrency actually runs into are the AI Gateway and Vectorize
-        // per-call rate limits; the consumer keeps under those by sharing
-        // one embed call and one Vectorize upsert per batch, so
-        // concurrency multiplies those two calls rather than per-message
-        // connections.
-        "max_concurrency": 10,
+        // Each invocation holds one database client; bound competing background
+        // work while interactive requests share the Hyperdrive origin pool.
+        // Freshness gates, rather than serial delivery, protect correctness.
+        "max_concurrency": 2,
         "max_retries": 3
       },
       {

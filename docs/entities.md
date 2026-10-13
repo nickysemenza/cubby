@@ -279,6 +279,18 @@ exclude historical file imports, while discovery and the Imports saved view
 have their own deliberately different scopes. A photo batch keeps its own
 review and durable transcript rather than purchase report sections.
 
+Expense analytical totals use `server/repo/expense-derived-read.ts`: one grouped
+allocation relation supplies the cost column for each SQL aggregate, rather
+than embedding a correlated allocation calculation in every money projection.
+Selection limits the purchases to resolve, while every live principal sibling
+still supplies the denominator; scope filters apply only to rounded shares.
+Unknown costs stay null and unscoped totals sum the original Expense costs.
+Each breakdown executes its own relation; this is not one shared database
+execution across all chart queries. A project report batch requesting analytics
+reuses that analytics summary for its budget in either slot order. Reuse lasts
+only for that batch, with no cross-request cache or transaction. Budget alone
+does not load the chart breakdowns.
+
 **Report slots.** A `slot` section whose content is figures, a chart series, a
 table or dated schedule rows has no per-platform code: the server composes it
 once (`entityReport.get`, builders in `server/repo/entity-report/`, block kinds

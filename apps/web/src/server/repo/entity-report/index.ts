@@ -23,6 +23,7 @@ import {
   projectBudgetReport,
   projectContributionReport,
   projectScheduleReport,
+  loadProjectReportAnalytics,
 } from "./project";
 import { purchaseFinancialSettlementReport } from "./purchase-financial-settlement";
 import { purchaseProjectAllocationReport } from "./purchase-project-allocation";
@@ -78,9 +79,9 @@ const recipeBuilder =
 
 const BUILDERS = {
   "email.review": emailReviewReport,
-  "project.budget": projectBudgetReport,
+  "project.budget": (db, code) => projectBudgetReport(db, code),
   "project.contribution": projectContributionReport,
-  "project.analytics": projectAnalyticsReport,
+  "project.analytics": (db, code) => projectAnalyticsReport(db, code),
   "project.schedule": projectScheduleReport,
   "recipe.availability": recipeBuilder("recipeAvailabilityReport"),
   "recipe.costing-coverage": recipeBuilder("recipeCostingCoverageReport"),
@@ -178,16 +179,36 @@ export async function buildEntityReports(
   if (runSlots.length > 0)
     throw new Error("A batched report must name slots of one entity.");
   const reports: EntityReportManyOut["reports"] = [];
+  const projectAnalytics = input.slots.includes("project.analytics")
+    ? await loadProjectReportAnalytics(db, input.id)
+    : undefined;
   for (const slot of input.slots)
     reports.push({
       slot,
-      report: await buildEntityReport(
-        db,
-        { slot, id: input.id },
-        viewer,
-        actor,
-        services,
-      ),
+      report:
+        projectAnalytics && slot === "project.budget"
+          ? {
+              blocks: await projectBudgetReport(
+                db,
+                input.id,
+                projectAnalytics.summary,
+              ),
+            }
+          : projectAnalytics && slot === "project.analytics"
+            ? {
+                blocks: await projectAnalyticsReport(
+                  db,
+                  input.id,
+                  projectAnalytics,
+                ),
+              }
+            : await buildEntityReport(
+                db,
+                { slot, id: input.id },
+                viewer,
+                actor,
+                services,
+              ),
     });
   return { reports };
 }
