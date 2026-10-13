@@ -10,7 +10,7 @@ import {
 import { cents } from "@cubby/shared";
 import { sql, type SQL } from "drizzle-orm";
 
-import { purchaseHasItemLinesSql } from "~/server/repo/purchase-evidence-policy";
+import { purchaseListsItemsSql } from "~/server/repo/purchase-evidence-policy";
 import type { PurchaseFinancialAggregate } from "~/server/repo/purchase-financial-aggregates";
 
 /**
@@ -192,8 +192,9 @@ export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
  * charge that is one of several live settlement charges on a purchase
  * (installments, combined orders) is `shared` and is never compared with the
  * purchase's lines. Otherwise the charge is itemized only when every allocated
- * Purchase has its item lines (`purchaseHasItemLinesSql`; unlinked goods
- * are the products axis's gap); one lump Purchase makes it a `lump`. An itemized one is compared through `purchaseFinancialMismatchSql`
+ * Purchase lists its goods (`purchaseListsItemsSql`: item lines, or allocation
+ * slices with linked Products; unlinked goods are the products axis's gap);
+ * one lump Purchase makes it a `lump`. An itemized one is compared through `purchaseFinancialMismatchSql`
  * so it agrees with the Problems worklist, including accepted exceptions.
  * Money stays `SUM(Expense.cost)`.
  */
@@ -220,7 +221,7 @@ export const financialTransactionItemizationSql = (
             AND iz_ft."kind" IN (${sql.raw(purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", "))})
             AND iz_ft."status" <> ${financialTransactionStatus.enum.void}
         ) AS shared,
-        ${purchaseHasItemLinesSql("iz_p")} AS itemized,
+        ${purchaseListsItemsSql("iz_p")} AS itemized,
         COALESCE(${sql.raw(purchaseFinancialMismatchSql("iz_p"))}, false) AS mismatch
       FROM "FinancialTransactionAllocation" iz_a
       JOIN "Purchase" iz_p ON iz_p."id" = iz_a."purchaseId" AND iz_p."deletedAt" IS NULL
