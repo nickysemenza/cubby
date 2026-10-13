@@ -414,6 +414,18 @@ checks embedded media and uses the existing gateway, retry, cache and usage
 paths. Media limits and payloads belong to `server/ai/decision-model.ts` and
 `server/services/image-identification.service.ts`.
 
+Image description consumers select confirmed corrections first, then the current
+preferred cloud result, then the newest available source-matching observation.
+A newer Apple observation does not displace a preferred cloud description;
+observations for replaced image content are historical evidence only.
+
+Identification retains visual composition separately from identity scope.
+Multiple related views, parts, or life stages may support one catalog identity;
+unrelated objects, documents and uncertain scenes abstain from single-identity
+matching. Suggestions remain unconfirmed and never change inventory or identity
+automatically. Prompt/schema revisions fence reuse; historical observations are
+retained rather than rewritten.
+
 An available Apple companion claims compatible waiting image jobs immediately
 when it connects. The queue's no-device cooldown does not delay that claim;
 pending retries still honor backoff. Device participation and advertised image

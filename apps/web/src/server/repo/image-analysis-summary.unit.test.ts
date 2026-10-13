@@ -10,7 +10,7 @@ describe("image analysis summary", () => {
     const identification = imageIdentificationResult.parse({
       subject: "multiple_objects",
       category: null,
-      outcome: "not_single_subject",
+      outcome: "not_single_identity",
       candidates: [],
       considered: 0,
       truncated: false,

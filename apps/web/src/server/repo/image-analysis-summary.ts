@@ -10,6 +10,8 @@ import { aiAnalysis, image } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { loadImageIdentifications } from "~/server/repo/image-identification";
 
+import { loadSelectedDescriptions } from "./image-description-selection";
+
 /**
  * The slice of an on-device `photo-local-analysis` row this reader needs.
  * Deliberately narrower than the full local-analysis payload (which also
@@ -89,10 +91,10 @@ async function loadNewestAnalysisByImage(
 
 /**
  * Batched analysis summary for a page of images: the newest non-deleted
- * `photo-local-analysis` (on-device Vision) and `image-description` (cloud)
+ * `photo-local-analysis` (on-device Vision) and selected `image-description`
  * `AiAnalysis` row per image, condensed to what the photo-inventory-import
  * agent needs to decide whether an image is worth opening — top
- * classifications, OCR text joined into lines, the cloud description, and
+ * classifications, OCR text joined into lines, the corrected/preferred current description, and
  * current unconfirmed Product suggestions or identification abstention.
  *
  * Every feature is loaded in a batch, including freshness and live-Product
@@ -113,7 +115,7 @@ export async function loadImageAnalysisSummaries(
   const [localByImage, descriptionByImage, identificationByImage] =
     await Promise.all([
       loadNewestAnalysisByImage(db, shortcodes, "photo-local-analysis"),
-      loadNewestAnalysisByImage(db, shortcodes, "image-description"),
+      loadSelectedDescriptions(db, shortcodes),
       loadImageIdentifications(db, shortcodes),
     ]);
 
@@ -121,7 +123,13 @@ export async function loadImageAnalysisSummaries(
   for (const shortcode of shortcodes) {
     const summary = composeImageAnalysisSummary(
       localByImage.get(shortcode),
-      descriptionByImage.get(shortcode),
+      descriptionByImage.has(shortcode)
+        ? {
+            description: descriptionByImage.get(shortcode),
+            claims: [],
+            cutoutEligibility: "review",
+          }
+        : undefined,
       identificationByImage.get(shortcode)?.result,
     );
     if (summary) summaries.set(shortcode, summary);

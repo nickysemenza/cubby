@@ -11,13 +11,13 @@ import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { preferredImageDescriptionPolicy } from "~/server/image-processing/description-policy";
 import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
 import {
   getEmbeddingTextsForRefs,
   type SearchableEntityText,
 } from "~/server/repo/entity-embedding";
 import { expenseDerivedReadSql } from "~/server/repo/expense-derived-read";
+import { loadSelectedDescriptions } from "~/server/repo/image-description-selection";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { normalizeSearchText } from "~/server/semantic/text";
@@ -81,43 +81,20 @@ async function loadDirectImageSearchText(
   const result = await unwrapDb(db).execute<{
     entityKind: SearchableEntity;
     entityId: string;
-    text: string | null;
+    shortcode: string;
   }>(sql`
     WITH refs("entityKind", "entityId") AS (VALUES ${refValues}),
     attached AS (${sql.join(branches, sql` UNION ALL `)})
-    SELECT attached."entityKind", attached."entityId",
-      COALESCE(correction.description, analysis.result->>'description') AS text
+    SELECT attached."entityKind", attached."entityId", image.shortcode
     FROM attached
     JOIN "Image" image ON image.id = attached."imageId" AND image."deletedAt" IS NULL
-    LEFT JOIN LATERAL (
-      SELECT c.description FROM "ImageDescriptionCorrection" c
-      WHERE c."imageId" = image.id AND c."deletedAt" IS NULL
-      LIMIT 1
-    ) correction ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT a.result FROM "AiAnalysis" a
-      WHERE a."entityKind" = 'image' AND a."entityId" = image.id
-        AND a.feature = 'image-description' AND a.provider = ${preferredImageDescriptionPolicy.provider}
-        AND a.model = ${preferredImageDescriptionPolicy.model}
-        AND a."promptVersion" = ${String(preferredImageDescriptionPolicy.promptRevision)}
-        AND a."resultSchemaRevision" = ${preferredImageDescriptionPolicy.resultSchemaRevision}
-        AND a."deletedAt" IS NULL
-        AND CASE
-          WHEN a."inputFingerprint" LIKE '{%'
-          THEN a."inputFingerprint"::jsonb->>'sourceContentHash' = image.sha256
-            AND a."inputFingerprint"::jsonb->>'provider' = ${preferredImageDescriptionPolicy.provider}
-            AND a."inputFingerprint"::jsonb->>'model' = ${preferredImageDescriptionPolicy.model}
-            AND a."inputFingerprint"::jsonb->>'promptRevision' = ${String(preferredImageDescriptionPolicy.promptRevision)}
-            AND a."inputFingerprint"::jsonb->>'resultSchemaRevision' = ${String(preferredImageDescriptionPolicy.resultSchemaRevision)}
-            AND a."inputFingerprint"::jsonb->>'normalizationRevision' = ${String(preferredImageDescriptionPolicy.normalizationRevision)}
-          ELSE false
-        END
-      ORDER BY a."createdAt" DESC LIMIT 1
-    ) analysis ON TRUE
   `);
+  const selected = await loadSelectedDescriptions(db, [
+    ...new Set(result.rows.map((row) => row.shortcode)),
+  ]);
   const values = new Map<string, string>();
   for (const row of result.rows) {
-    const text = row.text?.trim();
+    const text = selected.get(row.shortcode)?.trim();
     if (!text) continue;
     const key = entityRefKey(row.entityKind, row.entityId);
     values.set(key, [values.get(key), text].filter(Boolean).join("\n"));

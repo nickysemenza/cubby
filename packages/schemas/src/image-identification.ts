@@ -2,8 +2,8 @@ import { z } from "zod";
 import { productShortcode } from "./identifier-fields";
 
 export const IMAGE_IDENTIFICATION_MODEL = "@cf/cloudflare/clef";
-export const IMAGE_IDENTIFICATION_PROMPT_REVISION = 1;
-export const IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION = 1;
+export const IMAGE_IDENTIFICATION_PROMPT_REVISION = 2;
+export const IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION = 2;
 
 export const imageIdentificationResult = z.object({
   subject: z.enum([
@@ -13,11 +13,14 @@ export const imageIdentificationResult = z.object({
     "scene",
     "unclear",
   ]),
+  identityScope: z
+    .enum(["single_identity", "multiple_identities", "unclear"])
+    .default("unclear"),
   category: z.string().nullable(),
   outcome: z.enum([
     "suggestions",
     "no_match",
-    "not_single_subject",
+    "not_single_identity",
     "no_candidates",
   ]),
   candidates: z
