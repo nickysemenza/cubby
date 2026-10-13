@@ -5,7 +5,7 @@ import {
   importSourceIdentity,
   type CommitAcceptedSourceOrderReconciliationInput,
 } from "@cubby/schemas/purchase-import";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import {
@@ -64,9 +64,24 @@ export async function canonicalizeReviewedLegacyOriginal(
   review: Review,
   actor: ActorContext,
 ): Promise<{ family: Family; reviewedLegacyChecksum?: string }> {
-  const legacy = /^gmail:([^:]+):order:(.+)$/u.exec(family.root.externalKey);
-  if (!legacy || family.root.kind !== "mail_message") return { family };
-  if (association.acceptedObservationId || family.members.length !== 1)
+  const historicalClaim = family.members.find(
+    (claim) => claim.id === association.sourceClaimId,
+  );
+  if (!historicalClaim) return { family };
+  const legacy = /^gmail:([^:]+):order:(.+)$/u.exec(
+    historicalClaim.externalKey,
+  );
+  if (
+    !legacy ||
+    family.root.kind !== "mail_message" ||
+    association.acceptedObservationId
+  )
+    return { family };
+  if (
+    family.members.some(
+      (claim) => claim.id !== family.root.id && claim.id !== historicalClaim.id,
+    )
+  )
     throw new Error(
       "Legacy source history requires separate ownership review.",
     );
@@ -77,7 +92,11 @@ export async function canonicalizeReviewedLegacyOriginal(
     source[1]!.startsWith("legacy") ||
     source[2] !== legacy[1] ||
     order.targetPurchaseId !== association.purchaseId ||
-    association.checksum !== family.root.checksum
+    association.checksum !== historicalClaim.checksum ||
+    (family.root.id !== historicalClaim.id &&
+      family.root.externalKey !== order.sourceExternalKey &&
+      /^gmail:legacy:[^:]+:([^:]+)$/u.exec(family.root.externalKey)?.[1] !==
+        legacy[1])
   )
     throw new Error(
       "Reviewed preparation must establish the same legacy original and Purchase.",
@@ -133,16 +152,26 @@ export async function canonicalizeReviewedLegacyOriginal(
     firstRunId: order.runId,
     lastRunId: order.runId,
   });
-  if (
-    await readSourceFamilyOrder(tx, canonical, association.orderKey, "update")
-  )
+  const existing = await readSourceFamilyOrder(
+    tx,
+    canonical,
+    association.orderKey,
+    "update",
+  );
+  if (existing && existing.association.id !== association.id)
     throw new Error(
       "The canonical original already has an accepted order association.",
     );
-  await tx
-    .update(importSourceClaim)
-    .set({ canonicalClaimId: canonical.root.id })
-    .where(eq(importSourceClaim.id, family.root.id));
+  if (canonical.root.id !== family.root.id)
+    await tx
+      .update(importSourceClaim)
+      .set({ canonicalClaimId: canonical.root.id })
+      .where(
+        inArray(
+          importSourceClaim.id,
+          family.members.map((claim) => claim.id),
+        ),
+      );
   const joined = await readImportSourceClaimFamily(tx, canonical.root, {
     lock: "update",
   });
