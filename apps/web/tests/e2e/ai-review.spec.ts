@@ -19,6 +19,93 @@ import {
   createEvidenceHarnessContext,
 } from "./fixtures-core";
 
+// Acceptance must acknowledge the chosen value before the response arrives,
+// retain other pills throughout the write/refetch, and persist the real value.
+test("list pills accept immediately without unloading another row's suggestion", async ({
+  page,
+}, testInfo) => {
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const categoryName = uniqueName(testInfo, "Pill category");
+  const category = await createEntityFixture(page, "productCategory", {
+    name: categoryName,
+  });
+  const prefix = uniqueName(testInfo, "Pill lifecycle");
+  const names = [`${prefix} first`, `${prefix} second`];
+  const products = await Promise.all(
+    names.map((name) =>
+      createEntityFixture(page, "product", { name, categoryId: null }),
+    ),
+  );
+  const recordIds = await Promise.all(
+    products.map((product) => resolveOrThrow(db, "product", product.id)),
+  );
+  const firstRecordId = recordIds[0];
+  if (!firstRecordId) throw new Error("Synthetic first Product is missing");
+  const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
+  await getDb(db)
+    .insert(suggestionTable)
+    .values(
+      recordIds.map((recordId) => ({
+        runId,
+        entity: "product",
+        recordId,
+        field: "categoryId",
+        currentValue: null,
+        suggestedValue: category.id,
+        confidence: 0.97,
+        runnerUpValue: null,
+        runnerUpConfidence: null,
+        model: "typesafe/jev",
+        kind: "addition" as const,
+        status: "pending" as const,
+      })),
+    );
+  const acceptance = Promise.withResolvers<void>();
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (!dispatchesOperation(route.request(), "ai.acceptSuggestion")) {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    await acceptance.promise;
+    await route.fulfill({ response });
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/products?q=${encodeURIComponent(prefix)}`,
+  );
+  const table = page.getByRole("table", { name: /Products table/i });
+  const first = table.getByRole("row").filter({ hasText: names[0] });
+  const second = table.getByRole("row").filter({ hasText: names[1] });
+  const pillName = `Accept suggested value: ${categoryName}`;
+  await expect(first.getByRole("button", { name: pillName })).toBeEnabled();
+  await expect(second.getByRole("button", { name: pillName })).toBeEnabled();
+  await first.getByRole("button", { name: pillName }).click();
+  await expect(first.getByRole("button", { name: pillName })).toHaveCount(0);
+  await expect(first.getByText(categoryName, { exact: true })).toBeVisible();
+  await expect(
+    first.getByRole("status", { name: "Saving suggested value" }),
+  ).toBeVisible();
+  await expect(second.getByRole("button", { name: pillName })).toBeEnabled();
+  await expect
+    .poll(
+      async () =>
+        (
+          await getDb(db)
+            .select({ categoryId: productTable.categoryId })
+            .from(productTable)
+            .where(eq(productTable.id, firstRecordId))
+        )[0]?.categoryId,
+    )
+    .toBe(await resolveOrThrow(db, "productCategory", category.id));
+  acceptance.resolve();
+  await expect(
+    first.getByRole("status", { name: "Saving suggested value" }),
+  ).toHaveCount(0);
+  await expect(first.getByText(categoryName, { exact: true })).toBeVisible();
+  await expect(second.getByRole("button", { name: pillName })).toBeEnabled();
+});
+
 // Failure modes: bulk Accept skips the shared handler (no record write or
 // status change), bulk Reject applies the suggested value, a Run-filtered
 // link shows another Run's Suggestions, a settled row hides its result, or
