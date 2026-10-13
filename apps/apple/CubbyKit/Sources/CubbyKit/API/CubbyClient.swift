@@ -856,8 +856,7 @@ public actor CubbyClient {
     }
 
     /// Every location, by name, for the sweep's bin picker.
-    public func locationOptions(page: Int = 1, pageSize: Int = 200) async throws -> ListPage<LocationChoice>
-    {
+    public func locationOptions(page: Int = 1, pageSize: Int = 200) async throws -> ListPage<LocationChoice> {
         let rows = try await list(EntityCatalog[.location], page: page, pageSize: pageSize, sort: "name")
         return ListPage(
             items: rows.items.map {

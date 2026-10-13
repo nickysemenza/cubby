@@ -104,7 +104,8 @@ extension EntityDescriptor {
     ) async throws -> ListPage<JSONValue> {
         try require(.list)
         let body = try listInput(page: page, pageSize: pageSize, sort: sort, filters: filters)
-        let response = try JSONValue(encoding: try await client.entity_list(body: .json(body.decoded())).ok.body.json)
+        let response = try JSONValue(
+            encoding: try await client.entity_list(body: .json(body.decoded())).ok.body.json)
         guard let meta = response["meta"] else { throw EntityOperationError.unsupported(key, .list) }
         return ListPage(items: response["items"]?.arrayValue ?? [], meta: try meta.decoded())
     }
@@ -126,15 +127,19 @@ extension EntityDescriptor {
     func getRow(client: Client, id: String) async throws -> JSONValue {
         try require(.get)
         let input: JSONValue = ["entity": .string(key.rawValue), "shortcode": .string(id)]
-        return try JSONValue(encoding: try await client.entity_detail(body: .json(input.decoded())).ok.body.json)
+        return try JSONValue(
+            encoding: try await client.entity_detail(body: .json(input.decoded())).ok.body.json)
     }
 
     /// `entity.mutate` create; returns the new record's id. The server parses `body` with the
     /// entity's create schema, so an unknown key is its 400.
     func create(_ body: JSONValue, client: Client) async throws -> String {
         try require(.create)
-        let result = try await mutate(["action": "create", "entity": .string(key.rawValue), "data": body], client)
-        guard let id = result["item"]?["id"]?.stringValue else { throw EntityOperationError.missingCreatedID(key) }
+        let result = try await mutate(
+            ["action": "create", "entity": .string(key.rawValue), "data": body], client)
+        guard let id = result["item"]?["id"]?.stringValue else {
+            throw EntityOperationError.missingCreatedID(key)
+        }
         return id
     }
 
@@ -156,13 +161,15 @@ extension EntityDescriptor {
     /// An update carrying only `pendingImageIds`, for entities whose update declares it.
     func attachImages(_ imageIds: [ImageCode], to id: String, client: Client) async throws {
         guard key.kernel?.imageAttach == true else { throw EntityOperationError.unsupported(key, .update) }
-        try await update(["pendingImageIds": .array(imageIds.map { .string($0.rawValue) })], id: id, client: client)
+        try await update(
+            ["pendingImageIds": .array(imageIds.map { .string($0.rawValue) })], id: id, client: client)
     }
 
     /// An update carrying only `imageOrder`.
     func setImageOrder(_ imageIds: [ImageCode], on id: String, client: Client) async throws {
         guard key.kernel?.imageOrder == true else { throw EntityOperationError.unsupported(key, .update) }
-        try await update(["imageOrder": .array(imageIds.map { .string($0.rawValue) })], id: id, client: client)
+        try await update(
+            ["imageOrder": .array(imageIds.map { .string($0.rawValue) })], id: id, client: client)
     }
 
     private func require(_ action: EntityAction) throws {

@@ -145,7 +145,10 @@ struct JSONNullMiddlewareTests {
                 _ = try await client.create(EntityCatalog[.financialAccount], body: body)
             }
         }
-        #expect(requests.map(\.body) == [["action": "create", "entity": "financialAccount", "data": .object(body)]])
+        #expect(
+            requests.map(\.body) == [
+                ["action": "create", "entity": "financialAccount", "data": .object(body)]
+            ])
     }
 
     /// With nothing cleared no `null` appears: an update that only changes values keeps the
