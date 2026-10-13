@@ -127,7 +127,11 @@ export async function seedDevDatabase(options: {
     const userId = await ensureDevUser(options.baseURL);
     if (pack === "core") {
       const { seedCorpus } = await import("../scenarios/corpus");
-      await seedCorpus(pool, userId);
+      await seedCorpus(pool, userId, {
+        storageOrigin: `${options.baseURL}/__local-storage/s3`,
+        bucket: process.env.R2_BUCKET_NAME ?? "cubby-local",
+        keyPrefix: process.env.R2_KEY_PREFIX ?? "cubby-local",
+      });
       await seedUpcLookupFixture(pool);
     } else {
       const { seedLocalFixturePack } = await import("./scenarios");

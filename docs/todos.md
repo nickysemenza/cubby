@@ -971,15 +971,6 @@ consume the declarations.
 
 ## Dev tooling, tests & CI
 
-- 🤔 🧪 **Seed a connected synthetic development household across every entity.**
-  Add a repeatable dev-server fixture pack with representative records for all
-  declared entities and meaningful cross-entity links, so Browse, details,
-  relationships and specialist workflows can be exercised without empty domains.
-  Include direct and related images, emoji/entity-icon fallbacks, missing-image
-  placeholders, long names and multiline facts, plus varied activity states.
-  Keep the pack deterministic, idempotent and confined to development databases;
-  derive coverage from the entity manifest and report unsupported seed cases.
-
 - 🤔 🐛 **Diagnose PostgreSQL test teardown disconnects.** A hosted integration
   shard passed every assertion but failed on an unhandled `57P01` connection
   termination around `mail-import-run.integration.test.ts`. Establish the

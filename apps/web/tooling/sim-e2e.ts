@@ -1368,7 +1368,10 @@ let qaIds: Record<string, string> = {};
 let qaUserId = "";
 let journeyIdsFile = "";
 
-async function seedNativeScenario(userId: string): Promise<{
+async function seedNativeScenario(
+  userId: string,
+  objectStorageUrl: string,
+): Promise<{
   productId: string;
   layoutRunID?: string;
   purchaseId?: string;
@@ -1384,6 +1387,13 @@ async function seedNativeScenario(userId: string): Promise<{
     } = await import("./scenarios/simulator");
     await seedSimulatorPhotoActor(seedPool, userId);
     if (qa) {
+      const { seedCorpus } = await import("./scenarios/corpus");
+      if (!qaPhotoCompletion)
+        await seedCorpus(seedPool, userId, {
+          storageOrigin: objectStorageUrl,
+          bucket: "e2e-bucket",
+          keyPrefix: "e2e",
+        });
       const { seedNativeQa } = await import("./scenarios/native-qa");
       qaIds = await seedNativeQa(seedPool, userId);
       qaUserId = userId;
@@ -1975,7 +1985,7 @@ async function main(): Promise<void> {
     } finally {
       await context.dispose();
     }
-    const seeded = await seedNativeScenario(userId);
+    const seeded = await seedNativeScenario(userId, objectStorageUrl);
     productId = seeded.productId;
     if (emojiReview) {
       const { createNativeEmojiReviewPeer } =
