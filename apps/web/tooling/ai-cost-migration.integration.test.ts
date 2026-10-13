@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client, Pool } from "pg";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { MIGRATIONS_FOLDER, migrateDatabase } from "./db-migrate";
@@ -192,6 +192,27 @@ it("preserves legacy charges and late writers across the AI cost expand/contract
       expect(
         reconstructed.filter((row) => row.standardCost === 0.0001),
       ).toHaveLength(5);
+      // Production histories cannot afford a network round trip for each row.
+      await client.query(
+        `INSERT INTO "AiUsage" ("runId", provider, model, feature, operation, transport, "inputTokens", "durationMs", "chargedCost", "costEvidence")
+        SELECT $1, 'openai', 'gpt-6-luna', 'synthetic', 'synthetic', 'gateway', 100, 1, 0.001,
+        '{"standard":null,"charged":{"source":"historical_recorded"},"billingReason":"unknown","original":{"estimatedCost":0.001}}'::jsonb
+        FROM generate_series(1, 401)`,
+        [runId],
+      );
+      const queries = vi.spyOn(connection, "query");
+      expect(
+        await reconstructHistoricalAiCosts(connection, pricing, true),
+      ).toMatchObject({ scanned: 401, priced: 401, applied: true });
+      const writes = queries.mock.calls.filter(
+        ([query]) =>
+          typeof query === "string" && query.trimStart().startsWith("UPDATE"),
+      );
+      expect(writes.length).toBeLessThanOrEqual(4);
+      queries.mockRestore();
+      expect(
+        await reconstructHistoricalAiCosts(connection, pricing, true),
+      ).toMatchObject({ scanned: 0 });
     } finally {
       connection.release();
       await pool.end();

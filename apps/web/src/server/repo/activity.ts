@@ -463,6 +463,11 @@ async function presentActivityRuns(db: Database, rows: readonly RunWire[]) {
       ...row,
       ...(row.recordType === "image_job" &&
       row.count === 0 &&
+      row.executors.length === 0
+        ? { standardComplete: false, chargedComplete: false }
+        : {}),
+      ...(row.recordType === "image_job" &&
+      row.count === 0 &&
       row.executors.length > 0
         ? {
             count: 1,
@@ -1046,7 +1051,7 @@ export async function activitySubmission(db: Database, id: string) {
     WHERE s."publicId" = ${id}
     GROUP BY s.id
   `);
-  return activitySubmissionOutput
+  const result = activitySubmissionOutput
     .extend({
       createdAt: z.coerce.date().transform((date) => date.toISOString()),
       standardCost: z.coerce.number(),
@@ -1058,6 +1063,9 @@ export async function activitySubmission(db: Database, id: string) {
       count: z.coerce.number(),
     })
     .parse(query.rows[0]);
+  return result.count === 0 && result.remaining > 0
+    ? { ...result, standardComplete: false, chargedComplete: false }
+    : result;
 }
 
 export async function imageAnalysisHistory(

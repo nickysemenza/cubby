@@ -50,7 +50,7 @@ export async function reconstructHistoricalAiCosts(
       );
       const rows = z.array(historicalUsage).parse(result.rows);
       if (rows.length === 0) break;
-      for (const row of rows) {
+      const updates = rows.map((row) => {
         const quote =
           row.transport === "cache" ||
           (row.cacheStatus === "hit" &&
@@ -80,23 +80,27 @@ export async function reconstructHistoricalAiCosts(
         scanned += 1;
         if (quote.amount === null) unknown += 1;
         else priced += 1;
-        if (apply)
-          await client.query(
-            `UPDATE "AiUsage" SET "standardCost" = $2,
-          "costEvidence" = jsonb_set(jsonb_set("costEvidence", '{standard}', $3::jsonb), '{reconstruction}', $4::jsonb)
-          WHERE id = $1 AND "costEvidence"->'standard' = 'null'::jsonb
-          AND NOT "costEvidence" ? 'reconstruction'`,
-            [
-              row.id,
-              quote.amount,
-              JSON.stringify(standard),
-              JSON.stringify({
-                capturedAt,
-                outcome: quote.amount === null ? "unavailable" : "priced",
-              }),
-            ],
-          );
-      }
+        return {
+          id: row.id,
+          amount: quote.amount,
+          evidence: {
+            standard,
+            reconstruction: {
+              capturedAt,
+              outcome: quote.amount === null ? "unavailable" : "priced",
+            },
+          },
+        };
+      });
+      if (apply)
+        await client.query(
+          `UPDATE "AiUsage" AS usage SET "standardCost" = patch.amount,
+           "costEvidence" = usage."costEvidence" || patch.evidence
+           FROM jsonb_to_recordset($1::jsonb) AS patch(id uuid, amount double precision, evidence jsonb)
+           WHERE usage.id = patch.id AND usage."costEvidence"->'standard' = 'null'::jsonb
+             AND NOT usage."costEvidence" ? 'reconstruction'`,
+          [JSON.stringify(updates)],
+        );
       cursor = rows.at(-1)!.id;
     }
     await client.query(apply ? "COMMIT" : "ROLLBACK");

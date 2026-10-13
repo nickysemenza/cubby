@@ -12,6 +12,7 @@ import {
   imageProcessingEvent,
   imageProcessingJob,
   imageProcessingSubmission,
+  imageProcessingSubmissionJob,
 } from "~/server/db/image-processing-schema";
 import {
   aiAnalysis,
@@ -134,6 +135,18 @@ describe("activity image processing projection", () => {
       processorRevision: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
     });
     if (!jobId) throw new Error("Expected image processing job");
+    const waiting = await listActivity(ctx.db, null, {
+      limit: 20,
+      sort: "newest",
+      executor: "all",
+    });
+    expect(
+      waiting.items.find((row) => row.recordType === "image_job"),
+    ).toMatchObject({
+      count: 0,
+      chargedComplete: false,
+      standardComplete: false,
+    });
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
     const [submission, laterSubmission] = await getDb(ctx.db)
       .insert(imageProcessingSubmission)
@@ -141,6 +154,24 @@ describe("activity image processing projection", () => {
       .returning();
     if (!submission || !laterSubmission)
       throw new Error("Expected image processing submissions");
+    await getDb(ctx.db).insert(imageProcessingSubmissionJob).values({
+      submissionId: submission.id,
+      jobId,
+      disposition: "new",
+      baselineAttempts: 0,
+    });
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({ submissionId: submission.id })
+      .where(eq(imageProcessingJob.id, jobId));
+    expect(await activitySubmission(ctx.db, submission.publicId)).toMatchObject(
+      {
+        remaining: 1,
+        count: 0,
+        chargedComplete: false,
+        standardComplete: false,
+      },
+    );
 
     const firstAttempt = crypto.randomUUID();
     const laterAttempt = crypto.randomUUID();
