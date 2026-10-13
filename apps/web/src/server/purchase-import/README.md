@@ -26,7 +26,12 @@ pending: nothing here starts Product research.
    reason on `Email`. Jev and Clef own their decisions: bounded-view
    incompleteness is sent to the model and reported in previews, but does not
    replace a definite choice with uncertain. Negative decisions still require
-   high model confidence. Missing or incomplete original body bytes remain a
+   high model confidence. Gift thresholds, shipping benefits, generic order or
+   security assurances and back-in-stock notices do not confirm a transaction;
+   omitted promotional labels alone do not require abstention. The prompt requests
+   uncertainty when body text is clipped without visible confirmation, since the
+   purchase-cue scanner does not cover every transaction phrase. Missing or
+   incomplete original body bytes remain a
    rule exception before inference; model abstentions reach the relevance
    fallback. The fallback uses the same Email compactor, including preheaders,
    and retains its missing-evidence guard.

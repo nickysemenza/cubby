@@ -5,9 +5,10 @@ description: Measure Cubby's Jev/Clef decisions and Email relevance from a Claud
 
 # Decision grading
 
-Every step runs through Cubby MCP; there is no eval script, database URL or
-local AI key. Inference runs server-side under the household's paid caps, so
-size samples deliberately (a few hundred calls, not thousands).
+Use Cubby MCP for retained originals and deployed pipeline measurement. For
+prompt iteration before deployment, the local live evaluator calls the same
+Jev/Clef runner and API Gateway; it requires `AI_GATEWAY_API_KEY` through the
+existing local-secret loader. Keep calls sequential and show sample sizes first.
 
 ## Rules
 
@@ -80,3 +81,24 @@ Measure the baseline, make the change, deploy, re-measure the same sample,
 then confirm on a fresh held-out sample. Ship a prompt or option change only
 when it improves the held-out numbers and the disagreements were
 spot-checked with the member.
+
+## Local prompt iteration
+
+Run `pnpm --dir apps/web eval:mail-prompts` to compare the checked-out production
+prompt with an optional full rules draft supplied as `MAIL_PROMPT_CANDIDATE_RULES`.
+Without a draft it checks only the checked-out prompt. Edit the prompt locally
+and rerun to iterate without deploying. Synthetic
+originals pass through the real normalizer and compactor, including the request
+budget. CI sets `MAIL_PROMPT_BASELINE_ONLY=1` and checks the production prompt
+through both models on manual CI dispatch only. The informational job is outside
+the required merge gate; fork PRs never receive the gateway credential.
+
+Read real originals via Cubby or Gmail MCP and lock session labels first. Remove
+identifying headers and addresses, preserving transaction evidence. Supply the
+JSON array of `{label, body, html?, subject?}` through the stdin wrapper
+(`pnpm --dir apps/web eval:mail-prompts:stdin`); never put member inputs in case
+files or command arguments. The wrapper transfers input through an ephemeral loopback socket, avoiding
+environment-size limits. Input stays in process memory; logs and reports
+contain aggregates. CI refuses custom member inputs. Catalog-based cost is an
+estimate, not a billing receipt. Confirm a candidate on fresh held-out sources
+and then deployed MCP previews before claiming population improvement.

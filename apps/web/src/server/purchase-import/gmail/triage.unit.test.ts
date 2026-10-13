@@ -513,6 +513,29 @@ describe("transient Gmail triage", () => {
     expect(withinGate(content)).toBe(true);
   });
 
+  it("budgets a local candidate's rules before building the decision view", async () => {
+    const raw = message("Community newsletter. ".repeat(4000));
+    const prompt = (subject: string) => ({
+      ...mailTriagePrompt(subject),
+      rules:
+        mailTriagePrompt(subject).rules +
+        "Additional candidate guidance. ".repeat(100),
+    });
+    let content = "";
+    const { decision } = await routeGmailMessage(
+      raw,
+      normalizeMessage("synthetic-mailbox", raw),
+      async (input) => {
+        content = input;
+        return "unrelated";
+      },
+      prompt,
+    );
+    expect(decision.classification).toBe("unrelated");
+    expect(JSON.parse(content).bodyComplete).toBe(false);
+    expect(decisionChoiceFitsContext(prompt(content))).toBe(true);
+  });
+
   it("keeps HTML evidence bounded and Unicode-safe", async () => {
     const { content, decision } = await route(
       message(

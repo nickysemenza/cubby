@@ -120,7 +120,11 @@ function purchaseCueCheck(
     cues.some((cue) => !serialized.includes(cue));
 }
 
-function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
+function triageView(
+  raw: GmailMessage,
+  normalized: GmailNormalizedMessage,
+  prompt = MAILBOX_TRIAGE_FEATURE.prompt,
+) {
   const bodyHtml = normalized.mail.bodyHtml;
   const html = bodyHtml ? wasm.compact_email_html(bodyHtml) : null;
   const plain = normalized.mail.bodyText ?? "";
@@ -253,9 +257,7 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
   };
   // The real gate: the decision model's serialized request, rules and escaping included.
   const fits = (length: number) =>
-    decisionChoiceFitsContext(
-      MAILBOX_TRIAGE_FEATURE.prompt(encode(length).content),
-    );
+    decisionChoiceFitsContext(prompt(encode(length).content));
   let low = 0;
   let high = body.length;
   while (low < high) {
@@ -284,6 +286,7 @@ export async function routeGmailMessage(
   raw: GmailMessage,
   normalized: GmailNormalizedMessage,
   choose: MailTriage,
+  prompt = MAILBOX_TRIAGE_FEATURE.prompt,
 ): Promise<{
   decision: MailboxClassificationDecision;
   view: MailTriageView | null;
@@ -298,7 +301,11 @@ export async function routeGmailMessage(
       },
       view: null,
     };
-  const { content, bytes, incompleteReasons } = triageView(raw, normalized);
+  const { content, bytes, incompleteReasons } = triageView(
+    raw,
+    normalized,
+    prompt,
+  );
   const view = {
     bytes,
     complete: incompleteReasons.length === 0,
