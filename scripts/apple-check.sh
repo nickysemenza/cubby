@@ -27,33 +27,7 @@ if [ "${CUBBY_NX_CACHE_PROBE:-}" = 1 ]; then
   exit 1
 fi
 
-if ! xcode-select -p >/dev/null 2>&1; then
-  echo "Apple checks require Xcode (xcode-select -p failed)." >&2
-  exit 1
-fi
-
-if [ "$mode" = host ]; then
-  apps/apple/scripts/prepare-project.sh --sources
-  # The package scheme runs host-only tests through Xcode's compilation cache;
-  # running them on the iOS Simulator cost about 6 minutes to boot plus ~10
-  # minutes of CPU starvation on a hosted runner (measured 2026-09-21).
-  (
-    cd apps/apple/CubbyKit
-    xcodebuild -showBuildTimingSummary \
-      -scheme CubbyKit-Package -configuration Debug \
-      -destination 'platform=macOS,arch=arm64' \
-      -derivedDataPath .build/xcode \
-      -onlyUsePackageVersionsFromResolvedFile \
-      -skipPackagePluginValidation -skipMacroValidation \
-      COMPILER_INDEX_STORE_ENABLE=NO SWIFT_ENABLE_BATCH_MODE=YES \
-      ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
-      COMPILATION_CACHE_ENABLE_CACHING=YES \
-      COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES test
-  )
-  apps/apple/scripts/check-openapi-warnings.sh
-  exit 0
-fi
-
+# Needs only a Swift toolchain, so CI runs it on Linux.
 if [ "$mode" = lint ]; then
   # @State/@StateObject must never be seeded from an init parameter: a re-presented
   # `.sheet(item:)` can then show the previous item's stale state (apps/apple/AGENTS.md,
@@ -83,6 +57,37 @@ swift format lint --strict --configuration apps/apple/.swift-format --recursive 
 
 exit 0
 fi
+
+if ! xcode-select -p >/dev/null 2>&1; then
+  echo "Apple checks require Xcode (xcode-select -p failed)." >&2
+  exit 1
+fi
+
+if [ "$mode" = host ]; then
+  apps/apple/scripts/prepare-project.sh --sources
+  host_log="$(mktemp)"
+  trap 'rm -f "$host_log"' EXIT
+  # The package scheme runs host-only tests through Xcode's compilation cache;
+  # running them on the iOS Simulator cost about 6 minutes to boot plus ~10
+  # minutes of CPU starvation on a hosted runner (measured 2026-09-21).
+  (
+    cd apps/apple/CubbyKit
+    xcodebuild -showBuildTimingSummary \
+      -scheme CubbyKit-Package -configuration Debug \
+      -destination 'platform=macOS,arch=arm64' \
+      -derivedDataPath .build/xcode \
+      -clonedSourcePackagesDirPath ../SourcePackages \
+      -onlyUsePackageVersionsFromResolvedFile \
+      -skipPackagePluginValidation -skipMacroValidation \
+      COMPILER_INDEX_STORE_ENABLE=NO SWIFT_ENABLE_BATCH_MODE=YES \
+      ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
+      COMPILATION_CACHE_ENABLE_CACHING=YES \
+      COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES test
+  ) 2>&1 | tee "$host_log"
+  apps/apple/scripts/check-openapi-warnings.sh "$host_log"
+  exit 0
+fi
+
 
 apps/apple/scripts/prepare-project.sh
 

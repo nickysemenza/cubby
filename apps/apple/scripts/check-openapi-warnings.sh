@@ -2,9 +2,10 @@
 # Fails when swift-openapi-generator warns about the generated OpenAPI document.
 # The generator only warns when it silently drops a schema (a nullable union
 # member, an unsupported keyword), so any warning is a hole in the CubbyAPI
-# client that the build plugin would otherwise let through. Runs the same
-# pinned generator the `OpenAPIGenerator` plugin uses (a CubbyKit dependency)
-# over `pnpm generate`'s openapi.json and config.
+# client that the build plugin would otherwise let through. Given the log of
+# a build in which the plugin generated this document, it reads the plugin's
+# diagnostics from that log; otherwise it runs the same pinned generator (a
+# CubbyKit dependency) over `pnpm generate`'s openapi.json and config.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 KIT="$ROOT/apps/apple/CubbyKit"
@@ -28,6 +29,26 @@ if [ -f "$PASS" ] && [ "$(cat "$PASS")" = "$KEY" ]; then
   exit 0
 fi
 
+pass() {
+  mkdir -p "$(dirname "$PASS")"
+  echo "$KEY" >"$PASS"
+  echo "check-openapi-warnings: no generator warnings"
+  exit 0
+}
+
+# The plugin prints its configuration, then its diagnostics, into the build
+# log. Generator 1.13.1 formats a diagnostic as `[<location>: ]warning:
+# <message> [context: ...]`, and every unsupported-schema warning carries a
+# `foundIn` context. A build that skipped the plugin falls through to a run.
+BUILD_LOG="${1:-}"
+if [ -n "$BUILD_LOG" ] && grep -qF -- "- OpenAPI document path: $API/openapi.json" "$BUILD_LOG"; then
+  if grep -E 'warning: .*\[context: |openapi(\.json|-generator-config\.yaml):[0-9:]* ?warning:' "$BUILD_LOG" >&2; then
+    echo "swift-openapi-generator emitted warnings; the document must not lose schemas." >&2
+    exit 1
+  fi
+  pass
+fi
+
 swift build --package-path "$KIT" --force-resolved-versions --disable-index-store --product swift-openapi-generator >/dev/null
 BIN="$(swift build --package-path "$KIT" --show-bin-path)/swift-openapi-generator"
 
@@ -43,6 +64,4 @@ if grep -qi 'warning' "$LOG"; then
   grep -i 'warning' "$LOG" >&2
   exit 1
 fi
-mkdir -p "$(dirname "$PASS")"
-echo "$KEY" >"$PASS"
-echo "check-openapi-warnings: no generator warnings"
+pass
