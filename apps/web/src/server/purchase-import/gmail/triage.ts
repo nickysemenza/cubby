@@ -81,9 +81,6 @@ const STRUCTURED_DATA_SHOWN = 3;
 /** Fewer letters and digits than this beside content images is an image-only message. */
 const READABLE_CHARS = 64;
 
-const readableChars = (text: string) =>
-  text.replaceAll(/https?:\/\/\S+/gu, "").match(/[\p{L}\p{N}]/gu)?.length ?? 0;
-
 /** Shown evidence lost a cue-bearing item, by position or by its bound. */
 const clippedCue = <T extends { cue: boolean }>(
   all: readonly T[],
@@ -148,7 +145,7 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
     if (html.truncated) reasons.add("compactor_truncated");
     if (
       html.images.length &&
-      html.readable_chars + readableChars(plain) < READABLE_CHARS
+      html.readable_chars + wasm.readable_chars(plain) < READABLE_CHARS
     )
       reasons.add("image_only");
     if (
@@ -193,9 +190,12 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
       );
   }
   // Cues are scanned on the full text; each must survive into the content the decision model reads.
+  const plainCues = wasm.purchase_cues(plain);
+  // A cue past the scan bound cannot be checked, so any clipped body counts as clipped evidence.
+  const cuesOmitted = (html?.cues_omitted ?? 0) + plainCues.omitted > 0;
   const cues = [
     ...new Map(
-      [...(html?.cues ?? []), ...wasm.purchase_cues(plain)].map((cue) => [
+      [...(html?.cues ?? []), ...plainCues.cues].map((cue) => [
         cue.toLowerCase(),
         cue,
       ]),
@@ -221,7 +221,8 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
     };
     // A cue never contains a character JSON escapes, so it matches the serialized view.
     const serialized = JSON.stringify(view).toLowerCase();
-    const missing = cues.some((cue) => !serialized.includes(cue));
+    const missing =
+      (cuesOmitted && !full) || cues.some((cue) => !serialized.includes(cue));
     return {
       content: JSON.stringify({ ...view, omittedPurchaseCues: missing }),
       missing,

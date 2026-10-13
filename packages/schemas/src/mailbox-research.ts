@@ -183,7 +183,8 @@ export type MailMessageRef = z.infer<typeof mailMessageRef>;
  * turns the decision model's `unrelated` into `uncertain`.
  */
 export const mailTriageIncompleteReason = z.enum([
-  /** An amount, order/invoice number or receipt phrase fell outside the view. */
+  /** An amount, order/invoice number or receipt phrase fell outside the view,
+   * or the body was clipped while cues past the scan bound went unchecked. */
   "purchase_cue_clipped",
   "attachments",
   /** Images carry the content and no readable text accompanies them. */
