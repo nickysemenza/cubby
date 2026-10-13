@@ -1,0 +1,47 @@
+apps/web/DESIGN.md
+  s_4e0c543cf9c195::t_fd523ce4f95395 39,41
+apps/web/src/entity/entity-detail/generic-entity-detail.tsx
+  s_4e0c543cf9c195::t_a1ec65beafc224 335,346,624,626,639,641,648,660,662
+apps/web/src/entity/entity-detail/generic-entity-detail.unit.test.tsx
+  s_4e0c543cf9c195::t_9c395d3aafcace 377,392
+apps/web/src/features/usda/USDAFoodDetail.tsx
+  s_4e0c543cf9c195::t_7177d3f1ec5596 252,259,287
+apps/web/src/ui/data-table/detail-page.preview.test.tsx
+  s_4e0c543cf9c195::t_189905fe3b76a2 20,40,50-56,58-63
+apps/web/src/ui/data-table/detail-page.tsx
+  s_4e0c543cf9c195::t_76cca0656c4522 45-46,79,103-105,115,117,119,126-128,160-164,198,256-283,287,293,320-325,345,350,360,363-386,388-399,453-457,460-463,470-477,491,499,502-504,506,509-514,525,587,708-723,933,936,953,970
+apps/web/src/ui/data-table/detail-page.unit.test.tsx
+  s_4e0c543cf9c195::t_2fa0cf7f794657 25,196
+apps/web/src/ui/data-table/detail-section-state.tsx
+  s_4e0c543cf9c195::t_410a06a1f7cc9d 29-36
+apps/web/tests/e2e/continuous-detail.spec.ts
+  s_4e0c543cf9c195::t_e252b192c217a7 18,30,38,59
+apps/web/tests/e2e/garden.spec.ts
+  s_4e0c543cf9c195::t_0184c79237833f 44,50,57
+apps/web/tests/e2e/wardrobe-preparation.spec.ts
+  s_4e0c543cf9c195::t_7a41ebcc4f881b 112
+docs/entities.md
+  s_4e0c543cf9c195::t_a6f69e41fe8705 20-26
+packages/schemas/src/entity-definitions/definition.ts
+  s_4e0c543cf9c195::t_c92b40abc1e60b 891
+scripts/generator/entities/presentation.ts
+  s_4e0c543cf9c195::t_29d94462911514 501
+docs/todos.md
+  s_4e0c543cf9c195::t_dea1a9524d8515 730-736
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f88be9eb101ff77398a8b0d796913729c3d355b7",
+  "prompts": {},
+  "sessions": {
+    "s_4e0c543cf9c195": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dfa7bc84-abc1-4e91-bc12-57c501fb9f26",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
