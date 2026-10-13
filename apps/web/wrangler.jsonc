@@ -79,6 +79,10 @@
   "durable_objects": {
     "bindings": [
       {
+        "name": "AI_GATEWAY_EGRESS",
+        "class_name": "AiGatewayEgressDurableObject"
+      },
+      {
         "name": "DB_FRESHNESS",
         "class_name": "DatabaseFreshnessDurableObject"
       },
@@ -114,6 +118,10 @@
     ]
   },
   "exports": {
+    "AiGatewayEgressDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
     "UsdaReleaseDurableObject": {
       "type": "durable-object",
       "storage": "sqlite"
@@ -182,6 +190,11 @@
   // (`<runShortcode>-<attempt>`), so retention only bounds diagnostics
   // (`server/workflow-runs/launcher.ts` sets it per instance).
   "workflows": [
+    {
+      "name": "cubby-ai-refresh",
+      "binding": "AI_REFRESH",
+      "class_name": "AiRefreshWorkflow"
+    },
     {
       "binding": "SEARCH_INDEX_REPAIR",
       "name": "cubby-search-index-repair",
@@ -254,9 +267,10 @@
     ]
   },
   "triggers": {
-    "crons": ["0 12 * * *"]
+    "crons": ["0 12 * * *", "*/5 * * * *"]
   },
   "vars": {
+    "AI_REFRESH_ENABLED": "false",
     "NODE_ENV": "production",
     // Signup is closed (personal instance). Flip to "true" + deploy to
     // temporarily allow creating an account, then flip back.

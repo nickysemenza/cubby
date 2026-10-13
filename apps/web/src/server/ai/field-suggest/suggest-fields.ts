@@ -1019,7 +1019,7 @@ export async function suggestFields(
   // seams and deliberately exercise suggestion mechanics in isolation.
   const fieldResolutions = ports?.resolveInheritance
     ? await ports.resolveInheritance(db, input)
-    : ports
+    : ports?.registry || ports?.decisionPort
       ? {}
       : await resolveSuggestionInheritance(db, input);
   const eligibleTargets = input.targets.filter((target) => {

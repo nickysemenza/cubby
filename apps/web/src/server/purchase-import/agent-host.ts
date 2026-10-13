@@ -1,6 +1,6 @@
 import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
+import { aiGatewayId } from "@cubby/shared/ai/gateway-metadata";
 import { createLogger } from "@cubby/worker-tracing";
 /**
  * The purchase agent's host: the exported Durable Object and the narrowed
@@ -19,6 +19,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
 import { DurableObject } from "cloudflare:workers";
 
+import { coordinatedGatewayRequest } from "~/server/ai/gateway-egress-client";
 import {
   assertNotInMaintenance,
   isMaintenanceMode,
@@ -67,9 +68,16 @@ function purchaseAgentEnvironment(
         options,
       ),
     gateway: () => {
-      const gateway = env.AI.gateway(CUBBY_AI_GATEWAY_ID);
+      const gateway = env.AI.gateway(aiGatewayId(gatewayEnvironment()));
       return {
-        id: CUBBY_AI_GATEWAY_ID,
+        id: aiGatewayId(gatewayEnvironment()),
+        coordinatedFetch: (provider, request, controls) =>
+          coordinatedGatewayRequest(
+            env.AI_GATEWAY_EGRESS.getByName(aiGatewayId(gatewayEnvironment())),
+            provider,
+            request,
+            controls,
+          ),
         environment: gatewayEnvironment(),
         run: (data, options) => gateway.run(data, options),
       };

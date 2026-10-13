@@ -117,7 +117,7 @@ export function createCubbyGatewayFetch(
         }),
       gateway: (request) => {
         const gateway = options.gateway();
-        return runUniversalGateway(gateway, route, request, {
+        const controls = {
           id: gateway.id,
           skipCache: true,
           collectPayload: false,
@@ -125,7 +125,10 @@ export function createCubbyGatewayFetch(
             ...COORDINATOR_CALL,
             environment: gateway.environment,
           }),
-        });
+        };
+        return gateway.coordinatedFetch
+          ? gateway.coordinatedFetch(route, request, controls)
+          : runUniversalGateway(gateway, route, request, controls);
       },
     });
   return (input, init) => {

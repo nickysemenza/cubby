@@ -11,6 +11,7 @@ export const runPurpose = z.enum([
   // import. Their lifetime is set by `trigger` (`ephemeral` or not).
   "ai_suggest",
   "suggestion_sweep",
+  "ai_refresh",
   "background",
   "file_import",
   "mail_search",
@@ -55,6 +56,7 @@ export const RUN_PURPOSE_LABEL = {
   ai_suggest: "AI suggestions",
   suggestion_sweep: "Suggestion sweep",
   background: "Background",
+  ai_refresh: "AI refresh",
   file_import: "File import",
   mail_search: "Mail search",
   mail_discovery: "Mail discovery",

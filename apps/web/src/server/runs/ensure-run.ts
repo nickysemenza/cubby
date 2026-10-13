@@ -58,9 +58,10 @@ export type EnsureRunInput = {
 /**
  * The run this actor's work belongs to. An inherited run always wins (the agent's
  * token-scoped run, an import's own run), so nothing nests. Otherwise a new
- * run is inserted and committed on the root connection, never inside a
- * caller's transaction: AI usage rows reference it through the telemetry
- * queue, and a run rolled back with its caller would orphan them.
+ * feature caller creates its Run before inference and business publication:
+ * queued AI usage must never reference an uncommitted Run. A durable scheduler
+ * may create the Run and its work in one transaction, then launch/infer only
+ * after that transaction commits.
  */
 export async function ensureRun(
   db: Database,

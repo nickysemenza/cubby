@@ -75,6 +75,11 @@ export function writeLocalDevConfig(profile: DevProfile): string {
     },
     workflows: [
       {
+        binding: "AI_REFRESH",
+        name: `${name}-ai-refresh`,
+        class_name: "AiRefreshWorkflow",
+      },
+      {
         binding: "SEARCH_INDEX_REPAIR",
         name: `${name}-search-index-repair`,
         class_name: "SearchIndexRepairWorkflow",

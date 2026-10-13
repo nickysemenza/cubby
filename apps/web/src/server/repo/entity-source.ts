@@ -65,7 +65,7 @@ export const entityDetailJson = z.preprocess(
 const jsonObject = z.record(z.string(), z.json());
 
 /** Order-independent JSON for objects. */
-function canonicalJson(value: JsonValue): string {
+export function canonicalJson(value: JsonValue): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   const object = jsonObject.safeParse(value);
   if (!object.success) return JSON.stringify(value);

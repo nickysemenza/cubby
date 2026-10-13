@@ -825,6 +825,78 @@ export const runChildren = [
     ],
   }),
   defineChildTable({
+    name: "AiEvaluation",
+    exportName: "aiEvaluation",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "runId",
+        kind: "uuid",
+        type: "RunId",
+        notNull: true,
+        reference: { table: "run", column: "id" },
+      },
+      { key: "workKey", kind: "text", notNull: true },
+      { key: "feature", kind: "text", notNull: true },
+      {
+        key: "target",
+        kind: "jsonb",
+        notNull: true,
+        type: "AiEvaluationTarget",
+      },
+      { key: "provenance", kind: "jsonb", notNull: true, type: "AiProvenance" },
+      { key: "snapshot", kind: "jsonb", notNull: true },
+      { key: "state", kind: "text", notNull: true, default: "queued" },
+      { key: "attempts", kind: "integer", notNull: true, default: 0 },
+      { key: "runAttempt", kind: "integer", notNull: true, default: 0 },
+      { key: "attemptToken", kind: "uuid" },
+      { key: "deadlineAt", kind: "timestamp" },
+      { key: "nextAttemptAt", kind: "timestamp" },
+      { key: "result", kind: "jsonb" },
+      { key: "receipt", kind: "jsonb" },
+      { key: "error", kind: "text" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+    ],
+    types: [
+      {
+        module: "@cubby/schemas/ai-evaluation",
+        exports: ["AiEvaluationTarget", "AiProvenance"],
+      },
+      { module: "@cubby/schemas/identifiers", exports: ["RunId"] },
+    ],
+    indexes: [
+      { name: "AiEvaluation_work_key", unique: true, on: ["workKey"] },
+      {
+        name: "AiEvaluation_run_state_idx",
+        on: ["runId", "state", "nextAttemptAt"],
+      },
+      { name: "AiEvaluation_feature_idx", on: ["feature"] },
+    ],
+    checks: [
+      {
+        name: "AiEvaluation_state_check",
+        sql: "{state} IN ('queued','running','result_ready','retry_wait','completed','blocked','failed','obsolete','cancelled')",
+      },
+    ],
+  }),
+  defineChildTable({
     name: "Suggestion",
     exportName: "suggestion",
     columns: [
@@ -844,6 +916,22 @@ export const runChildren = [
       { key: "recordId", kind: "uuid", notNull: true },
       { key: "field", kind: "text", notNull: true },
       { key: "financeReviewFingerprint", kind: "text" },
+      {
+        key: "evaluationId",
+        kind: "uuid",
+        reference: { table: "aiEvaluation", column: "id" },
+      },
+      { key: "provenance", kind: "jsonb", type: "AiProvenance" },
+      {
+        key: "acceptanceReceipt",
+        kind: "jsonb",
+        type: "SuggestionAcceptanceReceipt",
+      },
+      {
+        key: "supersessionReceipt",
+        kind: "jsonb",
+        type: "SuggestionSupersessionReceipt",
+      },
       { key: "currentValue", kind: "jsonb" },
       { key: "suggestedValue", kind: "jsonb", notNull: true },
       { key: "confidence", kind: "real", notNull: true },
@@ -873,8 +961,19 @@ export const runChildren = [
         onUpdateNow: true,
       },
     ],
+    types: [
+      {
+        module: "@cubby/schemas/ai-evaluation",
+        exports: [
+          "AiProvenance",
+          "SuggestionAcceptanceReceipt",
+          "SuggestionSupersessionReceipt",
+        ],
+      },
+    ],
     indexes: [
       { name: "Suggestion_run_status_idx", on: ["runId", "status"] },
+      { name: "Suggestion_evaluation_idx", on: ["evaluationId"] },
       {
         name: "Suggestion_entity_field_status_idx",
         on: ["entity", "field", "status"],

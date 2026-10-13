@@ -55,7 +55,12 @@ JSONL routes    →  cancellable workflow streams
 - OpenAI Responses calls use the household's ChatGPT plan when connected in
   Settings, retaining the declared Luna/Sol choices. `CHATGPT_PLAN` owns OAuth
   credentials and serializes rotating refreshes. Other providers and embeddings
-  use the existing AI Gateway. [ChatGPT setup](runbooks/chatgpt-plan.md) explains
+  use AI Gateway through the shared production egress Durable Object. It
+  admits managed-credential traffic under an aggregate rolling window and
+  concurrency cap, preserves streaming/provider headers, and shares 429
+  cooldowns. ChatGPT subscription traffic bypasses Gateway admission. Local
+  integrations and live evaluations use the separate `cubby-evaluation`
+  gateway so they cannot consume production's admission budget. [ChatGPT setup](runbooks/chatgpt-plan.md) explains
   local authorization, the read-only account model catalog, limitations, and
   how each `AiUsage` row records its transport.
 

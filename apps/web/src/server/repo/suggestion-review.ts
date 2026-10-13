@@ -8,6 +8,8 @@ import {
   suggestionStatus,
   type SuggestionReviewBatchOut,
 } from "@cubby/schemas/ai";
+import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
+import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
@@ -24,6 +26,7 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { withAuditReceipts } from "~/server/repo/audit-receipts";
 import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
 import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
@@ -143,11 +146,44 @@ export async function listSuggestions(
   const refs = reviewable.map((row) =>
     parseEntityRef(row.entity, row.recordId),
   );
-  const codes = await lookupShortcodes(db, refs);
+  const receiptRunRefs = rows.flatMap(({ suggestion: row }) =>
+    row.acceptanceReceipt?.runId
+      ? [parseEntityRef("run", row.acceptanceReceipt.runId)]
+      : [],
+  );
+  const codes = await lookupShortcodes(db, [...refs, ...receiptRunRefs]);
   return reviewable.flatMap((row, index) => {
     const ref = refs[index];
     const recordId = ref && codes.get(entityRefKey(ref.entity, ref.id));
-    return recordId ? [{ ...row, recordId }] : [];
+    const stored = rows.find(
+      (item) => item.suggestion.id === row.id,
+    )?.suggestion;
+    const receipt = stored?.acceptanceReceipt;
+    const acceptanceReceipt = receipt
+      ? {
+          ...receipt,
+          runId: receipt.runId
+            ? (codes.get(entityRefKey("run", receipt.runId)) ?? null)
+            : null,
+        }
+      : null;
+    const supersessionReceipt = stored?.supersessionReceipt
+      ? {
+          reason: stored.supersessionReceipt.reason,
+          at: stored.supersessionReceipt.at,
+        }
+      : null;
+    return recordId
+      ? [
+          {
+            ...row,
+            recordId,
+            provenance: stored?.provenance ?? null,
+            acceptanceReceipt,
+            supersessionReceipt,
+          },
+        ]
+      : [];
   });
 }
 
@@ -181,7 +217,7 @@ export async function suggestionCounts(
   return suggestionCountsOut.parse(rows);
 }
 
-export async function applySuggestionValue(
+async function writeSuggestionValue(
   db: Database,
   context: EntityKernelContext,
   row: Pick<
@@ -242,10 +278,38 @@ export async function applySuggestionValue(
   );
 }
 
+async function applySuggestionValue(
+  db: Database,
+  context: EntityKernelContext,
+  row: Parameters<typeof writeSuggestionValue>[2],
+  value: unknown,
+  options: {
+    mode?: "automatic" | "member";
+    reason?: "confident_addition" | "member_acceptance" | "member_correction";
+    confidence?: number;
+  } = {},
+) {
+  const suppliedValue = z.json().parse(value);
+  const { auditIds } = await withAuditReceipts(() =>
+    writeSuggestionValue(db, context, row, suppliedValue),
+  );
+  return suggestionAcceptanceReceipt.parse({
+    mode: options.mode ?? "member",
+    runId: context.actorContext.runId,
+    auditIds,
+    acceptedAt: new Date().toISOString(),
+    reason: options.reason ?? "member_acceptance",
+    confidence: options.confidence ?? null,
+    threshold:
+      options.mode === "automatic" ? SUGGESTION_AUTO_APPLY_THRESHOLD : null,
+  });
+}
+
 export async function acceptSuggestion(
   db: Database,
   context: EntityKernelContext,
   input: z.infer<typeof rowIdInput>,
+  automatic?: { mode: "automatic"; confidence: number },
 ) {
   const { id } = rowIdInput.parse(input);
   return withTransactionDatabase(db, async (transactionDb) => {
@@ -265,12 +329,17 @@ export async function acceptSuggestion(
       .update(suggestionTable)
       .set({ status: "applied" })
       .where(eq(suggestionTable.id, id));
-    await applySuggestionValue(
+    const receipt = await applySuggestionValue(
       transactionDb,
       { ...context, db: transactionDb },
       parsed,
       row.suggestedValue,
+      automatic ? { ...automatic, reason: "confident_addition" } : {},
     );
+    await getDb(transactionDb)
+      .update(suggestionTable)
+      .set({ acceptanceReceipt: receipt })
+      .where(eq(suggestionTable.id, id));
     return { id, status: "applied" as const };
   });
 }
@@ -344,12 +413,17 @@ export async function rejectSuggestion(
         .update(suggestionTable)
         .set({ status: "rejected", correctValue: parsedInput.correctValue })
         .where(eq(suggestionTable.id, parsedInput.id));
-      await applySuggestionValue(
+      const receipt = await applySuggestionValue(
         transactionDb,
         { ...context, db: transactionDb },
         parsed,
         parsedInput.correctValue,
+        { reason: "member_correction" },
       );
+      await getDb(transactionDb)
+        .update(suggestionTable)
+        .set({ acceptanceReceipt: receipt })
+        .where(eq(suggestionTable.id, parsedInput.id));
       return { id: parsedInput.id, status: "rejected" as const };
     });
   }
@@ -364,10 +438,18 @@ export async function rejectSuggestion(
     )
     .limit(1);
   if (!row) throw new Error(`Pending Suggestion not found: ${parsedInput.id}`);
-  await getDb(db)
+  const decided = await getDb(db)
     .update(suggestionTable)
     .set({ status: "rejected", correctValue: parsedInput.correctValue ?? null })
-    .where(eq(suggestionTable.id, parsedInput.id));
+    .where(
+      and(
+        eq(suggestionTable.id, parsedInput.id),
+        eq(suggestionTable.status, "pending"),
+      ),
+    )
+    .returning({ id: suggestionTable.id });
+  if (!decided.length)
+    throw new Error(`Pending Suggestion not found: ${parsedInput.id}`);
   return { id: parsedInput.id, status: "rejected" as const };
 }
 

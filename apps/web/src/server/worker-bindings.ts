@@ -51,3 +51,9 @@ export interface MailDiscoveryWorkflow {
     step: WorkflowStep,
   ): Promise<{ runId: string }>;
 }
+
+export type AiGatewayEgressDurableObject =
+  import("./ai/gateway-egress-contract").AiGatewayEgressRpc &
+    Rpc.DurableObjectBranded;
+
+export type AiRefreshWorkflow = MailDiscoveryWorkflow;

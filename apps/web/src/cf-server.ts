@@ -174,6 +174,12 @@ const handler = {
     env: Env,
     ctx: { waitUntil(promise: Promise<unknown>): void },
   ) {
+    if (new URL(request.url).pathname === "/api/internal/ai-refresh/activate") {
+      setCfEnv(env);
+      return (
+        await import("./server/ai-refresh-activation")
+      ).activateDeployedAiRefresh(request, env);
+    }
     const startedAt = performance.now();
     const invocationOrdinal = ++fetchInvocationOrdinal;
     const runFetch = (entrySpan: AppSpan) =>
@@ -627,6 +633,18 @@ const handler = {
           cronLog.warn("skipped: maintenance mode");
           return;
         }
+        if (controller.cron === "*/5 * * * *") {
+          await withRequestDbClient(
+            env.HYPERDRIVE.connectionString,
+            async () => {
+              const { db } = await import("./server/db");
+              await (
+                await import("./server/runs/ai-refresh")
+              ).recoverAiRefresh(db);
+            },
+          );
+          return;
+        }
         if (controller.cron !== "0 12 * * *")
           throw new Error(`Unexpected cron trigger: ${controller.cron}`);
         await Sentry.withMonitor(
@@ -831,3 +849,7 @@ export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow
 export { MailDiscoveryWorkflow } from "./server/gmail-workflows";
 
 export default Sentry.withSentry(workerSentryOptions, handler);
+
+export { AiGatewayEgressDurableObject } from "./server/ai/gateway-egress-durable-object";
+
+export { AiRefreshWorkflow } from "./server/ai-refresh-workflow";

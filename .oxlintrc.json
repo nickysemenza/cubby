@@ -291,6 +291,7 @@
         "packages/schemas/src/entity-definitions/**/*.ts",
         "packages/schemas/src/child-tables/**/*.ts",
         "packages/schemas/src/*-fields.ts",
+        "packages/schemas/src/ai-evaluation.ts",
         "packages/schemas/src/mailbox-research.ts",
         "packages/schemas/src/email-actions.ts",
         "packages/schemas/src/email-observations.ts",

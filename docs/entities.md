@@ -608,14 +608,40 @@ Run. A human acceptance writes through the entity update path (finance
 categories use the reviewed finance apply so linked Expense reach is checked);
 a rejection records a Miss on that Run. "Use a different value…" writes the
 member's value to the record and keeps it as that Miss's `correctValue`.
-Misses are evidence for improving the prompt or classification vocabulary and
-do not suppress future suggestions. Batch accept and reject
+Rejected Suggestions suppress the same semantic proposal on that field across
+prompt/input changes; a different proposal remains eligible. Misses and all
+applied, rejected and superseded rows remain grading and audit evidence. Batch accept and reject
 (`ai.acceptSuggestions`, `ai.rejectSuggestions`; MCP `accept_suggestions`,
 `reject_suggestions`) settle each id through the same single-id handler and
 return a per-id result, so one failure never hides or rolls back the rest.
 Bulk sweeps retain paired model rows for evaluation, while review exposes only
 the pinned model's candidate. The response cache includes the active
 classification revision, which each sweep also records for later comparison.
+
+Automatic acceptance and member acceptance/correction retain an acceptance
+receipt with the accepting Run, reason, confidence/threshold and the actual
+field-write AuditLog ids, in the same transaction as applying the value.
+Legacy acceptance receipts remain unknown. Supersession appends its reason and
+replacement evaluation without rewriting earlier predictions or Misses.
+
+The deployed AI refresh manifest compares exact per-feature prompt/policy
+versions, including rollbacks. Its Run-backed AiEvaluation ledger deduplicates
+feature-specific evidence/option fingerprints and fences publication against
+the active generation, Workflow attempt and target-field audit revision. A
+member edit returning the field to its earlier value still invalidates the
+outstanding result. Discovery refreshes uncertain
+unresolved Emails and pending Suggestions; it also revisits input-invalidated
+or no-proposal field work when the relevant fingerprint changes. Settled
+confident Emails, member resolutions, applied values and rejected history remain
+protected. Eligible unknown legacy provenance is evaluated once. Successful
+ambiguity or missing evidence is terminal for that fingerprint; transient or
+interrupted inference gets three attempts. Two independent refresh targets may
+run globally, with dependent calls sequential. Email Runs freeze at most 200
+items and retain the mailbox's existing execution authorization. Reused Email
+stages require current source checksum and feature provenance. The
+[AI refresh runbook](runbooks/ai-refresh.md) owns activation, observation and
+recovery. Independent model grading and member labels follow the
+[decision-grading skill](../.claude/skills/decision-grading/SKILL.md).
 
 An omitted or null mode has no schema. Zod owns optionality, transformations,
 nullability, descriptions, refinements, and defaults. Put create-only defaults

@@ -1,7 +1,7 @@
 import type { EvalUsage } from "./ai/eval-support";
 import {
   type AiGatewayEnvironment,
-  CUBBY_AI_GATEWAY_ID,
+  CUBBY_EVALUATION_GATEWAY_ID,
   proxiedAiGatewayMetadata,
 } from "@cubby/shared/ai/gateway-metadata";
 import {
@@ -209,7 +209,7 @@ export default {
         throw new Error("Required subscription eval transport is unavailable");
       target = gatewayProviderUrl({
         accountId: env.ACCOUNT_ID,
-        gatewayId: CUBBY_AI_GATEWAY_ID,
+        gatewayId: CUBBY_EVALUATION_GATEWAY_ID,
         provider: "openai",
         endpoint: `${endpoint}${url.search}`,
       });

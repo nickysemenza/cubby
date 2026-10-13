@@ -1,6 +1,7 @@
 import type { LedgerPartyId, RunId } from "@cubby/schemas/identifiers";
 import {
   isMailReclassifyRun,
+  isAiRefreshMailRun,
   mailResearchRunInput,
 } from "@cubby/schemas/run-fields";
 import {
@@ -242,7 +243,8 @@ export function paidResearchPreflight(
     if (
       (current.purpose === "mail_discovery" ||
         current.purpose === "mail_import" ||
-        isMailReclassifyRun(current)) &&
+        isMailReclassifyRun(current) ||
+        isAiRefreshMailRun(current)) &&
       request.endpoint !== "responses" &&
       ["typesafe/jev", "@cf/cloudflare/clef"].includes(
         workersAiModel(request.endpoint),

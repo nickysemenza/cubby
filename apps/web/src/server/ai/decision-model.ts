@@ -31,6 +31,9 @@ import {
   recordFeatureUsage,
 } from "~/server/ai/run-feature";
 
+import { captureAiInput, preparingAiInputs } from "./evaluation-inputs";
+import { isGatewayAdmissionWait } from "./gateway-egress-client";
+
 /** Common trial bounds: the decision model's 32k context, conservatively measured in bytes. */
 const DECISION_CONTEXT_BYTE_LIMIT = 32_000;
 const DECISION_MAX_CHOICES = 255;
@@ -265,6 +268,7 @@ async function requestDecision(
   }, DECISION_DEADLINE_MS);
   let parsed: DecisionChoiceResponse | undefined;
   let attempt = 0;
+  let admissionWait = false;
   try {
     const { response, body } = await retryWithBackoff(
       async () => {
@@ -307,6 +311,7 @@ async function requestDecision(
     parsed = parseDecisionResponse(await response.text().catch(() => ""));
     return parsed;
   } catch (error) {
+    admissionWait = isGatewayAdmissionWait(error);
     throw wrapAiGatewayError(error, {
       model: feature.model,
       provider: providerFor(feature.model),
@@ -317,17 +322,18 @@ async function requestDecision(
     });
   } finally {
     clearTimeout(deadline);
-    await recordFeatureUsage(feature, ctx, {
-      transport,
-      inputTokens: parsed?.usage?.input_tokens ?? null,
-      outputTokens: parsed?.usage?.output_tokens ?? null,
-      durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
-      applicationCacheStatus,
-      attempt,
-      status: parsed ? "succeeded" : "failed",
-      gatewayLogId: gateway?.gatewayLogId,
-      gatewayCacheStatus: gateway?.gatewayCacheStatus,
-    });
+    if (!admissionWait || gateway)
+      await recordFeatureUsage(feature, ctx, {
+        transport,
+        inputTokens: parsed?.usage?.input_tokens ?? null,
+        outputTokens: parsed?.usage?.output_tokens ?? null,
+        durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+        applicationCacheStatus,
+        attempt,
+        status: parsed ? "succeeded" : "failed",
+        gatewayLogId: gateway?.gatewayLogId,
+        gatewayCacheStatus: gateway?.gatewayCacheStatus,
+      });
   }
 }
 
@@ -476,6 +482,14 @@ export async function runDecisionChoice(args: {
       : args.port
         ? args.feature
         : { ...args.feature, model: selectDecisionModel() };
+  await captureAiInput(feature, args.usage.operation, input);
+  if (preparingAiInputs())
+    return {
+      selectedIndex: null,
+      confidence: "low",
+      probability: 0,
+      ranked: [],
+    };
   if (input.images?.length) {
     const selector = getDecisionModelConfig(feature.model).selector;
     const body = JSON.stringify({

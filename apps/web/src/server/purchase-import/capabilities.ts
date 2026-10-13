@@ -49,6 +49,7 @@ const capabilityMatrix = {
   purchase_validation: new Set(),
   product_enrichment: new Set(),
   // Runs that only group AI work never authorize purchase-agent writes.
+  ai_refresh: new Set(),
   ai_suggest: new Set(),
   suggestion_sweep: new Set(),
   background: new Set(),

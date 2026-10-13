@@ -7,7 +7,11 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { expense as expenseTable, run as runTable } from "~/server/db/schema";
+import {
+  auditLog,
+  expense as expenseTable,
+  run as runTable,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { loadFinanceSuggestionContext } from "~/server/repo/finance-suggestion-context";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -49,6 +53,37 @@ const savedRun = async (
 // record and field.
 describe("persisted Suggestion sweeps", () => {
   const ctx = withTestDb();
+
+  it("atomically identifies automatic acceptance and its generating Run in the actual field audit", async () => {
+    const item = await productFixture(ctx, "Synthetic audited addition");
+    const started = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts() },
+    );
+    const [row] = await runSuggestions(ctx.db, started.id);
+    expect(row?.acceptanceReceipt).toMatchObject({
+      mode: "automatic",
+      runId: started.id,
+      reason: "confident_addition",
+    });
+    const audits = await getDb(ctx.db)
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.runId, started.id));
+    expect(audits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entityKind: "product", action: "update" }),
+      ]),
+    );
+    expect(row?.acceptanceReceipt?.auditIds).toEqual(
+      audits.map((audit) => audit.id),
+    );
+  });
 
   it("checkpoints no-proposal targets by public id and field for filter-selected rows only", async () => {
     const context = kernelCtx(ctx);

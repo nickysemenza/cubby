@@ -1,3 +1,8 @@
+import {
+  aiProvenance,
+  suggestionAcceptanceReceipt,
+  suggestionSupersessionReceipt,
+} from "./ai-evaluation";
 import { vendorSpendingProfile } from "./spending-classification";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
@@ -527,6 +532,16 @@ const suggestionRecordId = anyShortcodeSchema([
   ...otherShortcodeEntities,
 ]);
 export const suggestionReviewRowSchema = z.object({
+  provenance: aiProvenance.nullable().optional(),
+  acceptanceReceipt: suggestionAcceptanceReceipt
+    .omit({ runId: true })
+    .extend({ runId: runShortcode.nullable() })
+    .nullable()
+    .optional(),
+  supersessionReceipt: suggestionSupersessionReceipt
+    .omit({ evaluationId: true })
+    .nullable()
+    .optional(),
   id: z.string().uuid(),
   /** The sweep or page Run that produced it, opened from its provenance. */
   runId: runShortcode,

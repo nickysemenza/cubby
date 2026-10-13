@@ -2,22 +2,32 @@ import {
   fieldSuggestionsInput,
   type FieldSuggestionsInput,
 } from "@cubby/schemas/ai";
+import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
 import {
   suggestionSweepRunInput,
   suggestionSweepRunProgress,
 } from "@cubby/schemas/run-fields";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { selectDecisionModel } from "@cubby/shared/ai/models";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { sha256Hex } from "@cubby/shared/sha256";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import type { UnparsedError } from "~/lib/error-utils";
+import { decisionCatalogRows } from "~/server/ai/decision-catalog";
+import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import {
   suggestFields,
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
+import {
+  dependencyStamps,
+  fieldDependencyKeys,
+  fieldPolicyKey,
+} from "~/server/ai/refresh-policy";
 import type { Database } from "~/server/db";
 import {
   run as runTable,
@@ -26,10 +36,13 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { getDb } from "~/server/repo/database-helpers";
+import { producingAiManifest } from "~/server/repo/ai-refresh";
+import { latestFieldWrite } from "~/server/repo/audit-log";
+import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
+import { canonicalJson } from "~/server/repo/entity-source";
 import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import { applySuggestionValue } from "~/server/repo/suggestion-review";
+import { acceptSuggestion } from "~/server/repo/suggestion-review";
 
 import { ensureRun } from "./ensure-run";
 import { runPacedBatch, type PacedBatchPorts } from "./paced-batch";
@@ -103,10 +116,13 @@ async function suggestTarget(
     targets: [input.field],
     basis: target.basis,
   };
-  const decisions = await recommend(db, runId, fieldInput, {
-    ...ports.suggestPorts,
-    decisionModel: input.decisionModel,
-  });
+  const primaryCall = await withAiInputs(false, () =>
+    recommend(db, runId, fieldInput, {
+      ...ports.suggestPorts,
+      decisionModel: input.decisionModel,
+    }),
+  );
+  const decisions = primaryCall.result;
   const decision = decisions.suggestions[input.field];
   if (!decision) {
     const entries: SweepSuggestion[] = [];
@@ -127,6 +143,10 @@ async function suggestTarget(
     pinnedModel: input.decisionModel,
     pairKey,
   });
+  if (primary) {
+    primary.model = primaryCall.inputs[0]?.model ?? input.decisionModel;
+    if (primary.model !== input.decisionModel) primary.status = "pending";
+  }
   const entries = primary ? [primary] : [];
   const diagnostics: {
     targetId: string;
@@ -170,46 +190,211 @@ async function suggestTarget(
   };
 }
 
-async function insertSuggestions(
+export async function publishSweepSuggestions(
   db: Database,
   runId: RunId,
-  entity: SweepEntity,
-  field: string,
-  recordId: string,
+  input: {
+    entity: SweepEntity;
+    field: string;
+    recordId: string;
+    currentValue: SuggestionValue;
+    fieldDecisionId?: string | null;
+    predecessorIds?: string[];
+    evaluationId?: string;
+    provenance?: import("@cubby/schemas/ai-evaluation").AiProvenance;
+  },
   entries: readonly SweepSuggestion[],
   financeReviewFingerprint: string | null,
+  context: EntityKernelContext,
+  onApplyFailure?: (error: UnparsedError) => void,
 ) {
-  const typedRecordId = parseEntityId(entity, recordId);
-  await getDb(db)
-    .update(suggestionTable)
-    .set({ status: "superseded" })
-    .where(
-      and(
-        eq(suggestionTable.entity, entity),
-        eq(suggestionTable.recordId, typedRecordId),
-        eq(suggestionTable.field, field),
-        eq(suggestionTable.status, "pending"),
-        ne(suggestionTable.runId, runId),
-      ),
-    );
-  for (const entry of entries) {
-    await getDb(db).insert(suggestionTable).values({
-      runId,
-      entity,
-      recordId: typedRecordId,
-      field,
-      financeReviewFingerprint,
-      currentValue: entry.currentValue,
-      suggestedValue: entry.suggestedValue,
-      confidence: entry.confidence,
-      runnerUpValue: entry.runnerUpValue,
-      runnerUpConfidence: entry.runnerUpConfidence,
-      model: entry.model,
-      pairKey: entry.pairKey,
-      kind: entry.kind,
-      status: "pending",
-    });
-  }
+  return withTransactionDatabase(
+    db,
+    async (tx) => {
+      const typedRecordId = parseEntityId(input.entity, input.recordId);
+      const saved = await getDb(tx)
+        .select()
+        .from(suggestionTable)
+        .where(
+          and(
+            eq(suggestionTable.runId, runId),
+            eq(suggestionTable.recordId, typedRecordId),
+            eq(suggestionTable.field, input.field),
+          ),
+        );
+      if (saved.length)
+        return saved.some((row) => row.status === "applied")
+          ? ("applied" as const)
+          : ("queued" as const);
+      if (
+        input.fieldDecisionId !== undefined &&
+        (await latestFieldWrite(tx, input.entity, typedRecordId, input.field))
+          ?.id !== (input.fieldDecisionId ?? undefined)
+      )
+        throw new Error("Suggestion member decision changed during inference");
+      const code = (await import("~/server/repo/shortcode-resolver"))
+        .lookupShortcodes;
+      const codes = await code(tx, [
+        parseEntityRef(input.entity, typedRecordId),
+      ]);
+      const publicId = codes.get(`${input.entity}:${typedRecordId}`);
+      if (!publicId) throw new Error("Suggestion target no longer exists");
+      const txContext = {
+        ...context,
+        db: tx,
+        actorContext: { ...context.actorContext, runId },
+      };
+      const found = await executeEntity(
+        txContext,
+        entityCommandSchema.parse({
+          action: "get",
+          entity: input.entity,
+          id: publicId,
+        }),
+      );
+      if (found.action !== "get" || !found.item)
+        throw new Error("Suggestion target no longer exists");
+      const record = z.record(z.string(), z.unknown()).parse(found.item);
+      if (
+        canonicalJson(z.json().parse(record[input.field] ?? null)) !==
+        canonicalJson(input.currentValue)
+      )
+        throw new Error("Suggestion target changed during inference");
+
+      const predecessors = await getDb(tx)
+        .select()
+        .from(suggestionTable)
+        .where(
+          and(
+            eq(suggestionTable.entity, input.entity),
+            eq(suggestionTable.recordId, typedRecordId),
+            eq(suggestionTable.field, input.field),
+          ),
+        )
+        .for("update");
+      if (
+        input.predecessorIds &&
+        input.predecessorIds.some(
+          (id) =>
+            !predecessors.some(
+              (row) =>
+                row.id === id &&
+                (row.status === "pending" ||
+                  (row.status === "superseded" &&
+                    ["input_changed", "no_proposal"].includes(
+                      row.supersessionReceipt?.reason ?? "",
+                    ))),
+            ),
+        )
+      )
+        throw new Error("Suggestion was decided during inference");
+      if (
+        input.predecessorIds &&
+        predecessors.some(
+          (row) =>
+            row.status === "pending" && !input.predecessorIds!.includes(row.id),
+        )
+      )
+        throw new Error("Suggestion target changed during inference");
+      const rejected = predecessors.filter((row) => row.status === "rejected");
+      const unordered =
+        decisionCatalogRows().find(
+          (row) => row.entity === input.entity && row.field === input.field,
+        )?.mode === "prune";
+      const proposalKey = (value: SuggestionValue) =>
+        canonicalJson(
+          unordered && Array.isArray(value)
+            ? [...value].sort((left, right) =>
+                canonicalJson(left).localeCompare(canonicalJson(right)),
+              )
+            : value,
+        );
+      const admissible = entries.filter(
+        (entry) =>
+          !rejected.some(
+            (row) =>
+              proposalKey(jsonValue(row.suggestedValue)) ===
+              proposalKey(entry.suggestedValue),
+          ),
+      );
+      for (const previous of predecessors) {
+        if (
+          previous.status !== "pending" ||
+          (input.predecessorIds && !input.predecessorIds.includes(previous.id))
+        )
+          continue;
+        await getDb(tx)
+          .update(suggestionTable)
+          .set({
+            status: "superseded",
+            supersessionReceipt: {
+              reason: admissible.length ? "replacement" : "no_proposal",
+              evaluationId: input.evaluationId ?? null,
+              at: new Date().toISOString(),
+            },
+          })
+          .where(
+            and(
+              eq(suggestionTable.id, previous.id),
+              eq(suggestionTable.status, "pending"),
+            ),
+          );
+      }
+      let outcome: "applied" | "queued" = "queued";
+      const created: {
+        row: typeof suggestionTable.$inferSelect;
+        entry: SweepSuggestion;
+      }[] = [];
+      for (const entry of admissible) {
+        const [row] = await getDb(tx)
+          .insert(suggestionTable)
+          .values({
+            runId,
+            entity: input.entity,
+            recordId: typedRecordId,
+            field: input.field,
+            financeReviewFingerprint,
+            evaluationId: input.evaluationId,
+            provenance: input.provenance
+              ? { ...input.provenance, model: entry.model }
+              : undefined,
+            currentValue: entry.currentValue,
+            suggestedValue: entry.suggestedValue,
+            confidence: entry.confidence,
+            runnerUpValue: entry.runnerUpValue,
+            runnerUpConfidence: entry.runnerUpConfidence,
+            model: entry.model,
+            pairKey: entry.pairKey,
+            kind: entry.kind,
+            status: "pending",
+          })
+          .returning();
+        if (row) created.push({ row, entry });
+      }
+      for (const { row, entry } of created) {
+        if (entry.status === "applied") {
+          try {
+            await acceptSuggestion(
+              tx,
+              txContext,
+              { id: row.id },
+              { mode: "automatic", confidence: entry.confidence },
+            );
+            outcome = "applied";
+          } catch (error) {
+            onApplyFailure?.(error);
+            // The nested acceptance transaction rolled back; its pending proposal remains reviewable.
+            await getDb(tx)
+              .update(suggestionTable)
+              .set({ status: "pending" })
+              .where(eq(suggestionTable.id, row.id));
+          }
+        }
+      }
+      return outcome;
+    },
+    { isolationLevel: "serializable" },
+  );
 }
 
 const savedSweep = async (db: Database, runId: RunId) => {
@@ -330,96 +515,92 @@ async function executeSweep(
         const pairKey = (ports.samplePair ?? stablePair)(target.entityId)
           ? crypto.randomUUID()
           : null;
+        const manifest = await producingAiManifest(db);
+        const fieldDecisionId =
+          (
+            await latestFieldWrite(
+              db,
+              input.entity,
+              target.entityId,
+              target.field,
+            )
+          )?.id ?? null;
+        const captured = await withAiInputs(false, () =>
+          suggestTarget(
+            db,
+            runId,
+            { ...input, field: target.field },
+            target,
+            pairKey,
+            ports,
+          ),
+        );
         const {
-          primary,
           entries,
           financeReviewFingerprint,
           diagnostics: targetDiagnostics = [],
-        } = await suggestTarget(
-          db,
-          runId,
-          { ...input, field: target.field },
-          target,
-          pairKey,
-          ports,
-        );
+        } = captured.result;
         diagnostics.push(...targetDiagnostics);
-        await insertSuggestions(
+        const policy = decisionCatalogRows().find(
+          (row) => row.entity === input.entity && row.field === target.field,
+        );
+        const basis = Object.fromEntries(
+          [
+            ...new Set([
+              ...(policy?.basis.map((row) => row.key) ?? []),
+              target.field,
+            ]),
+          ].map((key) => [
+            key,
+            key === target.field
+              ? target.currentValue == null
+                ? null
+                : typeof target.currentValue === "string"
+                  ? target.currentValue
+                  : JSON.stringify(target.currentValue)
+              : (target.basis[key] ?? null),
+          ]),
+        );
+        const provenance = {
+          dependencies: dependencyStamps(manifest, [
+            ...fieldDependencyKeys(input.entity, target.field),
+            ...captured.inputs.map((call) => call.feature),
+          ]),
+          inputFingerprint: await sha256Hex(
+            JSON.stringify({
+              basis,
+              fieldDecisionId,
+              inputs: [
+                ...new Set(captured.inputs.map((call) => call.fingerprint)),
+              ].sort(),
+            }),
+          ),
+          optionFingerprint:
+            manifest[fieldPolicyKey(input.entity, target.field)]
+              ?.policyFingerprint ?? "",
+          model: captured.inputs[0]?.model ?? input.decisionModel,
+        };
+        const outcome = await publishSweepSuggestions(
           db,
           runId,
-          input.entity,
-          target.field,
-          target.entityId,
+          {
+            entity: input.entity,
+            field: target.field,
+            recordId: target.entityId,
+            currentValue: target.currentValue,
+            fieldDecisionId,
+            provenance,
+          },
           entries,
           financeReviewFingerprint,
-        );
-        let outcome: "applied" | "queued" | "failed" =
-          primary?.status === "applied" ? "applied" : "queued";
-        if (primary?.status === "applied") {
-          try {
-            const [savedSuggestion] = await getDb(db)
-              .select()
-              .from(suggestionTable)
-              .where(
-                and(
-                  eq(suggestionTable.runId, runId),
-                  eq(suggestionTable.field, target.field),
-                  eq(
-                    suggestionTable.recordId,
-                    parseEntityId(input.entity, target.entityId),
-                  ),
-                  eq(suggestionTable.model, primary.model),
-                ),
-              )
-              .limit(1);
-            if (!savedSuggestion)
-              throw new Error("Auto-apply Suggestion was not persisted");
-            await applySuggestionValue(
-              db,
-              ports.context,
-              {
-                entity: input.entity,
-                recordId: target.entityId,
-                field: target.field,
-                financeReviewFingerprint:
-                  savedSuggestion.financeReviewFingerprint,
-              },
-              primary.suggestedValue,
-            );
-            await getDb(db)
-              .update(suggestionTable)
-              .set({ status: "applied" })
-              .where(
-                and(
-                  eq(suggestionTable.runId, runId),
-                  eq(suggestionTable.field, target.field),
-                  eq(
-                    suggestionTable.recordId,
-                    parseEntityId(input.entity, target.entityId),
-                  ),
-                  eq(suggestionTable.model, primary.model),
-                ),
-              );
-          } catch (error) {
+          ports.context,
+          (error) =>
             diagnostics.push({
               targetId: target.id,
               stage: "apply",
               reason: scrubErrorMessage(String(error)),
-            });
-            const recordId = parseEntityId(input.entity, target.entityId);
-            await getDb(db)
-              .update(suggestionTable)
-              .set({ status: "pending" })
-              .where(
-                and(
-                  eq(suggestionTable.runId, runId),
-                  eq(suggestionTable.recordId, recordId),
-                  eq(suggestionTable.field, target.field),
-                ),
-              );
-            outcome = "queued";
-          }
-        }
+            }),
+        );
         processed.add(`${target.entityId}:${target.field}`);
         return outcome;
       } catch {
@@ -519,12 +700,12 @@ export type SweepSuggestion = {
   confidence: number;
   runnerUpValue: SuggestionValue | null;
   runnerUpConfidence: number | null;
-  model: SupportedDecisionModel;
+  model: string;
   pairKey: string | null;
 };
 const isBlank = (value: SuggestionValue) => value == null || value === "";
 const equalValue = (left: SuggestionValue, right: SuggestionValue) =>
-  JSON.stringify(left) === JSON.stringify(right);
+  canonicalJson(left) === canonicalJson(right);
 
 /** Converts a decision into its durable sweep row; only the pinned model may apply an Addition. */
 export function makeSweepSuggestion(args: {
@@ -540,7 +721,7 @@ export function makeSweepSuggestion(args: {
     kind,
     status:
       kind === "addition" &&
-      args.decision.confidence >= 0.85 &&
+      args.decision.confidence >= SUGGESTION_AUTO_APPLY_THRESHOLD &&
       args.model === args.pinnedModel
         ? "applied"
         : "pending",

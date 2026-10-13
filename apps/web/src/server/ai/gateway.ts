@@ -6,7 +6,7 @@ import {
   aiGatewayEnvironment,
   aiGatewayMetadataSchema,
   CF_ACCOUNT_ID,
-  CUBBY_AI_GATEWAY_ID,
+  aiGatewayId,
 } from "@cubby/shared/ai/gateway-metadata";
 import {
   type GatewayControls,
@@ -25,7 +25,14 @@ import type { GatewayProvider } from "@cubby/shared/ai/models";
 
 import { env } from "~/env";
 import { chatGptInference } from "~/server/ai/chatgpt/client";
-import { getAi, getAiGateway, getTestAiGateway } from "~/server/cf-env";
+import {
+  getAi,
+  getAiGateway,
+  getTestAiGateway,
+  getAiGatewayEgress,
+} from "~/server/cf-env";
+
+import { coordinatedGatewayRequest } from "./gateway-egress-client";
 
 /**
  * A call's gateway labels (`feature`, `operation`, optional `entityKind`);
@@ -217,12 +224,17 @@ export function gatewayFetch(
       };
     },
     gateway: async (request) => {
+      const egress = getAiGatewayEgress(
+        aiGatewayId(controls.metadata.environment),
+      );
+      if (egress)
+        return coordinatedGatewayRequest(egress, provider, request, controls);
       if (provider === "workers-ai")
         return workersAiFetch(request, {
-          id: CUBBY_AI_GATEWAY_ID,
+          id: aiGatewayId(controls.metadata.environment),
           ...controls,
         });
-      const gateway = getAiGateway();
+      const gateway = getAiGateway(aiGatewayId(controls.metadata.environment));
       if (gateway)
         return runUniversalGateway(gateway, provider, request, controls);
       const headers = request.headers;
@@ -234,7 +246,7 @@ export function gatewayFetch(
       return fetch(
         gatewayProviderUrl({
           accountId: CF_ACCOUNT_ID,
-          gatewayId: CUBBY_AI_GATEWAY_ID,
+          gatewayId: aiGatewayId(controls.metadata.environment),
           provider,
           endpoint: request.endpoint,
         }),

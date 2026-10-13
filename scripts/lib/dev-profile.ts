@@ -67,7 +67,7 @@ function resolveIntegrations(
 ): DevProfile["integration"] {
   let integration: DevProfile["integration"];
   if (profile === "integrations") {
-    // AI calls share the `cubby` gateway (labelled `development`); only the
+    // AI calls use the evaluation gateway (labelled `development`); only the
     // vector index, which local writes would corrupt, is checkout-isolated.
     const vectorizeIndex = inherited.CUBBY_DEV_VECTORIZE_INDEX;
     if (!vectorizeIndex?.startsWith(`cubby-dev-${id}`))

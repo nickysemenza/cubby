@@ -1,3 +1,4 @@
+import { aiProvenance } from "./ai-evaluation";
 import { z } from "zod";
 import {
   mailboxClassification,
@@ -38,6 +39,8 @@ export const emailClassificationObservationInput = z
     promptVersion: z.string().nullable().default(null),
     operation: emailClassificationOperation.nullable().default(null),
     usageId: z.uuid().nullable().default(null),
+    evaluationId: z.uuid().nullable().default(null),
+    provenance: aiProvenance.nullable().default(null),
     conflict: emailClassificationConflict.nullable().default(null),
   })
   .strict();

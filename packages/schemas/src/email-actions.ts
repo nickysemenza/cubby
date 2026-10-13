@@ -172,7 +172,7 @@ export const mailReclassificationRead = z.strictObject({
   /** Immutable model evidence, not proof that publication succeeded. */
   classificationObservations: z.array(
     emailClassificationObservationInput
-      .omit({ emailId: true, runId: true, usageId: true })
+      .omit({ emailId: true, runId: true, usageId: true, evaluationId: true })
       .extend({ id: emailShortcode.nullable(), createdAt: z.iso.datetime() }),
   ),
 });

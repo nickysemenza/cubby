@@ -70,6 +70,7 @@ export async function loadMailReclassificationRead(
         model: emailClassificationObservation.model,
         promptVersion: emailClassificationObservation.promptVersion,
         operation: emailClassificationObservation.operation,
+        provenance: emailClassificationObservation.provenance,
         conflict: emailClassificationObservation.conflict,
         createdAt: emailClassificationObservation.createdAt,
       })

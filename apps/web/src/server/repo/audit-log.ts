@@ -1,3 +1,4 @@
+import { auditEntitySchema } from "@cubby/schemas/audit";
 import type {
   AuditEntityKind,
   AuditFieldChange,
@@ -32,6 +33,7 @@ import {
   lte,
   or,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import { z } from "zod";
 
@@ -39,6 +41,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { oauthClient } from "~/server/db/auth.schema";
 import { EDGE_KEY_TARGET_ENTITY } from "~/server/db/entity-incoming-edges";
 import { auditLog } from "~/server/db/schema";
+import { captureAuditId } from "~/server/repo/audit-receipts";
 import { eqAny, unwrapDb } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { identityShortcodes } from "~/server/repo/entity-identity";
@@ -268,7 +271,7 @@ export async function logAuditEntry(
   actor: ActorContext,
   entry: AuditEntryInput,
 ): Promise<void> {
-  await unwrapDb(db)
+  const [inserted] = await unwrapDb(db)
     .insert(auditLog)
     .values({
       entityKind: entry.entityKind,
@@ -276,7 +279,9 @@ export async function logAuditEntry(
       action: entry.action,
       changes: storedChanges(entry.changes),
       ...auditActorColumns(actor),
-    });
+    })
+    .returning({ id: auditLog.id });
+  if (inserted) captureAuditId(inserted.id);
 }
 
 /**
@@ -298,7 +303,11 @@ export async function logAuditEntries(
     ...auditActorColumns(actor),
   }));
 
-  await unwrapDb(db).insert(auditLog).values(auditRecords);
+  const inserted = await unwrapDb(db)
+    .insert(auditLog)
+    .values(auditRecords)
+    .returning({ id: auditLog.id });
+  for (const row of inserted) captureAuditId(row.id);
 }
 
 /**
@@ -576,4 +585,29 @@ export async function getAuditLog(
     ),
     nextCursor,
   };
+}
+
+/** Target-field revisions survive ABA edits and use the existing entity audit index. */
+export async function latestFieldWrite(
+  db: Database,
+  entity: ShortcodeEntity,
+  recordId: string,
+  field: string,
+) {
+  const kind = auditEntitySchema.safeParse(entity);
+  if (!kind.success) return null;
+  const [row] = await unwrapDb(db)
+    .select({ id: auditLog.id, createdAt: auditLog.createdAt })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.entityKind, kind.data),
+        sql`${auditLog.entityId} = ${recordId}::uuid`,
+        eq(auditLog.action, "update"),
+        sql`${auditLog.changes} ? ${field}`,
+      ),
+    )
+    .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
+    .limit(1);
+  return row ?? null;
 }

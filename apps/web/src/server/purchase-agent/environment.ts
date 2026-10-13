@@ -101,6 +101,11 @@ export interface RunServices {
 
 /** Cubby's AI Gateway as the model providers call it (`AiGateway.run`). */
 export interface AgentGateway extends UniversalGateway {
+  coordinatedFetch?: (
+    provider: import("@cubby/shared/ai/models").GatewayProvider,
+    request: GatewayFetchRequest,
+    controls: import("@cubby/shared/ai/gateway-request").GatewayControls,
+  ) => Promise<Response>;
   readonly id: string;
   /** The runtime's `environment` label for every call's metadata. */
   readonly environment: AiGatewayEnvironment;

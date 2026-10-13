@@ -1,5 +1,8 @@
 import type { UnparsedError } from "~/lib/error-utils";
-import { getMailDiscoveryWorkflow } from "~/server/cf-env";
+import {
+  getMailDiscoveryWorkflow,
+  getAiRefreshWorkflow,
+} from "~/server/cf-env";
 
 import type { WorkflowRunParams, WorkflowRunPurpose } from "./contract";
 
@@ -54,7 +57,10 @@ const RETENTION = {
 } as const;
 
 const bindingFor = (purpose: WorkflowRunPurpose) => {
-  const binding = getMailDiscoveryWorkflow();
+  const binding =
+    purpose === "ai_refresh"
+      ? getAiRefreshWorkflow()
+      : getMailDiscoveryWorkflow();
   if (!binding)
     throw new Error(`The ${purpose} Workflow binding is not configured`);
   return binding;
