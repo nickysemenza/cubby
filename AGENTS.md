@@ -139,3 +139,11 @@ owns a distinct concern.
 
 Open PRs ready for review unless the work is intentionally incomplete or the
 user asks for a draft.
+
+## Cursor Cloud
+
+The Cloud Agent environment starts Docker and `pnpm dev` on boot. Readiness is
+`http://localhost:3000/__dev/ready`; sign in at `http://localhost:3000/__dev/login`.
+On this Linux image the dev server accepts `localhost` (IPv6) and refuses
+`127.0.0.1`. Test Postgres/IntegreSQL is separate from that dev database:
+`docker compose -p cubby up -d --wait`.
