@@ -30,8 +30,9 @@ export const EXPENSE_LINE_KIND_LABELS = {
  * answers "does this row correspond to something you can point at". They are
  * orthogonal: an `allocation` is still `principal` money.
  *
- * `allocation` covers the two ways a lump sum gets cut into ledger rows without
- * ever being itemized:
+ * `allocation` covers the two ways a lump sum gets cut into ledger rows that
+ * cannot name individual goods (a Purchase paid this way lists its goods as
+ * linked Products instead):
  *   - by payment schedule — a deposit and a balance on one vendor order, where
  *     the deposit is money on account and buys no particular item; and
  *   - by an estimated materials/labor split of a single non-itemized contract,

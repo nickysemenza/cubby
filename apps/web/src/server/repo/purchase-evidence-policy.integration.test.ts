@@ -4,13 +4,18 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityLink, expense } from "~/server/db/schema";
+import {
+  entityLink,
+  expense,
+  financialTransactionAllocation,
+} from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { linkValues } from "~/server/repo/entity-links";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { setDataException } from "./data-quality/exceptions";
 import { loadDataQualities } from "./data-quality/hydrate";
+import { financialTransactionItemizationSql } from "./financial-reconciliation";
 import { mergePurchases, getPurchaseByID } from "./purchase";
 import {
   financialTransactionCoverageSql,
@@ -148,25 +153,47 @@ describe("purchase evidence policy", () => {
   // Regression: goods paid as a deposit and balance are recorded as allocation
   // lines plus purchaseProduct links, the shape the import writers produce, but
   // the rule only looked for Products on item lines and kept them in the queue.
+  // A reimbursement slice is not the vendor's order shape, an unlinked goods
+  // line still blocks, and the charge verdict reads the same shape.
   it("counts instalment-paid goods itemized through their linked Products", async () => {
     const { purchase } = await fixture();
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "Purchase" SET "itemizationExpectation" = ${itemizationExpectation.enum.required} WHERE id = ${purchase.id}`,
     );
-    for (const name of ["Fixture deposit", "Fixture balance"])
-      await insertWithShortcode(ctx.db, "expense", {
+    // The reimbursed slice is $0 so the charge still matches the vendor lines.
+    const slice = (name: string, economicRole: "vendor" | "reimbursement") =>
+      insertWithShortcode(ctx.db, "expense", {
         name,
         purchaseId: purchase.id,
-        cost: 500,
+        cost: economicRole === "vendor" ? 500 : 0,
         date: "2026-09-01",
         costType: "materials",
         lineKind: "principal",
         lineBasis: "allocation",
-        economicRole: "vendor",
+        economicRole,
       });
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Fixture instalment card",
+      identity: { kind: "cash" },
+    });
+    const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: account.id,
+      amount: 1000,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-09-01",
+      merchant: "Fixture instalment merchant",
+    });
+    await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
+      transactionId: charge.id,
+      purchaseId: purchase.id,
+      amount: 1000,
+    });
     const itemization = async () => {
       const result = await unwrapDb(ctx.db).execute(sql`
-        SELECT ${purchaseCoverageSql("p")}->>'itemization' AS itemization
+        SELECT ${purchaseCoverageSql("p")}->>'itemization' AS itemization,
+          (SELECT ${financialTransactionItemizationSql("ft.id")}
+            FROM "FinancialTransaction" ft WHERE ft.id = ${charge.id}) AS verdict
         FROM "Purchase" p WHERE p.id = ${purchase.id}
       `);
       const quality = (
@@ -174,11 +201,10 @@ describe("purchase evidence policy", () => {
       ).get(purchase.id);
       return {
         coverage: result.rows[0]?.itemization,
+        verdict: result.rows[0]?.verdict,
         gap: quality?.gaps.some((gap) => gap.check === "purchase_itemization"),
       };
     };
-    expect(await itemization()).toEqual({ coverage: "missing", gap: true });
-
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture steel planter",
       manufacturer: "Fixture maker",
@@ -186,7 +212,80 @@ describe("purchase evidence policy", () => {
     await unwrapDb(ctx.db)
       .insert(entityLink)
       .values(linkValues("purchaseProduct", purchase.id, product.id));
-    expect(await itemization()).toEqual({ coverage: "present", gap: false });
+    await slice("Fixture reimbursed share", "reimbursement");
+    expect(await itemization()).toMatchObject({
+      coverage: "missing",
+      gap: true,
+    });
+
+    await slice("Fixture deposit", "vendor");
+    await slice("Fixture balance", "vendor");
+    expect(await itemization()).toEqual({
+      coverage: "present",
+      verdict: "itemized_match",
+      gap: false,
+    });
+
+    const unlinked = await insertWithShortcode(ctx.db, "expense", {
+      name: "Fixture unlinked goods",
+      purchaseId: purchase.id,
+      cost: 0,
+      date: "2026-09-01",
+      costType: "materials",
+      lineKind: "principal",
+      lineBasis: "item_line",
+      economicRole: "vendor",
+    });
+    expect(await itemization()).toMatchObject({
+      coverage: "missing",
+      gap: true,
+    });
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Expense" SET "deletedAt" = now() WHERE id = ${unlinked.id}`,
+    );
+    expect(await itemization()).toMatchObject({
+      coverage: "present",
+      gap: false,
+    });
+  });
+
+  // A linked Product is new goods evidence even when it does not itemize the
+  // Purchase, so it reopens an accepted gap; a Purchase without links keeps
+  // the fingerprint its exception was accepted with.
+  it("reopens an accepted itemization gap when a Product is linked", async () => {
+    const { purchase } = await fixture();
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Purchase" SET "itemizationExpectation" = ${itemizationExpectation.enum.required} WHERE id = ${purchase.id}`,
+    );
+    await setDataException(
+      ctx.db,
+      {
+        entityId: purchase.shortcode,
+        check: "purchase_itemization",
+        reason: "unavailable",
+        note: "Synthetic order history is unavailable.",
+      },
+      ctx.actor,
+    );
+    const product = await insertWithShortcode(ctx.db, "product", {
+      name: "Fixture linked good",
+      manufacturer: "Fixture maker",
+    });
+    await unwrapDb(ctx.db)
+      .insert(entityLink)
+      .values(linkValues("purchaseProduct", purchase.id, product.id));
+    const reopened = (
+      await loadDataQualities(ctx.db, "purchase", [purchase.id])
+    ).get(purchase.id);
+    expect(reopened?.gaps.map((gap) => gap.check)).toContain(
+      "purchase_itemization",
+    );
+    expect(reopened?.exceptions).toContainEqual(
+      expect.objectContaining({
+        check: "purchase_itemization",
+        state: "stale",
+      }),
+    );
   });
 
   it("carries itemization policy and refuses silently discarding conflicting Purchase policy", async () => {

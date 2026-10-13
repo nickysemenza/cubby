@@ -1,4 +1,3 @@
-import { expenseLineBasisSchema } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { primaryPurchaseDocumentKinds } from "@cubby/schemas/purchase";
@@ -100,6 +99,15 @@ export const purchaseHasPrimaryDocumentSql = (
     )})
 )`;
 
+/** Booked as an `allocation` slice of an un-itemized total (an instalment, a
+ * statement booking) rather than as the order's own lines. */
+const purchaseHasAllocationSql = (alias: string): SQL => sql`EXISTS (
+  SELECT 1 FROM "Expense" ep_allocation_line
+  WHERE ep_allocation_line."purchaseId" = ${column(alias, "id")} AND ep_allocation_line."deletedAt" IS NULL
+    AND ep_allocation_line.future = false AND ep_allocation_line."economicRole" = 'vendor'
+    AND ep_allocation_line."lineBasis" = 'allocation'
+)`;
+
 /** The order's own item lines, before Product identity: at least one live,
  * incurred vendor principal `item_line` and no `allocation` slice of an
  * un-itemized total. Transaction surfaces read this shape alone because their
@@ -111,35 +119,39 @@ export const purchaseHasItemLinesSql = (alias: string): SQL => sql`(
     WHERE ep_line."purchaseId" = ${column(alias, "id")} AND ep_line."deletedAt" IS NULL
       AND ep_line.future = false AND ep_line."economicRole" = 'vendor'
       AND ep_line."lineKind" = 'principal' AND ep_line."lineBasis" = 'item_line')
-  AND NOT EXISTS (SELECT 1 FROM "Expense" ep_lump
-    WHERE ep_lump."purchaseId" = ${column(alias, "id")} AND ep_lump."deletedAt" IS NULL
-      AND ep_lump.future = false AND ep_lump."economicRole" = 'vendor'
-      AND ep_lump."lineBasis" = 'allocation')
+  AND NOT ${purchaseHasAllocationSql(alias)}
 )`;
 
-/** A Purchase is itemized when its lines have the item shape and every
- * principal line whose Product is expected links one. A single productless
- * goods line is a lump, not an itemization. Goods paid in instalments are the
- * other itemized shape: `allocation` lines carry the money and never a
- * Product, so the goods are recorded as `purchaseProduct` links instead.
- * Totals stay with `paperwork_mismatch` and `settlement_mismatch`; this axis
- * is the line shape only. */
-export const purchaseHasItemizationSql = (alias: string): SQL => sql`((
-  ${purchaseHasItemLinesSql(alias)}
-  AND NOT EXISTS (SELECT 1 FROM "Expense" ep_unlinked
-    WHERE ep_unlinked."purchaseId" = ${column(alias, "id")} AND ep_unlinked."deletedAt" IS NULL
-      AND ep_unlinked.future = false AND ep_unlinked."productId" IS NULL
-      AND ${expenseProductExpectedSql("ep_unlinked")})
-) OR (
-  EXISTS (SELECT 1 FROM "Expense" ep_instalment
-    WHERE ep_instalment."purchaseId" = ${column(alias, "id")} AND ep_instalment."deletedAt" IS NULL
-      AND ep_instalment.future = false
-      AND ep_instalment."lineBasis" = ${expenseLineBasisSchema.enum.allocation})
+/** Goods booked as `allocation` slices (a deposit and balance): those lines
+ * never carry a Product, so the goods are recorded as `purchaseProduct`
+ * links instead. */
+const purchaseHasLinkedGoodsSql = (alias: string): SQL => sql`(
+  ${purchaseHasAllocationSql(alias)}
   AND EXISTS (SELECT 1 FROM "EntityLink" ep_linked_goods
     JOIN "Product" ep_linked_product ON ep_linked_product.id = ep_linked_goods."toEntityId" AND ep_linked_product."deletedAt" IS NULL
     WHERE ep_linked_goods."fromEntityId" = ${column(alias, "id")} AND ep_linked_goods."deletedAt" IS NULL
       AND ep_linked_goods.kind = 'purchaseProduct')
-))`;
+)`;
+
+/** The order lists its goods, before per-line Product policy: its own item
+ * lines, or allocation slices with linked Products. Transaction surfaces read
+ * this alone for the planner-memory reason on `purchaseHasItemLinesSql`. */
+export const purchaseListsItemsSql = (alias: string): SQL => sql`(
+  ${purchaseHasItemLinesSql(alias)} OR ${purchaseHasLinkedGoodsSql(alias)}
+)`;
+
+/** A Purchase is itemized when it lists its goods and every principal line
+ * whose Product is expected links one, whichever shape lists them. A single
+ * productless goods line is a lump, not an itemization. Totals stay with
+ * `paperwork_mismatch` and `settlement_mismatch`; this axis is the line shape
+ * only. */
+export const purchaseHasItemizationSql = (alias: string): SQL => sql`(
+  ${purchaseListsItemsSql(alias)}
+  AND NOT EXISTS (SELECT 1 FROM "Expense" ep_unlinked
+    WHERE ep_unlinked."purchaseId" = ${column(alias, "id")} AND ep_unlinked."deletedAt" IS NULL
+      AND ep_unlinked.future = false AND ep_unlinked."productId" IS NULL
+      AND ${expenseProductExpectedSql("ep_unlinked")})
+)`;
 
 /** An accepted missing-evidence gap reopens when new documents or ledger lines
  * arrive, even when the new material still needs extraction or review. The
@@ -147,7 +159,9 @@ export const purchaseHasItemizationSql = (alias: string): SQL => sql`((
  * `productNotExpected`) is subtracted: otherwise its migration alone would
  * change every stored fingerprint and reopen every accepted gap. For the same
  * reason the retired `itemizationEvidence` flag keeps its key as the `false`
- * every accepted itemization gap was recorded with. */
+ * every accepted itemization gap was recorded with, and linked Products add
+ * their key only when one exists, so a Purchase without links keeps the
+ * fingerprint its exception was accepted with. */
 export const purchaseEvidenceFingerprintSql = (
   alias: string,
 ): SQL => sql`jsonb_build_object(
@@ -160,7 +174,12 @@ export const purchaseEvidenceFingerprintSql = (
   'lines', (SELECT jsonb_agg(to_jsonb(ep_changed_line) - 'productNotExpected' ORDER BY ep_changed_line.id)
     FROM "Expense" ep_changed_line WHERE ep_changed_line."purchaseId" = ${column(alias, "id")}
       AND ep_changed_line."deletedAt" IS NULL AND ep_changed_line."economicRole" = 'vendor')
-)`;
+) || COALESCE((SELECT jsonb_build_object('linkedProducts', jsonb_agg(ep_changed_link."toEntityId" ORDER BY ep_changed_link."toEntityId"))
+    FROM "EntityLink" ep_changed_link
+    JOIN "Product" ep_changed_product ON ep_changed_product.id = ep_changed_link."toEntityId" AND ep_changed_product."deletedAt" IS NULL
+    WHERE ep_changed_link."fromEntityId" = ${column(alias, "id")} AND ep_changed_link."deletedAt" IS NULL
+      AND ep_changed_link.kind = 'purchaseProduct'
+    HAVING count(*) > 0), '{}'::jsonb)`;
 
 // Services are labor and carry no Product by design, whatever their category;
 // a service line that does link one (a software subscription) keeps it.
@@ -355,7 +374,7 @@ export const financialTransactionCoverageAxisSql = (
       : axis === "document"
         ? documentPresence(purchaseHasPrimaryDocumentSql("ep_axis_purchase"))
         : evidencePresence(
-            purchaseHasItemLinesSql("ep_axis_purchase"),
+            purchaseListsItemsSql("ep_axis_purchase"),
             effectivePurchaseItemizationExpectationSql(
               "ep_axis_purchase",
               column(alias, "itemizationExpectation"),
