@@ -1720,20 +1720,10 @@ export async function importVendorOrder(
           ),
         );
       } else if (decision.kind === "review_aggregate") {
-        if (target.itemizationEvidence) {
-          findingIds.push(
-            await fileFinding(
-              tx,
-              input,
-              purchaseId,
-              "duplicate_lines",
-              "Reviewed item lines already exist. Compare the new evidence before changing them.",
-              null,
-            ),
-          );
-        } else {
-          replacementExpenseId = decision.aggregate.id;
-        }
+        // `decideLineWrite` offers only an unclaimed lone productless line
+        // whose amount equals the extracted total; lines an import already
+        // claimed are never replaceable.
+        replacementExpenseId = decision.aggregate.id;
       } else if (decision.kind === "no_op") {
         const productsByExternalIdentity = new Map<string, string>();
         for (const [lineIndex, line] of lines.entries()) {
@@ -1798,10 +1788,6 @@ export async function importVendorOrder(
         }
       } else if (decision.kind === "insert") {
         const productsByExternalIdentity = new Map<string, string>();
-        await tx
-          .update(purchase)
-          .set({ itemizationEvidence: true })
-          .where(eq(purchase.id, purchaseId));
         for (const [lineIndex, line] of decision.lines.entries()) {
           const identity = identityDecisions[lineIndex] ?? {
             productId: null,

@@ -820,7 +820,7 @@ export const MCP_TOOLS = defineMcpTools({
       reclassify: mcpAction({
         op: purchaseContract.ops.reclassifyDocument,
         description:
-          "Reclassify one existing attachment on a Purchase. Primary evidence is exactly order_confirmation, sales_order, invoice, or receipt; payment receipts, credits, returns, quotes, estimates, contracts, statements, specifications, and other files stay useful but do not satisfy primary_document completeness. Returns the Purchase with freshly computed dataQuality.",
+          "Reclassify one existing attachment on a Purchase. Primary evidence is exactly order_confirmation, sales_order, invoice, or receipt; payment receipts, credits, returns, quotes, estimates, contracts, statements, specifications, and other files stay useful but do not make the Purchase's itemization expected. Returns the Purchase with freshly computed dataQuality.",
       }),
     },
   },

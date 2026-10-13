@@ -731,7 +731,6 @@ describe("caller-driven purchase import writes", () => {
         orderId: "SYNTHETIC-ITEMIZED-CHOICES",
         date: "2026-09-01",
         defaultTrade: "other",
-        itemizationEvidence: true,
       });
       for (const line of lines)
         await insertWithShortcode(ctx.db, "expense", {

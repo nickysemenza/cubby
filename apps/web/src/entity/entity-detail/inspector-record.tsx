@@ -135,12 +135,7 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
                 <section key={id} className="min-w-0">
                   <SectionHeading
                     title={
-                      section?.title ??
-                      (id === "images"
-                        ? "Images"
-                        : id === "documents"
-                          ? "Documents"
-                          : "Sources")
+                      section?.title ?? (id === "images" ? "Images" : "Sources")
                     }
                     actions={
                       isBrowserRoutedEntity(entity) ? (

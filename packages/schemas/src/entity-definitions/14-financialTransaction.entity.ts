@@ -1667,22 +1667,13 @@ export default defineEntity({
             "This spending transaction has missing or unpriced Expense booking.",
         },
         {
-          id: "financial_transaction_document",
-          satisfiedLabel: "Expected receipt recorded",
-          placement: { field: "documentCoverage" },
-          facet: "paperwork",
-          label: "Expected receipt",
-          message:
-            "An expected receipt is missing from this transaction's linked Purchases.",
-        },
-        {
           id: "financial_transaction_itemization",
-          satisfiedLabel: "Itemization recorded",
+          satisfiedLabel: "Itemized",
           placement: { field: "itemizationCoverage" },
           facet: "ledger",
-          label: "Receipt itemization",
+          label: "Itemization",
           message:
-            "Expected receipt lines have not been reviewed for this transaction.",
+            "A linked Purchase is not yet broken into item lines with their Products.",
         },
         {
           id: "financial_transaction_products",

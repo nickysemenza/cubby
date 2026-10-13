@@ -387,7 +387,6 @@ const purchaseColumns = {
     string | null
   >`(SELECT name FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
   evidenceExpectation: purchase.evidenceExpectation,
-  itemizationEvidence: purchase.itemizationEvidence,
   statedTotal: purchase.statedTotal,
   notes: purchase.notes,
   createdAt: purchase.createdAt,
@@ -426,7 +425,6 @@ type PurchaseRow = Pick<
   spendingCategoryShortcode: string | null;
   spendingCategoryName: PurchaseOut["spendingCategoryName"];
   evidenceExpectation: PurchaseOut["evidenceExpectation"];
-  itemizationEvidence: boolean;
   defaultProjectShortcode: string | null;
   defaultTrade: PurchaseOut["defaultTrade"];
   vendorName: string | null;
@@ -468,7 +466,6 @@ const dbPurchaseToAPI = (
     : null,
   spendingCategoryName: row.spendingCategoryName,
   evidenceExpectation: row.evidenceExpectation,
-  itemizationEvidence: row.itemizationEvidence,
   coverage: row.coverage,
   fieldResolutions: row.fieldResolutions,
   spendingCategorySummary,
@@ -1108,7 +1105,6 @@ export const createPurchase = async (
         : null,
       spendingCategoryOrigin: data.spendingCategoryId ? "manual" : "legacy",
       evidenceExpectation: data.evidenceExpectation,
-      itemizationEvidence: data.itemizationEvidence,
       defaultTrade: data.defaultTrade,
       vendorId,
       vendorAccountId,
@@ -1253,7 +1249,6 @@ export const updatePurchase = async (
           options.spendingCategoryOrigin,
         ),
         evidenceExpectation: data.evidenceExpectation,
-        itemizationEvidence: data.itemizationEvidence,
         defaultTrade: data.defaultTrade,
         orderId:
           data.orderId === undefined ? undefined : data.orderId?.trim() || null,
@@ -1912,8 +1907,6 @@ const carryChargeMetadata = async (
     spendingCategoryId: purchase.spendingCategoryId,
     spendingCategoryOrigin: purchase.spendingCategoryOrigin,
     evidenceExpectation: purchase.evidenceExpectation,
-    itemizationEvidence: purchase.itemizationEvidence,
-    vendorExpenseCount: purchaseVendorExpenseCount,
 
     statedTotal: purchase.statedTotal,
     displayLabel: purchase.displayLabel,
@@ -1962,12 +1955,6 @@ const carryChargeMetadata = async (
     evidenceExpectation: carryMissing(
       survivor.evidenceExpectation,
       dead.evidenceExpectation,
-    ),
-    itemizationEvidence: Boolean(
-      (survivor.itemizationEvidence ||
-        Number(survivor.vendorExpenseCount) === 0) &&
-      (dead.itemizationEvidence || Number(dead.vendorExpenseCount) === 0) &&
-      (survivor.itemizationEvidence || dead.itemizationEvidence),
     ),
 
     statedTotal: carryMissing(survivor.statedTotal, dead.statedTotal),

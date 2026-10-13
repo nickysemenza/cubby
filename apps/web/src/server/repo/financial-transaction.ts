@@ -14,7 +14,6 @@ import {
   financialTransactionOut,
   financialTransactionSettlementViolation,
 } from "@cubby/schemas/financial-transaction";
-import type { FinancialTransactionItemization } from "@cubby/schemas/financial-transaction-fields";
 import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,
@@ -40,7 +39,6 @@ import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { gapCondition } from "~/server/repo/data-quality/sql";
 import {
   buildPartialUpdateValues,
-  correlated,
   eqAny,
   getDb,
   type ListReadIntent,
@@ -171,9 +169,9 @@ const columns = {
     WHERE aa."transactionId" = "FinancialTransaction"."id" AND aa."deletedAt" IS NULL
   ), '[]'::jsonb)`,
   accountName,
-  // A raw string in a select field: Drizzle would strip a column prefix.
-  itemization: correlated<FinancialTransactionItemization>(
-    financialTransactionItemizationSql('"FinancialTransaction"."id"'),
+  // A raw id reference: Drizzle would strip a column object's prefix.
+  itemization: financialTransactionItemizationSql(
+    '"FinancialTransaction"."id"',
   ),
 } as const;
 
@@ -473,7 +471,7 @@ export async function buildFinancialTransactionWhere(
         ? sql`NOT ${hasAnyAllocation()}`
         : undefined,
     filters.itemization
-      ? sql`${sql.raw(financialTransactionItemizationSql('"FinancialTransaction"."id"'))} = ${filters.itemization}`
+      ? sql`${financialTransactionItemizationSql('"FinancialTransaction"."id"')} = ${filters.itemization}`
       : undefined,
     filters.allocationIntegrity === "defect"
       ? gapCondition(
