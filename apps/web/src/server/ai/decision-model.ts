@@ -63,8 +63,75 @@ function retryDelay(
   return elapsedMs + delayMs < DECISION_DEADLINE_MS ? delayMs : null;
 }
 
+/** Embedded-only Clef media. Dimensions, when known, are validated but not sent. */
+const decisionImageSchema = z.union([
+  z.string(),
+  z.object({
+    content_type: z.enum(["image/png", "image/jpeg", "image/webp"]),
+    base64: z.string(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+  }),
+]);
+export type DecisionImage = z.infer<typeof decisionImageSchema>;
+const MIB = 1024 * 1024;
+
+function embeddedImages(images: readonly DecisionImage[]) {
+  if (images.length > 4) throw new Error("Clef supports at most 4 images.");
+  let totalBytes = 0;
+  return images.map((value) => {
+    const image = decisionImageSchema.parse(value);
+    let base64: string;
+    if (typeof image === "string") {
+      const match = /^data:image\/(?:png|jpeg|webp);base64,(.*)$/i.exec(image);
+      if (!match)
+        throw new Error(
+          "Clef images require embedded PNG, JPEG, or WebP data URLs.",
+        );
+      base64 = match[1]!;
+    } else {
+      base64 = image.base64;
+      if ((image.width === undefined) !== (image.height === undefined)) {
+        throw new Error("Clef image dimensions require both width and height.");
+      }
+      if (
+        image.width !== undefined &&
+        image.height !== undefined &&
+        image.width * image.height > 16_000_000
+      ) {
+        throw new Error("Clef image exceeds 16 megapixels.");
+      }
+    }
+    if (
+      base64.length === 0 ||
+      base64.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]*={0,2}$/.test(base64)
+    ) {
+      throw new Error("Clef image contains invalid base64.");
+    }
+    const bytes =
+      (base64.length / 4) * 3 -
+      (base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0);
+    if (bytes > 4 * MIB) throw new Error("Clef image exceeds 4 MiB.");
+    totalBytes += bytes;
+    if (totalBytes > 8 * MIB)
+      throw new Error("Clef images exceed 8 MiB total decoded bytes.");
+    return typeof image === "string"
+      ? image
+      : { content_type: image.content_type, base64 };
+  });
+}
+
 const decisionChoiceInputSchema = z.object({
   state: z.string(),
+  images: z
+    .array(
+      z.union([
+        z.string(),
+        z.object({ content_type: z.string(), base64: z.string() }),
+      ]),
+    )
+    .optional(),
   questions: z.object({
     selection: z.object({
       type: z.literal("choice"),
@@ -290,6 +357,7 @@ export interface DecisionChoicePrompt {
   rules: string;
   choices: readonly string[];
   allowNone?: boolean;
+  images?: readonly DecisionImage[];
 }
 
 /** The exact request body a choice sends; the Decisions catalog renders it. */
@@ -303,6 +371,7 @@ export function buildChoiceInput(
   if (allowNone) criteria[NONE_KEY] = "No listed choice is a suitable match.";
   return {
     state: args.subject,
+    ...(args.images?.length ? { images: embeddedImages(args.images) } : {}),
     questions: {
       selection: {
         type: "choice",
@@ -316,9 +385,10 @@ export function buildChoiceInput(
 }
 
 function inputFitsContext(input: DecisionChoiceInput): boolean {
-  // UTF-8 bytes include JSON escaping and the complete request envelope.
+  // Media has its own decoded-byte and body limits; the text context bound stays unchanged.
+  const { images: _images, ...textInput } = input;
   return (
-    new TextEncoder().encode(JSON.stringify(input)).byteLength <=
+    new TextEncoder().encode(JSON.stringify(textInput)).byteLength <=
     DECISION_CONTEXT_BYTE_LIMIT
   );
 }
@@ -350,6 +420,7 @@ export async function runDecisionChoice(args: {
    * (every product has a category), where "none" would be an invalid value.
    */
   allowNone?: boolean;
+  images?: readonly DecisionImage[];
   port?: DecisionPort;
   onTokenUsage?: (usage: {
     inputTokens: number | null;
@@ -396,14 +467,25 @@ export async function runDecisionChoice(args: {
     }
     return result;
   };
-  // Every decision feature is trial traffic: a caller's pinned model (Mail
-  // triage records the one it sampled) wins; otherwise sample once before
-  // cache/retry.
-  const feature = args.decisionModel
-    ? { ...args.feature, model: args.decisionModel }
-    : args.port
-      ? args.feature
-      : { ...args.feature, model: selectDecisionModel() };
+  // Images require vision even when a text-only model was pinned. Text calls
+  // retain their pinned model or sample once before cache/retry.
+  const feature = input.images?.length
+    ? { ...args.feature, model: selectDecisionModel({ vision: true }) }
+    : args.decisionModel
+      ? { ...args.feature, model: args.decisionModel }
+      : args.port
+        ? args.feature
+        : { ...args.feature, model: selectDecisionModel() };
+  if (input.images?.length) {
+    const selector = getDecisionModelConfig(feature.model).selector;
+    const body = JSON.stringify({
+      model: feature.model,
+      input: { ...input, model: selector },
+    });
+    if (new TextEncoder().encode(body).byteLength > 13 * MIB) {
+      throw new Error("Clef request body exceeds 13 MiB.");
+    }
+  }
   return withAiResponseCache({
     enabled: feature.cache && !args.port,
     force: args.usage.force,

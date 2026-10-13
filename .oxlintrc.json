@@ -311,6 +311,7 @@
         "packages/schemas/src/garden-guides.ts",
         "packages/schemas/src/garden-practice.ts",
         "packages/schemas/src/image-summary.ts",
+        "packages/schemas/src/image-identification.ts",
         "packages/schemas/src/inventory-ownership.ts",
         "packages/schemas/src/meal-classification.ts",
         "packages/schemas/src/meal-shared.ts",

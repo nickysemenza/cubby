@@ -26,6 +26,7 @@ const activityIconFallback = {
   mail_discovery: "vendorAccount",
   subject_lift: "image",
   describe_image: "image",
+  identify_image: "image",
 } satisfies Record<ActivityKind, Entity>;
 
 /** Identity stays independent of run status and execution device. */

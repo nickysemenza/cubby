@@ -58,7 +58,7 @@ describe("retained classification evidence", () => {
       automatic: true,
     });
     expect(itemJobs.jobIds).toHaveLength(1);
-    expect(labelJobs.jobIds).toHaveLength(1);
+    expect(labelJobs.jobIds).toHaveLength(2);
     expect(
       (
         await getDb(ctx.db)
@@ -68,7 +68,7 @@ describe("retained classification evidence", () => {
             eq(imageProcessingJob.imageId, parseEntityId("image", label.id)),
           )
       ).map((row) => row.kind),
-    ).toEqual(["describe_image"]);
+    ).toEqual(["describe_image", "describe_image"]);
     // Purpose belongs to the attachment. A second Product may legitimately
     // use the same original as an item; that use still permits a rendition.
     const secondProduct = await insertWithShortcode(ctx.db, "product", {

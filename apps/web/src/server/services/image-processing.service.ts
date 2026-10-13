@@ -71,7 +71,7 @@ import {
 const IMAGE_PROCESSING_WAKEUP_SOURCE = "image-processing";
 
 /**
- * Persist both jobs before publishing their lightweight wakeups. The caller
+ * Persist independent jobs before publishing their lightweight wakeups. The caller
  * never waits for a companion: durable rows repair a missed publication.
  */
 export async function scheduleImageProcessingJobs(

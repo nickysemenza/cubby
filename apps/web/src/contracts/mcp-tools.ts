@@ -1087,7 +1087,7 @@ export const MCP_TOOLS = defineMcpTools({
       schedule_processing: mcpAction({
         op: imageProcessingContract.ops.schedule,
         description:
-          "Schedule description and/or transparent-cutout processing for an uploaded image.",
+          "Schedule processing for an uploaded image. Omitting kinds queues independent Apple and cloud descriptions, transparent subject-lift cutouts, and Clef Product identification. Supply kinds to request a subset. Cloud descriptions and Clef identification use billable AI calls; retained work is reused for the same content and processor revision. Identification saves unconfirmed suggestions and never attaches records or changes inventory.",
       }),
     },
   },

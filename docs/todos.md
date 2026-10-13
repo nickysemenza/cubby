@@ -64,7 +64,11 @@ history is the archive. Permanent product constraints live in the
   aperture, or ISO yet; they are kept so the bytes never need refetching.
 
 - 🤔 ✨ **Identify what is in a photo.** Photo import stops at the entity type,
-  and web location detection matches by name only. In order:
+  and web location detection matches by name only. The
+  [design interview](plans/photo-identification.md) records the agreed
+  Apple-plus-Clef baseline and first single-Product suggestion slice. Multi-item
+  proposals, search expansion, quality evaluation, and budgeted frontier
+  escalation remain. Existing backlog slices:
   1. 🤔 ✨ Compare detected items visually against Product covers and
      subject-lift cutouts, not only by exact name then semantic name
      similarity. Needs an eval set like `inventory-detection-evals.ts`.

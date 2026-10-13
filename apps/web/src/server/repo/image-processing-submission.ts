@@ -16,6 +16,7 @@ import {
   createTransparentDerivativeAndJob,
   createImageProcessingJob,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   loadImageRepresentations,
 } from "./image-processing";
@@ -97,10 +98,23 @@ export async function persistImageProcessingSubmission(
         imageId,
         kind,
         sourceContentHash: source.sha256,
-        processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+        processorRevision:
+          kind === "identify_image"
+            ? IMAGE_IDENTIFICATION_PROCESSOR_REVISION
+            : IMAGE_DESCRIPTION_PROCESSOR_REVISION,
         runId: input.runId,
       });
       if (jobId) jobIds.push(jobId);
+      if (kind === "describe_image") {
+        const appleJobId = await createImageProcessingJob(transactionDb, {
+          imageId,
+          kind,
+          sourceContentHash: source.sha256,
+          processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+          runId: input.runId,
+        });
+        if (appleJobId) jobIds.push(appleJobId);
+      }
     }
     const unique = [...new Set(jobIds)];
     if (submission)

@@ -32,6 +32,7 @@ import { resolveMail } from "~/server/purchase-import/mail-tool";
 import { getDb } from "~/server/repo/database-helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/repo/expense-category-resolution";
 import {
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   claimImageProcessingJob,
   completeImageProcessingJob,
 } from "~/server/repo/image-processing";
@@ -353,7 +354,7 @@ export function syntheticOrderIds(token: string): BrowserOrderImport["ids"] {
 export const sha256Hex = (value: string | Uint8Array) =>
   createHash("sha256").update(value).digest("hex");
 
-/** The `describe_image` jobs finalize queued for these images. */
+/** The cloud `describe_image` jobs finalize queued for these images. */
 export function listDescribeImageJobs(
   db: Database,
   imageIds: readonly (typeof schema.imageProcessingJob.$inferSelect)["imageId"][],
@@ -365,6 +366,10 @@ export function listDescribeImageJobs(
       and(
         inArray(schema.imageProcessingJob.imageId, imageIds),
         eq(schema.imageProcessingJob.kind, "describe_image"),
+        eq(
+          schema.imageProcessingJob.processorRevision,
+          IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+        ),
       ),
     );
 }

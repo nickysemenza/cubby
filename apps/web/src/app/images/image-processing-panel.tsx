@@ -1,6 +1,9 @@
 import { imageShortcode } from "@cubby/schemas/identifiers";
 import type { ImageWithEntity } from "@cubby/schemas/image";
-import { imageProcessingStatusOutput } from "@cubby/schemas/image-processing";
+import {
+  imageProcessingStatusOutput,
+  scheduleImageProcessingInput,
+} from "@cubby/schemas/image-processing";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
@@ -317,7 +320,7 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
         variant="outline"
         disabled={schedule.isPending}
         onClick={() =>
-          schedule.mutate({ id, kinds: ["describe_image", "subject_lift"] })
+          schedule.mutate(scheduleImageProcessingInput.parse({ id }))
         }
       >
         Queue missing processing

@@ -1,3 +1,4 @@
+import { imageProcessingJobKind } from "@cubby/schemas/image-processing";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -7,6 +8,8 @@ import { image } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } from "./image-processing";
 
@@ -15,7 +18,8 @@ function imageProcessingIssueExpression(
   source: typeof image = image,
 ): SQL<"failed" | "review_needed" | null> {
   const current = sql`j."imageId" = ${source.id} AND j."sourceContentHash" = ${source.sha256}
-    AND ((j.kind = 'describe_image' AND j."processorRevision" = ${IMAGE_DESCRIPTION_PROCESSOR_REVISION})
+    AND ((j.kind = 'describe_image' AND j."processorRevision" IN (${IMAGE_DESCRIPTION_PROCESSOR_REVISION}, ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}))
+      OR (j.kind = ${imageProcessingJobKind.enum.identify_image} AND j."processorRevision" = ${IMAGE_IDENTIFICATION_PROCESSOR_REVISION})
       OR (j.kind = 'subject_lift' AND j."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}))`;
   return sql`CASE WHEN ${source.status} <> 'UPLOADED' OR ${source.deletedAt} IS NOT NULL THEN NULL
     WHEN EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE ${current} AND j.state = 'failed') THEN 'failed'

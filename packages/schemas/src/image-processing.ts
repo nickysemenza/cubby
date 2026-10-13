@@ -328,8 +328,8 @@ export const scheduleImageProcessingInput = z.object({
   kinds: z
     .array(imageProcessingJobKind)
     .min(1)
-    .max(2)
-    .default(["subject_lift", "describe_image"]),
+    .max(3)
+    .default(["subject_lift", "describe_image", "identify_image"]),
 });
 export const scheduleImageProcessingOutput = z.object({
   jobIds: z.array(z.uuid()),

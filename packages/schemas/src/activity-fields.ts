@@ -35,6 +35,7 @@ export const hasImportRunReports = (purpose: RunPurpose): boolean =>
 export const imageProcessingJobKind = z.enum([
   "subject_lift",
   "describe_image",
+  "identify_image",
 ]);
 export type ImageProcessingJobKind = z.infer<typeof imageProcessingJobKind>;
 
@@ -64,4 +65,5 @@ export const ACTIVITY_KIND_LABEL = {
   ...RUN_PURPOSE_LABEL,
   subject_lift: "Subject lift",
   describe_image: "Image description",
+  identify_image: "Image identification",
 } as const satisfies Record<ActivityKind, string>;
