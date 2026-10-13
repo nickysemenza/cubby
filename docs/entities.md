@@ -643,6 +643,9 @@ read. `mode: "fill"` (the default) targets a select-controlled enum, a singular
 resolve to a model field, a basis key naming the field itself, and any cycle in
 the basis → target edges across an entity's suggest fields, so one request can
 always resolve every target in dependency order.
+Enum targets may declare `allowNone: true` to offer an evaluated decline when
+their basis does not support a value. A decline proposes no replacement or
+clearing of the current field; exhaustive enums keep `allowNone: false`.
 
 A suggest target with no physical column declares `backedBy`: same-record
 stored columns with `{ column }`, or referenced-record columns with
@@ -1347,6 +1350,10 @@ and retained original-image evidence. Confirmed description corrections take
 precedence over model text. Taxonomy contents participate in the proposal
 basis, so changing vocabulary invalidates old proposals without rerunning
 vision or introducing an inference cache.
+Hierarchy-aware placement retains a selected leaf when it carries at least 80%
+of the first ancestor branch whose summed probability reaches 0.85. Otherwise
+that confident ancestor is proposed; an already selected parent can still use
+its subtree probability. A retained leaf keeps its original confidence.
 Hierarchy-aware proposals never replace a saved specific category with its
 ancestor merely because aggregated branch probability is high. Current target
 values participate in suggestion requests and drift checks; sibling corrections,

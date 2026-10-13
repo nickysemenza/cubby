@@ -234,6 +234,13 @@ const validateSuggestField = (
 ): void => {
   const fieldContext = `${context}.${field.key}.control.suggest`;
   const mode = field.control?.suggest?.mode ?? "fill";
+  if (
+    field.control?.suggest?.allowNone &&
+    (field.kind !== "enum" || mode !== "fill")
+  )
+    throw new EntityDeclarationError(
+      `${fieldContext}.allowNone is only supported on fill-mode enum targets.`,
+    );
   if (!isValidSuggestTarget(field, mode))
     throw new EntityDeclarationError(
       mode === "prune"

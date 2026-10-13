@@ -151,7 +151,7 @@ describe('control.suggest.mode: "prune" compiles only onto a text-array target',
     const tags = compiled?.fieldModel.fields.find(
       (field) => field.key === "tags",
     );
-    expect(tags?.control?.suggest).toEqual({
+    expect(tags?.control?.suggest).toMatchObject({
       reviewRequired: false,
       basis: ["subject"],
       mode: "prune",

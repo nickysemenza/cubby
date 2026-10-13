@@ -172,7 +172,8 @@ export default defineEntity({
 
 Rules:
 1. Use the name's timing and dish cues (e.g., "pancakes" suggests breakfast, "birthday cake" suggests dessert).
-2. When the name gives no timing cue, prefer "dinner" — the most common unslotted meal.`,
+2. Salads, sandwiches, and wraps suggest "lunch" when there is no stronger timing or dish cue.
+3. When the name gives no timing or dish cue, prefer "dinner" — the most common unslotted meal.`,
             ],
           },
         },

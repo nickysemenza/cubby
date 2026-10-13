@@ -68,9 +68,10 @@ const tradeDescriptions = {
   millwork: "Trim, molding, doors, casing, and finish carpentry",
   finishes: "Paint, stain, caulk, and other surface finishing",
   appliances:
-    "Major appliances (refrigerator, range, washer, dishwasher): selection, delivery, and install",
+    "Major appliances (refrigerator, range, washer, dishwasher): selection and install; delivery is logistics",
   landscaping: "Yard work, planting, hardscape, irrigation, fencing",
-  logistics: "Moving, hauling, storage, and job-site coordination",
+  logistics:
+    "Delivery, pickup, transport, hauling, storage, and job-site coordination, regardless of the trade served",
   metalworking: "Welding, fabrication, and metal machining",
   crafts: "Arts, crafts, and small hand-made projects",
   auto: "Vehicle maintenance, repair, and parts",
@@ -80,15 +81,19 @@ const tradeDescriptions = {
 const cost_typeDescriptions = {
   materials:
     "Physical goods consumed by or installed in the work: lumber, fixtures, fasteners, finishes",
-  tools: "Equipment bought or rented to do the work, not consumed by it",
+  tools:
+    "Durable goods bought or rented that outlast the job, including equipment, cases, and accessories; not consumed or installed materials",
   services: "Paid labor, delivery, permits, or other non-material services",
 };
 const project_kindDescriptions = {
   furniture: "Building or restoring a piece of furniture",
-  workshop: "Shop infrastructure, tooling, and workspace setup",
+  workshop:
+    "Shop infrastructure, tooling, and workspace setup, including workbenches, jigs, and tool storage",
   household: "General household projects not tied to a room renovation",
-  renovation: "Renovating or remodeling a room or structure",
-  garden: "Outdoor planting, landscaping, and yard projects",
+  renovation:
+    "Renovating a room or structure, including permanent outdoor construction, paving, retaining walls, and irrigation infrastructure",
+  garden:
+    "Growing plants, planting, and plant care; not permanent construction",
   trip: "Travel and trip planning",
 };
 const meal_typeDescriptions = {

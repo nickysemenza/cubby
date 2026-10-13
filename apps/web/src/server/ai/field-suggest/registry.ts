@@ -10,6 +10,7 @@ import { emojiCandidates } from "@cubby/schemas/emoji";
  */
 import {
   entityFieldModels,
+  type EntityFieldModel,
   type GeneratedSuggestFieldKey,
 } from "@cubby/schemas/entity-fields";
 import type { ProductId } from "@cubby/schemas/identifiers";
@@ -69,6 +70,7 @@ export type RawBasis = Readonly<Record<string, string | null>>;
  */
 interface EnumSuggestSpec<V extends string> {
   kind: "enum";
+  allowNone?: boolean;
   values: readonly V[];
   /** Narrows `values` for this record; an empty result skips the target
    * without asking the decision model (nothing admissible to suggest). */
@@ -680,17 +682,7 @@ function manifestEnumSpecs(): Record<EnumSuggestKey, FieldSuggestSpec> {
   // value still comes from the generated field model declared below.
   const models = Object.entries(entityFieldModels) as [
     string,
-    {
-      fields: readonly {
-        key: string;
-        control: {
-          options:
-            | readonly { value: string; label: string; description?: string }[]
-            | null;
-          suggest: { mode: "fill" | "prune"; rules?: readonly string[] } | null;
-        } | null;
-      }[];
-    },
+    { fields: readonly EntityFieldModel[] },
   ][];
   for (const [entity, model] of models)
     for (const field of model.fields) {
@@ -705,6 +697,7 @@ function manifestEnumSpecs(): Record<EnumSuggestKey, FieldSuggestSpec> {
       >(options.map((option) => [option.value, option]));
       const spec: EnumSuggestSpec<string> = {
         kind: "enum",
+        allowNone: suggest.allowNone,
         values: options
           .filter(
             ({ value }) => !(key === "location.type" && value === "furniture"),

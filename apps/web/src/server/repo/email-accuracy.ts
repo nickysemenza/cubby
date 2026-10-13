@@ -726,6 +726,16 @@ export async function getEmailAccuracyReport(
     sampleSize: evaluation.sampleSize,
     pipeline,
     modelOnly,
+    items: roster.items.map((item) => {
+      const stratum = strata.get(item.stratumId);
+      if (!stratum)
+        throw new Error("Email accuracy item has no frozen sampling stratum.");
+      return {
+        predictionId: item.predictionId,
+        inclusionProbability: stratum.inclusionProbability,
+        weight: 1 / stratum.inclusionProbability,
+      };
+    }),
     counts,
     strata: reportStrata,
     byStage: [...byStage.values()],

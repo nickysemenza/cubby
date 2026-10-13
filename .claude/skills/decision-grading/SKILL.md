@@ -19,6 +19,13 @@ size samples deliberately (a few hundred calls, not thousands).
   only for items the member confirmed in this session.
 - Grade blind: read the item before its prediction (`imports_read.
   email_accuracy_blind`, or the record itself before the suggestion).
+- Read the retained original body for every Email before locking its grade.
+  Header-only judgments stay provisional. If predictions were opened first,
+  report the body review as retrospective rather than blind.
+- Run production MCP reads sequentially; parallel effective-value reads can
+  exhaust the connection pool. Show sample sizes and the inference budget before
+  replay calls. Keep private worklists and originals in session memory; files
+  contain aggregates and synthetic examples only.
 - Keep originals immutable. Never use `mail.reclassify`, `accept_suggestion`
   or `reject_suggestion` to measure; they write.
 
@@ -45,9 +52,9 @@ size samples deliberately (a few hundred calls, not thousands).
 
 ## Email relevance
 
-1. `mail.accuracy_sample` freezes a stratified sample (it keeps inclusion
-   probabilities); `imports_read.email_accuracy_blind` reads it without
-   predictions.
+1. Get member approval before `mail.accuracy_sample` freezes a stratified sample
+   (it keeps inclusion probabilities); `imports_read.email_accuracy_blind` reads
+   it without predictions.
 2. Grade each item from `imports_read.mail` (or the member's Gmail
    connector): related means it evidences a household purchase, refund,
    subscription charge or order lifecycle. Missing originals are
@@ -58,7 +65,12 @@ size samples deliberately (a few hundred calls, not thousands).
 4. Report, weighted by inclusion probability: false negatives (purchase
    Email called unrelated — the costly error), false positives, uncertain
    rate, bounded-view size and which incompleteness reasons fired.
-   `imports_read.email_accuracy_report` covers member-graded samples.
+   After grades are locked, `imports_read.email_accuracy_report.items` joins
+   the blind roster by `predictionId` and gives each frozen inclusion probability
+   and inverse-probability weight. Use these weights for session-only grades and
+   fresh previews; the report's confusion matrices cover member-graded samples.
+   Report unavailable originals, ambiguous grades, and unpredicted population
+   coverage separately. Never substitute current routing fields for frozen weights.
 
 ## Before/after a change
 

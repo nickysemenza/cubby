@@ -219,6 +219,29 @@ interface TableCase {
 }
 
 describe("suggestFields", () => {
+  it("lets an ambiguous Location decline without suggesting a replacement type", async () => {
+    const decisionPort = decisionPortPicking("No listed choice");
+    const out = await suggestFields(
+      fakeDb,
+      fixtureRunId,
+      {
+        basisMode: "provided",
+        entity: "location",
+        targets: ["type"],
+        basis: { name: "17", type: "shelf" },
+      },
+      { decisionPort },
+    );
+    expect(
+      decisionPort.mock.calls[0]?.[0].questions.selection.criteria,
+    ).toHaveProperty("none");
+    expect(out.suggestions.type).toBeNull();
+    expect(out.outcomes?.type).toMatchObject({
+      kind: "evaluated",
+      answer: "none",
+      probability: 0.9,
+    });
+  });
   const cases: TableCase[] = [
     {
       name: "an enum target classifies and resolves its label from the manifest's label map",

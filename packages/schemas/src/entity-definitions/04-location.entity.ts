@@ -251,15 +251,16 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.locationType,
           suggest: {
-            basis: ["name"],
+            basis: ["name", "notes", "parentId", "productId"],
+            allowNone: true,
             rules: [
-              `You are a location classification assistant. Given a location name, determine the most appropriate location type.
+              `You are a location classification assistant. Given a location name, notes, parent location, and linked product when available, determine the most appropriate location type.
 
 Rules:
 1. Look for keywords in the name that indicate the type (e.g., "shelf" in name suggests shelf type)
 2. Consider the hierarchy: rooms contain areas, areas contain shelves/cabinets/drawers, etc.
-3. For ambiguous names, consider the most likely physical form
-4. Names with numbers often indicate shelves or drawers (e.g., "Shelf 3", "Drawer 2")
+3. Classify physical form, not the contents stored there. Use parent and linked-product evidence when the name describes contents.
+4. A number or code alone does not establish physical form; choose none when the available evidence does not identify a type.
 5. Names mentioning "workbench" or "station" are typically areas or tables`,
             ],
           },

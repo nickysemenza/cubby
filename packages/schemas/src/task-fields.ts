@@ -74,4 +74,5 @@ Rules:
 2. A product or vendor name is a strong signal: electrical supply vendors imply "electrical", lumber implies "building".
 3. Prefer the most specific trade that fits over "other".
 4. "planning" is for pre-work (design, permits, estimates), not the work itself.
-5. Trip costs (airfare, lodging, car rental, and their taxes and fees) are "travel".`;
+5. Trip costs (airfare, lodging, car rental, and their taxes and fees) are "travel".
+6. Delivery, pickup, transport, and hauling are "logistics", regardless of the trade served. This work takes precedence over product and vendor cues.`;

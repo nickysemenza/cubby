@@ -1,7 +1,6 @@
 /**
- * One exhaustive closed-set classification on the decision tier: the decision model picks
- * over value-labeled choices with no `none` (every product has a category,
- * every location a type), and the winner's index maps back to the value.
+ * Closed-set classification on the decision tier: exhaustive callers require
+ * a value; suggestion targets may opt into an evaluated `none` outcome.
  * The decision model writes no prose, so `reasoning` is the empty string the wire shape
  * requires.
  *
@@ -9,16 +8,28 @@
  * methods and `field-suggest/suggest-fields.ts`'s enum targets share the one
  * implementation.
  */
-import type { Confidence } from "@cubby/schemas/ai";
-import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
-
 import {
   type DecisionChoicePrompt,
-  type DecisionPort,
   runDecisionChoice,
 } from "~/server/ai/decision-model";
-import type { AiDecisionFeature } from "~/server/ai/features";
-import type { AiRunContext } from "~/server/ai/run-feature";
+
+type ClassificationInput<Value extends string> = Omit<
+  Parameters<typeof runDecisionChoice>[0],
+  "choices" | "allowNone"
+> & {
+  values: readonly Value[];
+  describe: (value: Value) => string;
+  allowNone?: boolean;
+};
+
+type ClassificationResult<Value extends string> = Pick<
+  Awaited<ReturnType<typeof runDecisionChoice>>,
+  "confidence" | "probability"
+> & {
+  value: Value | null;
+  reasoning: "";
+  alternatives: ClassifyAlternative<Value>[];
+};
 
 /** One runner-up: the caller (`resolveEnumTarget`) applies its own
  * `labelOf`/`describe` to render this into the wire's `label`/`detail`. */
@@ -46,42 +57,32 @@ function alternativesFrom<Value extends string>(
     });
 }
 
-/** The exhaustive choice an enum classification asks; the Decisions catalog
+/** The choice an enum classification asks; the Decisions catalog
  * renders the same prompt. */
 export function classificationPrompt<Value extends string>(args: {
   subject: string;
   rules: string;
   values: readonly Value[];
   describe: (value: Value) => string;
+  allowNone?: boolean;
 }): DecisionChoicePrompt {
   return {
     subject: args.subject,
     rules: args.rules,
     choices: args.values.map((value) => `${value}: ${args.describe(value)}`),
-    allowNone: false,
+    allowNone: args.allowNone ?? false,
   };
 }
 
-export async function classifyWithDecisionModel<Value extends string>(args: {
-  feature: AiDecisionFeature;
-  subject: string;
-  rules: string;
-  values: readonly Value[];
-  describe: (value: Value) => string;
-  usage: AiRunContext;
-  port?: DecisionPort;
-  decisionModel?: SupportedDecisionModel;
-  onTokenUsage?: (usage: {
-    inputTokens: number | null;
-    outputTokens: number | null;
-  }) => void;
-}): Promise<{
-  value: Value;
-  confidence: Confidence;
-  probability: number;
-  reasoning: "";
-  alternatives: ClassifyAlternative<Value>[];
-}> {
+export function classifyWithDecisionModel<Value extends string>(
+  args: ClassificationInput<Value> & { allowNone?: false },
+): Promise<Omit<ClassificationResult<Value>, "value"> & { value: Value }>;
+export function classifyWithDecisionModel<Value extends string>(
+  args: ClassificationInput<Value>,
+): Promise<ClassificationResult<Value>>;
+export async function classifyWithDecisionModel<Value extends string>(
+  args: ClassificationInput<Value>,
+): Promise<ClassificationResult<Value>> {
   const { selectedIndex, confidence, probability, ranked } =
     await runDecisionChoice({
       feature: args.feature,
@@ -92,11 +93,11 @@ export async function classifyWithDecisionModel<Value extends string>(args: {
       onTokenUsage: args.onTokenUsage,
     });
   const value = selectedIndex === null ? undefined : args.values[selectedIndex];
-  if (value === undefined) {
+  if (value === undefined && !args.allowNone) {
     throw new Error("Decision-model classification returned no value.");
   }
   return {
-    value,
+    value: value ?? null,
     confidence,
     probability,
     reasoning: "",

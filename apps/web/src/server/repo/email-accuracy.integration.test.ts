@@ -301,6 +301,32 @@ describe("member-owned blind Email accuracy", () => {
       { evaluationId: evaluation.evaluationId },
       ctx.actor,
     );
+    const ungradedReport = await getEmailAccuracyReport(
+      ctx.db,
+      { evaluationId: evaluation.evaluationId },
+      ctx.actor,
+    );
+    // Session-only grades and fresh previews need each frozen item's sampling
+    // weight without persisting an assistant opinion as a member grade.
+    expect(ungradedReport.items).toEqual(
+      expect.arrayContaining(
+        blind.items.map((item) => {
+          const weight =
+            item.headers?.subject === "Synthetic receipt"
+              ? 6
+              : item.headers?.subject === "Synthetic bulletin"
+                ? 2
+                : 4;
+          return {
+            predictionId: item.predictionId,
+            inclusionProbability: 1 / weight,
+            weight,
+          };
+        }),
+      ),
+    );
+    expect(ungradedReport.items).toHaveLength(blind.items.length);
+    expect(ungradedReport.counts.graded).toBe(0);
     for (const item of blind.items)
       await gradeEmailAccuracyItem(
         ctx.db,
@@ -321,6 +347,7 @@ describe("member-owned blind Email accuracy", () => {
       { evaluationId: evaluation.evaluationId },
       ctx.actor,
     );
+    expect(report.items).toEqual(ungradedReport.items);
     expect(report.pipeline.confusionMatrix).toEqual({
       truePositive: 6,
       falsePositive: 2,

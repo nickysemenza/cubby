@@ -144,6 +144,7 @@ type EntityFieldControl = Readonly<{
       { column: string } | { entity: string; column: string; via: string }
     >[];
     rules?: readonly string[];
+    allowNone: boolean;
     mode: "fill" | "prune";
     reviewRequired: boolean;
   }> | null;
