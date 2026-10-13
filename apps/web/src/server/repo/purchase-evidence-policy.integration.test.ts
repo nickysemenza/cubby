@@ -1,10 +1,12 @@
+import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { expense } from "~/server/db/schema";
+import { entityLink, expense } from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
+import { linkValues } from "~/server/repo/entity-links";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { setDataException } from "./data-quality/exceptions";
@@ -141,6 +143,50 @@ describe("purchase evidence policy", () => {
     expect(await state()).toMatchObject({
       coverage: { itemization: "missing" },
     });
+  });
+
+  // Regression: goods paid as a deposit and balance are recorded as allocation
+  // lines plus purchaseProduct links, the shape the import writers produce, but
+  // the rule only looked for Products on item lines and kept them in the queue.
+  it("counts instalment-paid goods itemized through their linked Products", async () => {
+    const { purchase } = await fixture();
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Purchase" SET "itemizationExpectation" = ${itemizationExpectation.enum.required} WHERE id = ${purchase.id}`,
+    );
+    for (const name of ["Fixture deposit", "Fixture balance"])
+      await insertWithShortcode(ctx.db, "expense", {
+        name,
+        purchaseId: purchase.id,
+        cost: 500,
+        date: "2026-09-01",
+        costType: "materials",
+        lineKind: "principal",
+        lineBasis: "allocation",
+        economicRole: "vendor",
+      });
+    const itemization = async () => {
+      const result = await unwrapDb(ctx.db).execute(sql`
+        SELECT ${purchaseCoverageSql("p")}->>'itemization' AS itemization
+        FROM "Purchase" p WHERE p.id = ${purchase.id}
+      `);
+      const quality = (
+        await loadDataQualities(ctx.db, "purchase", [purchase.id])
+      ).get(purchase.id);
+      return {
+        coverage: result.rows[0]?.itemization,
+        gap: quality?.gaps.some((gap) => gap.check === "purchase_itemization"),
+      };
+    };
+    expect(await itemization()).toEqual({ coverage: "missing", gap: true });
+
+    const product = await insertWithShortcode(ctx.db, "product", {
+      name: "Fixture steel planter",
+      manufacturer: "Fixture maker",
+    });
+    await unwrapDb(ctx.db)
+      .insert(entityLink)
+      .values(linkValues("purchaseProduct", purchase.id, product.id));
+    expect(await itemization()).toEqual({ coverage: "present", gap: false });
   });
 
   it("carries itemization policy and refuses silently discarding conflicting Purchase policy", async () => {

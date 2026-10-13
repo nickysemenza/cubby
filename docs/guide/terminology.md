@@ -547,7 +547,7 @@ An assertion that an external source supports an Expense or transfer fact, inclu
 _Avoid_: imported truth, automatic match
 
 **Itemization**:
-A Purchase recorded as the order's own item lines, each goods line naming its Product, rather than one lump amount or a slice of an un-itemized total. It describes the line shape, not whether the lines were checked against a document.
+A Purchase recorded as the order's own item lines, each goods line naming its Product, rather than one lump amount or a slice of an un-itemized total. Goods paid in instalments are itemized by linking their Products to the Purchase, since an instalment line carries no Product. It describes the line shape, not whether the lines were checked against a document.
 _Avoid_: reviewed lines, receipt itemization
 
 **Itemization expectation**:
