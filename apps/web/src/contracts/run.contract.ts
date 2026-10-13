@@ -1,5 +1,6 @@
 import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
+import { mailReclassificationRead } from "@cubby/schemas/email-actions";
 import {
   executionAuthorizationApprovalInput,
   executionAuthorizationRef,
@@ -335,6 +336,8 @@ export const runContract = defineContract("run", {
       operations: z.array(
         runDetail.shape.operations.element.omit({ operationId: true }),
       ),
+      /** Durable publication receipts; absent on legacy Runs. */
+      mailReclassification: mailReclassificationRead.nullable(),
       /** Persisted Workflow evidence; mailbox coverage may advance after this Run. */
       mailDiscovery: z
         .object({
