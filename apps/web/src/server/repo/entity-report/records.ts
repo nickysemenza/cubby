@@ -14,6 +14,7 @@ import {
   parseShortcodeFor,
   recipeShortcode,
 } from "@cubby/schemas/identifiers";
+import type { ImageIdentificationResult } from "@cubby/schemas/image-identification";
 import { runPurpose } from "@cubby/schemas/run-fields";
 import { and, asc, eq } from "drizzle-orm";
 
@@ -44,6 +45,7 @@ import {
 } from "~/server/repo/collection-items";
 import { getDb, mapImages, notDeleted } from "~/server/repo/database-helpers";
 import { getImageById } from "~/server/repo/image";
+import { readImageIdentification } from "~/server/repo/image-identification";
 import { getImageProcessingReadProjection } from "~/server/repo/image-processing";
 import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient/search";
 import { readLocationAiDescription } from "~/server/repo/location/ai-description";
@@ -272,15 +274,84 @@ export const ingredientRecipeUsagesReport = async (
   return recipeUsagesReport(db, row);
 };
 
-export const imageAssociationsReport = async (db: Database, code: string) =>
-  records(
-    imageAssociationItems(
-      (await getImageById(db, await resolveOrThrow(db, "image", code)))
-        .associations,
+/** Suggestions remain separate from attachments and never offer a write. */
+export const imageIdentificationBlocks = (
+  identification: ImageIdentificationResult | null,
+): ReportBlock[] => {
+  if (!identification) return [];
+  const candidates =
+    identification.subject === "single_object" &&
+    identification.outcome === "suggestions"
+      ? identification.candidates
+      : [];
+  const abstentionNotes = {
+    suggestions: "No live Product suggestions remain from this identification.",
+    no_candidates:
+      "Identification abstained: no eligible Product candidates were available.",
+    no_match:
+      "Identification abstained: no Product match was sufficiently supported.",
+    not_single_subject:
+      "Identification abstained: this image does not show a supported single object.",
+  };
+  const blocks: ReportBlock[] = candidates.length
+    ? [
+        {
+          kind: "records",
+          title: "Unconfirmed Product suggestions",
+          rows: candidates.map((candidate) => ({
+            entity: "product",
+            id: candidate.productId,
+            title: candidate.name,
+            subtitle:
+              "Confirm identity before attaching or changing inventory.",
+            trailing: `${Math.round(candidate.probability * 100)}%`,
+            statuses: [{ label: "Unconfirmed", tone: "warning" }],
+          })),
+          empty: "No Product suggestions.",
+        },
+      ]
+    : [
+        {
+          kind: "note",
+          text:
+            identification.subject !== "single_object"
+              ? abstentionNotes.not_single_subject
+              : abstentionNotes[identification.outcome],
+          tone: "muted",
+        },
+      ];
+  if (candidates.length) {
+    blocks.push({
+      kind: "note",
+      text: "These suggestions are unconfirmed. Confirm identity before attaching this image or changing inventory.",
+      tone: "warning",
+    });
+  }
+  if (identification.truncated) {
+    blocks.push({
+      kind: "note",
+      text: `Identification search was limited to ${identification.considered} Product candidates; other Products were not considered.`,
+      tone: "warning",
+    });
+  }
+  return blocks;
+};
+
+export const imageAssociationsReport = async (db: Database, code: string) => {
+  const id = await resolveOrThrow(db, "image", code);
+  const [record, identification] = await Promise.all([
+    getImageById(db, id),
+    readImageIdentification(db, id),
+  ]);
+  return [
+    ...records(
+      imageAssociationItems(record.associations),
+      "This image is not attached to a record.",
+      reportSlotActions["image.associations"],
     ),
-    "This image is not attached to a record.",
-    reportSlotActions["image.associations"],
-  );
+    ...imageIdentificationBlocks(identification?.result ?? null),
+  ];
+};
 
 export const locationAiDescriptionReport = async (
   db: Database,

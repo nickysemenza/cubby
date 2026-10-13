@@ -408,6 +408,12 @@ turns, scores synthetic cases, and saves revision/replay/results under
 own the replay command. Mail import still needs controlled model comparison
 ([backlog](todos.md#import-pipeline-architecture)).
 
+Image decisions route to vision-capable Clef independently of the text-only Jev
+trial. Photo identification prepares renditions before the shared adapter
+checks embedded media and uses the existing gateway, retry, cache and usage
+paths. Media limits and payloads belong to `server/ai/decision-model.ts` and
+`server/services/image-identification.service.ts`.
+
 Field decision prompts are measured from a Claude/Codex session over Cubby
 MCP, following `.claude/skills/decision-grading`: reviewed Suggestions
 (`entity_read.suggestion_queue` with `status`) are the labels, and

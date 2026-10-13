@@ -694,7 +694,7 @@ export async function finalizePhotoRun(
   for (const shortcode of finalizedIds) {
     const scheduled = await persistImageProcessingSubmission(db, {
       id: shortcode,
-      kinds: ["describe_image", "subject_lift"],
+      kinds: ["describe_image", "subject_lift", "identify_image"],
       submission: { id: submission.id, publicId: submission.publicId },
       runId: scope.public.runId,
     });

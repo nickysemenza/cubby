@@ -1,4 +1,7 @@
-import type { ImageProcessingJobKind } from "@cubby/schemas/image-processing";
+import {
+  imageProcessingJobKind,
+  type ImageProcessingJobKind,
+} from "@cubby/schemas/image-processing";
 import {
   imageProcessingSettings,
   imageProcessingMaintenanceCounts,
@@ -20,6 +23,8 @@ import {
   findImageProcessingDispatchRepairs,
   retryFailedImageProcessingJobs,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } from "./image-processing";
 
@@ -29,10 +34,12 @@ const DEFAULTS = { enabled: false, paused: true };
 
 const ALL_IMAGE_PROCESSING_KINDS: readonly ImageProcessingJobKind[] = [
   "describe_image",
+  "identify_image",
   "subject_lift",
 ];
 const REVISION_BY_KIND = {
   describe_image: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  identify_image: IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   subject_lift: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } satisfies Record<ImageProcessingJobKind, number>;
 
@@ -161,6 +168,11 @@ export async function backfillImageProcessing(
     ) => sql`NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id
           AND j.kind = ${kind} AND j."sourceContentHash" = i.sha256 AND j."processorRevision" = ${REVISION_BY_KIND[kind]})`,
   );
+  if (kinds.includes("describe_image"))
+    missing.push(sql`NOT EXISTS (
+    SELECT 1 FROM "ImageProcessingJob" j WHERE j."imageId" = i.id
+      AND j.kind = ${imageProcessingJobKind.enum.describe_image} AND j."sourceContentHash" = i.sha256
+      AND j."processorRevision" = ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION})`);
   const result = await getDb(db).execute(sql`
     SELECT i.shortcode FROM "Image" i
     WHERE i."deletedAt" IS NULL AND i.status = 'UPLOADED'

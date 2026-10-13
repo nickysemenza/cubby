@@ -423,8 +423,19 @@ async function assertNativePhotoImport(
           `Native uploaded photo bytes are unavailable for ${runID}`,
         );
     }
-    const jobs = await checkPool.query<{ imageId: string; kind: string }>(
-      `SELECT i.shortcode AS "imageId", j.kind
+    const processing = await import("~/server/repo/image-processing");
+    const expectedJobs = [
+      `describe_image:${processing.IMAGE_DESCRIPTION_PROCESSOR_REVISION}`,
+      `describe_image:${processing.IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}`,
+      `identify_image:${processing.IMAGE_IDENTIFICATION_PROCESSOR_REVISION}`,
+      `subject_lift:${processing.IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}`,
+    ].sort();
+    const jobs = await checkPool.query<{
+      imageId: string;
+      kind: string;
+      processorRevision: number;
+    }>(
+      `SELECT i.shortcode AS "imageId", j.kind, j."processorRevision"
        FROM "ImageProcessingJob" j
        JOIN "Image" i ON i.id = j."imageId"
        JOIN "PhotoRunImage" t ON t."imageId" = i.id
@@ -433,12 +444,14 @@ async function assertNativePhotoImport(
       [runID],
     );
     for (const row of result.rows) {
-      const kinds = jobs.rows
+      const scheduledJobs = jobs.rows
         .filter((job) => job.imageId === row.id)
-        .map((job) => job.kind)
+        .map((job) => `${job.kind}:${job.processorRevision}`)
         .sort();
-      if (kinds.join(",") !== "describe_image,subject_lift")
-        throw new Error(`Native photo ${row.id} scheduled ${kinds.join(",")}`);
+      if (scheduledJobs.join(",") !== expectedJobs.join(","))
+        throw new Error(
+          `Native photo ${row.id} scheduled ${scheduledJobs.join(",")}, expected ${expectedJobs.join(",")}`,
+        );
     }
     console.log(
       `[${lane}] ${expectedCount} native photo uploads and ${jobs.rows.length} processing jobs verified in ${simName}`,
@@ -467,8 +480,9 @@ async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
       `SELECT i.shortcode AS "imageId", j.id AS "jobId", j.kind
        FROM "ImageProcessingJob" j
        JOIN "Image" i ON i.id = j."imageId"
-       WHERE i.shortcode = ANY($1::text[])`,
-      [imageIDs],
+       WHERE i.shortcode = ANY($1::text[])
+         AND (j.kind <> 'describe_image' OR j."processorRevision" = $2)`,
+      [imageIDs, processing.IMAGE_DESCRIPTION_PROCESSOR_REVISION],
     );
     for (const [index, imageID] of imageIDs.entries()) {
       const job = result.rows.find(
@@ -537,8 +551,9 @@ async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
       `SELECT i.shortcode AS "imageId", j.kind, j.state
        FROM "ImageProcessingJob" j
        JOIN "Image" i ON i.id = j."imageId"
-       WHERE i.shortcode = ANY($1::text[])`,
-      [imageIDs],
+       WHERE i.shortcode = ANY($1::text[])
+         AND (j.kind <> 'describe_image' OR j."processorRevision" = $2)`,
+      [imageIDs, processing.IMAGE_DESCRIPTION_PROCESSOR_REVISION],
     );
     for (const [index, imageID] of imageIDs.entries()) {
       const state = (kind: string) =>

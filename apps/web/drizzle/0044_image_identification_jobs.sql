@@ -1,0 +1,2 @@
+ALTER TABLE "ImageProcessingJob" DROP CONSTRAINT "ImageProcessingJob_kind_check";--> statement-breakpoint
+ALTER TABLE "ImageProcessingJob" ADD CONSTRAINT "ImageProcessingJob_kind_check" CHECK ("ImageProcessingJob"."kind" IN ('subject_lift', 'describe_image', 'identify_image'));

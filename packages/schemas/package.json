@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./image-identification": "./src/image-identification.ts",
     "./email-accuracy": "./src/email-accuracy.ts",
     "./purchase-import-debug": "./src/purchase-import-debug.ts",
     "./mailbox-research": "./src/mailbox-research.ts",

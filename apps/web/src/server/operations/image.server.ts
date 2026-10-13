@@ -87,7 +87,7 @@ export async function markImageUploadedWorkflow(
   if (uploaded.contentType.startsWith("image/"))
     await scheduleImageProcessingJobs(db, {
       id: uploaded.id,
-      kinds: ["describe_image", "subject_lift"],
+      kinds: ["describe_image", "subject_lift", "identify_image"],
       automatic: true,
     });
   await publishImageMetadataExtraction(

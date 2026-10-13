@@ -59,6 +59,7 @@ import {
 import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   getImageProcessingReadProjection,
 } from "./image-processing";
@@ -116,8 +117,9 @@ function runProjection(memberIds?: SQL): SQL {
           WHERE a."jobId" = j.id AND a.executor IS NOT NULL
           UNION ALL
           SELECT ${cloudExecutor}
-          WHERE j.kind = 'describe_image'
-            AND j."processorRevision" = ${IMAGE_DESCRIPTION_PROCESSOR_REVISION}
+          WHERE (j.kind = 'describe_image'
+            AND j."processorRevision" = ${IMAGE_DESCRIPTION_PROCESSOR_REVISION})
+            OR (j.kind = 'identify_image' AND j."processorRevision" = ${IMAGE_IDENTIFICATION_PROCESSOR_REVISION})
         ) execution),
         '[]'::jsonb
       ) AS executors,
@@ -127,7 +129,7 @@ function runProjection(memberIds?: SQL): SQL {
           (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
             SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
           ))
-          OR (u."jobKind" = 'describe_image' AND u."jobId" = j.id::text)
+          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text)
         )
       ) THEN NULL ELSE (
         SELECT sum(u."estimatedCost") FROM "AiUsage" u
@@ -135,7 +137,7 @@ function runProjection(memberIds?: SQL): SQL {
           (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
             SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
           ))
-          OR (u."jobKind" = 'describe_image' AND u."jobId" = j.id::text)
+          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text)
         )
       ) END AS "estimatedCost",
       j."lastError" AS error,
@@ -144,7 +146,8 @@ function runProjection(memberIds?: SQL): SQL {
       coalesce(j.state = 'failed'
         AND i.sha256 = j."sourceContentHash"
         AND ((j.kind = 'describe_image' AND j."processorRevision" IN (${IMAGE_DESCRIPTION_PROCESSOR_REVISION}, ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}))
-          OR (j.kind = 'subject_lift' AND j."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION})), false) AS "canRetry"
+          OR (j.kind = 'subject_lift' AND j."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION})
+          OR (j.kind = 'identify_image' AND j."processorRevision" = ${IMAGE_IDENTIFICATION_PROCESSOR_REVISION})), false) AS "canRetry"
     FROM "ImageProcessingJob" j
     JOIN "Image" i ON i.id = j."imageId" AND i."deletedAt" IS NULL
     LEFT JOIN "Run" parent ON parent.id = j."runId" AND parent."deletedAt" IS NULL

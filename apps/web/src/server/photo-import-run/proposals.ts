@@ -76,7 +76,10 @@ import {
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
-import { loadImageRepresentations } from "~/server/repo/image-processing";
+import {
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  loadImageRepresentations,
+} from "~/server/repo/image-processing";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import { photoRunImageOrder } from "~/server/repo/photo-import";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
@@ -919,10 +922,13 @@ async function approveRow(
               roster.images.map((entry) => entry.imageId),
             ),
             eq(imageProcessingJob.kind, "describe_image"),
+            eq(
+              imageProcessingJob.processorRevision,
+              IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+            ),
             eq(imageProcessingJob.sourceContentHash, image.sha256),
           ),
-        )
-        .orderBy(desc(imageProcessingJob.processorRevision));
+        );
       const latestByImage = new Map<ImageId, string>();
       for (const job of descriptionJobs) {
         const id = imageId.parse(job.imageId);
@@ -1158,6 +1164,7 @@ export async function listPhotoRunImages(
         id: imageProcessingJob.id,
         imageId: imageProcessingJob.imageId,
         kind: imageProcessingJob.kind,
+        processorRevision: imageProcessingJob.processorRevision,
         state: imageProcessingJob.state,
         lastError: imageProcessingJob.lastError,
         dispatchedAt: imageProcessingJob.dispatchedAt,
@@ -1188,7 +1195,11 @@ export async function listPhotoRunImages(
       ),
   ]);
   const descriptionJobIds = jobs
-    .filter((job) => job.kind === "describe_image")
+    .filter(
+      (job) =>
+        job.kind === "describe_image" &&
+        job.processorRevision === IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+    )
     .map((job) => job.id);
   const descriptionAttempts = descriptionJobIds.length
     ? await getDb(db)
@@ -1202,11 +1213,16 @@ export async function listPhotoRunImages(
     : [];
   const locallyAnalyzed = new Set(localAnalyses.map((entry) => entry.imageId));
   const hashById = new Map(rows.map((row) => [row.imageId, row.sha256]));
-  // Newest processor revision first: the first current-source job per
-  // (image, kind) is the one that decides what the reviewer sees.
+  // Cloud descriptions own the review gate and timing; Apple descriptions
+  // remain independent evidence, regardless of their revision hash order.
   const jobByKey = new Map<string, (typeof jobs)[number]>();
   for (const job of jobs) {
     if (job.sourceContentHash !== hashById.get(job.imageId)) continue;
+    if (
+      job.kind === "describe_image" &&
+      job.processorRevision !== IMAGE_DESCRIPTION_PROCESSOR_REVISION
+    )
+      continue;
     const key = `${job.imageId}:${job.kind}`;
     if (!jobByKey.has(key)) jobByKey.set(key, job);
   }

@@ -172,7 +172,7 @@ test.describe("Recipe Flow", () => {
       actions.getByRole("button", { name: "copy parse", exact: true }),
     ).toBeVisible();
     await expect(
-      actions.getByRole("button", { name: /Add to meal/i }),
+      actions.getByRole("button", { name: "Add to meal", exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Flow view", exact: true }).click();
