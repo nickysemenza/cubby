@@ -7,7 +7,7 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
-  gotoAuthenticatedPage,
+  gotoDetailActions,
   selectComboboxItem,
   uniqueName,
 } from "./e2e-helpers";
@@ -82,11 +82,7 @@ test("receiving after a photo import writes nothing until additional units are c
     name: "Receive into inventory...",
   });
   const dialog = page.getByRole("dialog", { name: "Receive into Inventory" });
-  await gotoAuthenticatedPage(
-    page,
-    `/expenses/${line.shortcode}`,
-    receiveButton,
-  );
+  await gotoDetailActions(page, `/expenses/${line.shortcode}`, receiveButton);
   await receiveButton.click();
 
   // The photo-counted match comes first, with a link to the directed review.
@@ -134,7 +130,7 @@ test("receiving after a photo import writes nothing until additional units are c
 
   // The Purchase offers the same dialog per Product line, and the units just
   // received now count as existing stock: the default is again "nothing new".
-  await gotoAuthenticatedPage(
+  await gotoDetailActions(
     page,
     `/purchases/${purchase.shortcode}`,
     page.getByRole("button", { name: "Receive into inventory..." }),

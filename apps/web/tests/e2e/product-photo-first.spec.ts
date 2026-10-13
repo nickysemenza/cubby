@@ -63,11 +63,8 @@ test("a member creates a Product from own item and label photos without an impor
   ).toBeVisible();
   await page.setViewportSize({ width: 402, height: 874 });
   const photo = page
-    .getByRole("button", {
-      name: "View synthetic-wardrobe-shirt.png",
-      exact: true,
-    })
-    .first();
+    .getByTestId("detail-spec-plate")
+    .getByRole("img", { name: "synthetic-wardrobe-shirt.png" });
   await expect(photo).toBeVisible();
   const bounds = await photo.boundingBox();
   const titleBounds = await page
@@ -75,14 +72,20 @@ test("a member creates a Product from own item and label photos without an impor
     .boundingBox();
   expect(bounds).not.toBeNull();
   expect(titleBounds).not.toBeNull();
-  expect(bounds!.width).toBeLessThanOrEqual(320);
-  expect(bounds!.height).toBeLessThanOrEqual(176);
-  expect(bounds!.y + bounds!.height).toBeLessThan(titleBounds!.y);
+  expect(bounds!.width).toBe(48);
+  expect(bounds!.height).toBe(48);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(titleBounds!.x);
   await expectViewportBounded(page);
   await page.screenshot({
     path: testInfo.outputPath("phone-photo-dossier.png"),
   });
-  await photo.click();
+  await page
+    .locator("#images")
+    .getByRole("button", {
+      name: "View synthetic-wardrobe-shirt.png",
+      exact: true,
+    })
+    .click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();

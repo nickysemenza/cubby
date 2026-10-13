@@ -2,7 +2,11 @@ import {
   seedCookbookSourcePrerequisite,
   seedStaplePlanningPrerequisite,
 } from "./fixtures-recipes";
-import { gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
+import {
+  openDetailActions,
+  gotoAuthenticatedPage,
+  uniqueName,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("a cookbook is retitled from its page and a recipe is re-pointed to it from the recipe editor", async ({
@@ -16,6 +20,7 @@ test("a cookbook is retitled from its page and a recipe is re-pointed to it from
   // Retitle: the detail heading follows the saved title.
   const retitled = `${name} retitled`;
   await gotoAuthenticatedPage(page, `/cookbooks/${book.id}`);
+  await openDetailActions(page);
   const actions = page.getByRole("group", {
     name: "Entity actions",
     exact: true,
@@ -23,15 +28,7 @@ test("a cookbook is retitled from its page and a recipe is re-pointed to it from
   await expect(
     actions.getByRole("button", { name: "Reprocess", exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("heading", { level: 2, name: "Relations", exact: true })
-    .scrollIntoViewIfNeeded();
-  await expect(
-    actions.getByRole("button", { name: "Reprocess", exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("heading", { level: 2, name: "Overview", exact: true })
-    .scrollIntoViewIfNeeded();
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Edit Cookbook" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit cookbook" });
   await dialog.getByLabel("Title").fill(retitled);

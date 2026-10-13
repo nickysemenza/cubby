@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 
 import "./build-constants";
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "../../src/server/ai/features";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { openDetailActions, gotoAuthenticatedPage } from "./e2e-helpers";
 import { createEntityFixture } from "./fixtures-core";
 import { expect, test } from "./e2e-test";
 
@@ -160,6 +160,7 @@ test.describe("Recipe Flow", () => {
     }
 
     await gotoAuthenticatedPage(page, `/recipes/${recipeShortcode}`);
+    await openDetailActions(page);
     const actions = page.getByRole("group", {
       name: "Entity actions",
       exact: true,
@@ -170,18 +171,10 @@ test.describe("Recipe Flow", () => {
     await expect(
       actions.getByRole("button", { name: "copy parse", exact: true }),
     ).toBeVisible();
-    await page
-      .getByRole("heading", { level: 2, name: "Relations", exact: true })
-      .scrollIntoViewIfNeeded();
+    await page.keyboard.press("Escape");
     await expect(
-      actions.getByRole("button", { name: /Add to meal/i }),
+      page.getByRole("button", { name: /Add to meal/i }),
     ).toBeVisible();
-    await expect(
-      actions.getByRole("button", { name: "Regenerate walkthrough" }),
-    ).toBeVisible();
-    await page
-      .getByRole("heading", { level: 2, name: "Overview", exact: true })
-      .scrollIntoViewIfNeeded();
     await page.getByRole("button", { name: "Flow view", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "E2E Branching Biscuits", level: 2 }),

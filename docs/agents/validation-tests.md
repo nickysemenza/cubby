@@ -48,6 +48,8 @@ Before a focused browser replay, run `pnpm --filter @cubby/web run build:cf
 gate can reject a run after workflow or documentation edits too; a
 `source-changed` startup failure executed no scenarios and is not a test result.
 
+Secondary record actions live in the contextual header overflow. Use `openDetailActions` after navigation, or `gotoDetailActions` when that panel is the next interaction; never use a hidden secondary action as the page hydration marker. Closed overflow owners stay mounted, so explanation checks select the visible popover rather than every popup node.
+
 Target a browser spec as `pnpm test:e2e <spec>` without an extra `--`. E2E
 serves `dist/`, so build it before a standalone run; `verify:local` does. The
 coupled Workers harness rebuilds a stale web Worker itself. A

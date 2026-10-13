@@ -150,6 +150,32 @@ export async function waitForAppHydration(page: Page) {
   }
 }
 
+/** Explicitly enter the contextual record overflow before using a secondary action. */
+export async function openDetailActions(page: Page) {
+  const panel = page.getByRole("dialog", { name: "More actions", exact: true });
+  if (!(await panel.isVisible())) {
+    await page
+      .getByRole("button", { name: "More actions", exact: true })
+      .click();
+  }
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+export async function gotoDetailActions(
+  page: Page,
+  path: string,
+  ready?: Locator,
+) {
+  await gotoAuthenticatedPage(
+    page,
+    path,
+    page.getByRole("button", { name: "More actions", exact: true }),
+  );
+  await openDetailActions(page);
+  if (ready) await expect(ready).toBeVisible();
+}
+
 export async function gotoAuthenticatedPage(
   page: Page,
   path: string,

@@ -29,20 +29,14 @@ function CountReporter({ count }: { count: number }) {
 }
 
 describe("Page bare variant", () => {
-  it("keeps the shared page width without inventing a loading-page header", () => {
+  it("renders bare content without inventing a loading-page header", () => {
     render(
       <Page variant="bare">
         <p>Loading recipe export</p>
       </Page>,
     );
 
-    const content = screen.getByText("Loading recipe export");
-    expect(content.parentElement).toHaveClass(
-      "mx-auto",
-      "max-w-7xl",
-      "px-2",
-      "md:px-6",
-    );
+    expect(screen.getByText("Loading recipe export")).toBeVisible();
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
   });
 

@@ -74,7 +74,7 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   await row
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
-  const popover = page.locator('[data-slot="popover-content"]');
+  const popover = page.locator('[data-slot="popover-content"]:visible');
   await expect(
     popover.getByRole("heading", { name: "Score calculation" }),
   ).toBeVisible();
@@ -372,9 +372,9 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
   await row
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
-  await expect(page.locator('[data-slot="popover-content"]')).toContainText(
-    "Paperwork mismatch",
-  );
+  await expect(
+    page.locator('[data-slot="popover-content"]:visible'),
+  ).toContainText("Paperwork mismatch");
 });
 
 test("a person accepts a data gap as an exception from the explanation and clears it", async ({
@@ -402,7 +402,7 @@ test("a person accepts a data gap as an exception from the explanation and clear
   const trigger = row.getByRole("button", {
     name: /How (data )?quality is determined/,
   });
-  const popover = page.locator('[data-slot="popover-content"]');
+  const popover = page.locator('[data-slot="popover-content"]:visible');
   const check = popover.locator('[data-quality-check="product_manufacturer"]');
   await expect(async () => {
     if (!(await popover.isVisible())) await trigger.click();
@@ -481,7 +481,7 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
     });
   });
   await trigger.click();
-  const popover = page.locator('[data-slot="popover-content"]');
+  const popover = page.locator('[data-slot="popover-content"]:visible');
   await expect(popover).toContainText("Loading…");
   release();
   await expect(
@@ -595,7 +595,7 @@ test("specialist board and gallery cards retain the shared quality explanation",
   await card
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
-  const popover = page.locator('[data-slot="popover-content"]');
+  const popover = page.locator('[data-slot="popover-content"]:visible');
   await expect(popover).toContainText("task.data-quality");
   await page.keyboard.press("Escape");
   const location = await seedLocationPrerequisite(page, `${name} shelf`);
@@ -673,7 +673,7 @@ test("explanation evidence formats links and dates without exposing internal ent
     .locator('[data-cell-col="primaryGtin"]')
     .getByRole("button", { name: /How primary gtin is determined/ })
     .click();
-  const popover = page.locator('[data-slot="popover-content"]');
+  const popover = page.locator('[data-slot="popover-content"]:visible');
   await expect(
     popover.getByRole("link", { name: `${host}/catalog/` }),
   ).toHaveAttribute("href", url);
