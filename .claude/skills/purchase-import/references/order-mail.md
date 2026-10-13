@@ -65,8 +65,10 @@ Unknown historical observations remain unknown. Do not bypass a genuine
 source-ownership refusal with generic Product creation. Financial corrections
 that change spend or allocations retain their existing reviewed-preview checks.
 
-Unchanged replay validates the current Expense title, quantity, role, basis and
-claims before returning `alreadyApplied`; duplicate source-line or Expense
+Every accepted binding validates the current Expense title, quantity, role,
+basis and claims across the complete source-line roster before either replay
+or a fresh write. This includes lines omitted from a partial choice; invalid
+replay cannot fall through as a fresh binding. Duplicate source-line or Expense
 choices refuse on both the first call and replay. Competing Product bindings
 include the sibling's current accepted observation as well as its historical
 bindings. A stated zero price is real money evidence, never an unknown marker.

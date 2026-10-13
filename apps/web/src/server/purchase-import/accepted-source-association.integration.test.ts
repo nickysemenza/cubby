@@ -209,6 +209,59 @@ describe("reviewed accepted source Product association", () => {
   }
 
   type World = Awaited<ReturnType<typeof world>>;
+  const refusalSnapshot = async (w: World) => ({
+    ledger: await w.snapshot(),
+    products: await w.db.select().from(product),
+    orders: await w.db.select().from(importSourceOrder),
+    claims: await w.db.select().from(importSourceClaim),
+    ledgerClaims: await w.db.select().from(ledgerSourceClaim),
+    bindings: await w.db.select().from(importSourceProduct),
+    audits: await w.db.select().from(auditLog),
+  });
+  const driftAcceptedExpense = async (
+    w: World,
+    item: World["item"],
+    change: "title" | "role" | "basis" | "ledger claim",
+  ) => {
+    if (change === "ledger claim") {
+      await updateExpense(
+        ctx.db,
+        parseShortcodeFor("expense", item.shortcode),
+        {
+          sourceClaims: [
+            ledgerSourceClaimInput.parse({
+              source: "synthetic-provider",
+              providerId: "synthetic-drifted-accepted-line",
+              normalizedEvidence: {
+                amount: item.cost,
+                occurredOn: "2026-09-01",
+                description: "Synthetic accepted line claim",
+                context: null,
+                disambiguator: null,
+              },
+              reconciliation: { decision: "amounts_match" },
+            }),
+          ],
+        },
+        ctx.actor,
+      );
+      return;
+    }
+    await w.db
+      .update(expense)
+      .set(
+        change === "title"
+          ? { name: "Synthetic different item" }
+          : change === "role"
+            ? { economicRole: "reimbursement" }
+            : {
+                lineBasis: "allocation",
+                productId: null,
+                productQuantity: null,
+              },
+      )
+      .where(eq(expense.id, item.id));
+  };
   /** Make the accepted source's claim a historical alias of a new canonical root. */
   const linkCanonicalRoot = async (
     w: World,
@@ -857,6 +910,140 @@ describe("reviewed accepted source Product association", () => {
   // A prior silent-success import has a known accepted original and immutable
   // prepared identities, but no Product binding. Repair creates only the
   // deliberately reviewed Product, preserving the original and all spend.
+  // Current item drift must be a refusal before both fresh review and replay;
+  // a failed replay match must never turn an invalid item into a fresh success.
+  it.each(
+    (["first binding", "replay"] as const).flatMap((phase) =>
+      (["title", "role", "basis", "ledger claim"] as const).map((change) => ({
+        phase,
+        change,
+      })),
+    ),
+  )(
+    "refuses existing Product $phase after current item $change changes without writes",
+    async ({ phase, change }) => {
+      const w = await world();
+      const setup =
+        phase === "replay" ? [await w.commit(), await w.commit()] : [];
+      expect(setup.map((result) => result.alreadyApplied)).toEqual(
+        phase === "replay" ? [false, true] : [],
+      );
+      await driftAcceptedExpense(w, w.item, change);
+      const before = await refusalSnapshot(w);
+      await expect(w.commit()).rejects.toThrow(/exact|preserve|claim/i);
+      await expect(w.prepare()).rejects.toThrow(/exact|preserve|claim/i);
+      expect(await refusalSnapshot(w)).toEqual(before);
+    },
+  );
+
+  // Omitted retained items and adjustments are still part of the accepted
+  // command's live roster, including lines that never carry a Product.
+  it.each(
+    (["existing", "new"] as const).flatMap((choice) =>
+      (
+        [
+          { lineKind: "principal", change: "role" },
+          { lineKind: "principal", change: "ledger claim" },
+          { lineKind: "tax", change: "basis" },
+          { lineKind: "tax", change: "ledger claim" },
+        ] as const
+      ).map((drift) => ({ choice, ...drift })),
+    ),
+  )(
+    "refuses partial $choice replay after omitted $lineKind $change drift without writes",
+    async ({ choice, lineKind, change }) => {
+      const w = await world(false, true);
+      const resolution =
+        choice === "new" ? w.newProductResolution : w.resolution;
+      const original = await w.snapshot();
+      expect((await w.commit(resolution)).alreadyApplied).toBe(false);
+      expect(
+        (await w.snapshot()).expenses.filter((row) => row.id !== w.item.id),
+      ).toEqual(original.expenses.filter((row) => row.id !== w.item.id));
+      expect((await w.commit(resolution)).alreadyApplied).toBe(true);
+      const omitted =
+        lineKind === "principal"
+          ? w.retainedItem
+          : original.expenses.find((row) => row.lineKind === "tax");
+      if (!omitted) throw new Error("Synthetic omitted line missing");
+      await driftAcceptedExpense(w, omitted, change);
+      const before = await refusalSnapshot(w);
+      await expect(w.commit(resolution)).rejects.toThrow(
+        /exact|preserve|claim/i,
+      );
+      expect(await refusalSnapshot(w)).toEqual(before);
+    },
+  );
+
+  it.each(["existing", "new"] as const)(
+    "preserves partial %s binding and replay with normalized titles and a catalog merge",
+    async (choice) => {
+      const w = await world(false, true);
+      if (!w.retainedItem) throw new Error("Synthetic retained item missing");
+      for (const item of [w.item, w.retainedItem])
+        await w.db
+          .update(expense)
+          .set({ name: `  ${item.name.replaceAll(" ", "  ")}  ` })
+          .where(eq(expense.id, item.id));
+      const resolution =
+        choice === "new" ? w.newProductResolution : w.resolution;
+      const before = await refusalSnapshot(w);
+      expect(
+        before.ledger.expenses.find((row) => row.id === w.item.id),
+      ).toMatchObject({ productId: null, productQuantity: null });
+      const review = await prepareSourceOrderReconciliation(
+        ctx.db,
+        { sourceOrderId: w.association.id, resolution },
+        ctx.actor,
+      );
+      expect(review.resolution.lines).toHaveLength(3);
+      expect(review.resolution.lines[0]).toMatchObject(resolution.lines[0]!);
+      expect(review.resolution.lines[2]?.productId).toBeNull();
+      expect(await refusalSnapshot(w)).toEqual(before);
+      expect((await w.commit(resolution)).alreadyApplied).toBe(false);
+      const bound = await w.db.query.expense.findFirst({
+        where: eq(expense.id, w.item.id),
+      });
+      const created = bound?.productId
+        ? await w.db.query.product.findFirst({
+            where: eq(product.id, bound.productId),
+          })
+        : null;
+      if (!created) throw new Error("Synthetic bound Product missing");
+      const keep = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic surviving catalog item" }),
+        ctx.actor,
+      );
+      await mergeProducts(
+        ctx.db,
+        {
+          keepId: keep.id,
+          mergeIds: [parseShortcodeFor("product", created.shortcode)],
+        },
+        ctx.actor,
+      );
+      const merged = await refusalSnapshot(w);
+      // Existing decisions name live catalog codes; a new decision's receipt
+      // retains the created identity and follows its durable merge redirect.
+      const replayResolution =
+        choice === "existing"
+          ? {
+              ...w.resolution,
+              lines: [{ ...w.resolution.lines[0]!, productId: keep.id }],
+            }
+          : resolution;
+      expect((await w.commit(replayResolution)).alreadyApplied).toBe(true);
+      expect(await refusalSnapshot(w)).toEqual(merged);
+      expect(
+        merged.ledger.expenses.filter((row) => row.id !== w.item.id),
+      ).toEqual(before.ledger.expenses.filter((row) => row.id !== w.item.id));
+      expect(merged.ledger.payments).toEqual(before.ledger.payments);
+      expect(merged.ledger.attributions).toEqual(before.ledger.attributions);
+      expect(merged.ledger.stock).toEqual(before.ledger.stock);
+    },
+  );
+
   it("creates a reviewed new Product from known accepted preparation and replays with conserved ledger evidence", async () => {
     const w = await world(false, true);
     await w.db.insert(expenseAttribution).values([
@@ -1356,7 +1543,10 @@ describe("reviewed accepted source Product association", () => {
   // corroborating lifecycle mail; only an actual competing binding or a
   // contradicting known extraction blocks, and each names its cause.
   it.each([
-    { cause: "item mismatch", refusal: /exact matching item Expenses: 0/i },
+    {
+      cause: "item mismatch",
+      refusal: /exact current item Expense.*title matches: false/i,
+    },
     {
       cause: "competing Product binding",
       refusal: /competing accepted source bindings: 1/i,

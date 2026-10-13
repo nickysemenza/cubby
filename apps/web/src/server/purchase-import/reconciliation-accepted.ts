@@ -159,7 +159,7 @@ async function completeAcceptedAttachmentResolution(
       (row) =>
         row.purchaseId === state.target.id &&
         !used.has(parseShortcodeFor("expense", row.shortcode)) &&
-        row.name === sourceLine.title &&
+        sameLineTitle(row.name, sourceLine.title) &&
         row.cost !== null &&
         cents(row.cost) === cents(sourceLine.amount) &&
         row.lineKind === sourceLine.lineKind &&
@@ -210,6 +210,42 @@ async function completeAcceptedAttachmentResolution(
   };
 }
 
+/** Current item drift is a refusal for both fresh bindings and replays. */
+function validateAcceptedAttachmentExpenses(
+  state: ReconciliationState,
+  resolution: AcceptedResolution,
+) {
+  const candidate = state.observation.extraction.candidate;
+  for (const binding of resolution.lines) {
+    const line = candidate?.lines[binding.lineIndex];
+    const selected = state.expenses.find(
+      (row) => row.shortcode === binding.expenseId,
+    );
+    const titleMatches =
+      !!line && !!selected && sameLineTitle(selected.name, line.title);
+    const ledgerClaimCount = state.ledgerClaims.filter(
+      (claim) => claim.expenseId === selected?.id,
+    ).length;
+    if (
+      !line ||
+      !selected ||
+      selected.purchaseId !== state.target.id ||
+      selected.economicRole !== "vendor" ||
+      selected.lineBasis !== "item_line" ||
+      !titleMatches ||
+      selected.cost === null ||
+      cents(selected.cost) !== cents(line.amount) ||
+      selected.lineKind !== line.lineKind ||
+      (selected.productQuantity !== null &&
+        selected.productQuantity !== (line.quantity ?? 1)) ||
+      ledgerClaimCount > 0
+    )
+      throw new Error(
+        `Accepted-source association must preserve an exact current item Expense without ledger source claims. Line ${binding.lineIndex}: economic role ${selected?.economicRole ?? "missing"}; line basis ${selected?.lineBasis ?? "missing"}; title matches: ${titleMatches}; amount ${selected?.cost ?? "missing"}; expected amount ${line?.amount ?? "missing"}; line kind ${selected?.lineKind ?? "missing"}; expected line kind ${line?.lineKind ?? "missing"}; quantity ${selected?.productQuantity ?? "unbound"}; expected quantity ${line?.quantity ?? 1}; ledger source claims: ${ledgerClaimCount}.`,
+      );
+  }
+}
+
 export async function prepareAcceptedSourceOrderReconciliation(
   db: Database,
   input: AcceptedInput,
@@ -233,6 +269,7 @@ export async function prepareAcceptedSourceOrderReconciliation(
       state,
       input.resolution,
     );
+    validateAcceptedAttachmentExpenses(state, resolution);
     const review = await reviewResolution(
       tx,
       state,
@@ -262,42 +299,25 @@ const appliedNewProduct = z.object({
 
 /**
  * An unchanged command is recognized from the current item binding, never a
- * caller token: each requested line's live Expense still matches its source
- * line, the accepted observation binds the same Product, and a new Product
- * decision has its receipt. Anything else is a fresh decision for review.
+ * caller token: every completed line's live Expense has been validated, the
+ * accepted observation binds the same Product, and an explicit new Product
+ * decision retains its receipt intent. Other bindings need fresh review.
  */
 async function appliedAcceptedBinding(
   tx: DrizzleTransaction,
   state: ReconciliationState,
   sourceOrderId: string,
-  resolution: CommitAcceptedSourceOrderReconciliationInput["resolution"],
+  resolution: AcceptedResolution,
 ) {
   if (!resolution.lines.some((row) => row.productId || row.newProduct))
     return false;
-  const candidate = state.observation.extraction.candidate;
   for (const binding of resolution.lines) {
-    const line = candidate?.lines[binding.lineIndex];
     const selected = state.expenses.find(
       (row) => row.shortcode === binding.expenseId,
-    );
+    )!;
     const accepted = state.observation.productBindings.find(
       (row) => row.lineIndex === binding.lineIndex,
     )?.productId;
-    if (
-      !line ||
-      !selected ||
-      selected.purchaseId !== state.target.id ||
-      selected.economicRole !== "vendor" ||
-      selected.lineBasis !== "item_line" ||
-      !sameLineTitle(selected.name, line.title) ||
-      selected.cost === null ||
-      cents(selected.cost) !== cents(line.amount) ||
-      selected.lineKind !== line.lineKind ||
-      (selected.productQuantity !== null &&
-        selected.productQuantity !== (line.quantity ?? 1)) ||
-      state.ledgerClaims.some((claim) => claim.expenseId === selected.id)
-    )
-      return false;
     if (!selected.productId) {
       if (binding.productId || binding.newProduct || accepted) return false;
       continue;
@@ -382,13 +402,9 @@ export async function commitAcceptedSourceOrderReconciliation(
       state,
       input.resolution,
     );
+    validateAcceptedAttachmentExpenses(state, resolution);
     if (
-      await appliedAcceptedBinding(
-        tx,
-        state,
-        input.sourceOrderId,
-        input.resolution,
-      )
+      await appliedAcceptedBinding(tx, state, input.sourceOrderId, resolution)
     )
       return commitAcceptedSourceOrderReconciliationOut.parse({
         purchaseId,
