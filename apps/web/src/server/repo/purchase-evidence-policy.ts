@@ -99,26 +99,39 @@ export const purchaseHasPrimaryDocumentSql = (
     )})
 )`;
 
+/** A Purchase is itemized when its live, incurred vendor lines are the order's
+ * own item lines: at least one principal `item_line`, no `allocation` slice of
+ * an un-itemized total, and every principal line whose Product is expected
+ * links one. A single productless goods line is a lump, not an itemization.
+ * Totals stay with `paperwork_mismatch` and `settlement_mismatch`; this axis
+ * is the line shape only. */
 export const purchaseHasItemizationSql = (alias: string): SQL => sql`(
-  ${column(alias, "itemizationEvidence")} = true
-  AND EXISTS (SELECT 1 FROM "Expense" ep_line
+  EXISTS (SELECT 1 FROM "Expense" ep_line
     WHERE ep_line."purchaseId" = ${column(alias, "id")} AND ep_line."deletedAt" IS NULL
-      AND ep_line."economicRole" = 'vendor' AND ep_line."lineBasis" = 'item_line')
+      AND ep_line.future = false AND ep_line."economicRole" = 'vendor'
+      AND ep_line."lineKind" = 'principal' AND ep_line."lineBasis" = 'item_line')
   AND NOT EXISTS (SELECT 1 FROM "Expense" ep_lump
     WHERE ep_lump."purchaseId" = ${column(alias, "id")} AND ep_lump."deletedAt" IS NULL
-      AND ep_lump."economicRole" = 'vendor' AND ep_lump."lineBasis" = 'allocation')
+      AND ep_lump.future = false AND ep_lump."economicRole" = 'vendor'
+      AND ep_lump."lineBasis" = 'allocation')
+  AND NOT EXISTS (SELECT 1 FROM "Expense" ep_unlinked
+    WHERE ep_unlinked."purchaseId" = ${column(alias, "id")} AND ep_unlinked."deletedAt" IS NULL
+      AND ep_unlinked.future = false AND ep_unlinked."productId" IS NULL
+      AND ${expenseProductExpectedSql("ep_unlinked")})
 )`;
 
 /** An accepted missing-evidence gap reopens when new documents or ledger lines
  * arrive, even when the new material still needs extraction or review. The
  * line hash is the whole Expense row, so a column added later (here
  * `productNotExpected`) is subtracted: otherwise its migration alone would
- * change every stored fingerprint and reopen every accepted gap. */
+ * change every stored fingerprint and reopen every accepted gap. For the same
+ * reason the retired `itemizationEvidence` flag keeps its key as the `false`
+ * every accepted itemization gap was recorded with. */
 export const purchaseEvidenceFingerprintSql = (
   alias: string,
 ): SQL => sql`jsonb_build_object(
   'expectation', ${purchaseEvidenceExpectationSql(alias)},
-  'itemizationEvidence', ${column(alias, "itemizationEvidence")},
+  'itemizationEvidence', false,
   'primaryDocument', ${purchaseHasPrimaryDocumentSql(alias)},
   'documents', (SELECT jsonb_agg(jsonb_build_array(ep_changed_document.id, ep_changed_document."imageId", ep_changed_document."documentKind") ORDER BY ep_changed_document.id)
     FROM "EntityAttachment" ep_changed_document
@@ -128,11 +141,14 @@ export const purchaseEvidenceFingerprintSql = (
       AND ep_changed_line."deletedAt" IS NULL AND ep_changed_line."economicRole" = 'vendor')
 )`;
 
+// Services are labor and carry no Product by design, whatever their category;
+// a service line that does link one (a software subscription) keeps it.
 const expenseProductExpectationSql = (alias: string): SQL => sql`(CASE
   WHEN ${column(alias, "economicRole")} <> 'vendor'
     OR ${column(alias, "lineKind")} <> 'principal'
     OR ${column(alias, "lineBasis")} <> 'item_line' THEN 'not_expected'
   WHEN ${column(alias, "productId")} IS NOT NULL THEN 'required'
+  WHEN ${column(alias, "costType")} = 'services' THEN 'not_expected'
   ELSE COALESCE(${categoryPolicy(effectiveExpenseSpendingCategorySql(alias), "productExpectation")}, 'unknown') END)`;
 
 export const expenseProductExpectedSql = (alias: string): SQL =>
@@ -145,6 +161,20 @@ const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
   FROM "Expense" ep_book WHERE ep_book."purchaseId" = ${column(alias, "id")}
     AND ep_book."deletedAt" IS NULL AND ep_book.future = false
 )`;
+
+/** No policy requires a document: an attached receipt or invoice is useful
+ * evidence when present and never a gap when absent. */
+const documentPresence = (present: SQL): SQL =>
+  sql`(CASE WHEN ${present} THEN 'present' ELSE 'not_expected' END)`;
+
+/** A retained receipt or invoice is itemizable whatever the policy says: a
+ * member's receipt photo enters the Research queue this way. Every itemization
+ * surface (Purchase gap, coverage, transaction axis) reads this one value. */
+export const purchaseItemizationExpectationSql = (
+  alias: string,
+  transactionOverride?: SQL,
+): SQL => sql`(CASE WHEN ${purchaseHasPrimaryDocumentSql(alias)} THEN 'required'
+  ELSE ${purchaseEvidenceExpectationSql(alias, transactionOverride)} END)`;
 
 const evidencePresence = (present: SQL, expectation: SQL): SQL => sql`(CASE
   WHEN ${present} THEN 'present'
@@ -180,8 +210,8 @@ export const purchaseCoverageSql = (
   return sql<PurchaseEvidenceCoverage>`jsonb_build_object(
     'expectation', ${expectation},
     'booking', ${purchaseBookingSql(alias)},
-    'document', ${evidencePresence(purchaseHasPrimaryDocumentSql(alias), expectation)},
-    'itemization', ${evidencePresence(purchaseHasItemizationSql(alias), expectation)},
+    'document', ${documentPresence(purchaseHasPrimaryDocumentSql(alias))},
+    'itemization', ${evidencePresence(purchaseHasItemizationSql(alias), purchaseItemizationExpectationSql(alias, transactionOverride))},
     'products', ${purchaseProductsSql(alias)}
   )`;
 };
@@ -286,31 +316,30 @@ export const financialTransactionBookingSql = (alias: string): SQL => sql`(CASE
     WHERE ep_alloc."transactionId" = ${column(alias, "id")} AND ep_alloc."deletedAt" IS NULL)
   END)`;
 
-/** Each allocated Purchase keeps its own policy; a present optional receipt
- * cannot satisfy a different Purchase's required receipt. */
+/** Each allocated Purchase keeps its own policy; one itemized Purchase cannot
+ * satisfy a different Purchase's expected itemization. */
 export const financialTransactionCoverageAxisSql = (
   alias: string,
   axis: "document" | "itemization" | "products",
 ): SQL => {
-  const expectation = purchaseEvidenceExpectationSql(
-    "ep_axis_purchase",
-    column(alias, "evidenceExpectation"),
-  );
   const purchaseAxis =
     axis === "products"
       ? purchaseProductsSql("ep_axis_purchase")
-      : evidencePresence(
-          axis === "document"
-            ? purchaseHasPrimaryDocumentSql("ep_axis_purchase")
-            : purchaseHasItemizationSql("ep_axis_purchase"),
-          expectation,
-        );
+      : axis === "document"
+        ? documentPresence(purchaseHasPrimaryDocumentSql("ep_axis_purchase"))
+        : evidencePresence(
+            purchaseHasItemizationSql("ep_axis_purchase"),
+            purchaseItemizationExpectationSql(
+              "ep_axis_purchase",
+              column(alias, "evidenceExpectation"),
+            ),
+          );
   const unallocated =
-    axis === "products"
-      ? sql`'not_expected'`
-      : sql`CASE WHEN ${financialTransactionRequiresBookingSql(alias)}
+    axis === "itemization"
+      ? sql`CASE WHEN ${financialTransactionRequiresBookingSql(alias)}
         THEN ${evidencePresence(sql`false`, financialTransactionEvidenceExpectationSql(alias))}
-        ELSE 'not_expected' END`;
+        ELSE 'not_expected' END`
+      : sql`'not_expected'`;
   return sql`(
   SELECT CASE
     WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'

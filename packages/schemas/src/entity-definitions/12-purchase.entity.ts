@@ -54,7 +54,6 @@ export default defineEntity({
             "defaultTrade",
             "spendingCategoryId",
             "evidenceExpectation",
-            "itemizationEvidence",
           ],
         },
       ],
@@ -129,12 +128,12 @@ export default defineEntity({
           label: "Research queue",
           description:
             "Purchases whose lines or paperwork research could complete, weakest first",
-          // A receipt photo or order Email that still needs itemizing, and
-          // orders missing their paperwork (terminology "Research queue").
+          // An order or receipt photo that still needs its item lines, and
+          // orders missing their order id (terminology "Research queue").
           filters: [
             {
               id: "dataGaps",
-              value: ["purchase_itemization", "primary_document", "order_id"],
+              value: ["purchase_itemization", "order_id"],
             },
           ],
           sort: [{ id: "dataQuality", desc: false }],
@@ -498,17 +497,6 @@ export default defineEntity({
             .enum(["unknown", "required", "not_expected"])
             .nullable()
             .optional(),
-        },
-      },
-      {
-        key: "itemizationEvidence",
-        kind: "boolean",
-        control: { kind: "checkbox" },
-        display: { detail: true },
-        validation: {
-          read: z.boolean().default(false),
-          create: z.boolean().default(false),
-          update: z.boolean().optional(),
         },
       },
       {
@@ -1069,7 +1057,6 @@ export default defineEntity({
         defaultValue: "legacy",
       },
       { key: "evidenceExpectation", specialized: "enum:evidenceExpectation" },
-      { key: "itemizationEvidence", defaultValue: false },
       {
         key: "id",
         specialized: "primary-key:PurchaseId",
@@ -1091,7 +1078,6 @@ export default defineEntity({
     create: [
       "spendingCategoryId",
       "evidenceExpectation",
-      "itemizationEvidence",
       "vendorId",
       "vendorAccountId",
       "defaultProjectId",
@@ -1106,7 +1092,6 @@ export default defineEntity({
     update: [
       "spendingCategoryId",
       "evidenceExpectation",
-      "itemizationEvidence",
       "vendorId",
       "vendorAccountId",
       "defaultProjectId",
@@ -1124,7 +1109,6 @@ export default defineEntity({
     audit: [
       "spendingCategoryId",
       "evidenceExpectation",
-      "itemizationEvidence",
       "vendorId",
       "vendorAccountId",
       "defaultProjectId",
@@ -1168,7 +1152,6 @@ export default defineEntity({
         full: [
           "spendingCategoryId",
           "evidenceExpectation",
-          "itemizationEvidence",
           "vendorId",
           "vendorAccountId",
           "defaultProjectId",
@@ -1197,7 +1180,6 @@ export default defineEntity({
       "spendingCategoryName",
       "spendingCategoryOrigin",
       "evidenceExpectation",
-      "itemizationEvidence",
       "id",
       "vendorId",
       "vendorAccountId",
@@ -1775,16 +1757,6 @@ export default defineEntity({
           message: "Literal vendor-stated total is not recorded.",
         },
         {
-          id: "primary_document",
-          satisfiedLabel: "Primary document attached",
-          placement: { section: "documents" },
-          facet: "paperwork",
-          weight: 2,
-          label: "No primary document",
-          message:
-            "No primary order confirmation, sales order, invoice, or receipt is attached.",
-        },
-        {
           id: "empty_expenses",
           satisfiedLabel: "Expenses recorded",
           placement: { section: "expenses" },
@@ -1815,12 +1787,13 @@ export default defineEntity({
         },
         {
           id: "purchase_itemization",
-          satisfiedLabel: "Itemization reviewed",
-          placement: { field: "itemizationEvidence" },
+          satisfiedLabel: "Itemized",
+          placement: { section: "expenses" },
           facet: "ledger",
           weight: 2,
-          label: "Receipt itemization",
-          message: "Expected receipt line itemization has not been reviewed.",
+          label: "Itemization",
+          message:
+            "The order is not yet broken into item lines with their Products.",
         },
         {
           id: "unpriced_expense",

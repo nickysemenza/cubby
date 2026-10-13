@@ -205,9 +205,6 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     .parse(await netResponse.json());
   expect(netPurchase).toMatchObject({ expenseTotal: 85, statedTotal: null });
   expect(netPurchase.dataQuality.gaps.map((gap) => gap.check)).not.toContain(
-    "primary_document",
-  );
-  expect(netPurchase.dataQuality.gaps.map((gap) => gap.check)).not.toContain(
     "order_id",
   );
   const reviewed = await page.request.get(

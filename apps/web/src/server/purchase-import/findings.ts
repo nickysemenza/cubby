@@ -463,19 +463,8 @@ async function applyAggregateReplacement(
   await logAuditEntries(tx, actor, audit);
   await tx
     .update(purchase)
-    .set({
-      displayLabel: targetPurchase.displayLabel ?? aggregate.name,
-      itemizationEvidence: true,
-    })
+    .set({ displayLabel: targetPurchase.displayLabel ?? aggregate.name })
     .where(and(eq(purchase.id, purchaseId), isNull(purchase.deletedAt)));
-  await logAuditEntries(tx, actor, [
-    {
-      entityKind: "purchase",
-      entityId: purchaseId,
-      action: "update",
-      changes: { itemizationEvidence: { from: false, to: true } },
-    },
-  ]);
 }
 
 /** Owner eligibility stays stable without blocking another Product writer's Finding FK. */

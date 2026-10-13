@@ -3,7 +3,6 @@ import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
@@ -49,7 +48,6 @@ import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
 import { buildFinancialTransactionWhere } from "~/server/repo/financial-transaction";
 import { buildProductWhere } from "~/server/repo/product/crud";
 import { buildPurchaseWhereClause } from "~/server/repo/purchase";
-import { purchaseEvidenceFieldResolutionsSql } from "~/server/repo/purchase-evidence-policy";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { reviewableSuggestionSql } from "~/server/repo/suggestion-review";
 import { additionalWorkProblemSelections } from "~/server/repo/work-queue-problems";
@@ -331,7 +329,7 @@ const fieldLabel = (entity: Entity, field: string) => {
 };
 
 /** Each row states its own gaps (an Email's missing original, a Purchase's
- * required receipt and the policy that requires it), not a generic reason. */
+ * missing item lines), not a generic reason. */
 async function stateRowGaps(db: Database, items: WorkQueueRow[]) {
   for (const { entity, source, view } of GAP_ROWS) {
     const rows = items.filter(
@@ -345,66 +343,16 @@ async function stateRowGaps(db: Database, items: WorkQueueRow[]) {
     );
     const qualities = await loadDataQualities(db, entity, [...ids.values()]);
     const relevantChecks = new Set([viewFilters(entity, view).dataGap].flat());
-    const policies =
-      entity === "purchase"
-        ? await purchaseEvidencePolicies(db, [...ids.values()])
-        : new Map<string, string>();
     for (const item of rows) {
       const id = item.id ? ids.get(item.id) : undefined;
       const quality = id ? qualities.get(id) : undefined;
       if (!id || !quality) continue;
       const messages = [...quality.gaps, ...quality.relatedGaps]
         .filter((gap) => relevantChecks.has(gap.check))
-        .map((gap) =>
-          gap.check === "primary_document"
-            ? (policies.get(id) ?? gap.message)
-            : gap.message,
-        );
+        .map((gap) => gap.message);
       if (messages.length) item.reason = [...new Set(messages)].join("; ");
     }
   }
-}
-
-const POLICY_SOURCE_TEXT = {
-  "purchase override": "set on this purchase",
-  "vendor policy": "inherited from Vendor",
-  "spending category policy": "inherited from Spending category",
-  "unclassified policy": "no policy source",
-} as const;
-
-/** "Receipt required — inherited from Spending category Hardware": only a
- * `required` expectation raises `primary_document`, so the row names where
- * that expectation came from. */
-async function purchaseEvidencePolicies(db: Database, ids: string[]) {
-  if (ids.length === 0) return new Map<string, string>();
-  const result = await getDb(db).execute(sql`
-    SELECT "Purchase".id::text AS id, ${purchaseEvidenceFieldResolutionsSql("Purchase")} AS resolutions
-    FROM "Purchase" WHERE "Purchase".id IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )})`);
-  const rows = z
-    .array(z.object({ id: z.string(), resolutions: fieldResolutionsSchema }))
-    .parse(result.rows);
-  return new Map(
-    rows.flatMap(({ id, resolutions }) => {
-      const policy = resolutions.evidenceExpectation;
-      if (!policy || policy.value !== "required") return [];
-      const origin =
-        new Map<string, string>(Object.entries(POLICY_SOURCE_TEXT)).get(
-          policy.source,
-        ) ?? policy.source;
-      // An override's sourceEntity is the fallback it overrides, not its origin.
-      const name =
-        policy.mode === "explicit" ? null : policy.sourceEntity?.name;
-      return [
-        [
-          id,
-          `Receipt required — ${origin}${name ? ` ${name}` : ""}; none is attached.`,
-        ],
-      ];
-    }),
-  );
 }
 
 async function attachDisplayImages(db: Database, items: WorkQueueRow[]) {

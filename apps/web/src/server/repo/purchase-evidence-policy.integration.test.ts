@@ -3,6 +3,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { expense } from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -16,8 +17,8 @@ import {
 } from "./purchase-evidence-policy";
 import { createImageFixture, insertEntityAttachments } from "./repo.fixtures";
 
-// SQL regressions: policy precedence must survive correlated aliases; missing
-// catalog identity must not erase line itemization; optional documents and
+// SQL regressions: policy precedence must survive correlated aliases;
+// itemization is the line shape, not a stored flag; optional documents and
 // orderless bookings must not lower the quality denominator. PostgreSQL runs
 // the same expressions used by hydration, list filtering, and score sorting.
 describe("purchase evidence policy", () => {
@@ -77,40 +78,71 @@ describe("purchase evidence policy", () => {
     const quality = (
       await loadDataQualities(ctx.db, "purchase", [purchase.id])
     ).get(purchase.id);
-    for (const check of [
-      "order_id",
-      "stated_total",
-      "primary_document",
-      "purchase_itemization",
-    ])
+    for (const check of ["order_id", "stated_total", "purchase_itemization"])
       expect(quality?.gaps.map((gap) => gap.check)).not.toContain(check);
   });
 
-  it("keeps verified itemization present when the goods Product is unresolved", async () => {
+  // Regression: itemization was a stored review flag that only one import path
+  // set, so ~2,700 item-lined online orders read "not reviewed". It is now the
+  // line shape: every expected Product linked, services and adjustments exempt,
+  // no allocation slice, and no document required.
+  it("derives itemization from the order's lines", async () => {
     const { purchase } = await fixture();
-    await unwrapDb(ctx.db).execute(sql`
-      UPDATE "Purchase" SET "evidenceExpectation" = 'required', "itemizationEvidence" = true
-      WHERE id = ${purchase.id}
-    `);
-    await insertWithShortcode(ctx.db, "expense", {
-      name: "Unresolved fixture item",
-      purchaseId: purchase.id,
-      cost: 25,
-      date: "2026-09-01",
-      costType: "materials",
-      lineBasis: "item_line",
-      economicRole: "vendor",
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Purchase" SET "evidenceExpectation" = 'required' WHERE id = ${purchase.id}`,
+    );
+    const product = await insertWithShortcode(ctx.db, "product", {
+      name: "Fixture hardware cloth",
+      manufacturer: "Fixture maker",
     });
-    const result = await unwrapDb(ctx.db).execute(sql`
-      SELECT ${purchaseCoverageSql("p")} AS coverage
-      FROM "Purchase" p WHERE p.id = ${purchase.id}
-    `);
-    expect(result.rows[0]?.coverage).toMatchObject({
-      booking: "recorded",
-      itemization: "present",
-      products: "missing",
+    const line = (values: Partial<typeof expense.$inferInsert>) =>
+      insertWithShortcode(ctx.db, "expense", {
+        name: "Fixture line",
+        purchaseId: purchase.id,
+        cost: 10,
+        date: "2026-09-01",
+        costType: "materials",
+        lineKind: "principal",
+        lineBasis: "item_line",
+        economicRole: "vendor",
+        ...values,
+      });
+    const state = async () => {
+      const result = await unwrapDb(ctx.db).execute(sql`
+        SELECT ${purchaseCoverageSql("p")} AS coverage
+        FROM "Purchase" p WHERE p.id = ${purchase.id}
+      `);
+      const quality = (
+        await loadDataQualities(ctx.db, "purchase", [purchase.id])
+      ).get(purchase.id);
+      return {
+        coverage: result.rows[0]?.coverage,
+        gaps: quality?.gaps.map((gap) => gap.check) ?? [],
+      };
+    };
+
+    await line({ productId: product.id, productQuantity: 1 });
+    await line({ name: "Fixture tax", lineKind: "tax" });
+    await line({ name: "Fixture install labor", costType: "services" });
+    expect(await state()).toMatchObject({
+      coverage: { itemization: "present", document: "not_expected" },
+    });
+    expect((await state()).gaps).not.toContain("purchase_itemization");
+
+    const lump = await line({ name: "Fixture unitemized goods" });
+    expect(await state()).toMatchObject({
+      coverage: { itemization: "missing", products: "partial" },
+    });
+    expect((await state()).gaps).toContain("purchase_itemization");
+
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Expense" SET "lineBasis" = 'allocation' WHERE id = ${lump.id}`,
+    );
+    expect(await state()).toMatchObject({
+      coverage: { itemization: "missing" },
     });
   });
+
   it("carries receipt policy and refuses silently discarding conflicting Purchase policy", async () => {
     const { purchase: donor, vendor, category } = await fixture();
     await unwrapDb(ctx.db).execute(
@@ -170,7 +202,7 @@ describe("purchase evidence policy", () => {
     );
     expect(await read()).toMatchObject({
       booking: "missing",
-      document: "missing",
+      document: "not_expected",
       itemization: "missing",
     });
   });
@@ -212,7 +244,6 @@ describe("purchase evidence policy", () => {
     const required = await quality();
     expect(required?.gaps.map((gap) => gap.check)).toEqual(
       expect.arrayContaining([
-        "financial_transaction_document",
         "financial_transaction_itemization",
         "financial_transaction_products",
       ]),
@@ -306,7 +337,7 @@ describe("purchase evidence policy", () => {
           : {
               booking: "recorded",
               expectation: "required",
-              document: "missing",
+              document: "not_expected",
               itemization: "missing",
               products: "missing",
             },
@@ -326,7 +357,6 @@ describe("purchase evidence policy", () => {
           role === "reimbursement"
             ? []
             : [
-                "financial_transaction_document",
                 "financial_transaction_itemization",
                 "financial_transaction_products",
               ],

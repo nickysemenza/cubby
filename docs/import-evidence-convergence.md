@@ -6,10 +6,18 @@ links recorded Expenses or creates an aggregate allocation line. Purchases
 created from bank evidence have no invented order identifier or printed total.
 
 SpendingCategory is independent of ProductCategory. Purchase defaults flow to
-Expense lines unless a line has its own category. Receipt expectation resolves
-from transaction/Purchase overrides, Vendor, then spending category. A required
-receipt, reviewed itemization, Product resolution, and Expense booking have
-separate coverage. Optional paperwork contributes no missing-evidence penalty.
+Expense lines unless a line has its own category. Evidence expectation resolves
+from transaction/Purchase overrides, Vendor, then spending category, and decides
+whether a Purchase should be itemized; a primary document (receipt, invoice,
+order confirmation, sales order) makes itemization expected whatever the
+policy. No policy requires a document: attachments are optional evidence and
+never a gap. Itemization is derived from the lines, not recorded: at least one
+live, incurred principal `item_line`, no `allocation` line, and every principal
+line whose Product is expected links one (services, tax, shipping, fees and
+discounts never need one). A lone productless goods line is a lump. Totals stay
+with paperwork and settlement reconciliation. Itemization, Product resolution,
+and Expense booking have separate coverage; a charge is itemized only when
+every Purchase it settles is.
 Gift and previously-owned Product provenance needs no purchase proof.
 
 Category policies apply to the assigned category, without inheriting a parent

@@ -818,7 +818,6 @@ export async function commitSourceOrderReconciliation(
     await tx
       .update(purchase)
       .set({
-        itemizationEvidence: true,
         statedTotal: candidate.printedGrandTotal,
         updatedAt: new Date(),
       })

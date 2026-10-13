@@ -16,10 +16,8 @@ type FinancialTransaction = typeof financialTransaction;
 
 const requiresEvidence = (t: FinancialTransaction) =>
   sql`(${financialTransactionRequiresBookingSql(getTableName(t))} AND ${financialTransactionEvidenceExpectationSql(getTableName(t))} = 'required')`;
-const axis = (
-  t: FinancialTransaction,
-  name: "document" | "itemization" | "products",
-) => financialTransactionCoverageAxisSql(getTableName(t), name);
+const axis = (t: FinancialTransaction, name: "itemization" | "products") =>
+  financialTransactionCoverageAxisSql(getTableName(t), name);
 const evidenceFingerprint = (t: FinancialTransaction) => [
   financialTransactionRequiresBookingSql(getTableName(t)),
   financialTransactionEvidenceExpectationSql(getTableName(t)),
@@ -69,11 +67,6 @@ export const financialTransactionChecks = defineEntityChecks({
       missing: (t) =>
         sql`${financialTransactionBookingSql(getTableName(t))} IN ('missing', 'partial')`,
       fingerprint: (t) => [financialTransactionBookingSql(getTableName(t))],
-    },
-    financial_transaction_document: {
-      expected: requiresEvidence,
-      missing: (t) => sql`${axis(t, "document")} IN ('missing', 'partial')`,
-      fingerprint: (t) => [...evidenceFingerprint(t), axis(t, "document")],
     },
     financial_transaction_itemization: {
       expected: requiresEvidence,

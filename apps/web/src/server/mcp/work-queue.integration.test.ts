@@ -1199,10 +1199,19 @@ describe("member actionable Work queue", () => {
       name: "Synthetic receipt policy vendor",
       evidenceExpectation: "required",
     });
-    await insertWithShortcode(ctx.db, "purchase", {
+    const lumpOrder = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       displayLabel: "Synthetic receipt policy order",
       date: "2026-09-20",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic lump booking",
+      purchaseId: lumpOrder.id,
+      cost: 30,
+      date: "2026-09-20",
+      costType: "materials",
+      lineBasis: "allocation",
+      economicRole: "vendor",
     });
     const queue = await readWorkQueue(
       ctx.db,
@@ -1222,8 +1231,9 @@ describe("member actionable Work queue", () => {
     const receipt = queue.items.find(
       (row) => row.name === "Synthetic receipt policy order",
     );
-    expect(receipt?.reason).toContain(
-      "Receipt required — inherited from Vendor Synthetic receipt policy vendor",
+    // No document is expected, so the row names only the missing item lines.
+    expect(receipt?.reason).toBe(
+      "The order is not yet broken into item lines with their Products.",
     );
   });
 });

@@ -212,6 +212,20 @@ describe("MCP catalog", () => {
       id: purchaseId,
       data: { evidenceExpectation: "required" },
     });
+    // An allocation slice is never an itemization, so the gap is open.
+    await call("entity", {
+      action: "create",
+      entity: "expense",
+      data: {
+        name: "Synthetic lump booking",
+        purchaseId,
+        cost: 12,
+        date: "2026-09-01",
+        costType: "materials",
+        trade: "other",
+        lineBasis: "allocation",
+      },
+    });
     const detail = await call("entity_read", {
       action: "get",
       entity: "purchase",
@@ -228,7 +242,7 @@ describe("MCP catalog", () => {
       })
       .parse(detail)
       .item.dataQuality.gaps.filter(
-        (candidate) => candidate.check === "primary_document",
+        (candidate) => candidate.check === "purchase_itemization",
       );
     expect(gap).toBeDefined();
     expect(
@@ -236,8 +250,8 @@ describe("MCP catalog", () => {
         action: "set",
         entityId: purchaseId,
         check: gap!.check,
-        reason: "not_issued",
-        note: "The synthetic vendor issued no receipt.",
+        reason: "unavailable",
+        note: "The synthetic order's item lines are no longer available.",
       }),
     ).toHaveProperty("status");
 

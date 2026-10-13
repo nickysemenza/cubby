@@ -18,6 +18,7 @@ import { findOrCreateVendor, getVendorByID } from "./vendor";
 //  - a purchase booked as productless lump rows read as "itemized";
 //  - a void sibling charge turning a solo charge into a shared one;
 //  - a charge split across purchases losing its per-purchase comparison;
+//  - a charge split across an itemized and a lump purchase read as itemized;
 //  - the verdict filter compiling on the rows leg but not the count leg.
 describe("financial transaction itemization verdict", () => {
   const ctx = withTestDb();
@@ -138,6 +139,16 @@ describe("financial transaction itemization verdict", () => {
         { purchaseId: splitB, amount: 15 },
       ]);
 
+      // One itemized purchase cannot vouch for a lump one on the same charge.
+      const mixedItemized = await purchase("mixed-itemized");
+      const mixedLump = await purchase("mixed-lump");
+      await line(mixedItemized, 11, true);
+      await line(mixedLump, 13, false);
+      await charge(24, [
+        { purchaseId: mixedItemized, amount: 11 },
+        { purchaseId: mixedLump, amount: 13 },
+      ]);
+
       await charge(7, []);
 
       const all = await verdicts();
@@ -149,6 +160,7 @@ describe("financial transaction itemization verdict", () => {
       expect(all.get("charge 40 1 posted")).toBe("shared");
       expect(all.get("charge 21 1 posted")).toBe("itemized_match");
       expect(all.get("charge 25 2 posted")).toBe("itemized_match");
+      expect(all.get("charge 24 2 posted")).toBe("lump");
 
       const only = async (
         itemization: FinancialTransactionFilters["itemization"],
@@ -162,7 +174,10 @@ describe("financial transaction itemization verdict", () => {
       ]);
       expect(await only("bare")).toEqual(["charge 7 0 posted"]);
       expect(await only("itemized_mismatch")).toEqual(["charge 45 1 posted"]);
-      expect(await only("lump")).toEqual(["charge 100 1 posted"]);
+      expect(await only("lump")).toEqual([
+        "charge 100 1 posted",
+        "charge 24 2 posted",
+      ]);
     },
   );
 });

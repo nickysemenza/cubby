@@ -10,14 +10,8 @@ import {
 const EXCEPTION_REASONS = {
   order_id: ["not_issued", "unavailable"],
   stated_total: ["not_issued", "unavailable"],
-  primary_document: ["not_issued", "unavailable", "history_expired"],
   empty_expenses: ["unavailable", "history_expired"],
   purchase_itemization: ["unavailable", "history_expired"],
-  financial_transaction_document: [
-    "not_issued",
-    "unavailable",
-    "history_expired",
-  ],
   financial_transaction_itemization: ["unavailable", "history_expired"],
   financial_transaction_products: ["unavailable", "insufficient_detail"],
   settlement_reference: ["not_applicable", "insufficient_detail"],

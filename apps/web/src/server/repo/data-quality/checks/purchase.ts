@@ -19,6 +19,7 @@ import {
   purchaseEvidenceFingerprintSql,
   purchaseHasItemizationSql,
   purchaseHasPrimaryDocumentSql,
+  purchaseItemizationExpectationSql,
 } from "~/server/repo/purchase-evidence-policy";
 
 import { defineEntityChecks } from "../registry";
@@ -30,7 +31,8 @@ const aliasOf = (t: Purchase) => `"${getTableName(t)}"`;
 
 const expectation = (t: Purchase) =>
   purchaseEvidenceExpectationSql(getTableName(t));
-const expectsDocument = (t: Purchase) => sql`(${expectation(t)} = 'required')`;
+const expectsItemization = (t: Purchase) =>
+  sql`(${purchaseItemizationExpectationSql(getTableName(t))} = 'required')`;
 const hasPrimaryDocument = (t: Purchase) =>
   purchaseHasPrimaryDocumentSql(getTableName(t));
 const hasItemization = (t: Purchase) =>
@@ -122,11 +124,6 @@ export const purchaseChecks = defineEntityChecks({
       missing: (t) => sql`${t.statedTotal} IS NULL`,
       fingerprint: (t) => [hasPrimaryDocument(t), statedCents(t)],
     },
-    primary_document: {
-      expected: expectsDocument,
-      missing: (t) => sql`NOT ${hasPrimaryDocument(t)}`,
-      fingerprint: (t) => [expectsDocument(t), hasPrimaryDocument(t)],
-    },
     empty_expenses: {
       missing: (t) => sql`NOT ${hasExpenses(t)}`,
       fingerprint: (t) => [expenseCount(t)],
@@ -144,9 +141,10 @@ export const purchaseChecks = defineEntityChecks({
       fingerprint: (t) => [expectation(t)],
     },
     purchase_itemization: {
-      // A retained receipt or invoice is itemizable whatever the Vendor's
-      // policy: a member's receipt photo enters the Research queue this way.
-      expected: (t) => sql`(${expectsDocument(t)} OR ${hasPrimaryDocument(t)})`,
+      // Not gated on having lines: a receipt photo on an empty Purchase reaches
+      // the Research queue only through this gap (`empty_expenses` is not in
+      // that view).
+      expected: expectsItemization,
       missing: (t) => sql`NOT ${hasItemization(t)}`,
       // Document presence is already part of the evidence fingerprint; the
       // inputs stay unchanged so accepted exceptions do not reopen.

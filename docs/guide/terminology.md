@@ -546,6 +546,14 @@ _Avoid_: Expense, contribution line, duplicate bank movement
 An assertion that an external source supports an Expense or transfer fact, including the source amount and any explicit decision about a discrepancy.
 _Avoid_: imported truth, automatic match
 
+**Itemization**:
+A Purchase recorded as the order's own item lines, each goods line naming its Product, rather than one lump amount or a slice of an un-itemized total. It describes the line shape, not whether the lines were checked against a document.
+_Avoid_: reviewed lines, receipt itemization
+
+**Lump**:
+A Purchase or charge booked as an amount without its item lines.
+_Avoid_: aggregate order, unitemized receipt
+
 **Contribution position**:
 A party's cumulative outlay and transfer movement less attributed consumption. It is a reconciliation position, not an automatic claim that someone owes money.
 _Avoid_: debt, settlement balance
@@ -658,6 +666,14 @@ _Avoid_: domain match
 **Research queue**:
 The derived, unstored list of household records whose quality further research could improve.
 _Avoid_: worklist, enrichment queue, backlog
+
+**Work queue**:
+The derived, unstored list of everything waiting on a member — research, review and repair — across records, Emails, findings, suggestions and Runs. It shows the same rows wherever a record appears; it assigns nothing.
+_Avoid_: inbox, task list, assignments
+
+**Waiting for**:
+Whose evidence or account authority a Work queue row needs: named members, Either for shared work, or Unresolved when no current member holds that authority. It follows the source, never inventory ownership.
+_Avoid_: owner, assignee
 
 **Burn-down**:
 A member's Claude or Codex session working through the Research queue with ordinary writes that carry Sources.
