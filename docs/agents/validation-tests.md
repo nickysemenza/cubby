@@ -231,9 +231,11 @@ opening it; initial trigger visibility can precede deferred enrichment. When
 hovering consecutive timestamp cells, assert the open tooltip so the previous
 tooltip's closing animation cannot create a duplicate text match.
 
-Scope sidebar assertions by their exact section heading rather than text that
-also appears in navigation or linked-record panels. Keep the intended row unique;
-do not use `first()` to hide a second matching record.
+Scope sidebar assertions by the section's own heading, not arbitrary descendant
+headings: nested panels and relationship graphs can repeat the same heading.
+Assert that the intended container is unique; do not use `first()` to hide a
+second matching record. Replay against the final rebased source when main
+changes the affected layout.
 
 ## Preview tests (real-browser layout invariants)
 
