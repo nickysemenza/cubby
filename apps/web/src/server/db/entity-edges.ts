@@ -601,6 +601,20 @@ export const ENTITY_EDGES = {
     },
   }),
   ledgerParty: edges({
+    "Task.assigneeId": {
+      column: task.assigneeId,
+      role: "reference",
+      label: "assigned tasks",
+      description: "An explicit member assignee on live work.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Project.assigneeId": {
+      column: project.assigneeId,
+      role: "reference",
+      label: "project assignee defaults",
+      description: "An explicit member default for project work.",
+      liveness: { kind: "must-target-live" },
+    },
     "PhotoGroupProposal.inventoryOwnerPartyId": {
       column: photoGroupProposal.inventoryOwnerPartyId,
       role: "metadata",

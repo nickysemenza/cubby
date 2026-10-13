@@ -880,6 +880,19 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
 
+  "Task.assigneeId": (db, targetId) =>
+    insertWithShortcode(db, "task", {
+      name: uniq("Assigned task"),
+      trade: "building",
+      assigneeId: parseEntityId("ledgerParty", targetId),
+      assigneeMode: "explicit",
+    }),
+  "Project.assigneeId": (db, targetId) =>
+    insertWithShortcode(db, "project", {
+      name: uniq("Assigned project"),
+      assigneeId: parseEntityId("ledgerParty", targetId),
+      assigneeMode: "explicit",
+    }),
   "InventoryEntry.ownerLedgerPartyId": async (db, targetId) => {
     const [product, location] = await Promise.all([
       mkProduct(db),

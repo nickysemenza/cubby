@@ -28,6 +28,8 @@ function task(params: {
   updatedAt?: Date;
 }): TaskOut {
   return {
+    assigneeId: null,
+    assigneeName: null,
     id: testShortcode("task", params.id),
     name: params.name ?? params.id,
     status: params.status ?? "not_started",

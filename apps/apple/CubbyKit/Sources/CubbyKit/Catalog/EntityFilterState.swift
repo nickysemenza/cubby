@@ -53,6 +53,22 @@ extension FilterDescriptor: Identifiable {
     public var id: String { columnId }
 }
 
+extension SavedView {
+    /// The generator expands column filters into query parameters, including nullable presence.
+    public var filterState: EntityFilterState {
+        EntityFilterState(
+            Dictionary(
+                uniqueKeysWithValues: filters.map { filter in
+                    (filter.id, filter.isList ? .many(filter.values) : .single(filter.values.first ?? ""))
+                }))
+    }
+
+    public var sortParameter: String? {
+        guard !sort.isEmpty else { return nil }
+        return sort.map { ($0.desc ? "-" : "") + $0.id }.joined(separator: ",")
+    }
+}
+
 /// Thrown by the generated `listPage`/`timeline` arms when a filter cannot be sent.
 public enum EntityFilterError: Error, Sendable, Hashable {
     /// The wire name is not a query parameter of the entity's route.

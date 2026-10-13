@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * `tasks_overview.actionable` — the computed "what can I actually do" read.
  *
@@ -286,6 +287,7 @@ function compareBlocked(a: BlockedTaskOut, b: BlockedTaskOut): number {
 export async function listActionableTasks(
   db: Database,
   filters: TaskFilters = {},
+  actor?: ActorContext,
 ): Promise<ActionableTasksOut> {
   // Membership is delegated to the ordinary list predicate. The actionable
   // renderer then adds its disclosed open/top-level semantics while retaining
@@ -296,6 +298,8 @@ export async function listActionableTasks(
       { ...filters, completion: "open", topLevelOnly: true },
       [],
       pagination,
+      "page",
+      actor,
     ),
   );
   const matchingShortcodes = new Set<string>(

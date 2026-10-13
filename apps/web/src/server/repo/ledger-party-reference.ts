@@ -40,3 +40,18 @@ export async function lockLedgerPartiesForReference(
   const byId = new Map(rows.map((row) => [row.id, row]));
   return ids.map((id) => byId.get(id)!);
 }
+
+/** Assignment is a member role, independent of whether that member has a login. */
+export async function resolveMemberAssignee(
+  tx: DrizzleTransaction,
+  shortcode: LedgerPartyShortcode | null | undefined,
+) {
+  if (shortcode == null) return shortcode;
+  const [party] = await lockLedgerPartiesForReference(tx, [shortcode]);
+  if (!party || party.kind !== "member")
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "An assignee must be a live member ledger party.",
+    );
+  return party.id;
+}

@@ -208,6 +208,35 @@ struct GenericEntityEditModelTests {
         #expect(!model.stageResolutionReset(field.key))
     }
 
+    /// A manual picker choice after reset must replace the staged inheritance intent.
+    @Test func referenceSelectionAfterResetRestoresExplicitIntent() throws {
+        let prefix = try #require(EntityCatalog[.ledgerParty].shortcodePrefix)
+        let first = prefix + "4K7M"
+        let second = prefix + "8K7M"
+        for key in [EntityKey.task, .project] {
+            let original: JSONValue = [
+                "assigneeId": .string(first),
+                "fieldResolutions": [
+                    "assigneeId": [
+                        "mode": "explicit", "storedValue": .string(first), "value": .string(first),
+                        "fallbackValue": .null, "source": "Override", "sourceEntity": .null,
+                        "matchesFallback": false, "canReset": true,
+                    ]
+                ],
+            ]
+            let model = GenericEntityEditModel(
+                descriptor: EntityCatalog[key], mode: .update(id: "synthetic-record"),
+                client: try makeClient(), original: original)
+            #expect(model.stageResolutionReset("assigneeId"))
+            #expect(model.stageReferenceSelection("assigneeId", value: .string(second)))
+            let patch = try model.patch()
+            #expect(patch.values["assigneeId"] == .string(second))
+            #expect(patch.values["assigneeMode"] == .string("explicit"))
+            #expect(model.stageReferenceSelection("assigneeId", value: .null))
+            #expect(try model.patch().values["assigneeMode"] == .string("explicit"))
+        }
+    }
+
     @Test func updateSendsExactlyTheChangedAndClearedKeys() async throws {
         defer { EditStub.handler.withLock { $0 = nil } }
         let seen = capture { _ in (200, Self.productUpdated) }

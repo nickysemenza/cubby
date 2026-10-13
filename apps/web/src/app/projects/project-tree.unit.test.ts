@@ -10,6 +10,8 @@ import { buildProjectTree } from "./project-tree";
  * shortcodes; callers should assert against the resulting fixture values. */
 function proj(id: string, parentProjectId?: string): ProjectListItemOut {
   return {
+    assigneeId: null,
+    assigneeName: null,
     id: testShortcode("project", id),
     displayImages: [],
     name: id,

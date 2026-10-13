@@ -2,6 +2,7 @@ import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
+  ledgerPartyShortcode,
   imageShortcode,
   productShortcode,
   projectShortcode,
@@ -80,6 +81,30 @@ export default defineEntity({
     list: {
       savedViews: [
         {
+          id: "my-tasks",
+          label: "My tasks",
+          description: "Open tasks assigned to your linked member",
+          filters: [
+            {
+              id: "status",
+              value: taskStatusValues.filter((status) => status !== "done"),
+            },
+            { id: "assignedToMe", value: "true" },
+          ],
+        },
+        {
+          id: "unassigned",
+          label: "Unassigned",
+          description: "Open tasks with no effective assignee",
+          filters: [
+            {
+              id: "status",
+              value: taskStatusValues.filter((status) => status !== "done"),
+            },
+            { id: "assigneeId", value: [FILTER_NONE] },
+          ],
+        },
+        {
           id: "inbox",
           label: "Inbox",
           description: "Open top-level tasks with no project",
@@ -107,6 +132,8 @@ export default defineEntity({
           "parentTaskId",
           "projectName",
           "subjectProductName",
+          "assigneeId",
+          "assigneeName",
           "parentTaskName",
           "blockedByIds",
           "blockingIds",
@@ -181,6 +208,71 @@ export default defineEntity({
           create: taskStatusSchema.default("not_started"),
           update: taskStatusSchema.optional(),
         },
+      },
+      {
+        key: "assigneeId",
+        kind: "identifier",
+        nullable: true,
+        reference: {
+          entity: "ledgerParty",
+          filters: [{ field: "kind", values: ["member"] }],
+        },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: {
+          columnLabel: "Assignee",
+          list: true,
+          detail: true,
+          width: "md",
+          mobile: { slot: "meta", priority: 40, interactive: true },
+        },
+        resolution: {
+          reset: { assigneeMode: "inherit", assigneeId: null },
+          none: { assigneeMode: "explicit", assigneeId: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "task.effective-assignee",
+          description:
+            "An explicit assignee or None wins; otherwise follow the parent task, then the effective project default.",
+          projections: {
+            list: "fieldResolutions.assigneeId.value",
+            detail: "fieldResolutions.assigneeId.value",
+            summary: "fieldResolutions.assigneeId.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.assigneeId.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.assigneeId.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.assigneeId.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
+        validation: {
+          read: ledgerPartyShortcode.nullable(),
+          create: ledgerPartyShortcode.nullable().optional(),
+          update: ledgerPartyShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "assigneeMode",
+        kind: "enum",
+        validation: {
+          read: null,
+          create: inheritanceModeSchema.optional(),
+          update: inheritanceModeSchema.optional(),
+        },
+      },
+      {
+        key: "assigneeName",
+        kind: "text",
+        validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
         key: "projectId",
@@ -595,13 +687,19 @@ export default defineEntity({
       {
         key: "projectMode",
         defaultValue: "'inherit'",
-        specialized: "enum:projectMode",
+        specialized: "enum:inheritance-mode",
+      },
+      { key: "assigneeId", reference: "ledgerParty" },
+      {
+        key: "assigneeMode",
+        defaultValue: "'inherit'",
+        specialized: "enum:inheritance-mode",
       },
       { key: "subjectProductId", reference: "product" },
       {
         key: "subjectProductMode",
         defaultValue: "'inherit'",
-        specialized: "enum:subjectProductMode",
+        specialized: "enum:inheritance-mode",
       },
       { key: "parentTaskId", reference: "task" },
       "dueDate",
@@ -619,6 +717,8 @@ export default defineEntity({
       "projectMode",
       "subjectProductId",
       "subjectProductMode",
+      "assigneeId",
+      "assigneeMode",
       "parentTaskId",
       "dueDate",
       "dueEndDate",
@@ -633,6 +733,8 @@ export default defineEntity({
       "projectMode",
       "subjectProductId",
       "subjectProductMode",
+      "assigneeId",
+      "assigneeMode",
       "parentTaskId",
       "dueDate",
       "dueEndDate",
@@ -644,6 +746,8 @@ export default defineEntity({
       "imageOrder",
     ],
     bulk: [
+      "assigneeId",
+      "assigneeMode",
       "projectId",
       "projectMode",
       "status",
@@ -658,6 +762,8 @@ export default defineEntity({
       "projectMode",
       "subjectProductId",
       "subjectProductMode",
+      "assigneeId",
+      "assigneeMode",
       "parentTaskId",
       "dueDate",
       "dueEndDate",
@@ -671,10 +777,11 @@ export default defineEntity({
         "trade",
         "projectId",
         "subjectProductId",
+        "assigneeId",
         "createdAt",
         "updatedAt",
       ],
-      computed: ["projectId", "subjectProductId"],
+      computed: ["projectId", "subjectProductId", "assigneeId"],
       groupable: ["status"],
     },
     intents: {
@@ -686,6 +793,8 @@ export default defineEntity({
           "projectMode",
           "subjectProductId",
           "subjectProductMode",
+          "assigneeId",
+          "assigneeMode",
           "trade",
           "dueDate",
           "pendingImageIds",
@@ -697,6 +806,8 @@ export default defineEntity({
           "projectMode",
           "subjectProductId",
           "subjectProductMode",
+          "assigneeId",
+          "assigneeMode",
           "trade",
           "dueDate",
           "dueEndDate",
@@ -721,6 +832,8 @@ export default defineEntity({
     },
     output: [
       "fieldResolutions",
+      "assigneeId",
+      "assigneeName",
       "id",
       "name",
       "status",
@@ -752,6 +865,7 @@ export default defineEntity({
   storage: {
     indexes: [{ on: ["status"] }, { on: ["dueDate"] }],
     relations: {
+      assignee: "assigneeId",
       project: "projectId",
       subjectProduct: "subjectProductId",
       parentTask: { field: "parentTaskId", relationName: "TaskToTask" },
@@ -763,6 +877,27 @@ export default defineEntity({
     audit: true,
     schema: { module: "@cubby/schemas/project", export: "taskFilterFields" },
     descriptors: [
+      {
+        columnId: "assignedToMe",
+        field: "assignedToMe",
+        kind: "boolean",
+        placeholder: "My tasks",
+        options: [
+          { value: "true", label: "My tasks" },
+          { value: "false", label: "All assignees" },
+        ],
+      },
+      {
+        columnId: "assigneeId",
+        urlKey: "assignee",
+        field: "assigneeId",
+        kind: "idMulti",
+        placeholder: "Filter by assignee...",
+        optionsKey: "ledgerParty",
+        brandRef: { entity: "ledgerParty" },
+        nullable: { field: "assigneePresenceFilter", label: "assignee" },
+      },
+
       {
         columnId: "name",
         field: "search",
@@ -939,6 +1074,17 @@ export default defineEntity({
   },
   relations: [
     {
+      key: "assignee",
+      label: "Assignee",
+      target: "ledgerParty",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Task.assigneeId", direction: "outgoing" }],
+      },
+      inverse: { steps: [{ edge: "Task.assigneeId", direction: "incoming" }] },
+    },
+    {
       key: "subtasks",
       label: "Subtasks",
       target: "task",
@@ -1070,6 +1216,8 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: {
       fields: [
+        "assigneeId",
+        "assigneeMode",
         "projectId",
         "projectMode",
         "status",

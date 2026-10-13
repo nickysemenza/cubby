@@ -243,6 +243,15 @@ inheriting record. Scalar edits retain explicit-write meaning.
   Unassigned. A null override means inherit, without an explicit None state.
 - Subtask project and “For” product: own value or explicit None → parent task.
   Reparenting follows the new source; detaching preserves effective values.
+- Task assignee: own member or explicit None → parent task’s effective assignee →
+  effective project default → Unassigned. A parent’s explicit None also stops
+  fallback. Project default assignee: own member or explicit None → parent
+  project’s resolved default → Unassigned. `assigneeId` references a live
+  LedgerParty of kind member, independently of a linked login; `assigneeMode`
+  records inherit or explicit. Scalar null writes mean None; Use inherited
+  clears the stored reference. Reparenting follows the new source and detaching
+  preserves the effective assignee. My tasks matches the acting login’s linked
+  member; a login without a linked live member matches no tasks.
 - Project site names: own names or explicit None → parent’s resolved names.
   Project trade: own default → nearest ancestor default.
 - Task trade: own choice → parent task trade when effective projects match →

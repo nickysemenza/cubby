@@ -105,22 +105,6 @@ export const resolveTaskDueFilter = (value: string | undefined) => {
   return resolveDueRange(value);
 };
 
-export const resolveRecountAge = (value: string | undefined) => {
-  const days = Number(value);
-  return Number.isInteger(days) && days > 0
-    ? { lastBulkInventoryOlderThanDays: days }
-    : {};
-};
-
-export const resolveLocationItems = (value: string | undefined) =>
-  value === "none"
-    ? { directItemCountMax: 0 }
-    : value === "has"
-      ? { directItemCountMin: 1 }
-      : value
-        ? { directItemCountMin: Number(value) }
-        : {};
-
 export const resolvePostedDate = (preset: string | undefined) => {
   const { dateFrom, dateTo } = resolveDateRange(preset);
   return { postedDateFrom: dateFrom, postedDateTo: dateTo };

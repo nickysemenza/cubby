@@ -31,6 +31,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
+import { resolveMemberAssignee } from "~/server/repo/ledger-party-reference";
 /**
  * Project CRUD operations.
  *
@@ -51,6 +52,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { effectiveExpenseProjectSql } from "../expense-inheritance";
 import {
   effectiveTaskProjectSql,
+  effectiveProjectAssigneeSql,
   effectiveProjectLocationsSql,
   effectiveProjectTradeSql,
 } from "../task-project-inheritance";
@@ -208,6 +210,13 @@ export const createProject = async (
 
     const created = await insertWithShortcode(tx, "project", {
       name: data.name,
+      assigneeId:
+        data.assigneeMode === "inherit"
+          ? null
+          : ((await resolveMemberAssignee(tx, data.assigneeId)) ?? null),
+      assigneeMode:
+        data.assigneeMode ??
+        (data.assigneeId === undefined ? "inherit" : "explicit"),
       status: data.status,
       kind: data.kind,
       locations: data.locations,
@@ -247,10 +256,12 @@ async function projectSettingsAfterParentChange(
   const inherited = detached
     ? (
         await tx.execute<{
+          assigneeId: import("@cubby/schemas/identifiers").LedgerPartyId | null;
           locations: string[];
           trade: ProjectOut["defaultTrade"];
         }>(sql`
-    SELECT ${effectiveProjectLocationsSql(sql`${id}::uuid`)} AS locations,
+    SELECT ${effectiveProjectAssigneeSql(sql`${id}::uuid`)} AS "assigneeId",
+      ${effectiveProjectLocationsSql(sql`${id}::uuid`)} AS locations,
       ${effectiveProjectTradeSql(sql`${id}::uuid`)} AS trade
   `)
       ).rows[0]
@@ -260,7 +271,22 @@ async function projectSettingsAfterParentChange(
     before.locationsMode === "inherit" &&
     data.locations === undefined &&
     data.locationsMode === undefined;
+  const preserveAssignee =
+    detached &&
+    before.assigneeMode === "inherit" &&
+    data.assigneeId === undefined &&
+    data.assigneeMode === undefined;
   return {
+    assigneeId:
+      data.assigneeMode === "inherit"
+        ? null
+        : preserveAssignee
+          ? (inherited?.assigneeId ?? null)
+          : await resolveMemberAssignee(tx, data.assigneeId),
+    assigneeMode: preserveAssignee
+      ? ("explicit" as const)
+      : (data.assigneeMode ??
+        (data.assigneeId === undefined ? undefined : ("explicit" as const))),
     locations:
       data.locationsMode === "inherit"
         ? []

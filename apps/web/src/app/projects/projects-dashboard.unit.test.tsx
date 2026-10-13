@@ -19,6 +19,8 @@ afterEach(() => {
 
 function projectFixture(): ProjectOut {
   return {
+    assigneeId: null,
+    assigneeName: null,
     id: testShortcode("project", "card"),
     name: "Kitchen refresh",
     status: "planning",

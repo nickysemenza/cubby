@@ -239,12 +239,14 @@ struct EntityFieldControl: View {
             }
             .buttonStyle(.plain)
             if let id = value.stringValue, !id.isEmpty, field.nullable {
-                Button("Clear", systemImage: "xmark.circle.fill") { model.draft[key] = .null }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.secondary)
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Clear \(field.label)")
-                    .accessibilityHidden(id.isEmpty)
+                Button("Clear", systemImage: "xmark.circle.fill") {
+                    model.stageReferenceSelection(key, value: .null)
+                }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.secondary)
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Clear \(field.label)")
+                .accessibilityHidden(id.isEmpty)
             }
         }
         .sheet(isPresented: $picking) {
@@ -255,7 +257,7 @@ struct EntityFieldControl: View {
             ) {
                 picks in
                 guard let pick = picks.first else { return }
-                model.draft[key] = .string(pick.id)
+                model.stageReferenceSelection(key, value: .string(pick.id))
                 pickedTitles[pick.id] = pick.title
             }
         }

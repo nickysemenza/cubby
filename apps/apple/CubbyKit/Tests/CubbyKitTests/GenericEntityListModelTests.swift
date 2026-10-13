@@ -30,6 +30,46 @@ struct GenericEntityListModelTests {
         )
     }
 
+    /// Saved views must send wire filters, including nullable presence, and replace the old
+    /// scope in one request. Sending column ids or sentinel ids fails the typed HTTP contract.
+    @Test func savedViewsReplaceFiltersUsingWireParameters() async throws {
+        defer { ListStub.handler.withLock { $0 = nil } }
+        let requests = Mutex<[[URLQueryItem]]>([])
+        var empty = try #require(
+            JSONSerialization.jsonObject(with: Fixtures.data(named: "products-list.json"))
+                as? [String: Any])
+        empty["items"] = []
+        let body = try JSONSerialization.data(withJSONObject: empty)
+        ListStub.handler.withLock { handler in
+            handler = { request in
+                requests.withLock {
+                    $0.append(
+                        URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? [])
+                }
+                return (200, body)
+            }
+        }
+        let descriptor = EntityCatalog[.task]
+        let mine = try #require(descriptor.presentation.savedViews.first { $0.id == "my-tasks" })
+        let unassigned = try #require(descriptor.presentation.savedViews.first { $0.id == "unassigned" })
+        let model = GenericEntityListModel(
+            descriptor: descriptor, client: try makeClient(),
+            filters: EntityFilterState(["search": .single("old scope")]), progressive: false)
+        await model.apply(savedView: mine)
+        #expect(model.activeSavedView?.id == mine.id)
+        #expect(requests.withLock { $0.count } == 1)
+        #expect(requests.withLock { $0[0].contains(URLQueryItem(name: "assignedToMe", value: "true")) })
+        #expect(model.filters["search"] == nil)
+        await model.apply(savedView: unassigned)
+        #expect(model.filters["assignedToMe"] == nil)
+        #expect(model.filters["assigneePresenceFilter"] == .single("none"))
+        #expect(requests.withLock { $0.count } == 2)
+        #expect(
+            requests.withLock { $0[1].contains(URLQueryItem(name: "assigneePresenceFilter", value: "none")) })
+        await model.apply(filters: EntityFilterState())
+        #expect(model.activeSavedView == nil)
+    }
+
     /// A header sort must restart server paging, retain filters, and use the same order for
     /// subsequent pages. Sorting just the loaded rows gives the wrong global order.
     @Test func sortRestartsPagingAndRetainsFilters() async throws {

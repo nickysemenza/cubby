@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import type { EntityId } from "@cubby/schemas/identifiers";
 import type {
   PaginationParams,
@@ -49,8 +50,10 @@ import {
 } from "~/server/repo/project/subtree";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 
-import { completeListReader } from "../list-read-adapters";
+import { currentMemberLedgerParty } from "../current-member-party";
+import { parseCompleteListRead } from "../list-read-adapters";
 import {
+  effectiveTaskAssigneeSql,
   effectiveTaskProjectSql,
   effectiveTaskSubjectProductSql,
   effectiveTaskTradeSql,
@@ -158,6 +161,8 @@ const joinedNameSort = (
 };
 
 const resolveTaskSort = (sort: SortParams) => {
+  if (sort.orderBy === "assigneeId")
+    return joinedNameSort(sort, "LedgerParty", effectiveTaskAssigneeSql());
   if (sort.orderBy === "projectId") {
     return joinedNameSort(sort, "Project", effectiveTaskProjectSql());
   }
@@ -170,7 +175,36 @@ const resolveTaskSort = (sort: SortParams) => {
 const taskScaffold = listScaffold("task", task);
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
+export const buildTaskWhere = async (
+  db: Database,
+  filters: TaskFilters,
+  actor?: ActorContext,
+) => {
+  const assigneeIds = await resolveAllPresent(
+    db,
+    "ledgerParty",
+    filters.assigneeId ? [filters.assigneeId].flat() : [],
+  );
+  const member =
+    filters.assignedToMe && actor
+      ? await currentMemberLedgerParty(db, actor)
+      : null;
+  const effectiveAssignee = effectiveTaskAssigneeSql();
+  const assigneePresence =
+    filters.assigneePresenceFilter === "has"
+      ? sql`${effectiveAssignee} IS NOT NULL`
+      : filters.assigneePresenceFilter === "none"
+        ? sql`${effectiveAssignee} IS NULL`
+        : undefined;
+  const assigneeCondition =
+    filters.assigneeId && [filters.assigneeId].flat().length
+      ? or(
+          assigneeIds.length
+            ? sql`${effectiveAssignee} = ANY(${uuidArrayParam(assigneeIds)})`
+            : sql`false`,
+          assigneePresence,
+        )
+      : assigneePresence;
   const dbClient = getDb(db);
   const {
     projectIds,
@@ -266,6 +300,12 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
     // Carries `projectPresenceFilter` too — it ORs with the id selection, so
     // it can't be a sibling condition here (that AND is what made
     // "project A or unassigned" inexpressible).
+    assigneeCondition,
+    filters.assignedToMe
+      ? member
+        ? sql`${effectiveAssignee} = ${member.id}`
+        : sql`false`
+      : undefined,
     projectCondition,
     subjectProductCondition(),
     filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
@@ -301,8 +341,9 @@ export const taskListRead = async (
   pagination: PaginationParams,
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
+  actor?: ActorContext,
 ) => {
-  const whereClause = await buildTaskWhere(db, filters);
+  const whereClause = await buildTaskWhere(db, filters, actor);
   return taskScaffold.list(
     db,
     { filters, sorts, pagination, readIntent, projection },
@@ -381,4 +422,23 @@ export const taskListRead = async (
   );
 };
 
-export const taskList = completeListReader(taskListItemOut, taskListRead);
+export const taskList = (
+  db: Database,
+  filters: TaskFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+  actor?: ActorContext,
+) =>
+  parseCompleteListRead(
+    taskListItemOut,
+    taskListRead(
+      db,
+      filters,
+      sorts,
+      pagination,
+      { kind: "full" },
+      readIntent,
+      actor,
+    ),
+  );

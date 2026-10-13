@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * `task.board` — the board's data source, replacing the old
  * `task.chartData({topLevelOnly: true})` fetch-everything-then-cap-client-side
@@ -23,6 +24,7 @@ const RECENT_DONE_CAP = 20;
 export async function getTaskBoard(
   db: Database,
   input: TaskBoardInput,
+  actor?: ActorContext,
 ): Promise<TaskBoardOut> {
   const intrinsic = { ...input, topLevelOnly: true };
   const [activeResult, doneResult] = await Promise.all([
@@ -32,6 +34,8 @@ export async function getTaskBoard(
         { ...intrinsic, completion: "open" },
         [{ orderBy: "createdAt", direction: "desc" }],
         pagination,
+        "page",
+        actor,
       ),
     ),
     taskList(
@@ -39,6 +43,8 @@ export async function getTaskBoard(
       { ...intrinsic, completion: "done" },
       [{ orderBy: "updatedAt", direction: "desc" }],
       { pageIndex: 0, pageSize: RECENT_DONE_CAP },
+      "page",
+      actor,
     ),
   ]);
 
