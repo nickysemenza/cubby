@@ -494,6 +494,8 @@ export default defineEntity({
       checks: [
         {
           id: "ledger_transfer_transaction",
+          satisfiedLabel: "Transaction evidence linked",
+          placement: { section: "evidence-transactions" },
           facet: "settlement",
           weight: 1,
           label: "Transaction",

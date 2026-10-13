@@ -1,22 +1,20 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
+import { imageUrlSummary } from "@cubby/schemas/image-summary";
 import { type ReactNode, useCallback, useState } from "react";
+import { z } from "zod";
 
 import {
   EntityActionButtons,
   type EntityActionRow,
 } from "~/entity/actions/entity-actions";
+import { EntityCover } from "~/entity/components/entity-cover";
 import {
-  EntityIcon,
-  entityLabel,
-  isBrowserRoutedEntity,
-} from "~/entity/entities";
+  detailEntities,
+  type DetailEntity,
+} from "~/entity/generated/entity-details.gen";
 import { AuditLogList } from "~/features/audit-log/audit-log-list";
 
-import {
-  type HoverPreviewEntity,
-  hoverPreviewEntities,
-} from "../../ui/preview/preview-entities";
 import { EntityPreviewContent } from "../components/EntityPreviewContent";
 import {
   EntityRelations,
@@ -24,6 +22,7 @@ import {
 } from "../relationships/entity-relations";
 import { EntityRelationshipPreview } from "../relationships/entity-relationship-preview";
 import { EntityInspectorFrame, type InspectorTab } from "./inspector-frame";
+import { InspectorRecord } from "./inspector-record";
 
 type EntityWorkbenchInspectorProps = {
   entity: Entity;
@@ -32,38 +31,14 @@ type EntityWorkbenchInspectorProps = {
   overviewSupplement?: ReactNode;
 };
 
-const COMPACT_OVERVIEW_ENTITIES: ReadonlySet<Entity> = new Set(
-  hoverPreviewEntities,
-);
+const recordEntities = new Set<Entity>(detailEntities);
+const isDetailEntity = (entity: Entity): entity is DetailEntity =>
+  recordEntities.has(entity);
+const recordMedia = z.looseObject({
+  displayImages: z.array(imageUrlSummary.extend({ id: z.string() })).optional(),
+});
 
-const supportsCompactOverview = (
-  entity: Entity,
-): entity is HoverPreviewEntity => COMPACT_OVERVIEW_ENTITIES.has(entity);
-
-function UnsupportedOverview({ entity, id }: { entity: Entity; id: string }) {
-  const label = entityLabel(entity);
-
-  return (
-    <div className="space-y-2 px-3 py-3">
-      <div className="flex items-center gap-2">
-        <EntityIcon entity={entity} colored className="size-3.5" />
-        <p className="text-xs font-medium text-foreground">{label}</p>
-      </div>
-      <p className="font-mono text-xs text-muted-foreground">{id}</p>
-      <p className="text-xs text-muted-foreground">
-        {isBrowserRoutedEntity(entity)
-          ? "Open the full record to inspect its details."
-          : "Use Relations or Activity to inspect linked records."}
-      </p>
-    </div>
-  );
-}
-
-/**
- * Compact inspector shared by canonical sibling lists. Product keeps its
- * purpose-built workbench inspector; this surface never mounts a full detail
- * page inside the table dock.
- */
+/** The inspector shares record fields and mutations without mounting the full route. */
 export function EntityWorkbenchInspector({
   entity,
   id,
@@ -92,9 +67,7 @@ function EntityWorkbenchInspectorContent({
   const [resolvedRecord, setResolvedRecord] = useState<
     EntityActionRow | undefined
   >();
-  // Product has a page-owned relationship contract and a specialist inspector.
-  // Do not add the generic graph beside that richer route.
-  const hasRelations = entity !== "product" && supportsEntityGraph(entity);
+  const hasRelations = supportsEntityGraph(entity);
   const hasActivity = isAuditableEntity(entity);
   const handleNameResolved = useCallback((name: string) => {
     setResolvedName((current) => (current === name ? current : name));
@@ -111,14 +84,32 @@ function EntityWorkbenchInspectorContent({
       entity={entity}
       id={id}
       name={resolvedName}
+      leading={
+        <EntityCover
+          entity={entity}
+          images={
+            recordMedia.safeParse(resolvedRecord).data?.displayImages ?? []
+          }
+          size={40}
+          alt={resolvedName ?? ""}
+          preview
+        />
+      }
       activeTab={activeTab}
       onTabChange={setActiveTab}
       onClose={onClose}
       overview={
         <div>
           {overviewSupplement}
-          {supportsCompactOverview(entity) ? (
-            <div className="px-3 py-3">
+          <div className="px-3 py-3">
+            {isDetailEntity(entity) ? (
+              <InspectorRecord
+                entity={entity}
+                id={id}
+                onNameResolved={handleNameResolved}
+                onRecordResolved={handleRecordResolved}
+              />
+            ) : entity === "usda-food" ? (
               <EntityPreviewContent
                 entity={entity}
                 id={id}
@@ -127,10 +118,8 @@ function EntityWorkbenchInspectorContent({
                 onNameResolved={handleNameResolved}
                 onRecordResolved={handleRecordResolved}
               />
-            </div>
-          ) : (
-            <UnsupportedOverview entity={entity} id={id} />
-          )}
+            ) : null}
+          </div>
           {hasRelations ? (
             <EntityRelationshipPreview
               entity={entity}
@@ -139,7 +128,7 @@ function EntityWorkbenchInspectorContent({
               onViewAll={() => setActiveTab("relations")}
             />
           ) : null}
-          {entity !== "product" && resolvedRecord ? (
+          {resolvedRecord ? (
             <div className="flex flex-wrap gap-2 px-3 pb-3">
               <EntityActionButtons
                 entity={entity}

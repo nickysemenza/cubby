@@ -814,6 +814,8 @@ export default defineEntity({
       checks: [
         {
           id: "planting_location",
+          satisfiedLabel: "Location recorded",
+          placement: { field: "locationId" },
           facet: "linkage",
           weight: 2,
           label: "Location",
@@ -821,6 +823,8 @@ export default defineEntity({
         },
         {
           id: "planting_started",
+          satisfiedLabel: "Start recorded",
+          placement: { field: "status" },
           facet: "content",
           weight: 1,
           label: "Start date",
@@ -829,6 +833,8 @@ export default defineEntity({
         },
         {
           id: "planting_finished",
+          satisfiedLabel: "Finish recorded",
+          placement: { field: "finishedOn" },
           facet: "content",
           weight: 2,
           label: "Finish",
@@ -836,6 +842,8 @@ export default defineEntity({
         },
         {
           id: "planting_lifecycle",
+          satisfiedLabel: "Lifecycle consistent",
+          placement: { field: "status" },
           facet: "integrity",
           kind: "defect",
           weight: 2,

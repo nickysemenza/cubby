@@ -430,6 +430,8 @@ export default defineEntity({
       checks: [
         {
           id: "spending_category_evidence_expectation",
+          satisfiedLabel: "Receipt expectation classified",
+          placement: { field: "evidenceExpectation" },
           facet: "paperwork",
           exceptions: "forbidden",
           weight: 2,
@@ -439,6 +441,8 @@ export default defineEntity({
         },
         {
           id: "spending_category_product_expectation",
+          satisfiedLabel: "Product expectation classified",
+          placement: { field: "productExpectation" },
           facet: "identity",
           exceptions: "forbidden",
           weight: 1,

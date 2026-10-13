@@ -3190,6 +3190,8 @@ Rules:
       checks: [
         {
           id: "product_label_review",
+          satisfiedLabel: "Label review complete",
+          placement: { section: "labels" },
           facet: "provenance",
           weight: 2,
           label: "Label review",
@@ -3198,6 +3200,8 @@ Rules:
         },
         {
           id: "product_orphaned",
+          satisfiedLabel: "Retaining evidence recorded",
+          placement: { section: "ownership" },
           facet: "integrity",
           kind: "defect",
           scoring: "unscored",
@@ -3208,6 +3212,8 @@ Rules:
         },
         {
           id: "product_name",
+          satisfiedLabel: "Name recorded",
+          placement: { field: "name" },
           facet: "identity",
           weight: 3,
           exceptions: "forbidden",
@@ -3216,6 +3222,8 @@ Rules:
         },
         {
           id: "product_manufacturer",
+          satisfiedLabel: "Manufacturer recorded",
+          placement: { field: "manufacturer" },
           facet: "identity",
           weight: 2,
           label: "Manufacturer",
@@ -3223,6 +3231,8 @@ Rules:
         },
         {
           id: "product_external_id",
+          satisfiedLabel: "External identifier recorded",
+          placement: { field: "externalIds" },
           facet: "identity",
           weight: 2,
           label: "External ID",
@@ -3231,6 +3241,8 @@ Rules:
         },
         {
           id: "product_category",
+          satisfiedLabel: "Category recorded",
+          placement: { field: "categoryId" },
           facet: "identity",
           weight: 3,
           scoreCap: 69,
@@ -3239,6 +3251,8 @@ Rules:
         },
         {
           id: "product_model",
+          satisfiedLabel: "Model recorded",
+          placement: { field: "model" },
           facet: "identity",
           weight: 2,
           label: "Model",
@@ -3246,6 +3260,8 @@ Rules:
         },
         {
           id: "product_price",
+          satisfiedLabel: "Valuation price available",
+          placement: { field: "price" },
           facet: "ledger",
           weight: 3,
           label: "Price",
@@ -3253,6 +3269,8 @@ Rules:
         },
         {
           id: "product_image",
+          satisfiedLabel: "Image attached",
+          placement: { section: "images" },
           facet: "provenance",
           label: "No image (stocked)",
           message: "No product image is attached.",
@@ -3260,12 +3278,16 @@ Rules:
         },
         {
           id: "amazon_asin",
+          satisfiedLabel: "Amazon ASIN recorded",
+          placement: { field: "externalIds" },
           facet: "provenance",
           label: "Amazon ASIN",
           message: "Amazon-linked product has no Amazon ASIN.",
         },
         {
           id: "product_unpurchased",
+          satisfiedLabel: "Acquisition evidence recorded",
+          placement: { section: "purchases" },
           facet: "provenance",
           label: "Not purchased",
           message: "Stocked product has no Purchase or acquiring Expense.",

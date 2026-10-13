@@ -749,6 +749,8 @@ export default defineEntity({
       checks: [
         {
           id: "financial_account_ledger_party",
+          satisfiedLabel: "Ledger party recorded",
+          placement: { field: "ledgerPartyId" },
           facet: "linkage",
           weight: 2,
           label: "Ledger party",
@@ -756,6 +758,8 @@ export default defineEntity({
         },
         {
           id: "financial_account_unclaimed",
+          satisfiedLabel: "Account claimed",
+          placement: { field: "ledgerPartyId" },
           facet: "identity",
           kind: "defect",
           scoring: "unscored",
@@ -766,6 +770,8 @@ export default defineEntity({
         },
         {
           id: "financial_account_confirmed",
+          satisfiedLabel: "Account confirmed",
+          placement: { field: "provisional" },
           facet: "identity",
           weight: 2,
           label: "Confirmed",

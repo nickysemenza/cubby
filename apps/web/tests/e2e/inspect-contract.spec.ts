@@ -23,6 +23,30 @@ test("a single Product selection exposes Inspect and opens the desktop dock", as
     page.getByRole("complementary", { name: "Product inspector" }),
   ).toBeVisible();
   await expect(row.getByRole("checkbox", { name: "Select row" })).toBeChecked();
+  const inspector = page.getByRole("complementary", {
+    name: "Product inspector",
+  });
+  const notes = inspector
+    .locator('[data-ledger="facts"] .ledger-row')
+    .filter({ has: page.getByText("Notes", { exact: true }) });
+  await notes.getByRole("button", { name: "Edit value", exact: true }).click();
+  await notes.getByRole("textbox").fill("Synthetic inspector edit");
+  await notes.getByRole("button", { name: "Save value", exact: true }).click();
+  await expect(notes).toContainText("Synthetic inspector edit");
+  await inspector
+    .locator("summary")
+    .getByText("Relations", { exact: true })
+    .click();
+  await expect(notes).toContainText("Synthetic inspector edit");
+  await inspector
+    .getByRole("button", { name: "Edit record", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await row.getByRole("checkbox", { name: "Select row" }).click();
+  await page.getByRole("button", { name: "Inspect", exact: true }).click();
+  await expect(notes).toContainText("Synthetic inspector edit");
 });
 
 // Regression: flipping row activity while a control inside the row holds focus

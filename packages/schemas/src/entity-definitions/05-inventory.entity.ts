@@ -758,6 +758,8 @@ export default defineEntity({
       checks: [
         {
           id: "inventory_unknown_location",
+          satisfiedLabel: "Location recorded",
+          placement: { field: "locationId" },
           facet: "integrity",
           kind: "defect",
           weight: 2,
@@ -768,6 +770,8 @@ export default defineEntity({
         },
         {
           id: "inventory_verified",
+          satisfiedLabel: "Inventory verified",
+          placement: { field: "verifiedAt" },
           facet: "provenance",
           weight: 1,
           label: "Verified",

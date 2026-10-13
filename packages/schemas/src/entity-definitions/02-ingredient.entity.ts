@@ -623,6 +623,8 @@ export default defineEntity({
       checks: [
         {
           id: "ingredient_product",
+          satisfiedLabel: "Product linked",
+          placement: { section: "nutrition-product" },
           facet: "linkage",
           weight: 2,
           label: "Product link",
@@ -631,6 +633,8 @@ export default defineEntity({
         },
         {
           id: "ingredient_recipe_deleted",
+          satisfiedLabel: "Sub-recipe available",
+          placement: { section: "recipe-usages" },
           facet: "integrity",
           kind: "defect",
           weight: 3,

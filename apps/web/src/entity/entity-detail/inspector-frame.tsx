@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useId, useEffect, useState, type ReactNode } from "react";
 
 import {
   EntityIcon,
@@ -12,7 +12,6 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { Button } from "~/ui/primitives/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 export type InspectorTab = "overview" | "relations" | "activity";
 
@@ -22,7 +21,7 @@ function OpenEntityLink({ entity, id }: { entity: Entity; id: string }) {
   return (
     <Button
       variant="ghost"
-      size="icon-xs"
+      size="xs"
       mobileSize="compact"
       nativeButton={false}
       aria-label={`Open full ${label.toLowerCase()} details`}
@@ -37,7 +36,7 @@ function OpenEntityLink({ entity, id }: { entity: Entity; id: string }) {
         )
       }
     >
-      <ArrowSquareOutIcon />
+      Open record <ArrowSquareOutIcon />
     </Button>
   );
 }
@@ -71,22 +70,26 @@ export function EntityInspectorFrame({
   const label = entityLabel(entity);
   const hasRelations = relations !== undefined;
   const hasActivity = activity !== undefined;
-  const selectTab = (value: string) => {
-    if (
-      value === "overview" ||
-      (value === "relations" && hasRelations) ||
-      (value === "activity" && hasActivity)
-    ) {
-      onTabChange(value);
-    }
-  };
+  const prefix = useId();
+  const [visited, setVisited] = useState<ReadonlySet<InspectorTab>>(
+    new Set(["overview"]),
+  );
+  useEffect(() => {
+    setVisited((previous) =>
+      previous.has(activeTab) ? previous : new Set([...previous, activeTab]),
+    );
+    if (activeTab !== "overview")
+      document
+        .getElementById(`${prefix}-${activeTab}`)
+        ?.scrollIntoView({ block: "nearest" });
+  }, [activeTab, prefix]);
 
   return (
     <aside
       aria-label={`${label} inspector`}
       className="h-full w-full max-w-full overflow-y-auto bg-card text-xs text-foreground"
     >
-      <header className="border-b border-border p-3">
+      <header className="sticky top-0 z-20 border-b border-border bg-card p-3">
         <div className="flex items-start gap-2">
           {leading ?? (
             <EntityIcon entity={entity} colored className="mt-0.5 size-4" />
@@ -98,7 +101,7 @@ export function EntityInspectorFrame({
               </span>
             )}
             <h2
-              className="truncate text-sm font-semibold text-foreground"
+              className="text-sm leading-snug font-semibold break-words text-foreground"
               title={name ?? label}
             >
               {name ?? label}
@@ -127,29 +130,43 @@ export function EntityInspectorFrame({
         </div>
       </header>
 
-      <Tabs value={activeTab} onValueChange={selectTab}>
-        <TabsList
-          variant="line"
-          className="w-full justify-start border-b border-border px-2"
+      <div id={`${prefix}-overview`}>{overview}</div>
+      {hasRelations ? (
+        <details
+          id={`${prefix}-relations`}
+          className="border-t border-border"
+          open={activeTab === "relations"}
+          onToggle={(event) => {
+            if (event.currentTarget.open) onTabChange("relations");
+            else if (activeTab === "relations") onTabChange("overview");
+          }}
         >
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          {hasRelations ? (
-            <TabsTrigger value="relations">Relations</TabsTrigger>
-          ) : null}
-          {hasActivity ? (
-            <TabsTrigger value="activity">Activity</TabsTrigger>
-          ) : null}
-        </TabsList>
-        {activeTab === "overview" ? (
-          <TabsContent value="overview">{overview}</TabsContent>
-        ) : null}
-        {activeTab === "relations" && hasRelations ? (
-          <TabsContent value="relations">{relations}</TabsContent>
-        ) : null}
-        {activeTab === "activity" && hasActivity ? (
-          <TabsContent value="activity">{activity}</TabsContent>
-        ) : null}
-      </Tabs>
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold">
+            Relations
+          </summary>
+          {visited.has("relations") || activeTab === "relations"
+            ? relations
+            : null}
+        </details>
+      ) : null}
+      {hasActivity ? (
+        <details
+          id={`${prefix}-activity`}
+          className="border-t border-border"
+          open={activeTab === "activity"}
+          onToggle={(event) => {
+            if (event.currentTarget.open) onTabChange("activity");
+            else if (activeTab === "activity") onTabChange("overview");
+          }}
+        >
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold">
+            Activity
+          </summary>
+          {visited.has("activity") || activeTab === "activity"
+            ? activity
+            : null}
+        </details>
+      ) : null}
     </aside>
   );
 }

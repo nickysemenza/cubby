@@ -857,7 +857,7 @@ describe("typed entity compiler", () => {
       {
         kind: "fields",
         id: "overview",
-        title: "Details",
+        title: "Record",
         placement: "primary",
         overview: true,
         fields: ["name"],

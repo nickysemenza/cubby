@@ -1165,6 +1165,8 @@ export default defineEntity({
       checks: [
         {
           id: "vendor_order_evidence",
+          satisfiedLabel: "Order evidence classified",
+          placement: { field: "orderEvidence" },
           facet: "identity",
           weight: 3,
           label: "Order evidence",
@@ -1172,6 +1174,8 @@ export default defineEntity({
         },
         {
           id: "vendor_order_evidence_conflict",
+          satisfiedLabel: "Order evidence consistent",
+          placement: { field: "orderEvidence" },
           facet: "identity",
           kind: "defect",
           weight: 3,
@@ -1183,6 +1187,8 @@ export default defineEntity({
         },
         {
           id: "vendor_logo",
+          satisfiedLabel: "Logo recorded",
+          placement: { section: "images" },
           facet: "provenance",
           weight: 1,
           label: "Logo",
@@ -1191,6 +1197,8 @@ export default defineEntity({
         },
         {
           id: "vendor_website",
+          satisfiedLabel: "Website recorded",
+          placement: { field: "website" },
           facet: "identity",
           weight: 1,
           label: "Website",

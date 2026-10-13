@@ -823,6 +823,8 @@ Rules:
       checks: [
         {
           id: "category_description",
+          satisfiedLabel: "Description recorded",
+          placement: { field: "description" },
           facet: "content",
           weight: 1,
           label: "Description",
@@ -830,6 +832,8 @@ Rules:
         },
         {
           id: "category_feature",
+          satisfiedLabel: "Feature classified",
+          placement: { field: "feature" },
           facet: "identity",
           weight: 2,
           label: "Feature",
@@ -838,6 +842,8 @@ Rules:
         },
         {
           id: "category_spending_category",
+          satisfiedLabel: "Spending category resolved",
+          placement: { field: "effectiveSpendingCategory" },
           facet: "linkage",
           weight: 2,
           label: "Spending category",

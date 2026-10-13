@@ -8,7 +8,6 @@ import { isGalleryEntity } from "@cubby/schemas/entity-manifest";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
-import { getErrorMessage } from "@cubby/shared";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
@@ -17,11 +16,10 @@ import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { PuzzlePieceIcon } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
 import { QuotesIcon } from "@phosphor-icons/react/dist/csr/Quotes";
 import { Link } from "@tanstack/react-router";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useState } from "react";
 import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
-import { detailFieldRenderersFor } from "~/entity/detail-field-renderers";
 import { detailEditRequest } from "~/entity/editing/editor-requests";
 import {
   EntityEditDialog,
@@ -33,16 +31,8 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import {
-  entityMutationOptionsFactory,
-  isGeneratedBrowserCrudEntity,
-} from "~/entity/entity-contracts";
-import {
-  editableFieldOverrides,
-  EntityBasicInfo,
-  renderDetailFieldValue,
-  type DetailFieldRenderer,
-} from "~/entity/entity-display";
+import { isGeneratedBrowserCrudEntity } from "~/entity/entity-contracts";
+import { renderDetailFieldValue } from "~/entity/entity-display";
 import {
   readRecordField,
   readDisplayReferenceField,
@@ -51,7 +41,6 @@ import { heroChipLabel } from "~/entity/enum-field-display";
 import { FieldExplanation } from "~/entity/field-explanation";
 import { RecordSuggestionsProvider } from "~/features/ai/record-suggestions";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
-import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { DetailHeroActions, DetailHeroStat } from "~/ui/layouts/page-hero";
 import { Page } from "~/ui/page/Page";
 import {
@@ -71,7 +60,6 @@ import {
   DetailSections,
 } from "../../ui/data-table/detail-page";
 import { DocumentViewerList } from "../../ui/DocumentViewerList";
-import { useEntityActionMutation } from "../../ui/hooks/useActionMutation";
 import {
   actionVerbs,
   type ActionVerbId,
@@ -88,6 +76,7 @@ import { DetailActionProvider, DetailActionTarget } from "./detail-action-bar";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { detailSlotsFor } from "./detail-slots";
+import { EntityRecordFields } from "./entity-record-fields";
 import {
   EntityRelationTable,
   type EntityRelationTableOperations,
@@ -95,6 +84,7 @@ import {
   RelationSectionActions,
 } from "./entity-relation-table";
 import { EntitySourcesSection, recordSources } from "./entity-sources-section";
+import { RecordQualityProvider, QualitySectionChecks } from "./record-quality";
 
 /** What every detail read carries that the generic page reads by name. */
 const detailRecordSchema = z.looseObject({
@@ -127,103 +117,6 @@ const sectionIcon = (kind: DeclaredSection["kind"]) => {
       return PuzzlePieceIcon;
   }
 };
-
-/** Scalar controls the generic inline editor renders as an `EditableCell`. */
-const INLINE_EDITABLE_CONTROLS = new Set([
-  "text",
-  "textarea",
-  "number",
-  "date",
-  "select",
-]);
-
-/**
- * The field keys of one `fields` section that the record's update contract
- * edits through a plain scalar control — those get an inline `EditableCell`;
- * reference, structured and boolean fields keep their read-only rendering
- * and are changed through the edit dialog.
- */
-function inlineEditableKeys(
-  entity: GenericDetailEntity,
-  fields: readonly string[],
-): string[] {
-  if (!isGeneratedBrowserCrudEntity(entity)) return [];
-  const model: EntityFieldModel = entityFieldModels[entity];
-  const updateRoster: readonly string[] = model.update;
-  const editable = new Set<string>(
-    model.fields
-      .filter(
-        (field) =>
-          updateRoster.includes(field.key) &&
-          field.control !== null &&
-          field.reference === null &&
-          INLINE_EDITABLE_CONTROLS.has(field.control.kind) &&
-          field.readKey !== null,
-      )
-      .map((field) => field.key),
-  );
-  return fields.filter((key) => editable.has(key));
-}
-
-function useInlineFieldOverrides(
-  entity: GenericDetailEntity,
-  record: DetailRecordBag,
-  fields: readonly string[],
-): Record<string, DetailFieldRenderer<DetailRecordBag>> {
-  const crud = isGeneratedBrowserCrudEntity(entity) ? entity : null;
-  const mutation = useEntityActionMutation({
-    // A non-CRUD entity (image, cookbook) never edits inline; the hook still
-    // has to run unconditionally, so it binds to `product` and is never
-    // invoked (the override set below is empty).
-    entity: crud ?? "product",
-    operation: "update",
-    intent: "full",
-    mutationFn: entityMutationOptionsFactory(crud ?? "product", "update"),
-    success: (data) => savedWithBackgroundWork(data.sideEffects),
-    error: (error) => getErrorMessage(error) || "Failed to save",
-  });
-  const keys = useMemo(
-    () => inlineEditableKeys(entity, fields),
-    [entity, fields],
-  );
-  if (crud === null || keys.length === 0) return {};
-  // SAFETY: `keys` names fields of `crud`'s own update contract; the wire
-  // variables are parsed by that contract before the mutation executes.
-  return editableFieldOverrides(crud, record, keys, (variables) =>
-    mutation.mutateAsync(variables as never),
-  );
-}
-
-function FieldsSection<E extends GenericDetailEntity>({
-  entity,
-  record,
-  fields,
-}: {
-  entity: E;
-  record: DetailRecordOf<E>;
-  fields: readonly string[];
-}) {
-  const bag = detailRecordSchema.parse(record);
-  const inline = useInlineFieldOverrides(entity, bag, fields);
-  // A domain renderer for a structured field wins over the generic cell; the
-  // inline editor covers the plain scalars a renderer never claims.
-  const renderers = detailFieldRenderersFor(entity) ?? {};
-  const overrides = { ...inline };
-  for (const [key, render] of Object.entries(renderers)) {
-    if (!fields.includes(key)) continue;
-    // SAFETY: `detailFieldRenderersFor` hands back this entity's own
-    // renderers, each typed against the record this page received.
-    overrides[key] = () => render(record as never);
-  }
-  return (
-    <EntityBasicInfo
-      entity={entity}
-      fields={fields}
-      record={bag}
-      overrides={overrides}
-    />
-  );
-}
 
 /** The chip, stats and breadcrumb the hero declares, read off the record. */
 function heroOf<E extends GenericDetailEntity>(
@@ -382,7 +275,7 @@ function declaredSections<E extends GenericDetailEntity>(
             ...base,
             title: section.title,
             content: (
-              <FieldsSection
+              <EntityRecordFields
                 entity={entity}
                 record={record}
                 fields={section.fields}
@@ -567,11 +460,33 @@ function RunEvidenceDetail<E extends GenericDetailEntity>({
         wayfinding={false}
         rawData={record}
       >
-        <DetailSections
-          onlyWorkspace="evidence"
-          sections={sections}
-          rawData={record}
-        />
+        <RecordQualityProvider
+          entity={entity}
+          id={bag.id}
+          visibleSections={sections.map((section) => section.id)}
+          visibleFields={presentationOf(entity)
+            .detail.sections.filter(
+              (section) =>
+                section.workspace === "evidence" && section.kind === "fields",
+            )
+            .flatMap((section) =>
+              section.kind === "fields" ? section.fields : [],
+            )}
+        >
+          <DetailSections
+            onlyWorkspace="evidence"
+            sections={sections.map((section) => ({
+              ...section,
+              content: (
+                <>
+                  <QualitySectionChecks section={section.id} />
+                  {section.content}
+                </>
+              ),
+            }))}
+            rawData={record}
+          />
+        </RecordQualityProvider>
       </Page>
     </DetailActionProvider>
   );
@@ -738,7 +653,24 @@ function FullEntityDetail<E extends GenericDetailEntity>({
             .filter((field) => field.display.detail)
             .map((field) => field.key)}
         >
-          <DetailSections sections={sections} rawData={record} />
+          <RecordQualityProvider
+            entity={entity}
+            id={bag.id}
+            renderedSections={sections.map((section) => section.id)}
+          >
+            <DetailSections
+              sections={sections.map((section) => ({
+                ...section,
+                content: (
+                  <>
+                    <QualitySectionChecks section={section.id} />
+                    {section.content}
+                  </>
+                ),
+              }))}
+              rawData={record}
+            />
+          </RecordQualityProvider>
         </RecordSuggestionsProvider>
         {editable && editing ? (
           EditOverride ? (

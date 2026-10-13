@@ -261,3 +261,24 @@
     font-weight: 400;
   }
 }
+
+/* The proposal stays on one compact line; only deliberate Review expands evidence. */
+.suggestion-review {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--brand-space-2);
+  width: 100%;
+}
+.suggestion-proposal {
+  flex: 1 1 auto;
+}
+.suggestion-disclosure {
+  display: contents;
+}
+.suggestion-disclosure > summary {
+  align-self: center;
+}
+.suggestion-evidence {
+  flex-basis: 100%;
+}

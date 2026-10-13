@@ -7,6 +7,7 @@ import {
   dataCheckFacet,
   dataCheckKind,
   dataCheckLabel,
+  dataCheckPresentation,
   dataCheckMessage,
   dataCheckWeight,
   dataCheckScoreCap,
@@ -162,7 +163,10 @@ export const buildQualityBreakdown = (
     summary: scoreSummary(result, terms),
     checks: terms.map(({ check, state }) => ({
       check,
-      label: dataCheckLabel[check],
+      label:
+        state === "satisfied"
+          ? dataCheckPresentation[check].satisfiedLabel
+          : dataCheckLabel[check],
       facet: dataCheckFacet[check],
       kind: dataCheckKind[check],
       weight: dataCheckWeight[check],

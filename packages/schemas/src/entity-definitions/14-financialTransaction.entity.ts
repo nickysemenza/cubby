@@ -1607,6 +1607,8 @@ export default defineEntity({
       checks: [
         {
           id: "financial_transaction_allocation_integrity",
+          satisfiedLabel: "Allocations consistent",
+          placement: { field: "allocations" },
           facet: "integrity",
           kind: "defect",
           weight: 3,
@@ -1617,6 +1619,8 @@ export default defineEntity({
         },
         {
           id: "financial_transaction_classification",
+          satisfiedLabel: "Transaction classified",
+          placement: { field: "kind" },
           facet: "identity",
           exceptions: "forbidden",
           weight: 1,
@@ -1626,6 +1630,8 @@ export default defineEntity({
         },
         {
           id: "financial_transaction_allocation",
+          satisfiedLabel: "Allocation recorded",
+          placement: { field: "allocations" },
           facet: "ledger",
           weight: 2,
           label: "Allocation",
@@ -1633,6 +1639,8 @@ export default defineEntity({
         },
         {
           id: "financial_transaction_merchant",
+          satisfiedLabel: "Merchant recorded",
+          placement: { field: "merchant" },
           facet: "identity",
           weight: 1,
           label: "Merchant",
@@ -1640,6 +1648,8 @@ export default defineEntity({
         },
         {
           id: "financial_transaction_evidence_expectation",
+          satisfiedLabel: "Receipt expectation classified",
+          placement: { field: "evidenceExpectation" },
           facet: "paperwork",
           exceptions: "forbidden",
           weight: 1,
@@ -1648,6 +1658,8 @@ export default defineEntity({
         },
         {
           id: "financial_transaction_booking",
+          satisfiedLabel: "Expenses booked",
+          placement: { field: "bookingCoverage" },
           facet: "ledger",
           weight: 2,
           label: "Expense booking",
@@ -1656,6 +1668,8 @@ export default defineEntity({
         },
         {
           id: "financial_transaction_document",
+          satisfiedLabel: "Expected receipt recorded",
+          placement: { field: "documentCoverage" },
           facet: "paperwork",
           label: "Expected receipt",
           message:
@@ -1663,6 +1677,8 @@ export default defineEntity({
         },
         {
           id: "financial_transaction_itemization",
+          satisfiedLabel: "Itemization recorded",
+          placement: { field: "itemizationCoverage" },
           facet: "ledger",
           label: "Receipt itemization",
           message:
@@ -1670,6 +1686,8 @@ export default defineEntity({
         },
         {
           id: "financial_transaction_products",
+          satisfiedLabel: "Goods identified",
+          placement: { field: "productsCoverage" },
           facet: "identity",
           label: "Goods identity",
           message: "Purchased goods have unresolved Product identities.",

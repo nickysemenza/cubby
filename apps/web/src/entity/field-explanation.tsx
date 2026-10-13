@@ -385,9 +385,6 @@ function QualityCheckRow({
         slot="trailing"
         className="flex flex-wrap items-center justify-end gap-2"
       >
-        <span className="text-[11px] text-muted-foreground tabular-nums">
-          {check.weightLabel}
-        </span>
         <Badge
           variant={
             check.state === "gap"
@@ -421,12 +418,6 @@ function QualityCalculation({
   breakdown: NonNullable<FieldExplanationOutput["qualityBreakdown"]>;
   entityId: string;
 }) {
-  const satisfied = breakdown.checks.filter(
-    (check) => check.state === "satisfied" && !check.exception,
-  );
-  const attention = breakdown.checks.filter(
-    (check) => check.state !== "satisfied" || check.exception,
-  );
   return (
     <section className="grid gap-2 border-t border-border pt-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -445,9 +436,21 @@ function QualityCalculation({
           {dataQualityStatusLabel(breakdown.status)}
         </Badge>
       </div>
-      <p className="text-xs leading-5 tabular-nums">{breakdown.summary}</p>
+      <details>
+        <summary className="cursor-pointer text-xs text-muted-foreground">
+          Score arithmetic
+        </summary>
+        <p className="py-2 text-xs leading-5 tabular-nums">
+          {breakdown.summary}
+        </p>
+        {breakdown.checks.map((check) => (
+          <p key={check.check} className="text-xs">
+            {check.label} · {check.weightLabel}
+          </p>
+        ))}
+      </details>
       <Ledger>
-        {attention.map((check) => (
+        {breakdown.checks.map((check) => (
           <QualityCheckRow
             key={check.check}
             check={check}
@@ -455,22 +458,6 @@ function QualityCalculation({
           />
         ))}
       </Ledger>
-      {satisfied.length > 0 ? (
-        <details>
-          <summary className="cursor-pointer text-xs font-medium text-positive">
-            {satisfied.length} satisfied checks
-          </summary>
-          <Ledger className="mt-1">
-            {satisfied.map((check) => (
-              <QualityCheckRow
-                key={check.check}
-                check={check}
-                entityId={entityId}
-              />
-            ))}
-          </Ledger>
-        </details>
-      ) : null}
     </section>
   );
 }
@@ -495,7 +482,7 @@ function ExplanationResult({
   return resolution ? (
     <ResolutionHeadline entity={entity} field={field} resolution={resolution} />
   ) : (
-    <p className="text-lg leading-snug font-semibold break-words">
+    <p className="text-sm leading-snug font-semibold break-words">
       <ReadableExplanationValue value={value} />
     </p>
   );
@@ -510,6 +497,30 @@ export function FieldExplanation({
   resolution,
 }: FieldExplanationProps) {
   const [open, setOpen] = useState(false);
+  if (surface === "detail")
+    return (
+      <div className="min-w-0">
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label={`How ${label.toLowerCase()} is determined`}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          <InfoIcon className="size-3.5" />
+        </Button>
+        {open ? (
+          <FieldExplanationContents
+            entity={entity}
+            id={id}
+            field={field}
+            label={label}
+            surface={surface}
+            resolution={resolution}
+          />
+        ) : null}
+      </div>
+    );
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
@@ -553,7 +564,7 @@ export function FieldExplanation({
 }
 
 /** Query observers and actions mount only while the explanation is open. */
-function FieldExplanationContents({
+export function FieldExplanationContents({
   entity,
   id,
   field,
@@ -575,11 +586,13 @@ function FieldExplanationContents({
   // Long rule identifiers must wrap inside the viewport-bounded popover.
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3 p-3">
-      <PopoverTitle className="text-base font-semibold">
-        <span className="sr-only">How </span>
-        {label}
-        <span className="sr-only"> is determined</span>
-      </PopoverTitle>
+      {surface === "detail" ? (
+        <h3 className="text-xs font-semibold">{label}</h3>
+      ) : (
+        <PopoverTitle className="text-sm font-semibold">
+          How {label.toLowerCase()} is determined
+        </PopoverTitle>
+      )}
       {result.isPending ? (
         <p className="text-muted-foreground">Loading…</p>
       ) : result.isError ? (

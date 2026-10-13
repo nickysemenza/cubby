@@ -1,6 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
 import { type ComponentType, lazy, useEffect } from "react";
 
+import { entityDetailParams } from "~/entity/entities";
+
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 
 /** Rendered while the hero's Edit action is open; the override owns the surface. */
@@ -13,12 +15,22 @@ export type DetailEditOverride<TRecord> = ComponentType<{
  * Recipe editing is a page-level workflow (`?edit=true` on the recipe route
  * swaps the whole body for `EditRecipeForm`), not a dialog.
  */
-function RecipeEditRedirect({ onClose }: { onClose: () => void }) {
+function RecipeEditRedirect({
+  record,
+  onClose,
+}: {
+  record: DetailRecordOf<"recipe">;
+  onClose: () => void;
+}) {
   const navigate = useNavigate();
   useEffect(() => {
-    void navigate({ to: ".", search: (prev) => ({ ...prev, edit: true }) });
+    void navigate({
+      to: "/recipes/$shortcode",
+      params: entityDetailParams(record.id),
+      search: { edit: true },
+    });
     onClose();
-  }, [navigate, onClose]);
+  }, [navigate, onClose, record.id]);
   return null;
 }
 

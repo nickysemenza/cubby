@@ -2,7 +2,7 @@ import { formatConfidence, type Confidence } from "@cubby/schemas/ai";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { formatCompactRelative } from "~/ui/HoverableTimestamp";
@@ -30,6 +30,8 @@ export interface SuggestionProvenance {
 export interface SuggestionBodyProps {
   /** What the field holds now; null for an addition. */
   current: ReactNode | null;
+  /** Inline records keep evidence behind an explicit disclosure. */
+  compact?: boolean;
   proposed: ReactNode;
   probability: number | null;
   confidence?: Confidence;
@@ -52,7 +54,7 @@ export interface SuggestionBodyProps {
   onUseDifferent?: () => void;
 }
 
-function stop(event: MouseEvent) {
+function stop(event: { stopPropagation: () => void }) {
   event.stopPropagation();
 }
 
@@ -95,6 +97,7 @@ function ProvenanceCaption({ model, runId, at }: SuggestionProvenance) {
  */
 export function SuggestionBody({
   current,
+  compact = false,
   proposed,
   probability,
   confidence,
@@ -112,14 +115,82 @@ export function SuggestionBody({
   onReject,
   onUseDifferent,
 }: SuggestionBodyProps) {
+  const accept = (
+    <Button
+      type="button"
+      size="xs"
+      className="min-h-11 md:min-h-0"
+      disabled={disabled || saving}
+      onClick={onAccept}
+    >
+      {saving ? "Saving…" : "Accept"}
+    </Button>
+  );
+  const evidenceBody = (
+    <Stack gap="xs" className="min-w-0 text-xs">
+      <Description size="xs">
+        Confidence: {formatConfidence(probability, confidence)}
+      </Description>
+      {runnerUp ? (
+        <Description size="xs">
+          Alternative: {runnerUp.label}
+          {runnerUp.probability !== null
+            ? ` · ${formatConfidence(runnerUp.probability)}`
+            : ""}
+        </Description>
+      ) : null}
+      {reasoning ? <Description size="xs">{reasoning}</Description> : null}
+      {basis.length > 0 ? (
+        <Description size="xs">Based on {basis.join(", ")}</Description>
+      ) : null}
+      {evidence}
+      {notice ? <Description size="xs">{notice}</Description> : null}
+      <Row gap="xs" wrap align="center">
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          disabled={saving}
+          onClick={onReject}
+        >
+          Reject
+        </Button>
+        {onUseDifferent ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="link"
+            disabled={saving}
+            onClick={onUseDifferent}
+          >
+            Use a different value…
+          </Button>
+        ) : null}
+      </Row>
+      <details>
+        <summary className="cursor-pointer text-xs text-muted-foreground">
+          Decision details
+        </summary>
+        <Stack gap="xs" className="pt-2">
+          <ProvenanceCaption {...provenance} />
+          {onUseDifferent ? (
+            <Description size="xs">
+              A different value is written to the record and this suggestion is
+              recorded as a Miss.
+            </Description>
+          ) : null}
+        </Stack>
+      </details>
+    </Stack>
+  );
   return (
-    <Stack
-      gap="xs"
-      className="min-w-0 text-xs whitespace-normal"
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- Review controls own keyboard behavior; this wrapper only blocks the record row click.
+    <div
+      className="suggestion-review min-w-0 text-xs whitespace-normal"
       onClick={stop}
       onMouseDown={stop}
     >
-      <Row gap="xs" wrap align="center">
+      <div className="suggestion-proposal flex min-w-0 flex-wrap items-center gap-2">
         {current !== null ? (
           <>
             <span className="text-muted-foreground">{current}</span>
@@ -133,71 +204,25 @@ export function SuggestionBody({
           {current === null && !removal ? "Suggested: " : null}
           {proposed}
         </span>
-        <span className="text-muted-foreground tabular-nums">
-          {formatConfidence(probability, confidence)}
-        </span>
-      </Row>
-      {runnerUp ? (
-        <Description size="xs" className="text-muted-foreground">
-          Runner-up: {runnerUp.label}
-          {runnerUp.probability !== null
-            ? ` · ${formatConfidence(runnerUp.probability)}`
-            : ""}
-        </Description>
-      ) : null}
-      {reasoning ? <Description size="xs">{reasoning}</Description> : null}
-      {basis.length > 0 ? (
-        <Description size="xs" className="text-muted-foreground">
-          Based on {basis.join(", ")}
-        </Description>
-      ) : null}
-      {evidence}
-      <ProvenanceCaption {...provenance} />
-      {notice ? <Description size="xs">{notice}</Description> : null}
-      <Row gap="xs" wrap align="center">
-        <Button
-          type="button"
-          size="xs"
-          className="min-h-11 md:min-h-0"
-          disabled={disabled || saving}
-          onClick={onAccept}
-        >
-          {saving ? "Saving…" : "Accept"}
-        </Button>
-        <Button
-          type="button"
-          size="xs"
-          variant="ghost"
-          className="min-h-11 md:min-h-0"
-          disabled={saving}
-          onClick={onReject}
-        >
-          Reject
-        </Button>
-        {onUseDifferent ? (
-          <Button
-            type="button"
-            size="xs"
-            variant="link"
-            className="min-h-11 md:min-h-0"
-            disabled={saving}
-            onClick={onUseDifferent}
-          >
-            Use a different value…
-          </Button>
-        ) : null}
-      </Row>
-      {onUseDifferent ? (
-        <Description size="xs" className="text-muted-foreground">
-          A different value is written to the record and this suggestion is
-          recorded as a Miss.
-        </Description>
-      ) : null}
+        {accept}
+      </div>
+      {compact ? (
+        <details className="suggestion-disclosure">
+          <summary className="flex min-h-11 min-w-11 cursor-pointer items-center text-xs text-muted-foreground underline-offset-2 hover:underline md:min-h-0 md:min-w-0">
+            Review
+          </summary>
+          <div className="suggestion-evidence border-t border-border pt-2">
+            {evidenceBody}
+          </div>
+        </details>
+      ) : (
+        <div className="pt-2">{evidenceBody}</div>
+      )}
       {failure !== null ? (
         <Description size="xs" role="alert">
           Could not save: {getAppErrorDetails(failure).message}
         </Description>
       ) : null}
-    </Stack>
+    </div>
   );
 }

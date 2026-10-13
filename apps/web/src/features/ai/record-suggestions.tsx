@@ -1314,6 +1314,7 @@ export function RecordFieldSuggestion({
         record={parsed.success ? parsed.data : { id: "" }}
         field={field}
         suggestion={storedSuggestion}
+        surface={surface}
         renderValue={renderValue}
       >
         {children}
@@ -1342,6 +1343,7 @@ function StoredSuggestionField({
   field,
   suggestion,
   renderValue,
+  surface,
   children,
 }: {
   context: RecordSuggestionsCtx;
@@ -1349,6 +1351,7 @@ function StoredSuggestionField({
   field: string;
   suggestion: SuggestionReviewRow;
   renderValue?: (value: JsonValue) => ReactNode;
+  surface: "inline" | "cell";
   children: ReactNode;
 }) {
   const runnerUp = suggestion.runnerUpValue;
@@ -1358,6 +1361,7 @@ function StoredSuggestionField({
       record={record}
       field={field}
       kind={suggestion.kind}
+      compact={surface === "inline"}
       value={suggestion.suggestedValue}
       probability={suggestion.confidence}
       runnerUp={
@@ -1529,6 +1533,7 @@ function GhostSuggestionCell({
   runnerUp = null,
   provenance,
   inline = true,
+  compact = false,
   pending = false,
   renderValue,
   accept,
@@ -1548,6 +1553,7 @@ function GhostSuggestionCell({
   runnerUp?: { label: ReactNode; probability: number | null } | null;
   provenance: SuggestionProvenance;
   inline?: boolean;
+  compact?: boolean;
   pending?: boolean;
   renderValue?: (value: JsonValue) => ReactNode;
   accept: () => Promise<void>;
@@ -1601,66 +1607,85 @@ function GhostSuggestionCell({
   );
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
-      {kind === "correction" || !inline ? (
+      {compact ? (
+        <SuggestionBody
+          compact
+          current={kind === "correction" ? children : null}
+          proposed={proposed}
+          probability={probability}
+          runnerUp={runnerUp}
+          reasoning={reasoning}
+          basis={suggestionBasisLabels(context.entity, field)}
+          provenance={provenance}
+          saving={busy}
+          onAccept={() => void run(accept)}
+          onReject={() => void run(reject)}
+          onUseDifferent={() => setEditOpen(true)}
+        />
+      ) : (
         <>
-          {children}
-          {inline ? (
-            <ArrowRightIcon
-              aria-label="Suggested replacement"
-              className="size-3 shrink-0"
-            />
+          {kind === "correction" || !inline ? (
+            <>
+              {children}
+              {inline ? (
+                <ArrowRightIcon
+                  aria-label="Suggested replacement"
+                  className="size-3 shrink-0"
+                />
+              ) : null}
+            </>
           ) : null}
-        </>
-      ) : null}
-      {inline ? (
-        <Pill
-          mode="suggestion"
-          render={
-            <button
-              type="button"
+          {inline ? (
+            <Pill
+              mode="suggestion"
+              render={
+                <button
+                  type="button"
+                  disabled={busy}
+                  aria-label={suggestionAcceptLabel(valueText.text)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void run(accept);
+                  }}
+                />
+              }
+              aria-busy={busy}
+              className="max-w-full min-w-0 cursor-pointer gap-1 overflow-hidden hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait max-md:min-h-11"
+            >
+              {ghost}
+            </Pill>
+          ) : null}
+          <Popover open={bodyOpen} onOpenChange={setBodyOpen}>
+            <PopoverTrigger
+              aria-label="Suggestion actions"
               disabled={busy}
-              aria-label={suggestionAcceptLabel(valueText.text)}
-              onClick={(event) => {
-                event.stopPropagation();
-                void run(accept);
-              }}
-            />
-          }
-          aria-busy={busy}
-          className="max-w-full min-w-0 cursor-pointer gap-1 overflow-hidden hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait max-md:min-h-11"
-        >
-          {ghost}
-        </Pill>
-      ) : null}
-      <Popover open={bodyOpen} onOpenChange={setBodyOpen}>
-        <PopoverTrigger
-          aria-label="Suggestion actions"
-          disabled={busy}
-          onMouseDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-          className="relative inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none after:absolute after:-inset-3 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:after:hidden"
-        >
-          <span aria-hidden>···</span>
-        </PopoverTrigger>
-        <PopoverContent side="bottom" className="w-auto max-w-xs p-2">
-          <SuggestionBody
-            current={kind === "correction" ? children : null}
-            proposed={proposed}
-            probability={probability}
-            runnerUp={runnerUp}
-            reasoning={reasoning}
-            basis={suggestionBasisLabels(context.entity, field)}
-            provenance={provenance}
-            saving={busy}
-            onAccept={() => void run(accept)}
-            onReject={() => void run(reject)}
-            onUseDifferent={() => {
-              setBodyOpen(false);
-              setEditOpen(true);
-            }}
-          />
-        </PopoverContent>
-      </Popover>
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+              className="relative inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none after:absolute after:-inset-3 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:after:hidden"
+            >
+              <span aria-hidden>···</span>
+            </PopoverTrigger>
+            <PopoverContent side="bottom" className="w-auto max-w-xs p-2">
+              <SuggestionBody
+                current={kind === "correction" ? children : null}
+                proposed={proposed}
+                probability={probability}
+                runnerUp={runnerUp}
+                reasoning={reasoning}
+                basis={suggestionBasisLabels(context.entity, field)}
+                provenance={provenance}
+                saving={busy}
+                onAccept={() => void run(accept)}
+                onReject={() => void run(reject)}
+                onUseDifferent={() => {
+                  setBodyOpen(false);
+                  setEditOpen(true);
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+        </>
+      )}
       <DifferentValueDialog
         entity={context.entity}
         record={record}

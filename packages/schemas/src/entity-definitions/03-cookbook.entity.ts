@@ -419,6 +419,8 @@ export default defineEntity({
       checks: [
         {
           id: "cookbook_import_incomplete",
+          satisfiedLabel: "Import complete",
+          placement: { section: "import-progress" },
           facet: "integrity",
           kind: "defect",
           weight: 3,
@@ -429,6 +431,8 @@ export default defineEntity({
         },
         {
           id: "cookbook_cover",
+          satisfiedLabel: "Cover recorded",
+          placement: { field: "coverUrl" },
           facet: "provenance",
           weight: 1,
           label: "Cover image",

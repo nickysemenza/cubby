@@ -1903,6 +1903,8 @@ Rules:
       checks: [
         {
           id: "expense_cost",
+          satisfiedLabel: "Cost recorded",
+          placement: { field: "cost" },
           facet: "ledger",
           weight: 3,
           scoreCap: 49,
@@ -1911,6 +1913,8 @@ Rules:
         },
         {
           id: "expense_spending_category",
+          satisfiedLabel: "Category recorded",
+          placement: { field: "spendingCategoryId" },
           facet: "identity",
           exceptions: "forbidden",
           weight: 2,
@@ -1921,6 +1925,8 @@ Rules:
         },
         {
           id: "expense_product_resolution",
+          satisfiedLabel: "Product identity resolved",
+          placement: { field: "productId" },
           facet: "identity",
           weight: 2,
           label: "Product identity",
@@ -1928,6 +1934,8 @@ Rules:
         },
         {
           id: "expense_quantity",
+          satisfiedLabel: "Quantity recorded",
+          placement: { field: "productQuantity" },
           facet: "ledger",
           weight: 1,
           label: "Quantity",

@@ -252,12 +252,28 @@ describe("record suggestions", () => {
             { id, uuid: recordId, name: "Synthetic row", categoryId: null },
           ]}
         />
+        <RecordFieldSuggestion
+          record={{ id, name: "Synthetic row", categoryId: null }}
+          field="categoryId"
+        >
+          <span>Current value</span>
+        </RecordFieldSuggestion>
       </RecordSuggestionsProvider>,
       { wrapper: harness.wrapper },
     );
     await waitFor(() => expect(stored.list).toHaveBeenCalled());
     expect(suggestFields).not.toHaveBeenCalled();
     finishStored([storedRow]);
+    expect(await screen.findByRole("button", { name: "Accept" })).toBeVisible();
+    const review = screen.getByText("Review", {
+      exact: true,
+      selector: "summary",
+    });
+    expect(
+      screen.queryByRole("button", { name: "Suggestion actions" }),
+    ).toBeNull();
+    fireEvent.click(review);
+    expect(screen.getByText(/Confidence:/)).toBeVisible();
     fireEvent.click(
       await screen.findByRole("button", { name: "Accept suggestions (1)" }),
     );
@@ -488,7 +504,7 @@ describe("record suggestions", () => {
     expect(
       await screen.findByText("Synthetic category evidence"),
     ).toBeVisible();
-    expect(screen.getByText(/Runner-up: Tools \/ Drivers/)).toBeVisible();
+    expect(screen.getByText(/Alternative: Tools \/ Drivers/)).toBeVisible();
   });
 
   it("opens the normal editor with the saved value after acceptance fails", async () => {

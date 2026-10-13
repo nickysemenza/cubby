@@ -427,6 +427,8 @@ export default defineEntity({
       checks: [
         {
           id: "wish_candidate",
+          satisfiedLabel: "Candidate recorded",
+          placement: { section: "candidates" },
           facet: "linkage",
           weight: 1,
           label: "Candidate",

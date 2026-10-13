@@ -1494,6 +1494,8 @@ Rules:
       checks: [
         {
           id: "project_kind",
+          satisfiedLabel: "Kind recorded",
+          placement: { field: "kind" },
           facet: "identity",
           weight: 1,
           label: "Kind",
@@ -1501,6 +1503,8 @@ Rules:
         },
         {
           id: "project_start_date",
+          satisfiedLabel: "Start date recorded",
+          placement: { field: "startDate" },
           facet: "paperwork",
           weight: 1,
           label: "Start date",
@@ -1508,6 +1512,8 @@ Rules:
         },
         {
           id: "project_date_order",
+          satisfiedLabel: "Dates in order",
+          placement: { field: "endDate" },
           facet: "integrity",
           kind: "defect",
           weight: 2,
