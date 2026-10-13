@@ -505,7 +505,12 @@ export const commitAcceptedSourceOrderReconciliationInput = z.object({
   sourceOrderId: z.uuid(),
   /** A current original review, never a reconstruction of historical extraction. */
   reviewedPreparation: z
-    .object({ run: runShortcode, stableOrderId: z.string().min(1) })
+    .object({
+      run: runShortcode,
+      stableOrderId: stableImportItemId.describe(
+        "Opaque prepared-order key within the selected Run; not a Cubby entity ID.",
+      ),
+    })
     .optional(),
   resolution: z.object({
     kind: z.literal("attach_only"),

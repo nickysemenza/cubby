@@ -548,6 +548,7 @@ describe("MCP catalog schemas", () => {
       // Stable source/workflow identifiers are opaque import evidence keys,
       // not Cubby entity UUIDs or public shortcodes.
       "purchase_import.orders[].stableOrderId",
+      "purchase_import.reviewedPreparation.stableOrderId",
       "purchase_import.orders[].itemOperationId",
       "purchase_import.orders[].lineIds",
       "purchase_import.prepareOperationId",
