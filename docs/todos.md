@@ -290,8 +290,10 @@ historical Runs stay readable through generic reports.
   accepting that specification; page authority alone does not resolve an
   internal contradiction. Preserve already supported identity and assignments.
 
-- ⏳ 🧪 **Accept live Mail import and Burn-down.** Live work stays paused until the
-  member resumes it. The approved Product scope has completed source-backed
+- ⏳ 🧪 **Accept live Mail import and Burn-down.** Historical discovery and
+  unattended bulk admission remain paused until the member resumes each scope.
+  Interactive member-directed repairs can continue independently. The approved
+  Product scope has completed source-backed
   acceptance, including the member's packaging-label confirmations. Remaining
   acceptance: live verification that imports refuse exact-identity Product forks and
   resolve Vendors by Sender proof or Vendor alias, known-vendor and
@@ -317,6 +319,16 @@ historical Runs stay readable through generic reports.
   applies an audit-proposed aggregate replacement; the first exact-identity
   guard broke its `distinctFrom` carry unnoticed. Add a commit → finding →
   approve case whose line carries a Distinct-from decision.
+
+- 🤔 ✨ **Support reviewed category attribution for negative price adjustments.**
+  A subscription upgrade invoice can credit unused time from its prior plan.
+  Preserve that signed `other_adjustment` and its source; do not relabel it as
+  a discount or alter the amount to force category completeness. Current
+  allocation leaves these credits unknown alongside positive principal lines,
+  and the Expense classification constraint rejects direct category assignment.
+  Add a source-backed reviewed attribution path through the generic model, and
+  make its preview reject unsupported assignments before an apply reaches the
+  database constraint. Preserve project/party cents and payment allocations.
 
 - ⏳ 🧪 **Measure paid fallback recovery.** A bounded live attempt saw the exact
   quota refusal inside an HTTP 200 stream; the shared router now qualifies it
