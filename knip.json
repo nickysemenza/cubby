@@ -11,6 +11,7 @@
         "scripts/apple-release.ts!",
         "scripts/test-services.ts!",
         "scripts/ensure.ts!",
+        "scripts/design-tokens.ts!",
         "scripts/generator/main.ts!",
         // Reached from hooks, CI, or package scripts rather than an import
         // (production mode does not read those): .husky/commit-msg,
