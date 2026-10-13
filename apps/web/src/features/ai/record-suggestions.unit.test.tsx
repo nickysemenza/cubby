@@ -827,15 +827,10 @@ describe("record suggestions", () => {
     errorSpy.mockRestore();
   });
 
-  it("accepts a suggestion whose request basis was the union of every visible target, not just the clicked field's own basis (regression: 'Suggestion inputs changed')", async () => {
-    // costType's own suggest basis is only ["name", "productId", "vendor"].
-    // With trade, vendor, and projectId also visible on this row, the
-    // request-building basis additionally picks up "notes", "orderId",
-    // "projectId", and "date" (from trade's and projectId's own bases,
-    // and the expense inheritance-context keys). Accepting the costType
-    // suggestion must re-derive that same wider key set, not silently
-    // narrow to costType's own basis keys, or the fingerprint compare
-    // manufactures a false "inputs changed" refusal.
+  it("accepts a proposal against its complete request basis (regression: 'Suggestion inputs changed')", async () => {
+    // Acceptance must reproduce the request's own declared keys and
+    // inheritance context, without widening it to other visible targets
+    // or silently dropping a context key from its drift fingerprint.
     const record = {
       id: testShortcode("expense", "regression"),
       name: "Lumber order",

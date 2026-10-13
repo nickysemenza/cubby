@@ -1299,7 +1299,21 @@ probability, so outcome summaries never count them as proposed changes.
 
 Manifest-declared suggestion targets appear as field pills in entity lists.
 Pending Suggestions and confident live answers both appear in those cells as the
-same shared suggestion-mode pill; one tap accepts. Every field-suggestion
+same shared suggestion-mode pill; one tap accepts. Each live suggestion
+question is keyed by one target's declared basis, current assignment, and relevant
+resolution context. Deferred sibling projections and unrelated assignments do not
+restart it. The page batches stored Suggestion reads and retains completed rows
+while an expanded roster loads; only newly seen rows wait. Pending state and read
+errors belong to the affected field, and background refreshes retain usable answers.
+Acceptance immediately shows the proposed value with a saving indicator in that
+cell, preserves unrelated pills, and hands off to the saved projection when it
+arrives. The accepted field stays settled for the visit until its dependencies or
+saved value change, rather than immediately asking for a correction to the new
+assignment. Failed writes restore the proposal and show the raw diagnostic. Live
+acceptance still rechecks authoritative saved inputs before writing; changed
+declared dependencies require a new question. A refused finance fingerprint
+refreshes only the affected question. Stored acceptance completes after
+its write, without awaiting unrelated list refreshes. Every field-suggestion
 surface opens the same suggestion body (`features/ai/suggestion-body.tsx`):
 Accept / Reject (with "Use a different value…"), confidence as "92% · high"
 (`formatConfidence`), the runner-up and its probability, the basis fields the
