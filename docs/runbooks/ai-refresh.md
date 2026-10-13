@@ -66,7 +66,10 @@ Disable `AI_REFRESH_ENABLED` in a deployment to pause admission and
 fence publication. Already applied values and immutable history survive disabling
 or rollback. Do not delete the additive ledger/receipt columns during rollback.
 A failed startup handoff retains its alarm and retries the same discovery Run;
-nightly reconciliation is the additional backstop. Input-only changes can wait
+nightly reconciliation is the additional backstop. Preserve the Gateway
+namespace and its storage during changes. If stored ownership falls behind
+PostgreSQL, the current object reports the fence and schedules a retry above
+the recorded epoch instead of acknowledging a stale observation. Input-only changes can wait
 until app-open recovery or nightly maintenance; they do not require idle database
 polling.
 

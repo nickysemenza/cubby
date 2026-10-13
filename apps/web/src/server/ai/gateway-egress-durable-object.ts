@@ -80,9 +80,22 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       return epoch;
     });
     if (epoch === null) return;
-    await (
+    const activeEpoch = await (
       await import("../ai-refresh-startup")
     ).observeAiRefreshFeatures(this.env, epoch);
+    if (activeEpoch > epoch) {
+      await this.ctx.blockConcurrencyWhile(async () => {
+        const nextEpoch = activeEpoch + 1;
+        await this.ctx.storage.put({
+          aiRefreshObservationEpoch: nextEpoch,
+          aiRefreshPendingObservation: { version, epoch: nextEpoch },
+        });
+        await this.ctx.storage.setAlarm(Date.now() + 60_000);
+      });
+      throw new Error(
+        `AI refresh observation fenced: attempted epoch ${epoch}, active epoch ${activeEpoch}; durable retry scheduled`,
+      );
+    }
     await this.ctx.blockConcurrencyWhile(async () => {
       await this.ctx.storage.put("aiRefreshObservedVersion", version);
       await this.ctx.storage.delete("aiRefreshPendingObservation");

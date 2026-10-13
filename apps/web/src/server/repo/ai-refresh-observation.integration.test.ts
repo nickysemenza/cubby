@@ -11,6 +11,7 @@ import { dispatchAiRefreshDiscovery } from "~/server/ai-refresh-startup";
 import { compiledRefreshManifest } from "~/server/ai/refresh-policy";
 import { run, user } from "~/server/db/schema";
 import { systemActor } from "~/server/runs/ensure-run";
+import { launchWorkflowRun } from "~/server/workflow-runs/lifecycle";
 
 import {
   activateAiRefresh,
@@ -232,5 +233,31 @@ describe("application-owned AI feature observation", () => {
       field: null,
       email: null,
     });
+  });
+  it("automatic dispatch atomically preserves cancellation recorded after its ownership read", async () => {
+    const activation = await activateAiRefresh(ctx.db, "synthetic-cancel", {
+      enabled: true,
+      startDiscovery: true,
+    });
+    const id = runEntityId.parse(activation.discoveryRunId);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "user_cancelled" })
+      .where(eq(run.id, id));
+    await expect(
+      launchWorkflowRun(
+        ctx.db,
+        { runId: id, purpose: "ai_refresh", automatic: true },
+        {
+          status: async () => ({ state: "missing", error: null }),
+          terminate: async () => {},
+          create: async () => {},
+        },
+      ),
+    ).rejects.toThrow(/cancelled Run/);
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]
+        ?.failureCode,
+    ).toBe("user_cancelled");
   });
 });

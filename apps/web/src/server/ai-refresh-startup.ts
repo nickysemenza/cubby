@@ -30,8 +30,10 @@ export async function observeAiRefreshFeatures(
       startDiscovery: true,
       observationEpoch,
     });
-    if (activation.observationEpoch !== observationEpoch) return;
+    if (activation.observationEpoch !== observationEpoch)
+      return activation.observationEpoch;
     await dispatchAiRefreshDiscovery(db, activation);
+    return activation.observationEpoch;
   });
 }
 
@@ -75,7 +77,7 @@ export async function dispatchAiRefreshDiscovery(
         },
         {
           failureCode: "workflow_instance_ended",
-          message: `AI refresh startup Workflow is ${status.state}`,
+          message: `AI refresh startup Workflow is ${status.state}${status.error ? `: ${status.error}` : ""}`,
         },
       ))
     )
@@ -86,6 +88,7 @@ export async function dispatchAiRefreshDiscovery(
     {
       runId: runEntityId.parse(activation.discoveryRunId),
       purpose: "ai_refresh",
+      automatic: true,
     },
     launcher,
   );

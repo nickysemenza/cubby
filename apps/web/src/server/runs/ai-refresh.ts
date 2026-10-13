@@ -893,6 +893,7 @@ export async function recoverAiRefresh(db: Database) {
         await launchWorkflowRun(db, {
           runId: runEntityId.parse(id),
           purpose: "ai_refresh",
+          automatic: true,
         });
       } catch (error) {
         log.error("Refresh Workflow launch failed", {

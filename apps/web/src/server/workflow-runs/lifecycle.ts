@@ -1,6 +1,6 @@
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import type { MailDiscoveryRunProgress } from "@cubby/schemas/run-fields";
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, ne, sql } from "drizzle-orm";
 
 import {
   describeErrorCauses,
@@ -94,6 +94,8 @@ export async function launchWorkflowRun(
     purpose: WorkflowRunPurpose;
     /** Purpose-specific progress to reset for the new attempt. */
     progressPatch?: RunProgressPatch;
+    /** Recovery cannot undo cancellation or reopen a completed Run. */
+    automatic?: boolean;
   },
   launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<{ attempt: number; instanceId: string }> {
@@ -113,11 +115,21 @@ export async function launchWorkflowRun(
       and(
         eq(runTable.id, input.runId),
         sql`(${runTable.status} <> 'running' OR ${attemptOf} = 0)`,
+        input.automatic
+          ? and(
+              ne(runTable.status, "completed"),
+              sql`${runTable.failureCode} IS DISTINCT FROM 'user_cancelled'`,
+            )
+          : undefined,
       ),
     )
     .returning({ shortcode: runTable.shortcode, attempt: attemptOf });
   if (!reopened)
-    throw new Error("This Run is already running; wait for it or cancel it.");
+    throw new Error(
+      input.automatic
+        ? "Automatic dispatch cannot restart a running, completed or cancelled Run."
+        : "This Run is already running; wait for it or cancel it.",
+    );
   const instanceId = workflowInstanceId(reopened.shortcode, reopened.attempt);
   await recordRunProgress(
     db,
