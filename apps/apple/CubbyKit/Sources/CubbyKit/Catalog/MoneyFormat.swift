@@ -13,12 +13,18 @@ extension Decimal {
 }
 
 /// AI usage keeps sub-cent precision and identifies incomplete known subtotals.
-public func aiCostSubtotal(_ value: Double, unpriced: Int, count: Int? = nil) -> String {
+public func aiCostSubtotal(_ value: Double, unpriced: Int, count: Int? = nil, complete: Bool? = nil) -> String
+{
+    if value == 0, unpriced == 0, complete == false {
+        return "unpriced · coverage unknown"
+    }
     if value == 0, unpriced > 0, unpriced >= (count ?? unpriced) {
         return "\(unpriced) unpriced"
     }
     let amount = ValueFormat.currency(value, minFractionDigits: 4, maxFractionDigits: 6)
-    return unpriced > 0 ? "\(amount) known · \(unpriced) unpriced" : amount
+    return unpriced > 0
+        ? "\(amount) known · \(unpriced) unpriced"
+        : complete == false ? "\(amount) known · coverage unknown" : amount
 }
 
 public func aiBillingReasonLabel(_ reason: String) -> String {

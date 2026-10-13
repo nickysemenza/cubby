@@ -7,6 +7,11 @@ import Testing
 /// display format identically (`packages/shared/golden-vectors/display-format.json`).
 @Suite("DisplayFormat")
 struct DisplayFormatTests {
+    @Test func incompleteAiCostCoverage() {
+        #expect(aiCostSubtotal(0, unpriced: 0, count: 0, complete: false) == "unpriced · coverage unknown")
+        #expect(aiCostSubtotal(0.25, unpriced: 0, complete: false) == "$0.2500 known · coverage unknown")
+    }
+
     private struct MoneyVector: Decodable {
         let value: Double
         let out: String

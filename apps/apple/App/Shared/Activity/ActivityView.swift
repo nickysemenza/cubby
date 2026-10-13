@@ -834,13 +834,15 @@ struct ActivityDetailView: View {
             LabeledContent(
                 "Charged cost",
                 value: aiCostSubtotal(
-                    detail.run.chargedCost, unpriced: detail.run.chargedUnpricedCount, count: detail.run.count
+                    detail.run.chargedCost, unpriced: detail.run.chargedUnpricedCount,
+                    count: detail.run.count,
+                    complete: detail.run.chargedComplete
                 ))
             LabeledContent(
                 "Standard cost",
                 value: aiCostSubtotal(
                     detail.run.standardCost, unpriced: detail.run.standardUnpricedCount,
-                    count: detail.run.count))
+                    count: detail.run.count, complete: detail.run.standardComplete))
             if let reasons = detail.run.billingReasons, !reasons.isEmpty {
                 LabeledContent(
                     "Billing",

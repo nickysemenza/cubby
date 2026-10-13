@@ -22,7 +22,8 @@ usage-based estimates.
 Application replays have zero incremental charge and an unknown comparison
 unless equivalent inference evidence was retained. A device executor establishes
 zero incremental charge for local image work; lack of usage rows alone does not
-establish that work was free. Unknown prices remain unknown.
+establish that work was free. Image jobs without an executor or usage retain
+incomplete price coverage, including while waiting for Apple. Unknown prices remain unknown.
 
 Summaries retain independent known subtotals and unpriced-call counts. Savings
 sum standard minus charged only where both are known, with comparison coverage
@@ -81,4 +82,5 @@ pnpm --filter @cubby/web db:backfill-ai-costs --target=production --apply
 The command requires the explicit direct production URL, captures one catalog
 per invocation, and reports aggregate counts only. Preview rolls back; applying
 changes only historical comparison prices and their evidence, never recorded
-charges. A catalog outage refuses the reconstruction.
+charges. Writes are batched to avoid a database round trip per historical row;
+preview, atomic rollback, and replay guards are the same. A catalog outage refuses the reconstruction.
