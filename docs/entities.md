@@ -1131,7 +1131,7 @@ produces one Identifier gap, rather than research work to collect every possible
 identifier. Any external-ID source and kind can qualify; blank values and deleted
 identifier records cannot. The check retains `product_external_id` as its key so
 existing accepted exceptions keep their evidence basis. Retired model exception
-notes are preserved by migration; model-only exceptions remain stale because
+notes are preserved by a one-off data update; model-only exceptions remain stale because
 they do not establish the absence of an external identifier. A known explicit or derived
 price earns credit, including zero; an unknown price is required only for stocked
 products outside miscellaneous buckets. Catalog inactivity remains an unscored

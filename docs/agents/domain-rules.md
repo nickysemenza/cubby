@@ -17,7 +17,11 @@ db:migrate --target=production` applies them with
 `PRODUCTION_DIRECT_DATABASE_URL`.
 Migrations are the one committed generated artifact and are immutable once
 merged — the runner refuses bookkeeping that is not a prefix of the journal.
-A data transform is a custom migration (`drizzle-kit generate --custom`). CI `db:check` fails when `schema.ts` has no migration or the
+A stored-shape transform accompanying schema work is a custom migration
+(`drizzle-kit generate --custom`). For an explicitly authorized one-off data-only
+correction, use a transactional update and verify preservation and read-back;
+keep the script outside the repository and add no journal entry or schema guard
+solely to route it through migrations. CI `db:check` fails when `schema.ts` has no migration or the
 migrations build a catalog different from `schema.ts`; `tooling/db-catalog.ts`
 reads the same catalog from production. Before a
 `DROP COLUMN`, remove the `schema.ts` declaration and DEPLOY first — the

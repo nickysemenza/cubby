@@ -34,28 +34,6 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
-## Product identifier consolidation
-
-Migration `0054_product_identifier_sufficiency` must run before deploying the
-code that removes the model quality check. It preserves retired model exception
-records in the surviving Identifier exception's note; standalone model exceptions
-remain stale until reviewed against the combined requirement. Existing external-ID
-exceptions keep their fingerprint and accepted/stale state for unchanged evidence.
-
-The migration holds a write barrier on `DataException` until consolidation and a
-constraint rejecting the retired check both commit. This prevents concurrent
-exception edits from losing evidence and prevents an old server from recreating
-a check the new reader cannot decode. Old requests attempting to accept a Model
-exception after cutover receive the raw constraint error and must refresh.
-
-The exclusive migration owner verifies exception-note preservation and all
-unrelated household data before pushing, applies through this exact tag, then
-checks the constraint and schema afterward. Use the journal-aware runner:
-
-```sh
-pnpm --filter @cubby/web db:migrate --target=production --through=0054_product_identifier_sufficiency
-```
-
 ## Typed Source references
 
 Apply expansion only through `0051_entity_source_targets`, then deploy the
