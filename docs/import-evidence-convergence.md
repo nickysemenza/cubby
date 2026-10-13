@@ -90,7 +90,6 @@ acceptance beyond classification-only discovery. Existing-Purchase attachment an
 accepted-source reconciliation preserve money and stock and refuse ambiguous or
 changed original bindings.
 
-
 ## Validation boundaries
 
 `import-order-convergence.integration.test.ts` exercises all 24 arrival
