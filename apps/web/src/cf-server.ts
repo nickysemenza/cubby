@@ -639,16 +639,6 @@ const handler = {
           cronLog.warn("skipped: maintenance mode");
           return;
         }
-        if (controller.cron === "*/5 * * * *") {
-          if (
-            !import.meta.env.CUBBY_LOCAL_RUNTIME &&
-            env.E2E_AUTH_TEST_MODE !== "true"
-          )
-            await env.AI_GATEWAY_EGRESS.getByName(
-              CUBBY_AI_GATEWAY_ID,
-            ).observeAiRefresh();
-          return;
-        }
         if (controller.cron !== "0 12 * * *")
           throw new Error(`Unexpected cron trigger: ${controller.cron}`);
         try {

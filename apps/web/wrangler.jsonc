@@ -267,7 +267,7 @@
     ]
   },
   "triggers": {
-    "crons": ["0 12 * * *", "*/5 * * * *"]
+    "crons": ["0 12 * * *"]
   },
   "vars": {
     "AI_REFRESH_ENABLED": "true",

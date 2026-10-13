@@ -25,8 +25,8 @@ applies to production paid inference independently.
    legacy work, repeated activation, no-proposal completion and member decisions
    during inference. No live source belongs in repository fixtures, reports or
    PR text.
-4. Enable the Wrangler flag in a reviewed deployment. Requests and the five-minute
-   cron nudge the production Gateway singleton. It checks its own
+4. Enable the Wrangler flag in a reviewed deployment. Requests and nightly
+   maintenance nudge the production Gateway singleton. It checks its own
    deployment version in Durable Object storage before opening Neon once to
    compare the exact compiled feature manifest.
    A monotonically increasing Durable Object ownership epoch fences delayed
@@ -49,8 +49,9 @@ eligible Emails per invocation; Email execution rosters still cap at 200.
 A new policy resets the scan cursor and its discovery Workflow checkpoints
 bounded pages until both independent streams finish. Cursor writes are fenced
 by activation revision, so an old page cannot overwrite a newer reset.
-The five-minute cron only nudges the Durable Object and never polls Neon while
-the deployment version is already observed. An alarm verifies and retries an interrupted startup handoff; external
+There is no frequent polling cron. Request nudges stay in Durable Object storage
+when the deployment version is already observed. The nightly cron is the idle
+reconciliation exception. An alarm verifies and retries an interrupted startup handoff; external
 activation does not block interactive Gateway admission. Active
 Workflows own inference deadlines and retries. Nightly maintenance and existing
 app-open recovery reconcile stranded Runs and relevant evidence/option changes.
