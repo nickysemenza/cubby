@@ -12,6 +12,7 @@ import type {
   RecipeAvailability,
 } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
+import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
   type IngredientId,
   type IngredientShortcode,
@@ -489,10 +490,11 @@ export class AvailabilityService {
 
   async getRecipeAvailability(
     recipeShortcode: RecipeShortcode,
+    resolvedId?: RecipeId,
   ): Promise<RecipeAvailability> {
     // Resolve first so a missing recipe 404s rather than returning an empty
     // availability that reads as "nothing needed".
-    await resolveOrThrow(this.db, "recipe", recipeShortcode);
+    if (!resolvedId) await resolveOrThrow(this.db, "recipe", recipeShortcode);
     const { groups, blocked, rootsByShortcode } = await this.evaluateNeeds([
       { recipeId: recipeShortcode, scale: 1 },
     ]);

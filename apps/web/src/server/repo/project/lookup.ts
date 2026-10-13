@@ -30,7 +30,7 @@ import {
   uuidArrayParam,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
-import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
+import { expenseDerivedReadSql } from "~/server/repo/expense-derived-read";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list";
 import {
@@ -135,6 +135,7 @@ export const buildProjectListQuery = async (
   filters: ProjectFilters,
   sorts: SortParams[],
   attentionItems?: readonly ProjectAttentionItem[],
+  preparedTree?: ProjectTree,
 ) => {
   // Whole-tree parent/child map — cheap single query — see subtree.ts's doc
   // comment. Loaded LAZILY and memoized: only two filters need it for the WHERE
@@ -149,9 +150,10 @@ export const buildProjectListQuery = async (
   // the `undefined` this can now return needs no call-site change — and a
   // `readIntent: "count"` list, which returns before rollups, stops loading the
   // tree at all.
-  let loadedTree: ProjectTree | undefined;
+  let loadedTree: ProjectTree | undefined = preparedTree;
   let treePromise: Promise<ProjectTree> | undefined;
   const getTree = async () => {
+    if (loadedTree) return loadedTree;
     treePromise ??= loadProjectTree(db);
     loadedTree = await treePromise;
     return loadedTree;
@@ -195,7 +197,9 @@ export const buildProjectListQuery = async (
   const parentCodes = filters.parentProjectId
     ? [filters.parentProjectId].flat()
     : [];
-  const resolvedParents = await resolveShortcodes(db, parentCodes);
+  const resolvedParents = preparedTree
+    ? undefined
+    : await resolveShortcodes(db, parentCodes);
   // `resolveShortcodes` keys its result Map by the CANONICAL code (see its
   // docstring), so the lookup goes through `parseShortcode(code).shortcode`
   // rather than the raw input — otherwise a lowercase or legacy-prefix code
@@ -203,7 +207,13 @@ export const buildProjectListQuery = async (
   // handles for single-entity lists).
   const parentProjectUuids = parentCodes.flatMap((code) => {
     const parsed = parseShortcode(code);
-    const resolved = parsed ? resolvedParents.get(parsed.shortcode) : undefined;
+    const preparedParent = parsed
+      ? preparedTree?.rowsByShortcode.get(parsed.shortcode)
+      : undefined;
+    if (preparedTree) return preparedParent ? [preparedParent.id] : [];
+    const resolved = parsed
+      ? resolvedParents?.get(parsed.shortcode)
+      : undefined;
     return resolved?.entity === "project"
       ? [parseEntityId("project", resolved.id)]
       : [];
@@ -310,7 +320,7 @@ export const buildProjectListQuery = async (
         FROM "Project" child JOIN date_tree parent ON child."parentProjectId" = parent."id"
         WHERE child."deletedAt" IS NULL AND parent."startDate" IS NULL
           AND parent.depth < ${MAX_PROJECT_TREE_DEPTH}
-      ), allocations AS (${expenseProjectAllocationSql()})
+      ), allocations AS (${expenseDerivedReadSql("projects")})
       SELECT min(coalesce(node."startDate", LEAST(
         (SELECT min(coalesce(t."dueEndDate", t."dueDate")) FROM "Task" t
          WHERE ${effectiveTaskProjectSql("t")} = node."id" AND t."deletedAt" IS NULL),
@@ -385,11 +395,14 @@ export const projectListRead = async (
   pagination: PaginationParams,
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
+  preparedTree?: ProjectTree,
 ) => {
   const { tree, whereClause, orderByArray } = await buildProjectListQuery(
     db,
     filters,
     sorts,
+    undefined,
+    preparedTree,
   );
   // Both start beside the page read rather than after it.
   const sumsRead =

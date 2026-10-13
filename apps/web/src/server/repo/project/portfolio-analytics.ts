@@ -36,15 +36,9 @@ import {
 } from "~/server/repo/database-helpers";
 import {
   EXPENSE_MONTH_BUCKET,
-  expenseAggregateFields,
   expenseShareAggregateFields,
 } from "~/server/repo/expense-aggregate-sql";
-import {
-  expenseAllocatedCostSql,
-  expenseAllocationExistsSql,
-  expenseAllocationScopeConditionSql,
-  expenseJointAllocationSql,
-} from "~/server/repo/expense-project-allocation";
+import { executeExpenseDerivedBatch } from "~/server/repo/expense-derived-read";
 import { effectiveTaskProjectSql } from "~/server/repo/task-project-inheritance";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
@@ -135,74 +129,65 @@ export async function projectPortfolioAnalytics(
   // Project filters choose attribution shares; date filters then narrow the
   // source expenses. The full-purchase allocation denominator remains intact.
   const allocationScope = { projectIds: ids };
-  const attributedCost = expenseAllocatedCostSql(
-    sql`${expense.id}`,
-    allocationScope,
-  );
   const expenseScope = and(
     notDeleted(expense),
-    expenseAllocationExistsSql(sql`${expense.id}`, allocationScope),
     filters.dateFrom ? sql`${expense.date} >= ${filters.dateFrom}` : undefined,
     filters.dateTo ? sql`${expense.date} <= ${filters.dateTo}` : undefined,
   );
   const expenseScopeWithDate = and(expenseScope, isNotNull(expense.date));
 
-  const [monthlyRows, plannedVsActualRows, tradeRows, taskHeatmapRows] =
-    await Promise.all([
-      getDb(db)
-        .select({
-          month: sql<string>`${EXPENSE_MONTH_BUCKET}`,
-          ...expenseAggregateFields(attributedCost),
-        })
-        .from(expense)
-        .where(expenseScopeWithDate)
-        .groupBy(EXPENSE_MONTH_BUCKET)
-        .orderBy(EXPENSE_MONTH_BUCKET),
-      getDb(db)
-        .select({
-          month: sql<string>`${EXPENSE_MONTH_BUCKET}`,
-          planned: sql<number>`coalesce(sum(${attributedCost}) filter (where ${expense.future} = true), 0)::float`,
-          actual: sql<number>`coalesce(sum(${attributedCost}) filter (where ${expense.future} = false), 0)::float`,
-        })
-        .from(expense)
-        .where(expenseScopeWithDate)
-        .groupBy(EXPENSE_MONTH_BUCKET)
-        .orderBy(EXPENSE_MONTH_BUCKET),
-      // Per share: adjustments follow their principals' trades; a share that
-      // follows none reports under the null (unassigned) trade.
-      getDb(db)
-        .select({
-          trade: sql<Trade | null>`allocation.trade`,
-          ...expenseShareAggregateFields(),
-        })
-        .from(expense)
-        .innerJoin(
-          sql`(${expenseJointAllocationSql()}) allocation`,
-          sql`allocation."expenseId" = ${expense.id}`,
-        )
-        .where(
-          and(
-            expenseScope,
-            expenseAllocationScopeConditionSql("allocation", allocationScope),
-          ),
-        )
-        .groupBy(sql`allocation.trade`),
-      getDb(db)
-        .select({
-          projectId: effectiveTaskProjectSql("Task"),
-          openTaskCount: sql<number>`count(*)::int`,
-        })
-        .from(task)
-        .where(
-          and(
-            sql`${effectiveTaskProjectSql("Task")} = ANY(${uuidArrayParam(ids)})`,
-            notDeleted(task),
-            ne(task.status, "done"),
-            isNull(task.parentTaskId),
-          ),
-        )
-        .groupBy(effectiveTaskProjectSql("Task")),
-    ]);
+  const { monthlyRows, plannedVsActualRows, tradeRows, taskHeatmapRows } =
+    await executeExpenseDerivedBatch(
+      db,
+      {
+        scope: allocationScope,
+        where: expenseScope,
+        expenseIds: sql`ARRAY(SELECT ${expense.id} FROM ${expense} WHERE ${expenseScope ?? sql`true`})`,
+      },
+      (read) => ({
+        monthlyRows: read
+          .select({ month: EXPENSE_MONTH_BUCKET, ...read.aggregate })
+          .where(expenseScopeWithDate)
+          .groupBy(EXPENSE_MONTH_BUCKET)
+          .orderBy(EXPENSE_MONTH_BUCKET),
+        plannedVsActualRows: read
+          .select({
+            month: EXPENSE_MONTH_BUCKET,
+            planned: sql<number>`coalesce(sum(${read.cost}) filter (where ${expense.future} = true), 0)::float`,
+            actual: sql<number>`coalesce(sum(${read.cost}) filter (where ${expense.future} = false), 0)::float`,
+          })
+          .where(expenseScopeWithDate)
+          .groupBy(EXPENSE_MONTH_BUCKET)
+          .orderBy(EXPENSE_MONTH_BUCKET),
+        tradeRows: getDb(db)
+          .select({
+            trade: sql<Trade | null>`allocation.trade`,
+            ...expenseShareAggregateFields(),
+          })
+          .from(expense)
+          .innerJoin(
+            read.allocations,
+            sql`allocation."expenseId" = ${expense.id}`,
+          )
+          .where(expenseScope)
+          .groupBy(sql`allocation.trade`),
+        taskHeatmapRows: getDb(db)
+          .select({
+            projectId: effectiveTaskProjectSql("Task"),
+            openTaskCount: sql<number>`count(*)::int`,
+          })
+          .from(task)
+          .where(
+            and(
+              sql`${effectiveTaskProjectSql("Task")} = ANY(${uuidArrayParam(ids)})`,
+              notDeleted(task),
+              ne(task.status, "done"),
+              isNull(task.parentTaskId),
+            ),
+          )
+          .groupBy(effectiveTaskProjectSql("Task")),
+      }),
+    );
 
   const openTaskCountByProject = new Map<ProjectId, number>();
   for (const row of taskHeatmapRows) {

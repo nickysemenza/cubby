@@ -19,6 +19,7 @@ import {
   type EntityKernelContext,
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
+import { expenseDerivedReadSql } from "~/server/repo/expense-derived-read";
 
 import {
   notDeleted,
@@ -31,7 +32,6 @@ import {
   type ExpenseSpendingCategoryResolutionDraft,
 } from "./expense-category-resolution";
 import {
-  expenseJointAllocationSql,
   loadExpenseJointAllocations,
   parseExpenseJointAllocationRows,
   type ExpenseJointAllocationRawRow,
@@ -290,7 +290,7 @@ const householdRow = z.object({
  */
 async function householdAllocations(db: Database, scope: readonly ExpenseId[]) {
   const result = await unwrapDb(db).execute(sql`
-    WITH a AS (${expenseJointAllocationSql()})
+    WITH a AS (${expenseDerivedReadSql("shares")})
     SELECT
       (SELECT count(*) FROM "Expense" WHERE "deletedAt" IS NULL) AS "expenseCount",
       (SELECT count(DISTINCT "expenseId") FROM a

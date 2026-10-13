@@ -4,13 +4,10 @@ import { projectContributionInput } from "@cubby/schemas/household-contribution"
 import { contributionGapLabels } from "@cubby/schemas/household-contribution-labels";
 import {
   type ProjectShortcode,
-  projectShortcode,
+  type ProjectId,
 } from "@cubby/schemas/identifiers";
 import { LEDGER_PARTY_KIND_LABELS } from "@cubby/schemas/ledger-party-fields";
-import {
-  expenseFiltersSchema,
-  type ExpenseAnalyticsOut,
-} from "@cubby/schemas/project";
+import { type ExpenseAnalyticsOut } from "@cubby/schemas/project";
 import { countLabel } from "@cubby/shared/pluralize";
 import { sum } from "es-toolkit";
 
@@ -18,28 +15,21 @@ import { buildDetailScheduleRows } from "~/lib/project-schedule";
 import { budgetRemaining } from "~/lib/spend";
 import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";
-import {
-  expenseAnalytics,
-  expenseSpendSummary,
-} from "~/server/repo/expense/analytics";
 import { projectContribution } from "~/server/repo/household-contribution/reports";
 import { listAll } from "~/server/repo/list-all";
 import { getProjectByID } from "~/server/repo/project/crud";
 import { projectList } from "~/server/repo/project/lookup";
 import {
   collectDescendantIds,
-  loadProjectTree,
+  type ProjectTree,
 } from "~/server/repo/project/subtree";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { taskList } from "~/server/repo/task/lookup";
 
-/** The validated public code of a live project (a mismatched prefix is refused). */
-async function liveProject(db: Database, code: string) {
-  const projectCode = projectShortcode.parse(code);
-  return {
-    code: projectCode,
-    id: await resolveOrThrow(db, "project", projectCode),
-  };
+export interface ProjectReportContext {
+  code: ProjectShortcode;
+  id: ProjectId;
+  tree: ProjectTree;
+  projectIds: ProjectId[];
 }
 
 /** `n expense(s) have no recorded cost`: unknown spend is counted, never read as $0. */
@@ -48,21 +38,11 @@ const unpricedNote = (count: number): ReportBlock => ({
   text: `${countLabel(count, "expense")} ${count === 1 ? "has" : "have"} no recorded cost and ${count === 1 ? "is" : "are"} not in these figures.`,
 });
 
-/** The project plus every live sub-project, the scope all spend figures share. */
-const subtreeSpend = (projectId: ProjectShortcode) =>
-  expenseFiltersSchema.parse({ projectId, includeSubProjects: true });
-
 /** Estimate against actual, committed and credited spend over the subtree. */
 export async function projectBudgetReport(
-  db: Database,
-  code: string,
-  sharedSpend?: ExpenseAnalyticsOut["summary"],
+  { id, tree }: ProjectReportContext,
+  spend: ExpenseAnalyticsOut["summary"],
 ): Promise<ReportBlock[]> {
-  const { code: projectCode, id } = await liveProject(db, code);
-  const [tree, spend] = await Promise.all([
-    loadProjectTree(db),
-    sharedSpend ?? expenseSpendSummary(db, subtreeSpend(projectCode)),
-  ]);
   // The subtree estimate is the sum of the non-null estimates; none stays unknown, not $0.
   const estimates = [id, ...collectDescendantIds(tree.childrenByParent, id)]
     .map((projectId) => tree.rowsById.get(projectId)?.costEstimate)
@@ -127,19 +107,10 @@ export async function projectBudgetReport(
 
 const TOP = 10;
 
-/** A batch's budget and analytics use this same resolved subtree and summary. */
-export async function loadProjectReportAnalytics(db: Database, code: string) {
-  return expenseAnalytics(db, subtreeSpend((await liveProject(db, code)).code));
-}
-
 /** Expense analytics scoped to the project and its sub-project subtree. */
 export async function projectAnalyticsReport(
-  db: Database,
-  code: string,
-  sharedAnalytics?: ExpenseAnalyticsOut,
+  analytics: ExpenseAnalyticsOut,
 ): Promise<ReportBlock[]> {
-  const analytics =
-    sharedAnalytics ?? (await loadProjectReportAnalytics(db, code));
   const { summary } = analytics;
   if (summary.count === 0)
     return [{ kind: "note", text: "No expenses recorded for this project." }];
@@ -233,14 +204,15 @@ export async function projectAnalyticsReport(
 /** Whole-group cost, who consumed and funded it, and the attribution gaps. */
 export async function projectContributionReport(
   db: Database,
-  code: string,
+  context: ProjectReportContext,
 ): Promise<ReportBlock[]> {
   const data = await projectContribution(
     db,
     projectContributionInput.parse({
-      projectId: (await liveProject(db, code)).code,
+      projectId: context.code,
       includeSubprojects: true,
     }),
+    { projectIds: context.projectIds },
   );
   const figure = (label: string, value: number) => ({
     label,
@@ -322,10 +294,9 @@ export async function projectContributionReport(
 /** Every live sub-project and task under the project, with dates and dependency ids. */
 export async function projectScheduleReport(
   db: Database,
-  code: string,
+  { code: projectCode, id, tree }: ProjectReportContext,
 ): Promise<ReportBlock[]> {
-  const { code: projectCode, id } = await liveProject(db, code);
-  const root = await getProjectByID(db, id);
+  const root = await getProjectByID(db, id, tree);
   const [descendants, tasks] = await Promise.all([
     listAll((pagination) =>
       projectList(
@@ -333,6 +304,8 @@ export async function projectScheduleReport(
         { parentProjectId: projectCode, includeSubProjects: true },
         [{ orderBy: "name", direction: "asc" }],
         pagination,
+        "page",
+        tree,
       ),
     ),
     listAll((pagination) =>
@@ -341,6 +314,9 @@ export async function projectScheduleReport(
         { projectId: projectCode, includeSubProjects: true },
         [{ orderBy: "createdAt", direction: "desc" }],
         pagination,
+        "page",
+        undefined,
+        tree,
       ),
     ),
   ]);

@@ -1,10 +1,13 @@
 import { sql, type SQL } from "drizzle-orm";
 
 import { expense } from "~/server/db/schema";
-import { expenseSpendingAllocationSql } from "~/server/repo/expense-spending-allocation";
+import {
+  expenseDerivedValueSql,
+  expenseDerivedReadSql,
+} from "~/server/repo/expense-derived-read";
 import { expenseProductExpectedSql } from "~/server/repo/purchase-evidence-policy";
 
-import { defineEntityChecks } from "../registry";
+import { defineEntityChecks, type QualityReadContext } from "../registry";
 
 type Expense = typeof expense;
 
@@ -18,9 +21,20 @@ const policyProjection = (
   WHERE dq_expense_policy.id = ${t.id}
 )`;
 
+const categoryEvidence = <K extends "missing" | "evidence">(
+  field: K,
+  t: Expense,
+  context?: QualityReadContext,
+): SQL =>
+  context
+    ? sql`${sql.identifier(context.derivedAlias)}.${sql.identifier(field)}`
+    : expenseDerivedValueSql(field, sql`${t.id}`);
+
 export const expenseChecks = defineEntityChecks({
   entity: "expense",
   table: expense,
+  derivedRead: (ids) => sql`SELECT "expenseId" AS "entityId", missing, evidence
+    FROM (${expenseDerivedReadSql("categoryEvidence", { expenseIds: ids })}) evidence`,
   checks: {
     expense_cost: {
       // A future (planned, not yet spent) line may be unpriced; once it is
@@ -31,11 +45,9 @@ export const expenseChecks = defineEntityChecks({
     },
     expense_spending_category: {
       expected: (t) => sql`${t.future} = false`,
-      missing: (t) =>
-        sql`NOT EXISTS (SELECT 1 FROM (${expenseSpendingAllocationSql(sql`ARRAY[${t.id}]::uuid[]`)}) a WHERE a."expenseId"=${t.id}) OR EXISTS (SELECT 1 FROM (${expenseSpendingAllocationSql(sql`ARRAY[${t.id}]::uuid[]`)}) a WHERE a."expenseId"=${t.id} AND (a."spendingCategoryId" IS NULL OR a.incomplete))`,
-      fingerprint: (t) => [
-        sql`(SELECT jsonb_agg(jsonb_build_array(a."spendingCategoryId",a.amount,a.incomplete) ORDER BY a."spendingCategoryId") FROM (${expenseSpendingAllocationSql(sql`ARRAY[${t.id}]::uuid[]`)}) a WHERE a."expenseId"=${t.id})`,
-      ],
+      missing: (t, context) =>
+        sql`coalesce(${categoryEvidence("missing", t, context)}, true)`,
+      fingerprint: (t, context) => [categoryEvidence("evidence", t, context)],
     },
     // Only a merchandise line (one whose Product identity is expected) feeds
     // the quantity ledger; a fee, tax, or service line has no unit count.

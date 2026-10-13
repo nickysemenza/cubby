@@ -43,6 +43,7 @@ import {
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { settlementRefsFor } from "~/server/repo/entity-external-ids";
 import { liveLinks } from "~/server/repo/entity-links";
+import { expenseDerivedReadSql } from "~/server/repo/expense-derived-read";
 import { solePurchaseForTransaction } from "~/server/repo/financial-transaction-allocations";
 import { inventoryAmountSql } from "~/server/repo/inventory/helpers";
 import { locationAiDescriptionExtras } from "~/server/repo/location/ai-description";
@@ -73,7 +74,6 @@ import {
 } from "~/server/semantic/text";
 
 import { effectiveExpenseTradeSql } from "./expense-inheritance";
-import { expenseProjectNamesSql } from "./expense-project-allocation";
 import {
   effectiveProjectLocationsSql,
   effectiveTaskProjectSql,
@@ -758,11 +758,17 @@ async function getExpenseEmbeddingTexts(
       costType: expense.costType,
       trade: effectiveExpenseTradeSql(),
       notes: expense.notes,
-      projectName: expenseProjectNamesSql(sql`${expense.id}`),
+      projectName: sql<string | null>`derived_names."projectNames"`,
       vendorName: vendor.name,
       orderId: purchase.orderId,
     })
     .from(expense)
+    .leftJoin(
+      sql`(${expenseDerivedReadSql("names", {
+        expenseIds: options.ids?.map((id) => parseEntityId("expense", id)),
+      })}) derived_names`,
+      sql`derived_names."expenseId" = ${expense.id}`,
+    )
     .leftJoin(
       purchase,
       and(eq(expense.purchaseId, purchase.id), notDeleted(purchase)),

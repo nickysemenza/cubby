@@ -266,15 +266,17 @@ const loadEvaluations = async (
   const entry = entryFor(entity);
   const t = entry.table;
   const checks = checksOf(entity);
+  const derived = entry.derivedRead?.(uuidArrayParam(ids));
+  const context = derived ? { derivedAlias: "dq_derived" } : undefined;
   const withFingerprints = dataQualityExceptionEntities[entity];
   const columns = checks.flatMap((check, index) => [
     sql`${expectedCondition(entity, check, t)} AS ${sql.identifier(expectedKey(index))}`,
     // `missing` alone; `evaluateRow` requires `expected` too. `rawGapCondition`
     // would plan every `expected` twice (see `scoreSql`).
-    sql`${checkMissingCondition(entity, check, t)} AS ${sql.identifier(gapKey(index))}`,
+    sql`${checkMissingCondition(entity, check, t, context)} AS ${sql.identifier(gapKey(index))}`,
     ...(withFingerprints
       ? [
-          sql`${fingerprintSql(entity, check, t)} AS ${sql.identifier(fingerprintKey(index))}`,
+          sql`${fingerprintSql(entity, check, t, context)} AS ${sql.identifier(fingerprintKey(index))}`,
         ]
       : []),
   ]);
@@ -296,6 +298,7 @@ const loadEvaluations = async (
   ${exceptions} AS "exceptions",
   ${sql.join(columns, sql`, `)}
 FROM ${t}
+${derived ? sql`LEFT JOIN (${derived}) dq_derived ON dq_derived."entityId" = ${t.id}` : sql``}
 WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}`);
   return z.array(hydrationRow).parse(result.rows);
 };

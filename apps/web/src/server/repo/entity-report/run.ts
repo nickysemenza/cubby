@@ -2,7 +2,6 @@ import { targetOutcomeSummary } from "@cubby/schemas/activity";
 import type { AiRunUsage } from "@cubby/schemas/ai";
 import type { AuditJsonValue, AuditLogListOut } from "@cubby/schemas/audit";
 import type {
-  EntityReportOut,
   ReportChoice,
   ReportCommand,
   ReportBlock,
@@ -11,7 +10,7 @@ import {
   countRunTargets,
   runTargetState,
 } from "@cubby/schemas/purchase-import";
-import { hasImportRunReports, runStatus } from "@cubby/schemas/run-fields";
+import { hasImportRunReports } from "@cubby/schemas/run-fields";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
 import { AI_USAGE_TRANSPORT_LABELS } from "@cubby/schemas/telemetry";
 import { CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
@@ -22,27 +21,17 @@ import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCurrency, formatPercent } from "~/lib/number-format";
-import type { Database } from "~/server/db";
-import { listAuditLog } from "~/server/operations/audit-log";
 import { runHasCapability } from "~/server/purchase-import/capabilities";
-import {
-  loadRunDetail,
-  loadRunLog,
-} from "~/server/purchase-import/run-service";
-import { listAiUsageForRun } from "~/server/repo/ai-usage";
 import { phaseLabel } from "~/server/repo/collection-items";
-import { getRunByShortcode } from "~/server/repo/run";
-import { getRunLiveProgress } from "~/server/repo/run-progress";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { suggestionCounts } from "~/server/repo/suggestion-review";
+import type { getRunLiveProgress } from "~/server/repo/run-progress";
+import type { suggestionCounts } from "~/server/repo/suggestion-review";
 
 /**
  * The Run detail's report blocks: progress, approvals, findings, transcript, log, AI usage and
  * changes, composed once for web and native. Every sentence, empty-state line, visibility rule
  * and action below is written here; a client lays the blocks out. A report that does not apply
  * to the run (the other progress variant, targets a run never had) is no blocks, so the client
- * hides its section. The builders are pure over what the loaders return; `runReport` is the
- * only one that reads.
+ * hides its section. The builders are pure over declared dependency results.
  */
 
 type RunLiveProgress = NonNullable<
@@ -1131,9 +1120,6 @@ export function changesBlocks(list: AuditLogListOut): ReportBlock[] {
   ];
 }
 
-/** Paged reports ask for this many rows at a time. */
-const PAGE_SIZE = 25;
-
 /** The run report slots (`run.*` in `reportSlots`). */
 export type RunReportSlot =
   | ImportReportSlot
@@ -1143,90 +1129,5 @@ export type RunReportSlot =
   | "run.suggestions"
   | "run.changes";
 
-const IMPORT_SLOT_IDS: ReadonlySet<string> = new Set(
-  Object.keys(IMPORT_BUILDERS),
-);
-
-/**
- * Composes Run slots' reports, with the run's liveness so clients know to poll. The run detail
- * (about twenty queries) loads once however many import slots are asked for, and the live
- * progress read once, so a page polling all of its slots costs one slot's reads.
- */
-export async function runReports<Slot extends RunReportSlot>(
-  db: Database,
-  slots: readonly Slot[],
-  runId: RunDetail["publicId"],
-  cursor: string | undefined,
-): Promise<Array<{ slot: Slot; report: EntityReportOut }>> {
-  const detail = slots.some((slot) => IMPORT_SLOT_IDS.has(slot))
-    ? await loadRunDetail(db, runId)
-    : undefined;
-  const header = detail ? undefined : await getRunByShortcode(db, runId);
-  if (!detail && !header) throw new Error("Import run was not found");
-  const status = runStatus.parse(detail?.status ?? header?.status);
-  const respond = (
-    blocks: ReportBlock[],
-    nextCursor?: string | null,
-  ): EntityReportOut => ({
-    blocks,
-    live: isLiveRunStatus(status),
-    status,
-    nextCursor: nextCursor ?? undefined,
-  });
-  const reports: Array<{ slot: Slot; report: EntityReportOut }> = [];
-  for (const slot of slots)
-    reports.push({ slot, report: await runSlotReport(slot) });
-  return reports;
-
-  async function runSlotReport(slot: RunReportSlot): Promise<EntityReportOut> {
-    switch (slot) {
-      case "run.ai-usage": {
-        const usage = await listAiUsageForRun(
-          db,
-          await resolveOrThrow(db, "run", runId),
-          { cursor, limit: PAGE_SIZE },
-        );
-        return respond(aiUsageBlocks(usage), usage.nextCursor);
-      }
-      case "run.suggestions":
-        return respond(
-          (detail?.purpose ?? header?.purpose) === "suggestion_sweep"
-            ? suggestionBlocks(await suggestionCounts(db, { runId }))
-            : [],
-        );
-      case "run.changes": {
-        const list = await listAuditLog(db, {
-          runId,
-          cursor,
-          limit: PAGE_SIZE,
-        });
-        return respond(changesBlocks(list), list.nextCursor);
-      }
-      case "run.import-debug-log":
-        return respond(runLogBlocks(await loadRunLog(db, runId)));
-      case "run.live-progress": {
-        const progress = await getRunLiveProgress(db, runId);
-        return respond(
-          progress
-            ? liveProgressBlocks(runId, progress)
-            : [note("Run progress is unavailable.")],
-        );
-      }
-      default:
-        // SAFETY: an import slot implies the detail was loaded above.
-        return respond(importReportBlocks(slot, detail!));
-    }
-  }
-}
-
-/** One Run slot's report (see `runReports`). */
-export async function runReport(
-  db: Database,
-  slot: RunReportSlot,
-  runId: RunDetail["publicId"],
-  cursor: string | undefined,
-): Promise<EntityReportOut> {
-  const [only] = await runReports(db, [slot], runId, cursor);
-  if (!only) throw new Error("Import run was not found");
-  return only.report;
-}
+export const isImportReportSlot = (slot: string): slot is ImportReportSlot =>
+  Object.hasOwn(IMPORT_BUILDERS, slot);

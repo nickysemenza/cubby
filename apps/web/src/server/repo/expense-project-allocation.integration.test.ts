@@ -1,19 +1,30 @@
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { unwrapDb } from "~/server/repo/database-helpers";
+import {
+  expenseDerivedReadSql,
+  expenseDerivedMembershipSql,
+  expenseDerivedValueSql,
+  prepareExpenseDerivedRead,
+} from "~/server/repo/expense-derived-read";
 import { loadRelatedSummary } from "~/server/repo/related-view";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { expenseDerivedCostsSql } from "./expense-derived-read";
-import {
-  expenseAllocatedCostSql,
-  expenseAllocationExistsSql,
-  expenseProjectAllocationSql,
-  expenseProjectNamesSql,
-  loadExpenseProjectAllocations,
-} from "./expense-project-allocation";
+import { loadExpenseProjectAllocations } from "./expense-project-allocation";
+
+const allocationPlanNode = z.object({
+  "Subplan Name": z.string().optional(),
+  "Actual Loops": z.number().optional(),
+  "Node Type": z.string(),
+  get Plans() {
+    return z.array(allocationPlanNode).optional();
+  },
+});
+const allocationPlan = z.array(z.object({ Plan: allocationPlanNode }));
 
 describe("expense project allocation", () => {
   const ctx = withTestDb("mcp");
@@ -108,7 +119,7 @@ describe("expense project allocation", () => {
     // A detail read must weight the whole target purchase, without resolving
     // unrelated ledger rows and holding the shared pool for ledger-wide work.
     const plan = await unwrapDb(ctx.db).execute<{ "QUERY PLAN": string }>(
-      sql`EXPLAIN (ANALYZE, COSTS OFF) ${expenseProjectAllocationSql([tax.id])}`,
+      sql`EXPLAIN (ANALYZE, COSTS OFF) ${expenseDerivedReadSql("projects", { expenseIds: [tax.id] })}`,
     );
     const planText = plan.rows.map((row) => row["QUERY PLAN"]).join("\n");
     expect(
@@ -141,12 +152,14 @@ describe("expense project allocation", () => {
         sql`ARRAY[${tax.id}]::uuid[]`,
       ),
     );
-    expect(totals.rows).toEqual([{ expenseId: tax.id, cost: 0.02 }]);
+    expect(totals.rows).toMatchObject([{ expenseId: tax.id, cost: 0.02 }]);
     const ledgerTotal = await unwrapDb(ctx.db).execute<{
       expenseId: string;
       cost: number;
     }>(expenseDerivedCostsSql(undefined, sql`ARRAY[${standalone.id}]::uuid[]`));
-    expect(ledgerTotal.rows).toEqual([{ expenseId: standalone.id, cost: -5 }]);
+    expect(ledgerTotal.rows).toMatchObject([
+      { expenseId: standalone.id, cost: -5 },
+    ]);
 
     const selected = [tax.id, unrelated.id, standalone.id];
     const global = await loadExpenseProjectAllocations(ctx.db);
@@ -165,9 +178,9 @@ describe("expense project allocation", () => {
       included: boolean;
     }>(sql`
       SELECT
-        ${expenseProjectNamesSql(sql`outer_expense."id"`)} AS names,
-        ${expenseAllocatedCostSql(sql`outer_expense."id"`, { projectIds: [smallProject.id] })} AS cost,
-        ${expenseAllocationExistsSql(sql`outer_expense."id"`, { projectIds: [smallProject.id] })} AS included
+        ${expenseDerivedValueSql("projectNames", sql`outer_expense."id"`)} AS names,
+        ${expenseDerivedValueSql("cost", sql`outer_expense."id"`, { projectIds: [smallProject.id] })} AS cost,
+        ${expenseDerivedMembershipSql(sql`outer_expense."id"`, { projectIds: [smallProject.id] })} AS included
       FROM "Expense" outer_expense
       WHERE outer_expense."id" = ${tax.id} AND outer_expense."deletedAt" IS NULL
     `);
@@ -178,6 +191,55 @@ describe("expense project allocation", () => {
         included: true,
       },
     ]);
+
+    // A grouped read must allocate once for the whole selected ledger. A
+    // correlated allocation under sum() repeats all sibling weighting for
+    // every output row, even when its share scope is identical.
+    const groupedPlan = await unwrapDb(ctx.db).execute<{
+      "QUERY PLAN": z.infer<typeof allocationPlan>;
+    }>(sql`EXPLAIN (ANALYZE, FORMAT JSON, COSTS OFF)
+      SELECT sum(${expenseDerivedValueSql("cost", sql`outer_expense."id"`, { projectIds: [smallProject.id] })})
+      FROM "Expense" outer_expense WHERE outer_expense."deletedAt" IS NULL`);
+    const allocationLoops: number[] = [];
+    const correlatedAllocations: number[] = [];
+    const inspectPlan = (node: z.infer<typeof allocationPlanNode>) => {
+      if (node["Subplan Name"] === "CTE principal_fact")
+        allocationLoops.push(Number(node["Actual Loops"]));
+      if (
+        String(node["Subplan Name"]).startsWith("SubPlan") &&
+        node["Node Type"] === "Aggregate"
+      )
+        correlatedAllocations.push(Number(node["Actual Loops"]));
+      for (const child of node.Plans ?? []) inspectPlan(child);
+    };
+    inspectPlan(
+      allocationPlan.parse(groupedPlan.rows[0]!["QUERY PLAN"])[0]!.Plan,
+    );
+    expect(allocationLoops).toEqual([1]);
+    expect(correlatedAllocations).toEqual([]);
+
+    // The embedded project scope selects whole expenses, while a direct
+    // project filter measures its shares. Different shares may satisfy each
+    // predicate; intersecting projects would lose this shared charge.
+    const embeddedRead = await prepareExpenseDerivedRead(ctx.db, {
+      projectId: smallProject.shortcode,
+      projectScope: { search: largeProject.name },
+      lineKind: "tax",
+    });
+    const embeddedQuery = embeddedRead
+      .select({ cost: embeddedRead.cost })
+      .where(embeddedRead.where);
+    expect(await embeddedQuery).toEqual([{ cost: 0.02 }]);
+    const embeddedPlan = await unwrapDb(ctx.db).execute<{
+      "QUERY PLAN": z.infer<typeof allocationPlan>;
+    }>(sql`EXPLAIN (ANALYZE, FORMAT JSON, COSTS OFF) ${embeddedQuery}`);
+    allocationLoops.length = 0;
+    correlatedAllocations.length = 0;
+    inspectPlan(
+      allocationPlan.parse(embeddedPlan.rows[0]!["QUERY PLAN"])[0]!.Plan,
+    );
+    expect(allocationLoops).toEqual([1]);
+    expect(correlatedAllocations).toEqual([]);
 
     const summary = await loadRelatedSummary(ctx.db, {
       relationKey: "purchase.projects",
@@ -275,6 +337,13 @@ describe("expense project allocation", () => {
         incomplete: true,
       }),
     ]);
+
+    // Unknown prices still establish membership and remain unknown in the
+    // grouped cost projection rather than disappearing or becoming zero.
+    const unknownCosts = await unwrapDb(ctx.db).execute<{
+      cost: number | null;
+    }>(expenseDerivedCostsSql({ projectIds: [unpricedProject.id] }));
+    expect(unknownCosts.rows).toMatchObject([{ cost: null }]);
 
     const summary = await loadRelatedSummary(ctx.db, {
       relationKey: "purchase.projects",
@@ -481,8 +550,8 @@ describe("expense project allocation", () => {
       included: boolean;
       attributedCost: number;
     }>(sql`SELECT
-      ${expenseAllocationExistsSql(sql`${fee.id}::uuid`, scope)} AS included,
-      ${expenseAllocatedCostSql(sql`${fee.id}::uuid`, scope)} AS "attributedCost"`);
+      ${expenseDerivedMembershipSql(sql`${fee.id}::uuid`, scope)} AS included,
+      ${expenseDerivedValueSql("cost", sql`${fee.id}::uuid`, scope)} AS "attributedCost"`);
 
     expect(result.rows[0]).toEqual({ included: true, attributedCost: 0.03 });
   });

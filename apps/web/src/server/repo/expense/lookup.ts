@@ -33,6 +33,10 @@ import {
   shortcodeSetCondition,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
+import {
+  expenseDerivedMembershipSql,
+  expenseDerivedValueSql,
+} from "~/server/repo/expense-derived-read";
 import { listScaffold } from "~/server/repo/list";
 import {
   loadListGroup,
@@ -53,8 +57,6 @@ import {
 } from "../expense-inheritance";
 import {
   type ExpenseAllocationProjectScope,
-  expenseAllocationExistsSql,
-  expenseJointAllocationSql,
   loadExpenseProjectAllocations,
 } from "../expense-project-allocation";
 import { loadExpenseSpendingAllocations } from "../expense-spending-allocation";
@@ -134,6 +136,9 @@ export const resolveExpenseProjectAllocationScope = async (
     "spendingCategory",
     categoryCodes,
   );
+  const membershipProjectIds = filters.projectScope
+    ? await matchingEmbeddedProjectIds(db, filters.projectScope)
+    : undefined;
   // Trade and cost type follow the same per-share split as category: an
   // adjustment matches through the shares it allocates to its principals.
   const trades = filters.trade ? [filters.trade].flat() : [];
@@ -144,10 +149,12 @@ export const resolveExpenseProjectAllocationScope = async (
     categoryCodes.length === 0 &&
     !filters.spendingCategoryPresenceFilter &&
     trades.length === 0 &&
-    costTypes.length === 0
+    costTypes.length === 0 &&
+    membershipProjectIds === undefined
   )
     return undefined;
   return {
+    membershipProjectIds,
     projectIds: projectIds.length > 0 ? projectIds : undefined,
     presence: filters.projectPresenceFilter,
     spendingCategoryIds: categoryCodes.length
@@ -165,20 +172,7 @@ const projectFilterCondition = async (
 ): Promise<SQL | undefined> => {
   const scope = await resolveExpenseProjectAllocationScope(db, filters);
   if (!scope) return undefined;
-  // The presence sentinel ORs with the selected projects, so "Kitchen or
-  // unassigned" remains one filter rather than an impossible conjunction.
-  return inArray(
-    expense.id,
-    getDb(db)
-      .select({ id: expense.id })
-      .from(expense)
-      .where(
-        and(
-          notDeleted(expense),
-          expenseAllocationExistsSql(sql`${expense.id}`, scope),
-        ),
-      ),
-  );
+  return expenseDerivedMembershipSql(sql`${expense.id}`, scope);
 };
 
 const requestedReferenceCondition = (
@@ -269,21 +263,7 @@ export const buildExpenseWhereClause = async (
   const projectCondition =
     options && "projectScope" in options
       ? options.projectScope
-        ? inArray(
-            expense.id,
-            getDb(db)
-              .select({ id: expense.id })
-              .from(expense)
-              .where(
-                and(
-                  notDeleted(expense),
-                  expenseAllocationExistsSql(
-                    sql`${expense.id}`,
-                    options.projectScope,
-                  ),
-                ),
-              ),
-          )
+        ? expenseDerivedMembershipSql(sql`${expense.id}`, options.projectScope)
         : undefined
       : await projectFilterCondition(db, filters);
   // The `(none)` / `Has project` sentinels OR with that selection instead of
@@ -292,9 +272,6 @@ export const buildExpenseWhereClause = async (
   // `projectId`. (This replaced a `noProject` boolean that AND-ed, which is
   // why the Unassigned view had to clobber `projectId` to avoid matching
   // nothing at all.)
-  const scopedProjectIds = filters.projectScope
-    ? await matchingEmbeddedProjectIds(db, filters.projectScope)
-    : null;
 
   // `search` matches the expense NAME only, and its terms OR. It is passed as
   // an extra condition rather than a `searchFilters` entry because
@@ -344,15 +321,6 @@ export const buildExpenseWhereClause = async (
     ...(options?.extraConditions ?? []),
     nameSearch,
     projectCondition,
-    scopedProjectIds
-      ? scopedProjectIds.length > 0
-        ? expenseAllocationExistsSql(sql`${expense.id}`, {
-            projectIds: scopedProjectIds.map((id) =>
-              parseEntityId("project", id),
-            ),
-          })
-        : sql`false`
-      : undefined,
     // `productIds.length === 0` is ambiguous by itself — it means either
     // "no productId filter was supplied" (no constraint) or "a productId WAS
     // supplied but didn't resolve to a live product" (must match nothing).
@@ -421,14 +389,14 @@ export const buildExpenseWhereClause = async (
   ]);
 };
 
-// Joined-name sorts stay correlated so the relational count query is untouched.
+// Allocation-backed sorts use one grouped lookup and retain the plain root FROM.
 const resolveExpenseSort = (sort: SortParams) => {
   const dirSql =
     sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
 
   if (sort.orderBy === "spendingCategoryId")
     return [
-      sql`(SELECT string_agg(DISTINCT a."spendingCategoryName", ', ' ORDER BY a."spendingCategoryName") FROM (${expenseJointAllocationSql(sql`ARRAY["Expense".id]`)}) a) ${sql.raw(dirSql)}`,
+      sql`${expenseDerivedValueSql("spendingCategoryNames", sql`${expense.id}`)} ${sql.raw(dirSql)}`,
     ];
   if (sort.orderBy === "projectId") {
     const direction =

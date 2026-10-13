@@ -62,7 +62,7 @@ import {
   withProjectExternalUrls,
 } from "./external-links";
 import { hydrateProjectRow } from "./helpers";
-import { loadProjectSubtreeRollups } from "./subtree";
+import { loadProjectSubtreeRollups, type ProjectTree } from "./subtree";
 
 export const PROJECT_DELETE_EDGE_POLICY = {
   "Purchase.defaultProjectId": {
@@ -129,36 +129,40 @@ const fetchProjectById = (db: Database, id: ProjectId) =>
     where: and(eq(project.id, id), notDeleted(project)),
   });
 
-const projectReader = createEntityReader({
-  entity: "project",
-  fetchById: fetchProjectById,
-  fromDB: async (db, row) => {
-    // Whole-tree parent/child map + this project's subtree rollup — see
-    // subtree.ts's doc comment for why the tree is loaded in full rather than
-    // walked with per-row queries.
-    const [projectContext, deps, dataQualities, [withUrls]] = await Promise.all(
-      [
-        loadProjectSubtreeRollups(db, [row.id]),
-        projectDependencyIds(db, [row.id]),
-        loadDataQualities(db, "project", [row.id]),
-        withProjectExternalUrls(db, [row]),
-      ],
-    );
+const createProjectReader = (tree?: ProjectTree) =>
+  createEntityReader({
+    entity: "project",
+    fetchById: fetchProjectById,
+    fromDB: async (db, row) => {
+      // Whole-tree parent/child map + this project's subtree rollup — see
+      // subtree.ts's doc comment for why the tree is loaded in full rather than
+      // walked with per-row queries.
+      const [projectContext, deps, dataQualities, [withUrls]] =
+        await Promise.all([
+          loadProjectSubtreeRollups(db, [row.id], tree),
+          projectDependencyIds(db, [row.id]),
+          loadDataQualities(db, "project", [row.id]),
+          withProjectExternalUrls(db, [row]),
+        ]);
 
-    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
-    return hydrateProjectRow(
-      withUrls!,
-      projectContext,
-      deps,
-      dataQualities.get(row.id)!,
-    );
-  },
-});
+      // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
+      return hydrateProjectRow(
+        withUrls!,
+        projectContext,
+        deps,
+        dataQualities.get(row.id)!,
+      );
+    },
+  });
+
+const projectReader = createProjectReader();
 
 export const getProjectByID = (
   db: Database,
   id: ProjectId,
-): Promise<ProjectOut> => projectReader.getByID(db, id);
+  tree?: ProjectTree,
+): Promise<ProjectOut> =>
+  (tree ? createProjectReader(tree) : projectReader).getByID(db, id);
 
 export const getProjectByShortcode = (db: Database, shortcode: string) =>
   projectReader.getByShortcode(db, shortcode);

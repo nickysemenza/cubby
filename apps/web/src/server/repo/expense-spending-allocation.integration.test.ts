@@ -1,19 +1,19 @@
 import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
+import { expenseFiltersSchema } from "@cubby/schemas/project";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { expense } from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
+import { expenseDerivedValueSql } from "~/server/repo/expense-derived-read";
 import {
   loadExpenseAnalysisPeriod,
-  loadExpenseEntityFacetOptions,
-  loadExpensePresenceFacetOptions,
+  loadExpenseFacetCounts,
 } from "~/server/repo/expense/analyze";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
-  expenseAllocatedCostSql,
   loadExpenseJointAllocations,
   loadExpenseProjectAllocations,
 } from "./expense-project-allocation";
@@ -104,7 +104,7 @@ describe("joint expense spending allocation", () => {
       );
     }
     const scoped = await unwrapDb(ctx.db).execute<{ amount: number }>(
-      sql`SELECT ${expenseAllocatedCostSql(sql`${fee.id}::uuid`, {
+      sql`SELECT ${expenseDerivedValueSql("cost", sql`${fee.id}::uuid`, {
         projectIds: [winner.projectId!],
         spendingCategoryIds: [winner.spendingCategoryId!],
       })} AS amount`,
@@ -400,15 +400,17 @@ describe("joint expense spending allocation", () => {
     const fee = await line("Synthetic facet fee", 0.02, "fee", {
       purchaseId: purchase.id,
     });
-    const facets = await loadExpenseEntityFacetOptions(
-      ctx.db,
-      eq(expense.id, fee.id),
-      "project",
-      {
-        spendingCategoryIds: [categories[0]!.id],
-      },
-    );
-    expect(facets).toEqual([
+    const facets = await loadExpenseFacetCounts(ctx.db, {
+      filters: expenseFiltersSchema.parse({
+        search: fee.name,
+        purchaseId: purchase.shortcode,
+        spendingCategoryId: categories[0]!.shortcode,
+      }),
+      facetIds: ["project"],
+    });
+    expect(facets.facets[0]?.options).toEqual([
+      { value: "__any__", label: null, count: 1 },
+      { value: "__none__", label: null, count: 0 },
       { value: projects[0]!.shortcode, label: projects[0]!.name, count: 1 },
     ]);
   });
@@ -427,15 +429,19 @@ describe("joint expense spending allocation", () => {
     const fee = await line("Synthetic presence fee", 0.02, "fee", {
       purchaseId: purchase.id,
     });
-    const presence = await loadExpensePresenceFacetOptions(
-      ctx.db,
-      eq(expense.id, fee.id),
-      "project",
-      {
-        spendingCategoryIds: [categories[0]!.id],
-      },
-    );
-    expect(presence).toEqual([
+    const facets = await loadExpenseFacetCounts(ctx.db, {
+      filters: expenseFiltersSchema.parse({
+        search: fee.name,
+        purchaseId: purchase.shortcode,
+        spendingCategoryId: categories[0]!.shortcode,
+      }),
+      facetIds: ["project"],
+    });
+    expect(
+      facets.facets[0]?.options.filter(
+        (option) => option.value === "__any__" || option.value === "__none__",
+      ),
+    ).toEqual([
       { value: "__any__", label: null, count: 1 },
       { value: "__none__", label: null, count: 0 },
     ]);

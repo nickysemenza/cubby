@@ -1,10 +1,8 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { PurchaseOut } from "@cubby/schemas/purchase";
 import type { RelatedSummaryOutput } from "@cubby/schemas/related-view";
 
 import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";
-import { createAppError } from "~/server/errors/app-error";
-import { getPurchaseByShortcode } from "~/server/repo/purchase";
 import { loadRelatedSummary } from "~/server/repo/related-view";
 
 import { sectionBlocks, sectionOut } from "./finance-section";
@@ -65,12 +63,9 @@ const composeProjectAllocationSection = (
 
 export const purchaseProjectAllocationReport = async (
   db: Database,
-  id: string,
+  purchase: PurchaseOut,
 ) => {
-  const purchaseId = parseShortcodeFor("purchase", id);
-  const purchase = await getPurchaseByShortcode(db, purchaseId);
-  if (!purchase)
-    throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found");
+  const purchaseId = purchase.id;
   return sectionBlocks(
     composeProjectAllocationSection(
       purchase.expenseTotal,

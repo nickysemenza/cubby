@@ -1,4 +1,4 @@
-import { entityRefKey } from "@cubby/schemas/entity";
+import { entityRefKey, entitySchema } from "@cubby/schemas/entity";
 import {
   embeddableEntities,
   type SearchableEntity,
@@ -17,12 +17,12 @@ import {
   getEmbeddingTextsForRefs,
   type SearchableEntityText,
 } from "~/server/repo/entity-embedding";
+import { expenseDerivedReadSql } from "~/server/repo/expense-derived-read";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { normalizeSearchText } from "~/server/semantic/text";
 
 import { effectiveExpenseTradeSql } from "./expense-inheritance";
-import { expenseProjectNamesSql } from "./expense-project-allocation";
 import {
   effectiveProjectLocationsSql,
   effectiveTaskProjectSql,
@@ -259,6 +259,15 @@ async function getSearchDocumentSources(
   const requested = (column: SQL) =>
     hasIds ? sql`${column} = ANY(${uuidArrayParam(entityIds)})` : sql`TRUE`;
 
+  const expenseNameIds = entityIds
+    ? uuidArrayParam(entityIds)
+    : page
+      ? sql`ARRAY(SELECT name_source.id FROM "Expense" name_source
+      WHERE name_source."deletedAt" IS NULL
+      ${page.cursor ? sql`AND (${entitySchema.enum.expense}::text, name_source.id) > (${page.cursor.entityKind}, ${page.cursor.entityId}::uuid)` : sql``}
+      ORDER BY name_source.id LIMIT ${page.pageSize})`
+      : undefined;
+
   // One branch per searchable entity, `satisfies Record<SearchableEntity, SQL>`
   // so the compiler — not a reviewer — is what notices a new `searchable: true`
   // entity. Without it the new entity still gets a `searchDocumentBuilders`
@@ -335,8 +344,9 @@ async function getSearchDocumentSources(
       FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
       WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND ${requested(sql`ft."id"`)}`,
     expense: sql`
-      SELECT 'expense', e."id"::text, e."shortcode", e."name", ${expenseProjectNamesSql(sql`e."id"`)}, CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", ${effectiveExpenseTradeSql("e")}, e."costType"]::text[]
+      SELECT 'expense', e."id"::text, e."shortcode", e."name", names."projectNames", CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", ${effectiveExpenseTradeSql("e")}, e."costType"]::text[]
       FROM "Expense" e
+      LEFT JOIN (${expenseDerivedReadSql("names", { expenseIds: expenseNameIds })}) names ON names."expenseId" = e."id"
       WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND ${requested(sql`e."id"`)}`,
     wish: sql`
       SELECT 'wish', w."id"::text, w."shortcode", w."name", w."notes", 'tool wishlist', ARRAY[]::text[], ARRAY['tool wishlist']::text[]

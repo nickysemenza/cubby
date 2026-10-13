@@ -1,10 +1,6 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 
-import type { Database } from "~/server/db";
-import { createAppError } from "~/server/errors/app-error";
 import { reconciliationLabel } from "~/server/repo/list-display-labels";
-import { getPurchaseByShortcode } from "~/server/repo/purchase";
 
 import { optionColor, sectionBlocks, sectionOut } from "./finance-section";
 
@@ -75,15 +71,5 @@ export const composeReconciliationSection = (
     ],
   });
 
-export const purchaseReconciliationReport = async (
-  db: Database,
-  id: string,
-) => {
-  const purchase = await getPurchaseByShortcode(
-    db,
-    parseShortcodeFor("purchase", id),
-  );
-  if (!purchase)
-    throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found");
-  return sectionBlocks(composeReconciliationSection(purchase));
-};
+export const purchaseReconciliationReport = (purchase: PurchaseOut) =>
+  sectionBlocks(composeReconciliationSection(purchase));

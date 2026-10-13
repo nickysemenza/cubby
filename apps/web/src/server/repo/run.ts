@@ -171,6 +171,7 @@ const reader = createEntityReader<
 });
 
 export const getRunByShortcode = reader.getByShortcode;
+export const getRunByID = reader.getByID;
 
 /** Import status needs the shared projection, without unrelated entity-quality hydration. */
 export async function getRunHeaderByShortcode(db: Database, shortcode: string) {

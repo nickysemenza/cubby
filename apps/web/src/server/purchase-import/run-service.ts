@@ -1575,11 +1575,12 @@ function restartInputSummary(
 export async function loadRunDetail(
   db: Database,
   shortcode: string,
+  preparedHeader?: ReturnType<typeof getRunHeaderByShortcode>,
 ): Promise<RunDetail> {
   const publicId = runShortcode.parse(shortcode);
   const database = getDb(db);
   const [header, [run]] = await Promise.all([
-    getRunHeaderByShortcode(db, publicId),
+    preparedHeader ?? getRunHeaderByShortcode(db, publicId),
     database
       .select({
         id: runTable.id,

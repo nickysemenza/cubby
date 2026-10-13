@@ -108,8 +108,8 @@ export const entityReportInput = z.object({
 export type EntityReportInput = z.infer<typeof entityReportInput>;
 
 /**
- * Several slots of one record in one read. A page that shows many slots of the same record
- * (a Run) polls this once, and the server loads the record once for all of them.
+ * Several slots of one record in one read. The server shares declared dependencies within
+ * this request while retaining requested slot order and duplicates.
  */
 export const entityReportManyInput = z.object({
   slots: z.array(reportSlot).min(1).max(16),

@@ -1,8 +1,9 @@
 import { calendarRangeInput } from "@cubby/schemas/calendar";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getCalendarRange, getCalendarSchedule } from "./calendar";
+import * as expenseAllocation from "./expense-project-allocation";
 import { insertWithShortcode } from "./shortcode-utils";
 
 describe("calendar effective attribution", () => {
@@ -52,15 +53,32 @@ describe("calendar effective attribution", () => {
       trade: null,
       purchaseId: purchase.id,
     });
-    const scoped = await getCalendarRange(
-      ctx.db,
-      calendarRangeInput.parse({
-        startDate: "2026-09-20",
-        endDateExclusive: "2026-09-21",
-        kinds: ["expense"],
-        projectId: first.shortcode,
-      }),
-    );
+    const allocation = vi.spyOn(expenseAllocation, "expenseJointAllocationSql");
+    const scopedRead = await (async () => {
+      try {
+        const result = await getCalendarRange(
+          ctx.db,
+          calendarRangeInput.parse({
+            startDate: "2026-09-20",
+            endDateExclusive: "2026-09-21",
+            kinds: ["expense"],
+            projectId: first.shortcode,
+          }),
+        );
+        return {
+          result,
+          allocations: allocation.mock.calls.filter(
+            ([, , dimensions]) => dimensions?.categories === false,
+          ).length,
+        };
+      } finally {
+        allocation.mockRestore();
+      }
+    })();
+    const scoped = scopedRead.result;
+    // Membership and displayed cost must consume the same allocation, rather
+    // than resolving every purchase a second time for the display projection.
+    expect(scopedRead.allocations).toBe(1);
     expect(scoped.items).toHaveLength(1);
     expect(scoped.items[0]).toMatchObject({ title: "Shared tax", cost: 0.2 });
     expect(scoped.days["2026-09-20"]).toMatchObject({

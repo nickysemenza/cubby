@@ -1,5 +1,5 @@
 import type { ReportBlock, ReportCommand } from "@cubby/schemas/entity-report";
-import { cookbookShortcode } from "@cubby/schemas/identifiers";
+import { cookbookShortcode, type CookbookId } from "@cubby/schemas/identifiers";
 import { countLabel } from "@cubby/shared/pluralize";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -7,7 +7,6 @@ import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";
 import { cookbook } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 const RETIRED_FORMAT_TEXT =
   "Extracted with a retired format — re-extract from the EPUB to restore the source, its run report, and sub-recipe links.";
@@ -20,9 +19,8 @@ const RETIRED_FORMAT_TEXT =
  */
 export async function cookbookExtractionReport(
   db: Database,
-  code: string,
+  id: CookbookId,
 ): Promise<ReportBlock[]> {
-  const id = await resolveOrThrow(db, "cookbook", code);
   const [row] = await getDb(db)
     .select({
       report: cookbook.report,
@@ -130,8 +128,8 @@ const MAX_LISTED = 100;
 export async function cookbookImportProgressReport(
   db: Database,
   code: string,
+  id: CookbookId,
 ): Promise<ReportBlock[]> {
-  const id = await resolveOrThrow(db, "cookbook", code);
   const cookbookId = cookbookShortcode.parse(code);
   const [{ getCookbookSourceCoverage }, { COOKBOOK_COMMAND_CHUNK }] =
     await Promise.all([

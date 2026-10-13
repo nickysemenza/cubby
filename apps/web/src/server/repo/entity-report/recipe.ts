@@ -3,15 +3,13 @@ import {
   type IngredientAvailability,
 } from "@cubby/schemas/availability";
 import type { ReportBlock } from "@cubby/schemas/entity-report";
-import { recipeShortcode } from "@cubby/schemas/identifiers";
+import { recipeShortcode, type RecipeId } from "@cubby/schemas/identifiers";
 
 import { deriveRecipeTotalsGaps } from "~/lib/recipe-totals-gaps";
 import {
   suggestionFor,
   TOTALS_MISSING_MEASURES,
 } from "~/lib/recipe-totals-gaps";
-import type { Database } from "~/server/db";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import type { RequestServices } from "~/server/request-services";
 
 import { amountFormatter } from "./records";
@@ -67,13 +65,13 @@ export function recipeAvailabilityVerdict(
  * once for web and native. The same engine as /meals/suggestions and the shopping list.
  */
 export async function recipeAvailabilityReport(
-  db: Database,
   code: string,
+  id: RecipeId,
   services: Services,
 ): Promise<ReportBlock[]> {
-  await resolveOrThrow(db, "recipe", code);
   const availability = await services.availability.getRecipeAvailability(
     recipeShortcode.parse(code),
+    id,
   );
   const formatAmount = await amountFormatter();
   const { assumedNames, hasQuantityIssues, shortfalls, ready } =
@@ -200,11 +198,10 @@ export async function recipeAvailabilityReport(
  * anchor measures a target against (`scale_factor_for_total_weight`).
  */
 export async function recipeCostingCoverageReport(
-  db: Database,
   code: string,
+  id: RecipeId,
   services: Services,
 ): Promise<ReportBlock[]> {
-  const id = await resolveOrThrow(db, "recipe", code);
   const { costing, ingMap } =
     await services.recipeCosting.costingWithContext(id);
   const gaps = deriveRecipeTotalsGaps(costing, ingMap);

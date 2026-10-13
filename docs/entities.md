@@ -170,12 +170,27 @@ exclude historical file imports, while discovery and the Imports saved view
 have their own deliberately different scopes. A photo batch keeps its own
 review and durable transcript rather than purchase report sections.
 
-Expense analytical totals use `server/repo/expense-derived-read.ts`: one grouped
-allocation relation supplies the cost column for each SQL aggregate, rather
-than embedding a correlated allocation calculation in every money projection.
-Selection limits the purchases to resolve, while every live principal sibling
-still supplies the denominator; scope filters apply only to rounded shares.
-Unknown costs stay null and unscoped totals sum the original Expense costs.
+Expense analytical reads use `server/repo/expense-derived-read.ts`: a declared
+scope and SQL projection batch share one materialized allocation relation.
+Compatible charts, analyzer grids and facets consume that relation in one
+statement; distinct date scopes remain separate. Ledger selection, search,
+related views, contributions and project rollups use the same owner rather
+than correlated allocation calculations per output row. Selection limits the
+purchases to resolve, while every live principal sibling supplies the
+denominator. Scope filters apply to rounded shares, unknown costs stay null,
+and unscoped totals sum original Expense costs. Quality hydration declares a
+bounded derived relation for its selected ID batch, sharing category gaps and
+exception evidence; single-record search refreshes restrict that relation too.
+
+Entity reports declare lazy dependencies in `server/repo/entity-report/`.
+Each batch memoizes dependency promises by declaration identity, preserving
+slot order, duplicates, cursors and status. Distinct slots share compatible
+project trees and scopes, record identities, purchase hydration and Run
+headers. Member-gated histories resolve viewer membership before record identity,
+preserving the authorization error when both inputs are invalid. Project analytics supplies the budget summary when both are requested;
+budget alone does not load charts. Reuse ends with the batch: there is no
+cross-request cache or encompassing transaction.
+
 The full-filter Product price footer groups live sibling quantities and
 visited kit-ancestor Expenses. Page-sized scalar pricing keeps its correlated
 path: small-fixture grouping regressed, and a scalar/batch SQL CASE made the
@@ -183,18 +198,12 @@ broad query much slower. Preserve values, signed money and full sibling
 weights when revisiting either path; measure broad and one-leaf populations
 separately rather than generalizing a synthetic speedup to production.
 
-Each breakdown executes its own relation; this is not one shared database
-execution across all chart queries. A project report batch requesting analytics
-reuses that analytics summary for its budget in either slot order. Reuse lasts
-only for that batch, with no cross-request cache or transaction. Budget alone
-does not load the chart breakdowns.
-
 **Report slots.** A `slot` section whose content is figures, a chart series, a
 table or dated schedule rows has no per-platform code: the server composes it
 once (`entityReport.get`, builders in `server/repo/entity-report/`, block kinds
 in `packages/schemas/src/entity-report.ts`) and web (`ReportBlocks`) and native
 (`ReportDetailSlot`, Swift Charts) only draw it. Add the slot id to
-`reportSlots`, a builder to `BUILDERS`, and register the slot on both clients;
+`reportSlots`, a declaration to `REPORTS`, and register the slot on both clients;
 money in a report is `SUM(Expense.cost)` or the persisted valuation, never
 recomputed on a client. Money summaries and chart labels preserve cents, matching
 the report rows. Linked record names truncate within the available row width,

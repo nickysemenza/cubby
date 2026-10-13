@@ -19,7 +19,7 @@ import {
   notDeleted,
   uuidArrayParam,
 } from "~/server/repo/database-helpers";
-import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
+import { expenseDerivedReadSql } from "~/server/repo/expense-derived-read";
 import { effectiveTaskProjectSql } from "~/server/repo/task-project-inheritance";
 import { effectiveTaskDueDateSql } from "~/server/repo/task/helpers";
 
@@ -55,7 +55,7 @@ const projectExpenseStats = async (
         (coalesce(sum(-allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" < 0), 0) / 100.0)::double precision AS "credits",
         count(distinct allocation."expenseId")::int AS "expenseCount",
         min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
-      FROM (${expenseProjectAllocationSql()}) allocation
+      FROM (${expenseDerivedReadSql("projects")}) allocation
       JOIN "Expense" e ON e."id" = allocation."expenseId"
       GROUP BY allocation."projectId"
     `)
@@ -211,7 +211,7 @@ export async function projectContentDates(
       }>(sql`
       SELECT allocation."projectId",
         min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
-      FROM (${expenseProjectAllocationSql()}) allocation
+      FROM (${expenseDerivedReadSql("projects")}) allocation
       JOIN "Expense" e ON e."id" = allocation."expenseId"
       WHERE ${scope(sql`allocation."projectId"`)}
         ${excludeExpenseId ? sql`AND e."id" <> ${excludeExpenseId}` : sql``}

@@ -22,6 +22,7 @@ import { type DataQualityEntries, dataQualityEntries } from "./entries";
 import {
   liveQualityRow,
   type CheckBinding,
+  type QualityReadContext,
   type EntityChecks,
   type ScoredTable,
 } from "./registry";
@@ -72,13 +73,14 @@ export const fingerprintSql = (
   entity: ScoredEntity,
   check: DataCheck,
   t: ScoredTable = entryFor(entity).table,
+  context?: QualityReadContext,
 ): SQL => {
   const binding = bindingFor(entity, check);
   if (!dataCheckExemptible[check]) return sql`NULL::text`;
   if (!binding.fingerprint)
     throw new Error(`${check} declares no fingerprint inputs.`);
   return sql`${check} || ':' || concat_ws('|', ${sql.join(
-    [...binding.fingerprint(t)].map(fingerprintValue),
+    [...binding.fingerprint(t, context)].map(fingerprintValue),
     sql`, `,
   )})`;
 };
@@ -115,7 +117,8 @@ export const checkMissingCondition = (
   entity: ScoredEntity,
   check: DataCheck,
   t: ScoredTable = entryFor(entity).table,
-): SQL => group(bindingFor(entity, check).missing(t));
+  context?: QualityReadContext,
+): SQL => group(bindingFor(entity, check).missing(t, context));
 
 /** `expected AND missing`, before any exception is applied. */
 const rawGapCondition = (

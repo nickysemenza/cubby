@@ -30,7 +30,7 @@ import type {
   Trade,
 } from "@cubby/schemas/project";
 import { and, eq, isNotNull, type SQL, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias, type SelectedFields } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { expense, project, purchase, vendor } from "~/server/db/schema";
@@ -41,12 +41,15 @@ import {
   expenseShareAggregateFields,
 } from "~/server/repo/expense-aggregate-sql";
 
-import { prepareExpenseDerivedRead } from "../expense-derived-read";
+import {
+  executeExpenseDerivedBatch,
+  prepareExpenseDerivedRead,
+  type PreparedExpenseDerivedRead,
+} from "../expense-derived-read";
 import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,
 } from "../expense-inheritance";
-import { expenseAllocationScopeConditionSql } from "../expense-project-allocation";
 
 const effectiveProjectId = effectiveExpenseProjectSql('"Expense"');
 const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
@@ -91,8 +94,9 @@ export async function expenseMonthlySummary(
 export async function expenseSpendSummary(
   db: Database,
   filters: ExpenseFilters,
+  prepared?: PreparedExpenseDerivedRead,
 ): Promise<ExpenseAnalyticsOut["summary"]> {
-  const read = await prepareExpenseDerivedRead(db, filters);
+  const read = prepared ?? (await prepareExpenseDerivedRead(db, filters));
   const { where: whereClause } = read;
   const [summary] = await read
     .select(summaryFields(read.cost))
@@ -104,34 +108,13 @@ export async function expenseSpendSummary(
 export async function expenseAnalytics(
   db: Database,
   filters: ExpenseFilters,
+  prepared?: PreparedExpenseDerivedRead,
 ): Promise<ExpenseAnalyticsOut> {
-  const read = await prepareExpenseDerivedRead(db, filters);
-  const { scope: projectScope, where: whereClause } = read;
-  const aggregate = read.aggregate;
-  // Trade and cost type are per share: each adjustment follows its principals,
-  // and a share that follows none reports under the null (unassigned) trade.
-  const shareTrade = sql<Trade | null>`allocation.trade`;
-  const shareCostType = sql<CostType>`allocation."costType"`;
-  const shares = <K extends Record<string, SQL>>(keys: K) =>
-    getDb(db)
-      .select({ ...keys, ...expenseShareAggregateFields() })
-      .from(expense)
-      .innerJoin(read.allocations, sql`allocation."expenseId" = ${expense.id}`)
-      .where(
-        and(
-          whereClause,
-          projectScope
-            ? expenseAllocationScopeConditionSql("allocation", projectScope)
-            : undefined,
-        ),
-      );
-  // $0 events and unknown-cost historical acquisitions can have an unknown
-  // date — exclude null-date rows from the month-bucketed breakdowns only
-  // (can't bucket what has no date); summary/byCostType/byTrade/byProject still
-  // include them. A null cost adds nothing to any sum; it is never a $0 spend.
+  const context = prepared ?? (await prepareExpenseDerivedRead(db, filters));
+  const { where: whereClause } = context;
+  // Null-date rows belong in lifetime totals, but have no month bucket.
   const datedWhereClause = and(whereClause, isNotNull(expense.date));
-
-  const [
+  const {
     summaryRows,
     byCostType,
     byTrade,
@@ -139,92 +122,62 @@ export async function expenseAnalytics(
     monthly,
     byProjectResult,
     byVendor,
-  ] = await Promise.all([
-    read.select(summaryFields(read.cost)).where(whereClause),
-    shares({ costType: shareCostType }).groupBy(shareCostType),
-    shares({ trade: shareTrade }).groupBy(shareTrade),
-    shares({ trade: shareTrade, costType: shareCostType }).groupBy(
-      shareTrade,
-      shareCostType,
-    ),
-    read
-      .select({ month: MONTH_BUCKET, ...aggregate })
-      .where(datedWhereClause)
-      .groupBy(MONTH_BUCKET)
-      .orderBy(MONTH_BUCKET),
-    // Inner-joined to `project` (and its own `notDeleted`) for the display
-    // name, so `projectId IS NOT NULL` implicitly excludes inbox expenses
-    // (no project to report against) as well as expenses still pointing at
-    // a soft-deleted project — mirroring `resolveLiveJoinName`'s convention
-    // of hiding a deleted parent's name elsewhere in the expense API.
-    getDb(db).execute<{
-      projectShortcode: string;
-      projectName: string;
-      actual: number;
-      committed: number;
-      credits: number;
-      net: number;
-      count: number;
-    }>(sql`
-      SELECT
-        p."shortcode" AS "projectShortcode",
-        p."name" AS "projectName",
-        coalesce(sum((allocation."attributedCents"::bigint / 100.0))
-          filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = false), 0)::float8 AS actual,
-        coalesce(sum((allocation."attributedCents"::bigint / 100.0))
-          filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = true), 0)::float8 AS committed,
-        coalesce(-sum((allocation."attributedCents"::bigint / 100.0))
-          filter (where allocation."attributedCents"::bigint < 0), 0)::float8 AS credits,
-        coalesce(sum(allocation."attributedCents"::bigint) / 100.0, 0)::float8 AS net,
-        count(DISTINCT ${expense.id})::int AS count
-      FROM ${read.allocations}
-      JOIN ${expense} ON ${expense.id} = allocation."expenseId"
-      JOIN ${project} p ON p."id" = allocation."projectId" AND p."deletedAt" IS NULL
-      WHERE ${whereClause ?? sql`true`}
-        ${
-          projectScope
-            ? sql`AND ${expenseAllocationScopeConditionSql("allocation", projectScope) ?? sql`true`}`
-            : sql``
-        }
-      GROUP BY p."shortcode", p."name"
-    `),
-    // Spend by the vendor the money went to, resolved through the charge:
-    // expense → Purchase → Vendor. Inner-joined for the same reason `byProject`
-    // is, with the same consequence: charge-less rows (no vendor recorded) are
-    // excluded, so this does NOT sum to `summary.net`. That gap is the size of
-    // the unattributed tail and is worth reading, not papering over with a left
-    // join that would invent an "unknown vendor" bucket.
-    //
-    // `notDeleted` on BOTH joins: a soft-deleted charge is still a row, so
-    // without it an expense whose charge was deleted would keep reporting under
-    // its old vendor — the same guard `resolveExpenseSort`'s vendor subquery
-    // applies on read.
-    //
-    // ⚠️ The charge table is ALIASED, deliberately. `buildExpenseWhereClause`
-    // emits `inArray(expense.purchaseId, <SELECT purchase.id …>)` whenever
-    // `vendorId`/`orderId`/`orderIdPresenceFilter` is set, which puts the
-    // unaliased `purchase` inside this query's WHERE. Joining the same table
-    // unaliased in the FROM as well would place it in two scopes at once —
-    // Postgres resolves that today, but it's implicit coupling that breaks
-    // quietly later. `byProject` never hit this: nothing in the where clause
-    // sub-selects `project`.
-    read
-      .select({
-        vendorShortcode: vendor.shortcode,
-        vendorName: vendor.name,
-        ...aggregate,
+  } = await executeExpenseDerivedBatch(db, context, (read) => {
+    const shareTrade = sql<Trade | null>`allocation.trade`;
+    const shareCostType = sql<CostType>`allocation."costType"`;
+    const shares = <K extends SelectedFields>(keys: K) =>
+      getDb(db)
+        .select({ ...keys, ...expenseShareAggregateFields() })
+        .from(expense)
+        .innerJoin(
+          read.allocations,
+          sql`allocation."expenseId" = ${expense.id}`,
+        )
+        .where(whereClause);
+    return {
+      summaryRows: read.select(summaryFields(read.cost)).where(whereClause),
+      byCostType: shares({ costType: shareCostType }).groupBy(shareCostType),
+      byTrade: shares({ trade: shareTrade }).groupBy(shareTrade),
+      tradeCostMatrix: shares({
+        trade: shareTrade,
+        costType: shareCostType,
+      }).groupBy(shareTrade, shareCostType),
+      monthly: read
+        .select({ month: MONTH_BUCKET, ...read.aggregate })
+        .where(datedWhereClause)
+        .groupBy(MONTH_BUCKET)
+        .orderBy(MONTH_BUCKET),
+      // Only live projects receive named buckets; unassigned shares remain
+      // in the summary, preserving the visible attribution gap.
+      byProjectResult: shares({
+        projectShortcode: project.shortcode,
+        projectName: project.name,
       })
-      .innerJoin(
-        chargeJoin,
-        and(eq(expense.purchaseId, chargeJoin.id), notDeleted(chargeJoin)),
-      )
-      .innerJoin(
-        vendor,
-        and(eq(chargeJoin.vendorId, vendor.id), notDeleted(vendor)),
-      )
-      .where(whereClause)
-      .groupBy(vendor.shortcode, vendor.name),
-  ]);
+        .innerJoin(
+          project,
+          and(sql`${project.id} = allocation."projectId"`, notDeleted(project)),
+        )
+        .groupBy(project.shortcode, project.name),
+      // Use a separate Purchase alias because ledger vendor/order predicates
+      // already select the unaliased Purchase table in their own scope.
+      byVendor: read
+        .select({
+          vendorShortcode: vendor.shortcode,
+          vendorName: vendor.name,
+          ...read.aggregate,
+        })
+        .innerJoin(
+          chargeJoin,
+          and(eq(expense.purchaseId, chargeJoin.id), notDeleted(chargeJoin)),
+        )
+        .innerJoin(
+          vendor,
+          and(eq(chargeJoin.vendorId, vendor.id), notDeleted(vendor)),
+        )
+        .where(whereClause)
+        .groupBy(vendor.shortcode, vendor.name),
+    };
+  });
 
   // A GROUP-BY-less aggregate always returns exactly one row, even over zero
   // matching expenses (every sum/count just comes back 0).
@@ -233,6 +186,7 @@ export async function expenseAnalytics(
   // Cumulative net over time — a running sum of `monthly`'s already-computed
   // net (already sorted ascending by its own ORDER BY), not a second SQL
   // window-function query.
+  monthly.sort((a, b) => a.month.localeCompare(b.month));
   let running = 0;
   const cumulative = monthly.map((row) => {
     running += row.net;
@@ -246,7 +200,7 @@ export async function expenseAnalytics(
     tradeCostMatrix,
     monthly,
     cumulative,
-    byProject: byProjectResult.rows.map(({ projectShortcode, ...row }) => ({
+    byProject: byProjectResult.map(({ projectShortcode, ...row }) => ({
       ...row,
       projectId: parseShortcodeFor("project", projectShortcode),
     })),

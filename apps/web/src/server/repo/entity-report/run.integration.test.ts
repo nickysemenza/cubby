@@ -1,8 +1,9 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { auditLog } from "~/server/db/schema";
+import { auditLog, run as runTable } from "~/server/db/schema";
 import { startImportRunFixture } from "~/server/purchase-import/import-run.fixtures";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -142,6 +143,98 @@ describe("Run detail reports", () => {
     expect(batch.result.reports.map((entry) => entry.report.blocks)).toEqual(
       singles.result.map((report) => report.blocks),
     );
+  });
+
+  // Duplicates used to reread progress/log/usage even in the Run-specific batch.
+  it("shares repeated Run dependencies without dropping duplicate slots", async () => {
+    const { id } = await startRun();
+    const slots = [
+      "run.live-progress",
+      "run.import-debug-log",
+      "run.ai-usage",
+      "run.changes",
+      "run.import-stats",
+    ] as const;
+    const one = await countTestDbQueries(() =>
+      buildEntityReports(ctx.db, { id, slots: [...slots] }),
+    );
+    const repeated = await countTestDbQueries(() =>
+      buildEntityReports(ctx.db, { id, slots: [...slots, ...slots] }),
+    );
+    expect(repeated.queryCount).toBe(one.queryCount);
+    expect(repeated.result.reports.map(({ slot }) => slot)).toEqual([
+      ...slots,
+      ...slots,
+    ]);
+    expect(repeated.result.reports.map(({ report }) => report)).toEqual(
+      [...one.result.reports, ...one.result.reports].map(
+        ({ report }) => report,
+      ),
+    );
+  });
+
+  it("shares the Run identity across distinct polled slots", async () => {
+    const { id } = await startRun();
+    const batch = await countTestDbQueries(() =>
+      buildEntityReports(ctx.db, {
+        id,
+        slots: ["run.import-stats", "run.ai-usage", "run.changes"],
+      }),
+    );
+    expect(
+      batch.statements.filter((statement) =>
+        statement.startsWith('select "id" from "Run"'),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("keeps paged Run cursors and reads updated status on the next request", async () => {
+    const { run, id, vendor } = await startRun();
+    await getDb(ctx.db)
+      .insert(auditLog)
+      .values(
+        Array.from({ length: 26 }, (_, index) => ({
+          runId: run.id,
+          entityKind: "vendor" as const,
+          entityId: vendor.id,
+          action: "update",
+          userId: ctx.actor.userId,
+          channel: "mcp" as const,
+          changes: { name: { from: "Before", to: `Page fixture ${index}` } },
+          createdAt: new Date(Date.UTC(2026, 8, 20, 0, 0, index)),
+        })),
+      );
+    const first = await buildEntityReport(ctx.db, { id, slot: "run.changes" });
+    expect(first.nextCursor).toBeTruthy();
+    const second = await buildEntityReport(ctx.db, {
+      id,
+      slot: "run.changes",
+      cursor: first.nextCursor,
+    });
+    const rows = (report: typeof first) =>
+      report.blocks.flatMap((block) =>
+        block.kind === "records" ? block.rows : [],
+      );
+    expect(rows(first)).toHaveLength(25);
+    expect(rows(second)).toHaveLength(1);
+    expect(rows(first).map(({ key }) => key)).not.toContain(
+      rows(second)[0]?.key,
+    );
+    expect(second.nextCursor).toBeUndefined();
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "completed" })
+      .where(eq(runTable.id, run.id));
+    const stopped = await buildEntityReports(ctx.db, {
+      id,
+      slots: ["run.changes", "run.import-stats"],
+    });
+    expect(
+      stopped.reports.map(({ report }) => [report.status, report.live]),
+    ).toEqual([
+      ["completed", false],
+      ["completed", false],
+    ]);
   });
 
   it("serves the log and usage reports, and refuses an unknown run", async () => {

@@ -6,8 +6,8 @@ import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import * as schema from "~/server/db/schema";
+import { expenseDerivedReadSql } from "~/server/repo/expense-derived-read";
 import { effectiveExpenseProjectSql } from "~/server/repo/expense-inheritance";
-import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 import {
   effectiveTaskProjectSql,
   effectiveTaskSubjectProductSql,
@@ -156,11 +156,10 @@ function edgeCondition(
       sql`${sql.raw(`${targetAlias}."shortcode"`)} = 'PRJ-HSHD'`,
     )} = ${target}`;
   if (edge.edgeKey === "Expense.projectId")
-    return sql`EXISTS (
-    SELECT 1 FROM (${expenseProjectAllocationSql()}) attributed
-    WHERE attributed."expenseId" = ${sql.raw(`${sourceAlias}."id"`)}
-      AND attributed."projectId" = ${target}
-  )`;
+    return sql`(${sql.raw(`${sourceAlias}."id"`)}, ${target}) IN (
+      SELECT attributed."expenseId", attributed."projectId"
+      FROM (${expenseDerivedReadSql("projects")}) attributed
+    )`;
   const matches = sql`${sql.raw(`${sourceAlias}."${edge.sourceColumn}"`)} = ${target}`;
   return edge.scope
     ? sql`${matches} AND ${sql.raw(`${sourceAlias}."${edge.scope.column}"`)} = ${edge.scope.value}`
