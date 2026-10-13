@@ -756,7 +756,7 @@ private struct PhotoLibraryCell: View {
     }
 
     private var cellAccessibilityLabel: String {
-        let date = asset.creationDate.map { DatePresentation.timestamp($0).text } ?? "Undated photo"
+        let date = asset.creationDate.map { DatePresentation.timestamp($0).absolute } ?? "Undated photo"
         return "\(date), \(cellState.accessibilityStatus)"
     }
 }

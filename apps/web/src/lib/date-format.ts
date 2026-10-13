@@ -29,7 +29,7 @@ const DATE_PRESETS = {
   isoDateTime: "yyyy-MM-dd HH:mm",
   /** 2026-01-05 13:04:09 */
   isoDateTimeSeconds: "yyyy-MM-dd HH:mm:ss",
-  /** Exact household timestamp, including its zone abbreviation. */
+  /** Exact household timestamp, including its zone offset. */
   timestampExact: "yyyy-MM-dd HH:mm:ss zzz",
   /** Jan 5 */
   monthDay: "MMM d",

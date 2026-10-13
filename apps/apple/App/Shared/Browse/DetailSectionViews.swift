@@ -594,9 +594,10 @@ struct FieldExplanationLabel: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Text("Rule: \(resolved.rule.id) · r\(resolved.rule.revision)")
                         .font(.caption.monospaced()).textSelection(.enabled)
-                    Text("Evaluated: \(DatePresentation.timestamp(resolved.evaluatedAt).text)").font(.caption)
-                        .foregroundStyle(
-                            .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Evaluated:")
+                        DateDisplay(date: resolved.evaluatedAt)
+                    }.font(.caption).foregroundStyle(.secondary)
                     if resolved.resolution == nil, let value = try? JSONValue(encoding: resolved.value) {
                         if value.objectValue != nil || value.arrayValue != nil {
                             ExplanationEvidenceValue(value: value)

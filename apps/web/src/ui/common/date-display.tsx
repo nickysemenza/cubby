@@ -101,7 +101,9 @@ export function DateDisplay(props: DateDisplayProps) {
         aria-describedby={open ? tooltipId : undefined}
         className={cn(
           "cursor-default text-left",
-          stacked ? "block max-w-full min-w-0" : "inline whitespace-normal",
+          stacked
+            ? "block max-w-full min-w-0"
+            : "inline-block max-w-full min-w-0 align-baseline whitespace-normal",
           props.className,
         )}
       >
