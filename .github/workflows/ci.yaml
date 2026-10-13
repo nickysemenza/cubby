@@ -278,6 +278,27 @@ jobs:
           artifact: purchase-import
           save-browser: "false"
 
+  mail-decisions:
+    name: Live Email decisions (Jev and Clef)${{ matrix.db && '' }}
+    needs: plan
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        include: [{ db: true }]
+    services: *test-databases
+    env: *web-lane-env
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: restore
+      - run: pnpm --dir apps/web eval:mail-prompts
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          MAIL_PROMPT_BASELINE_ONLY: "1"
+
   rust:
     name: Rust - recipebridge and cubby-ffi
     needs: plan
@@ -437,6 +458,7 @@ jobs:
       [
         plan,
         validation,
+        mail-decisions,
         docs,
         lanes,
         rust,
@@ -456,5 +478,6 @@ jobs:
           allowed-failures: apple-probe
           allowed-skips: >-
             ${{ needs.plan.outputs.skips }},
+            ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'mail-decisions' || '' }},
             ${{ needs.apple-probe.outputs.host == 'success' && 'apple-host' || '' }},
             ${{ needs.apple-probe.outputs.simulator == 'success' && 'apple-simulator' || '' }}

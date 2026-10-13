@@ -359,7 +359,10 @@ lanes, and the exact jobs it skipped.
 `CI passed` is the single required check (`re-actors/alls-green` on
 `ubuntu-slim`). It needs every lane and fails on any failure or cancellation,
 and on any skip other than the jobs `Plan` skipped or an Apple job whose probe
-verified a cached pass. A failed probe is allowed: it only sends both Apple
+verified a cached pass, or the live Email decision job on a fork PR without
+secrets. Trusted runs always call Jev and Clef on the synthetic Email suite
+through the real gateway; this uncached job uses `AI_GATEWAY_API_KEY`. Real
+member inputs are refused in CI. A failed probe is allowed: it only sends both Apple
 lanes to macOS.
 
 `Validation` runs the cached generate, design-token, types, lint, Knip,
