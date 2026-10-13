@@ -16,7 +16,7 @@ type Email = typeof email;
 // Correlated subqueries name the unaliased "Email" root explicitly: Drizzle
 // renders an interpolated column unqualified, which would bind to a same-named
 // inner column. No entity rolls Email quality up under an alias.
-const { related, uncertain } = mailboxClassification.enum;
+const { related, uncertain, unrelated } = mailboxClassification.enum;
 const retainedContent = sql`(
   "Email"."orderMailId" IS NOT NULL AND "Email"."contentClearedAt" IS NULL AND (
     EXISTS (
@@ -36,7 +36,8 @@ const retainedContent = sql`(
   )
 )`;
 
-/** Relevance-conditional pipeline gaps: an unrelated Email can only lack review. */
+/** Settled automated negatives require no member review; their observations
+ * remain available to independent accuracy sampling. */
 export const emailChecks = defineEntityChecks({
   entity: "email",
   table: email,
@@ -46,7 +47,7 @@ export const emailChecks = defineEntityChecks({
     },
     email_relevance_unreviewed: {
       expected: (t: Email) =>
-        sql`${t.classificationStage} IN ${automatedStagesSql}`,
+        sql`${t.classification} <> ${unrelated} AND ${t.classificationStage} IN ${automatedStagesSql}`,
       missing: () => sql`(${emailMemberClassificationSql()}) IS NULL`,
     },
     email_original_missing: {

@@ -302,19 +302,36 @@ async function hasRetainedContent(
 
 /**
  * Reclassify replaces Relevance only when the member keeps what they have: a
- * resolution stands, and a rerun that would drop retained content or an
- * imported Email waits for the member to accept it. A confirming rerun of an
+ * resolution stands, and an imported Email waits for member acceptance.
+ * Unaccepted retained negatives settle automatically through the protected
+ * original-disposal writer. A confirming rerun of an
  * Email whose content is gone publishes normally so the refetched original is
  * retained again. `null` publishes normally.
  */
 async function reclassifyPublication(
   db: Database,
   current: NonNullable<PriorMessage>,
+  checksum: string,
   decision: MailboxClassificationDecision,
   retain: boolean,
 ): Promise<GmailAcquisitionOutcome | null> {
   if (current.classificationStage === "resolution")
     return { kind: "kept", reason: "resolution_kept" };
+  if (
+    current.checksum === checksum &&
+    current.classification !== decision.classification
+  ) {
+    const [review] = await getDb(db)
+      .select({ classification: emailMemberClassificationSql() })
+      .from(emailTable)
+      .where(eq(emailTable.id, current.id))
+      .limit(1);
+    if (
+      review?.classification &&
+      review.classification !== decision.classification
+    )
+      return { kind: "kept", reason: "resolution_kept" };
+  }
   const imported =
     current.classification !== "unrelated" &&
     (current.status === "completed" || current.status === "researching");
@@ -333,9 +350,15 @@ async function reclassifyPublication(
     return { kind: "confirmed" };
   }
   if (imported) return { kind: "kept", reason: "awaiting_acceptance" };
-  return !retain && (await hasRetainedContent(db, current))
-    ? { kind: "kept", reason: "awaiting_acceptance" }
-    : null;
+  // An unreadable refetch is not a negative verdict and cannot discard the
+  // earlier usable original. Only definite unrelated decisions dispose it.
+  if (
+    !retain &&
+    decision.classification !== "unrelated" &&
+    (await hasRetainedContent(db, current))
+  )
+    return { kind: "kept", reason: "awaiting_acceptance" };
+  return null;
 }
 async function protectOriginalOutcome(
   db: Database,
@@ -655,7 +678,13 @@ async function acquireEligible(
           );
           const reclassified =
             input.reclassify && current
-              ? await reclassifyPublication(tx, current, decision, retain)
+              ? await reclassifyPublication(
+                  tx,
+                  current,
+                  checksum,
+                  decision,
+                  retain,
+                )
               : null;
           if (reclassified) return reclassified;
           const recorded = {

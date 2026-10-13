@@ -1,7 +1,7 @@
 /**
  * Reclassify reruns every Relevance stage from the Gmail original. Failure
  * modes guarded here: skipping the relevance model under classification-only
- * policy; replacing Relevance in a way that drops retained content; overriding
+ * policy; failing to settle unaccepted negatives; overriding
  * a member's resolution; losing a disagreement with the member's review;
  * re-pointing the Email's processing Run (which would freeze later refreshes);
  * admitting more than one capped batch; and a triage preview that writes
@@ -299,7 +299,7 @@ describe("member Reclassify", () => {
     });
   });
 
-  it("records an unrelated rerun of retained content as history until the member accepts it", async () => {
+  it("settles an unaccepted retained newsletter without Luna or another member acceptance", async () => {
     const f = await fixture();
     f.triage.mockResolvedValue("unrelated");
     const email = await f.seed(
@@ -322,21 +322,23 @@ describe("member Reclassify", () => {
     );
 
     expect(result.results[0]).toMatchObject({
-      outcome: "awaiting_acceptance",
+      outcome: "replaced",
       classification: "unrelated",
       stage: "decision",
     });
     expect(await f.current(email.id)).toMatchObject({
-      classification: "related",
+      classification: "unrelated",
       classificationStage: "decision",
-      contentClearedAt: null,
+      status: "completed",
       orderMailId: original.id,
     });
     const [kept] = await getDb(ctx.db)
       .select()
       .from(orderMail)
       .where(eq(orderMail.id, original.id));
-    expect(kept?.content.bodyText).toBe("Synthetic retained order body");
+    expect(kept?.content.bodyText).toBeNull();
+    expect((await f.current(email.id)).contentClearedAt).not.toBeNull();
+    expect(f.relevance).not.toHaveBeenCalled();
     expect((await f.history(email.id))[0]).toMatchObject({
       classification: "unrelated",
       stage: "decision",
@@ -386,6 +388,65 @@ describe("member Reclassify", () => {
     );
     expect(conflicts.data.map((row) => row.id)).toEqual([email.shortcode]);
   });
+
+  it.each([false, true])(
+    "protects a reviewed related label only for the same original (changed: %s)",
+    async (changed) => {
+      const f = await fixture();
+      f.triage.mockResolvedValue("unrelated");
+      const email = await f.seed(
+        "synthetic-member-labelled-order",
+        "Synthetic complete message",
+        {
+          classification: "related",
+          classificationStage: "decision",
+          status: "pending",
+        },
+      );
+      const original = await f.retain(email.id);
+      const [prediction] = await getDb(ctx.db)
+        .insert(emailClassificationObservation)
+        .values({
+          emailId: email.id,
+          checksum: email.checksum,
+          classification: "related",
+          stage: "decision",
+          reason: "Synthetic prediction",
+          classificationVersion: "synthetic-history",
+        })
+        .returning();
+      await getDb(ctx.db).insert(emailClassificationLabel).values({
+        predictionId: prediction!.id,
+        classification: "related",
+        reason: "Synthetic independent member review",
+        actorUserId: ctx.actor.userId,
+      });
+      if (changed)
+        f.getMessage.mockResolvedValue(
+          message(
+            "synthetic-member-labelled-order",
+            "Changed synthetic newsletter without an order.",
+          ),
+        );
+      const result = await reclassifyEmails(
+        ctx.db,
+        { ids: [email.shortcode] },
+        ctx.actor,
+        { triage: f.triage, relevance: f.relevance },
+      );
+      expect(result.results[0]).toMatchObject({
+        outcome: changed ? "replaced" : "resolution_kept",
+        conflict: !changed,
+      });
+      const after = await f.current(email.id);
+      expect(after).toMatchObject({
+        classification: changed ? "unrelated" : "related",
+        orderMailId: original.id,
+      });
+      expect(after.checksum === email.checksum).toBe(!changed);
+      expect(after.contentClearedAt !== null).toBe(changed);
+    },
+  );
 
   it("records a conflict with the member's reviewed label without changing that review", async () => {
     const f = await fixture();
@@ -446,6 +507,42 @@ describe("member Reclassify", () => {
       reviewedClassification: "related",
       reviewConflict: true,
     });
+  });
+
+  it("keeps retained evidence when the refetched original is unreadable rather than unrelated", async () => {
+    const f = await fixture();
+    const email = await f.seed(
+      "synthetic-unreadable-rerun",
+      "Synthetic retained receipt",
+      {
+        classification: "related",
+        classificationStage: "decision",
+        status: "pending",
+      },
+    );
+    const original = await f.retain(email.id);
+    f.getMessage.mockResolvedValue(message("synthetic-unreadable-rerun", ""));
+    f.relevance.mockResolvedValue({ classification: "uncertain" });
+    const result = await reclassifyEmails(
+      ctx.db,
+      { ids: [email.shortcode] },
+      ctx.actor,
+      { triage: f.triage, relevance: f.relevance },
+    );
+    expect(result.results[0]).toMatchObject({
+      outcome: "awaiting_acceptance",
+      classification: "uncertain",
+    });
+    expect(await f.current(email.id)).toMatchObject({
+      classification: "related",
+      orderMailId: original.id,
+      contentClearedAt: null,
+    });
+    const [retained] = await getDb(ctx.db)
+      .select()
+      .from(orderMail)
+      .where(eq(orderMail.id, original.id));
+    expect(retained?.content.bodyText).toBe("Synthetic retained order body");
   });
 
   it("reports an unresolved historical source identity as frozen without reading Gmail", async () => {

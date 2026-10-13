@@ -17,7 +17,7 @@ import { loadDataQualities } from "./hydrate";
 describe("Email data quality", () => {
   const ctx = withTestDb();
 
-  it("docks unrelated Emails only for review and keeps related checks bound to their own original and import", async () => {
+  it("settles automated negatives and keeps related checks bound to their own original and import", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic quality member",
       kind: "member",
@@ -128,7 +128,7 @@ describe("Email data quality", () => {
         .get(id(row))
         ?.gaps.map((gap) => gap.check)
         .sort();
-    expect(gaps(unrelated)).toEqual(["email_relevance_unreviewed"]);
+    expect(gaps(unrelated)).toEqual([]);
     expect(gaps(related)).toEqual([
       "email_not_imported",
       "email_original_missing",
@@ -141,6 +141,16 @@ describe("Email data quality", () => {
       "email_relevance_unreviewed",
     ]);
     expect(gaps(linked)).toEqual([]);
+
+    const reviewQueue = await listEmailsRead(
+      ctx.db,
+      { dataGap: ["email_relevance_unreviewed"] },
+      [],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    expect(reviewQueue.data.map((row) => row.id)).not.toContain(
+      unrelated.shortcode,
+    );
 
     const missingOriginal = await listEmailsRead(
       ctx.db,
