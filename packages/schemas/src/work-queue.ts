@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { plainDate } from "./base-entity";
-import { dataCheck, type DataCheck } from "./data-quality";
+import { dataCheck, type DataCheck, dataQuality } from "./data-quality";
 import { displayImagesField } from "./display-images";
 import { shortcodeEntities } from "./entity-manifest";
 import { entitySummary } from "./generated/entity-summary.gen";
@@ -100,6 +100,9 @@ export const workQueueRowSchema = problemRowSchema
     /** The saved view's checks this record currently fails; empty for rows
      * that are not data-quality gaps. */
     gaps: z.array(workQueueGapSchema),
+    /** The source record's own data-quality score and status; null for rows
+     * whose entity is not scored and for Problems or suggested-field rows. */
+    dataQuality: dataQuality.pick({ status: true, score: true }).nullable(),
     /** The record's own money (a Purchase's SUM(Expense.cost), an Expense's
      * cost, a transaction's signed amount); null when it has none. */
     amount: z.number().nullable(),
