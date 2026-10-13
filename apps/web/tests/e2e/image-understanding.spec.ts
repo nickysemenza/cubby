@@ -1,7 +1,11 @@
 import { eq, and } from "drizzle-orm";
 import { image, aiAnalysis, entityAttachment } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
-import { saveImageDescriptionAnalysis } from "~/server/repo/image-processing";
+import {
+  createImageProcessingJob,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  saveImageDescriptionAnalysis,
+} from "~/server/repo/image-processing";
 import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
 import { preferredImageDescriptionPolicy } from "~/server/image-processing/description-policy";
 import {
@@ -10,9 +14,11 @@ import {
   IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-identification";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { writeOutcomeReceipts } from "~/server/purchase-import/run-outcome.fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
-import { getFixtureDb } from "./fixtures-core";
+import { getFixtureDb, fixtureUserId } from "./fixtures-core";
 import { seedImagePrerequisite } from "./fixtures-photos";
 import { seedProductPrerequisite } from "./fixtures-catalog";
 
@@ -92,6 +98,29 @@ test("image results compare descriptions and require explicit attachment confirm
         truncated: false,
       },
     });
+  const history = await insertWithShortcode(db, "run", {
+    actorUserId: await fixtureUserId(page),
+    actorName: "Fixture member",
+    actorEmail: "fixture@example.test",
+    purpose: "background",
+    trigger: "manual",
+    status: "completed",
+  });
+  await writeOutcomeReceipts(db, [
+    {
+      runId: parseEntityId("run", history.id),
+      entityKind: "email",
+      entityId: crypto.randomUUID(),
+      state: "completed",
+      targetFingerprint: "a".repeat(64),
+    },
+  ]);
+  const job = await createImageProcessingJob(db, {
+    imageId,
+    kind: "describe_image",
+    sourceContentHash: row.sha256,
+    processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  });
   await gotoAuthenticatedPage(page, `/images/${source.id}`);
   const description = page.getByRole("region", {
     name: "Selected image description",
@@ -132,4 +161,11 @@ test("image results compare descriptions and require explicit attachment confirm
       exact: true,
     }),
   ).toBeDisabled();
+  await page
+    .getByRole("link", { name: "Image description", exact: true })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`selected=${job.publicId}`));
+  await expect(
+    page.getByRole("table", { name: "Runs and image jobs" }),
+  ).toBeVisible();
 });

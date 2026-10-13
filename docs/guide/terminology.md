@@ -457,7 +457,7 @@ it; `sourceLabel` holds the title only for a book with no Cookbook row.
 Each term names one concept; the _Avoid_ line lists names that blur it.
 
 **Run**:
-A durable record of coordinated work, identified by `RUN-`, with a purpose, trigger, status, and optional targets or operations. It may group image jobs, but its recorded cost can already include their costs. The Runs history presents every purpose together. A vendor mail search is a Run: what was asked and where its page-by-page walk stands belong to the Run itself.
+A durable record of coordinated work, identified by `RUN-`, with a purpose, trigger, status, and optional targets or operations. It may group image jobs, but its recorded cost can already include their costs. The Runs history presents every purpose together. Retained target outcomes, including Email targets, remain visible after the mutable target roster is retired. A vendor mail search is a Run: what was asked and where its page-by-page walk stands belong to the Run itself.
 _Avoid_: image processing job, individual attempt, search job
 
 **Image processing job**:

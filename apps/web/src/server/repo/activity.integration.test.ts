@@ -474,6 +474,43 @@ describe("activity image processing projection", () => {
 describe("unified Runs history", () => {
   const ctx = withTestDb();
 
+  it("reads activity lists and selected details with retained Email outcomes", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const [coordinator] = await getDb(ctx.db)
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, runId));
+    if (!coordinator) throw new Error("Synthetic Run missing");
+    await writeOutcomeReceipts(ctx.db, [
+      {
+        runId,
+        entityKind: "email",
+        entityId: crypto.randomUUID(),
+        state: "completed",
+        targetFingerprint: "a".repeat(64),
+      },
+    ]);
+    const input = {
+      recordType: "run" as const,
+      executor: "all" as const,
+      sort: "newest" as const,
+      limit: 20,
+    };
+    expect(
+      (await listActivity(ctx.db, null, input)).items.find(
+        (row) => row.id === coordinator.shortcode,
+      )?.targetPreview[0]?.entity,
+    ).toBe("email");
+    expect(
+      (
+        await activityDetail(ctx.db, null, {
+          id: coordinator.shortcode,
+          limit: 5,
+        })
+      ).run?.id,
+    ).toBe(coordinator.shortcode);
+  });
+
   it("presents Run-scoped research targets in lists, groups, and details", async () => {
     const coordinatorId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "background",

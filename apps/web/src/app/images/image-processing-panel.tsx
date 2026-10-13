@@ -23,6 +23,7 @@ import {
   activity,
   imageProcessing,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
@@ -49,7 +50,7 @@ function ImageAnalysisHistory({
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <h4 className="text-sm font-medium">Full AI history</h4>
+        <h4 className="text-sm font-medium">Analysis history</h4>
         <span className="text-xs text-muted-foreground">
           {pages[0]?.total ?? 0} analyses
         </span>
@@ -62,14 +63,19 @@ function ImageAnalysisHistory({
             className="border-b border-border py-2 text-sm"
           >
             <summary className="text-xs text-muted-foreground">
-              {analysis.provider} · {analysis.model} · {analysis.createdAt}
+              {analysis.provider} ·{" "}
+              {formatInstant(analysis.createdAt, "dateShortTime")}
             </summary>
-            <p>
-              <ShortcodeProse>{analysis.result.description}</ShortcodeProse>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {analysis.model}
+              {analysis.preferred ? " · Preferred description" : ""}
             </p>
-            <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
-              {JSON.stringify(analysis, null, 2)}
-            </pre>
+            <details className="mt-2">
+              <summary className="text-xs">Technical details</summary>
+              <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
+                {JSON.stringify(analysis, null, 2)}
+              </pre>
+            </details>
           </details>
         ))}
       {pages
@@ -83,9 +89,12 @@ function ImageAnalysisHistory({
               Unparsed result · {analysis.provider ?? "Unknown provider"} ·{" "}
               <ShortcodeProse>{analysis.reason}</ShortcodeProse>
             </summary>
-            <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
-              {analysis.rawResultJson}
-            </pre>
+            <details className="mt-2">
+              <summary className="text-xs">Technical details</summary>
+              <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
+                {analysis.rawResultJson}
+              </pre>
+            </details>
           </details>
         ))}
       {analyses.hasNextPage ? (
@@ -300,21 +309,63 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
             <div className="flex items-center justify-between gap-2">
               <h4 className="text-sm font-medium">Recent jobs</h4>
             </div>
-            {(recentRuns.data?.items ?? []).map((run) => (
-              <a
-                key={run.id}
-                className="block border-b border-border py-2 text-sm hover:bg-muted/40"
-                href={`/runs?selected=${encodeURIComponent(run.id)}`}
-              >
-                {run.kind.replaceAll("_", " ")} ·{" "}
-                <WorkState state={run.state} />
-                {workIssueText(run) ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    <ShortcodeProse>{workIssueText(run) ?? ""}</ShortcodeProse>
-                  </p>
-                ) : null}
-              </a>
-            ))}
+            <RecordList
+              empty="No processing jobs yet."
+              state={
+                recentRuns.isPending
+                  ? { status: "pending" }
+                  : recentRuns.error
+                    ? {
+                        status: "error",
+                        error: recentRuns.error,
+                        title: "recent image jobs",
+                        onRetry: () => void recentRuns.refetch(),
+                      }
+                    : undefined
+              }
+            >
+              {(recentRuns.data?.items ?? []).map((run) => (
+                <RecordRow
+                  key={run.id}
+                  primary={
+                    <a
+                      className="hover:underline"
+                      href={`/runs?selected=${encodeURIComponent(run.id)}`}
+                    >
+                      {run.workLabel}
+                    </a>
+                  }
+                  secondary={
+                    run.executors.length
+                      ? [
+                          ...new Set(
+                            run.executors.map((executor) =>
+                              executor.kind === "device" ? "Apple" : "Cloud",
+                            ),
+                          ),
+                        ].join(" · ")
+                      : "Executor not assigned"
+                  }
+                  trailing={
+                    <span className="flex flex-wrap items-center justify-end gap-2">
+                      <span>
+                        {formatInstant(run.createdAt, "dateShortTime")}
+                      </span>
+                      <WorkState state={run.state} />
+                    </span>
+                  }
+                  detail={
+                    workIssueText(run) ? (
+                      <p className="text-xs text-muted-foreground">
+                        <ShortcodeProse>
+                          {workIssueText(run) ?? ""}
+                        </ShortcodeProse>
+                      </p>
+                    ) : undefined
+                  }
+                />
+              ))}
+            </RecordList>
           </section>
         </>
       ) : status.error ? (
