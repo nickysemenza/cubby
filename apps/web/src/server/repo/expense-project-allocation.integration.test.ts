@@ -6,6 +6,7 @@ import { unwrapDb } from "~/server/repo/database-helpers";
 import { loadRelatedSummary } from "~/server/repo/related-view";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { expenseDerivedCostsSql } from "./expense-derived-read";
 import {
   expenseAllocatedCostSql,
   expenseAllocationExistsSql,
@@ -128,6 +129,24 @@ describe("expense project allocation", () => {
     ).toBe(5n);
     expect(rows.every((row) => row.sourceCents === 5n)).toBe(true);
     expect(rows.every((row) => row.basis === "positive")).toBe(true);
+
+    // Filtering the output to one adjustment must retain both principals in
+    // its denominator, and each selected line must produce just one total.
+    const totals = await unwrapDb(ctx.db).execute<{
+      expenseId: string;
+      cost: number;
+    }>(
+      expenseDerivedCostsSql(
+        { projectIds: [smallProject.id] },
+        sql`ARRAY[${tax.id}]::uuid[]`,
+      ),
+    );
+    expect(totals.rows).toEqual([{ expenseId: tax.id, cost: 0.02 }]);
+    const ledgerTotal = await unwrapDb(ctx.db).execute<{
+      expenseId: string;
+      cost: number;
+    }>(expenseDerivedCostsSql(undefined, sql`ARRAY[${standalone.id}]::uuid[]`));
+    expect(ledgerTotal.rows).toEqual([{ expenseId: standalone.id, cost: -5 }]);
 
     const selected = [tax.id, unrelated.id, standalone.id];
     const global = await loadExpenseProjectAllocations(ctx.db);

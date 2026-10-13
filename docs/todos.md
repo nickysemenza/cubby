@@ -873,6 +873,27 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   decision-grading skill). Keep one global share unless a per-field gap
   exceeds the sample's noise.
 
+- 🛠️ **Complete generic derived-read execution.** The expense-derived read
+  module owns set-based analytical totals/month/vendor costs and selected share
+  relations; the existing entity-report batch shares project analytics and its
+  budget summary. Remaining callers: Expense analyzer grids/facets, ledger
+  membership/sort/filter scalar helpers, search project names, related-view
+  summaries, project rollups/portfolio analytics, and contribution reports.
+  Finish by moving those callers onto one declared derived-read execution
+  contract, deleting their scalar allocation relations, and retaining signed
+  cents, unknown costs and full sibling-denominator regressions. Completion
+  requires no scalar allocation calculation per output row and a query-plan
+  check establishing one allocation execution per grouped query; batched detail
+  slots must share compatible scope/summary work with query-count evidence.
+  Separate chart queries still execute allocation independently today.
+  Declare generic entity-report dependencies and compatible request-local reuse
+  in the existing report owner, migrating its Run and project special paths
+  onto that contract. Completion includes all declared entity report slots
+  sharing identical dependencies once per batch without cross-request caches.
+  Bound active purchase-agent/coordinator database work separately from queue
+  delivery; delivery concurrency alone cannot bound that work. Tune background
+  concurrency against backlog/oldest age, pool waits and interactive latency.
+
 Per-row household policies (SpendingCategory `productExpectation`) stay
 columns; algorithms (allocation, reconciliation, fingerprints) stay code and
 consume the declarations.

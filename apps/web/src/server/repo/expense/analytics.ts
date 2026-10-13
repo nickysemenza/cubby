@@ -41,20 +41,12 @@ import {
   expenseShareAggregateFields,
 } from "~/server/repo/expense-aggregate-sql";
 
+import { prepareExpenseDerivedRead } from "../expense-derived-read";
 import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,
 } from "../expense-inheritance";
-import {
-  expenseAllocatedCostSql,
-  expenseAllocationScopeConditionSql,
-  expenseJointAllocationSql,
-  type ExpenseAllocationProjectScope,
-} from "../expense-project-allocation";
-import {
-  buildExpenseWhereClause,
-  resolveExpenseProjectAllocationScope,
-} from "./lookup";
+import { expenseAllocationScopeConditionSql } from "../expense-project-allocation";
 
 const effectiveProjectId = effectiveExpenseProjectSql('"Expense"');
 const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
@@ -65,11 +57,6 @@ const summaryFields = (cost: SQL<number | null>) => ({
   actualCount: sql<number>`count(*) filter (where ${expense.future} = false)::int`,
   plannedCount: sql<number>`count(*) filter (where ${expense.future} = true)::int`,
 });
-
-const analyticsCost = (scope: ExpenseAllocationProjectScope | undefined) =>
-  scope
-    ? expenseAllocatedCostSql(sql`${expense.id}`, scope)
-    : sql<number | null>`${expense.cost}`;
 
 /**
  * The charge table under its own alias, for `byVendor`'s join.
@@ -85,15 +72,12 @@ export async function expenseMonthlySummary(
   db: Database,
   filters: ExpenseFilters,
 ): Promise<ExpenseMonthlySummaryOut> {
-  const projectScope = await resolveExpenseProjectAllocationScope(db, filters);
-  const whereClause = await buildExpenseWhereClause(db, filters, {
-    projectScope,
-  });
-  const aggregate = expenseAggregateFields(analyticsCost(projectScope));
+  const read = await prepareExpenseDerivedRead(db, filters);
+  const { where: whereClause } = read;
+  const aggregate = read.aggregate;
   const datedWhereClause = and(whereClause, isNotNull(expense.date));
-  return await getDb(db)
+  return await read
     .select({ month: MONTH_BUCKET, ...aggregate })
-    .from(expense)
     .where(datedWhereClause)
     .groupBy(MONTH_BUCKET)
     .orderBy(MONTH_BUCKET);
@@ -108,13 +92,10 @@ export async function expenseSpendSummary(
   db: Database,
   filters: ExpenseFilters,
 ): Promise<ExpenseAnalyticsOut["summary"]> {
-  const projectScope = await resolveExpenseProjectAllocationScope(db, filters);
-  const whereClause = await buildExpenseWhereClause(db, filters, {
-    projectScope,
-  });
-  const [summary] = await getDb(db)
-    .select(summaryFields(analyticsCost(projectScope)))
-    .from(expense)
+  const read = await prepareExpenseDerivedRead(db, filters);
+  const { where: whereClause } = read;
+  const [summary] = await read
+    .select(summaryFields(read.cost))
     .where(whereClause);
   // A GROUP-BY-less aggregate always returns exactly one row.
   return summary!;
@@ -124,11 +105,9 @@ export async function expenseAnalytics(
   db: Database,
   filters: ExpenseFilters,
 ): Promise<ExpenseAnalyticsOut> {
-  const projectScope = await resolveExpenseProjectAllocationScope(db, filters);
-  const whereClause = await buildExpenseWhereClause(db, filters, {
-    projectScope,
-  });
-  const aggregate = expenseAggregateFields(analyticsCost(projectScope));
+  const read = await prepareExpenseDerivedRead(db, filters);
+  const { scope: projectScope, where: whereClause } = read;
+  const aggregate = read.aggregate;
   // Trade and cost type are per share: each adjustment follows its principals,
   // and a share that follows none reports under the null (unassigned) trade.
   const shareTrade = sql<Trade | null>`allocation.trade`;
@@ -137,10 +116,7 @@ export async function expenseAnalytics(
     getDb(db)
       .select({ ...keys, ...expenseShareAggregateFields() })
       .from(expense)
-      .innerJoin(
-        sql`(${expenseJointAllocationSql()}) allocation`,
-        sql`allocation."expenseId" = ${expense.id}`,
-      )
+      .innerJoin(read.allocations, sql`allocation."expenseId" = ${expense.id}`)
       .where(
         and(
           whereClause,
@@ -164,19 +140,15 @@ export async function expenseAnalytics(
     byProjectResult,
     byVendor,
   ] = await Promise.all([
-    getDb(db)
-      .select(summaryFields(analyticsCost(projectScope)))
-      .from(expense)
-      .where(whereClause),
+    read.select(summaryFields(read.cost)).where(whereClause),
     shares({ costType: shareCostType }).groupBy(shareCostType),
     shares({ trade: shareTrade }).groupBy(shareTrade),
     shares({ trade: shareTrade, costType: shareCostType }).groupBy(
       shareTrade,
       shareCostType,
     ),
-    getDb(db)
+    read
       .select({ month: MONTH_BUCKET, ...aggregate })
-      .from(expense)
       .where(datedWhereClause)
       .groupBy(MONTH_BUCKET)
       .orderBy(MONTH_BUCKET),
@@ -205,7 +177,7 @@ export async function expenseAnalytics(
           filter (where allocation."attributedCents"::bigint < 0), 0)::float8 AS credits,
         coalesce(sum(allocation."attributedCents"::bigint) / 100.0, 0)::float8 AS net,
         count(DISTINCT ${expense.id})::int AS count
-      FROM (${expenseJointAllocationSql()}) allocation
+      FROM ${read.allocations}
       JOIN ${expense} ON ${expense.id} = allocation."expenseId"
       JOIN ${project} p ON p."id" = allocation."projectId" AND p."deletedAt" IS NULL
       WHERE ${whereClause ?? sql`true`}
@@ -236,13 +208,12 @@ export async function expenseAnalytics(
     // Postgres resolves that today, but it's implicit coupling that breaks
     // quietly later. `byProject` never hit this: nothing in the where clause
     // sub-selects `project`.
-    getDb(db)
+    read
       .select({
         vendorShortcode: vendor.shortcode,
         vendorName: vendor.name,
         ...aggregate,
       })
-      .from(expense)
       .innerJoin(
         chargeJoin,
         and(eq(expense.purchaseId, chargeJoin.id), notDeleted(chargeJoin)),

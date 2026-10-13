@@ -7,7 +7,10 @@ import {
   projectShortcode,
 } from "@cubby/schemas/identifiers";
 import { LEDGER_PARTY_KIND_LABELS } from "@cubby/schemas/ledger-party-fields";
-import { expenseFiltersSchema } from "@cubby/schemas/project";
+import {
+  expenseFiltersSchema,
+  type ExpenseAnalyticsOut,
+} from "@cubby/schemas/project";
 import { countLabel } from "@cubby/shared/pluralize";
 import { sum } from "es-toolkit";
 
@@ -53,11 +56,12 @@ const subtreeSpend = (projectId: ProjectShortcode) =>
 export async function projectBudgetReport(
   db: Database,
   code: string,
+  sharedSpend?: ExpenseAnalyticsOut["summary"],
 ): Promise<ReportBlock[]> {
   const { code: projectCode, id } = await liveProject(db, code);
   const [tree, spend] = await Promise.all([
     loadProjectTree(db),
-    expenseSpendSummary(db, subtreeSpend(projectCode)),
+    sharedSpend ?? expenseSpendSummary(db, subtreeSpend(projectCode)),
   ]);
   // The subtree estimate is the sum of the non-null estimates; none stays unknown, not $0.
   const estimates = [id, ...collectDescendantIds(tree.childrenByParent, id)]
@@ -123,15 +127,19 @@ export async function projectBudgetReport(
 
 const TOP = 10;
 
+/** A batch's budget and analytics use this same resolved subtree and summary. */
+export async function loadProjectReportAnalytics(db: Database, code: string) {
+  return expenseAnalytics(db, subtreeSpend((await liveProject(db, code)).code));
+}
+
 /** Expense analytics scoped to the project and its sub-project subtree. */
 export async function projectAnalyticsReport(
   db: Database,
   code: string,
+  sharedAnalytics?: ExpenseAnalyticsOut,
 ): Promise<ReportBlock[]> {
-  const analytics = await expenseAnalytics(
-    db,
-    subtreeSpend((await liveProject(db, code)).code),
-  );
+  const analytics =
+    sharedAnalytics ?? (await loadProjectReportAnalytics(db, code));
   const { summary } = analytics;
   if (summary.count === 0)
     return [{ kind: "note", text: "No expenses recorded for this project." }];

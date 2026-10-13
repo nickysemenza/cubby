@@ -330,9 +330,14 @@ never count against a test timeout.
 
 Neon owns the PostgreSQL database. Production compute is autoscaling
 0.25–1 CU (it was a fixed 0.25 CU compute until the 2026-09-21 OOM incident).
-The Hyperdrive origin connection caps below (12 + 5) and the background
-queue's `max_concurrency: 10` remain sized for the 0.25 CU floor, not the
-ceiling — revisit them together if the floor ever moves.
+The Hyperdrive origin connection caps below remain 12 + 5. The background
+queue runs one message per invocation with `max_concurrency: 2`, a conservative
+starting policy to reduce competing database work, not a measured optimum or
+an interactive connection reservation. Tune it against queue backlog and oldest
+message age, origin pool waits, and interactive latency together. Telemetry
+concurrency remains 1. Purchase-agent delivery is serial within each batch, but
+starts coordinator work outside delivery; capping that queue would not bound
+active agent database work. That workload policy remains separate.
 
 Cloudflare has two Hyperdrive configurations pointing at the same direct Neon
 connection string:
