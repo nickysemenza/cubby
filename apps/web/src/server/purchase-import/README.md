@@ -28,7 +28,9 @@ pending: nothing here starts Product research.
    replace a definite choice with uncertain. Negative decisions still require
    high model confidence. Related evidence concerns the recipient or household,
    including forwarded confirmations; newsletters about an author's or other
-   people's shopping are unrelated. Gift thresholds, shipping benefits, generic order or
+   people's shopping are unrelated. Recommendations explicitly confirming a named
+   product the recipient bought or returned remain related. Campaign metadata
+   alone does not supply that confirmation. Gift thresholds, shipping benefits, generic order or
    security assurances and back-in-stock notices do not confirm a transaction;
    omitted promotional labels alone do not require abstention. The prompt requests
    uncertainty when body text is clipped without visible confirmation, since the

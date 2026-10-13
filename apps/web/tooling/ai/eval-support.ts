@@ -10,7 +10,9 @@ import {
   estimateAiUsageCost,
 } from "@cubby/shared/ai/pricing";
 import { providerFor } from "@cubby/shared/ai/models";
+import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import { z } from "zod";
+import type { StructuredRunPorts } from "~/server/ai/run-feature";
 
 import { localSecret } from "../local-secret";
 import { type ModelSwap, modelSwapSchema } from "../responses-model-swap";
@@ -67,6 +69,62 @@ export const evalUsageReport = z.object({
   ),
 });
 export type EvalUsage = z.infer<typeof evalUsageReport>;
+
+export const emptyEvalUsage = (): EvalUsage => ({
+  requests: 0,
+  failedRequests: 0,
+  inputTokens: 0,
+  cachedInputTokens: 0,
+  outputTokens: 0,
+  reasoningTokens: 0,
+  modelMs: 0,
+  calls: [],
+});
+
+/** Inject the target after local secrets load; imports must not snapshot env early. */
+export function meteredStructuredPorts(
+  usage: EvalUsage,
+  callTarget: StructuredRunPorts["callTarget"],
+): StructuredRunPorts {
+  return {
+    callTarget: (model, call) => {
+      const target = callTarget(model, call);
+      return {
+        ...target,
+        complete: async (context, options) => {
+          const started = Date.now();
+          usage.requests++;
+          usage.failedRequests++;
+          const message = await target.complete(context, options);
+          usage.failedRequests--;
+          usage.modelMs += Date.now() - started;
+          if (
+            message.stopReason === "error" ||
+            message.stopReason === "aborted"
+          )
+            usage.failedRequests++;
+          usage.inputTokens +=
+            message.usage.input +
+            message.usage.cacheRead +
+            message.usage.cacheWrite;
+          usage.cachedInputTokens += message.usage.cacheRead;
+          usage.outputTokens += message.usage.output;
+          usage.reasoningTokens += message.usage.reasoning ?? 0;
+          if (piTokenUsage(message).inputTokens !== null)
+            usage.calls.push({
+              inputTokens:
+                message.usage.input +
+                message.usage.cacheRead +
+                message.usage.cacheWrite,
+              cachedInputTokens: message.usage.cacheRead,
+              outputTokens: message.usage.output,
+            });
+          return message;
+        },
+      };
+    },
+  };
+}
 
 type PricingSource = Pick<ReturnType<typeof createAiModelPricing>, "current">;
 
