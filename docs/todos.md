@@ -1019,6 +1019,13 @@ consume the declarations.
 
 ## Infra & deploy
 
+- 🤔 🧪 **Check Google OAuth agentic-client requirements.** Verify current
+  official requirements and whether any Cubby client calls Google Workspace
+  MCP servers. The purchase-import Gmail client currently uses the Gmail REST
+  API (`apps/web/src/server/purchase-import/gmail/client.ts`); distinguish that
+  path before changing OAuth settings. Preserve existing scopes and member
+  connections, and record any applicable rollout deadline in the owning runbook.
+
 - 🤔 ✨ **Maintenance mode.** The `MAINTENANCE_MODE` Worker secret makes the web
   Worker answer 503 and skips the cron (`server/maintenance.ts`); purchase
   coordinator callbacks and tool effects now defer/refuse before DB/model

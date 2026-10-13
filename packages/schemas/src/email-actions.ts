@@ -100,8 +100,9 @@ export const reclassifyEmailsInput = z
 /**
  * `replaced` changed the Email's Relevance; `confirmed` kept it and refreshed
  * the deciding stage. The rest only record history: `awaiting_acceptance`
- * would drop retained content or an import, `resolution_kept` honors a
- * member's resolution, `frozen` is an admitted or unresolved historical
+ * would change a completed/researching import or discard retained evidence
+ * after an unreadable refetch, `resolution_kept` honors a
+ * member's resolution or independent review, `frozen` is an admitted or unresolved historical
  * import source, `changed` means the Email changed during the rerun, and
  * `removed` is deleted or in Spam/Trash at Gmail. `deferred` Emails were not
  * reached within one request's time budget; reclassify them again.
