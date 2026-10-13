@@ -1,0 +1,29 @@
+.github/ci-lanes.yml
+  s_73fe69dd841a24::t_e4b63d8237e773 3,15,18,26-27,34,36,41,43-44,55,57,59,99,120-121,125,127-128,139,146,150,154,157-159,161
+.github/workflows/ci.yaml
+  s_73fe69dd841a24::t_6d942f66d92d9f 95,97,99,140,304-305
+docs/adr/0009-content-hash-merge-gate.md
+  s_73fe69dd841a24::t_b9e8b19e169ede 38
+docs/ci.md
+  s_73fe69dd841a24::t_b3234b3e9e1dc2 232-239,360-362,372
+scripts/ci-lanes.test.ts
+  s_73fe69dd841a24::t_bb867125281e69 18,27,40
+scripts/ci-lanes.ts
+  s_73fe69dd841a24::t_c4e09c678c9ebf 13,49,128-145,288-290,292-295,297-298,302,307,309-316,320,322-331
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e3e9017cab89d4252c874b6d4e6abf4ddb85270e",
+  "prompts": {},
+  "sessions": {
+    "s_73fe69dd841a24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96d21c32-0fd2-4535-be08-daa98aa3f469",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
