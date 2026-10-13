@@ -1,0 +1,254 @@
+.github/actions/setup-apple/action.yml
+  s_73fe69dd841a24::t_2bb403c8f24e0e 4-6,15-21,23-25,27,29-31,34-36,40-50,55-99,101-127,129-230
+  s_055199a1dff06a::t_834eaf3ecb8c43 4-6,15-21,23-25,27,29-31,34-36,40-50,55-99,101-127,129-230
+.github/workflows/ci.yaml
+  s_73fe69dd841a24::t_60fd8c25dc97d0 6-7,16-24,28-32,43-46,55,59-63,67-69,72-75,77-149,151,162,173,195,213,216,580-852,855-857,859,871
+  s_055199a1dff06a::t_9bc6513e4d587f 6-7,16-24,28-32,43-46,55,59-63,67-69,72-75,77-149,151,162,173,195,213,216,580-852,855-857,859,871
+apps/apple/AGENTS.md
+  s_73fe69dd841a24::t_c4a8a00430f3e6 70-85,140-149
+apps/apple/App/Shared/Capture/CaptureModel.swift
+  s_73fe69dd841a24::t_f48eb5c67bc784 55
+apps/apple/App/Shared/DeveloperOverlays.swift
+  s_73fe69dd841a24::t_671d0b8b3a2671 122
+apps/apple/CubbyKit/Package.swift
+  s_73fe69dd841a24::t_bdbebfdd333ba0 77
+apps/apple/CubbyKit/Sources/CubbyAPI/README.md
+  s_73fe69dd841a24::t_4045a3f2413c75 8-15
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyClient.swift
+  s_73fe69dd841a24::t_e37a288331d66a 45,65-68,73-75,82-85,91-94,173,184,192-193,195,198-199,204,222,232,248,348-349,729-733,859,861-868,920-923,975,1066-1072
+apps/apple/CubbyKit/Sources/CubbyKit/API/ProgressiveEntityLists.swift
+  s_73fe69dd841a24::t_5f478d8ef67210 10,13-14,19,57
+apps/apple/CubbyKit/Sources/CubbyKit/Catalog/EntityFilterState.swift
+  s_73fe69dd841a24::t_5a3508f735c849 72,74,79-81
+apps/apple/CubbyKit/Sources/CubbyKit/Catalog/HeroActionRunner.swift
+  s_73fe69dd841a24::t_6d7f2c94534a0a 115
+apps/apple/CubbyKit/Sources/CubbyKit/Participation/DeviceRegistration.swift
+  s_73fe69dd841a24::t_948ef6e34b519f 3-7,43-44
+apps/apple/CubbyKit/Sources/CubbyKit/Photo/PhotoService.swift
+  s_73fe69dd841a24::t_19013552c1119a 64
+apps/apple/CubbyKit/Sources/CubbyKit/Receiving/ReceivingModel.swift
+  s_73fe69dd841a24::t_e0444ab45b1cfc 268
+apps/apple/CubbyKit/Sources/cubby/CallCommand.swift
+  s_73fe69dd841a24::t_266a3eeba04452 12
+apps/apple/CubbyKit/Tests/CubbyKitTests/ClientQueryTests.swift
+  s_73fe69dd841a24::t_3e025f0e0f837a 52-69,150-151,173-177,180-181,183-185,188-194,209,211-213,216-218
+apps/apple/CubbyKit/Tests/CubbyKitTests/DebugClientTests.swift
+  s_73fe69dd841a24::t_1c851c13a66a53 70
+apps/apple/CubbyKit/Tests/CubbyKitTests/EntityFilterTests.swift
+  s_73fe69dd841a24::t_374648cffd4253 19-22,37-41,43,46-49,53-74,82-83,89,92,95,98,101,103-104,106-107,109-110,112,114,116-117,119-123,128,133-135,138,145,150,153-154,156-173,175-177,180-183
+apps/apple/CubbyKit/Tests/CubbyKitTests/ErrorDecodingTests.swift
+  s_73fe69dd841a24::t_1eb4827f512474 21,57,71,104,157
+apps/apple/CubbyKit/Tests/CubbyKitTests/GenericEntityEditModelTests.swift
+  s_73fe69dd841a24::t_38d03772be19f6 77-78,255-261,266,279-283,318,366,371
+apps/apple/CubbyKit/Tests/CubbyKitTests/GenericEntityListModelTests.swift
+  s_73fe69dd841a24::t_2f97a7b1e5a8d4 34,37,45,58-60,66-68,77,82-84,102-104,106,120-122,347-349,613-615,617-650
+apps/apple/CubbyKit/Tests/CubbyKitTests/HeroActionRunnerTests.swift
+  s_73fe69dd841a24::t_ea23529cc2c219 83-84,112-113,115,118,120-122,171-173,334,341-346,350
+apps/apple/CubbyKit/Tests/CubbyKitTests/JSONNullMiddlewareTests.swift
+  s_73fe69dd841a24::t_1bd3480436fc22 19-23,30-33,58-59,94-102,119,122-123,133,148,151-152,161,178,184-186,188,194
+apps/apple/CubbyKit/Tests/CubbyKitTests/MiddlewareTests.swift
+  s_73fe69dd841a24::t_25d2be7ac37055 25,47,56,79,101,239,247,265,284,303,308
+apps/apple/CubbyKit/Tests/CubbyKitTests/NativeListAdaptersTests.swift
+  s_73fe69dd841a24::t_b64945cc867f5b 37,40,43,49-50,53-55,57,66-86,151,209-220,223
+apps/apple/CubbyKit/Tests/CubbyKitTests/StatementMatchSessionTests.swift
+  s_73fe69dd841a24::t_80e155ea3efea3 35-36,237,251,256-262
+apps/apple/README.md
+  s_73fe69dd841a24::t_45d7f8ca730b68 19-20
+apps/apple/scripts/prepare-project.sh
+  s_73fe69dd841a24::t_b914c9129d81d4 9,15,20
+apps/web/src/cf-server.ts
+  s_73fe69dd841a24::t_8f05b51a529c69 133
+apps/web/src/contracts/define.ts
+  s_73fe69dd841a24::t_82a63870be98e7 82-88,90-93,95-97,114,130
+apps/web/src/contracts/entity-detail.contract.ts
+  s_73fe69dd841a24::t_4fc62842f8bb5d 4,21,24-25
+apps/web/src/contracts/entity-kernel-wire.ts
+  s_73fe69dd841a24::t_db5c40b692ebb3 1,4,6-15,17-20,22-31
+apps/web/src/contracts/entity-list.contract.ts
+  s_73fe69dd841a24::t_8b21acda5e265b 4,60,63-64
+apps/web/src/contracts/entity-mutation.contract.ts
+  s_73fe69dd841a24::t_ddcc23468a4697 4,19-20,23-24
+apps/web/src/contracts/entity-timeline.contract.ts
+  s_73fe69dd841a24::t_f4f802ab63ef50 5,20,23-24
+apps/web/src/contracts/image-upload.contract.ts
+  s_73fe69dd841a24::t_403755da491cc9 100
+apps/web/src/contracts/meal.contract.ts
+  s_73fe69dd841a24::t_40042b5df75354 203
+apps/web/src/contracts/photo-import.contract.ts
+  s_73fe69dd841a24::t_f27943ff9675d4 416
+apps/web/src/contracts/product.contract.ts
+  s_73fe69dd841a24::t_f8607bb17799e1 228
+apps/web/src/contracts/project.contract.ts
+  s_73fe69dd841a24::t_648f2f70f0e604 177
+apps/web/src/contracts/purchase.contract.ts
+  s_73fe69dd841a24::t_86fd7c8b45dca2 176
+apps/web/src/contracts/recipe.contract.ts
+  s_73fe69dd841a24::t_c59a0d30e30634 264
+apps/web/src/contracts/search.contract.ts
+  s_73fe69dd841a24::t_d4190bc016dab3 70
+apps/web/src/contracts/statement-row.contract.ts
+  s_73fe69dd841a24::t_a0403b95558df7 65
+apps/web/src/contracts/usda.contract.ts
+  s_73fe69dd841a24::t_c0b10abd99587d 69
+apps/web/src/lib/http-api/openapi-document.unit.test.ts
+  s_73fe69dd841a24::t_2d89788438bac3 10-11,150,215,226-228,235-238
+apps/web/src/lib/http-api/router.ts
+  s_73fe69dd841a24::t_2e69429b668c76 1,14,92-93,148-158,179-182,187-189
+apps/web/src/lib/http-api/router.unit.test.ts
+  s_73fe69dd841a24::t_8ae115fb7d360e 4,9,12,17,20,24,33-34,40-41,79,88,106-116,118-120,123,128-130
+apps/web/src/lib/http-api/routes.ts
+  s_73fe69dd841a24::t_2426edd25b86c9 22-23,27-28
+apps/web/src/lib/http-api/wire.ts
+  s_73fe69dd841a24::t_22574e9c750ab0 59-60
+apps/web/src/lib/http-api/wire.unit.test.ts
+  s_73fe69dd841a24::t_d3440ec7013bd1 30,33,258
+apps/web/src/server/http-api-handler.ts
+  s_73fe69dd841a24::t_f9316fe71196ae 359
+apps/web/src/server/http-api.unit.test.ts
+  s_73fe69dd841a24::t_8d5aa969d28b5a 21-35,53,71,81,91,130,147,157-158,171-172,174-179,194-195,197-202,223-227,229-235,257-258,263-268,294,304-305,310-315,321-324,326-329,332-351,369-379,393,399,402,404
+apps/web/src/server/maintenance.unit.test.ts
+  s_bb32f946657188::t_3ade20d081a6ad 13
+apps/web/src/server/mcp/entity-kernel.integration.test.ts
+  s_bb32f946657188::t_f1db3ca3620d98 169
+apps/web/src/server/repo/location.integration.test.ts
+  s_bb32f946657188::t_1667fa8d24d2c4 411-412
+apps/web/tests/e2e/assignment-picker-dialog.spec.ts
+  s_73fe69dd841a24::t_bc06bed8610326 1,125-128
+apps/web/tests/e2e/browser-operation-dispatch.spec.ts
+  s_73fe69dd841a24::t_f502fa71b1f9bd 1,13-18,49
+apps/web/tests/e2e/browser-workflows.spec.ts
+  s_73fe69dd841a24::t_005ddf85b38996 1,95-100
+apps/web/tests/e2e/bulk-edit.spec.ts
+  s_73fe69dd841a24::t_1cea86042741d4 1,62,119-123,161-165,210-214
+apps/web/tests/e2e/declared-record-lists.spec.ts
+  s_73fe69dd841a24::t_1a7583965f3a1a 1,326-332
+apps/web/tests/e2e/e2e-helpers.ts
+  s_bb32f946657188::t_a15db9fabe7851 1,96,99,555
+apps/web/tests/e2e/entity-api.ts
+  s_73fe69dd841a24::t_62c31f15881285 1-65
+apps/web/tests/e2e/finance-category-display.spec.ts
+  s_73fe69dd841a24::t_953399e6344b0d 1,72-75,178-181,191-195,210-213,236-239,305-309,361,379-382,475
+apps/web/tests/e2e/finance-evidence-journey.spec.ts
+  s_73fe69dd841a24::t_3aabfcbcec982d 1,13,16,29,34,38,42,46,55,81-84,90,102-105,119-123,126,137-141,149-152
+apps/web/tests/e2e/finance-itemization.spec.ts
+  s_73fe69dd841a24::t_e9739f64d684d3 1,16,19,29,33-34,39,45,57
+apps/web/tests/e2e/financial-booking-review.spec.ts
+  s_73fe69dd841a24::t_8d85848faac748 1,38,41,46,52,56,60,89-93,105-108,153-156,162,202-205,218-221
+apps/web/tests/e2e/garden.spec.ts
+  s_73fe69dd841a24::t_92315556cae374 1,104-107,230-232,240-242
+apps/web/tests/e2e/gmail.input-first-import.spec.ts
+  s_73fe69dd841a24::t_44311c2d30d3f9 1,103-107
+apps/web/tests/e2e/gmail.input-first-settlement.spec.ts
+  s_73fe69dd841a24::t_714311fc7c8d36 1,176-180
+apps/web/tests/e2e/http-api.spec.ts
+  s_73fe69dd841a24::t_ed19bcf716c8c0 1-3,96-103,106-111,118-123,126,147,152-156,158,161,179-181,187,308-313,317-319,324-326,330,336-342,357-359,408-412,419-425
+apps/web/tests/e2e/http-entity-kernel-api.spec.ts
+  s_73fe69dd841a24::t_a820cbb841190f 1,5-6,21-23,27-28,33-35,37-45,47-52,54-55,57-59,61-64,66-69,72,93-96,99-104,107-109,111,114,117,120-154,156-157,160,169,173,175,178,184,190,192-210,212-215,217-241,244-245,262,266-267,274-275,279,281-282,284-286,295
+apps/web/tests/e2e/import-order-convergence.helpers.ts
+  s_73fe69dd841a24::t_cc9e0c38c665b8 1-2,242-248,264-268
+apps/web/tests/e2e/list-delete.spec.ts
+  s_bb32f946657188::t_859f09281a23ad 1,95,112
+apps/web/tests/e2e/native-fieldwork-api.spec.ts
+  s_73fe69dd841a24::t_8e41fb26b41cd2 1,104,109-113,161
+apps/web/tests/e2e/native-workspace.spec.ts
+  s_73fe69dd841a24::t_e261cd98052536 1,66-68,143-147
+apps/web/tests/e2e/photo-group-review.spec.ts
+  s_73fe69dd841a24::t_936e19b93fec25 1,42-44,94-96,256-258,413-415,541-543,618-620
+apps/web/tests/e2e/quality-explanations.spec.ts
+  s_73fe69dd841a24::t_8c13b8b55640a9 1,293-298,431-436
+apps/web/tests/e2e/record-emoji-categories.spec.ts
+  s_73fe69dd841a24::t_ab4c2cbbba31cb 1,22,25,34-36,38-39,42,46,52,56,61,106-109,127,138,145,147,154-159,193,196,202,205,208,213,218,222,226,229,232,235,241,254,284-289,302
+apps/web/tests/e2e/relationship-discovery.spec.ts
+  s_73fe69dd841a24::t_24b960e4e75f68 1,62-64,77-80,89-93,98-100
+apps/web/tests/e2e/spending-classification-review.spec.ts
+  s_73fe69dd841a24::t_a92068d07352bf 1,59,65,196-201,215,273-276
+apps/web/tests/e2e/start-operation.ts
+  s_73fe69dd841a24::t_6f9cb4530b6d27 1-3,5-6,8-23,25,27-29,31-49
+apps/web/tests/e2e/statement-import.spec.ts
+  s_73fe69dd841a24::t_0ae37e2f062e3f 1,18-20,29-31,59-62
+apps/web/tests/e2e/table-row-height.spec.ts
+  s_73fe69dd841a24::t_7f953514bcc77e 1,50,53,59,61
+apps/web/tests/e2e/unknown-expense-date-flow.ts
+  s_73fe69dd841a24::t_8fd733ccca1d68 1,25-27,34-36
+apps/web/tests/e2e/unknown-expense-dates.spec.ts
+  s_73fe69dd841a24::t_e1ce92e4c6d1e4 1,10-15
+docs/agents/core-journey-e2e.md
+  s_73fe69dd841a24::t_9c3942391a780d 118
+  s_73fe69dd841a24::t_1d80142af0fbcb 118
+docs/ci.md
+  s_73fe69dd841a24::t_2ab79228276ec6 16-19,26-76,301,357-360,362,366-367,427,430,435
+  s_73fe69dd841a24::t_130af0acc6e196 16-19,26-76,301,357-360,362,366-367,427,430,435
+docs/development.md
+  s_73fe69dd841a24::t_b48956ab3a73a9 222-233,236-241
+docs/entities.md
+  s_73fe69dd841a24::t_8ed62d1124cd49 413-414,857
+docs/photo-library-dedup.md
+  s_73fe69dd841a24::t_0546ae57ad5a88 98
+docs/tester-army.md
+  s_73fe69dd841a24::t_48018102bca118 221-229,236,238-242,244-246,255-257,301
+  s_73fe69dd841a24::t_06627de68bcd06 221-229,236,238-242,244-246,255-257,301
+docs/todos.md
+  s_73fe69dd841a24::t_4ac81ad7def972 545-576,885-886,1083-1089,1354
+packages/shared/src/apple-client-version.ts
+  s_73fe69dd841a24::t_40431f4c0f04de 8
+project.json
+  s_73fe69dd841a24::t_0560ef0774b120 10
+scripts/generator/entities/render/index.ts
+  s_73fe69dd841a24::t_7830363f5f6ed2 285,292-293,297-299,301,303,308,325
+scripts/generator/http-api/api-types.ts
+  s_73fe69dd841a24::t_354aec118483ce 3,30-33,42,75-86,92
+scripts/generator/http-api/entity-kernel.ts
+  s_73fe69dd841a24::t_fa6f3030754eae 2-10,13-15,17,20-22,24-28,30-41,43-50,52-62,65-74,77-113,115-120,123-127,129-130,132-137,139-141,143-146,150-155,158-167,170-173,175-227,229-265,268-269,271-284,286-294,296-303,306-314
+scripts/generator/http-api/native.ts
+  s_73fe69dd841a24::t_eb99006ca2cb1f 15,19,55,79-80,88,101,196-197,199-201,203-207,209-210,229-231,236,241-255,257-258,260
+scripts/generator/http-api/openapi.ts
+  s_73fe69dd841a24::t_975091bb40d04c 5-6,10-11,37,40,48-49,76-97,103-111,240,272,293-296,300,302,385-387,464-488,500,506-512,531,541,545-546,550
+scripts/generator/http-api/schema-names.ts
+  s_73fe69dd841a24::t_fca962141b13e4 31
+scripts/generator/http-api/swift-operations.ts
+  s_73fe69dd841a24::t_a6b763be792f62 5
+scripts/generator/http-api/swift-routes.ts
+  s_73fe69dd841a24::t_9365b9766867d5 16
+scripts/generator/http-api/type-overrides.ts
+  s_73fe69dd841a24::t_f9eba6f0f3e9d6 25-38
+scripts/generator/main.ts
+  s_73fe69dd841a24::t_e97af7c797119b 29,152,157
+scripts/generator/start-operations/collect.ts
+  s_73fe69dd841a24::t_6e7957578c1da7 42-43,65-66,310,537,541
+scripts/generator/start-operations/render.ts
+  s_73fe69dd841a24::t_71490fa2bf1e05 111-113,115,122,126,139,147,154,156,179
+apps/apple/CubbyKit/Sources/CubbyKit/Catalog/EntityKernel.swift
+  s_73fe69dd841a24::t_4b67e517a6024f 1-222
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "30569c22939b12e3e58de3f284bcebf143fd0ca8",
+  "prompts": {},
+  "sessions": {
+    "s_055199a1dff06a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ade419a5d65886808",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_73fe69dd841a24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96d21c32-0fd2-4535-be08-daa98aa3f469",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_bb32f946657188": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1373c-26cf-7e12-8e69-d6f1585b90b0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
