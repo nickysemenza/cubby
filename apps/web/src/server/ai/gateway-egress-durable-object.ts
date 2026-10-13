@@ -50,12 +50,15 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
   private async observeCurrentVersion() {
     const version = this.env.CF_VERSION_METADATA.id;
     const epoch = await this.ctx.blockConcurrencyWhile(async () => {
-      if ((await this.ctx.storage.get("aiRefreshObservedVersion")) === version)
-        return null;
       const pending = await this.ctx.storage.get<{
         version: string;
         epoch: number;
       }>("aiRefreshPendingObservation");
+      if (
+        !pending &&
+        (await this.ctx.storage.get("aiRefreshObservedVersion")) === version
+      )
+        return null;
       if (
         pending &&
         pending.version === version &&

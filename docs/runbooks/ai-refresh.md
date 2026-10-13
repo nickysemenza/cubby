@@ -47,7 +47,8 @@ retain inference and actual business-write provenance.
 Discovery advances durable cursors through at most 200 field targets and 400
 eligible Emails per invocation; Email execution rosters still cap at 200.
 A new policy resets the scan cursor and its discovery Workflow checkpoints
-bounded pages until the scan completes.
+bounded pages until both independent streams finish. Cursor writes are fenced
+by activation revision, so an old page cannot overwrite a newer reset.
 The five-minute cron only nudges the Durable Object and never polls Neon while
 the deployment version is already observed. An alarm verifies and retries an interrupted startup handoff; external
 activation does not block interactive Gateway admission. Active

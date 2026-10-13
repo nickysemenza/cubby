@@ -85,12 +85,13 @@ export async function activateAiRefresh(
           ? prior.data.activatedAt
           : new Date().toISOString(),
     });
+    let resetCursor = false;
     if (
       options.startDiscovery &&
       options.enabled &&
       (changed || !activation.discoveryRunId)
     ) {
-      await saveAiDiscoveryCursor(tx, { field: null, email: null });
+      resetCursor = true;
       const { ensureRun, systemActor } =
         await import("~/server/runs/ensure-run");
       activation.discoveryRunId = await ensureRun(tx, systemActor(), {
@@ -109,6 +110,12 @@ export async function activateAiRefresh(
       .update(appSettings)
       .set({ metadata: activation, updatedAt: new Date() })
       .where(eq(appSettings.id, SETTINGS_ID));
+    if (resetCursor)
+      await saveAiDiscoveryCursor(tx, {
+        revision: activation.revision,
+        field: null,
+        email: null,
+      });
     return activation;
   });
 }
@@ -139,6 +146,9 @@ export async function producingAiManifest(db: Database) {
 
 const DISCOVERY_SETTINGS_ID = "00000000-0000-4000-8000-000000000075";
 const discoveryCursor = z.object({
+  revision: z.number().int().nonnegative().default(0),
+  fieldDone: z.boolean().default(false),
+  emailDone: z.boolean().default(false),
   field: z
     .object({ entity: z.string(), recordId: z.uuid(), field: z.string() })
     .nullable()
@@ -154,13 +164,22 @@ export async function readAiDiscoveryCursor(db: Database) {
 }
 export async function saveAiDiscoveryCursor(
   db: Database,
-  value: z.infer<typeof discoveryCursor>,
+  value: z.input<typeof discoveryCursor>,
 ) {
-  await getDb(db)
-    .insert(appSettings)
-    .values({ id: DISCOVERY_SETTINGS_ID, metadata: value })
-    .onConflictDoUpdate({
-      target: appSettings.id,
-      set: { metadata: value, updatedAt: new Date() },
+  return withTransactionDatabase(db, async (tx) => {
+    const current = await readAiRefreshActivation(tx, "update");
+    const cursor = discoveryCursor.parse({
+      ...value,
+      revision: value.revision ?? current?.revision ?? 0,
     });
+    if (current && current.revision !== cursor.revision) return false;
+    await getDb(tx)
+      .insert(appSettings)
+      .values({ id: DISCOVERY_SETTINGS_ID, metadata: cursor })
+      .onConflictDoUpdate({
+        target: appSettings.id,
+        set: { metadata: cursor, updatedAt: new Date() },
+      });
+    return true;
+  });
 }

@@ -70,7 +70,10 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
                     "Discovery Workflow policy differs from activated policy",
                   );
                 const cursor = await readAiDiscoveryCursor(db);
-                return Boolean(cursor.field || cursor.email);
+                return (
+                  cursor.revision === current.revision &&
+                  !(cursor.fieldDone && cursor.emailDone)
+                );
               }),
           );
           if (!more) break;

@@ -324,7 +324,18 @@ export async function discoverAiRefresh(
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled) return [];
   const runs = new Set<string>();
-  const cursor = await readAiDiscoveryCursor(db);
+  let cursor = await readAiDiscoveryCursor(db);
+  if (
+    cursor.revision !== activation.revision ||
+    (cursor.fieldDone && cursor.emailDone)
+  )
+    cursor = {
+      revision: activation.revision,
+      field: null,
+      email: null,
+      fieldDone: false,
+      emailDone: false,
+    };
   const eligibleSuggestions = or(
     eq(suggestion.status, "pending"),
     and(
@@ -332,28 +343,30 @@ export async function discoverAiRefresh(
       sql`${suggestion.supersessionReceipt}->>'reason' IN (${suggestionSupersessionReceipt.shape.reason.enum.input_changed}, ${suggestionSupersessionReceipt.shape.reason.enum.no_proposal})`,
     ),
   );
-  const pending = await getDb(db)
-    .selectDistinctOn([
-      suggestion.entity,
-      suggestion.recordId,
-      suggestion.field,
-    ])
-    .from(suggestion)
-    .where(
-      and(
-        eligibleSuggestions,
-        cursor.field
-          ? sql`(${suggestion.entity}, ${suggestion.recordId}, ${suggestion.field}) > (${cursor.field.entity}, ${cursor.field.recordId}::uuid, ${cursor.field.field})`
-          : undefined,
-      ),
-    )
-    .orderBy(
-      asc(suggestion.entity),
-      asc(suggestion.recordId),
-      asc(suggestion.field),
-      desc(suggestion.createdAt),
-    )
-    .limit(EMAIL_RECLASSIFY_LIMIT);
+  const pending = cursor.fieldDone
+    ? []
+    : await getDb(db)
+        .selectDistinctOn([
+          suggestion.entity,
+          suggestion.recordId,
+          suggestion.field,
+        ])
+        .from(suggestion)
+        .where(
+          and(
+            eligibleSuggestions,
+            cursor.field
+              ? sql`(${suggestion.entity}, ${suggestion.recordId}, ${suggestion.field}) > (${cursor.field.entity}, ${cursor.field.recordId}::uuid, ${cursor.field.field})`
+              : undefined,
+          ),
+        )
+        .orderBy(
+          asc(suggestion.entity),
+          asc(suggestion.recordId),
+          asc(suggestion.field),
+          desc(suggestion.createdAt),
+        )
+        .limit(EMAIL_RECLASSIFY_LIMIT);
   const grouped = new Map<string, typeof pending>();
   for (const row of pending) {
     const history = await getDb(db)
@@ -434,29 +447,31 @@ export async function discoverAiRefresh(
       });
     }
   }
-  const candidates = await getDb(db)
-    .select({ item: email, ownerUserId: ledgerParty.userId })
-    .from(email)
-    .innerJoin(
-      ledgerParty,
-      and(eq(email.ledgerPartyId, ledgerParty.id), notDeleted(ledgerParty)),
-    )
-    .where(
-      and(
-        cursor.email ? gt(email.id, cursor.email) : undefined,
-        notDeleted(email),
-        eq(email.classification, "uncertain"),
-        notInArray(email.status, [
-          "completed",
-          "deleted",
-          "excluded",
-          "researching",
-        ]),
-        isNull(emailMemberClassificationSql()),
-      ),
-    )
-    .orderBy(asc(email.id))
-    .limit(EMAIL_RECLASSIFY_LIMIT * 2);
+  const candidates = cursor.emailDone
+    ? []
+    : await getDb(db)
+        .select({ item: email, ownerUserId: ledgerParty.userId })
+        .from(email)
+        .innerJoin(
+          ledgerParty,
+          and(eq(email.ledgerPartyId, ledgerParty.id), notDeleted(ledgerParty)),
+        )
+        .where(
+          and(
+            cursor.email ? gt(email.id, cursor.email) : undefined,
+            notDeleted(email),
+            eq(email.classification, "uncertain"),
+            notInArray(email.status, [
+              "completed",
+              "deleted",
+              "excluded",
+              "researching",
+            ]),
+            isNull(emailMemberClassificationSql()),
+          ),
+        )
+        .orderBy(asc(email.id))
+        .limit(EMAIL_RECLASSIFY_LIMIT * 2);
   const observations = candidates.length
     ? await getDb(db)
         .select()
@@ -593,6 +608,10 @@ export async function discoverAiRefresh(
     }
   const lastField = pending.at(-1);
   await saveAiDiscoveryCursor(db, {
+    revision: activation.revision,
+    fieldDone: cursor.fieldDone || pending.length < EMAIL_RECLASSIFY_LIMIT,
+    emailDone:
+      cursor.emailDone || candidates.length < EMAIL_RECLASSIFY_LIMIT * 2,
     field:
       pending.length === EMAIL_RECLASSIFY_LIMIT && lastField
         ? {

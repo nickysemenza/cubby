@@ -85,7 +85,7 @@ describe("application-owned AI feature observation", () => {
       startDiscovery: true,
     });
     expect(next.discoveryRunId).not.toBe(first.discoveryRunId);
-    expect(await readAiDiscoveryCursor(ctx.db)).toEqual({
+    expect(await readAiDiscoveryCursor(ctx.db)).toMatchObject({
       field: null,
       email: null,
     });
@@ -204,6 +204,33 @@ describe("application-owned AI feature observation", () => {
       create: async () => {
         throw new Error("Healthy instances must not duplicate");
       },
+    });
+  });
+  it("rejects cursor writes from a page that outlived its activation revision", async () => {
+    const prior = await activateAiRefresh(ctx.db, "synthetic-cursor-a", {
+      enabled: true,
+      startDiscovery: true,
+    });
+    const current = await activateAiRefresh(ctx.db, "synthetic-cursor-b", {
+      enabled: false,
+      startDiscovery: true,
+    });
+    await saveAiDiscoveryCursor(ctx.db, {
+      field: null,
+      email: null,
+      revision: current.revision,
+    });
+    expect(
+      await saveAiDiscoveryCursor(ctx.db, {
+        revision: prior.revision,
+        field: null,
+        email: "00000000-0000-4000-8000-000000000123",
+      }),
+    ).toBe(false);
+    expect(await readAiDiscoveryCursor(ctx.db)).toMatchObject({
+      revision: current.revision,
+      field: null,
+      email: null,
     });
   });
 });

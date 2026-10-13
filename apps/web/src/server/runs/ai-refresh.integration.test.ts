@@ -23,7 +23,11 @@ import {
   claimAiEvaluation,
   guardAiEvaluation,
 } from "~/server/repo/ai-evaluation";
-import { activateAiRefresh } from "~/server/repo/ai-refresh";
+import {
+  activateAiRefresh,
+  saveAiDiscoveryCursor,
+  readAiDiscoveryCursor,
+} from "~/server/repo/ai-refresh";
 import { withTransactionDatabase } from "~/server/repo/database-helpers";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -660,5 +664,38 @@ describe("targeted prompt refresh", () => {
         .where(eq(suggestion.status, "applied")),
     ).toHaveLength(0);
     expect(await discoverAiRefresh(ctx.db, ports)).toEqual([]);
+  });
+  it("does not restart a finished field scan while the Email stream still has pages", async () => {
+    const item = await productFixture(ctx, "Synthetic completed scan stream");
+    await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts(0.6) },
+    );
+    const activation = await activateAiRefresh(ctx.db, "synthetic-scan", {
+      enabled: true,
+    });
+    await saveAiDiscoveryCursor(ctx.db, {
+      revision: activation.revision,
+      field: null,
+      fieldDone: true,
+      email: "00000000-0000-4000-8000-000000000123",
+      emailDone: false,
+    });
+    expect(
+      await discoverAiRefresh(ctx.db, {
+        context: kernelCtx(ctx),
+        suggestPorts: categoryPorts(0.6).suggestPorts,
+      }),
+    ).toEqual([]);
+    expect(await readAiDiscoveryCursor(ctx.db)).toMatchObject({
+      fieldDone: true,
+      emailDone: true,
+    });
+    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(0);
   });
 });
