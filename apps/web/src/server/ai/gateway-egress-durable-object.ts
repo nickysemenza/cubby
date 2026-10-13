@@ -57,12 +57,13 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         epoch: number;
       }>("aiRefreshPendingObservation");
       if (
-        pending?.version === version &&
+        pending &&
+        pending.version === version &&
         ((await this.ctx.storage.getAlarm()) ?? 0) > Date.now()
       )
         return null;
       const epoch =
-        pending?.version === version
+        pending && pending.version === version
           ? pending.epoch
           : ((await this.ctx.storage.get<number>(
               "aiRefreshObservationEpoch",

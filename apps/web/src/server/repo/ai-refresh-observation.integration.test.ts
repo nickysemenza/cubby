@@ -1,4 +1,7 @@
-import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
+import {
+  aiRefreshRunInput,
+  aiRefreshProgress,
+} from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -179,7 +182,7 @@ describe("application-owned AI feature observation", () => {
     });
     await getDb(ctx.db)
       .update(run)
-      .set({ progress: { attempt: 1 } })
+      .set({ progress: aiRefreshProgress.parse({ attempt: 1 }) })
       .where(eq(run.id, runEntityId.parse(activation.discoveryRunId)));
     const created: unknown[] = [];
     await dispatchAiRefreshDiscovery(ctx.db, activation, {
