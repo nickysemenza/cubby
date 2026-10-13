@@ -171,7 +171,8 @@ struct StatementMatchSessionTests {
         ])
         #expect(
             session.suggestionNote
-                == "2 charges rank equally. The decision model can suggest which fits best; you still choose and allocate.")
+                == "2 charges rank equally. The decision model can suggest which fits best; you still choose and allocate."
+        )
         await session.suggest()
         #expect(session.displayOrder == ["FTX-5N8P", "FTX-4K7M", "FTX-6Q9R"])
         #expect(session.badge(for: "FTX-5N8P") == "Suggested · 72%")

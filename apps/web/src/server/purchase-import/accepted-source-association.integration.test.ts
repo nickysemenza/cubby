@@ -1001,6 +1001,58 @@ describe("reviewed accepted source Product association", () => {
     );
   });
 
+  // A combined refusal hid whether exact item matching or another accepted
+  // source blocked a repair; both must remain safe and identify their cause.
+  it.each(["item mismatch", "competing source"] as const)(
+    "explains accepted new Product repair refusal for %s without writes",
+    async (cause) => {
+      const w = await world();
+      if (cause === "item mismatch")
+        await w.db
+          .update(expense)
+          .set({ name: "Synthetic changed item" })
+          .where(eq(expense.id, w.item.id));
+      else
+        await w.db.insert(importSourceOrder).values({
+          sourceClaimId: w.association.sourceClaimId,
+          orderKey: "synthetic:another-accepted-order",
+          checksum: w.association.checksum,
+          outputFingerprint: w.association.outputFingerprint,
+          purchaseId: w.association.purchaseId,
+          originalOrder: w.association.originalOrder,
+          acceptedObservationId: w.association.acceptedObservationId,
+        });
+      const before = await w.snapshot();
+      const products = await w.db.select().from(product);
+      await expect(
+        prepareSourceOrderReconciliation(
+          ctx.db,
+          {
+            sourceOrderId: w.association.id,
+            resolution: {
+              kind: "attach_only",
+              lines: [
+                {
+                  lineIndex: 0,
+                  expenseId: parseShortcodeFor("expense", w.item.shortcode),
+                  productId: null,
+                  newProduct: { kind: "new" },
+                },
+              ],
+            },
+          },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(
+        cause === "item mismatch"
+          ? /exact matching item Expenses: 0/i
+          : /other accepted source orders: 1/i,
+      );
+      expect(await w.snapshot()).toEqual(before);
+      expect(await w.db.select().from(product)).toEqual(products);
+    },
+  );
+
   it.each([
     "prepared identity drift",
     "exact Product appears",

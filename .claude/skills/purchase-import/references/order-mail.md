@@ -55,3 +55,8 @@ code, deletion status and stored source identity. Use the handle with
 unknown original. A holding claim can use a historical alias key while the
 review normalizes it to the canonical family key. Commit the full returned
 review unchanged, rather than replacing its source identity from this read.
+
+When a new-Product repair refuses an exact unbound item Expense, its diagnostic
+reports the selected row's role and basis, exact-match count, ledger source-claim
+count and other accepted source-order count. Use these to identify the evidence
+gap; do not bypass a source-ownership refusal with generic Product creation.
