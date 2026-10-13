@@ -606,6 +606,7 @@ public actor CubbyClient {
         case .identifyImage: .identifyImage
         case .subjectLift: .subjectLift
         case .aiSuggest: .aiSuggest
+        case .aiRefresh: .aiRefresh
         case .background: .background
         case .fileImport: .fileImport
         case .mailSearch: .mailSearch
