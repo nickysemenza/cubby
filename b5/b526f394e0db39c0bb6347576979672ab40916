@@ -1,0 +1,19 @@
+apps/web/tests/e2e/photo-group-review.spec.ts
+  s_73fe69dd841a24::t_baaca99f84b733 288-291
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b5b526f394e0db39c0bb6347576979672ab40916",
+  "prompts": {},
+  "sessions": {
+    "s_73fe69dd841a24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96d21c32-0fd2-4535-be08-daa98aa3f469",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
