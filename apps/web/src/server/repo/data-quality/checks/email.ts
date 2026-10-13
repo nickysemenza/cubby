@@ -55,7 +55,8 @@ export const emailChecks = defineEntityChecks({
       missing: () => sql`NOT ${retainedContent}`,
     },
     email_preview_missing: {
-      expected: (t: Email) => sql`${t.classification} = ${related}`,
+      expected: (t: Email) =>
+        sql`${t.classification} = ${related} AND NOT ${emailLinkedSql()}`,
       missing: () => sql`NOT EXISTS (
         SELECT 1 FROM "EmailCandidateObservation" preview
         WHERE preview."emailId" = "Email"."id"

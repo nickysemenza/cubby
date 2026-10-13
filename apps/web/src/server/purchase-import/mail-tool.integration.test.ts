@@ -11,7 +11,8 @@ import {
  * Image, serves changed bytes, or truncates an oversized original; an
  * unrelated disposition deletes an original a Purchase still depends on, a
  * disposal lost after the disposition commits is never retried, or a replay
- * fails once the original is gone; a cancelled, retired or deleted Mail import
+ * fails once the original is gone, or confirming an already-disposed automated
+ * negative loses the member resolution and leaves it awaiting review; a cancelled, retired or deleted Mail import
  * Run still reads, resolves, or spends on search.
  */
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
@@ -81,6 +82,126 @@ describe("public mail tool", () => {
       userId: ctx.actor.userId,
       updatedAt: new Date(),
     });
+
+  it("records a member resolution after an automated unrelated original was disposed", async () => {
+    const party = await member();
+    const mail = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "disposed-newsletter",
+      checksum: "e".repeat(64),
+    });
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({
+        classification: "unrelated",
+        classificationStage: "decision",
+        classificationReason: "Newsletter",
+        status: "completed",
+        orderMailId: null,
+        contentClearedAt: new Date(),
+      })
+      .where(eq(emailTable.messageId, mail.messageId));
+    const input = {
+      mailboxId,
+      messageId: mail.messageId,
+      checksum: mail.rawChecksum,
+      disposition: {
+        kind: "unrelated",
+        reason: "Reviewed the original: editorial newsletter only",
+      },
+    } satisfies Parameters<typeof resolveMail>[1];
+    const admitted = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "different-admitted-message",
+      checksum: "a".repeat(64),
+    });
+    const delegatedRun = await insertWithShortcode(ctx.db, "run", {
+      purpose: "mail_import",
+      status: "running",
+      trigger: "manual",
+      ledgerPartyId: party.id,
+      actorUserId: ctx.actor.userId,
+      actorName: party.name,
+      actorEmail: "synthetic@example.test",
+      actorLedgerPartyShortcode: party.shortcode,
+      actorLedgerPartyName: party.name,
+      actorLedgerPartyKind: "member",
+      input: mailResearchRunInput.parse({
+        kind: "mail_research",
+        sources: [{ orderMailId: admitted.id, checksum: admitted.rawChecksum }],
+      }),
+    });
+    await resolveMail(ctx.db, input, { ...ctx.actor, runId: delegatedRun.id });
+    const [stillAutomated] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.messageId, mail.messageId));
+    expect(stillAutomated?.classificationStage).toBe("decision");
+    await resolveMail(ctx.db, input, ctx.actor);
+    const [resolved] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.messageId, mail.messageId));
+    expect(resolved).toMatchObject({
+      classification: "unrelated",
+      classificationStage: "resolution",
+      classificationReason: `unrelated: ${input.disposition.reason}`,
+      orderMailId: null,
+      status: "completed",
+    });
+    const history = () =>
+      getDb(ctx.db)
+        .select()
+        .from(emailClassificationObservation)
+        .where(eq(emailClassificationObservation.emailId, resolved!.id));
+    expect(await history()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          checksum: mail.rawChecksum,
+          stage: "decision",
+          reason: "Newsletter",
+        }),
+        expect.objectContaining({
+          checksum: mail.rawChecksum,
+          stage: "resolution",
+          reason: `unrelated: ${input.disposition.reason}`,
+        }),
+      ]),
+    );
+    const beforeReplay = await history();
+    await resolveMail(ctx.db, input, ctx.actor);
+    expect(await history()).toEqual(beforeReplay);
+    await expect(
+      resolveMail(ctx.db, { ...input, checksum: "f".repeat(64) }, ctx.actor),
+    ).rejects.toThrow(/No retained Email/);
+    expect(await history()).toEqual(beforeReplay);
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({
+        checksum: "b".repeat(64),
+        classification: "related",
+        classificationStage: "decision",
+        orderMailId: mail.id,
+      })
+      .where(eq(emailTable.id, resolved!.id));
+    await expect(
+      settleMail(ctx.db, {
+        mail: {
+          ledgerPartyId: party.id,
+          mailboxId,
+          messageId: mail.messageId,
+          rawChecksum: mail.rawChecksum,
+        },
+        importRunId: null,
+        status: "completed",
+        classification: "unrelated",
+        detail: `unrelated: ${input.disposition.reason}`,
+      }),
+    ).rejects.toThrow(/changed/);
+    expect(await history()).toEqual(beforeReplay);
+  });
 
   it("atomically links a combined lifecycle Email to every Purchase and replays without duplicate evidence", async () => {
     const party = await member();
