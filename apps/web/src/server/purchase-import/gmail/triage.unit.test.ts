@@ -129,6 +129,88 @@ describe("transient Gmail triage", () => {
     expect(view?.incompleteReasons).toEqual(["purchase_cue_clipped"]);
   });
 
+  // Amounts are scanned first, so an advertised price list used to fill the
+  // cue bound and hide a receipt clipped from the middle.
+  it("keeps a clipped message uncertain when its cues overflow the scan bound", async () => {
+    const prices = Array.from(
+      { length: 210 },
+      (_, cents) =>
+        `$${10 + Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`,
+    ).join(" ");
+    const { decision, view, content } = await route(
+      message(
+        `Weekly deals ${prices} ` +
+          "filler ".repeat(4_000) +
+          "Receipt for order #SYN-55123 total $42.00 " +
+          "filler ".repeat(4_000),
+      ),
+    );
+    expect(withinGate(content)).toBe(true);
+    expect(content).not.toContain("SYN-55123");
+    expect(decision).toMatchObject({
+      classification: "uncertain",
+      stage: "rule",
+    });
+    expect(view?.incompleteReasons).toEqual(["purchase_cue_clipped"]);
+
+    const whole = await route(message(`Weekly deals ${prices}`));
+    expect(whole.decision).toMatchObject({
+      classification: "unrelated",
+      stage: "decision",
+    });
+  });
+
+  // The preheader is bounded separately from the body; with cues overflowing,
+  // a receipt clipped from the preheader went unchecked.
+  it("keeps a message uncertain when overflowing cues meet a clipped preheader", async () => {
+    const prices = Array.from(
+      { length: 210 },
+      (_, cents) =>
+        `$${10 + Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`,
+    ).join(" ");
+    const { decision, view, content } = await route(
+      message(
+        `<html><body><div style="display:none">${"filler ".repeat(100)}Receipt for order #SYN-55123</div>` +
+          `<p>Weekly deals ${prices}</p></body></html>`,
+        "text/html",
+      ),
+    );
+    expect(content).not.toContain("SYN-55123");
+    expect(JSON.parse(content)).toMatchObject({ bodyComplete: true });
+    expect(decision).toMatchObject({
+      classification: "uncertain",
+      stage: "rule",
+    });
+    expect(view?.incompleteReasons).toEqual(["purchase_cue_clipped"]);
+  });
+
+  // The plain-text alternative's footer used to count as readable text, so an
+  // image-only receipt with an unsubscribe footer looked complete.
+  it("keeps an image-only receipt uncertain beside a footer-only text part", async () => {
+    const raw: GmailMessage = {
+      id: "synthetic-multipart",
+      payload: {
+        mimeType: "multipart/alternative",
+        headers: [{ name: "Subject", value: "Your receipt" }],
+        parts: [
+          part(
+            "For assistance with this message please contact Synthetic Shop at 123 Sample Avenue. To stop future messages, unsubscribe.\n" +
+              "You are receiving this email because you shopped with Synthetic Shop.\n" +
+              "Unsubscribe or manage your preferences: https://example.test/prefs\n" +
+              "Privacy policy · © 2026 Synthetic Shop",
+          ),
+          part(EMAIL_HTML_FIXTURES.imageOnlyReceipt, "text/html"),
+        ],
+      },
+    };
+    const { decision, view } = await route(raw);
+    expect(decision).toMatchObject({
+      classification: "uncertain",
+      stage: "rule",
+    });
+    expect(view?.incompleteReasons).toContain("image_only");
+  });
+
   it("lets unrelated stand when the clipped middle carries no purchase cue", async () => {
     const { decision, content } = await route(
       message("Club news " + "filler ".repeat(8_000) + " See you soon"),

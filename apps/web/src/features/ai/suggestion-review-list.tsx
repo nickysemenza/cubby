@@ -50,6 +50,18 @@ import {
 } from "./suggestion-review-filters";
 
 type Outcome = SuggestionReviewBatchOut[number];
+type ReviewState = {
+  key: string;
+  generation: number;
+  outcomes: ReadonlyMap<string, Outcome>;
+  failedRows: ReadonlyMap<string, SuggestionReviewRow>;
+};
+const emptyReview = (key: string, generation: number): ReviewState => ({
+  key,
+  generation,
+  outcomes: new Map(),
+  failedRows: new Map(),
+});
 const helper = createCubbyColumnHelper<SuggestionReviewRow>();
 const MIN_CONFIDENCE_DEFAULT = 0.5;
 const KIND_OPTIONS = ["correction", "addition"] as const;
@@ -183,6 +195,7 @@ function RowReview({
 
 function reviewColumns(
   outcomes: ReadonlyMap<string, Outcome>,
+  listed: ReadonlySet<string>,
   onSettle: (action: "accept" | "reject", ids: string[]) => Promise<void>,
 ) {
   return createCubbyColumnCollection<SuggestionReviewRow>((add) => {
@@ -347,7 +360,9 @@ function reviewColumns(
         }),
         cell: ({ row }) => (
           <Row gap="xs" align="center">
-            <RowReview row={row.original} onSettle={onSettle} />
+            {listed.has(row.original.id) ? (
+              <RowReview row={row.original} onSettle={onSettle} />
+            ) : null}
             <OutcomeCell outcome={outcomes.get(row.original.id)} />
           </Row>
         ),
@@ -485,25 +500,55 @@ export function SuggestionReviewList({
   });
   const list = useQuery(ai.listSuggestionReviewQueue.queryOptions(input));
   const counts = useQuery(ai.suggestionCounts.queryOptions({}));
-  const [outcomes, setOutcomes] = useState<ReadonlyMap<string, Outcome>>(
-    new Map(),
+  // Outcomes and failed rows belong to one visit of a filtered query. Every
+  // filter change (back/forward included, and a return to earlier filters)
+  // starts a new generation with nothing shown, and a settlement commits only
+  // into the generation it started in; refetching the same query keeps it.
+  const reviewKey = JSON.stringify(input);
+  const [review, setReview] = useState<ReviewState>(() =>
+    emptyReview(reviewKey, 0),
+  );
+  if (review.key !== reviewKey)
+    setReview(emptyReview(reviewKey, review.generation + 1));
+  const { outcomes, failedRows } = useMemo(
+    () =>
+      review.key === reviewKey
+        ? review
+        : emptyReview(reviewKey, review.generation + 1),
+    [review, reviewKey],
   );
   const settle = async (action: "accept" | "reject", ids: string[]) => {
+    const generation = review.generation;
+    const shown = list.data ?? [];
     const results =
       action === "accept"
         ? await ai.acceptSuggestions.call({ ids })
         : await ai.rejectSuggestions.call({ ids });
-    setOutcomes(
-      (previous) =>
-        new Map([
-          ...previous,
-          ...results.map((result) => [result.id, result] as const),
-        ]),
+    const failed = new Set(
+      results.filter((result) => !result.ok).map((result) => result.id),
+    );
+    setReview((previous) =>
+      previous.generation !== generation
+        ? previous
+        : {
+            ...previous,
+            outcomes: new Map([
+              ...previous.outcomes,
+              ...results.map((result) => [result.id, result] as const),
+            ]),
+            // Failed rows as they were when settled: accepting one selected
+            // row can supersede another, which then fails and leaves the
+            // refetch.
+            failedRows: new Map([
+              ...[...previous.failedRows].filter(([id]) => !ids.includes(id)),
+              ...shown
+                .filter((row) => failed.has(row.id))
+                .map((row) => [row.id, row] as const),
+            ]),
+          },
     );
     const touched = new Set<ShortcodeEntity>(
-      (list.data ?? [])
-        .filter((row) => ids.includes(row.id))
-        .map((row) => row.entity),
+      shown.filter((row) => ids.includes(row.id)).map((row) => row.entity),
     );
     await Promise.all([
       list.refetch(),
@@ -514,17 +559,27 @@ export function SuggestionReviewList({
     ]);
     return results;
   };
-  // Settled rows leave the pending list on refetch; a failed id stays pending,
-  // so its error is read beside its row in Result.
-  const rows = useMemo(() => list.data ?? [], [list.data]);
+  // Settled rows leave the pending list on refetch. A failed row stays beside
+  // its Result even when the refetch dropped it; only a listed row reselects.
+  const listed = useMemo(
+    () => new Set((list.data ?? []).map((row) => row.id)),
+    [list.data],
+  );
+  const rows = useMemo(
+    () => [
+      ...(list.data ?? []),
+      ...[...failedRows.values()].filter((row) => !listed.has(row.id)),
+    ],
+    [list.data, failedRows, listed],
+  );
   const settleRef = useRef(settle);
   settleRef.current = settle;
   const columns = useMemo(
     () =>
-      reviewColumns(outcomes, async (action, ids) => {
+      reviewColumns(outcomes, listed, async (action, ids) => {
         await settleRef.current(action, ids);
       }),
-    [outcomes],
+    [outcomes, listed],
   );
   const bulk: BulkActionsConfig<SuggestionReviewRow> = {
     actions: (["accept", "reject"] as const).map((action) => ({
@@ -533,7 +588,10 @@ export function SuggestionReviewList({
       icon: action === "accept" ? <CheckIcon /> : <XIcon />,
       tone: action === "reject" ? "destructive" : undefined,
       availability: (selected) =>
-        selected.every((row) => row.original.status === "pending")
+        selected.every(
+          (row) =>
+            row.original.status === "pending" && listed.has(row.original.id),
+        )
           ? { status: "available" }
           : { status: "disabled", reason: "Only pending suggestions settle." },
       onExecute: async (selected) => {
@@ -546,6 +604,9 @@ export function SuggestionReviewList({
     })),
   };
   const selection = useBulkActions({ config: bulk });
+  const listedSelection = Object.fromEntries(
+    Object.entries(selection.rowSelection).filter(([id]) => listed.has(id)),
+  );
   const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
   });
@@ -556,8 +617,10 @@ export function SuggestionReviewList({
     getRowId: (row) => row.id,
     enableSorting: false,
     enableFilters: false,
-    enableRowSelection: (row) => row.original.status === "pending",
-    state: { rowSelection: selection.rowSelection },
+    enableRowSelection: (row) =>
+      row.original.status === "pending" && listed.has(row.original.id),
+    // A row the refetch dropped leaves the selection with it.
+    state: { rowSelection: listedSelection },
     onRowSelectionChange: selection.onRowSelectionChange,
     initialState: {
       columnOrder: defaultLayout.columnOrder,
@@ -577,7 +640,6 @@ export function SuggestionReviewList({
         filters={filters}
         entities={entities}
         onChange={(patch) => {
-          setOutcomes(new Map());
           selection.clearSelection();
           onFiltersChange(patch);
         }}
@@ -599,7 +661,7 @@ export function SuggestionReviewList({
         embedded
         bulkActionBar={
           <BulkActionBar
-            selectedCount={selection.selectedCount}
+            selectedCount={selectedRows.length}
             selectedRows={selectedRows}
             actions={selection.getAvailableActions(selectedRows)}
             onExecute={selection.executeAction}

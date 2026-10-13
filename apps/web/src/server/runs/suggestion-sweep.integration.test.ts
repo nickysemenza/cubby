@@ -11,10 +11,7 @@ import { expense as expenseTable, run as runTable } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { loadFinanceSuggestionContext } from "~/server/repo/finance-suggestion-context";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import {
-  listPagePendingSuggestions,
-  listSuggestions,
-} from "~/server/repo/suggestion-review";
+import { listSuggestions } from "~/server/repo/suggestion-review";
 
 import { pauseSuggestionSweep } from "./suggestion-sweep";
 import {
@@ -215,7 +212,8 @@ describe("persisted Suggestion sweeps", () => {
       }),
     ).toHaveLength(0);
     expect(
-      await listPagePendingSuggestions(ctx.db, {
+      await listSuggestions(ctx.db, {
+        minConfidence: 0,
         entity: "product",
         recordIds: [product.id],
         fields: ["categoryId"],

@@ -503,6 +503,8 @@ export const suggestionStatus = z.enum([
   "rejected",
   "superseded",
 ]);
+/** The most rows one suggestion_queue read returns. */
+export const SUGGESTION_LIST_LIMIT_MAX = 1000;
 export const suggestionReviewListInput = z.object({
   entity: z.enum(shortcodeEntities).optional(),
   field: z.string().optional(),
@@ -512,7 +514,7 @@ export const suggestionReviewListInput = z.object({
   /** Reviewed history (applied, rejected, superseded) is the decision-eval
    * label set; the review queue reads `pending`. */
   status: suggestionStatus.default("pending"),
-  limit: z.number().int().min(1).max(1000).default(500),
+  limit: z.number().int().min(1).max(SUGGESTION_LIST_LIMIT_MAX).default(500),
   /** Bounded list-page read; both are supplied together by generic entity lists. */
   recordIds: z.array(z.string().min(1)).max(250).optional(),
   fields: z.array(z.string()).max(100).optional(),

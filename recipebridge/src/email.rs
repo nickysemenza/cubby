@@ -42,6 +42,16 @@ pub struct WEmailImage {
     pub cue: bool,
 }
 
+/// Purchase cues and how many distinct ones fell past the cue bound.
+#[derive(Tsify, Serialize, Deserialize, Debug, PartialEq)]
+#[tsify(into_wasm_abi)]
+pub struct WPurchaseCues {
+    pub cues: Vec<String>,
+    /// Distinct cues past the bound. A caller cannot check these against its
+    /// view, so any clipping must count as clipped purchase evidence.
+    pub omitted: u32,
+}
+
 #[derive(Tsify, Serialize, Deserialize, Debug, PartialEq)]
 #[tsify(into_wasm_abi)]
 pub struct WCompactEmail {
@@ -64,6 +74,8 @@ pub struct WCompactEmail {
     /// Amounts, order/invoice numbers and receipt phrases found in the
     /// preheader and the whole text, before any caller truncation.
     pub cues: Vec<String>,
+    /// Distinct cues past the cue bound (see `WPurchaseCues::omitted`).
+    pub cues_omitted: u32,
     /// Letters and digits outside footer lines: near zero means the content
     /// lives in images the view cannot show.
     pub readable_chars: u32,
@@ -160,6 +172,28 @@ const FOOTER_PHRASES: &[&str] = &[
 fn is_footer_line(line: &str) -> bool {
     let lower = line.to_lowercase();
     FOOTER_PHRASES.iter().any(|phrase| lower.contains(phrase))
+}
+
+/// Letters and digits outside footer lines and bare URLs. Triage applies the
+/// same count to an HTML body and its plain-text alternative, so footer
+/// boilerplate in either cannot make an image-only receipt look readable. A
+/// line with any footer phrase counts as nothing, even when it opens with
+/// content: undercounting only sends an image-heavy message to review, while
+/// counting footer prose would let a missed receipt stand as unrelated.
+#[wasm_bindgen]
+pub fn readable_chars(text: &str) -> u32 {
+    let count = text
+        .lines()
+        .filter(|line| !is_footer_line(line))
+        .flat_map(str::split_whitespace)
+        .filter(|word| {
+            let scheme = word.get(..8).unwrap_or(word).to_ascii_lowercase();
+            !scheme.starts_with("http://") && !scheme.starts_with("https://")
+        })
+        .flat_map(str::chars)
+        .filter(|c| c.is_alphanumeric())
+        .count();
+    u32::try_from(count).unwrap_or(u32::MAX)
 }
 
 /// Preheader padding (combining grapheme joiners, zero-width characters,
@@ -535,10 +569,10 @@ fn identifiers(text: &str) -> Vec<&str> {
 /// against its final view (case-insensitively) to tell whether a bound clipped
 /// purchase evidence.
 #[wasm_bindgen]
-pub fn purchase_cues(text: &str) -> Vec<String> {
+pub fn purchase_cues(text: &str) -> WPurchaseCues {
     let lower = text.to_lowercase();
     let mut seen = std::collections::HashSet::new();
-    currency_amounts(text)
+    let mut cues: Vec<String> = currency_amounts(text)
         .into_iter()
         .chain(identifiers(text))
         .map(str::to_string)
@@ -549,8 +583,15 @@ pub fn purchase_cues(text: &str) -> Vec<String> {
                 .map(|phrase| (*phrase).to_string()),
         )
         .filter(|cue| seen.insert(cue.to_lowercase()))
-        .take(MAX_CUES)
-        .collect()
+        .collect();
+    // Amounts come first, so an advertised price list must not hide a later
+    // receipt's identifiers: the overflow is reported, never silently dropped.
+    let omitted = cues.len().saturating_sub(MAX_CUES);
+    cues.truncate(MAX_CUES);
+    WPurchaseCues {
+        cues,
+        omitted: u32::try_from(omitted).unwrap_or(u32::MAX),
+    }
 }
 
 const LINK_CUES: &[&str] = &[
@@ -658,11 +699,7 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
             kept.push(line);
         }
     }
-    let readable_chars = kept
-        .iter()
-        .flat_map(|line| line.chars())
-        .filter(|c| c.is_alphanumeric())
-        .count();
+    let readable_chars = readable_chars(&state.main);
     let mut text = kept
         .into_iter()
         .chain(demoted)
@@ -675,7 +712,10 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
         )
         .collect::<Vec<_>>()
         .join("\n");
-    let cues = purchase_cues(&format!(
+    let WPurchaseCues {
+        cues,
+        omitted: cues_omitted,
+    } = purchase_cues(&format!(
         "{}\n{text}",
         state.preheader.as_deref().unwrap_or_default()
     ));
@@ -770,7 +810,8 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
         structured_data,
         structured_data_omitted,
         cues,
-        readable_chars: u32::try_from(readable_chars).unwrap_or(u32::MAX),
+        cues_omitted,
+        readable_chars,
         truncated: state.truncated,
     }
 }
@@ -918,14 +959,50 @@ mod tests {
         assert_eq!(
             purchase_cues(
                 "Paid USD 12 and 12,50 € then $ 3. Order no. 55-A1; order#X99 ref #1234; total 2026 visits"
-            ),
+            )
+            .cues,
             vec!["USD 12", "12,50 €", "$ 3", "55-A1", "X99", "1234"]
         );
         assert_eq!(
-            purchase_cues("USDA grade, 3 eggs, #ff00ff"),
+            purchase_cues("USDA grade, 3 eggs, #ff00ff").cues,
             Vec::<String>::new()
         );
-        assert_eq!(purchase_cues("Bowl 1 $24.00"), vec!["$24.00"]);
+        assert_eq!(purchase_cues("Bowl 1 $24.00").cues, vec!["$24.00"]);
+    }
+
+    #[test]
+    fn counts_no_footer_or_url_as_readable() {
+        assert_eq!(
+            readable_chars(
+                "Unsubscribe from these emails\nPrivacy policy · © 2026 Synthetic Shop\nhttps://example.test/a"
+            ),
+            0
+        );
+        assert_eq!(readable_chars("Order 12\nUnsubscribe"), 7);
+        // A scheme in capitals is still a URL, not readable text.
+        assert_eq!(
+            readable_chars(&format!("HTTPS://example.test/{}", "a".repeat(100))),
+            0
+        );
+        assert_eq!(
+            readable_chars(
+                "For assistance with this message please contact Synthetic Shop at 123 Sample Avenue. To stop future messages, unsubscribe."
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn reports_cues_past_its_bound() {
+        let prices = (0..MAX_CUES + 5)
+            .map(|cents| format!("${}.{:02}", 10 + cents / 100, cents % 100))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let found = purchase_cues(&format!("{prices} Order no. SYN-40217"));
+        assert_eq!(found.cues.len(), MAX_CUES);
+        assert_eq!(found.omitted, 6);
+        assert!(!found.cues.iter().any(|cue| cue == "SYN-40217"));
+        assert_eq!(purchase_cues("Bowl 1 $24.00").omitted, 0);
     }
 
     #[test]

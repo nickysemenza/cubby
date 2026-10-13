@@ -4,6 +4,7 @@ import type {
   SuggestionReviewBatchOut,
   SuggestionReviewRow,
 } from "@cubby/schemas/ai";
+import { SUGGESTION_LIST_LIMIT_MAX } from "@cubby/schemas/ai";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
@@ -190,8 +191,40 @@ export interface StoredSuggestionOperations {
   }) => Promise<{ id: string; status: "applied" | "rejected" }>;
 }
 
+type PendingPageInput = Parameters<StoredSuggestionOperations["list"]>[0];
+
+/**
+ * Every pending row for a list page's records: no confidence floor, and a
+ * read that fills the row limit is split by record until none does, so a page
+ * with many suggestible fields is never silently truncated.
+ */
+export const everyPendingSuggestion =
+  (
+    read: (
+      input: PendingPageInput & { minConfidence: number; limit: number },
+    ) => Promise<SuggestionReviewRow[]>,
+  ) =>
+  async (input: PendingPageInput): Promise<SuggestionReviewRow[]> => {
+    const rows = await read({
+      ...input,
+      minConfidence: 0,
+      limit: SUGGESTION_LIST_LIMIT_MAX,
+    });
+    if (rows.length < SUGGESTION_LIST_LIMIT_MAX || input.recordIds.length < 2)
+      return rows;
+    const middle = Math.ceil(input.recordIds.length / 2);
+    const halves = await Promise.all(
+      [input.recordIds.slice(0, middle), input.recordIds.slice(middle)].map(
+        (recordIds) => everyPendingSuggestion(read)({ ...input, recordIds }),
+      ),
+    );
+    return halves.flat();
+  };
+
 const productionStoredSuggestionOperations: StoredSuggestionOperations = {
-  list: (input) => ai.listSuggestionReviewQueue.call(input),
+  list: everyPendingSuggestion((input) =>
+    ai.listSuggestionReviewQueue.call(input),
+  ),
   accept: (input) => ai.acceptSuggestion.call(input),
   acceptMany: (input) => ai.acceptSuggestions.call(input),
   reject: (input) => ai.rejectSuggestion.call(input),
@@ -629,30 +662,35 @@ function storedSuggestionIndex(
         categories.set(parsed.data.id, parsed.data.category);
     }
   }
-  return new Map(
-    (rows ?? [])
-      .filter((suggestion) => {
-        const current = categories.get(suggestion.recordId);
-        if (
-          entity === "product" &&
-          suggestion.field === "categoryId" &&
-          suggestion.kind === "correction" &&
-          !current
-        )
-          return false;
-        return !(
-          suggestion.field === "categoryId" &&
-          current &&
-          suggestion.currentValue === current.id &&
-          suggestion.suggestedValue !== current.id &&
-          current.path.some((node) => node.id === suggestion.suggestedValue)
-        );
-      })
-      .map((suggestion) => [
-        storedSuggestionKey(suggestion.recordId, suggestion.field),
-        suggestion,
-      ]),
-  );
+  const index = new Map<string, SuggestionReviewRow>();
+  for (const suggestion of (rows ?? []).filter((suggestion) => {
+    const current = categories.get(suggestion.recordId);
+    if (
+      entity === "product" &&
+      suggestion.field === "categoryId" &&
+      suggestion.kind === "correction" &&
+      !current
+    )
+      return false;
+    return !(
+      suggestion.field === "categoryId" &&
+      current &&
+      suggestion.currentValue === current.id &&
+      suggestion.suggestedValue !== current.id &&
+      current.path.some((node) => node.id === suggestion.suggestedValue)
+    );
+  })) {
+    // Siblings share a key; the strongest wins regardless of read order.
+    const key = storedSuggestionKey(suggestion.recordId, suggestion.field);
+    const held = index.get(key);
+    if (
+      !held ||
+      suggestion.confidence > held.confidence ||
+      (suggestion.confidence === held.confidence && suggestion.id < held.id)
+    )
+      index.set(key, suggestion);
+  }
+  return index;
 }
 
 function actionableRowSuggestionCount(

@@ -32,7 +32,6 @@ import {
   acceptSuggestion,
   acceptSuggestions,
   latestSuggestionSweepStatus,
-  listPagePendingSuggestions,
   listSuggestions,
   rejectSuggestion,
   rejectSuggestions,
@@ -317,13 +316,7 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   applyFinanceCategorySuggestion: (context, input) =>
     applyFinanceCategorySuggestion(context, input),
   listSuggestionReviewQueue: (context, input) =>
-    input.recordIds && input.fields && input.entity
-      ? listPagePendingSuggestions(context.db, {
-          entity: input.entity,
-          recordIds: input.recordIds,
-          fields: input.fields,
-        })
-      : listSuggestions(context.db, input),
+    listSuggestions(context.db, input),
   acceptSuggestion: (context, input) =>
     acceptSuggestion(context.db, context, input),
   acceptSuggestions: (context, input) =>

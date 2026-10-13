@@ -116,3 +116,99 @@ test("Review bulk-accepts and bulk-rejects a Run's Suggestions with read-back", 
     page.getByRole("tab", { name: "Review", selected: true }),
   ).toBeVisible();
 });
+
+// Failure mode: accepting one selected row supersedes its sibling, the
+// sibling's failure is reported, and the pending refetch drops both rows so
+// the error has nowhere to show.
+test("Review keeps a superseded sibling's bulk failure beside its row", async ({
+  page,
+}, testInfo) => {
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const categories = await Promise.all(
+    ["First", "Second"].map((label) =>
+      createEntityFixture(page, "productCategory", {
+        name: uniqueName(testInfo, `Sibling ${label}`),
+      }),
+    ),
+  );
+  const name = uniqueName(testInfo, "Review sibling");
+  const product = await createEntityFixture(page, "product", {
+    name,
+    categoryId: null,
+  });
+  const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
+  const [run] = await getDb(db)
+    .select({ shortcode: runTable.shortcode })
+    .from(runTable)
+    .where(eq(runTable.id, runId));
+  if (!run) throw new Error("Synthetic Run is missing");
+  const recordId = await resolveOrThrow(db, "product", product.id);
+  await getDb(db)
+    .insert(suggestionTable)
+    .values(
+      categories.map((category, index) => ({
+        runId,
+        entity: "product",
+        recordId,
+        field: "categoryId",
+        currentValue: null,
+        suggestedValue: category.id,
+        confidence: 0.9 - index * 0.1,
+        runnerUpValue: null,
+        runnerUpConfidence: null,
+        model: "typesafe/jev",
+        kind: "addition" as const,
+        status: "pending" as const,
+      })),
+    );
+
+  await gotoAuthenticatedPage(
+    page,
+    `/ai?tab=review&entity=product&field=categoryId&runId=${run.shortcode}`,
+  );
+  const table = page.getByRole("table", { name: "Suggestions" });
+  const rows = table.getByRole("row").filter({ hasText: name });
+  await expect(rows).toHaveCount(2);
+  for (const row of await rows.all())
+    await row
+      .getByRole("checkbox", { name: "Select row", exact: true })
+      .check();
+  await page.getByRole("button", { name: "Accept", exact: true }).click();
+
+  await expect
+    .poll(async () =>
+      (
+        await getDb(db)
+          .select({ status: suggestionTable.status })
+          .from(suggestionTable)
+          .where(eq(suggestionTable.recordId, recordId))
+      )
+        .map((row) => row.status)
+        .sort(),
+    )
+    .toEqual(["applied", "superseded"]);
+  await expect(rows).toHaveCount(1);
+  await expect(rows.getByRole("alert")).toContainText(
+    "Pending Suggestion not found",
+  );
+  await expect(page.getByText("1 could not be settled")).toBeVisible();
+  // The superseded row can no longer settle, so it offers no selection.
+  await expect(
+    rows.getByRole("checkbox", { name: "Select row", exact: true }),
+  ).toHaveCount(0);
+  // Nor does it stay selected behind the bar, where bulk Accept could resend it.
+  await expect(
+    page.getByRole("button", { name: "Accept", exact: true }),
+  ).toHaveCount(0);
+  // Leaving and returning to the same filters starts a fresh visit: the
+  // earlier failure does not reappear without another settlement.
+  const status = page.getByRole("combobox", { name: "Status" });
+  await status.selectOption("rejected");
+  await expect(page.getByText("could not be settled")).toHaveCount(0);
+  await status.selectOption("pending");
+  await expect(
+    page.getByText("No suggestions match these filters."),
+  ).toBeVisible();
+  await expect(rows).toHaveCount(0);
+  await expect(page.getByText("could not be settled")).toHaveCount(0);
+});
