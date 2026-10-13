@@ -177,6 +177,17 @@ describe("transient Gmail triage", () => {
     expect(view?.incompleteReasons).toContain("purchase_cue_clipped");
   });
 
+  it("keeps a full promotional price label usable when only image tracking bytes are clipped", async () => {
+    const { decision, view } = await route(
+      message(
+        `<p>Browse our new catalog of cotton towels and upcoming seasonal collections. Discover the full range of sizes, colors and new styles in this week's community newsletter.</p><img src="https://cdn.example.test/catalog.jpg?tracking=${"x".repeat(600)}" alt="New cotton towels from $19">`,
+        "text/html",
+      ),
+    );
+    expect(decision.classification).toBe("unrelated");
+    expect(view?.incompleteReasons).toEqual([]);
+  });
+
   it("keeps clipped image sources and omitted booking-image labels uncertain", async () => {
     for (const pictures of [
       `<img src="https://shop.example.test/${"x".repeat(600)}/receipt.png" alt="Catalog pictures">`,

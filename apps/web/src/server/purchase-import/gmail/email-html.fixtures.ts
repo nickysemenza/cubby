@@ -27,7 +27,7 @@ export const EMAIL_FIXTURE_SUMMARY = {
     truncated: false,
   },
   imageOnlyReceipt: {
-    bytes: 658,
+    bytes: 691,
     cues: [] as string[],
     readableChars: 0,
     truncated: false,
@@ -39,13 +39,13 @@ export const EMAIL_FIXTURE_SUMMARY = {
     truncated: false,
   },
   newsletter: {
-    bytes: 1517,
+    bytes: 1559,
     cues: [] as string[],
     readableChars: 301,
     truncated: false,
   },
   orderTable: {
-    bytes: 1586,
+    bytes: 1600,
     cues: [
       "$24.00",
       "$18.50",

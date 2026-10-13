@@ -236,7 +236,7 @@ export const SETTLEMENT_CANDIDATE_RANK_FEATURE = defineFeature({
 export const MAILBOX_TRIAGE_FEATURE = defineFeature({
   prompt: mailTriagePrompt,
   feature: "mailbox-triage",
-  promptVersion: "2026-10-13.1",
+  promptVersion: "2026-10-13.2",
   cache: false,
   tier: "decision",
   collectPayload: false,

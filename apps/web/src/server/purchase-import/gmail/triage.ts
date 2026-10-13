@@ -191,14 +191,18 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
       reasons.add("links_clipped");
     if (
       html.cue_images_omitted ||
-      clippedCue(
-        html.images,
-        images,
-        (image, index) =>
-          images[index]?.alt === image.alt &&
-          ((Boolean(image.alt.trim()) && !image.cue) ||
-            images[index].src === image.src),
-      )
+      clippedCue(html.images, images, (image, index) => {
+        const shown = images[index];
+        return (
+          shown !== undefined &&
+          shown.alt === image.alt &&
+          (shown.src === image.src ||
+            (Boolean(image.alt.trim()) &&
+              image.url_cues.every((cue) =>
+                shown.src.toLowerCase().includes(cue.toLowerCase()),
+              )))
+        );
+      })
     )
       reasons.add("images_clipped");
     const structuredComplete =
