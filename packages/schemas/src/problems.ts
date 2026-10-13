@@ -526,7 +526,14 @@ export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
 
 export const runFindingProblemSchema = z.object({
   id: z.uuid(),
-  purchaseId: purchaseShortcode.nullable(),
+  /** The record the finding is about (`RunFinding.entityKind`); null for a code-less tombstone. */
+  targetId: anyShortcodeSchema([
+    "purchase",
+    "expense",
+    "product",
+    "run",
+    "email",
+  ]).nullable(),
   kind: z.string(),
   summary: z.string(),
   probability: z.number().nullable(),

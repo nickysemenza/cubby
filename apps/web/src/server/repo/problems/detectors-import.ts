@@ -1,9 +1,8 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { storedImportFix } from "@cubby/schemas/purchase-import";
 import { and, eq, lt } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { purchase, runFinding } from "~/server/db/schema";
+import { entityIdentity, runFinding } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
 export async function findOpenRunFindings(db: Database) {
@@ -16,7 +15,7 @@ export async function findOpenRunFindings(db: Database) {
   const rows = await database
     .select({
       id: runFinding.id,
-      purchaseShortcode: purchase.shortcode,
+      targetShortcode: entityIdentity.shortcode,
       kind: runFinding.kind,
       summary: runFinding.summary,
       probability: runFinding.probability,
@@ -24,14 +23,12 @@ export async function findOpenRunFindings(db: Database) {
       createdAt: runFinding.createdAt,
     })
     .from(runFinding)
-    .leftJoin(purchase, eq(runFinding.entityId, purchase.id))
+    .leftJoin(entityIdentity, eq(runFinding.entityId, entityIdentity.id))
     .where(eq(runFinding.status, "open"))
     .orderBy(runFinding.createdAt);
   return rows.map((row) => ({
     id: row.id,
-    purchaseId: row.purchaseShortcode
-      ? parseShortcodeFor("purchase", row.purchaseShortcode)
-      : null,
+    targetId: row.targetShortcode,
     kind: row.kind,
     summary: row.summary,
     probability: row.probability,

@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { parseShortcode } from "@cubby/shared";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
@@ -6,10 +7,10 @@ import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 
-import { MobileCard } from "~/entity/components/mobile-card";
 import type { EntityDetailParams, EntityDetailRoute } from "~/entity/entities";
 import { EntityIcon } from "~/entity/entities";
 import { cn } from "~/lib/utils";
+import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
 import { Grid, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -72,6 +73,8 @@ const ROUTE_NOUN = new Map([
   ["meals", "meal"],
   ["cookbooks", "cookbook"],
   ["financial", "financial record"],
+  ["emails", "email"],
+  ["runs", "run"],
 ]);
 
 /** First path segment of either route shape, e.g. `/expenses/EXP-1` → `expenses`. */
@@ -96,6 +99,12 @@ export type RenderedProblemItem = {
   key?: string;
   title: string;
   subtitle?: string;
+  /**
+   * The copyable code beside the subtitle. Defaults to the code `route` points
+   * at; set `null` when the route opens a sample rather than the card's own
+   * subject (a manufacturer spelling links one product that uses it).
+   */
+  shortcode?: string | null;
   badges?: ReactNode[];
   details?: ReactNode[];
   /**
@@ -346,7 +355,7 @@ function SectionGroup<T>({
           <Badge variant="outline">{items.length}</Badge>
         </h4>
       )}
-      <Grid cols="cards3">
+      <Grid cols="cards3" gap="sm">
         {visible.map((item) => {
           const rendered = renderItem(item);
           return (
@@ -377,8 +386,25 @@ function SectionGroup<T>({
 }
 
 /**
- * One problem card. Holds its own expand state so opening an inline fix on one
- * card doesn't re-render or collapse the others.
+ * The shortcode a card names, read off its route: every detail route is keyed
+ * by the record's shortcode, and an `{ href }` route ends in one. A path whose
+ * last segment isn't a code (a filtered list, a workbench) yields none.
+ */
+const routeShortcode = (route: RoutePattern): string | null =>
+  parseShortcode(
+    "href" in route
+      ? (route.href.split("?")[0]?.split("/").filter(Boolean).at(-1) ?? "")
+      : route.params.shortcode,
+  )?.shortcode ?? null;
+
+/**
+ * One problem card: a dense cell of identity (title, copyable shortcode,
+ * subtitle) beside its actions, then evidence. Holds its own expand state so
+ * opening an inline fix on one card doesn't re-render or collapse the others.
+ *
+ * Not `MobileCard`: that forces every action button to a 44px square, which
+ * crushed labelled actions ("Set price", "Dismiss") on desktop. Phone touch
+ * targets come from the global coarse-pointer button floor instead.
  */
 function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
   const [open, setOpen] = useState(false);
@@ -394,6 +420,13 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
     inlineFix,
     tone,
   } = rendered;
+  const shortcode =
+    rendered.shortcode === undefined
+      ? route
+        ? routeShortcode(route)
+        : null
+      : rendered.shortcode;
+  const openLabel = route ? (editLabel ?? `Open ${routeNoun(route)}`) : "";
 
   // How many recipes use this product (via its ingredient) — a "how much does
   // fixing this matter" signal. Only set for ingredient-linked products.
@@ -404,81 +437,105 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
       : undefined;
 
   return (
-    <MobileCard
-      title={title}
-      subtitle={subtitle}
-      imageSlot={imageSlot}
+    <div
       className={cn(
-        "p-2",
-        tone ? TONE_SPINE[tone] : "border-l border-l-border",
+        "flex min-w-0 items-start gap-2 border border-border bg-card px-2.5 py-2",
+        tone ? TONE_SPINE[tone] : undefined,
       )}
-      actions={
-        <div className="flex gap-1">
-          {inlineFix && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant={open ? "secondary" : "default"}
-                    size="sm"
-                    onClick={() => setOpen((o) => !o)}
-                  />
-                }
-              >
-                {open ? (
-                  <XIcon className="mr-1 size-3" />
-                ) : (
-                  <WrenchIcon className="mr-1 size-3" />
-                )}
-                {open ? "Cancel" : inlineFix.label}
-              </TooltipTrigger>
-              <TooltipContent>Quick fix — just this item</TooltipContent>
-            </Tooltip>
-          )}
-          {route && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    render={
-                      "href" in route ? (
-                        <Link to={route.href} />
-                      ) : (
-                        <Link to={route.to} params={route.params} />
-                      )
-                    }
-                    nativeButton={false}
-                  />
-                }
-              >
-                <ArrowSquareOutIcon className="mr-1 size-3" />
-                {editLabel ?? `Open ${routeNoun(route)}`}
-              </TooltipTrigger>
-              <TooltipContent>
-                Open the full {routeNoun(route)} page
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {customActions}
-        </div>
-      }
     >
-      {details.length > 0 && <div className="space-y-1">{details}</div>}
-      {badges.length > 0 && (
-        <div className="flex flex-wrap gap-1">{badges}</div>
-      )}
-      {recipeCount !== undefined && (
-        <div className="text-xs text-muted-foreground">
-          Used in {recipeCount} {recipeCount === 1 ? "recipe" : "recipes"}
+      {imageSlot && (
+        <div className="size-10 shrink-0 overflow-hidden bg-muted">
+          {imageSlot}
         </div>
       )}
-      {inlineFix && open && (
-        <div className="mt-2 border-t pt-2">
-          {inlineFix.render(() => setOpen(false))}
+      <Stack gap="xs" className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p
+              className="line-clamp-2 text-sm leading-snug font-medium break-words"
+              title={title}
+            >
+              {title}
+            </p>
+            {(shortcode || subtitle) && (
+              <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                {shortcode && (
+                  <CopyableShortcode
+                    code={shortcode}
+                    className="shrink-0 pointer-coarse:min-h-11"
+                  />
+                )}
+                {shortcode && subtitle && <span aria-hidden>·</span>}
+                {subtitle && (
+                  <span className="min-w-0 truncate" title={subtitle}>
+                    {subtitle}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+            {inlineFix && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant={open ? "secondary" : "default"}
+                      size="sm"
+                      onClick={() => setOpen((o) => !o)}
+                    />
+                  }
+                >
+                  {open ? <XIcon /> : <WrenchIcon />}
+                  {open ? "Cancel" : inlineFix.label}
+                </TooltipTrigger>
+                <TooltipContent>Quick fix — just this item</TooltipContent>
+              </Tooltip>
+            )}
+            {route && (
+              // Icon-only: the label lives in the accessible name and tooltip,
+              // so the title keeps the width a repeated "Open product" took.
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label={openLabel}
+                      render={
+                        "href" in route ? (
+                          <Link to={route.href} />
+                        ) : (
+                          <Link to={route.to} params={route.params} />
+                        )
+                      }
+                      nativeButton={false}
+                    />
+                  }
+                >
+                  <ArrowSquareOutIcon />
+                </TooltipTrigger>
+                <TooltipContent>{openLabel}</TooltipContent>
+              </Tooltip>
+            )}
+            {customActions}
+          </div>
         </div>
-      )}
-    </MobileCard>
+        {details.length > 0 && <Stack gap="xs">{details}</Stack>}
+        {badges.length > 0 && (
+          <div className="flex flex-wrap gap-1">{badges}</div>
+        )}
+        {recipeCount !== undefined && (
+          <div className="text-xs text-muted-foreground">
+            Used in {recipeCount} {recipeCount === 1 ? "recipe" : "recipes"}
+          </div>
+        )}
+        {inlineFix && open && (
+          <div className="mt-1 border-t pt-2">
+            {inlineFix.render(() => setOpen(false))}
+          </div>
+        )}
+      </Stack>
+    </div>
   );
 }

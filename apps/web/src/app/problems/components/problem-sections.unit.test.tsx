@@ -186,6 +186,48 @@ describe("PROBLEM_SECTIONS", () => {
       "href",
       `/images/${issue.id}`,
     );
+    // The card names its record by a copyable shortcode read off the route.
+    expect(screen.getByRole("button", { name: issue.id })).toHaveAttribute(
+      "title",
+      "Copy shortcode",
+    );
+    harness.dispose();
+  });
+
+  it("links and names an Email-targeted import finding", async () => {
+    const harness = createBrowserTestHarness();
+    await act(async () => {
+      await harness.loadRouter();
+    });
+    const section = PROBLEM_SECTIONS.find(
+      (candidate) => candidate.id === "import-findings",
+    );
+    if (!section) throw new Error("Missing import-findings Problems section");
+    const email = testShortcode("email", "unclassified-vendor");
+    const problems: AllProblems = {
+      ...EMPTY_PROBLEM_ARRAYS,
+      runFindings: [
+        {
+          id: "00000000-0000-4000-8000-000000000001",
+          targetId: email,
+          kind: "unclassified_vendor",
+          summary: "Purchase mail from Example Shop does not match a vendor",
+          probability: null,
+          proposedFix: null,
+          createdAt: new Date("2026-01-02T03:04:05Z"),
+        },
+      ],
+      sectionTotals: {},
+      totalProblems: 1,
+    };
+
+    render(section.node(problems, undefined), { wrapper: harness.wrapper });
+
+    expect(screen.getByRole("button", { name: "Open email" })).toHaveAttribute(
+      "href",
+      `/emails/${email}`,
+    );
+    expect(screen.getByRole("button", { name: email })).toBeInTheDocument();
     harness.dispose();
   });
 });
