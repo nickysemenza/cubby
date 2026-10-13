@@ -50,6 +50,16 @@ import {
 } from "./suggestion-review-filters";
 
 type Outcome = SuggestionReviewBatchOut[number];
+type ReviewState = {
+  key: string;
+  outcomes: ReadonlyMap<string, Outcome>;
+  failedRows: ReadonlyMap<string, SuggestionReviewRow>;
+};
+const emptyReview = (key: string): ReviewState => ({
+  key,
+  outcomes: new Map(),
+  failedRows: new Map(),
+});
 const helper = createCubbyColumnHelper<SuggestionReviewRow>();
 const MIN_CONFIDENCE_DEFAULT = 0.5;
 const KIND_OPTIONS = ["correction", "addition"] as const;
@@ -488,42 +498,51 @@ export function SuggestionReviewList({
   });
   const list = useQuery(ai.listSuggestionReviewQueue.queryOptions(input));
   const counts = useQuery(ai.suggestionCounts.queryOptions({}));
-  const [outcomes, setOutcomes] = useState<ReadonlyMap<string, Outcome>>(
-    new Map(),
+  // Outcomes and failed rows belong to one filtered query: a filter change
+  // (including back/forward) starts empty, and a settlement that finishes
+  // after the filters moved on is not shown against the new rows.
+  const reviewKey = JSON.stringify(input);
+  const latestKey = useRef(reviewKey);
+  latestKey.current = reviewKey;
+  const [review, setReview] = useState<ReviewState>(() =>
+    emptyReview(reviewKey),
   );
-  // Failed rows as they were when settled: accepting one selected row can
-  // supersede another, which then fails and leaves the pending refetch.
-  const [failedRows, setFailedRows] = useState<
-    ReadonlyMap<string, SuggestionReviewRow>
-  >(new Map());
+  const { outcomes, failedRows } = useMemo(
+    () => (review.key === reviewKey ? review : emptyReview(reviewKey)),
+    [review, reviewKey],
+  );
   const settle = async (action: "accept" | "reject", ids: string[]) => {
+    const settledKey = reviewKey;
+    const shown = list.data ?? [];
     const results =
       action === "accept"
         ? await ai.acceptSuggestions.call({ ids })
         : await ai.rejectSuggestions.call({ ids });
-    setOutcomes(
-      (previous) =>
-        new Map([
-          ...previous,
-          ...results.map((result) => [result.id, result] as const),
-        ]),
-    );
     const failed = new Set(
       results.filter((result) => !result.ok).map((result) => result.id),
     );
-    setFailedRows(
-      (previous) =>
-        new Map([
-          ...[...previous].filter(([id]) => !ids.includes(id)),
-          ...(list.data ?? [])
-            .filter((row) => failed.has(row.id))
-            .map((row) => [row.id, row] as const),
-        ]),
-    );
+    if (latestKey.current === settledKey)
+      setReview((previous) => {
+        const base =
+          previous.key === settledKey ? previous : emptyReview(settledKey);
+        return {
+          key: settledKey,
+          outcomes: new Map([
+            ...base.outcomes,
+            ...results.map((result) => [result.id, result] as const),
+          ]),
+          // Failed rows as they were when settled: accepting one selected row
+          // can supersede another, which then fails and leaves the refetch.
+          failedRows: new Map([
+            ...[...base.failedRows].filter(([id]) => !ids.includes(id)),
+            ...shown
+              .filter((row) => failed.has(row.id))
+              .map((row) => [row.id, row] as const),
+          ]),
+        };
+      });
     const touched = new Set<ShortcodeEntity>(
-      (list.data ?? [])
-        .filter((row) => ids.includes(row.id))
-        .map((row) => row.entity),
+      shown.filter((row) => ids.includes(row.id)).map((row) => row.entity),
     );
     await Promise.all([
       list.refetch(),
@@ -563,7 +582,10 @@ export function SuggestionReviewList({
       icon: action === "accept" ? <CheckIcon /> : <XIcon />,
       tone: action === "reject" ? "destructive" : undefined,
       availability: (selected) =>
-        selected.every((row) => row.original.status === "pending")
+        selected.every(
+          (row) =>
+            row.original.status === "pending" && listed.has(row.original.id),
+        )
           ? { status: "available" }
           : { status: "disabled", reason: "Only pending suggestions settle." },
       onExecute: async (selected) => {
@@ -576,6 +598,9 @@ export function SuggestionReviewList({
     })),
   };
   const selection = useBulkActions({ config: bulk });
+  const listedSelection = Object.fromEntries(
+    Object.entries(selection.rowSelection).filter(([id]) => listed.has(id)),
+  );
   const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
   });
@@ -588,7 +613,8 @@ export function SuggestionReviewList({
     enableFilters: false,
     enableRowSelection: (row) =>
       row.original.status === "pending" && listed.has(row.original.id),
-    state: { rowSelection: selection.rowSelection },
+    // A row the refetch dropped leaves the selection with it.
+    state: { rowSelection: listedSelection },
     onRowSelectionChange: selection.onRowSelectionChange,
     initialState: {
       columnOrder: defaultLayout.columnOrder,
@@ -608,8 +634,6 @@ export function SuggestionReviewList({
         filters={filters}
         entities={entities}
         onChange={(patch) => {
-          setOutcomes(new Map());
-          setFailedRows(new Map());
           selection.clearSelection();
           onFiltersChange(patch);
         }}
@@ -631,7 +655,7 @@ export function SuggestionReviewList({
         embedded
         bulkActionBar={
           <BulkActionBar
-            selectedCount={selection.selectedCount}
+            selectedCount={selectedRows.length}
             selectedRows={selectedRows}
             actions={selection.getAvailableActions(selectedRows)}
             onExecute={selection.executeAction}

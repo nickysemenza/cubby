@@ -174,19 +174,28 @@ fn is_footer_line(line: &str) -> bool {
     FOOTER_PHRASES.iter().any(|phrase| lower.contains(phrase))
 }
 
-/// Letters and digits outside footer lines and bare URLs. Triage applies the
-/// same count to an HTML body and its plain-text alternative, so footer
-/// boilerplate in either cannot make an image-only receipt look readable.
+/// Letters and digits before any footer phrase on a line, outside bare URLs.
+/// Triage applies the same count to an HTML body and its plain-text
+/// alternative, so footer boilerplate in either cannot make an image-only
+/// receipt look readable, and a receipt sentence ending in `© Shop` still
+/// counts.
 #[wasm_bindgen]
 pub fn readable_chars(text: &str) -> u32 {
-    let count = text
-        .lines()
-        .filter(|line| !is_footer_line(line))
-        .flat_map(str::split_whitespace)
-        .filter(|word| !word.starts_with("http://") && !word.starts_with("https://"))
-        .flat_map(str::chars)
-        .filter(|c| c.is_alphanumeric())
-        .count();
+    let mut count = 0;
+    for line in text.lines() {
+        let lower = line.to_lowercase();
+        let end = FOOTER_PHRASES
+            .iter()
+            .filter_map(|phrase| lower.find(phrase))
+            .min()
+            .unwrap_or(lower.len());
+        count += lower[..end]
+            .split_whitespace()
+            .filter(|word| !word.starts_with("http://") && !word.starts_with("https://"))
+            .flat_map(str::chars)
+            .filter(|c| c.is_alphanumeric())
+            .count();
+    }
     u32::try_from(count).unwrap_or(u32::MAX)
 }
 
@@ -693,7 +702,8 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
             kept.push(line);
         }
     }
-    let readable_chars = readable_chars(&kept.join("\n"));
+    // Demoted footer lines still count up to their footer phrase.
+    let readable_chars = readable_chars(&state.main);
     let mut text = kept
         .into_iter()
         .chain(demoted)
@@ -973,6 +983,7 @@ mod tests {
             0
         );
         assert_eq!(readable_chars("Order 12\nUnsubscribe"), 7);
+        assert_eq!(readable_chars("Order 12 shipped © Synthetic Shop"), 14);
     }
 
     #[test]

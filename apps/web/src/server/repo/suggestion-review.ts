@@ -118,6 +118,8 @@ export async function listSuggestions(
     conditions.push(inArray(suggestionTable.recordId, recordUuids));
   if (input.fields)
     conditions.push(inArray(suggestionTable.field, input.fields));
+  // Before the limit: unserved trial candidates must not use up the page.
+  conditions.push(reviewableSuggestionSql);
   const rows = await getDb(db)
     .select({
       suggestion: suggestionTable,
@@ -131,6 +133,7 @@ export async function listSuggestions(
       input.status === "pending"
         ? desc(suggestionTable.confidence)
         : desc(suggestionTable.updatedAt),
+      suggestionTable.id,
     )
     .limit(input.limit);
   const reviewable = rows.flatMap(({ suggestion, runInput, runCode }) =>

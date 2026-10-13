@@ -196,4 +196,8 @@ test("Review keeps a superseded sibling's bulk failure beside its row", async ({
   await expect(
     rows.getByRole("checkbox", { name: "Select row", exact: true }),
   ).toHaveCount(0);
+  // Nor does it stay selected behind the bar, where bulk Accept could resend it.
+  await expect(
+    page.getByRole("button", { name: "Accept", exact: true }),
+  ).toHaveCount(0);
 });

@@ -160,6 +160,50 @@ describe("transient Gmail triage", () => {
     });
   });
 
+  // The preheader is bounded separately from the body; with cues overflowing,
+  // a receipt clipped from the preheader went unchecked.
+  it("keeps a message uncertain when overflowing cues meet a clipped preheader", async () => {
+    const prices = Array.from(
+      { length: 210 },
+      (_, cents) =>
+        `$${10 + Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`,
+    ).join(" ");
+    const { decision, view, content } = await route(
+      message(
+        `<html><body><div style="display:none">${"filler ".repeat(100)}Receipt for order #SYN-55123</div>` +
+          `<p>Weekly deals ${prices}</p></body></html>`,
+        "text/html",
+      ),
+    );
+    expect(content).not.toContain("SYN-55123");
+    expect(JSON.parse(content)).toMatchObject({ bodyComplete: true });
+    expect(decision).toMatchObject({
+      classification: "uncertain",
+      stage: "rule",
+    });
+    expect(view?.incompleteReasons).toEqual(["purchase_cue_clipped"]);
+  });
+
+  // A whole line used to be dropped for one footer phrase, so a receipt
+  // sentence ending in "© Shop" counted as nothing beside a content image.
+  it("counts a receipt line that ends in a footer phrase as readable", async () => {
+    const raw: GmailMessage = {
+      id: "synthetic-mixed-footer",
+      payload: {
+        mimeType: "multipart/alternative",
+        headers: [{ name: "Subject", value: "Your order" }],
+        parts: [
+          part(
+            "Thanks for your order of two bamboo spatula sets; it ships from our warehouse tomorrow morning. © Synthetic Shop",
+          ),
+          part(EMAIL_HTML_FIXTURES.imageOnlyReceipt, "text/html"),
+        ],
+      },
+    };
+    const { view } = await route(raw);
+    expect(view?.incompleteReasons).not.toContain("image_only");
+  });
+
   // The plain-text alternative's footer used to count as readable text, so an
   // image-only receipt with an unsubscribe footer looked complete.
   it("keeps an image-only receipt uncertain beside a footer-only text part", async () => {

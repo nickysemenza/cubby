@@ -561,6 +561,22 @@ describe("stored suggestions in generic list cells", () => {
     harness.dispose();
   });
 
+  // The read orders siblings strongest first; indexing kept the last, so the
+  // weakest sibling's value was the one offered.
+  it("offers the strongest of a field's sibling Suggestions", async () => {
+    const { harness } = setup([
+      suggestion({ confidence: 0.95 }),
+      suggestion({
+        id: "22222222-2222-4222-8222-222222222222",
+        suggestedValue: "CAT-3333",
+        confidence: 0.1,
+      }),
+    ]);
+    expect(await screen.findByText("Food")).toBeInTheDocument();
+    expect(screen.queryByText("CAT-3333")).not.toBeInTheDocument();
+    harness.dispose();
+  });
+
   it("renders a Correction as the current value followed by its ghost", async () => {
     const { harness } = setup(
       [

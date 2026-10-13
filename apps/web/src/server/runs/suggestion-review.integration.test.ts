@@ -123,6 +123,42 @@ describe("Suggestion review", () => {
     ).toHaveLength(0);
   });
 
+  // A list page reads with a limit; unserved trial candidates were dropped only
+  // after it, so enough of them hid the record's reviewable Suggestion.
+  it("limits only reviewable rows, never unserved trial candidates", async () => {
+    const product = await productFixture(ctx, "Synthetic limited item", {
+      categoryId: taxonomyId("tools"),
+    });
+    const runId = await sweepCategories([product.id]);
+    const pairKey = crypto.randomUUID();
+    const uuid = await recordId(ctx.db, product.id, "product");
+    await getDb(ctx.db)
+      .insert(suggestionTable)
+      .values(
+        [0.99, 0.98, 0.97].map((confidence) => ({
+          runId,
+          entity: "product" as const,
+          recordId: uuid,
+          field: "categoryId",
+          currentValue: taxonomyShortcode("tools"),
+          suggestedValue: taxonomyShortcode("household"),
+          confidence,
+          model: "synthetic/unserved-trial",
+          kind: "correction" as const,
+          status: "pending" as const,
+          pairKey,
+        })),
+      );
+    const page = await listSuggestions(ctx.db, {
+      entity: "product",
+      recordIds: [product.id],
+      fields: ["categoryId"],
+      minConfidence: 0,
+      limit: 1,
+    });
+    expect(page).toEqual([expect.objectContaining({ model: PRIMARY_MODEL })]);
+  });
+
   it("records a plain rejection as a Miss and applies a reviewer-corrected value", async () => {
     const context = kernelCtx(ctx);
     const dismissed = await productFixture(ctx, "Synthetic dismissed item", {

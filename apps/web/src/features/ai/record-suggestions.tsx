@@ -636,30 +636,35 @@ function storedSuggestionIndex(
         categories.set(parsed.data.id, parsed.data.category);
     }
   }
-  return new Map(
-    (rows ?? [])
-      .filter((suggestion) => {
-        const current = categories.get(suggestion.recordId);
-        if (
-          entity === "product" &&
-          suggestion.field === "categoryId" &&
-          suggestion.kind === "correction" &&
-          !current
-        )
-          return false;
-        return !(
-          suggestion.field === "categoryId" &&
-          current &&
-          suggestion.currentValue === current.id &&
-          suggestion.suggestedValue !== current.id &&
-          current.path.some((node) => node.id === suggestion.suggestedValue)
-        );
-      })
-      .map((suggestion) => [
-        storedSuggestionKey(suggestion.recordId, suggestion.field),
-        suggestion,
-      ]),
-  );
+  const index = new Map<string, SuggestionReviewRow>();
+  for (const suggestion of (rows ?? []).filter((suggestion) => {
+    const current = categories.get(suggestion.recordId);
+    if (
+      entity === "product" &&
+      suggestion.field === "categoryId" &&
+      suggestion.kind === "correction" &&
+      !current
+    )
+      return false;
+    return !(
+      suggestion.field === "categoryId" &&
+      current &&
+      suggestion.currentValue === current.id &&
+      suggestion.suggestedValue !== current.id &&
+      current.path.some((node) => node.id === suggestion.suggestedValue)
+    );
+  })) {
+    // Siblings share a key; the strongest wins regardless of read order.
+    const key = storedSuggestionKey(suggestion.recordId, suggestion.field);
+    const held = index.get(key);
+    if (
+      !held ||
+      suggestion.confidence > held.confidence ||
+      (suggestion.confidence === held.confidence && suggestion.id < held.id)
+    )
+      index.set(key, suggestion);
+  }
+  return index;
 }
 
 function actionableRowSuggestionCount(

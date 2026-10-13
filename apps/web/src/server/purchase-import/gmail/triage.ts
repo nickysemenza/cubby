@@ -1,3 +1,4 @@
+import type { WCompactEmail } from "@cubby/recipebridge";
 import type {
   MailboxClassification,
   MailboxClassificationDecision,
@@ -90,6 +91,34 @@ const clippedCue = <T extends { cue: boolean }>(
   all.some(
     (item, index) => item.cue && !(index < shown.length && same(item, index)),
   );
+
+/**
+ * Whether the serialized view lost purchase evidence. Cues are scanned on the
+ * full text, and each must survive into the content the decision model reads.
+ * A cue past the scan bound cannot be checked, so then a clipped body or
+ * preheader counts as clipped evidence.
+ */
+function purchaseCueCheck(
+  html: WCompactEmail | null,
+  plain: string,
+  preheader: string | null,
+) {
+  const plainCues = wasm.purchase_cues(plain);
+  const cuesOmitted = (html?.cues_omitted ?? 0) + plainCues.omitted > 0;
+  const preheaderClipped =
+    (html?.preheader ?? null) !== null && preheader !== html?.preheader;
+  const cues = [
+    ...new Map(
+      [...(html?.cues ?? []), ...plainCues.cues].map((cue) => [
+        cue.toLowerCase(),
+        cue,
+      ]),
+    ).keys(),
+  ];
+  return (serialized: string, bodyFull: boolean) =>
+    (cuesOmitted && (!bodyFull || preheaderClipped)) ||
+    cues.some((cue) => !serialized.includes(cue));
+}
 
 function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
   const bodyHtml = normalized.mail.bodyHtml;
@@ -189,18 +218,7 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
           images[index]?.src === src && images[index].alt === alt,
       );
   }
-  // Cues are scanned on the full text; each must survive into the content the decision model reads.
-  const plainCues = wasm.purchase_cues(plain);
-  // A cue past the scan bound cannot be checked, so any clipped body counts as clipped evidence.
-  const cuesOmitted = (html?.cues_omitted ?? 0) + plainCues.omitted > 0;
-  const cues = [
-    ...new Map(
-      [...(html?.cues ?? []), ...plainCues.cues].map((cue) => [
-        cue.toLowerCase(),
-        cue,
-      ]),
-    ).keys(),
-  ];
+  const cueMissing = purchaseCueCheck(html, plain, preheader);
 
   const encode = (length: number) => {
     const full = length === body.length;
@@ -221,8 +239,7 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
     };
     // A cue never contains a character JSON escapes, so it matches the serialized view.
     const serialized = JSON.stringify(view).toLowerCase();
-    const missing =
-      (cuesOmitted && !full) || cues.some((cue) => !serialized.includes(cue));
+    const missing = cueMissing(serialized, full);
     return {
       content: JSON.stringify({ ...view, omittedPurchaseCues: missing }),
       missing,
