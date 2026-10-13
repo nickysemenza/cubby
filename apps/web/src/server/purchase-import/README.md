@@ -38,7 +38,9 @@ pending: nothing here starts Product research.
    incomplete original body bytes remain a
    rule exception before inference; model abstentions reach the relevance
    fallback. The fallback uses the same Email compactor, including preheaders,
-   and retains its missing-evidence guard.
+   and retains its missing-evidence guard. Hidden image destinations on pictures
+   explicitly at most one pixel in both dimensions are tracking metadata;
+   their labels and surrounding links still participate in evidence checks.
    Confident positives proceed to extraction/matching; only uncertain relevance
    reaches the relevance fallback. Related originals become `OrderMail`; unrelated
    mail keeps only its provider identity. Coverage is checkpointed with a

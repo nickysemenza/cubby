@@ -325,6 +325,9 @@ fn walk(element: ElementRef, footer: bool, state: &mut Walk) {
                 .any(|node| {
                     ["alt", "src", "href"]
                         .iter()
+                        // A fixed one-pixel picture cannot carry readable pixels;
+                        // its label and surrounding links can still carry evidence.
+                        .filter(|name| **name != "src" || !is_fixed_tracking_pixel(&node))
                         .filter_map(|name| node.value().attr(name))
                         .any(|value| cue_hits(value) > 0 || !purchase_cues(value).cues.is_empty())
                 });
@@ -665,25 +668,61 @@ fn url_purchase_cues(value: &str) -> Vec<String> {
         .collect()
 }
 
-fn is_tracking_pixel(image: &ElementRef) -> bool {
+fn is_fixed_tracking_pixel(image: &ElementRef) -> bool {
+    if image.value().name() != "img" {
+        return false;
+    }
+    let pixel_number = |value: &str| {
+        value
+            .trim()
+            .strip_suffix("px")
+            .unwrap_or(value.trim())
+            .parse::<f32>()
+            .ok()
+    };
+    let (width, height) = image_dimensions(image, pixel_number);
+    let tiny = |value| pixel_number(value).is_some_and(|value| (0.0..=1.0).contains(&value));
+    // Conflicting CSS can render an attribute-sized pixel as a real picture.
+    let styles = image
+        .value()
+        .attr("style")
+        .map(style_declarations)
+        .unwrap_or_default();
+    width.is_some_and(|width| (0.0..=1.0).contains(&width))
+        && height.is_some_and(|height| (0.0..=1.0).contains(&height))
+        && styles
+            .iter()
+            .filter(|(name, _)| {
+                matches!(
+                    name.as_str(),
+                    "width" | "height" | "min-width" | "min-height"
+                )
+            })
+            .all(|(_, value)| tiny(value))
+}
+
+fn image_dimensions<T>(
+    image: &ElementRef,
+    parse: impl Fn(&str) -> Option<T>,
+) -> (Option<T>, Option<T>) {
     let declarations = image
         .value()
         .attr("style")
         .map(style_declarations)
         .unwrap_or_default();
     let size = |name: &str| {
-        image
-            .value()
-            .attr(name)
-            .and_then(leading_number)
-            .or_else(|| {
-                declarations
-                    .iter()
-                    .find(|(property, _)| property == name)
-                    .and_then(|(_, value)| leading_number(value))
-            })
+        image.value().attr(name).and_then(&parse).or_else(|| {
+            declarations
+                .iter()
+                .find(|(property, _)| property == name)
+                .and_then(|(_, value)| parse(value))
+        })
     };
-    let (width, height) = (size("width"), size("height"));
+    (size("width"), size("height"))
+}
+
+fn is_tracking_pixel(image: &ElementRef) -> bool {
+    let (width, height) = image_dimensions(image, leading_number);
     width == Some(0)
         || height == Some(0)
         || (width.is_some_and(|w| w <= 1) && height.is_some_and(|h| h <= 1))
@@ -883,6 +922,35 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hidden_tracking_pixels_do_not_omit_purchase_evidence() {
+        let email = compact_email_html(
+            r#"<p>Community updates and gardening tips.</p><div style="display:none"><img width="1" height="1" src="https://example.test/track/return/open.gif"></div>"#,
+        );
+        assert!(!email.truncated);
+        assert!(email.images.is_empty());
+
+        for dimensions in [
+            r#"width="600" height="400""#,
+            r#"width="600" height="0""#,
+            r#"width="0" height="400""#,
+            r#"style="width:1%;height:1em""#,
+            r#"width="1" height="1" style="width:600px;height:400px""#,
+            r#"width="1" height="1" style="min-width:600px;min-height:400px""#,
+            r#"style="width:1px;width:600px;height:1px""#,
+            "",
+        ] {
+            let receipt = compact_email_html(&format!(
+                r#"<p>Community updates.</p><div style="display:none"><img {dimensions} src="https://example.test/receipt.png"></div>"#,
+            ));
+            assert!(receipt.truncated, "receipt dimensions: {dimensions}");
+        }
+        let labeled_pixel = compact_email_html(
+            r#"<p>Community updates.</p><div style="display:none"><img width="1" height="1" src="https://example.test/open.gif" alt="Receipt total $24"></div>"#,
+        );
+        assert!(labeled_pixel.truncated);
+    }
 
     const ORDER_TABLE: &str = include_str!("../fixtures/email/order-table.html");
     const NEWSLETTER: &str = include_str!("../fixtures/email/newsletter.html");
