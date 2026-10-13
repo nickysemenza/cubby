@@ -7,6 +7,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { formatInstant } from "~/lib/date-format";
+
 import { AiProposalCard, AiProvenance } from "./ai-proposal-card";
 
 const base = {
@@ -80,21 +82,24 @@ describe("AiProposalCard content", () => {
   });
 
   it("renders model, age and cache status when the read path carries them", () => {
+    const analyzedAt = new Date(Date.now() - 3 * 60 * 60 * 1000);
     render(
       <AiProposalCard
         {...base}
         provenance={
           <AiProvenance
             model="claude-sonnet-5"
-            analyzedAt={new Date(Date.now() - 3 * 60 * 60 * 1000)}
+            analyzedAt={analyzedAt}
             cacheStatus="hit"
           />
         }
       />,
     );
-    expect(
-      screen.getByText("Analyzed by claude-sonnet-5 · 3h ago · cache hit"),
-    ).toBeVisible();
+    const provenance = screen.getByText(/Analyzed by claude-sonnet-5/);
+    expect(provenance).toHaveTextContent(
+      formatInstant(analyzedAt, "dateShortTime"),
+    );
+    expect(provenance).toHaveTextContent("· about 3 hours ago · cache hit");
   });
 
   // A surface whose response carries no provenance renders nothing rather

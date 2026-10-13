@@ -379,7 +379,6 @@ test("run history hides ephemeral runs by default and shows them once cleared", 
 test("record dates retain their calendar label with present and future context", async ({
   page,
 }) => {
-  await page.clock.install();
   const prefix = `Date context ${Date.now()}`;
   const today = householdLocalDate();
   const later = householdDaysFromNow(26);
@@ -534,6 +533,8 @@ test("record dates retain their calendar label with present and future context",
   );
   await expect(timestamp).toContainText(/· (now|.+ ago)/);
   await timestamp.locator("..").focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("tooltip")).toContainText(
     /\d{2}:\d{2}:\d{2} (PDT|PST|GMT-7|GMT-8)/,
   );
@@ -544,9 +545,14 @@ test("record dates retain their calendar label with present and future context",
       (element) => element.getBoundingClientRect().right <= innerWidth,
     ),
   ).toBe(true);
-  // Mounted labels advance without reloading the record or waiting on wall time.
+  // A waking page refreshes mounted ages without replacing Date constructors
+  // (browser clock emulation can discard TZDate subclass behavior).
   const before = await timestamp.textContent();
-  await page.clock.fastForward(120_000);
+  await page.evaluate(() => {
+    const later = Date.now() + 120_000;
+    Date.now = () => later;
+    window.dispatchEvent(new Event("focus"));
+  });
   if (!before) throw new Error("missing timestamp label");
   await expect(timestamp).not.toHaveText(before);
 });

@@ -167,7 +167,7 @@ describe("EntityTimeline", () => {
     expect(
       screen.getAllByTitle("Uncertain after Feb 1, 2026").length,
     ).toBeGreaterThan(0);
-    expect(screen.getByTitle("Jan 10, 2026 – Feb 1, 2026")).toBeInTheDocument();
+    expect(screen.getByTitle(/^Jan 10 – Feb 1, 2026 · /)).toBeInTheDocument();
     expect(screen.getByText("Inferred")).toBeVisible();
     expect(
       screen.getByRole("link", { name: "Recommended transplant · Tomato" }),

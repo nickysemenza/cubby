@@ -31,7 +31,7 @@ const plantingMilestone: CalendarItem = {
 };
 
 describe("itemSpanLabel", () => {
-  // The span format omits the year only for the household's current year.
+  // Relative context is anchored to the household day.
   beforeEach(() => {
     vi.useFakeTimers({
       toFake: ["Date"],
@@ -55,13 +55,13 @@ describe("itemSpanLabel", () => {
   it("renders the INCLUSIVE end, one day back from endDateExclusive", () => {
     // The off-by-one that matters: exclusive 2026-11-13 is an inclusive Nov 12.
     expect(itemSpanLabel(projectSpan("2026-10-03", "2026-11-13"))).toBe(
-      "Oct 3 – Nov 12 (in a few days)",
+      "Oct 3 – Nov 12, 2026 · in 2 days",
     );
   });
 
   it("qualifies both ends with the year when the span crosses one", () => {
     expect(itemSpanLabel(projectSpan("2025-12-01", "2027-07-02"))).toBe(
-      "Dec 1, 2025 – Jul 1, 2027 (ongoing)",
+      "Dec 1, 2025 – Jul 1, 2027 · ongoing",
     );
   });
 
