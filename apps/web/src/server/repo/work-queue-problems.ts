@@ -17,15 +17,11 @@ import {
 } from "@cubby/schemas/project";
 import { recipeFiltersSchema } from "@cubby/schemas/recipe";
 import { vendorFiltersSchema } from "@cubby/schemas/vendor";
-import {
-  workQueueHouseholdInput,
-  type WorkQueueRow,
-} from "@cubby/schemas/work-queue";
+import { type WorkQueueRow } from "@cubby/schemas/work-queue";
 import { type ParsedShortcode } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { sql, type SQL } from "drizzle-orm";
 import { getTableName } from "drizzle-orm";
-import type { z } from "zod";
 
 import { compileProblemFilters } from "~/entity/problem-filter-semantics";
 import type {
@@ -45,13 +41,16 @@ import { buildProductWhere } from "~/server/repo/product/crud";
 import { computeAttentionItems } from "~/server/repo/project/attention";
 import { buildProjectWhere } from "~/server/repo/project/lookup";
 import { buildRecipeWhere } from "~/server/repo/recipe/crud";
+import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-tables";
 import { statementImportMembers } from "~/server/repo/statement-import-membership";
 import { buildTaskWhere } from "~/server/repo/task/lookup";
 import { buildVendorWhereClause } from "~/server/repo/vendor";
 import {
+  scopeAdmitsUnrecorded,
   workDiagnosticCandidate,
   workQueueCandidate,
+  type WorkQueueScope,
 } from "~/server/repo/work-queue-projection";
 import {
   workExpenseOwners,
@@ -247,17 +246,13 @@ const privateOwnerRelation = (ref: ParsedShortcode): SQL | null => {
   return sql`coalesce((SELECT CASE WHEN cardinality(authority.owners) > 0 THEN authority.owners ELSE ARRAY[NULL::uuid] END FROM ${table} CROSS JOIN LATERAL (SELECT ${owners} AS owners) authority WHERE ${scope}), ARRAY[NULL::uuid])`;
 };
 
-type WorkSourceInput = Pick<
-  z.infer<typeof workQueueHouseholdInput>,
-  "source" | "kind"
->;
 const includesWorkSource = (
-  input: WorkSourceInput,
-  source: WorkSourceInput["source"],
-  kind: WorkSourceInput["kind"],
+  scope: WorkQueueScope,
+  source: WorkQueueScope["source"],
+  kind: WorkQueueScope["kind"],
 ) =>
-  (!input.source || input.source === source) &&
-  (!input.kind || input.kind === kind);
+  (!scope.source || scope.source === source) &&
+  (!scope.kind || scope.kind === kind);
 const needsProjectAttention = (source: EntityProblemSource) =>
   source.entity === "project" &&
   source.filters.some((filter) => filter.id === "attention");
@@ -269,14 +264,27 @@ const sharedProblemScope = (entity: ShortcodeEntity, id: SQL) =>
 
 export async function additionalWorkProblemSelections(
   db: Database,
-  input: WorkSourceInput,
+  scope: WorkQueueScope,
 ): Promise<SQL[]> {
   const selections: SQL[] = [];
-  const includeProblems = includesWorkSource(input, "problem", "repair");
-  const includeAccounts = includesWorkSource(input, "account", "review");
-  if (!includeProblems && !includeAccounts) return selections;
+  const includeProblems = includesWorkSource(scope, "problem", "repair");
+  // Diagnostics and statement imports name no single record and carry no gaps.
+  const includeUnrecorded = scopeAdmitsUnrecorded(scope);
+  const includeAccounts =
+    includeUnrecorded && includesWorkSource(scope, "account", "review");
+  if (scope.check || (!includeProblems && !includeAccounts)) return selections;
   let attentionPromise: Promise<ProjectAttentionItem[]> | undefined;
-  const attentionItems = () => (attentionPromise ??= computeAttentionItems(db));
+  // A Project record read evaluates the shared attention rules for that
+  // project only; non-project record reads never reach the project branch.
+  const scopedProjects = async () => {
+    if (scope.record?.entity !== "project") return undefined;
+    const ids = await resolveLiveShortcodes(db, [scope.record.id], "project");
+    return [...ids.values()];
+  };
+  const attentionItems = () =>
+    (attentionPromise ??= scopedProjects().then((projectIds) =>
+      computeAttentionItems(db, projectIds ? { projectIds } : undefined),
+    ));
   for (const definition of problemQueryDeclarations()) {
     if (!includeProblems) break;
     const source = definition.source;
@@ -288,7 +296,10 @@ export async function additionalWorkProblemSelections(
     } as const;
     if (source.kind === "entity") {
       if (
-        ["purchase", "expense", "financialTransaction"].includes(source.entity)
+        ["purchase", "expense", "financialTransaction"].includes(
+          source.entity,
+        ) ||
+        (scope.record && scope.record.entity !== source.entity)
       )
         continue;
       const buildWhere = Object.entries(sharedProblemBuilders).find(
@@ -309,25 +320,26 @@ export async function additionalWorkProblemSelections(
           : sql`${table}`;
       const routing = sharedProblemScope(source.entity, sql`${table.id}`);
       selections.push(
-        workQueueCandidate(
-          source.entity,
-          from,
-          sql`${table.shortcode}`,
-          labelSql(source.entity, `"${getTableName(table)}"`),
-          routing.owners,
-          await buildWhere(
+        ...workQueueCandidate(scope, {
+          entity: source.entity,
+          table: from,
+          id: sql`${table.shortcode}`,
+          name: labelSql(source.entity, `"${getTableName(table)}"`),
+          owners: routing.owners,
+          where: await buildWhere(
             db,
             source.filters,
             needsProjectAttention(source) ? await attentionItems() : undefined,
           ),
           details,
-          definition.key,
-          routing.shared,
-        ),
+          key: definition.key,
+          shared: routing.shared,
+        }),
       );
       continue;
     }
-    if (excludedDiagnostics.has(source.diagnostic)) continue;
+    if (!includeUnrecorded || excludedDiagnostics.has(source.diagnostic))
+      continue;
     if (!privateDiagnosticKeys.has(definition.key)) {
       const result = await runDiagnostic(
         db,

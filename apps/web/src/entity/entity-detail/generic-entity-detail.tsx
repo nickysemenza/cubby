@@ -40,6 +40,7 @@ import {
 import { heroChipLabel } from "~/entity/enum-field-display";
 import { FieldExplanation } from "~/entity/field-explanation";
 import { RecordSuggestionsProvider } from "~/features/ai/record-suggestions";
+import { RecordWorkQueue } from "~/features/work-queue/record-work-queue";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
 import type { DetailHeroActions, DetailHeroStat } from "~/ui/layouts/page-hero";
 import { Page } from "~/ui/page/Page";
@@ -658,6 +659,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
             id={bag.id}
             renderedSections={sections.map((section) => section.id)}
           >
+            <RecordWorkQueue id={bag.id} />
             <DetailSections
               sections={sections.map((section) => ({
                 ...section,

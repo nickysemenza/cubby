@@ -10,7 +10,11 @@ import {
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  inlineExplanation,
+  uniqueName,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { seedProductPrerequisite } from "./fixtures-catalog";
 import {
@@ -338,4 +342,33 @@ test("Work queue rows show the source record's image, type and next action", asy
   const table = await page.getByRole("table").boundingBox();
   const main = await page.getByRole("main").boundingBox();
   expect(table && main && main.width - table.width).toBeLessThanOrEqual(2);
+});
+
+// Failure mode: the record strip keeps a gap the person just resolved on the
+// same page, because the queue read is not refreshed by record writes.
+test("Record Work queue strip drops a gap as soon as it is accepted", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const name = uniqueName(testInfo, "Queue strip refresh");
+  const product = await seedProductPrerequisite(page, {
+    name,
+    manufacturer: "(unspecified)",
+  });
+  await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  const strip = page.getByRole("region", { name: "Work queue", exact: true });
+  await expect(strip).toContainText("Manufacturer is not recorded.");
+  const explanation = page.getByRole("button", {
+    name: /How manufacturer is determined/,
+  });
+  await explanation.click();
+  const inline = await inlineExplanation(page, explanation);
+  await inline.getByRole("button", { name: "Accept as…" }).click();
+  await inline.getByLabel("Reason").selectOption({ label: "Not applicable" });
+  await inline.getByRole("button", { name: "Accept exception" }).click();
+  await expect(strip).not.toContainText("Manufacturer is not recorded.");
+  await expect(strip).toContainText(
+    "No barcode, ASIN, or other external identifier is recorded.",
+  );
 });

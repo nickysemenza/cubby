@@ -1,8 +1,21 @@
 import { z } from "zod";
 
+import { plainDate } from "./base-entity";
+import { dataCheck, type DataCheck } from "./data-quality";
 import { displayImagesField } from "./display-images";
-import { ledgerPartyShortcode } from "./identifiers";
-import { createSortParamsSchema, mcpPaginationFields } from "./pagination";
+import { shortcodeEntities } from "./entity-manifest";
+import { entitySummary } from "./generated/entity-summary.gen";
+import { anyShortcodeSchema } from "./identifier-fields";
+import {
+  ledgerPartyShortcode,
+  nonEmptyTuple,
+  vendorShortcode,
+} from "./identifiers";
+import {
+  createSortParamsSchema,
+  mcpPaginationFields,
+  oneOrMany,
+} from "./pagination";
 import { problemRowSchema } from "./problems";
 
 export const workQueueMemberSchema = z.object({
@@ -31,6 +44,42 @@ export const workQueueSourceSchema = z.enum([
   "suggestion",
 ]);
 
+/** Saved views whose rows state their own data-quality gaps; the view's
+ * `dataGaps` filter is the set of checks such a row can carry. */
+export const workQueueGapViews = [
+  { entity: "product", source: "research", view: "research-queue" },
+  { entity: "purchase", source: "research", view: "research-queue" },
+  { entity: "expense", source: "research", view: "research-queue" },
+  { entity: "email", source: "email", view: "pipeline-worklist" },
+] as const satisfies readonly {
+  entity: (typeof shortcodeEntities)[number];
+  source: z.infer<typeof workQueueSourceSchema>;
+  view: string;
+}[];
+
+/** The checks a gap view's rows can carry: its declared `dataGaps` filter. */
+export const workQueueGapChecks = (
+  gapView: (typeof workQueueGapViews)[number],
+): DataCheck[] =>
+  (
+    entitySummary[gapView.entity].list.savedViews.find(
+      (view) => view.id === gapView.view,
+    )?.filters ?? []
+  )
+    .flatMap((filter) => (filter.id === "dataGaps" ? [filter.value] : []))
+    .flat()
+    .flatMap((value) => dataCheck.safeParse(value).data ?? []);
+
+export const workQueueGapSchema = z.object({
+  check: dataCheck,
+  message: z.string().min(1),
+});
+
+export const workQueueVendorSchema = z.object({
+  id: vendorShortcode,
+  name: z.string(),
+});
+
 export const workQueueRowSchema = problemRowSchema
   .omit({
     subtitle: true,
@@ -46,7 +95,19 @@ export const workQueueRowSchema = problemRowSchema
     key: z.string().min(1),
     source: workQueueSourceSchema,
     kind: workQueueKindSchema,
+    /** Plain text; a gap row's is its gap messages as sentences. */
     reason: z.string(),
+    /** The saved view's checks this record currently fails; empty for rows
+     * that are not data-quality gaps. */
+    gaps: z.array(workQueueGapSchema),
+    /** The record's own money (a Purchase's SUM(Expense.cost), an Expense's
+     * cost, a transaction's signed amount); null when it has none. */
+    amount: z.number().nullable(),
+    /** The record's own calendar day (purchase, expense, received, or
+     * posted/transaction date) — never when it entered the queue, which
+     * this read-time projection cannot know. */
+    date: plainDate.nullable(),
+    vendor: workQueueVendorSchema.nullable(),
     nextAction: z.string(),
     waitingFor: workWaitingForSchema,
     /** The source record's resolved thumbnails on household reads; empty for a
@@ -80,6 +141,9 @@ export const workQueueSortableFields = [
   "waitingFor",
   "nextAction",
   "source",
+  "amount",
+  "date",
+  "vendor",
 ] as const;
 
 export const workQueueSortSchema = createSortParamsSchema(
@@ -92,6 +156,9 @@ export const workQueuePageInput = z.object({
   query: z.string().max(500).optional(),
   kind: workQueueKindSchema.optional(),
   source: workQueueSourceSchema.optional(),
+  /** Gap rows failing any of these checks; every other row drops out. */
+  check: oneOrMany(dataCheck).optional(),
+  vendor: vendorShortcode.optional(),
   sort: workQueueSortSchema.optional(),
 });
 
@@ -115,7 +182,13 @@ export const workQueueOutSchema = z.object({
   }),
 });
 
+/** One record's rows of the same projection, for its detail strip. */
+export const workQueueRecordInput = z.object({
+  id: anyShortcodeSchema(nonEmptyTuple([...shortcodeEntities])),
+});
+
 export type WorkQueueRow = z.infer<typeof workQueueRowSchema>;
 export type WorkQueueMember = z.infer<typeof workQueueMemberSchema>;
 export type WorkQueueKind = z.infer<typeof workQueueKindSchema>;
 export type WorkWaitingFor = z.infer<typeof workWaitingForSchema>;
+export type WorkQueueGap = z.infer<typeof workQueueGapSchema>;

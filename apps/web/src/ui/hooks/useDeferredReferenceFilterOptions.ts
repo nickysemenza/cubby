@@ -24,6 +24,26 @@ export function useDeferredReferenceFilterOptions(
       }),
     [entity],
   );
+  return useDeferredEntityRosters(references);
+}
+
+type FilterOptionsPage = Awaited<
+  ReturnType<typeof entityFilterOptions.filterOptions.call>
+>;
+const rosterResults = (
+  results: readonly { data?: FilterOptionsPage; isFetching: boolean }[],
+) => results.map(({ data, isFetching }) => ({ data, isFetching }));
+
+export type DeferredEntityRoster = {
+  key: string;
+  target: BrowserRoutedEntity;
+};
+
+/** Live, searchable shortcode rosters fetched only once their filter opens.
+ * `references` must be stable (a module constant or memoized value). */
+export function useDeferredEntityRosters(
+  references: readonly DeferredEntityRoster[],
+): RuntimeFilterOptions {
   const [active, setActive] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState<Record<string, string>>({});
   const [debouncedSearch] = useDebouncedValue(search, { wait: 250 });
@@ -41,6 +61,9 @@ export function useDeferredReferenceFilterOptions(
       }),
       enabled: active[key] === true,
     })),
+    // A stable result keeps the returned rosters (and any column set built
+    // from them) unchanged across unrelated renders.
+    combine: rosterResults,
   });
   // FilterBar re-activates an active filter after every commit. Comparing
   // against the last request, not the updater's `current`, keeps that from

@@ -1,6 +1,6 @@
 import { workQueueContract } from "~/contracts/work-queue.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { readWorkQueue } from "~/server/repo/work-queue";
+import { readRecordWorkQueue, readWorkQueue } from "~/server/repo/work-queue";
 
 export const workQueueHandlers = implementOperationDomain(workQueueContract, {
   list: async (context, input) =>
@@ -8,6 +8,13 @@ export const workQueueHandlers = implementOperationDomain(workQueueContract, {
       context.db,
       (await context.currentParty())?.id ?? null,
       input,
+      false,
+    ),
+  forRecord: async (context, input) =>
+    readRecordWorkQueue(
+      context.db,
+      (await context.currentParty())?.id ?? null,
+      input.id,
       false,
     ),
   forMember: async (context, input) =>

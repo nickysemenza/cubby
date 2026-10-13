@@ -1014,13 +1014,33 @@ projection, not a new entity or assignment ledger. MCP `activity.work_queue`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
 
+Research and Email rows carry structured `gaps` (`{check, message}`): the
+record's live gaps among the checks its saved view's `dataGaps` declares
+(`workQueueGapChecks`). Every other row carries none and keeps its `reason`
+text; a gap row's `reason` is its messages as sentences. The `check` filter
+narrows each gap view's `dataGaps` predicate to the requested checks inside
+the branch, and branches that cannot carry those checks drop out, so counts
+and pages agree. Rows also carry the record's own `amount` (a Purchase's
+`SUM(Expense.cost)`, an Expense's cost, a transaction's signed amount),
+`date` (purchase, expense, received household day, or posted/transaction
+date) and `vendor`, declared once per entity and reused by findings that name
+the record; they sort and filter server-side with nulls last. Queue-entry age
+is not offered: a read-time projection cannot know when work appeared.
+`workQueue.forRecord` (household web only, not MCP) pushes an exact record
+filter into every branch, skips field-level suggestion groups and record-less
+diagnostics, and keeps the list's routing; the generic detail page and
+inspector render those rows as a compact Work queue strip and nothing when
+there are none.
+
 The browser reuses shared infinite loading, column controls, checkbox selection,
 Copy codes and responsive source-record inspection. Queue keys identify work
 reasons; source shortcodes identify records and are deduplicated when copied.
 Rows without source codes are not selectable. Filters clear selection, scrolling
 preserves it, and refetched rows reconcile it with the loaded result set.
 Select-all-matching uses the shared bounded pager. Projected fields sort before
-paging with stable name/key ties; the enriched Reason column stays unsortable.
+paging with stable name/key ties; the enriched Reason column stays unsortable
+and shows one chip per failed check (label from the check declaration, message
+as tooltip and accessible text), filterable by check.
 Filters and sorting are URL state; browser pagination keys are removed and
 unsupported sort fields fall back to the default. Column controls are session
 state. MCP retains its paged read contract. Run rows open passive Problems until
