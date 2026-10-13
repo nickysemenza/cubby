@@ -1,0 +1,43 @@
+.github/workflows/ci.yaml
+  s_73fe69dd841a24::t_18670d0052027b 29-33,36,41,82-85,102-106,114-128,596-598,679,683-684,785-786
+apps/apple/App/Shared/Editors/LedgerAttributionsControl.swift
+  s_73fe69dd841a24::t_a69d9d36500483 164,173,175,187-190
+apps/apple/App/Shared/Previews/PreviewFixtures.swift
+  s_73fe69dd841a24::t_b5660064275dd7 111
+apps/web/scripts/apple-preview-fixtures.ts
+  s_73fe69dd841a24::t_0a5efbd9e882d2 214
+apps/web/tests/e2e/http-api.spec.ts
+  s_73fe69dd841a24::t_5ec92c34cfcb73 97
+apps/web/tests/e2e/http-entity-kernel-api.spec.ts
+  s_73fe69dd841a24::t_53b4630fdcc285 34-35,145-155
+apps/web/tests/e2e/import-order-convergence.helpers.ts
+  s_73fe69dd841a24::t_cbf3d5d118c430 244
+apps/web/tests/e2e/photo-group-review.spec.ts
+  s_73fe69dd841a24::t_f67ddc0b418711 42-49,98-105,264-271,425,553,630
+apps/web/tests/e2e/start-operation.ts
+  s_73fe69dd841a24::t_3214109a05101f 1,5-6,8-14,16,20-25,27-30,39,45-46
+apps/web/tooling/database-socket-lifecycle.integration.test.ts
+  s_73fe69dd841a24::t_1ed109ae09de89 11,51,96,108-111,115,126-127
+apps/web/tooling/sim-e2e.ts
+  s_73fe69dd841a24::t_516e812b5f1cae 45,987-989
+docs/ci.md
+  s_73fe69dd841a24::t_f5ab999546340c 35-36,42-46,53-55,57-60,63,73-74
+scripts/generator/entities/render/index.ts
+  s_73fe69dd841a24::t_c97440482b4713 483,490-491
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9e28c622ea77145b0ed8569e4a3d9926c86dd99d",
+  "prompts": {},
+  "sessions": {
+    "s_73fe69dd841a24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96d21c32-0fd2-4535-be08-daa98aa3f469",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
