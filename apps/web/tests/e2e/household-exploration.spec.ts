@@ -4,8 +4,12 @@ import { getDb } from "~/server/repo/database-helpers";
 import { getFixtureDb } from "./fixtures-core";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { seedHouseholdRuntime } from "./fixtures-household";
 
-test.use({ household: true });
+test.beforeAll(async ({ e2eRuntime }) => {
+  test.setTimeout(120_000);
+  await seedHouseholdRuntime(e2eRuntime);
+});
 
 // Stored-graph, idempotence and external-storage failures belong to the
 // PostgreSQL fixture contract. This journey covers the browser read boundary.

@@ -17,8 +17,6 @@ type TestFixtures = {
   signedIn: boolean;
 };
 type WorkerFixtures = {
-  /** Opt-in connected household for screenshots and broad exploration. */
-  household: boolean;
   e2eRuntime: E2EWorkerRuntime;
   /** Which queues and peers the Worker runs (`WORKERD_PROFILES`). */
   workerdProfile: WorkerdProfile;
@@ -29,7 +27,6 @@ type WorkerFixtures = {
 const recordingVideo = process.env.CUBBY_E2E_VIDEO === "1";
 
 const test = base.extend<TestFixtures, WorkerFixtures>({
-  household: [false, { scope: "worker", option: true }],
   // `video` is worker-scoped: a spec's `test.use({ video })`, even to the
   // default, splits its tests into separate workers, each booting another
   // browser, database, and Worker harness. Recording is chosen per run here.
@@ -37,11 +34,7 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
   workerdProfile: ["offline", { scope: "worker", option: true }],
   objectStoragePublicUrl: [undefined, { scope: "worker", option: true }],
   e2eRuntime: [
-    async (
-      { workerdProfile, objectStoragePublicUrl, household },
-      provide,
-      workerInfo,
-    ) => {
+    async ({ workerdProfile, objectStoragePublicUrl }, provide, workerInfo) => {
       const runtime = await createE2EWorkerRuntime({
         authenticated: true,
         parallelIndex: workerInfo.parallelIndex,
@@ -49,10 +42,6 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
         objectStorage: { publicUrl: objectStoragePublicUrl },
       });
       try {
-        if (household) {
-          const { seedHouseholdRuntime } = await import("./fixtures-household");
-          await seedHouseholdRuntime(runtime);
-        }
         await provide(runtime);
       } finally {
         await runtime.close();
