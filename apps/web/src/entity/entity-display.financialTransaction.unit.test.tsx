@@ -166,7 +166,7 @@ describe("financial transaction list display columns", () => {
   );
   afterEach(() => vi.useRealTimers());
   it.each([
-    ["transactionDate", "Sep 10"],
+    ["transactionDate", "Sep 10, 2026"],
     ["merchant", "Ace Hardware"],
   ] as const)(
     "renders the generic %s column from its declaration",

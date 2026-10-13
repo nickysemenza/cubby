@@ -870,10 +870,20 @@ struct EntityListView: View {
                 {
                     StatusChip(text: fact.value, color: color)
                 } else {
-                    Text(fact.value)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                    Group {
+                        if let date = fact.dateValue {
+                            #if os(macOS)
+                                DateDisplay(date, compact: true)
+                            #else
+                                DateDisplay(date, compact: true, stacked: true)
+                            #endif
+                        } else {
+                            Text(fact.value)
+                        }
+                    }
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
                 if let source = fact.source {
                     Text(source).font(.caption2).foregroundStyle(.secondary)
@@ -1079,6 +1089,12 @@ struct EntityRowView: View {
                 FieldExplanationLabel(
                     field: field, subject: EntityRef(entity: key, id: row.id),
                     labelOverride: fact.value, surface: "list")
+            } else if let date = fact.dateValue {
+                VStack(alignment: isRail ? .trailing : .leading, spacing: 2) {
+                    Text("\(fact.label ?? field?.label ?? fact.id):")
+                    DateDisplay(date)
+                }
+                .accessibilityElement(children: .combine)
             } else if isRail {
                 Text(fact.value)
                     .monospacedDigit()

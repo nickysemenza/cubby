@@ -19,7 +19,10 @@ struct AIReviewSheet: View {
                         section("Current", previous, secondary: true)
                     }
                     section(review.previous == nil ? "New" : "Proposed", review.proposed)
-                    Text(provenance).font(.caption).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(provenance)
+                        DateDisplay(date: review.analyzedAt)
+                    }.font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(FieldGuideTokens.Space.md)
@@ -48,9 +51,8 @@ struct AIReviewSheet: View {
     }
 
     private var provenance: String {
-        let age = review.analyzedAt.formatted(date: .abbreviated, time: .shortened)
         let source = review.cacheStatus == "hit" ? "Replayed a stored analysis" : "Read the photos again"
-        return "\(source) · \(review.model) · \(age)"
+        return "\(source) · \(review.model)"
     }
 }
 

@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { page } from "vitest/browser";
 
+import { DateDisplay } from "~/ui/common/date-display";
+
 import {
   RecordFold,
   RecordGroup,
@@ -10,7 +12,6 @@ import {
   RecordList,
   RecordMore,
   RecordRow,
-  RecordTime,
 } from "./record-list";
 
 const rect = (testId: string) =>
@@ -18,6 +19,7 @@ const rect = (testId: string) =>
 
 // Grouped rows share one grid, so trailing facts align across groups and the
 // heading spans every column instead of claiming the identity track.
+// Full timestamps must wrap on phone without pushing record identity offscreen.
 it("aligns trailing facts across groups beneath full-width headings", async () => {
   await page.viewport(1440, 900);
   render(
@@ -66,11 +68,19 @@ it("keeps phone rows with links at the touch floor", async () => {
       <RecordRow
         data-testid="phone-row"
         primary={<a href="/tasks/TSK-4K7M">Water</a>}
-        trailing={<RecordTime at="2026-10-11T19:38:00.000Z" />}
+        trailing={<DateDisplay timestamp="2026-10-11T19:38:00.000Z" />}
       />
     </RecordList>,
   );
   expect(rect("phone-row").height).toBeGreaterThanOrEqual(44);
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+    window.innerWidth,
+  );
+  const instant = screen.getByTestId("phone-row").querySelector("time");
+  if (!instant) throw new Error("missing full record timestamp");
+  expect(instant.getBoundingClientRect().right).toBeLessThanOrEqual(
+    window.innerWidth,
+  );
 });
 
 it("draws the timeline rail through each row's dot", async () => {

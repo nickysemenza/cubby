@@ -6,8 +6,8 @@ import { type ReactNode, Suspense, useState } from "react";
 
 import { FilterRefLink } from "~/entity/components/ref-link/leaf";
 import { entities } from "~/entity/entities";
-import { formatInstant } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { RecordList } from "~/ui/common/record-list";
 import { CloudflareIcon } from "~/ui/icons/cloudflare";
@@ -288,7 +288,7 @@ function RecordRow({
           ) : null}
           {row.at ? (
             <span className="text-muted-foreground">
-              {formatInstant(row.at, "dateTime")}
+              <DateDisplay timestamp={row.at} />
             </span>
           ) : null}
         </LedgerCell>
@@ -395,7 +395,6 @@ function RecordFilmstrip({
 function RecordsRows({
   block,
   ledger,
-  day,
   commands,
   choices,
   choicesLocked,
@@ -404,7 +403,6 @@ function RecordsRows({
 }: {
   block: RecordsBlock;
   ledger: boolean;
-  day: string | null;
   commands: ReportCommands;
   choices: ChoiceAnswerState | null;
   choicesLocked: boolean;
@@ -415,8 +413,7 @@ function RecordsRows({
     return <RecordFilmstrip block={block} commands={commands} />;
   if (block.rows.length === 0)
     return block.empty ? <Description>{block.empty}</Description> : null;
-  if (ledger)
-    return <RecordLedger rows={block.rows} day={day} commands={commands} />;
+  if (ledger) return <RecordLedger rows={block.rows} commands={commands} />;
   const keys = rowKeys(block.rows);
   return (
     <RecordList>
@@ -458,7 +455,12 @@ function RecordsHeader({
       {title ? (
         <Eyebrow className="my-0">
           {title}
-          {day ? ` · ${day}` : ""}
+          {day ? (
+            <>
+              {" "}
+              · <DateDisplay start={day} />
+            </>
+          ) : null}
         </Eyebrow>
       ) : null}
       <Row gap="sm" wrap className="ml-auto">
@@ -518,7 +520,6 @@ export function RecordsBlockView({
         <RecordsRows
           block={block}
           ledger={ledger}
-          day={day}
           commands={commands}
           choices={form ? choices : null}
           choicesLocked={choicesLocked}

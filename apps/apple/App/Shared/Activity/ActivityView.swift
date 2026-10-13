@@ -480,7 +480,8 @@ private struct LocalActivityRow: View {
                 if let detail = activity.detail {
                     Text(detail).font(.caption).foregroundStyle(.secondary)
                 }
-                Text(activity.startedAt, style: .relative).font(.caption).foregroundStyle(.secondary)
+                DateDisplay(date: activity.startedAt).font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
             if activity.isCancellable {
@@ -512,7 +513,9 @@ struct LocalActivityDetailView: View {
                     if let detail = activity.detail {
                         LabeledContent("Detail", value: detail)
                     }
-                    LabeledContent("Started") { Text(activity.startedAt, style: .relative) }
+                    LabeledContent("Started") {
+                        DateDisplay(date: activity.startedAt)
+                    }
                     if let progress = activity.progress {
                         LabeledContent("Progress") {
                             Text(progress, format: .percent.precision(.fractionLength(0)))
@@ -606,7 +609,7 @@ struct ActivityRunRow: View {
                     run.state == "ready" || run.state == "completed"
                         ? FieldGuideTokens.positive
                         : run.active ? FieldGuideTokens.interaction : Color.secondary)
-            RecordRowTimestamp(date: run.createdAt)
+            DateDisplay(date: run.createdAt)
         } supplement: {
             if let progress = run.progressLine { Text(progress).monospacedDigit() }
             if let error = run.error {
@@ -827,7 +830,7 @@ struct ActivityDetailView: View {
             }
             LabeledContent(
                 "State", value: activityStateLabel(detail.run.state))
-            LabeledContent("Started") { Text(detail.run.createdAt, style: .relative) }
+            LabeledContent("Started") { DateDisplay(date: detail.run.createdAt) }
             if let cost = detail.run.estimatedCost {
                 LabeledContent("Estimated cost", value: cost.usd)
             }
@@ -876,9 +879,10 @@ struct ActivityDetailView: View {
                 ForEach(model.events, id: \.id) { event in
                     VStack(alignment: .leading, spacing: 3) {
                         Text(event.event).font(.body.monospaced())
-                        Text(
-                            "\(event.source.rawValue) · \(event.occurredAt.formatted(.relative(presentation: .named)))"
-                        )
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(event.source.rawValue)
+                            DateDisplay(date: event.occurredAt)
+                        }
                         .font(.caption).foregroundStyle(.secondary)
                         if let details = event.detailsJson {
                             Text(details).font(.caption.monospaced()).textSelection(.enabled)

@@ -1,24 +1,35 @@
 # Web UI contracts
 
-Human record dates use `formatDateSpan(day, null)` and declared ranges use
-`formatDateSpan(start, end)`: retain the calendar label, omit the current year,
-and append relative context for past/present/future dates (today, tomorrow, in a few
-days, in about a week, in a few weeks, in about a month, in a few months,
-in about a year, then approximate years). Ranges covering today say ongoing;
-past dates mirror these buckets with yesterday or ago. Fully ended ranges use their end for relative context. Compare household calendar days, never elapsed hours
-or UTC dates. Generic scalar dates, declared spans, and task due-date summaries
-share this formatter through `CalendarDate`. Mounted labels subscribe to
-`useHouseholdToday`, whose shared clock refreshes at household midnight, on
-focus, and on visibility changes; cached records must not need a query refetch
-to update relative context. Calendar metadata passes the same reactive day to
-the pure formatter. Inside a desktop table cell, `CalendarDate` stacks the
-label over its compact distance from `dateSpanParts` ("Oct 7" / "5d ago",
-"in 7mo"), so date columns start at 96px and declared spans at 320px; shared
-rendered-content fitting preserves the full current labels, and the full
-`formatDateSpan` label remains in the title. Task summaries pass the optional end
+All human record dates, timestamps, and declared date ranges render through
+`DateDisplay` (`ui/common/date-display.tsx`): outside tables the absolute date
+includes the year and, for an instant, its clock time, followed by a muted
+relative distance separated by a middle dot ("Oct 13, 2026, 11:50 AM · 2 minutes
+ago"). The instant is formatted in the household zone. Plain days never convert
+through UTC; their distance compares household calendar days, including DST.
+Today, yesterday, tomorrow, and ongoing ranges retain those labels. Fully ended
+ranges use their end for relative context; future ranges use their start.
+
+Inside desktop tables, the same component stacks the month/day over a muted
+compact distance ("Oct 13" / "3 min ago"). Minutes use `min`, months use `mo`,
+with a space before both, so neither can read as the other. Another year leads
+the compact distance line ("’25 · 1y ago"). Timestamp tooltips on hover and
+keyboard focus expose exact seconds and the household timezone offset.
+`DenseCellContext` selects the table form; static tables opt in with `stacked`.
+Full labels wrap rather than clip on narrow screens. Date columns start at
+96px and declared spans at 320px; shared rendered-content fitting preserves
+readable labels.
+
+Mounted record labels share `useDisplayNow`, refreshing once per minute and on
+focus/visibility changes, including household midnight and sleep/wake; they do
+not depend on a query refetch. `formatTimestamp` and `formatDateSpan` supply the
+same full label for string-only captions. Keep dates absolute in record names,
+persisted evidence, or narrative sentences that already describe their relative
+context (overdue/quiet periods or uncertain/open chart intervals); relative ages
+must not enter AI evidence or be repeated mid-sentence. Task summaries pass the optional end
 so an ongoing window cannot collapse to a past start day. Browser checks verify
-unclipped labels rather than only matching DOM text. `formatCalendarDay` remains the absolute primitive for
-editable date inputs, calendar axes/headings, and fixed-format diagnostics.
+unclipped labels rather than only matching DOM text. `formatCalendarDay` and
+`formatInstant` remain absolute primitives for editable date inputs,
+calendar/chart axes and headings, month labels, and fixed-format diagnostics.
 
 Use style tokens—never component hardcoded colors. Semantic color additions get
 both `:root` and `@theme inline` mirrors. Use `size-N` icon sizing (inline/nav

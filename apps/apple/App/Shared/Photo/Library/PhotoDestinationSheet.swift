@@ -665,7 +665,7 @@ private struct PhotoImportGroupRows: View {
                             .frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 8))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(
-                                item.capturedAt?.formatted(date: .abbreviated, time: .shortened)
+                                item.capturedAt.map { DatePresentation.timestamp($0).text }
                                     ?? "Undated photo")
                             if let suggestion = manifest.suggestions[id] {
                                 Text(suggestion).font(.caption).foregroundStyle(.secondary)

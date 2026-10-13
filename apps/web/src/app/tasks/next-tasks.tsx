@@ -16,7 +16,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { CalendarDate } from "~/ui/common/calendar-date";
+import { DateDisplay } from "~/ui/common/date-display";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
@@ -167,7 +167,7 @@ function TaskRows({
               )}
             </TableCell>
             <TableCell>
-              <CalendarDate start={t.dueDate} end={t.dueEndDate} />
+              <DateDisplay start={t.dueDate} end={t.dueEndDate} />
             </TableCell>
           </TableRow>
         ))}

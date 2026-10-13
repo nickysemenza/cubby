@@ -1,9 +1,8 @@
 import type { ReactNode } from "react";
 import { z } from "zod";
 
-import { CalendarDate } from "~/ui/common/calendar-date";
+import { DateDisplay } from "~/ui/common/date-display";
 import { MiddleTruncate } from "~/ui/common/middle-truncate";
-import { HoverableTimestamp } from "~/ui/HoverableTimestamp";
 import JsonRenderer from "~/ui/json-renderer";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 import { NoneValue } from "~/ui/primitives/none-value";
@@ -104,9 +103,9 @@ export function renderScalarValue(
     case "empty":
       return value.raw === undefined ? undefined : <NoneValue />;
     case "timestamp":
-      return <HoverableTimestamp timestamp={value.raw} />;
+      return <DateDisplay timestamp={value.raw} />;
     case "date":
-      return <CalendarDate start={value.raw} />;
+      return <DateDisplay start={value.raw} />;
     case "boolean":
       return value.raw ? "Yes" : "No";
     case "number":

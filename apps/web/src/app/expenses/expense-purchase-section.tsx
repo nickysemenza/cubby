@@ -10,8 +10,8 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -181,7 +181,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
               >
                 {line.date && (
                   <span className="text-muted-foreground">
-                    {formatCalendarDay(line.date, "dateShort")}
+                    <DateDisplay start={line.date} />
                   </span>
                 )}
                 {line.cost != null ? formatCurrency(line.cost) : <NoneValue />}

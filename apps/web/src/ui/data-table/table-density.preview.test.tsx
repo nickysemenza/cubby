@@ -4,10 +4,9 @@ import { describe, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
 import { householdDaysFromNow } from "~/lib/household-date";
-import { CalendarDate } from "~/ui/common/calendar-date";
 import { ChipCluster } from "~/ui/common/chip-cluster";
+import { DateDisplay } from "~/ui/common/date-display";
 import { MiddleTruncate } from "~/ui/common/middle-truncate";
-import { HoverableTimestamp } from "~/ui/HoverableTimestamp";
 import {
   Table,
   TableBody,
@@ -152,13 +151,13 @@ describe("table density", () => {
           {
             id: "c3",
             width: 96,
-            content: <CalendarDate start={householdDaysFromNow(200)} stacked />,
+            content: <DateDisplay start={householdDaysFromNow(200)} stacked />,
           },
           {
             id: "c4",
             width: 72,
             content: (
-              <HoverableTimestamp
+              <DateDisplay
                 timestamp={new Date(Date.now() - 90 * 86_400_000)}
                 stacked
               />
@@ -179,7 +178,7 @@ describe("table density", () => {
       }
       expect(Math.round(rect(cell).height)).toBe(32);
     }
-    expect(view.getByTestId("cell-1").textContent).toMatch(/3mo ago$/);
+    expect(view.getByTestId("cell-1").textContent).toMatch(/3 mo ago$/);
   });
 
   it("moves another year to the distance line", async () => {
@@ -191,7 +190,7 @@ describe("table density", () => {
             id: "c8",
             width: 72,
             content: (
-              <HoverableTimestamp
+              <DateDisplay
                 timestamp={new Date(Date.now() - 400 * 86_400_000)}
                 stacked
               />

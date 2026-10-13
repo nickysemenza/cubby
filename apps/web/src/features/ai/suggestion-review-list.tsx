@@ -21,6 +21,7 @@ import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCount } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/BulkActionBar";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
@@ -33,7 +34,6 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useBulkActions } from "~/ui/data-table/useBulkActions";
-import { formatCompactRelative } from "~/ui/HoverableTimestamp";
 import { Row, Stack } from "~/ui/layout";
 import { Input } from "~/ui/primitives/input";
 import { NativeSelect } from "~/ui/primitives/native-select";
@@ -344,7 +344,7 @@ function reviewColumns(
         cell: ({ row }) => (
           <span className="truncate text-muted-foreground">
             {row.original.model} · {row.original.runId} ·{" "}
-            {formatCompactRelative(new Date(row.original.createdAt))}
+            <DateDisplay timestamp={row.original.createdAt} />
           </span>
         ),
       }),

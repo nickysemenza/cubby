@@ -7,7 +7,7 @@ import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { formatCalendarDay } from "~/lib/date-format";
+import { formatDateSpan } from "~/lib/date-span";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import { StaticPicker } from "~/ui/combobox/static-picker";
 import { Row, Stack } from "~/ui/layout";
@@ -161,7 +161,7 @@ export function PortionSheet({
     !isSaving;
 
   const sourceDate = useMemo(() => {
-    return formatCalendarDay(source.sourceMeal.date, "monthDay");
+    return formatDateSpan(source.sourceMeal.date, null);
   }, [source.sourceMeal.date]);
 
   const updateRow = (index: number, patch: Partial<PortionDraft>) => {

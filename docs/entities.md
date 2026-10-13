@@ -403,7 +403,8 @@ that list as is, with no fallback grouping of their own. The image-block keys
 stay out, since the editors' image block owns them on both platforms.
 `presentation.spans` (`[{ start, end, label }]`, date fields only) declares a
 start/optional-end pair. Web lists fold it into the start field's row through
-`CalendarDate` and `formatDateSpan` ("Sep 22 (today)", "Sep 22 – 25 (ongoing)")
+`DateDisplay` and `formatDateSpan` (full date plus relative context outside tables;
+compact stacked day/distance inside tables, per [web UI contracts](agents/web-ui.md))
 and hide the end field. Web details and inspectors show both endpoints as
 independently editable, human-readable dates with their contextual quality
 results. The editor rejects an end before its start; the native catalog's

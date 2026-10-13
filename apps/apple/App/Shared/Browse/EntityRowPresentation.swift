@@ -47,13 +47,18 @@ struct EntityRowPresentation: Sendable, Hashable {
         let label: String?
         let value: String
         let isDate: Bool
+        let dateValue: String?
         let source: String?
 
-        init(id: String, label: String? = nil, value: String, isDate: Bool = false, source: String? = nil) {
+        init(
+            id: String, label: String? = nil, value: String, isDate: Bool = false, dateValue: String? = nil,
+            source: String? = nil
+        ) {
             self.id = id
             self.label = label
             self.value = value
             self.isDate = isDate
+            self.dateValue = dateValue
             self.source = source
         }
     }
@@ -160,6 +165,7 @@ struct EntityRowPresentation: Sendable, Hashable {
                     Fact(
                         id: key, label: label ?? field.label, value: value,
                         isDate: field.kind == .date || field.kind == .timestamp,
+                        dateValue: EntityFieldValue.dateValue(in: row.raw, field: field, surface: "list"),
                         source: resolution?.sourceText))
             }
         }

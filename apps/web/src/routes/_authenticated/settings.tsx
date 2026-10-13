@@ -23,7 +23,6 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
 import { copyTextWithToast } from "~/lib/clipboard";
-import { formatInstant } from "~/lib/date-format";
 import { hasGmailReadonlyScope } from "~/lib/google-auth";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { pageTitle } from "~/lib/page-title";
@@ -31,6 +30,7 @@ import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
+import { DateDisplay } from "~/ui/common/date-display";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
@@ -584,7 +584,9 @@ function DiagnosticsCard() {
               gap="md"
               className="py-2 text-xs text-muted-foreground"
             >
-              <span>Last run {formatInstant(dataUpdatedAt, "time")}</span>
+              <span>
+                Last run <DateDisplay timestamp={dataUpdatedAt} />
+              </span>
               <span className="font-mono tabular-nums">
                 total {data.totalMs} ms
               </span>

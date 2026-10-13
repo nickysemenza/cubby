@@ -1,5 +1,5 @@
 import { TZDate } from "@date-fns/tz";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistance } from "date-fns";
 
 import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
 import { parsePlainDate } from "~/lib/plain-date";
@@ -29,6 +29,8 @@ const DATE_PRESETS = {
   isoDateTime: "yyyy-MM-dd HH:mm",
   /** 2026-01-05 13:04:09 */
   isoDateTimeSeconds: "yyyy-MM-dd HH:mm:ss",
+  /** Exact household timestamp, including its zone offset. */
+  timestampExact: "yyyy-MM-dd HH:mm:ss zzz",
   /** Jan 5 */
   monthDay: "MMM d",
   /** Jan 5, 1:04 PM */
@@ -72,6 +74,9 @@ export function formatInstant(
   return format(new TZDate(instant, timeZone), DATE_PRESETS[preset]);
 }
 
+export const DAYS_PER_MONTH = 30.4375;
+export const DAYS_PER_YEAR = 365.2425;
+
 const PLAIN_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -105,7 +110,51 @@ export function formatCalendarDay(
   return format(day, DATE_PRESETS[preset]);
 }
 
-/** "about 3 hours ago" / "in 2 days" — elapsed time from now, zone-free. */
-export function formatRelative(value: Date | string | number): string {
-  return formatDistanceToNow(value, { addSuffix: true });
+/** Elapsed time from now, independent of the display zone. */
+export function formatRelative(
+  value: Date | string | number,
+  now: number = Date.now(),
+): string {
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return "Invalid Date";
+  if (Math.abs(now - instant.getTime()) < 45_000) return "now";
+  return formatDistance(instant, now, { addSuffix: true });
+}
+
+/** Compact table distance; minutes and months have unambiguous units. */
+export function formatCompactRelative(
+  value: Date | string | number,
+  now: number = Date.now(),
+): string {
+  const instant = new Date(value).getTime();
+  if (Number.isNaN(instant)) return "Invalid Date";
+  const seconds = Math.round(Math.abs(now - instant) / 1000);
+  if (seconds < 45) return "now";
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.round(minutes / 60);
+  const days = Math.round(hours / 24);
+  const amount =
+    minutes < 60
+      ? `${minutes} min`
+      : hours < 24
+        ? `${hours}h`
+        : days < 7
+          ? `${days}d`
+          : days < 30
+            ? `${Math.round(days / 7)}w`
+            : days < 365
+              ? `${Math.min(11, Math.round(days / DAYS_PER_MONTH))} mo`
+              : `${Math.round(days / DAYS_PER_YEAR)}y`;
+  return instant > now ? `in ${amount}` : `${amount} ago`;
+}
+
+/** String-only captions share DateDisplay's full timestamp presentation. */
+export function formatTimestamp(
+  value: Date | string | number,
+  now: number = Date.now(),
+): string {
+  const label = formatInstant(value, "dateShortTime");
+  return label === "Invalid Date"
+    ? label
+    : `${label} · ${formatRelative(value, now)}`;
 }

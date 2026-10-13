@@ -1,6 +1,6 @@
 import { chooseListView } from "./e2e-helpers";
-import { formatCalendarDay } from "~/lib/date-format";
-import { stackedDateSpan } from "~/lib/date-span";
+import { formatInstant } from "~/lib/date-format";
+import { formatDateSpan, stackedDateSpan } from "~/lib/date-span";
 import { householdLocalDate, householdDaysFromNow } from "~/lib/household-date";
 import {
   seedVendorDisplayPrerequisite,
@@ -397,11 +397,9 @@ test("record dates retain their calendar label with present and future context",
   const current = stackedDateSpan(today, null, today);
   const future = stackedDateSpan(later, null, today);
   const currentDay = current.primary;
-  const currentLabel = `${formatCalendarDay(today, "monthDay")} (today)`;
-  const laterYear =
-    later.slice(0, 4) === today.slice(0, 4) ? "" : `, ${later.slice(0, 4)}`;
+  const currentLabel = formatDateSpan(today, null, today);
   const futureDay = future.primary;
-  const futureLabel = `${formatCalendarDay(later, "monthDay")}${laterYear} (in a few weeks)`;
+  const futureLabel = formatDateSpan(later, null, today);
   const futureContext = future.secondary ?? "";
   const assertDate = async (
     scope: ReturnType<typeof page.locator>,
@@ -419,7 +417,7 @@ test("record dates retain their calendar label with present and future context",
     trade: "other",
     dueDate: today,
   });
-  await createFixture(page, "task", {
+  const futureTask = await createFixture(page, "task", {
     name: `${prefix} future`,
     projectId: project.id,
     trade: "other",
@@ -519,5 +517,42 @@ test("record dates retain their calendar label with present and future context",
     exact: true,
   });
   await expect(ongoing).toBeVisible();
-  await expect(ongoing.locator("..")).toContainText("(ongoing)");
+  await expect(ongoing.locator("..")).toContainText("· ongoing");
+
+  // Full record details expose both date and timestamp without opening a tooltip.
+  await gotoAuthenticatedPage(page, `/tasks/${futureTask.id}`);
+  await expect(page.getByTitle(futureLabel, { exact: true })).toBeVisible();
+  const header = page.getByTestId("detail-spec-plate");
+  await expect(header).toContainText("Added");
+  const timestamp = header.locator("time");
+  await expect(timestamp).toBeVisible();
+  const instant = await timestamp.getAttribute("datetime");
+  if (!instant) throw new Error("missing created timestamp");
+  await expect(timestamp).toContainText(
+    formatInstant(instant, "dateShortTime"),
+  );
+  await expect(timestamp).toContainText(/· (now|.+ ago)/);
+  await timestamp.locator("..").focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("tooltip")).toContainText(
+    /\d{2}:\d{2}:\d{2} (PDT|PST|GMT-7|GMT-8)/,
+  );
+  await page.setViewportSize({ width: 402, height: 874 });
+  await expect(timestamp).toBeVisible();
+  expect(
+    await timestamp.evaluate(
+      (element) => element.getBoundingClientRect().right <= innerWidth,
+    ),
+  ).toBe(true);
+  // A waking page refreshes mounted ages without replacing Date constructors
+  // (browser clock emulation can discard TZDate subclass behavior).
+  const before = await timestamp.textContent();
+  await page.evaluate(() => {
+    const later = Date.now() + 120_000;
+    Date.now = () => later;
+    window.dispatchEvent(new Event("focus"));
+  });
+  if (!before) throw new Error("missing timestamp label");
+  await expect(timestamp).not.toHaveText(before);
 });

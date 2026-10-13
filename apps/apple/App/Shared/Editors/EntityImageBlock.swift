@@ -61,7 +61,7 @@ struct EntityImageBlock: View {
                     VStack(alignment: .leading) {
                         Text("New photo")
                         if let day = item.capturedAt {
-                            Text(day.formatted(date: .abbreviated, time: .omitted))
+                            DateDisplay(date: day)
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }

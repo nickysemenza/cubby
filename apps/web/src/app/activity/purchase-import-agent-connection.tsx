@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatInstant } from "~/lib/date-format";
+import { formatTimestamp } from "~/lib/date-format";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -67,7 +67,7 @@ export function PurchaseImportAgentConnection({
             <span className="text-sm text-muted-foreground">
               Authorized
               {access.data.expiresAt
-                ? ` until ${formatInstant(access.data.expiresAt, "dateTime")}`
+                ? ` until ${formatTimestamp(access.data.expiresAt)}`
                 : ""}
               .
             </span>

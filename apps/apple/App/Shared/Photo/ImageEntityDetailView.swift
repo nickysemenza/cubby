@@ -235,11 +235,8 @@ private struct PhotoTab: View {
                     Text(
                         "\(sighting.ownerName ?? "Unknown owner") · \(sighting.deviceName ?? "Unknown device")"
                     )
-                    Text(
-                        (sighting.capturedAt ?? sighting.observedAt)
-                            .formatted(date: .abbreviated, time: .omitted)
-                    )
-                    .font(.caption).foregroundStyle(.secondary)
+                    DateDisplay(date: sighting.capturedAt ?? sighting.observedAt)
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
         }.detailContentsAnchor("in-libraries")
@@ -292,9 +289,10 @@ private struct ImageJobRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(job.kind.title)
-            Text(
-                "\(job.state.replacingOccurrences(of: "_", with: " ").capitalized) · \(job.createdAt.formatted(.relative(presentation: .named)))"
-            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(job.state.replacingOccurrences(of: "_", with: " ").capitalized)")
+                DateDisplay(date: job.createdAt)
+            }
             .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -385,9 +383,10 @@ private struct ImageAnalysisRow: View {
                 Text(analysis.result.description).lineLimit(3)
                 if analysis.preferred { Image(systemName: "checkmark.seal.fill").foregroundStyle(.tint) }
             }
-            Text(
-                "\(analysis.provider) · \(analysis.model) · \(analysis.createdAt.formatted(.relative(presentation: .named)))"
-            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(analysis.provider) · \(analysis.model)")
+                DateDisplay(date: analysis.createdAt)
+            }
             .font(.caption).foregroundStyle(.secondary)
             Text("Cutout: \(analysis.result.cutoutEligibility.rawValue)")
                 .font(.caption).foregroundStyle(.secondary)
@@ -405,9 +404,10 @@ private struct ImageAnalysisHistoryRow: View {
         case .unparsed(let analysis):
             VStack(alignment: .leading, spacing: 4) {
                 Text("Unsupported historical result").font(.subheadline.weight(.medium))
-                Text(
-                    "\(analysis.provider ?? "Unknown provider") · \(analysis.model ?? "Unknown model") · \(analysis.createdAt.formatted(.relative(presentation: .named)))"
-                )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(analysis.provider ?? "Unknown provider") · \(analysis.model ?? "Unknown model")")
+                    DateDisplay(date: analysis.createdAt)
+                }
                 .font(.caption).foregroundStyle(.secondary)
                 LabeledContent("Prompt version", value: analysis.promptVersion)
                 if let revision = analysis.resultSchemaRevision {
@@ -534,7 +534,7 @@ private struct ProvenanceRows: View {
     }
 
     private static func captureDateText(_ date: Date, offsetMinutes: Int?) -> String {
-        let base = date.formatted(date: .abbreviated, time: .shortened)
+        let base = DatePresentation.timestamp(date).text
         guard let offsetMinutes else { return base }
         let sign = offsetMinutes < 0 ? "-" : "+"
         let magnitude = abs(offsetMinutes)

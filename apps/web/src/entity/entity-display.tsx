@@ -38,7 +38,7 @@ import {
   referenceEntitySearch,
 } from "~/ui/combobox/reference-entity-search";
 import { BasicInfo, type BasicInfoField } from "~/ui/common/basic-info";
-import { CalendarDate } from "~/ui/common/calendar-date";
+import { DateDisplay } from "~/ui/common/date-display";
 import {
   renderScalarValue,
   type ScalarDisplayValue,
@@ -881,7 +881,7 @@ const renderSpanValue = <TRecord extends object>(
   return start === null && end === null ? (
     <NoneValue />
   ) : (
-    <CalendarDate start={start} end={end} className="tabular-nums" />
+    <DateDisplay start={start} end={end} className="tabular-nums" />
   );
 };
 

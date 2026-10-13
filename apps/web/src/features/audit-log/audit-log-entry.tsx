@@ -7,12 +7,8 @@ import { sortBy } from "es-toolkit";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCount } from "~/lib/utils";
-import {
-  RecordDetail,
-  RecordDot,
-  RecordRow,
-  RecordTime,
-} from "~/ui/common/record-list";
+import { DateDisplay } from "~/ui/common/date-display";
+import { RecordDetail, RecordDot, RecordRow } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { MutedBox } from "~/ui/layout/muted-box";
 import { Avatar, AvatarFallback, AvatarImage } from "~/ui/primitives/avatar";
@@ -283,11 +279,9 @@ const ACTION_TONE = {
 export function AuditRecordRow({
   group,
   showEntityLink,
-  dayShown,
 }: {
   group: readonly AuditLogEntry[];
   showEntityLink: boolean;
-  dayShown: boolean;
 }) {
   const [entry] = group;
   if (!entry) return null;
@@ -364,7 +358,7 @@ export function AuditRecordRow({
       trailing={
         <span className="inline-flex items-center gap-1.5">
           <AuditActor entry={entry} />
-          <RecordTime at={entry.createdAt} dayShown={dayShown} />
+          <DateDisplay timestamp={entry.createdAt} />
         </span>
       }
       detail={

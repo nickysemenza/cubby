@@ -34,20 +34,20 @@ describe("live calendar date labels", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-09T06:59:59Z"));
     render(<>{renderScalarValue({ kind: "date", raw: "2026-03-08" })}</>);
-    const cell = screen.getByTitle("Mar 8 (today)");
-    expect(cell).toHaveTextContent("Mar 8 (today)");
+    const cell = screen.getByTitle("Mar 8, 2026 · today");
+    expect(cell).toHaveTextContent("Mar 8, 2026 · today");
     act(() => vi.advanceTimersByTime(1200));
-    expect(cell).toHaveTextContent("Mar 8 (yesterday)");
+    expect(cell).toHaveTextContent("Mar 8, 2026 · yesterday");
   });
 
   it("refreshes a mounted future date after the page wakes days later", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-05T19:00:00Z"));
     render(<>{renderScalarValue({ kind: "date", raw: "2026-10-06" })}</>);
-    const cell = screen.getByTitle("Oct 6 (tomorrow)");
-    expect(cell).toHaveTextContent("Oct 6 (tomorrow)");
+    const cell = screen.getByTitle("Oct 6, 2026 · tomorrow");
+    expect(cell).toHaveTextContent("Oct 6, 2026 · tomorrow");
     vi.setSystemTime(new Date("2026-10-07T19:00:00Z"));
     act(() => window.dispatchEvent(new Event("focus")));
-    expect(cell).toHaveTextContent("Oct 6 (yesterday)");
+    expect(cell).toHaveTextContent("Oct 6, 2026 · yesterday");
   });
 });

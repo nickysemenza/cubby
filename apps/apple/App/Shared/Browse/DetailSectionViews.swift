@@ -118,7 +118,13 @@ struct EntityHeroView<Actions: View>: View {
             }
             ForEach(heroStats, id: \.label) { stat in
                 LabeledContent {
-                    Text(stat.value).font(.fieldGuideData.weight(.semibold))
+                    if let date = EntityFieldValue.dateValue(
+                        in: row.raw, field: stat.field, surface: "detail")
+                    {
+                        DateDisplay(date).font(.fieldGuideData.weight(.semibold))
+                    } else {
+                        Text(stat.value).font(.fieldGuideData.weight(.semibold))
+                    }
                 } label: {
                     FieldExplanationLabel(
                         field: stat.field,
@@ -372,6 +378,9 @@ struct FieldsSectionView<Inline: View>: View {
                 {
                     StatusChip(text: value, color: color)
                         .textSelection(.enabled)
+                } else if let date = EntityFieldValue.dateValue(in: row.raw, field: field, surface: "detail")
+                {
+                    DateDisplay(date).textSelection(.enabled).multilineTextAlignment(.trailing)
                 } else {
                     Text(value)
                         .font(
@@ -585,8 +594,10 @@ struct FieldExplanationLabel: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Text("Rule: \(resolved.rule.id) · r\(resolved.rule.revision)")
                         .font(.caption.monospaced()).textSelection(.enabled)
-                    Text("Evaluated: \(resolved.evaluatedAt.formatted())").font(.caption).foregroundStyle(
-                        .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Evaluated:")
+                        DateDisplay(date: resolved.evaluatedAt)
+                    }.font(.caption).foregroundStyle(.secondary)
                     if resolved.resolution == nil, let value = try? JSONValue(encoding: resolved.value) {
                         if value.objectValue != nil || value.arrayValue != nil {
                             ExplanationEvidenceValue(value: value)
@@ -1404,7 +1415,7 @@ struct EntitySourceRow: View {
             if let url, let link = URL(string: url) {
                 Link(link.host() ?? url, destination: link).font(.caption)
             }
-            Text(seenAt.formatted(date: .abbreviated, time: .shortened))
+            DateDisplay(date: seenAt)
                 .font(.caption).foregroundStyle(.secondary)
             if let runID {
                 NavigationLink(runID, value: Route.entityDetail(.run, id: runID)).font(.caption)

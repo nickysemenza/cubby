@@ -126,7 +126,7 @@ struct AuditEntryRow: View {
                 DisclosureGroup("Show \(group.entries.count) updates") {
                     ForEach(group.entries, id: \.entryKey) { update in
                         VStack(alignment: .leading, spacing: 2) {
-                            RecordRowTimestamp(date: update.createdAt)
+                            DateDisplay(date: update.createdAt)
                                 .font(.caption2).foregroundStyle(.secondary)
                             AuditChangeLines(changes: update.fieldChanges)
                         }
@@ -154,7 +154,7 @@ struct AuditEntryRow: View {
                     ?? entry.entityKind.rawValue)
         } rail: {
             Text(group.foldSummary ?? entry.action.rawValue.capitalized)
-            RecordRowTimestamp(date: entry.createdAt)
+            DateDisplay(date: entry.createdAt)
         } supplement: {
             if !group.isFolded, entry.action == .update {
                 AuditChangeLines(changes: entry.fieldChanges)

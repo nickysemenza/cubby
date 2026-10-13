@@ -14,7 +14,7 @@ import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 
 import { formatCurrency } from "~/lib/utils";
-import { CalendarDate } from "~/ui/common/calendar-date";
+import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
 
 import { attentionEvidence } from "./attention-presentation";
@@ -151,7 +151,7 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
                 </Link>
                 {item.date && (
                   <span className="shrink-0 text-muted-foreground">
-                    <CalendarDate start={item.date} end={null} />
+                    <DateDisplay start={item.date} end={null} />
                   </span>
                 )}
                 {item.amount != null && (

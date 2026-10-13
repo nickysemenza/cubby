@@ -36,7 +36,7 @@ struct RecordRowView: View {
         } rail: {
             if row.listLink == nil, let trailing = row.trailing, !trailing.isEmpty { Text(trailing) }
             if let at = row.at {
-                Text(at.formatted(date: .abbreviated, time: .shortened))
+                DateDisplay(date: at)
             }
         } supplement: {
             ForEach(row.badges, id: \.self) { badge in

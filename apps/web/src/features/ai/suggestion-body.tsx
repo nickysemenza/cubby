@@ -5,7 +5,7 @@ import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import type { ReactNode } from "react";
 
 import { getAppErrorDetails } from "~/lib/error-utils";
-import { formatCompactRelative } from "~/ui/HoverableTimestamp";
+import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -59,16 +59,15 @@ function stop(event: { stopPropagation: () => void }) {
 }
 
 function ProvenanceCaption({ model, runId, at }: SuggestionProvenance) {
-  const time = at ? new Date(at) : null;
-  const relative = time ? formatCompactRelative(time) : null;
   return (
     <Description size="xs" className="text-muted-foreground">
-      {[
-        model ?? "Live check",
-        relative ? (relative === "now" ? "just now" : `${relative} ago`) : null,
-      ]
-        .filter(Boolean)
-        .join(" · ")}
+      {model ?? "Live check"}
+      {at ? (
+        <>
+          {" "}
+          · <DateDisplay timestamp={at} />
+        </>
+      ) : null}
       {runId ? (
         <>
           {" · "}

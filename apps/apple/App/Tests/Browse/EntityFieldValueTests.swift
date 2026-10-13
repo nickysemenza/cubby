@@ -10,6 +10,7 @@ struct EntityFieldValueTests {
     @Test func dateOnlyValueKeepsItsCalendarDay() {
         let rendered = EntityFieldValue.formattedDate("2039-05-10")
         #expect(rendered == "May 10, 2039")
+        #expect(EntityFieldValue.formattedDate("2039-02-30") == nil)
     }
 
     /// `format: "amount"` renders the `{value, unit}` shape the inventory list carries.

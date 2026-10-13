@@ -18,12 +18,13 @@ import {
 
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { mcp } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatInstant } from "~/lib/date-format";
+import { formatTimestamp } from "~/lib/date-format";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 import { statusTone } from "~/lib/status-tone";
 import { formatCount } from "~/lib/utils";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
 import { ResponsiveBar } from "~/ui/charts/nivo-responsive";
+import { DateDisplay } from "~/ui/common/date-display";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import RTable from "~/ui/data-table/Table";
 import {
@@ -81,7 +82,7 @@ function StatusBadge({ status }: { status: McpToolUsageStatus }) {
 }
 
 function formatOrNever(value: Date | null): string {
-  return value ? formatInstant(value, "dateTime") : "Never";
+  return value ? formatTimestamp(value) : "Never";
 }
 
 function ChartCard({
@@ -384,7 +385,10 @@ function ToolRosterTable({
             size: 190,
             enableSorting: false,
             meta: { mobile: { slot: "meta", priority: 20 } },
-            cell: ({ getValue }) => formatOrNever(getValue()),
+            cell: ({ getValue }) => {
+              const at = getValue();
+              return at ? <DateDisplay timestamp={at} /> : "Never";
+            },
           }),
         );
         add(
@@ -396,7 +400,10 @@ function ToolRosterTable({
               (left.getValue<Date | null>(id)?.getTime() ?? 0) -
               (right.getValue<Date | null>(id)?.getTime() ?? 0),
             meta: { mobile: { slot: "meta", priority: 30 } },
-            cell: ({ getValue }) => formatOrNever(getValue()),
+            cell: ({ getValue }) => {
+              const at = getValue();
+              return at ? <DateDisplay timestamp={at} /> : "Never";
+            },
           }),
         );
         add(
@@ -538,7 +545,10 @@ function ActivityTable({
               mono: true,
               mobile: { slot: "subtitle", priority: 0 },
             },
-            cell: ({ getValue }) => formatOrNever(getValue()),
+            cell: ({ getValue }) => {
+              const at = getValue();
+              return at ? <DateDisplay timestamp={at} /> : "Never";
+            },
           }),
         );
         add(

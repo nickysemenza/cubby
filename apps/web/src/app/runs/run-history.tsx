@@ -26,8 +26,8 @@ import { RunSubject, RunTargetChips } from "~/app/runs/run-work-summary";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
+import { DateDisplay } from "~/ui/common/date-display";
 import { RecordDetail, RecordList, RecordRow } from "~/ui/common/record-list";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import RTable from "~/ui/data-table/Table";
@@ -503,7 +503,7 @@ export function RunHistory({
           helper.accessor("createdAt", {
             header: "Submitted",
             size: 180,
-            cell: ({ getValue }) => formatInstant(getValue(), "dateTime"),
+            cell: ({ getValue }) => <DateDisplay timestamp={getValue()} />,
             meta: { mono: true, mobile: { slot: "meta", priority: 40 } },
           }),
         );

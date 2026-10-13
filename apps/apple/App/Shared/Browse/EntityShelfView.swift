@@ -74,6 +74,7 @@ struct EntityShelfView: View {
         let card = EntityCard(
             title: row.title,
             subtitle: subtitleOverride?(row) ?? subtitle(for: row),
+            subtitlePieces: subtitleOverride == nil ? subtitlePieces(for: row) : nil,
             identifier: row.id,
             imageURL: row.imageURL,
             symbol: descriptor.recordSymbol(in: row),
@@ -118,6 +119,19 @@ struct EntityShelfView: View {
         return "browse.\(descriptor.key.rawValue).\(density.rawValue).\(row.id)"
     }
 
+    private func subtitlePieces(for row: EntityRow) -> [EntityRowPresentation.Fact]? {
+        let pieces = descriptor.presentation.shelfSubtitle.compactMap { key -> EntityRowPresentation.Fact? in
+            guard let field = descriptor.field(key),
+                let value = EntityFieldValue.text(in: row.raw, field: field, surface: "list")
+            else { return nil }
+            let date = EntityFieldValue.dateValue(in: row.raw, field: field, surface: "list")
+            return EntityRowPresentation.Fact(
+                id: key, label: date == nil ? nil : field.label, value: value,
+                isDate: date != nil, dateValue: date)
+        }
+        return pieces.contains { $0.dateValue != nil } ? pieces : nil
+    }
+
     private func subtitle(for row: EntityRow) -> String? {
         let parts = descriptor.presentation.shelfSubtitle.compactMap { key -> String? in
             guard let field = descriptor.field(key) else { return nil }
@@ -133,6 +147,7 @@ struct EntityShelfView: View {
 struct EntityCard: View {
     let title: String
     let subtitle: String?
+    var subtitlePieces: [EntityRowPresentation.Fact]? = nil
     let identifier: String
     let imageURL: URL?
     let symbol: String
@@ -160,7 +175,21 @@ struct EntityCard: View {
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .multilineTextAlignment(.leading)
 
-            if let subtitle, !subtitle.isEmpty {
+            if let subtitlePieces {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(subtitlePieces) { piece in
+                        if let date = piece.dateValue {
+                            if let label = piece.label { Text("\(label):") }
+                            DateDisplay(date)
+                        } else {
+                            Text(piece.value)
+                        }
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            } else if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
@@ -186,8 +215,8 @@ struct EntityCard: View {
                     lineWidth: selected ? 2 : FieldGuideTokens.hairlineWidth)
         }
         .contentShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityElement(children: subtitlePieces == nil ? .ignore : .combine)
+        .accessibilityLabel(subtitlePieces == nil ? accessibilityLabel : "\(title), \(identifier)")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
