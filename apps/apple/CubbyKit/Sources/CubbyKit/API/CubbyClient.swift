@@ -728,7 +728,7 @@ public actor CubbyClient {
         try await perform {
             let body: JSONValue = [
                 "productId": .string(product.rawValue), "locationId": .string(location.rawValue),
-                "amount": .number(count),
+                "amount": try JSONValue(encoding: PositiveAmountInput(count)),
             ]
             return InventoryEntryCode(try await EntityCatalog[.inventory].create(body, client: api))
         }

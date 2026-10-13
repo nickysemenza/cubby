@@ -81,6 +81,26 @@ struct JSONNullMiddlewareTests {
         return data
     }
 
+    /// The inventory create schema takes a `{value, unit}` amount; a bare count is its 400.
+    @Test func inventoryCreateSendsACountAsAnEachAmount() async throws {
+        let requests = try await capture { client in
+            await #expect(throws: CubbyAPIError.self) {
+                _ = try await client.createInventory(
+                    product: ProductCode("PRD-2345"), at: LocationCode("LOC-2345"), count: 3)
+            }
+        }
+        let request = try #require(requests.first)
+        #expect(request.path == "/api/v1/entity/mutate")
+        #expect(
+            request.body == [
+                "action": "create", "entity": "inventory",
+                "data": [
+                    "productId": "PRD-2345", "locationId": "LOC-2345",
+                    "amount": ["value": 3, "unit": "each"],
+                ],
+            ])
+    }
+
     @Test func clearedKeysBecomeNullBesideTheTypedValues() async throws {
         let requests = try await capture { client in
             await #expect(throws: CubbyAPIError.self) {
