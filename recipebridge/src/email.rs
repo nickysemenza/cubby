@@ -186,7 +186,10 @@ pub fn readable_chars(text: &str) -> u32 {
         .lines()
         .filter(|line| !is_footer_line(line))
         .flat_map(str::split_whitespace)
-        .filter(|word| !word.starts_with("http://") && !word.starts_with("https://"))
+        .filter(|word| {
+            let scheme = word.get(..8).unwrap_or(word).to_ascii_lowercase();
+            !scheme.starts_with("http://") && !scheme.starts_with("https://")
+        })
         .flat_map(str::chars)
         .filter(|c| c.is_alphanumeric())
         .count();
@@ -976,6 +979,11 @@ mod tests {
             0
         );
         assert_eq!(readable_chars("Order 12\nUnsubscribe"), 7);
+        // A scheme in capitals is still a URL, not readable text.
+        assert_eq!(
+            readable_chars(&format!("HTTPS://example.test/{}", "a".repeat(100))),
+            0
+        );
         assert_eq!(
             readable_chars(
                 "For assistance with this message please contact Synthetic Shop at 123 Sample Avenue. To stop future messages, unsubscribe."
