@@ -209,17 +209,13 @@ test("Runs pages history, attempts, and events past one cursor page", async ({
 }) => {
   const name = uniqueName(test.info(), "Paged history");
   const sample = await seedPagedActivityHistory(name, 22);
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1440, height: 2400 });
   const table = page.getByRole("table", { name: "Runs and image jobs" });
-  // The list loads its next page on its own whenever the first 20 rows do not
-  // fill the viewport, so whether page two is present yet is a race; assert
-  // only the settled listing. All 22 jobs, each exactly once and in the
-  // scope's order, can only come from following the cursor without skipping
-  // or repeating a row.
+  // Keep all fixture rows inside the virtual window. The unfilled pane loads
+  // page two automatically; asserting every row once verifies cursor order
+  // without confusing an unmounted row with a missing result.
   const filenamePattern = new RegExp(`${name} (\\d{2})\\.png`, "g");
   const listedJobs = async () => {
-    await table.hover();
-    await page.mouse.wheel(0, 4000);
     const text = (await table.textContent()) ?? "";
     return Array.from(text.matchAll(filenamePattern), (match) => match[1]);
   };
@@ -236,7 +232,7 @@ test("Runs pages history, attempts, and events past one cursor page", async ({
 
   await gotoAuthenticatedPage(page, `/runs/jobs/${sample.newestJobId}`);
   const attempt = (number: number) =>
-    page.getByText(new RegExp(`^#${number} · failed · `));
+    page.getByText(new RegExp(`^#${number} · Failed · `));
   await expect(attempt(22)).toBeVisible();
   await expect(attempt(1)).toHaveCount(0);
   await page.getByRole("button", { name: "Load more attempts" }).click();
