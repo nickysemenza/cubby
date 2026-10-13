@@ -23,7 +23,15 @@ pending: nothing here starts Product research.
    `Run.progress`, and replays it until its page commits. `gmail/ingest.ts`
    classifies each message (`gmail/triage.ts` rule/decision model, then
    `gmail/relevance.ts` for uncertain mail) and records the deciding stage and
-   reason on `Email`. Related originals become `OrderMail`; unrelated
+   reason on `Email`. Completeness follows missing purchase evidence: a clipped
+   tracking URL is usable only when its full label and URL purchase tokens
+   survive. Labeled non-cue catalog pictures can explain an image-only promotion;
+   unresolved sources, omitted pictures, lost receipt-image cues, clipped purchase
+   text/structured data, hidden purchase evidence, attachments and dropped MIME
+   parts remain exceptions. The relevance fallback uses the same Email compactor,
+   including preheaders, and does not override missing evidence with a negative.
+   Confident positives proceed to extraction/matching; only uncertain relevance
+   reaches the relevance fallback. Related originals become `OrderMail`; unrelated
    mail keeps only its provider identity. Coverage is checkpointed with a
    compare-and-swap in the same transaction as the page's events
    (`gmail/persistence.ts`).

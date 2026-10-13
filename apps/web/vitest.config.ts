@@ -12,8 +12,8 @@ import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts
 // Generated output and the @cubby/recipebridge WASM are never committed; bring
 // them current before any module graph (or TanStack's route scan) reads them.
 // Each is an Nx cache hit when its inputs are unchanged.
-for (const ensure of ["ensure-wasm.ts", "generator/ensure.ts"])
-  execFileSync(process.execPath, [`../../scripts/${ensure}`], {
+for (const target of ["wasm", "generate"])
+  execFileSync(process.execPath, ["../../scripts/ensure.ts", target], {
     cwd: import.meta.dirname,
     stdio: "inherit",
   });

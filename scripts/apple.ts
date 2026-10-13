@@ -133,7 +133,7 @@ const capture = (program: string, arguments_: readonly string[]): string =>
 // separate entry that the next mac/sim/ios launch cannot reuse. Run
 // build-rust.sh directly for one-slice iteration.
 const ensureFfi = () =>
-  run("node", [join(ROOT, "scripts/ensure-apple-ffi.ts")]);
+  run("node", [join(ROOT, "scripts/ensure.ts"), "apple-ffi"]);
 
 // `--use-cache` regenerates only when the spec or its tracked file set
 // changed (or the gitignored project is missing), so a project.yml edit takes
@@ -199,7 +199,7 @@ const productPath = (platformDirectory: string) =>
 // ---------------------------------------------------------------------------
 
 const cli = (options: Options) => {
-  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
+  run("node", [join(ROOT, "scripts/ensure.ts"), "generate"]);
   ensureFfi();
   run("swift", [
     "build",
@@ -258,7 +258,7 @@ const assertTeamSigned = (app: string, allowTestFlight = false) => {
 
 const mac = async (options: Options) => {
   ensureFfi();
-  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
+  run("node", [join(ROOT, "scripts/ensure.ts"), "generate"]);
   ensureProject();
   xcodebuild("Cubby-macOS", "platform=macOS,arch=arm64", options);
   const app = productPath("Debug");
@@ -357,7 +357,7 @@ const pickDevice = (name: string | undefined) => {
 
 const ios = (options: Options) => {
   const device = pickDevice(options.device);
-  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
+  run("node", [join(ROOT, "scripts/ensure.ts"), "generate"]);
   ensureFfi();
   ensureProject();
   xcodebuild("Cubby-iOS", `platform=iOS,id=${device.id}`, options);
@@ -405,7 +405,7 @@ const sim = (options: Options) => {
   if (simulator.state !== "Booted") {
     run("xcrun", ["simctl", "boot", simulator.udid]);
   }
-  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
+  run("node", [join(ROOT, "scripts/ensure.ts"), "generate"]);
   ensureFfi();
   ensureProject();
   xcodebuild(
@@ -433,12 +433,12 @@ const sim = (options: Options) => {
 
 const gen = () => {
   ensureFfi();
-  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
+  run("node", [join(ROOT, "scripts/ensure.ts"), "generate"]);
   ensureProject();
 };
 
 const test = () => {
-  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
+  run("node", [join(ROOT, "scripts/ensure.ts"), "generate"]);
   ensureFfi();
   run("swift", [
     "test",

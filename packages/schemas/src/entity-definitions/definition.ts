@@ -1776,6 +1776,16 @@ const buildMetadataSchemas = () => {
         .enum(["inherit", "forbidden"])
         .optional()
         .default("inherit"),
+      /** Result wording when the check is satisfied, never the name of a defect. */
+      satisfiedLabel: nonEmptyString(),
+      /** One field or section owns the contribution; null keeps it in Quality. */
+      placement: z
+        .union([
+          z.object({ field: nonEmptyString() }).strict(),
+          z.object({ section: nonEmptyString() }).strict(),
+        ])
+        .nullable()
+        .default(null),
       /** Filter-option label. */
       label: nonEmptyString(),
       /** `gap.message` shown beside the check. */

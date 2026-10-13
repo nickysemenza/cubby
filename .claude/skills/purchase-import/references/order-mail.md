@@ -7,9 +7,15 @@ purchases; promotions, transfers and bank statements have different roles.
 The decision model routes mail cheaply and escalates uncertainty to the researcher rather than
 discarding unfamiliar vendors or formats. Read related retained originals and
 use the hosted research workflow's task and evidence references.
-When a stored Relevance looks wrong, `mail.reclassify` reruns every stage from
-the original; it reports `awaiting_acceptance` instead of dropping retained
-content and `conflict` when it disagrees with the member's review. Resolve or
+When a stored Relevance looks wrong, `mail.reclassify` reruns routing from
+the original. Routine decisions stay with the decision model; uncertainty may
+use Luna relevance fallback. Unaccepted negatives settle automatically through
+protected original disposal while preserving classification history. Completed
+or researching imports and unreadable refetches of retained evidence report
+`awaiting_acceptance`; accepted associations, member resolutions and independent
+reviews of the same checksum remain protected. Disagreement with
+a member review reports `conflict`. Settled negatives need no member review
+to leave the Work queue; accuracy sampling remains available. Resolve or
 correct the Email yourself rather than reclassifying until it agrees.
 
 Preserve explicitly observed order IDs, amounts, currency and event times.

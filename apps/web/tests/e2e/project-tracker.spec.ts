@@ -40,7 +40,7 @@ test("task quick-add requires a deliberate trade and saves assignment modes", as
   await expect(page.getByText(name, { exact: true })).toBeVisible();
 });
 
-test("task detail shows one human date span for a ranged due date", async ({
+test("task detail keeps both ranged due date endpoints editable", async ({
   page,
 }) => {
   const name = `e2e ranged task ${Date.now()}`;
@@ -51,7 +51,12 @@ test("task detail shows one human date span for a ranged due date", async ({
   });
   await gotoAuthenticatedPage(page, `/tasks/${task.id}`);
 
-  await expect(page.getByText("Sep 22 – 25, 2031")).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: /^Sep 22, 2031/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Sep 25, 2031/ }),
+  ).toBeVisible();
   await expect(page.getByText("2031-09-22")).toHaveCount(0);
   await expect(page.getByText("2031-09-25")).toHaveCount(0);
 });

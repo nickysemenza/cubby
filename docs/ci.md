@@ -30,11 +30,9 @@ see [Tester Army](tester-army.md) for replay, evidence and timing limits.
 
 ## Cache keys and the remote cache
 
-`docs/todos.md` remains in the generation and type-check keys: generation
-validates deferred MCP capability references against its entries. It does not
-invalidate the broad test keys. Formatting and build targets may independently
-include Markdown. The generator's
-own fingerprint still includes it, so changing a referenced entry is checked.
+Cache inputs are declared in `nx.json` and each project's `project.json`.
+Deferred MCP omissions are typed contract metadata; backlog wording is not a
+generation input.
 
 ```mermaid
 flowchart LR
@@ -87,7 +85,7 @@ documentation, a rebase that leaves the content unchanged, or a re-push of a
 tested tree hits; any code change misses.
 
 Use the documented Nx CLI and existing Actions for CI changes; do not build
-hashing or cache-archive probes with private Nx APIs. Nx 23.2.1 has no
+hashing or cache-archive probes with private Nx APIs. The installed Nx has no
 supported cache-only execution mode: a normal invocation restores a hit and
 executes a miss. `--graph` shows the task graph, not a verified cached pass;
 `--excludeTaskDependencies` skips prerequisites, not target execution.
@@ -147,11 +145,6 @@ for the merged commit: it embeds source identity and uploads source maps, so a
 PR's `dist` cannot simply be deployed as main. Current-main checks remain both
 before build and before publication.
 
-A deployment measured on 2026-10-12 took 5m07s, of which 3m18s was WASM
-compilation because deployment supplied no remote-cache credentials. About
-55s built/checked the web bundle and 16s deployed it. Cache wiring removes that
-compilation only when the artifact key exists; it is not a deploy-time promise.
-
 ## Local verification
 
 `pnpm verify:local` is an optional local diagnostic; commands and when to use
@@ -176,7 +169,9 @@ it live in the [validation policy](agents/validation.md) and
 Commit hooks, push behavior, and the merge gate are defined in the
 [validation policy](agents/validation.md).
 
-Node 26 (from `.nvmrc`, shared by local tooling and CI), pnpm 12.9.1, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
+Toolchain versions come from `.nvmrc`, the root `packageManager`,
+`rust-toolchain.toml`, and the Apple setup action. Rust/wasm-pack, Apple
+`container` on macOS (external PostgreSQL/IntegreSQL on Linux), and Playwright
 browsers must be available; [test tiers](agents/validation-tests.md) cover database setup.
 PostgreSQL remains the authoritative integration tier; Playwright defaults to
 one worker on hosted runners and two on local macOS in `playwright.config.ts`,
@@ -226,13 +221,6 @@ the targets' compilation and could spend time compiling even when Nx already
 had a passing result. Only successful jobs save new compiler-cache entries.
 A job that replays every target may save a small compiler cache; that affects
 later compilation speed, not the validity of Nx's cached pass.
-
-A [successful PR run](https://github.com/nickysemenza/cubby/actions/runs/38092783727/job/114332463103)
-on 2026-10-10 took 4:14 overall, including a 208s Nx step and about 34s of
-Node/dependency setup. Despite an exact 39 MB Rust-cache restore, recipebridge
-spent 96s + 12s in Clippy and 52s compiling tests; FFI spent 19s + 26s.
-Tests themselves took under one second. Those timings predate removal of the
-separate dependency-population pass; they do not measure the current workflow.
 
 `cubby-ffi` and the WASM packages share the `recipebridge` Rust core and Cargo
 lockfile, but each target needs its own compiled artifacts. EPUB extraction is
@@ -301,17 +289,9 @@ ordinary build products need rebuilding but the compiler inputs are unchanged;
 new source inputs still compile. Local `swift test` remains available and does
 not use this Xcode cache.
 
-A local ARM/Xcode 27 experiment on 2026-10-06 changed every native input's
-mtime without changing its contents, then removed the Xcode build products.
-The host's CAS-and-clones-only replay passed the same 661 tests in 37s
-(386/386 compiler-cache hits), versus 130s cold. The simulator build replay
-passed in 32s (227/227 hits), versus 161s cold. These demonstrate reuse without
-the deleted timestamp helper or XCBuild inode override; they do not establish
-hosted Xcode 26 job times or include GitHub cache transfer and runner queueing.
-Manual native E2E installation (`apps/web/tooling/sim-e2e.ts`) runs
-`apple:simulator-build`, so an unchanged app is restored from the Nx cache.
-Removing a shared build helper requires checking those manual callers as well
-as the required workflow.
+Manual native E2E installation (`apps/web/tooling/sim-e2e.ts`) also runs
+`apple:simulator-build`, restoring unchanged apps from Nx. Check those callers
+when removing a shared build helper.
 
 The earlier simulator-test job ran `xcodebuild test` on a concrete simulator:
 first boot cost about 6 minutes plus roughly 10 minutes of CPU starvation
@@ -334,30 +314,12 @@ Kit pins remain in `apps/apple/CubbyKit/Package.resolved`. Simulator dependency
 cache keys include both lockfiles and both specs.
 
 Compiled Apple caches are published only after successful work. GitHub cache
-entries are immutable: saving an interrupted compile under the final content
-key makes every exact hit repeat that unfinished work, and a successful build
-cannot repair the entry. Simulator DerivedData `v6` excludes earlier entries
-that could have been saved after cancellation or failure. Host `xcode-host-v1`
-starts separately from the retired standalone SwiftPM `v2` cache. A new generation pays one cold build; unchanged successful restores
-are the evidence for warm performance. Dependency clones remain advisory.
-With the previous timestamp-normalizing backend, a controlled same-head [cold build and warm rerun](https://github.com/nickysemenza/cubby/actions/runs/37418543352)
-on 2026-10-05 took 7:39 and 4:35 respectively in the Apple app job after the
-successful exact-key DerivedData restore. Swift compilation log entries fell
-from 1,380 to two. This verifies reuse for unchanged inputs; one controlled
-rerun does not establish a PR median.
-After the main cache was seeded, a [normal main Apple app job](https://github.com/nickysemenza/cubby/actions/runs/37423177521/job/112138086525)
-on 2026-10-05 restored the same exact 419 MB DerivedData entry and passed in
-3:47, with two Swift compilation log entries for generated asset symbols.
-This confirms cross-run main-cache reuse, not a new required-check median.
-A controlled [same-head SwiftPM cold build and warm rerun](https://github.com/nickysemenza/cubby/actions/runs/37423177521)
-passed the same 646 tests in both attempts: the package job fell from 8:03 to
-2:57 after restoring its exact main cache, and compilation fell from 357s to
-72s. Cache restore and generator-warning checks still contribute to the warm
-job. This controlled measurement does not establish a PR median.
-Retire obsolete cache generations and merged PRs' private cache entries with
-GitHub's cache controls after main is seeded; retain active PR and current main
-entries. The repository keeps the default 10 GB cache limit, so no paid cache
-capacity or custom cleanup scheduler is needed.
+entries are immutable: an interrupted compile saved under the final key makes
+later exact hits repeat unfinished work. Cache-generation names and keys belong
+in the setup actions. Retire obsolete generations and merged PRs' private entries
+with GitHub's cache controls after main is seeded; retain active PR/current main
+entries. Dependency clones remain advisory; warm restores establish reuse,
+not a required-check runtime guarantee.
 
 ## Hosted suite
 
@@ -411,17 +373,10 @@ action, a composite action that downloads the Lychee binary (no Docker).
 Paths written as inline code are informational; link a repository file when
 its existence should be checked.
 
-`setup-node-with-deps` installs from the registry with no pnpm store cache:
-on [PR #1945's first run](https://github.com/nickysemenza/cubby/actions/runs/38330171871)
-a cold install of 1,607 packages took 10.4 seconds, while saving a missed store
-cost 18–28 seconds per job, and an Apple host job on 2026-10-12 spent about 65
-seconds extracting a 710 MB store before a 6.4-second install. With
-`wasm: restore` it then replays the Nx `wasm` target from the shared Nx cache
-(R2, outside the 10 GB Actions cache) and builds it with the runner's Rust only
-on a miss. The same run rebuilt WASM in every job for about 3.5 minutes each
-because the Actions cache, at 10.9 GB, had evicted its `wasm-pkg` entry, while
-the Nx cache already held that build. Retain the compiler and SwiftPM caches
-separately.
+`setup-node-with-deps` installs from the registry without a pnpm store cache:
+measured restore/save cost exceeded fresh install cost. With `wasm: restore`
+it replays Nx's WASM artifact from R2, outside the Actions cache, and builds
+with the runner's Rust only on a miss. Compiler and SwiftPM caches are separate.
 
 Generated output is never committed, except `.github/ci-lanes.yml`, which
 `Plan` reads before any install; web and Apple jobs generate it during
@@ -552,103 +507,38 @@ more than 10 minutes cold. Optimize only a measured bottleneck; prior evidence
 already rejects node_modules caching. Track queue and
 cold native builds separately; the target is not a measured runtime guarantee.
 
-### Measured decisions
+### Retained experiment conclusions
 
-Keep the full experiment tables in Git history; this page records the decisions
-that still shape the current checks. When changing CI topology, collect at least
-five naturally occurring successful PR runs before claiming a new
-median, and compare queue time, required-check p50/p95, cache misses,
-cancellations, job-minutes, and merge-to-deploy time. Do not infer a speedup
-from a single warm run or a different host load.
+Collect naturally occurring successful PR runs before claiming a new median.
+Compare queue time, required-check p50/p95, cache misses, cancellations,
+job-minutes, and merge-to-deploy time. Historical experiment tables and run
+links remain in Git history.
 
-Before the PostgreSQL/runtime split, ten successful PR runs sampled on
-2026-10-05 had a slowest desktop E2E job of 7:35–8:44, with job-ready-to-start
-waits no longer than 57 seconds. Representative
-[web](https://github.com/nickysemenza/cubby/actions/runs/37407377916) and
-[cross-client](https://github.com/nickysemenza/cubby/actions/runs/37406566591)
-runs show that browser execution and native compilation remain the full-PR
-bottlenecks. The split removes an unnecessary prerequisite for ordinary
-database contracts; it does not establish a five-minute full suite.
-
-- Desktop Chromium uses four shards and ordinary PostgreSQL files two, since
-  the remote cache made a run's cost proportional to its changed content
-  ([ADR 0009](adr/0009-content-hash-merge-gate.md)); hosted timings for that
-  split are not yet measured. Earlier, more workers per runner and three
-  shards did not improve the critical path enough to justify their setup and
-  contention costs.
-  A three-worker re-benchmark on the larger suite passed all 160 cases, but a
-  same-head replay of its slower 80-case shard reduced Playwright execution
-  only from 391 to 375 seconds while cumulative case time rose from 665 to
-  911 seconds and navigation time from 270 to 377 seconds. Keep two workers
-  per runner: the repeated latency increase did not justify the small,
-  variable critical-path benefit. The
-  [bounded trial](https://github.com/nickysemenza/cubby/actions/runs/37499250416)
-  and [two-worker baseline](https://github.com/nickysemenza/cubby/actions/runs/37497540250)
-  do not establish a new median or isolate runner variability.
-  Phone and WebKit browser projects were removed
-  from PR CI; device-dependent phone behavior still needs device acceptance.
-- The fast projects share one job to reduce runner demand. Ten completed PR
-  runs sampled on 2026-10-06 (six successful, four failed) had Node jobs of
-  1:47–2:06 and UI jobs of 1:21–1:43, while the slowest desktop shard took
-  7:51–8:58. Representative
-  [successful](https://github.com/nickysemenza/cubby/actions/runs/37426186409)
-  and [failed](https://github.com/nickysemenza/cubby/actions/runs/37426021174)
-  runs support testing that consolidation outside the browser critical path;
-  they do not establish the combined job's hosted runtime or a new PR median.
-- Test page loads spend much of their time waiting for hydration and queued
-  JavaScript chunks under the harness's HTTP/1.1 connection limit. A measured
-  HTTPS/HTTP/2 proxy added runner time without a useful end-to-end gain.
-  Preloading the recipebridge WASM also did not improve hydration.
-  Across three PR runs sampled on 2026-10-10, page navigation and hydration
-  waits were about 36% of desktop case time: each test's fresh context loads
-  roughly 240 JavaScript modules cold (about 1.1s to hydrate locally, versus
-  0.4s for a second navigation in the same context). Serving `/assets/` from a
-  per-worker in-memory `context.route` cache doubled navigation time in a
-  local shard and timed out a CPU-throttled case, because any route disables
-  Chromium's HTTP and code cache for the context. Merging the shared client
-  modules into fewer chunks (a catch-all entries-aware group, or one for
-  modules under 4 KiB) broke hydration on every route with a module
-  initialization-order error, and `strictExecutionOrder` turned that into a
-  hydration stall, so the client bundle keeps its bounded groups. Madge
-  (`--circular` with type-only imports skipped) finds 11 source cycles, among
-  them `field-explanation` ↔ `field-resolution-explanation`,
-  `detail-action-bar` ↔ `report-slot`/`records-block`,
-  `TableLayoutCustomizer` ↔ `data-table-view-options`,
-  `suggestion-outcome-mark` ↔ `suggestion-review`, and the event-calendar
-  group. Removing them is not sufficient on its own: regrouping chunks can
-  create new initialization cycles through shared dependencies, so fewer
-  chunks needs a deliberate renderer-boundary refactor, not a config change.
-- Playwright's `--shard` with `fullyParallel` takes contiguous, equal-count
-  slices of the ordered test list, so one slow case lands wholly on one shard.
-  Keep individual cases short (wait on a fast-forwarded page clock or a
-  response, not a poll interval or a full expect timeout inside `toPass`)
-  rather than reordering specs.
-- Each browser shard and the workerd job build the web Worker themselves
-  (about 40s): their commands run `build-cf.ts --ensure` directly rather than
-  depend on the Nx `build-cf` target, and concurrent shards on a new revision
-  would all miss its cache at once anyway. A separate build job would add its
-  own runner start and install ahead of every shard.
-- Caching `node_modules` or the pnpm store cost more than a registry install.
-  Retain exact-key caches for Apple dependencies where the measured build work
-  exceeds restore cost.
-- Local full verification runs Nx targets sequentially because the individual
-  test/build tiers are parallel internally. The parallel `run-many` trial took
-  10:54 and failed under contention; the sequential trial took 6:49 and passed
-  on the same shared host. These are observations, not runtime guarantees.
-- Keep pure grouping and projection tests in the fast tier, transaction and
-  SQL behavior in PostgreSQL, and browser-only contracts in Playwright.
-  Previously consolidated test files and changed worker counts are not reasons
-  to move a behavior to a more expensive tier.
+- More browser workers increased navigation latency and cumulative case time
+  without a reliable critical-path gain. Shard counts and worker settings live
+  in the workflows and Playwright configuration.
+- Fast projects share a job to reduce runner demand outside the browser
+  critical path. Each browser shard and the workerd job build their own Worker:
+  a separate build job would add startup and install prerequisites.
+- HTTP/2 proxying and WASM preloading did not improve end-to-end hydration.
+  `context.route` asset caching disabled Chromium's HTTP/code cache and made
+  navigation slower. Catch-all chunk grouping caused module initialization
+  cycles; strict execution order stalled hydration. Fewer chunks needs a
+  renderer-boundary refactor, not a bundler toggle.
+- Playwright's fully-parallel sharding takes contiguous equal-count slices;
+  one slow case stays on one shard. Keep cases short using page clocks or
+  responses rather than poll intervals, instead of reordering specs.
+- Local full verification runs tiers sequentially because each tier already
+  parallelizes internally. Concurrent full runs caused contention and timeouts.
+- Cache dependency artifacts when build savings exceed transfer costs. Store
+  and `node_modules` caching lost to registry installation.
 
 ## Operational checks
 
-Before changing CI, run:
-
-```sh
-actionlint -no-color .github/workflows/*.yaml
-pnpm run check
-pnpm exec nx show projects --affected --base=origin/main
-```
+Choose workflow/routing checks under the
+[validation policy](agents/validation.md#before-opening-a-pr); workflow edits
+use `actionlint`, and `pnpm check:plan` explains selected lanes without asking
+for a broad local suite.
 
 After a material workflow change, compare at least ten representative runs for
 PR p50/p95 wall time, merge-to-deploy time, total job-minutes, cancellations,

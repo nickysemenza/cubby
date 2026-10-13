@@ -97,6 +97,13 @@
   justify-self: end;
   align-self: center;
 }
+/* Review grows beneath the proposal without moving its field identity or rail. */
+.ledger[data-ledger="facts"]
+  > .ledger-row:has(> [data-slot="basic-info-value"] .suggestion-review)
+  > :is([data-ledger-slot="primary"], [data-ledger-slot="actions"]) {
+  align-self: start;
+}
+
 .ledger[data-ledger="facts"]
   > .ledger-row[data-full-width="true"]
   > [data-ledger-slot="primary"] {
@@ -260,4 +267,25 @@
     color: var(--muted-foreground);
     font-weight: 400;
   }
+}
+
+/* The proposal stays on one compact line; only deliberate Review expands evidence. */
+.suggestion-review {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--brand-space-2);
+  width: 100%;
+}
+.suggestion-proposal {
+  flex: 1 1 auto;
+}
+.suggestion-disclosure {
+  display: contents;
+}
+.suggestion-disclosure > summary {
+  align-self: center;
+}
+.suggestion-evidence {
+  flex-basis: 100%;
 }

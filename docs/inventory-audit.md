@@ -79,15 +79,11 @@ Resolution behavior:
 Plain `bulkMove` never stamps `lastBulkInventory`. Skipping a location is
 client-only: it never stamps `verifiedAt` or `lastBulkInventory`.
 
-## 4. Implementation map
+Implementation and focused coverage live in the inventory service/repository
+and `tests/e2e/native-fieldwork-api.spec.ts`; the
+[journey coverage map](agents/core-journey-e2e.md) owns remaining client gaps.
 
-- `server/services/scan-plan.ts` — the pure add/confirm/queue decision
-- `server/services/scan-into-location.service.ts` — resolve, plan, execute
-- `server/repo/inventory/bulk.ts` — atomic reconcile and staleness guard
-- `tests/e2e/native-fieldwork-api.spec.ts` — HTTP-level checks of the staged
-  photo capture, confirm-never-increment, and reconcile staleness contracts
-
-## 5. Retired web surfaces
+## 4. Retired web surfaces
 
 The web app no longer scans, recounts, sweeps, or runs the location photo pass,
 and it is no longer installable as a PWA. The old routes return the ordinary

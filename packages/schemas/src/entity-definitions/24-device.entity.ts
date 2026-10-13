@@ -454,6 +454,8 @@ export default defineEntity({
       checks: [
         {
           id: "device_owner_missing",
+          satisfiedLabel: "Owner recorded",
+          placement: { field: "ledgerPartyId" },
           facet: "identity",
           weight: 2,
           label: "Owner",

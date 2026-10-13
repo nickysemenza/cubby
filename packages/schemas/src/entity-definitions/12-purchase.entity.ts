@@ -1750,6 +1750,8 @@ export default defineEntity({
       checks: [
         {
           id: "purchase_date",
+          satisfiedLabel: "Date recorded",
+          placement: { field: "date" },
           facet: "identity",
           weight: 3,
           scoreCap: 69,
@@ -1758,18 +1760,24 @@ export default defineEntity({
         },
         {
           id: "order_id",
+          satisfiedLabel: "Order ID recorded",
+          placement: { field: "orderId" },
           facet: "paperwork",
           label: "Missing order ID",
           message: "Vendor order or receipt ID is not recorded.",
         },
         {
           id: "stated_total",
+          satisfiedLabel: "Stated total recorded",
+          placement: { field: "statedTotal" },
           facet: "paperwork",
           label: "Missing stated total",
           message: "Literal vendor-stated total is not recorded.",
         },
         {
           id: "primary_document",
+          satisfiedLabel: "Primary document attached",
+          placement: { section: "documents" },
           facet: "paperwork",
           weight: 2,
           label: "No primary document",
@@ -1778,6 +1786,8 @@ export default defineEntity({
         },
         {
           id: "empty_expenses",
+          satisfiedLabel: "Expenses recorded",
+          placement: { section: "expenses" },
           facet: "ledger",
           weight: 3,
           scoreCap: 69,
@@ -1786,6 +1796,8 @@ export default defineEntity({
         },
         {
           id: "purchase_spending_category_origin",
+          satisfiedLabel: "Fallback provenance reviewed",
+          placement: { field: "spendingCategoryOrigin" },
           facet: "identity",
           exceptions: "forbidden",
           label: "Review legacy fallback",
@@ -1794,6 +1806,8 @@ export default defineEntity({
         },
         {
           id: "purchase_evidence_expectation",
+          satisfiedLabel: "Receipt expectation classified",
+          placement: { field: "evidenceExpectation" },
           facet: "paperwork",
           exceptions: "forbidden",
           label: "Receipt expectation",
@@ -1801,6 +1815,8 @@ export default defineEntity({
         },
         {
           id: "purchase_itemization",
+          satisfiedLabel: "Itemization reviewed",
+          placement: { field: "itemizationEvidence" },
           facet: "ledger",
           weight: 2,
           label: "Receipt itemization",
@@ -1808,6 +1824,8 @@ export default defineEntity({
         },
         {
           id: "unpriced_expense",
+          satisfiedLabel: "Expense prices complete",
+          placement: { section: "expenses" },
           facet: "ledger",
           weight: 2,
           label: "Unpriced expense line",
@@ -1815,6 +1833,8 @@ export default defineEntity({
         },
         {
           id: "paperwork_mismatch",
+          satisfiedLabel: "Paperwork consistent",
+          placement: { section: "reconciliation" },
           facet: "paperwork",
           kind: "defect",
           weight: 2,
@@ -1825,6 +1845,8 @@ export default defineEntity({
         },
         {
           id: "settlement_reference",
+          satisfiedLabel: "Settlement evidence linked",
+          placement: { section: "financial-settlement" },
           facet: "settlement",
           weight: 2,
           label: "No settlement evidence",
@@ -1833,6 +1855,8 @@ export default defineEntity({
         },
         {
           id: "settlement_mismatch",
+          satisfiedLabel: "Settlement consistent",
+          placement: { section: "financial-settlement" },
           facet: "settlement",
           kind: "defect",
           weight: 2,

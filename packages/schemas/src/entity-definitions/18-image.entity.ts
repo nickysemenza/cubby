@@ -882,6 +882,8 @@ export default defineEntity({
       checks: [
         {
           id: "image_provenance_unknown",
+          satisfiedLabel: "Source recorded",
+          placement: { field: "source" },
           facet: "provenance",
           weight: 3,
           label: "Source",
@@ -889,6 +891,8 @@ export default defineEntity({
         },
         {
           id: "image_capture_attribution",
+          satisfiedLabel: "Capture attributed",
+          placement: { field: "captureAttribution" },
           facet: "provenance",
           kind: "defect",
           weight: 2,
@@ -898,6 +902,8 @@ export default defineEntity({
         },
         {
           id: "image_capture_date",
+          satisfiedLabel: "Capture date recorded",
+          placement: { field: "capturedAt" },
           facet: "content",
           weight: 1,
           label: "Capture date",
@@ -905,6 +911,8 @@ export default defineEntity({
         },
         {
           id: "image_dimensions",
+          satisfiedLabel: "Dimensions recorded",
+          placement: { field: "width" },
           facet: "integrity",
           weight: 1,
           label: "Dimensions",
@@ -912,6 +920,8 @@ export default defineEntity({
         },
         {
           id: "image_asset_unusable",
+          satisfiedLabel: "File usable",
+          placement: { field: "storageStatus" },
           facet: "integrity",
           kind: "defect",
           weight: 3,
@@ -922,6 +932,8 @@ export default defineEntity({
         },
         {
           id: "image_sighting_missing",
+          satisfiedLabel: "Sightings recorded",
+          placement: { field: "sightings" },
           facet: "provenance",
           weight: 1,
           label: "Sightings",

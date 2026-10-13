@@ -1,8 +1,7 @@
 // Content fingerprint for a Rust build whose inputs live outside Nx's
 // workspace: Cargo resolution, every local path dependency (including the
 // `[patch]` checkouts in ~/.cargo/config.toml), Cargo configuration, the
-// compiler, and the build-affecting environment. Shared by ensure-wasm.ts and
-// ensure-apple-ffi.ts so both artifacts key their Nx cache the same way.
+// compiler, and the build-affecting environment. Used by ensure.ts for both artifacts.
 // A metadata failure must fail closed; restoring an old artifact would hide an
 // incompatible local parser checkout.
 import { execFileSync } from "node:child_process";
@@ -133,32 +132,4 @@ export const rustFingerprint = (
     ),
   );
   return hash.digest("hex");
-};
-
-// Runs one cached Nx target of the root `cubby-checks` project. The daemon is
-// off so the run is self-contained; without node_modules the nx entry cannot
-// resolve, which is the "run pnpm install first" case.
-export const runNxTarget = (target: string, args: string[] = []) => {
-  // Inside an Nx task the enclosing graph owns this dependency (each target
-  // that runs tests or builds declares `wasm` and `generate` in dependsOn).
-  // Re-entering Nx from a task is refused as a recursive invocation, e.g. when
-  // knip loads vitest.config.ts during the `knip` target.
-  if (process.env.NX_TASK_TARGET_PROJECT !== undefined) return;
-  let nx: string;
-  try {
-    nx = fileURLToPath(import.meta.resolve("nx/bin/nx.js"));
-  } catch {
-    throw new Error(
-      `cannot resolve nx; run \`pnpm install --frozen-lockfile\` before ${target}`,
-    );
-  }
-  execFileSync(
-    process.execPath,
-    [nx, "run", `cubby-checks:${target}`, ...args],
-    {
-      cwd: ROOT,
-      stdio: "inherit",
-      env: { ...process.env, NX_DAEMON: "false" },
-    },
-  );
 };

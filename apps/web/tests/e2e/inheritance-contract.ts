@@ -48,10 +48,14 @@ export function inheritanceContract() {
     await expect(
       page.locator(`a[href="/projects/${fixture.project.id}"]`).first(),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "How project is determined", exact: true })
-      .click();
-    const explanation = page.getByRole("dialog");
+    const projectExplanation = page.getByRole("button", {
+      name: "How project is determined",
+      exact: true,
+    });
+    await projectExplanation.click();
+    const panelId = await projectExplanation.getAttribute("aria-controls");
+    expect(panelId).toBeTruthy();
+    const explanation = page.locator(`[id="${panelId}"]`);
     await expect(
       explanation.getByText("Project share", { exact: true }),
     ).toBeVisible();

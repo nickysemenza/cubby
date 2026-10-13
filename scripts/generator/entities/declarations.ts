@@ -404,30 +404,12 @@ export type CompiledEntity = Readonly<{
   table: CompiledEntityTable | null;
   children: readonly ChildTableMetadata[];
   /** `capabilities.dataQuality`, or null for an unscored entity. */
-  dataQuality: Readonly<{
-    checks: readonly Readonly<{
-      id: string;
-      facet: string;
-      kind: "missing" | "defect";
-      weight: number;
-      scoring: "weighted" | "unscored";
-      scoreCap?: number;
-      exceptions: "inherit" | "forbidden";
-      label: string;
-      message: string;
-      coverage?: string;
-    }>[];
-    exceptions: boolean;
-    related: readonly string[];
-  }> | null;
+  dataQuality: EntityDeclarationMetadata["capabilities"]["dataQuality"];
   /** `capabilities.classificationPolicies`; validated cross-entity. */
   classificationPolicies: EntityDeclarationMetadata["capabilities"]["classificationPolicies"];
 }>;
 
-export type EntityArtifacts = Readonly<{
-  relativePath: string;
-  source: string;
-}>;
+export type { EntityArtifacts } from "../artifacts.ts";
 
 export class EntityDeclarationError extends Error {
   constructor(message: string) {
@@ -513,8 +495,8 @@ export const compileLoadedEntityDeclarations = (
     ...compileEntity(raw, 0),
     overrides: declaredOverrides.get(String(raw.key)) ?? [],
   }));
-  const entities = deriveRelationSections(
-    validateDataQualityDeclarations(compiled),
+  const entities = validateDataQualityDeclarations(
+    deriveRelationSections(compiled),
   );
   const routes = new Set<string>();
   validateEntityIdentities(entities);

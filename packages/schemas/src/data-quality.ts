@@ -17,6 +17,7 @@ export {
   dataCheckFacet,
   dataCheckKind,
   dataCheckLabel,
+  dataCheckPresentation,
   dataCheckMessage,
   dataChecksByEntity,
   dataCheckWeight,

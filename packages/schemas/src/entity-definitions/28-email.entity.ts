@@ -712,6 +712,8 @@ export default defineEntity({
       checks: [
         {
           id: "email_relevance_undecided",
+          satisfiedLabel: "Relevance classified",
+          placement: { field: "classification" },
           facet: "content",
           weight: 3,
           label: "Relevance",
@@ -719,6 +721,8 @@ export default defineEntity({
         },
         {
           id: "email_relevance_unreviewed",
+          satisfiedLabel: "Member review complete",
+          placement: { field: "reviewedClassification" },
           facet: "provenance",
           weight: 1,
           label: "Member review",
@@ -727,6 +731,8 @@ export default defineEntity({
         },
         {
           id: "email_original_missing",
+          satisfiedLabel: "Original retained",
+          placement: { section: "review" },
           facet: "integrity",
           weight: 2,
           label: "Original",
@@ -734,6 +740,8 @@ export default defineEntity({
         },
         {
           id: "email_preview_missing",
+          satisfiedLabel: "Extraction preview recorded",
+          placement: { section: "review" },
           facet: "content",
           weight: 1,
           label: "Extraction preview",
@@ -741,6 +749,8 @@ export default defineEntity({
         },
         {
           id: "email_not_imported",
+          satisfiedLabel: "Import complete",
+          placement: { section: "review" },
           facet: "linkage",
           weight: 3,
           label: "Import",

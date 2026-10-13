@@ -603,6 +603,7 @@ public actor CubbyClient {
         case .suggestionSweep: .suggestionSweep
         case .photoInventory: .photoInventory
         case .describeImage: .describeImage
+        case .identifyImage: .identifyImage
         case .subjectLift: .subjectLift
         case .aiSuggest: .aiSuggest
         case .background: .background

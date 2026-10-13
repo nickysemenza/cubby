@@ -254,6 +254,8 @@ describe("image repository", () => {
       );
     expect(jobs.map(({ kind }) => kind).sort()).toEqual([
       "describe_image",
+      "describe_image",
+      "identify_image",
       "subject_lift",
     ]);
   });

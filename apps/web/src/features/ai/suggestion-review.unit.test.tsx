@@ -45,6 +45,32 @@ const removeSuggestion: FieldSuggestion = {
 };
 
 describe("inline suggestion review", () => {
+  it.each([false, true])(
+    "keeps evidence collapsed until Review without hiding the actionable proposal (phone=%s)",
+    (phone) => {
+      vi.stubGlobal("matchMedia", (media: string) => ({
+        matches: phone,
+        media,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }));
+      const save = vi.fn();
+      render(
+        <SuggestionReview
+          suggestion={{ ...suggestion, reasoning: "Evidence from the record" }}
+          currentValue={null}
+          questionKey="compact-review"
+          onApply={save}
+        />,
+      );
+      expect(screen.getByRole("button", { name: "Accept" })).toBeVisible();
+      expect(screen.getByText("Evidence from the record")).not.toBeVisible();
+      fireEvent.click(screen.getByText("Review", { exact: true }));
+      expect(screen.getByText("Evidence from the record")).toBeVisible();
+      fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+      expect(save).toHaveBeenCalledOnce();
+    },
+  );
   it.each([
     [null, 0.849, false],
     [null, 0.85, true],
@@ -106,6 +132,7 @@ describe("inline suggestion review", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     expect(save).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByText("Review", { exact: true }));
     expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
   });
 
@@ -166,6 +193,7 @@ describe("inline suggestion review", () => {
     expect(screen.getAllByText("Materials")).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Materials" }));
     expect(edit).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByText("Review", { exact: true }));
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     expect(screen.queryByText("Tools")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Materials" }));
@@ -183,6 +211,7 @@ describe("inline suggestion review", () => {
         onDismiss={onDismiss}
       />,
     );
+    fireEvent.click(screen.getByText("Review", { exact: true }));
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     await vi.waitFor(() => expect(onDismiss).toHaveBeenCalledOnce());
   });
@@ -201,6 +230,7 @@ describe("inline suggestion review", () => {
       </SuggestionVisitProvider>
     );
     const view = render(content("first"));
+    fireEvent.click(screen.getByText("Review", { exact: true }));
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     view.rerender(content(null));
     view.rerender(content("first"));
@@ -246,12 +276,9 @@ describe("reviewThreshold", () => {
 });
 
 describe("folded review", () => {
-  // Phone inline regression: a review mounted inline after load pushed the
-  // facts below it down mid-tap, so phones fold it like a table cell does.
-  it.each([
-    ["cell", false],
-    ["inline", true],
-  ] as const)(
+  // Tables retain stable geometry. The compact phone regression above keeps
+  // evidence collapsed until explicit Review instead of expanding on arrival.
+  it.each([["cell", false]] as const)(
     "%s surface (phone=%s) keeps children flat and folds the whole review into the mark's popover",
     async (surface, phone) => {
       vi.stubGlobal("matchMedia", (media: string) => ({

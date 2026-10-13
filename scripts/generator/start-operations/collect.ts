@@ -10,7 +10,7 @@ import {
   type StringLiteral,
 } from "oxc-parser";
 
-export const ROOT = new URL("../../..", import.meta.url).pathname;
+const ROOT = new URL("../../..", import.meta.url).pathname;
 export const SOURCE_ROOT = join(ROOT, "apps/web/src");
 const SERVER_ROOT = join(SOURCE_ROOT, "server");
 const CONTRACTS_ROOT = join(SOURCE_ROOT, "contracts");

@@ -41,102 +41,27 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 
 ### Main Worker
 
-`apps/web/wrangler.jsonc` declares the reproducible part of Worker `cubby`:
+[`apps/web/wrangler.jsonc`](../apps/web/wrangler.jsonc) owns Worker bindings,
+Durable Objects, Workflows, queues, placement, asset routing, crons and plaintext
+variables. Deploy creates/updates those resources. This page records provider
+state and reconstruction constraints that configuration cannot reproduce.
 
-- Custom domain `cubby.nickysemenza.com`; `workers.dev` production routing is
-  disabled and preview URLs are enabled.
-- Smart Placement and static assets.
-- SQLite Durable Objects `DatabaseFreshnessDurableObject`,
-  `CalendarFeedDurableObject`,
-  `ImageProcessingDurableObject`, `AiResponseCacheDurableObject`, the
-  purchase agent's `PurchaseImportRunAgent` (below), and
-  `UsdaReleaseDurableObject` (binding `USDA_RELEASE`): one object per USDA
-  release, loaded from R2 bucket `cubby-usda-releases` (binding
-  `USDA_RELEASES`) and selected by the plaintext variable
-  `USDA_ACTIVE_RELEASE` ([ADR 0008](adr/0008-usda-release-durable-object.md)).
-- Workflows `cubby-search-index-repair` and `cubby-mail-discovery`.
-  Gmail discovery executes one Run attempt per Workflow instance
-  (see [Workflow-backed Runs](#workflow-backed-runs)).
-- Queues `cubby-background`, `cubby-telemetry`, and `cubby-purchase-agent`,
-  each produced and consumed by this Worker, with settings in the Wrangler
-  file.
-- One daily cron trigger at 12:00 UTC; authenticated app openings enqueue
-  catch-up work with a household-wide one-hour cooldown. Catch-up starts a
-  `mail_discovery` Workflow per Google-connected member, fails Workflow Runs
-  whose instance ended without finishing them, and prunes routine Runs older
-  than 30 days.
-- Workers AI binding `AI` and AI Gateway `cubby`.
-- Vectorize binding `VECTORIZE` ->
-  `cubby-openai-text-embedding-3-small-1536`, dimensions `1536`, cosine metric,
-  with string metadata index `entityType` (the property name predates the
-  `entityKind` rename and stays: the index is provider-side state).
-- Version metadata and the two Hyperdrive bindings below.
+Vectorize's string metadata index is named `entityType`: that provider-side
+name predates `entityKind` and must remain when recreating the index.
 
 ### Workflow-backed Runs
 
-A scheduled mailbox pass (`mail_discovery`) is a Run a Cloudflare Workflow executes
-(`server/gmail-workflows.ts`, bodies in `server/purchase-import/gmail/`).
-The Run row is the record; an instance is one attempt at it, named
-`<runShortcode>-<attempt>` (`server/workflow-runs/`):
+Mailbox discovery is a Workflow-backed Run. Its page/retention/admission
+contract lives in the [purchase-import module guide](../apps/web/src/server/purchase-import/README.md#mail-import-end-to-end).
+Workflow instances are attempts, not the durable record; retries must resume
+persisted progress without depending on provider retention. Instance diagnostics
+expire independently of Run history. The Run's Cloudflare dashboard link requires
+provider sign-in and can outlive the instance.
 
-- Each step re-reads the Run and acts only while it is `running` under its
-  own attempt, so a cancel or a retry stops an older attempt mid-walk.
-- Progress lives in `Run.progress`, written under a compare-and-set, so a
-  step that replays after its write committed changes nothing. A retry
-  (`run.control` `retry`) starts a new instance that resumes from it; nothing
-  relies on Cloudflare still retaining an older instance.
-- Cancel (`run.control` `cancel`) fails the Run with `user_cancelled`, then
-  terminates the instance.
-- Instance retention is set per instance (7 days after success, 30 after an
-  error) and only bounds diagnostics: the Run detail shows the attempt and the
-  instance state Cloudflare reports while it is retained. Its “Open in Cloudflare”
-  link opens the current attempt under the corresponding Workflow in the
-  Cloudflare dashboard on web and native; dashboard access requires a Cloudflare
-  sign-in, and the link may outlive instance retention.
-- Retired `mail_search` Runs retain their original input/checkpoint JSON in generic
-  saved-data report details. Their executor, binding and retry choreography are
-  removed; shared controls refuse execution before writes. Known-vendor search
-  uses the retained researcher with frozen acquisition and scoped coverage.
-- `reconcileWorkflowRuns` in catch-up fails a Run whose instance ended
-  without its failure step, and one saved but never launched. The purchase
-  agent's stale-run expiry skips these purposes.
-- At most one `mail_discovery` Run per mailbox is `running`
-  (`Run_one_active_mail_discovery`), so an overlapping cron and app-open
-  trigger start one pass. Each Run freezes its execution authorization and
-  acquisition page. Pilot and historical grants cover targeted queries and
-  broad history scans; continuous monthly grants cover incremental Gmail
-  history. These allowances remain independent. Known Vendor and unmatched
-  transaction queries run first; broad scans exclude Spam and Trash.
-  The decision model routes unrelated, related, and uncertain mail. Unrelated mail keeps a
-  minimal scan record; related and uncertain mail retain content and streamed
-  attachments for the researcher. Research admission uses batches of up to
-  fifty retained messages, including unfamiliar vendors and lifecycle mail.
-  The researcher proposes supported records and links through the shared
-  evidence-backed writer. Durable page replay reuses admitted work, and the
-  mailbox cursor moves only after retention and admission finish. See
-  `gmail/discovery.ts`, `gmail/sync.ts`, and `gmail/ingest.ts`.
-- A member's Email Reclassify or extraction-preview rerun opens a `background`
-  Run (`mail_reclassify` input) per mailbox and binds that mailbox's latest
-  usable backfill approval, else its continuous one (an expired or revoked one
-  is skipped); with neither it refuses before any Run or Gmail read. Jev/Clef
-  calls are unmetered as in discovery. It never admits import. One request
-  stops starting Emails after 150 s and reports the rest `deferred`.
-  `imports_read.mail_triage_preview` opens the same Run (`triage_preview`
-  mode) to rerun triage on one original and records only model usage.
-- Mail triage (`gmail/triage.ts`) sends the decision model one bounded view sized by the
-  real decision-model request gate (`decisionChoiceFitsContext`, escaping included). HTML is
-  compacted by recipebridge's `compact_email_html` (preheader kept, tracking
-  pixels dropped, data tables as `cell | cell` rows, footers last, links
-  ranked by purchase cues) and the full text's purchase cues — amounts,
-  order/invoice numbers, receipt phrases — are re-checked against the
-  serialized view. The decision model's `unrelated` becomes `uncertain` only for a listed
-  incompleteness reason (`mailTriageIncompleteReason`): a clipped cue,
-  attachments, an image-only body, a clipped cue-bearing link/image or
-  structured data, the compactor's own bound, dropped MIME text parts, or
-  clipped headers. HTML alone no longer does, and there are no sender-wide
-  exclusions. Triage is Jev/Clef trial traffic like every decision feature.
-- A completed scheduled pass that saved no message and recorded no history
-  event is `routine`; the Runs list hides routine Runs by default.
+Retired executor purposes preserve recorded inputs/checkpoints but cannot resume.
+Catch-up reconciles attempts that ended without finishing their Run. Discovery
+readiness and usage reads remain storage-only; current cursor coverage is not a
+snapshot of one historical Run and a read never grants execution.
 
 One-time creation commands that cannot be inferred or safely rerun by deploy:
 
@@ -233,52 +158,12 @@ request: the exported Durable Object is a shell that loads
 loads the consumer when a `cubby-purchase-agent` batch arrives
 (`apps/web/scripts/check-server-closure.ts` budgets both paths).
 
-Pi runs two purposes ([ADR 0010](adr/0010-mail-import-unattended-burn-down-interactive.md)):
-`mail_import` and `photo_inventory`. Both mount the same three host tools in
-`server/purchase-agent/tools.ts` (`claim_next_import_work`,
-`report_agent_progress`, `stop_import_run_for_review`) plus the public MCP
-actions their manifest lists. Work claims take no model arguments: the host
-derives the operation identity from the durable tool task, so a new call sees
-current work and replay of the same task retains its result. Mail import reads Email (`imports_read.mail`),
-searches Gmail (`mail.search`), imports through `purchase_import.prepare/commit`
-and records Email dispositions (`mail.resolve`). Pi has no browser and no web
-search; browser research is a member's Claude/Codex Burn-down. Instructions
-come from `.claude/skills/purchase-import/references/mail-import.md` and the
-photo-inventory skill. Queue signals use `<signal type="…">` user text
-(`signals.ts`). A Lifecycle job per submission reports its settlement: `done`
-goes to `reconcileSettledRun`, an unanswered submission to `markRunFailed`
-(`agent_failed` / `agent_aborted`). The run page reads the conversation through
-`agent-proxy.ts` as the `AgentConversation` contract
-(`packages/schemas/src/agent-conversation.ts`). A settled Run's transcript,
-also readable through the owned, paginated `imports_read.run_transcript` MCP
-action's storage-only path without loading or resuming execution (committed
-messages only; live generation partials stay on the live UI),
-which holds the Email text the agent read, is destroyed by the daily cron a day
-after settlement (`run-retirement.ts`), stamping `Run.retiredAt`.
-
-Mail discovery is a Workflow rather than a purchase-agent coordinator. Its
-member-owned `imports_read.run_status.mailDiscovery` reads frozen mailbox inputs,
-the persisted Workflow checkpoint and current mailbox cursor coverage directly
-from storage. It also projects the bound approval's expiry/disposition and verified
-reservation/claim/revocation receipts, separately from recorded AI usage and retry
-counts. Coverage is current mailbox state, not a historical snapshot of that Run;
-AI counts describe retained usage rows, not unrecorded provider attempts. No read
-grants execution, checks a live Workflow, or resumes it. Discovery transcript reads
-return `absent` after the same ownership check because no coordinator transcript
-exists.
-
-Native Workers Traces carry the consumer's `job.purchase_agent_event` span
-(`run.id`, `event.type`, `dispatch.outcome`). Sentry receives the agent's
-errors through the Worker's own configuration (`server/worker-sentry.ts`;
-the Durable Object's issues carry tag `service: purchase-agent`); it receives
-no traces, and model and tool content is never recorded in either
-destination. Each model response's usage reaches `AiUsage` through
-`recordAgentUsage`, with the transport selected before the request
-([usage attribution](runbooks/chatgpt-plan.md#usage-attribution)).
-
-Mail import and photo Runs share the queue. Each admitted run records a stable
-start-event id and the consumer fences duplicates and late deliveries before
-agent admission.
+Run purposes and MCP authority are declared in
+`packages/schemas/src/import-run-agent.ts`; execution, settlement and transcript
+retirement follow the [purchase-import module guide](../apps/web/src/server/purchase-import/README.md).
+The shared host records model usage in `AiUsage`; transport attribution follows
+[ChatGPT-plan usage attribution](runbooks/chatgpt-plan.md#usage-attribution).
+Model/tool content stays out of Sentry and Workers traces.
 
 The fixed public OAuth client id is `cubby-purchase-agent`. It uses authorization
 code + PKCE, `offline_access`, no client secret, and the callback
@@ -310,21 +195,9 @@ WHERE c.client_id = 'cubby-purchase-agent'
 GROUP BY c.client_id, c.token_endpoint_auth_method, c.require_pkce;
 ```
 
-The workerd harness's `purchase-agent` profile (`apps/web/tooling/workerd-harness.ts`,
-the built `cubby` Worker with a scripted model and gateway, driven through
-`apps/web/tooling/purchase-agent-workerd-harness.ts`) exercises the real agent
-without an authenticated household session or production data.
-
-The `purchase-agent` and `coupled` profiles (`startWorkerdHarness`,
-`apps/web/tooling/workerd-harness.ts`) first take the machine-wide harness
-lock, then check every Worker build they load (`COUPLED_WORKER_BUILDS` in `apps/web/tooling/worker-builds.ts`; today
-only the web Worker, which hosts the agent) against the content hash in
-`dist/web-build-provenance.json`. Locally a stale build is rebuilt in place
-before workerd starts; in CI, where the Worker artifact must be current, a
-stale build fails with the exact rebuild command. The `integration-workerd`
-Vitest project holds the harness for its whole run with `holdWorkerdHarness()`
-in global setup, so its files run in parallel and the wait and any rebuild
-never count against a test timeout.
+The scripted workerd harness exercises the built agent without production
+data; profile/provenance contracts belong in
+[test runtime guidance](agents/validation-tests.md#workerd-test-runtime-and-profiles).
 
 ### PostgreSQL and Hyperdrive
 
@@ -387,13 +260,6 @@ is in [development](development.md).
 Cloudflare DNS and the R2 custom-domain configuration must route
 `media.nickysemenza.com` to the main bucket. Image delivery depends on
 Cloudflare Image Resizing at that origin.
-
-### Retired auxiliary Workers
-
-The retired `usda-api` Worker is replaced by the USDA release Durable Object
-above; it and its D1 database and R2 bucket are deleted. The retired `upc-lookup` Worker (D1 `upc-lookup-db`, R2
-`upc-images`) is replaced by the main Worker's `UpcLookupCache`; its data was copied and the D1
-database is deleted.
 
 ### Secrets and plaintext variables
 
@@ -518,20 +384,12 @@ configuration are Cloudflare AI Gateway state; no provider key belongs in this
 repository. Verify that every model in the checked-in registry is enabled in
 the gateway before relying on a feature that selects it.
 
-AI prices come from the live catalog fetched by the runtime client in
-`@opencode-ai/models`; Cubby maintains no rate table or generated pricing
-snapshot. The shared pricing module selects exact model IDs under their serving
-catalog providers while preserving the vendor names stored in usage records.
-One in-flight request per isolate is shared, successful prices are cached for
-one hour, and fetches time out after five seconds. A failure records its
-diagnostic and backs off for five minutes; unavailable prices remain unknown
-rather than being counted as free. Estimates include cache token rates and
-context tiers per call before aggregating spend. Pricing fetches happen in
-accounting, outside inference. The ledger owns cost estimates; conversation
-messages carry token evidence without a second SDK price estimate. Failed
-calls without reported usage remain unpriced. Import-run summaries return an
-unknown total when any recorded call is unpriced; a run with no calls totals
-zero. The nullable run-history cost contract requires Apple client 2.6 or newer.
+AI catalog/pricing implementation is owned by
+`packages/shared/src/ai/pricing.ts`; runtime model defaults by
+`packages/shared/src/ai/models.ts` and feature tiers by
+`apps/web/src/server/ai/features.ts`. Pricing belongs to accounting, outside
+inference. Unavailable prices stay unknown; failed calls without reported usage
+are unpriced, and token evidence is not a second SDK cost estimate.
 
 The shared transport owns request controls, response headers, Universal gateway
 calls, and the choice between test peers, ChatGPT, and billed gateway calls.
@@ -540,54 +398,21 @@ embedding, cookbook, and native recovery calls retain their protocol-specific
 payloads and retry policies. Gateway cache verdicts describe upstream billing;
 application `cacheStatus` continues to describe the caller's own cache.
 
-Closed-set decision calls run a random 50/50 trial between `typesafe/jev` and
-`@cf/cloudflare/clef` (the full model). The shared runner samples once before
-the application-cache lookup and keeps that model through retries. Each model
-has its own cache key, so repeated identical inputs can return either model's
-cached answer. Cache hits do not place an upstream request; 50/50 is the
-request-assignment probability, not a guaranteed split of billed calls.
-The selected answer drives the normal decision, including the existing 0.85
-high-confidence/autofill threshold. The opt-in classification sweep retains the
-pinned model's candidate and a paired candidate for one in ten stable record
-identities; only the pinned model's pending row enters human review. Field
-suggestion cache keys also include the live classification revision, which the
-sweep stores on its Run to report whether the vocabulary changed afterward.
-Existing AI usage records retain the selected model,
-provider, latency, token counts and failures, including model-specific cache
-hits. Compare upstream latency on rows with `attempt > 0`, excluding
-application-cache hits. The shared `selectDecisionModel` controls the trial.
-Clef requires `model: "clef"` in its body. Jev's gateway response wraps `answers` and
-`usage` under `result`; Clef can return them at the root. The scoped Workers AI
-run API can additionally wrap the model output in a `Completed` run result.
-The decision parser accepts these observed envelopes, rejects incomplete or
-failed run results, and validates the same choice contract. Gateway test
-fixtures must preserve each model's observed response shape. Both models keep
-the existing 254-candidate and 32,000-byte input bounds; oversized rosters
-still use the chat overflow tier.
+Decision assignment, caching, request bounds and response envelopes belong to
+the shared decision runner. Application feature tiers are declared in
+`apps/web/src/server/ai/features.ts`; retier only with live-eval evidence or an
+explicit member choice. Small ceiling-scoring evals cannot establish parity.
+The opt-in feature eval uses production prompts, schema, validation and repair
+turns, scores synthetic cases, and saves revision/replay/results under
+`artifacts/feature-routing-eval/`. Its package script and environment options
+own the replay command. Mail import still needs controlled model comparison
+([backlog](todos.md#import-pipeline-architecture)).
 
-Each feature's tier is declared once in `apps/web/src/server/ai/features.ts`.
-Chat and embedding models derive from that tier; decision calls sample the
-trial model as described above. Chat features use two tiers: `quality`
-(`gpt-6-sol`) for calls whose accuracy outweighs latency — purchase evidence
-extraction, receipt extraction, mail classification, audit and repair, recipe
-flow, and photo identity — and `fast` (`gpt-6-luna`) for interactive and bulk
-background calls. Retier a feature in either direction only on live-eval
-evidence. One recorded exception: on 2026-10-06 the household member moved
-these eight features to `quality` without a new eval, judging Sol the better
-model for them; production reaches OpenAI through the household's ChatGPT
-plan, where Sol's marginal cost is about zero, which removed the cost reason
-for Luna. The 2026-10-04 suites (audit, repair, recipe flow) scored the two
-models equal, but they are small and largely at ceiling, so they cannot
-resolve the difference. The eval is `pnpm --dir apps/web eval:features` (opt-in, billed): it places the
-production purchase-import audit, extraction-repair, and recipe-flow prompts
-through the Gateway as each candidate, with the production schema, validator,
-and repair turn, and scores synthetic cases correct, unsafe, or reviewable
-miss with token cost. `FEATURE_EVAL_FEATURES` narrows to `audit`, `repair`, or
-`recipe-flow`; `AGENT_EVAL_CANDIDATES` (for example `gpt-6-luna:xhigh`) and
-`AGENT_EVAL_REPEATS` set the candidates and repeats. Each run writes its
-revision, replay command, and results under `artifacts/feature-routing-eval/`.
-Mail import model routing has no billed eval today (the research evals were
-retired with the hosted researcher); see [todos](todos.md#import-pipeline-architecture).
+Image decisions route to vision-capable Clef independently of the text-only Jev
+trial. Photo identification prepares renditions before the shared adapter
+checks embedded media and uses the existing gateway, retry, cache and usage
+paths. Media limits and payloads belong to `server/ai/decision-model.ts` and
+`server/services/image-identification.service.ts`.
 
 Field decision prompts are measured from a Claude/Codex session over Cubby
 MCP, following `.claude/skills/decision-grading`: reviewed Suggestions
@@ -628,14 +453,11 @@ span. Other code uses `withTrace` for child operations and
 `annotateActiveSpan` for an already initialized active span. Outside the Worker
 build these helpers run work without tracing.
 
-Authenticated Start, workflow-stream, HTTP API, and MCP failures carry bounded
-message/cause diagnostics with operation, optional entity, execution stage, and
-request references. Credentials and Drizzle SQL/parameter wrappers are scrubbed;
-pre-authentication failures expose safe messages and correlation IDs. Server
-stacks stay in Sentry. The request-scoped reporter captures unexpected original
-exceptions before returning the error, deduplicates nested reporting, and supplies
-the actual event ID and an event-search link. An ID records a capture attempt,
-not guaranteed ingestion. MCP batch items receive separate references.
+Authenticated Start, workflow-stream, HTTP and MCP failures follow the
+[raw diagnostic contract](../AGENTS.md#product-constraints). Only credential-shaped
+values are redacted. Request-scoped reporting captures the original exception
+and supplies correlation/Sentry references; a capture ID is an attempt, not
+proof of ingestion, and MCP batch items retain separate references.
 
 Web error details include Copy details, the Sentry link, and Open Workers
 Observability with a copyable Ray ID when Cloudflare supplied one. The Cloudflare
@@ -660,8 +482,8 @@ network upload. `SENTRY_IGNORED_ERRORS` (`apps/web/src/lib/sentry-noise.ts`)
 lists known-noise messages dropped via `ignoreErrors` before Sentry ingests
 them, so they never consume the free-plan error quota.
 
-All four production Wrangler configurations persist traces in Workers
-Observability with the current sampling rate. Cloudflare is the only trace
+Production Wrangler configuration owns Workers Observability trace persistence
+and sampling. Cloudflare is the only trace
 destination; no Jaeger, Grafana Tempo, or Sentry trace exporter is configured.
 Sentry continues to capture errors on web, Apple, and auxiliary Workers.
 
@@ -676,10 +498,10 @@ or this repository.
 Environment serializes and scopes production deployment. Required repository
 or environment secrets are:
 
-| Secret                    | Purpose                                                    |
-| ------------------------- | ---------------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`    | Deploy all four Workers and manage their declared bindings |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Automated Claude workflows, not application runtime        |
+| Secret                    | Purpose                                             |
+| ------------------------- | --------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`    | Deploy declared Workers and manage their bindings   |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Automated Claude workflows, not application runtime |
 
 The Cloudflare token should be scoped to the checked-in account and only the
 resource types the deployment workflow manages. Production deploys always
@@ -692,8 +514,8 @@ The native targets use Xcode-managed signing and the associated domain
 `cubby.nickysemenza.com`. The web Worker serves the Apple App Site Association
 file. Purchase-import browser control additionally requires the checked-in
 Apple Events entitlement and usage description; macOS grants Automation and
-optional Screen Recording permission per local installation. There is no
-hosted native deployment in this repository.
+optional Screen Recording permission per local installation. Hosted release setup follows
+[the Apple release guide](../apps/apple/README.md#testflight-releases).
 
 ## Reconstruction and drift check
 
@@ -718,18 +540,5 @@ provider usage/audit logs, and confirm that it is absent from current deployed
 bindings. A resource being absent from this file is evidence of drift, not by
 itself authorization to delete it.
 
-## Suggestion sweep model routing
-
-A `suggestion_sweep` Run stores its entity, target fields, filters, pinned decision
-model, and pause state in Run input; Run progress checkpoints total, completed,
-applied, queued, and failed targets. Targets come from the entity's generic
-live list read. A new sweep supersedes prior pending rows for the same record
-and field. A write to a suggested field also supersedes its other pending rows.
-Superseded rows remain stored for evaluation but are excluded from pending
-reads. There is no separate classification review page.
-Manifest-generated entity lists offer a pending-suggestion filter by kind and a sweep action that reuses the list's current filters.
-A deterministic sample of targets is evaluated by both Jev and Clef; the paired
-Suggestions share a pair key, and only the pinned-model row can auto-apply an
-Addition at confidence 0.85 or higher. Corrections remain pending regardless of
-confidence. The shared paced batch loop observes persisted pause state between
-items; image-processing backfill can move onto it in a later change.
+Suggestion sweep behavior belongs in [compiled entities](entities.md#product-classification-and-photos),
+not the infrastructure reconstruction checklist.

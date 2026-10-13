@@ -14,9 +14,9 @@ import { fileURLToPath } from "node:url";
 import { sourceDigest, sourceInputs } from "./rust-fingerprint.ts";
 
 test("offline startup ignores inherited Rust logging but preserves compiler flag freshness", () => {
-  const script = fileURLToPath(new URL("./ensure-wasm.ts", import.meta.url));
+  const script = fileURLToPath(new URL("./ensure.ts", import.meta.url));
   const key = (env: NodeJS.ProcessEnv) =>
-    execFileSync(process.execPath, [script, "--fingerprint"], {
+    execFileSync(process.execPath, [script, "wasm", "--fingerprint"], {
       env,
       encoding: "utf8",
     }).trim();

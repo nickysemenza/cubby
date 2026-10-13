@@ -4,14 +4,13 @@ Status: **proposed**. Design agreed 2026-09-22 in a design-review session run
 against `main` at `537d853c6`. It follows the household contribution ledger
 ([architecture](../household-contribution-ledger.md)), which shipped the
 model; this plan closes the gaps found when planning a first real group-trip
-import. Phase 4 (backlog hygiene) landed with this plan; Phases 1–3 are not
-implemented yet. Execution: the main session, one implementation PR, phases in
+import. Bulk attribution, gap links and importer guidance remain proposed. Execution: the main session, one implementation PR, phases in
 order.
 
 ## 1. Summary
 
 The ledger can already say who consumed an Expense and who first paid for it,
-and both the web and native editors can set that one expense at a time. Four
+and both the web and native editors can set that one expense at a time. Three
 things are still missing for a shared-cost import to be pleasant and correct:
 
 1. **Bulk attribution.** Setting the same beneficiary or funder set across many
@@ -22,67 +21,18 @@ things are still missing for a shared-cost import to be pleasant and correct:
 3. **Importer guidance.** The shared `purchase-import` skill has no vocabulary
    for person-to-person repayments, so an agent handed a statement or a payment
    app export would book a friend's repayment as a negative Expense.
-4. **Backlog drift.** One todo entry described native editor behavior that was
-   no longer true, and one was not written in synthetic terms. Fixed with this
-   plan (§7).
 
 No schema migration is needed: every change is code, generated bindings, docs,
 and tests.
 
-## 2. What already exists
+## 2. Existing contract
 
-Verified on `main` at `537d853c6`. Do not rebuild any of this.
-
-- **Storage and write path.** Expense `beneficiaries` and `funders` are arrays of
-  `{ partyId | null, weight }` stored in `ExpenseAttribution`. They are written
-  only by `replaceExpenseAttributionRole`
-  (`apps/web/src/server/repo/expense-attribution.ts`): it locks the referenced
-  `LedgerParty` rows, soft-deletes the role's live rows for that expense, and
-  inserts the replacements, inside the caller's transaction. It does **not**
-  audit; the single-record path audits around it via `auditNestedChanges` in
-  `apps/web/src/server/repo/expense/crud.ts`.
-- **Editors.** Web: `LedgerAttributionsField`
-  (`apps/web/src/entity/editing/ledger-attributions-field.tsx`), registered as
-  the `ledger-attributions` specialized renderer in
-  `apps/web/src/entity/editing/entity-primitive-fields.tsx`. Native:
-  `apps/apple/App/Shared/Editors/LedgerAttributionsControl.swift`, listed as
-  implemented in `NativePresentationCoverage.swift`.
-- **Fallbacks.** In `apps/web/src/server/repo/household-contribution/allocation.ts`,
-  a funder with no explicit row is derived from the paying account's
-  `FinancialAccount.ledgerPartyId`, and a beneficiary with no explicit row
-  defaults to the Household party (`assumed_household`). Ordinary household
-  spending therefore needs no tagging; only costs shared with guests do.
-- **Gaps.** Codes live in `packages/schemas/src/household-contribution.ts` and
-  are computed by `attributionGaps()` in
-  `apps/web/src/server/repo/household-contribution/reports.ts`. Per-expense
-  codes carry expense shortcodes in `targetIds`. `beneficiary_assumed_household`
-  and `funder_not_yet_paid` are **aggregated**: a count with empty `targetIds`,
-  because assumed-household can cover most of the ledger.
-- **Per-target links.** `ContributionGapTargets`
-  (`apps/web/src/features/finance/household-contribution-format.tsx/`) already
-  links each `EXP-` target to its detail page, on both the project section and
-  the household ledger page.
-- **Filter pattern.** The expense list's `ledgerPartyId` filter (either role) is
-  implemented in `buildExpenseWhereClause`
-  (`apps/web/src/server/repo/expense/lookup.ts`) as an `EXISTS` over
-  `ExpenseAttribution` joined to a live `LedgerParty`.
-- **Bulk path.** The expense definition
-  (`packages/schemas/src/entity-definitions/16-expense.entity.ts`) declares
-  `bulkUpdate: { fields: ["projectId", "trade", "costType", "date"] }`.
-  `pnpm generate` emits a `.pick()` of `expenseUpdateData` into
-  `apps/web/src/server/generated/entity-bindings.gen.ts`; the kernel workflow in
-  `apps/web/src/server/entity-kernel/entity-operations.ts` validates against it
-  and calls `expenseEntityAdapter.repository.bulkUpdate`
-  (`apps/web/src/server/repo/expense/entity-adapter.ts`), which calls
-  `updateExpensesInBulk` in `crud.ts`. That function is typed to the four
-  scalars and writes them with one `.set()`. The web surface is
-  `apps/web/src/entity/actions/bulk-edit-entity-action.tsx`.
-- **Import pipeline.** The import-run agent imports only
-  `.claude/skills/purchase-import/SKILL.md`
-  (`apps/web/src/server/purchase-agent/import-run-workflows.ts`), **not** its `references/`.
-  Gmail sync targets are vendor order senders only; nothing ingests
-  person-to-person payments, and the only negative-Expense write path is the
-  `create_refund` fix for vendor-order refunds.
+[Household contribution ledger](../household-contribution-ledger.md) owns the
+current model; declarations and repository code own field rosters. Reuse the
+existing attribution editors, `replaceExpenseAttributionRole`, allocation
+fallbacks, gap reports and generic bulk path. Trace their current audit and
+invalidation behavior before implementing this proposal; the design review's
+old source inventory is not a current implementation claim.
 
 ## 3. Decisions
 
@@ -90,7 +40,7 @@ Settled; do not relitigate without new evidence.
 
 | Decision                                                                                      | Why                                                                                                                                                       |
 | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Scope is bulk attribution, bulk gap links, importer guidance, and backlog fixes               | Group trips are rare. The editors already exist on web and native.                                                                                        |
+| Scope is bulk attribution, bulk gap links and importer guidance                               | Group trips are rare. The editors already exist on web and native.                                                                                        |
 | Code ships before the first real group-trip import, in one PR                                 | The import then exercises the finished tools.                                                                                                             |
 | Bulk is **replace per role**. Each role is optional; `[]` clears the role                     | Covers the real use ("these lines are shared by these people, equally"). Add/remove modes need a weight-conflict rule and have no use case yet.           |
 | Bulk goes through the **generic kernel**, with a narrow nested-field hook                     | One bulk path; MCP and web both inherit it. Not a bespoke tool.                                                                                           |
@@ -199,29 +149,6 @@ bulk id cap applies.
 3. **`docs/household-contribution-ledger.md`:** link the reference as the usage
    guide; keep the architecture doc about architecture.
 
-## 7. Phase 4 — Backlog hygiene (`docs/todos.md`) — done
-
-Landed with this plan.
-
-1. **Fixed "Native specialized-renderer editors".** Removed expense
-   `beneficiaries` and `funders` (implemented natively). Replaced "silently left
-   out": each remaining field's renderer was re-checked, and unsupported
-   renderers show "Additional fields are available on web" in
-   `EntityEditorSheet` via `NativePresentationCoverage`.
-2. **Rewrote the re-export dedupe entry** ("Shared-expense export re-import
-   dedupe") in synthetic terms and as a condition.
-3. **Added "Person-to-person repayment discovery"** — promote when entering
-   transfers by hand becomes a chore. Sources: already-imported aggregator
-   statement rows with person-to-person payments that were never promoted to
-   Financial Transactions, and Gmail "paid you" emails. It must be review-only:
-   propose, a human confirms, and confirmation creates the `LedgerTransfer` and
-   its source claim. No automatic counterparty resolution.
-4. **Added "Project default beneficiaries"** — promote if shared-cost projects
-   become frequent. It would be a fallback tier (explicit, then project default,
-   then household), following the live-inheritance pattern.
-5. **Added "Attribution prefill"** — the last set used with the same vendor, as an
-   editor default. Promote with the same evidence as (4).
-
 ## 8. Out of scope
 
 A Splitwise importer or any batch importer; ingesting person-to-person payments;
@@ -264,4 +191,3 @@ required PR checks. All repository text uses synthetic data.
 - [ ] Gap links follow §5.4 and open lists whose counts match the report
 - [ ] `SKILL.md` carries the inline repayment rule; the reference guide exists
       and the architecture doc links it
-- [x] `docs/todos.md` updated per §7

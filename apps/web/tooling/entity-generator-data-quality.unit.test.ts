@@ -43,3 +43,19 @@ describe("related data-quality roll-ups", () => {
     expect(() => validateDataQualityDeclarations(entities)).toThrow(/one hop/);
   });
 });
+
+// A readable field alone cannot host a check: the record renderer needs a
+// declared field section, otherwise quality navigation points nowhere.
+it("rejects quality placement on a readable field omitted from record sections", () => {
+  const entity = scored("a", []);
+  entity.dataQuality!.checks[0]!.placement = { field: "name" };
+  const withoutSections = {
+    ...entity,
+    inspector: fromPartial<CompiledEntity["inspector"]>({
+      detail: { sections: [] },
+    }),
+  };
+  expect(() => validateDataQualityDeclarations([withoutSections])).toThrow(
+    /field absent from detail/,
+  );
+});

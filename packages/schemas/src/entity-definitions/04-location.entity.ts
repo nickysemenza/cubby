@@ -1070,6 +1070,8 @@ Rules:
       checks: [
         {
           id: "location_ai_description",
+          satisfiedLabel: "Description recorded",
+          placement: { section: "ai-description" },
           facet: "content",
           weight: 1,
           label: "AI description",
@@ -1080,6 +1082,8 @@ Rules:
           // Product elsewhere counts the item twice (once as the place, once
           // as an inventory row).
           id: "location_furniture_counted",
+          satisfiedLabel: "Furniture counted once",
+          placement: { field: "productId" },
           facet: "integrity",
           kind: "defect",
           weight: 2,

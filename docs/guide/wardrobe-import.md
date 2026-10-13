@@ -65,6 +65,10 @@ and never expires while waiting for you.
 - **On your device, during upload**: text recognition reads tags and labels.
 - **In Cubby**: each photo gets a written description, when image work is on.
   While it is paused, the Run's page says so and grouping waits.
+  Independent Apple description jobs wait for a capable participating device.
+  Clef also proposes existing Products for supported single-object photos;
+  open an image to see unconfirmed suggestions or why it abstained. No match
+  changes a Product, attachment, or inventory without confirmation.
 - **On a connected Apple device**: each garment photo gets a background-removed
   cutout, when a device is available. Tag photos are never cut out.
 

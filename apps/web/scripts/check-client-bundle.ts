@@ -43,7 +43,7 @@ export async function assertNoServerCodeInClient(
 }
 
 // Each recipebridge package carries exports the others lack
-// (scripts/build-wasm.sh). Hashed asset names do not say which build an asset
+// (scripts/ensure.ts wasm --build). Hashed asset names do not say which build an asset
 // is, so match on an export name in the binary instead.
 const WASM_EXCLUSIONS = [
   { directory: "Worker", forbidden: "open_book" },

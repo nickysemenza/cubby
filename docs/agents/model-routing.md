@@ -14,9 +14,7 @@ Delegation pays only for:
   small or single-file changes itself.
 
 Anything a handful of tool calls covers stays in the main session — a lookup in
-a known file, a small plan, a focused test. Measured over 30 days of Claude
-sessions, half spawned subagents and subagents consumed 47% of all context
-tokens, so each spawn should be a deliberate choice. Parallel lanes suit
+a known file, a small plan, a focused test. Each spawn should earn its setup and context cost. Parallel lanes suit
 read-heavy work; write lanes own disjoint worktrees or stay in the main thread.
 Run at most two implementation lanes at once on one machine: each builds,
 typechecks and starts test services, and more lanes contend for CPU and the

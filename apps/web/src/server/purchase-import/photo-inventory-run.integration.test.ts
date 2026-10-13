@@ -398,6 +398,8 @@ describe("photo import finalize", () => {
       .where(eq(imageProcessingJob.imageId, parseImageId.parse(staged.id)));
     expect(jobs.map((job) => job.kind).sort()).toEqual([
       "describe_image",
+      "describe_image",
+      "identify_image",
       "subject_lift",
     ]);
   });

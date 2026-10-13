@@ -470,18 +470,35 @@ export const compilePresentation = (
   const overviewFields = detailFields.filter(
     (key) => !additionalFields.has(key),
   );
-  const declaredSections = detail.sections ?? [
-    ...(overviewFields.length === 0
+  // Read and edit share the same declared groups. Uneditable computed facts
+  // retain a separate summary section rather than preceding record identity.
+  const grouped = edit.sections.flatMap((section) => {
+    const fields = section.fields.filter((key) => overviewFields.includes(key));
+    return fields.length === 0
       ? []
       : [
           {
             kind: "fields" as const,
-            id: "overview",
-            // The group is already titled Overview; its fact section is Details.
-            // The section id remains the stable hash anchor.
-            title: "Details",
+            id: section.id === "main" ? "overview" : `fields-${section.id}`,
+            title: section.title ?? "Record",
             placement: "primary" as const,
-            fields: overviewFields,
+            fields,
+          },
+        ];
+  });
+  const groupedKeys = new Set(grouped.flatMap((section) => section.fields));
+  const remaining = overviewFields.filter((key) => !groupedKeys.has(key));
+  const declaredSections = detail.sections ?? [
+    ...grouped,
+    ...(remaining.length === 0
+      ? []
+      : [
+          {
+            kind: "fields" as const,
+            id: grouped.length === 0 ? "overview" : "summaries",
+            title: grouped.length === 0 ? "Record" : "Coverage and summaries",
+            placement: "primary" as const,
+            fields: remaining,
           },
         ]),
     ...detail.additionalSections,

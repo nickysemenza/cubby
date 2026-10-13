@@ -108,7 +108,6 @@ export const productContract = defineContract("product", {
   findOrCreateByCode: mutation({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
       note: "upc.find_or_create covers UPCs only, not ISBNs",
     },
     native: "Search tab create from a barcode or ISBN",
@@ -139,7 +138,6 @@ export const productContract = defineContract("product", {
   mergePreview: query({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
       note: "Keeper and incoming field winners and blockers; entity_read.connections reports only edge dispositions",
     },
     input: mergeProductMatchInput,
@@ -208,7 +206,6 @@ export const productContract = defineContract("product", {
   discard: mutation({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
     },
     native: "Discard product units from the hero action",
     ...productWorkflowSchemas.discard,

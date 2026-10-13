@@ -24,6 +24,10 @@ import {
 } from "~/server/purchase-import/run-service";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { deleteImages } from "~/server/repo/image";
+import {
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+} from "~/server/repo/image-processing";
 import { mergeLedgerParties } from "~/server/repo/ledger-party";
 import { mergeProducts } from "~/server/repo/product/merge";
 import {
@@ -505,7 +509,7 @@ describe("photo group proposals", () => {
     expect(view?.committedProduct?.name).toBe("Synthetic Rain Coat");
   });
 
-  it("waits for current cloud descriptions but lets device cutout work continue", async () => {
+  it("waits for current cloud descriptions but lets Apple descriptions and device cutout work continue", async () => {
     const { run, codes } = await seedRun(1);
     const [source] = await getDb(ctx.db)
       .select({ id: image.id })
@@ -524,9 +528,19 @@ describe("photo group proposals", () => {
         kind: "describe_image",
         state: "pending",
         sourceContentHash: sourceHash,
-        processorRevision: 1,
+        processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
       })
       .returning();
+    const [appleDescription] = await getDb(ctx.db)
+      .insert(imageProcessingJob)
+      .values({
+        imageId: parseEntityId("image", source.id),
+        kind: "describe_image",
+        state: "waiting_for_device",
+        sourceContentHash: sourceHash,
+        processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+      })
+      .returning({ id: imageProcessingJob.id });
     await getDb(ctx.db)
       .insert(imageProcessingJob)
       .values({
@@ -563,6 +577,12 @@ describe("photo group proposals", () => {
     expect(approved.results).toEqual([
       { groupKey: "sweater", outcome: "committed" },
     ]);
+    expect(
+      await getDb(ctx.db)
+        .select({ state: imageProcessingJob.state })
+        .from(imageProcessingJob)
+        .where(eq(imageProcessingJob.id, appleDescription!.id)),
+    ).toEqual([{ state: "waiting_for_device" }]);
   });
 
   // Regression: each upload numbers its photos from 0, so a second batch
@@ -651,11 +671,21 @@ describe("photo group proposals", () => {
         kind: "describe_image",
         state: "ready",
         sourceContentHash: contentHash,
-        processorRevision: 1,
+        processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
         dispatchedAt,
         completedAt,
       })
       .returning({ id: imageProcessingJob.id });
+    await getDb(ctx.db)
+      .insert(imageProcessingJob)
+      .values({
+        imageId: parseEntityId("image", source.id),
+        kind: "describe_image",
+        state: "waiting_for_device",
+        sourceContentHash: contentHash,
+        processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+        dispatchedAt: new Date("2026-09-20T07:00:00.000Z"),
+      });
     await getDb(ctx.db)
       .insert(imageProcessingAttempt)
       .values({
@@ -670,6 +700,9 @@ describe("photo group proposals", () => {
     expect(await listPhotoRunImages(ctx.db, run.shortcode)).toEqual([
       expect.objectContaining({
         id: codes[0],
+        describe: "ready",
+        describeStartedAt: dispatchedAt.toISOString(),
+        describeCompletedAt: completedAt.toISOString(),
         describeAttemptMs: 4_000,
         describeWaitingMs: 23_931_500,
       }),

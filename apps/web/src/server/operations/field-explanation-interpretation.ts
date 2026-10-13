@@ -115,12 +115,8 @@ export function interpretFieldValue(
     {
       result,
       summary: field.explanation?.description ?? field.description ?? "",
-      caveats: [
-        "This reflects recorded inputs at evaluation time. Unrecorded or unavailable source evidence cannot be inferred.",
-      ],
-      nextSteps: [
-        "Open this record or a linked evidence record to review the inputs used by this rule.",
-      ],
+      caveats: [],
+      nextSteps: [],
     };
   const declared = declaredInterpretation(field, value);
   if (declared) return { result, ...declared };

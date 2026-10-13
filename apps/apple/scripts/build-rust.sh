@@ -5,7 +5,7 @@
 # but required on disk for SPM's `binaryTarget(path:)`) and the committed
 # `cubby_ffi.swift` shim.
 #
-# This script is the builder only. `scripts/ensure-apple-ffi.ts` is the entry
+# This script is the builder only. `scripts/ensure.ts apple-ffi` is the entry
 # point: it keys an Nx-cached target (project.json `apple-ffi`) on the Rust
 # content fingerprint, so an unchanged tree — including a fresh worktree —
 # restores the xcframework and shim instead of running this. There is

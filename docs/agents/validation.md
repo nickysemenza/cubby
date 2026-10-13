@@ -122,8 +122,7 @@ against production: the repository is public and attached images are too. Save
 `page.screenshot({ path })` files from a throwaway Playwright spec or the
 affected scenario, and delete the throwaway spec before committing. Reference
 each image in the body by its local path and pass the same path to
-`gh pr create --attach` or `gh pr edit --attach` (gh 2.102 has the flag; 2.96
-does not); the CLI uploads it and rewrites the reference. A before image (from
+`gh pr create --attach` or `gh pr edit --attach` (verify support in the installed `gh pr create --help` / `gh pr edit --help`); the CLI uploads it and rewrites the reference. A before image (from
 `main` or a run before the first edit) helps when the change is a comparison.
 Do not open the images to check them: attaching a saved file costs no context.
 

@@ -157,7 +157,8 @@ describe("image execution history conservation", () => {
       kinds: ["describe_image"],
       publish: false,
     });
-    expect(repeated.jobIds).toEqual([jobId]);
+    expect(repeated.jobIds).toContain(jobId);
+    expect(repeated.jobIds).toHaveLength(2);
     const memberships = await getDb(ctx.db)
       .select()
       .from(imageProcessingSubmissionJob)
@@ -568,7 +569,7 @@ describe("image execution history conservation", () => {
     expect(await retryFailedImageProcessingJobs(ctx.db, 25)).toEqual([]);
   });
   it("repairs a live wakeup past more obsolete rows than its batch limit", async () => {
-    const { source, jobId } = await setup();
+    const { source, scheduled } = await setup();
     const sourceId = parseEntityId("image", source.id);
     await getDb(ctx.db)
       .insert(imageProcessingJob)
@@ -583,9 +584,9 @@ describe("image execution history conservation", () => {
         })),
       );
 
-    expect(await findImageProcessingDispatchRepairs(ctx.db, 100)).toEqual([
-      jobId,
-    ]);
+    expect(
+      new Set(await findImageProcessingDispatchRepairs(ctx.db, 100)),
+    ).toEqual(new Set(scheduled.jobIds));
 
     const obsolete = await getDb(ctx.db)
       .select({ state: imageProcessingJob.state })
@@ -594,7 +595,7 @@ describe("image execution history conservation", () => {
     expect(obsolete.filter((row) => row.state === "skipped")).toHaveLength(100);
   });
   it("retires obsolete processor wakeups without executing them or changing completed history", async () => {
-    const { source, jobId } = await setup();
+    const { source, scheduled, jobId } = await setup();
     const sourceId = parseEntityId("image", source.id);
     const revisions = Array.from(
       { length: 104 },
@@ -647,9 +648,9 @@ describe("image execution history conservation", () => {
         leaseMs: 60_000,
       }),
     ).toBeNull();
-    expect(await findImageProcessingDispatchRepairs(ctx.db, 100)).toEqual([
-      jobId,
-    ]);
+    expect(
+      new Set(await findImageProcessingDispatchRepairs(ctx.db, 100)),
+    ).toEqual(new Set(scheduled.jobIds));
     const retired = await getDb(ctx.db)
       .select()
       .from(imageProcessingJob)

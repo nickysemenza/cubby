@@ -74,8 +74,6 @@ export const mcpOmission = z.discriminatedUnion("omit", [
   /** A real agent capability not yet exposed. */
   z.strictObject({
     omit: z.literal("deferred_capability"),
-    /** The bold title of the docs/todos.md entry that lists this operation. */
-    todo: z.string().min(1),
     note: note.optional(),
   }),
 ]);

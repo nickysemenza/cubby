@@ -123,10 +123,12 @@ A member may Reclassify up to 200 owned Emails at once. One Run per mailbox
 backfill or continuous execution approval) reruns rule, Jev and the relevance
 model even under classification-only policy, refetching each original from
 Gmail. The rerun is always recorded as a prediction, but it never becomes the
-Email's processing Run and never admits import. It replaces Relevance only when
-no retained content or import would be dropped; otherwise the Email keeps its
-Relevance until the member accepts the rerun (resolving it unrelated). A
-member resolution is never overridden. A rule, Jev or model prediction that
+Email's processing Run and never admits import. Unaccepted retained negatives
+settle automatically through the protected original-disposal writer. Completed
+or researching imports keep their Relevance until member acceptance. Unreadable
+refetches cannot discard an earlier retained original. Accepted associations,
+member resolutions and independent reviews of the same checksum are never
+discarded by a negative rerun. A rule, Jev or model prediction that
 disagrees with the member's resolution or latest review of the same checksum
 records a `member_review` conflict. One request stops starting Emails after a
 time budget and reports the rest `deferred` for the member to rerun. One shared
@@ -134,7 +136,8 @@ predicate drives the list's
 review-conflict filter and saved view, and the Accuracy view counts conflicts
 by stage and model. Email quality scores these pipeline gaps per Relevance:
 undecided, unreviewed, missing original, missing preview and not imported; an
-unrelated Email can only lack review.
+settled unrelated Emails need no member review and leave the operational queue.
+Their prediction history remains eligible for independent accuracy sampling.
 One association resolver serves hydration, linked filters, counts and related
 records. It distinguishes accepted import associations, active lifecycle links,
 dismissed candidates and mailbox-scoped thread context.

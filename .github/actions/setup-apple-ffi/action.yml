@@ -62,7 +62,7 @@ runs:
         CUBBY_FFI_TARGETS: ${{ inputs.targets }}
       run: |
         set -euo pipefail
-        fingerprint="$(node scripts/ensure-apple-ffi.ts --fingerprint)"
+        fingerprint="$(node scripts/ensure.ts apple-ffi --fingerprint)"
         echo "key=apple-ffi-output-v1-${RUNNER_OS}-${{ inputs.targets }}-${{ inputs.profile }}-${fingerprint}" >> "$GITHUB_OUTPUT"
         echo "CUBBY_FFI_SETUP_FINGERPRINT=$fingerprint" >> "$GITHUB_ENV"
 
@@ -88,9 +88,9 @@ runs:
       # Reuse the shared artifact cache whenever the workspace is available.
       run: |
         if node --input-type=module -e 'import.meta.resolve("nx/bin/nx.js")' >/dev/null 2>&1; then
-          node scripts/ensure-apple-ffi.ts
+          node scripts/ensure.ts apple-ffi
         else
-          node scripts/ensure-apple-ffi.ts --build
+          node scripts/ensure.ts apple-ffi --build
         fi
 
     - name: Check committed UniFFI bindings

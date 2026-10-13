@@ -21,6 +21,12 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ReferencePreview } from "~/entity/components/reference-preview";
+import {
+  fieldQualityChecks,
+  useFieldQuality,
+  QualityResult,
+  QualityCheckDetails,
+} from "~/entity/entity-detail/record-quality";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { filterUrlKey } from "~/entity/filters";
@@ -63,6 +69,7 @@ import {
   type MobileColumnMeta,
 } from "~/ui/data-table/table-meta";
 import { ExternalLinkText } from "~/ui/ExternalLink";
+import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
@@ -81,7 +88,7 @@ import {
   enumFieldOptions,
   enumFieldSuggestSource,
 } from "./enum-field-display";
-import { FieldExplanation } from "./field-explanation";
+import { FieldExplanationContents } from "./field-explanation";
 import { FieldResolutionBadge, fieldResolutionFor } from "./field-resolution";
 import { listRendererColumns } from "./list-field-renderers";
 import { readPathValue } from "./read-path";
@@ -973,8 +980,11 @@ export function EntityBasicInfo<TRecord extends object>({
   footer?: ReactNode;
 }) {
   const fields = entityDetailFields(entity, fieldKeys);
-  const spans = foldedSpans(entity, fields);
   const explainedRecord = explainedRecordSchema.safeParse(record);
+  const quality = useFieldQuality(
+    entity,
+    explainedRecord.success ? explainedRecord.data.id : undefined,
+  );
   for (const key of [...Object.keys(overrides), ...Object.keys(afterFields)]) {
     if (!fields.some((field) => field.key === key)) {
       throw new Error(`Undeclared detail renderer for ${entity}.${key}`);
@@ -989,12 +999,7 @@ export function EntityBasicInfo<TRecord extends object>({
       header={header}
       footer={footer}
       fields={fields.flatMap((field) => {
-        if (spans.ends.has(field.key)) return [];
-        const span = spans.byStart.get(field.key);
-        if (span !== undefined)
-          return [
-            { label: span.label, value: renderSpanValue(entity, record, span) },
-          ];
+        const checks = fieldQualityChecks(quality?.checks ?? [], field.key);
         const rendered = overrides[field.key]?.(record) ?? {
           value: renderDetailFieldValue(entity, record, field),
         };
@@ -1006,13 +1011,14 @@ export function EntityBasicInfo<TRecord extends object>({
             : cohortLinks
               ? cohortFilterAction(entity, record, field)
               : undefined;
-        const explanationAction =
+        const explanation =
           field.explanation && explainedRecord.success ? (
-            <FieldExplanation
+            <FieldExplanationContents
               entity={entity}
               id={explainedRecord.data.id}
               field={field.key}
               label={field.label}
+              surface="detail"
             />
           ) : undefined;
         const resolution = fieldResolutionFor(record, field.key);
@@ -1021,11 +1027,11 @@ export function EntityBasicInfo<TRecord extends object>({
         const decoratedValue = field.control?.suggest ? (
           <span className="inline-flex max-w-full min-w-0 items-center gap-1">
             <RecordFieldSuggestion record={record} field={field.key}>
-              {rendered.value}
+              {rendered.value ?? <NoneValue />}
             </RecordFieldSuggestion>
           </span>
         ) : (
-          rendered.value
+          (rendered.value ?? <NoneValue />)
         );
         return [
           {
@@ -1036,14 +1042,33 @@ export function EntityBasicInfo<TRecord extends object>({
             caption: resolution ? (
               <FieldResolutionBadge record={record} field={field.key} />
             ) : undefined,
-            filterAction:
-              filterAction || explanationAction ? (
-                // One unit, so a wrap never strands the info icon alone.
-                <span className="inline-flex shrink-0 items-center gap-2">
-                  {filterAction}
-                  {explanationAction}
+            anchor: quality
+              ? `${quality.prefix}-field-${field.key}`
+              : undefined,
+            quality:
+              checks.length > 0 ? (
+                <span className="flex flex-col items-start gap-1">
+                  {checks.map((check) => (
+                    <QualityResult key={check.check} check={check} />
+                  ))}
                 </span>
               ) : undefined,
+            explanation:
+              checks.length > 0 && explainedRecord.success ? (
+                <div className="grid gap-3">
+                  {checks.map((check) => (
+                    <QualityCheckDetails
+                      key={check.check}
+                      check={check}
+                      entityId={explainedRecord.data.id}
+                    />
+                  ))}
+                  {explanation}
+                </div>
+              ) : (
+                explanation
+              ),
+            filterAction,
           },
           ...(afterFields[field.key] ?? []),
         ];
@@ -1098,7 +1123,7 @@ const asText = (value: EditableFieldValue) =>
 const numberOrNull = z.number().nullable().catch(null);
 const booleanOrNull = z.boolean().nullable().catch(null);
 const asNumber = (value: EditableFieldValue) => numberOrNull.parse(value);
-const asBoolean = (value: EditableFieldValue) => booleanOrNull.parse(value);
+const asBoolean = (value: unknown) => booleanOrNull.parse(value);
 
 /** The row-parametrized copy/paste descriptor for an editable field's column. */
 function editableFieldCellData<TRecord extends object>(
@@ -1283,13 +1308,31 @@ function renderEditableField<TRecord extends object>(
     }
     case "checkbox":
       return (
-        <Checkbox
-          checked={asBoolean(value) ?? false}
-          onCheckedChange={(next) => {
-            void save(next);
-          }}
-          aria-label={`Set ${field.label}`}
-        />
+        <span className="inline-flex items-center gap-2">
+          <Checkbox
+            checked={asBoolean(resolution ? resolution.value : value) === true}
+            indeterminate={
+              asBoolean(resolution ? resolution.value : value) === null
+            }
+            onCheckedChange={(next) => {
+              void save(next);
+            }}
+            aria-label={`Set ${field.label}`}
+          />
+          {asBoolean(resolution ? resolution.value : value) === null ? (
+            <span className="text-xs text-muted-foreground">Undecided</span>
+          ) : null}
+          {resolution?.canReset && field.nullable ? (
+            <Button
+              type="button"
+              variant="link"
+              size="xs"
+              onClick={() => void save(null)}
+            >
+              Use inherited value
+            </Button>
+          ) : null}
+        </span>
       );
     case "specialized":
       throw new Error(
@@ -1323,6 +1366,35 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
         throw new Error(`${entity}.${key} has no editable scalar control`);
       }
       const control = field.control;
+      if (
+        field.reference &&
+        !field.reference.multiple &&
+        isReferencePickerEntity(field.reference.entity)
+      ) {
+        const target = field.reference.entity;
+        const item = readReferenceField(record, field)?.items[0];
+        const value = item ? { id: item.id, name: item.name ?? item.id } : null;
+        return [
+          key,
+          () => ({
+            value: (
+              <EditableEntityCell
+                value={value}
+                onSave={async (id) => {
+                  await mutate({ id: record.id, data: { [key]: id } });
+                }}
+                SearchProvider={referenceEntitySearch(target)}
+                label={target}
+                clearable={field.nullable}
+                trigger="pencil"
+                renderValue={() =>
+                  renderDetailFieldValue(entity, record, field)
+                }
+              />
+            ),
+          }),
+        ] as const;
+      }
       const resolution = fieldResolutionFor(record, field.key);
       // SAFETY: `readKey` names a declared read projection on this same
       // record shape — the manifest is the contract this file already

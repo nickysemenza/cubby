@@ -4,8 +4,16 @@ import {
   type ImageId,
   type RunId,
 } from "@cubby/schemas/identifiers";
+import { ImageStatus } from "@cubby/schemas/image";
+import {
+  IMAGE_IDENTIFICATION_MODEL,
+  IMAGE_IDENTIFICATION_PROMPT_REVISION,
+  IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION,
+  type ImageIdentificationResult,
+} from "@cubby/schemas/image-identification";
 import {
   imageProcessingCompletedOutcome,
+  imageProcessingJobKind,
   imageDescriptionResult,
   imageDescriptionAnalysis,
   type ImageDescriptionResult,
@@ -94,9 +102,20 @@ export const IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION =
     ].join("/"),
   );
 
+export const IMAGE_IDENTIFICATION_PROCESSOR_REVISION = stableProcessorRevision(
+  [
+    "cloud",
+    IMAGE_IDENTIFICATION_MODEL,
+    IMAGE_IDENTIFICATION_PROMPT_REVISION,
+    IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION,
+  ].join("/"),
+);
+
 const currentImageProcessingProcessor = () => sql<boolean>`(
   (${imageProcessingJob.kind} = 'subject_lift'
     AND ${imageProcessingJob.processorRevision} = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION})
+  OR (${imageProcessingJob.kind} = ${imageProcessingJobKind.enum.identify_image}
+    AND ${imageProcessingJob.processorRevision} = ${IMAGE_IDENTIFICATION_PROCESSOR_REVISION})
   OR (${imageProcessingJob.kind} = 'describe_image'
     AND ${imageProcessingJob.processorRevision} IN (${IMAGE_DESCRIPTION_PROCESSOR_REVISION}, ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}))
 )`;
@@ -931,8 +950,29 @@ type DescriptionAnalysisIdentity = {
   inputFingerprint: string;
 };
 
+/** Cloud decisions never enter the companion command/result protocol. */
+type IdentificationCompletion = Omit<ImageProcessingResult, "outcome"> & {
+  outcome:
+    | {
+        kind: "identify_image";
+        status: "completed";
+        identification: ImageIdentificationResult;
+      }
+    | {
+        kind: "identify_image";
+        status: "failed";
+        retryable: boolean;
+        reason: string;
+      }
+    | {
+        kind: "identify_image";
+        status: "skipped";
+        reason: "unsupported_format" | "not_suitable" | "no_subject";
+      };
+};
+
 type CompletionInput = {
-  result: ImageProcessingResult;
+  result: ImageProcessingResult | IdentificationCompletion;
   runtime?: AiAnalysisRuntime;
   verifiedDerivative?: {
     sha256: string;
@@ -943,6 +983,7 @@ type CompletionInput = {
   /** Analysis insertion and artifact adoption share the current-attempt fence. */
   appleAnalysis?: DescriptionAnalysisIdentity;
   cloudAnalysis?: DescriptionAnalysisIdentity;
+  identificationAnalysis?: DescriptionAnalysisIdentity;
   /** A rejected output belongs to this verified attempt and is retired atomically. */
   orphanOutputKey?: string;
 };
@@ -958,6 +999,7 @@ type CompletionJob = {
   sourceContentHash: string;
   processorRevision: number;
   imageHash: string | null;
+  imageStatus: string;
 };
 
 function canAdoptCompletion(
@@ -969,6 +1011,8 @@ function canAdoptCompletion(
   const revisionMatches =
     (job.kind === "subject_lift" &&
       job.processorRevision === IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION) ||
+    (job.kind === "identify_image" &&
+      job.processorRevision === IMAGE_IDENTIFICATION_PROCESSOR_REVISION) ||
     (job.kind === "describe_image" &&
       (job.processorRevision === IMAGE_DESCRIPTION_PROCESSOR_REVISION ||
         job.processorRevision === IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION));
@@ -986,8 +1030,17 @@ function canAdoptCompletion(
     job.attemptId === input.result.attemptId &&
     job.leaseValid &&
     job.imageHash === job.sourceContentHash &&
+    job.imageStatus === ImageStatus.enum.UPLOADED &&
     revisionMatches &&
-    appleAnalysisMatches
+    appleAnalysisMatches &&
+    (outcome.kind !== "identify_image" ||
+      outcome.status !== "completed" ||
+      (input.identificationAnalysis?.model === IMAGE_IDENTIFICATION_MODEL &&
+        input.identificationAnalysis.provider === "cloudflare" &&
+        input.identificationAnalysis.promptRevision ===
+          IMAGE_IDENTIFICATION_PROMPT_REVISION &&
+        input.identificationAnalysis.resultSchemaRevision ===
+          IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION))
   );
 }
 
@@ -1105,6 +1158,24 @@ async function adoptSuccessfulCompletion(
       })
       .onConflictDoNothing();
   }
+  if (input.identificationAnalysis && outcome.kind === "identify_image") {
+    const identification = input.identificationAnalysis;
+    await tx
+      .insert(aiAnalysis)
+      .values({
+        entityKind: "image",
+        entityId: job.imageId,
+        feature: "image-identification",
+        provider: identification.provider,
+        model: identification.model,
+        promptVersion: String(identification.promptRevision),
+        resultSchemaRevision: identification.resultSchemaRevision,
+        inputFingerprint: identification.inputFingerprint,
+        result: outcome.identification,
+        runtime: input.runtime ?? null,
+      })
+      .onConflictDoNothing();
+  }
   await tx
     .update(imageProcessingJob)
     .set({
@@ -1142,6 +1213,7 @@ export async function completeImageProcessingJob(
         sourceContentHash: imageProcessingJob.sourceContentHash,
         processorRevision: imageProcessingJob.processorRevision,
         imageHash: image.sha256,
+        imageStatus: image.status,
       })
       .from(imageProcessingJob)
       .innerJoin(

@@ -16,13 +16,13 @@ import {
   auditPurchaseImportBatch,
   extractPurchaseEvidence,
 } from "~/server/agents/purchase-import/extract";
-import { purchaseExtractionPrompt } from "~/server/agents/purchase-import/prompts";
 import {
   DECISION_MAX_CANDIDATES,
   runDecisionChoice,
 } from "~/server/ai/decision-model";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import {
+  IMAGE_IDENTIFICATION_FEATURE,
   ENTITY_EMBEDDING_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
@@ -45,12 +45,9 @@ import { aiUsage, image, run as runTable } from "~/server/db/schema";
 import { loadPurchaseAuditBatch } from "~/server/purchase-import/audit-batch";
 import { normalizeMessage } from "~/server/purchase-import/gmail/normalize";
 import { interpretMailRelevance } from "~/server/purchase-import/gmail/relevance";
-import { mailTriagePrompt } from "~/server/purchase-import/gmail/triage";
-import {
-  chooseLineStage,
-  PRODUCT_IDENTITY_RULES,
-} from "~/server/purchase-import/writer";
+import { chooseLineStage } from "~/server/purchase-import/writer";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getVerifiedImageRenditionKey } from "~/server/repo/image-identification";
 import { getUploadedImageProcessingSource } from "~/server/repo/image-processing";
 import { getLocationById } from "~/server/repo/location/crud";
 import { getProductByID } from "~/server/repo/product/crud";
@@ -63,10 +60,11 @@ import {
   suggestUsdaFood,
   suggestUsdaFoodBatch,
 } from "~/server/services/ai-enrichment/usda-match";
+import { imageAnalysisRenditionUrl } from "~/server/services/image-description.service";
 import {
-  descriptionRequest,
-  imageAnalysisRenditionUrl,
-} from "~/server/services/image-description.service";
+  imageIdentificationCompositionPrompt,
+  readImageIdentificationRendition,
+} from "~/server/services/image-identification.service";
 import {
   assessRecipeFlowCandidate,
   flowPromptInput,
@@ -336,6 +334,36 @@ async function runCase(
               ),
       };
     }
+    case "imageIdentification": {
+      const { imageId } = aiSmokeInputs.imageIdentification.parse(raw);
+      const id = await resolveOrThrow(db, "image", imageId);
+      const source = await getUploadedImageProcessingSource(db, id);
+      if (!source)
+        throw new Error(
+          "Select an uploaded image that passed integrity checks.",
+        );
+      const normalizedKey =
+        source.contentType === "image/avif"
+          ? await getVerifiedImageRenditionKey(db, id)
+          : null;
+      if (source.contentType === "image/avif" && !normalizedKey)
+        throw new Error("Waiting for verified Apple JPEG normalization");
+      const { media } = await readImageIdentificationRendition(
+        getR2PublicUrl(normalizedKey ?? source.key),
+      );
+      return {
+        result: await runDecisionChoice({
+          ...imageIdentificationCompositionPrompt(media),
+          feature: IMAGE_IDENTIFICATION_FEATURE,
+          usage: {
+            db,
+            runId,
+            operation: "smoke.imageIdentification",
+            entity: { entityKind: "image", entityId: id },
+          },
+        }),
+      };
+    }
     case "imageDescription": {
       const { imageId } = aiSmokeInputs.imageDescription.parse(raw);
       const id = await resolveOrThrow(db, "image", imageId);
@@ -350,7 +378,7 @@ async function runCase(
       return {
         result: await runStructuredFeature(
           IMAGE_DESCRIPTION_FEATURE,
-          descriptionRequest(url),
+          IMAGE_DESCRIPTION_FEATURE.request(url),
           {
             db,
             runId,
@@ -398,7 +426,7 @@ async function runCase(
       if (scenario === "mailboxTriage") {
         return {
           result: await runDecisionChoice({
-            ...mailTriagePrompt(
+            ...MAILBOX_TRIAGE_FEATURE.prompt(
               JSON.stringify({
                 headers: original.mail.headers,
                 body: original.mail.bodyText,
@@ -483,7 +511,7 @@ async function runCase(
             seller: line.seller ?? null,
             productUrl: line.productUrl ?? null,
           }),
-          rules: PRODUCT_IDENTITY_RULES,
+          rules: PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE.rules,
           choices: labels,
           usage: { db, runId, operation: "smoke.purchaseProductIdentity" },
         }),
@@ -494,7 +522,7 @@ async function runCase(
       return {
         result: await runStructuredFeature(
           PURCHASE_IMPORT_EXTRACTION_FEATURE,
-          purchaseExtractionPrompt(purchaseCapture(fixture)),
+          PURCHASE_IMPORT_EXTRACTION_FEATURE.request(purchaseCapture(fixture)),
           { db, runId, operation: "smoke.purchaseExtraction" },
           structuredPorts,
         ),
@@ -516,7 +544,7 @@ async function runCase(
     case "purchaseMail": {
       const { fixture } = aiSmokeInputs.purchaseMail.parse(raw);
       const { orderMailRequest } =
-        await import("~/server/agents/purchase-import/extract");
+        await import("~/server/ai/prompts/purchase-import");
       return {
         result: await runStructuredFeature(
           PURCHASE_IMPORT_MAIL_FEATURE,
@@ -589,7 +617,7 @@ async function runCase(
     case "purchaseRepair": {
       const { fixture } = aiSmokeInputs.purchaseRepair.parse(raw);
       const { purchaseRepairRequest } =
-        await import("~/server/agents/purchase-import/extract");
+        await import("~/server/ai/prompts/purchase-import");
       return {
         result: await runStructuredFeature(
           PURCHASE_IMPORT_REPAIR_FEATURE,

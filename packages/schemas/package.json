@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./image-identification": "./src/image-identification.ts",
     "./email-accuracy": "./src/email-accuracy.ts",
     "./purchase-import-debug": "./src/purchase-import-debug.ts",
     "./mailbox-research": "./src/mailbox-research.ts",
@@ -180,8 +181,8 @@
     "./email-actions": "./src/email-actions.ts"
   },
   "scripts": {
-    "typecheck": "node ../../scripts/generator/ensure.ts && tsc --noEmit",
-    "test": "node ../../scripts/generator/ensure.ts && vitest run",
+    "typecheck": "node ../../scripts/ensure.ts generate && tsc --noEmit",
+    "test": "node ../../scripts/ensure.ts generate && vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {

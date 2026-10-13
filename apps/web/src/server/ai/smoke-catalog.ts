@@ -8,6 +8,7 @@ import {
   FIELD_SUGGESTION_FEATURE,
   SETTLEMENT_CANDIDATE_RANK_FEATURE,
   IMAGE_DESCRIPTION_FEATURE,
+  IMAGE_IDENTIFICATION_FEATURE,
   INGREDIENT_MERGE_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
@@ -97,6 +98,13 @@ export const AI_SMOKE_CASES = {
     feature: LOCATION_INVENTORY_DETECTION_FEATURE,
     label: "Inventory detection",
     description: "Detect items in a photographed location",
+    group: "Vision",
+  },
+  imageIdentification: {
+    feature: IMAGE_IDENTIFICATION_FEATURE,
+    label: "Image identification composition",
+    description:
+      "Classify an uploaded image using the production Clef composition choice",
     group: "Vision",
   },
   imageDescription: {

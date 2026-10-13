@@ -758,7 +758,7 @@ export const MCP_TOOLS = defineMcpTools({
       reclassify: mcpAction({
         op: purchaseImportContract.ops.emailReclassify,
         description:
-          "Rerun Relevance for at most 200 owned Emails (one Run per mailbox): rule, the decision model and the relevance model, refetching each original from Gmail. The result is recorded as history. It replaces Relevance only when no retained content or import would be dropped (`awaiting_acceptance` otherwise; accept with `mail.resolve` unrelated), never overrides a member resolution, and reports `conflict` when it disagrees with the member's review.",
+          "Rerun Relevance for at most 200 owned Emails (one Run per mailbox), refetching originals. The decision model handles routine messages; uncertain results may use the relevance model. Records history and automatically settles unaccepted negatives through protected content disposal. Completed/researching imports and unreadable refetches of retained evidence await acceptance. Accepted evidence, member resolutions and same-checksum independent reviews are preserved; disagreements report conflicts. Never admits import.",
       }),
       rerun_preview: mcpAction({
         op: purchaseImportContract.ops.emailPreviewRerun,
@@ -1087,7 +1087,7 @@ export const MCP_TOOLS = defineMcpTools({
       schedule_processing: mcpAction({
         op: imageProcessingContract.ops.schedule,
         description:
-          "Schedule description and/or transparent-cutout processing for an uploaded image.",
+          "Schedule processing for an uploaded image. Omitting kinds queues independent Apple and cloud descriptions, transparent subject-lift cutouts, and Clef Product identification. Supply kinds to request a subset. Cloud descriptions and Clef identification use billable AI calls; retained work is reused for the same content and processor revision. Identification saves unconfirmed suggestions and never attaches records or changes inventory.",
       }),
     },
   },

@@ -32,8 +32,6 @@ describe("MCP tool generation", () => {
 // Every query/mutation either backs an MCP action or says why it does not,
 // so a new operation cannot silently stay off the agent surface.
 describe("MCP exposure declarations", () => {
-  const todos =
-    "- 🤔 **Deferred widget capabilities.** `widget.restock` lets an agent restock.\n";
   const check = (
     operations: Parameters<typeof assertMcpExposure>[0]["operations"],
   ) =>
@@ -41,7 +39,6 @@ describe("MCP exposure declarations", () => {
       operations,
       exposedOperations: new Set(["widget.list"]),
       kernelActions: new Set(["get", "update"]),
-      todos,
     });
 
   it("accepts exposed, declared, and subscription operations", () => {
@@ -72,7 +69,6 @@ describe("MCP exposure declarations", () => {
           kind: "mutation",
           mcp: {
             omit: "deferred_capability",
-            todo: "Deferred widget capabilities",
           },
         },
         { operation: "widget.backfill", kind: "subscription" },
@@ -159,52 +155,5 @@ describe("MCP exposure declarations", () => {
     ).toThrow(
       "widget.board names agent twin widget.summary, which is not an MCP tool action",
     );
-  });
-
-  it("refuses a deferred capability without its todo reference", () => {
-    expect(() =>
-      check([
-        { operation: "widget.list", kind: "query" },
-        {
-          operation: "widget.restock",
-          kind: "mutation",
-          mcp: { omit: "deferred_capability" },
-        },
-      ]),
-    ).toThrow("widget.restock declares an invalid `mcp` omission");
-  });
-
-  it("refuses a deferred capability whose todo is missing from docs/todos.md", () => {
-    expect(() =>
-      check([
-        { operation: "widget.list", kind: "query" },
-        {
-          operation: "widget.restock",
-          kind: "mutation",
-          mcp: {
-            omit: "deferred_capability",
-            todo: "Restock widgets from agents",
-          },
-        },
-      ]),
-    ).toThrow(
-      "widget.restock defers to docs/todos.md entry **Restock widgets from agents.**, which does not exist",
-    );
-  });
-
-  it("refuses a deferred capability the todo entry does not list", () => {
-    expect(() =>
-      check([
-        { operation: "widget.list", kind: "query" },
-        {
-          operation: "widget.recount",
-          kind: "mutation",
-          mcp: {
-            omit: "deferred_capability",
-            todo: "Deferred widget capabilities",
-          },
-        },
-      ]),
-    ).toThrow("docs/todos.md does not name `widget.recount`");
   });
 });

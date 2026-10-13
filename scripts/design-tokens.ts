@@ -1,8 +1,9 @@
+import tokens from "../packages/design-tokens/tokens.json" with { type: "json" };
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const assetRoles = {
   AccentColor: "interaction",
   Signal: "signal",
@@ -19,9 +20,15 @@ const assetRoles = {
   Warning: "warning",
   Destructive: "destructive",
   Slate: "slate",
-};
+} as const;
 
-export function renderBrandCss(roles, aliases, values) {
+type ColorRole = typeof tokens.colors.signal;
+
+export function renderBrandCss(
+  roles: Record<string, ColorRole>,
+  aliases: Record<string, string>,
+  values: Record<string, string>,
+) {
   const lines = [
     "/* Generated from tokens.json. Edit the source and run pnpm generate. */",
     ":root {",
@@ -51,7 +58,7 @@ export function renderBrandCss(roles, aliases, values) {
   return lines.join("\n");
 }
 
-function components(hex) {
+function components(hex: string) {
   if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) throw new Error(`Invalid color ${hex}`);
   return Object.fromEntries(
     ["red", "green", "blue"].map((key, index) => [
@@ -61,7 +68,7 @@ function components(hex) {
   );
 }
 
-export function renderColorAsset(role) {
+export function renderColorAsset(role: ColorRole) {
   return `${JSON.stringify(
     {
       colors: [
@@ -88,7 +95,7 @@ export function renderColorAsset(role) {
   )}\n`;
 }
 
-export function renderMetricsSwift(values) {
+export function renderMetricsSwift(values: Record<string, string>) {
   const names = [
     "radius-control",
     "radius-panel",
@@ -102,9 +109,9 @@ export function renderMetricsSwift(values) {
   ];
   const declarations = names.map((name) => {
     const value = values[name];
-    if (!/^\d+px$/.test(value ?? ""))
+    if (!value || !/^\d+px$/.test(value))
       throw new Error(`Invalid metric ${name}: ${value}`);
-    const identifier = name.replace(/-([a-z\d])/g, (_, letter) =>
+    const identifier = name.replace(/-([a-z\d])/g, (_, letter: string) =>
       letter.toUpperCase(),
     );
     return `    static let ${identifier}: CGFloat = ${value.slice(0, -2)}`;
@@ -130,7 +137,7 @@ export function renderMetricsSwift(values) {
   ].join("\n");
 }
 
-function sync(path, content, check) {
+function sync(path: string, content: string, check: boolean) {
   if (check) {
     if (readFileSync(path, "utf8") !== content) {
       throw new Error(`Design token output is stale: ${path}`);
@@ -141,9 +148,7 @@ function sync(path, content, check) {
 }
 
 function main() {
-  const { colors, aliases, values } = JSON.parse(
-    readFileSync(join(root, "packages/design-tokens/tokens.json"), "utf8"),
-  );
+  const { colors, aliases, values } = tokens;
   const check = process.argv.includes("--check");
   sync(
     join(root, "packages/design-tokens/brand.css"),

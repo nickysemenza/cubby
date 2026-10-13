@@ -2,7 +2,9 @@ import { seedProductPrerequisite } from "./fixtures-catalog";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-test("a single Product selection exposes Inspect and opens the desktop dock", async ({
+// Table hosting must preserve record click-to-edit behavior. Portaled Save
+// controls stay inside the resized viewport, and scalar writes survive reload.
+test("Product inspection keeps scalar edits accessible and persistent", async ({
   page,
 }) => {
   const name = `Inspect contract product ${Date.now()}`;
@@ -23,6 +25,45 @@ test("a single Product selection exposes Inspect and opens the desktop dock", as
     page.getByRole("complementary", { name: "Product inspector" }),
   ).toBeVisible();
   await expect(row.getByRole("checkbox", { name: "Select row" })).toBeChecked();
+  const inspector = page.getByRole("complementary", {
+    name: "Product inspector",
+  });
+  const notes = inspector
+    .locator('[data-ledger="facts"] .ledger-row')
+    .filter({ has: page.getByText("Notes", { exact: true }) });
+  await notes.getByRole("button", { name: "Edit value", exact: true }).click();
+  const editor = page.locator('[data-slot="cell-editor-overlay"]');
+  await editor.getByRole("textbox").fill("Synthetic inspector edit");
+  await page.setViewportSize({ width: 1440, height: 760 });
+  await expect
+    .poll(async () => {
+      const bounds = await editor.boundingBox();
+      return (
+        bounds !== null &&
+        bounds.x >= 0 &&
+        bounds.y >= 0 &&
+        bounds.x + bounds.width <= 1440 &&
+        bounds.y + bounds.height <= 760
+      );
+    })
+    .toBe(true);
+  await editor.getByRole("button", { name: "Save value", exact: true }).click();
+  await expect(notes).toContainText("Synthetic inspector edit");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await inspector
+    .locator("summary")
+    .getByText("Relations", { exact: true })
+    .click();
+  await expect(notes).toContainText("Synthetic inspector edit");
+  await inspector
+    .getByRole("button", { name: "Edit record", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await row.getByRole("checkbox", { name: "Select row" }).click();
+  await page.getByRole("button", { name: "Inspect", exact: true }).click();
+  await expect(notes).toContainText("Synthetic inspector edit");
 });
 
 // Regression: flipping row activity while a control inside the row holds focus

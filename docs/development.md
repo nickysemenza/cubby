@@ -31,7 +31,8 @@ JSONL routes    →  cancellable workflow streams
   `wasm` from `~/lib/wasm` (sync) on the client and `wasmServer` (async) on the
   server. Conversions chain through a product's unit mappings, e.g.
   `2 cups → $5.00 → 333g`.
-- [scripts/build-wasm.sh](../scripts/build-wasm.sh) builds three packages into
+- `pnpm wasm` prepares three packages through the shared
+  [artifact preparation entrypoint](../scripts/ensure.ts) into
   `packages/wasm`. The Worker and Vitest load the full build, `worker/`. The browser
   loads `browser/`, built without the Worker-only `html` and `ai-usage`
   features (`compact_browser_page`, `parse_scraped_recipe`,
@@ -67,39 +68,15 @@ contracts separately.
 
 ## Commands
 
-| Command                                                            | What it does                                                                |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `pnpm dev`                                                         | Local workerd HMR session with isolated persistent resources                |
-| `pnpm build`                                                       | Build the production Worker bundle                                          |
-| `pnpm check`                                                       | Generate, design tokens, TypeScript, lint, format, Knip                     |
-| `pnpm check:all`                                                   | `check` plus Worker/OpenAPI, script tests and security validation           |
-| `pnpm generate` / `pnpm check:clean`                               | Regenerate entity/contract/OpenAPI artifacts, then prove them clean         |
-| `pnpm typecheck` · `lint` · `lint:fix` · `format` · `format:check` | Individual checks                                                           |
-| `pnpm test`                                                        | Fast unit, UI, contract and auxiliary-package tests                         |
-| `pnpm test:postgres`                                               | Authoritative PostgreSQL contracts                                          |
-| `pnpm test:e2e`                                                    | PostgreSQL-backed Playwright tests                                          |
-| `pnpm test:e2e:local`                                              | Headless + simulator smoke; choose lanes or `--all` for extended acceptance |
-| `pnpm test:e2e:sim [-- --headless\|--watch\|--video\|--layout]`    | iOS simulator or headless CLI journey against a disposable DB               |
-| `pnpm --filter @cubby/web test:e2e:watch`                          | Shared services + `vite build --watch` + Playwright `--ui`                  |
-| `pnpm test:services:down`                                          | Remove shared test containers that no live run uses                         |
-| `pnpm db:generate` / `pnpm db:check`                               | Generate a migration from `schema.ts` / prove migrations match it           |
-| `pnpm --filter @cubby/web db:migrate --target=production`          | Apply migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`                    |
-| `pnpm deploy:all`                                                  | Deploy web                                                                  |
-| `pnpm wasm`                                                        | Rebuild the `@cubby/recipebridge` packages from Rust, uncached              |
-| `pnpm apple <cli\|mac\|ios\|sim\|gen\|test>`                       | Native app products                                                         |
+[Root package scripts](../package.json) own command names; package-local
+scripts live in their `package.json`. Use [local development](local-development.md)
+for dev sessions, [validation](agents/validation.md) for check selection,
+[CI](ci.md) for hosted lanes, and [production migrations](runbooks/production-migrations.md)
+for staged rollouts. Dependencies and toolchain pins belong in manifests,
+lockfiles, `.nvmrc`, and `rust-toolchain.toml`, not this command reference.
 
-For a staged production rollout, add `--through=EXACT_JOURNAL_TAG` to
-`pnpm --filter @cubby/web db:migrate --target=production`; it applies the pending
-prefix through that tag inclusively. Follow the
-[production migration runbook](runbooks/production-migrations.md) to keep
-contract migrations behind deployment.
-
-Test suffixes: `*.unit.test.ts` (Vitest), `*.integration.test.ts` (PostgreSQL
-contracts, Vitest), `*.spec.ts` (Playwright). Which tier to use is set by the
-[validation policy](agents/validation.md) and [test tiers](agents/validation-tests.md).
-CI scoping is in [CI](ci.md). Provider resources and secrets are in
-[infrastructure](infrastructure.md). Pinned dependency exceptions are in
-[dependency exceptions](dependency-exceptions.md).
+Provider resources and secrets are in [infrastructure](infrastructure.md).
+Upstream metadata workarounds are in [dependency exceptions](dependency-exceptions.md).
 
 A USDA release is built locally from FoodData Central's CSV download and
 loads itself into its Durable Object:
@@ -163,7 +140,7 @@ native PostgreSQL installation remain owned by their existing runners.
   `pnpm agent:setup` on the image's Node, with Docker reachable without sudo.
   Start PostgreSQL/IntegreSQL with `docker compose -p cubby up -d --wait`.
 - Rust builds share `~/.cache/cubby/cargo-target`.
-  [scripts/ensure-wasm.ts](../scripts/ensure-wasm.ts) keys the WASM artifact on
+  [scripts/ensure.ts](../scripts/ensure.ts) keys the WASM artifact on
   Cargo's resolved graph and file contents, so it never drifts silently.
   `pnpm typecheck`, `pnpm typecheck:web` and every web Vitest run call it, so
   a fresh worktree restores or builds the WASM on demand.
@@ -210,18 +187,11 @@ native PostgreSQL installation remain owned by their existing runners.
 | [apps/web/src/lib/recipebridge-cf.ts](../apps/web/src/lib/recipebridge-cf.ts) | WASM via `?init` (Workers SSR)                    |
 | [apps/web/wrangler.jsonc](../apps/web/wrangler.jsonc)                         | Bindings, vars, compat flags, secret names        |
 
-- **Hyperdrive bindings.** There are two, both pointing at the same Neon
-  origin.
-  - `HYPERDRIVE` is the strong-read path, with up to 5 connections per
-    request.
-  - `HYPERDRIVE_CACHED` serves cache-eligible reads: 60 s cached plus 15 s
-    stale-while-revalidate, with 1 connection.
-  - After a household write, reads are strong for 90 s. The
-    `DatabaseFreshnessDurableObject` holds the last-write timestamp, and a
-    missing binding or a timeout falls back to strong reads. Timings are in
-    `src/lib/hyperdrive-cache-policy.ts`.
-  - Hyperdrive caching settings are account state; inspect them with
-    `wrangler hyperdrive get`.
+- **Hyperdrive.** Both bindings use one Neon origin. Account-side configuration
+  and reconstruction live in [infrastructure](infrastructure.md#postgresql-and-hyperdrive);
+  application read/freshness timing is owned by
+  `apps/web/src/lib/hyperdrive-cache-policy.ts`. Missing freshness state or a
+  timeout falls back to strong reads.
 - **Database admission.** The household freshness Durable Object admits ten
   concurrent SQL leases, with at most two background leases. Navigation passes
   queued advisory work. Promise-based pooled clients hold capacity from connect
@@ -240,6 +210,7 @@ native PostgreSQL installation remain owned by their existing runners.
   refresh promotes that call to navigation priority. Repeated suggestion reads
   reuse Run identity within a request and do not update Run timestamps; persisted
   AI usage advances completed ephemeral Run timestamps monotonically.
+
 - **Background tasks are self-contained queue messages** on
   `cubby-background`. There is no execution table and no dead-letter queue.
   - Every handler re-checks its row's own freshness marker, so redelivery is a

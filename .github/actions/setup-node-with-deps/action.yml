@@ -72,7 +72,7 @@ runs:
 
     # The Nx `wasm` target's key fingerprints the local crates and wasm-pack,
     # so a pass from any runner or Mac in the shared Nx cache restores
-    # packages/wasm; a miss builds it here (scripts/build-wasm.sh).
+    # packages/wasm; a miss builds it here (scripts/ensure.ts wasm --build).
     - name: Install wasm-pack
       if: inputs.wasm == 'restore'
       uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
