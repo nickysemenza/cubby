@@ -13,7 +13,12 @@ import { type ReactNode, useId, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCount, formatCurrency } from "~/lib/utils";
+import { formatCount } from "~/lib/utils";
+import {
+  AiCost,
+  formatAiCost as formatUsageCost,
+  formatAiCostSubtotal,
+} from "~/ui/common/ai-cost";
 import { DateDisplay } from "~/ui/common/date-display";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import RTable from "~/ui/data-table/Table";
@@ -51,8 +56,12 @@ interface UsageTotals {
   calls: number;
   inputTokens: number;
   outputTokens: number;
-  knownCost: number;
-  unpricedCalls: number;
+  chargedCost: number;
+  standardCost: number;
+  chargedUnpricedCount: number;
+  standardUnpricedCount: number;
+  savings: number;
+  comparedCalls: number;
   durationMs: number;
 }
 
@@ -74,11 +83,6 @@ function formatTokens(value: number | null | undefined): string {
   return formatCount(value ?? 0);
 }
 
-const formatUsageCost = (value: number | null | undefined): string =>
-  value == null
-    ? "unpriced"
-    : formatCurrency(value, 6, { minimumFractionDigits: 4 });
-
 function formatMs(value: number): string {
   if (value < 1000) return `${value}ms`;
   return `${(value / 1000).toFixed(1)}s`;
@@ -90,17 +94,26 @@ function usageTotals(rows: AiUsageSummaryRow[]): UsageTotals {
       calls: totals.calls + row.count,
       inputTokens: totals.inputTokens + row.inputTokens,
       outputTokens: totals.outputTokens + row.outputTokens,
-      knownCost: totals.knownCost + (row.estimatedCost ?? 0),
-      unpricedCalls:
-        totals.unpricedCalls + (row.estimatedCost == null ? row.count : 0),
+      chargedCost: totals.chargedCost + row.chargedCost,
+      standardCost: totals.standardCost + row.standardCost,
+      chargedUnpricedCount:
+        totals.chargedUnpricedCount + row.chargedUnpricedCount,
+      standardUnpricedCount:
+        totals.standardUnpricedCount + row.standardUnpricedCount,
+      savings: totals.savings + row.savings,
+      comparedCalls: totals.comparedCalls + row.comparedCalls,
       durationMs: totals.durationMs + row.durationMs,
     }),
     {
       calls: 0,
       inputTokens: 0,
       outputTokens: 0,
-      knownCost: 0,
-      unpricedCalls: 0,
+      chargedCost: 0,
+      standardCost: 0,
+      chargedUnpricedCount: 0,
+      standardUnpricedCount: 0,
+      savings: 0,
+      comparedCalls: 0,
       durationMs: 0,
     },
   );
@@ -159,14 +172,6 @@ export function UsageEntityLink({
       entityId={row.entityId}
       compact
     />
-  );
-}
-
-function CostCell({ value }: { value: number | null }) {
-  return (
-    <span className={value == null ? "text-muted-foreground" : undefined}>
-      {formatUsageCost(value)}
-    </span>
   );
 }
 
@@ -357,11 +362,11 @@ function SummaryTable({
         }),
       );
       add(
-        helper.accessor("estimatedCost", {
-          header: "Cost",
-          size: 120,
+        helper.accessor("chargedCost", {
+          header: "Charged / standard",
+          size: 180,
           meta: { numeric: true, mobile: { slot: "trailing", priority: 10 } },
-          cell: ({ getValue }) => <CostCell value={getValue()} />,
+          cell: ({ row }) => <AiCost cost={row.original} />,
         }),
       );
       add(
@@ -507,11 +512,11 @@ function RecentTable({
         }),
       );
       add(
-        helper.accessor("estimatedCost", {
-          header: "Cost",
-          size: 120,
+        helper.accessor("chargedCost", {
+          header: "Charged / standard",
+          size: 180,
           meta: { numeric: true, mobile: { slot: "trailing", priority: 10 } },
-          cell: ({ getValue }) => <CostCell value={getValue()} />,
+          cell: ({ row }) => <AiCost cost={row.original} />,
         }),
       );
       add(
@@ -746,13 +751,31 @@ export function AiUsagePage() {
             )} out`}
           />
           <UsageMetric
-            label="USD cost"
-            value={formatUsageCost(totals.knownCost)}
-            detail={
-              totals.unpricedCalls > 0
-                ? `${formatTokens(totals.unpricedCalls)} calls unpriced`
-                : "all calls priced"
+            label="Charged cost"
+            value={formatAiCostSubtotal(
+              totals.chargedCost,
+              totals.chargedUnpricedCount,
+              totals.calls,
+            )}
+            detail={`${totals.chargedUnpricedCount} calls unpriced`}
+          />
+          <UsageMetric
+            label="Standard cost"
+            value={formatAiCostSubtotal(
+              totals.standardCost,
+              totals.standardUnpricedCount,
+              totals.calls,
+            )}
+            detail={`${totals.standardUnpricedCount} calls unpriced`}
+          />
+          <UsageMetric
+            label="Savings"
+            value={
+              totals.comparedCalls > 0
+                ? formatUsageCost(totals.savings)
+                : "unavailable"
             }
+            detail={`${totals.comparedCalls} of ${totals.calls} calls compared`}
           />
           <UsageMetric
             label="Provider time"

@@ -123,23 +123,62 @@ function runProjection(memberIds?: SQL): SQL {
         ) execution),
         '[]'::jsonb
       ) AS executors,
-      CASE WHEN EXISTS(
-        SELECT 1 FROM "AiUsage" u
-        WHERE u."deletedAt" IS NULL AND u."estimatedCost" IS NULL AND (
-          (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
-            SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
-          ))
-          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text)
-        )
-      ) THEN NULL ELSE (
-        SELECT sum(u."estimatedCost") FROM "AiUsage" u
+      (SELECT coalesce(sum(u."standardCost"), 0) FROM "AiUsage" u
         WHERE u."deletedAt" IS NULL AND (
           (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
             SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
           ))
           OR (u."jobKind" = j.kind AND u."jobId" = j.id::text)
-        )
-      ) END AS "estimatedCost",
+        )) AS "standardCost",
+      (SELECT coalesce(sum(u."chargedCost"), 0) FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND (
+          (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
+            SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
+          ))
+          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text)
+        )) AS "chargedCost",
+      (SELECT (count(*) filter (where u."standardCost" is null))::int FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND (
+          (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
+            SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
+          ))
+          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text)
+        )) AS "standardUnpricedCount",
+      (SELECT (count(*) filter (where u."chargedCost" is null))::int FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND (
+          (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
+            SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
+          ))
+          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text)
+        )) AS "chargedUnpricedCount",
+      (SELECT coalesce(sum(u."standardCost" - u."chargedCost") filter (where u."standardCost" is not null and u."chargedCost" is not null), 0) FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND (
+          (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
+            SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
+          ))
+          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text)
+        )) AS "savings",
+      (SELECT (count(*) filter (where u."standardCost" is not null and u."chargedCost" is not null))::int FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND (
+          (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
+            SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
+          ))
+          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text)
+        )) AS "comparedCalls",
+      (SELECT count(*)::int FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND (
+          (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
+            SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
+          ))
+          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text)
+        )) AS "count",
+      (SELECT coalesce(jsonb_agg(distinct u."costEvidence"->>'billingReason') filter (where u."costEvidence"->>'billingReason' is not null), '[]'::jsonb) FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND (
+          (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
+            SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
+          ))
+          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text)
+        )) AS "billingReasons",
       j."lastError" AS error,
       false AS routine,
       EXISTS(SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id) AS "hasDiagnostics",
@@ -192,13 +231,22 @@ function runProjection(memberIds?: SQL): SQL {
         WHERE r.purpose IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory')
           OR EXISTS(SELECT 1 FROM "AiUsage" u WHERE u."runId" = r.id AND u."deletedAt" IS NULL)
       ) execution), '[]'::jsonb) AS executors,
-      CASE WHEN EXISTS(
-        SELECT 1 FROM "AiUsage" u
-        WHERE u."deletedAt" IS NULL AND u."runId" = r.id AND u."estimatedCost" IS NULL
-      ) THEN NULL ELSE (
-        SELECT sum(u."estimatedCost") FROM "AiUsage" u
-        WHERE u."deletedAt" IS NULL AND u."runId" = r.id
-      ) END AS "estimatedCost",
+      (SELECT coalesce(sum(u."standardCost"), 0) FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND u."runId" = r.id) AS "standardCost",
+      (SELECT coalesce(sum(u."chargedCost"), 0) FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND u."runId" = r.id) AS "chargedCost",
+      (SELECT (count(*) filter (where u."standardCost" is null))::int FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND u."runId" = r.id) AS "standardUnpricedCount",
+      (SELECT (count(*) filter (where u."chargedCost" is null))::int FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND u."runId" = r.id) AS "chargedUnpricedCount",
+      (SELECT coalesce(sum(u."standardCost" - u."chargedCost") filter (where u."standardCost" is not null and u."chargedCost" is not null), 0) FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND u."runId" = r.id) AS "savings",
+      (SELECT (count(*) filter (where u."standardCost" is not null and u."chargedCost" is not null))::int FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND u."runId" = r.id) AS "comparedCalls",
+      (SELECT count(*)::int FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND u."runId" = r.id) AS "count",
+      (SELECT coalesce(jsonb_agg(distinct u."costEvidence"->>'billingReason') filter (where u."costEvidence"->>'billingReason' is not null), '[]'::jsonb) FROM "AiUsage" u
+        WHERE u."deletedAt" IS NULL AND u."runId" = r.id) AS "billingReasons",
       coalesce(r."dispatchError", r."failureCode") AS error,
       r.routine,
       EXISTS(SELECT 1 FROM "RunOperation" o WHERE o."runId" = r.id) AS "hasDiagnostics",
@@ -271,7 +319,13 @@ const runWire = activityRun
       .nullable()
       .transform((date) => date?.toISOString() ?? null),
     durationMs: z.coerce.number().nullable(),
-    estimatedCost: z.coerce.number().nullable(),
+    standardCost: z.coerce.number(),
+    chargedCost: z.coerce.number(),
+    standardUnpricedCount: z.coerce.number(),
+    chargedUnpricedCount: z.coerce.number(),
+    savings: z.coerce.number(),
+    comparedCalls: z.coerce.number(),
+    count: z.coerce.number(),
   });
 type RunWire = z.infer<typeof runWire>;
 
@@ -407,6 +461,24 @@ async function presentActivityRuns(db: Database, rows: readonly RunWire[]) {
     const subject = row.subjectId ? parseShortcode(row.subjectId) : null;
     return activityRun.parse({
       ...row,
+      ...(row.recordType === "image_job" &&
+      row.count === 0 &&
+      row.executors.length > 0
+        ? {
+            count: 1,
+            standardUnpricedCount: 1,
+            chargedUnpricedCount: row.executors.every(
+              (executor) => executor.kind === "device",
+            )
+              ? 0
+              : 1,
+            billingReasons: row.executors.every(
+              (executor) => executor.kind === "device",
+            )
+              ? ["local"]
+              : ["unknown"],
+          }
+        : {}),
       dataQuality:
         row.recordType === "run"
           ? qualities.get(parseEntityId("run", internalId))
@@ -776,7 +848,9 @@ async function loadImageAttempts(
             'outputTokens', ${aiUsage.outputTokens},
             'status', ${aiUsage.status},
             'durationMs', ${aiUsage.durationMs},
-            'estimatedCost', ${aiUsage.estimatedCost},
+            'standardCost', ${aiUsage.standardCost},
+            'costEvidence', ${aiUsage.costEvidence},
+            'chargedCost', ${aiUsage.chargedCost},
             'gatewayLogId', ${aiUsage.gatewayLogId}
           ) ORDER BY ${aiUsage.createdAt})
           FROM ${aiUsage}
@@ -934,17 +1008,38 @@ export async function activitySubmission(db: Database, id: string) {
       count(m.id) FILTER (WHERE j.state = 'skipped')::int AS skipped,
       count(m.id) FILTER (WHERE j.state = 'failed')::int AS failed,
       count(m.id) FILTER (WHERE j.state IN ('pending', 'leased', 'waiting_for_device'))::int AS remaining,
-      CASE WHEN EXISTS(
-        SELECT 1 FROM "ImageProcessingAttempt" a
+      (SELECT coalesce(sum(u."standardCost"), 0) FROM "ImageProcessingAttempt" a
         JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
           AND u."jobId" = a.id::text AND u."deletedAt" IS NULL
-        WHERE a."submissionId" = s.id AND u."estimatedCost" IS NULL
-      ) THEN NULL ELSE (
-        SELECT sum(u."estimatedCost") FROM "ImageProcessingAttempt" a
+        WHERE a."submissionId" = s.id) AS "standardCost",
+      (SELECT coalesce(sum(u."chargedCost"), 0) FROM "ImageProcessingAttempt" a
         JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
           AND u."jobId" = a.id::text AND u."deletedAt" IS NULL
-        WHERE a."submissionId" = s.id
-      ) END AS "estimatedCost"
+        WHERE a."submissionId" = s.id) AS "chargedCost",
+      (SELECT (count(*) filter (where u."standardCost" is null))::int FROM "ImageProcessingAttempt" a
+        JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
+          AND u."jobId" = a.id::text AND u."deletedAt" IS NULL
+        WHERE a."submissionId" = s.id) AS "standardUnpricedCount",
+      (SELECT (count(*) filter (where u."chargedCost" is null))::int FROM "ImageProcessingAttempt" a
+        JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
+          AND u."jobId" = a.id::text AND u."deletedAt" IS NULL
+        WHERE a."submissionId" = s.id) AS "chargedUnpricedCount",
+      (SELECT coalesce(sum(u."standardCost" - u."chargedCost") filter (where u."standardCost" is not null and u."chargedCost" is not null), 0) FROM "ImageProcessingAttempt" a
+        JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
+          AND u."jobId" = a.id::text AND u."deletedAt" IS NULL
+        WHERE a."submissionId" = s.id) AS "savings",
+      (SELECT (count(*) filter (where u."standardCost" is not null and u."chargedCost" is not null))::int FROM "ImageProcessingAttempt" a
+        JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
+          AND u."jobId" = a.id::text AND u."deletedAt" IS NULL
+        WHERE a."submissionId" = s.id) AS "comparedCalls",
+      (SELECT count(*)::int FROM "ImageProcessingAttempt" a
+        JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
+          AND u."jobId" = a.id::text AND u."deletedAt" IS NULL
+        WHERE a."submissionId" = s.id) AS "count",
+      (SELECT coalesce(jsonb_agg(distinct u."costEvidence"->>'billingReason') filter (where u."costEvidence"->>'billingReason' is not null), '[]'::jsonb) FROM "ImageProcessingAttempt" a
+        JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
+          AND u."jobId" = a.id::text AND u."deletedAt" IS NULL
+        WHERE a."submissionId" = s.id) AS "billingReasons"
     FROM "ImageProcessingSubmission" s
     LEFT JOIN "ImageProcessingSubmissionJob" m ON m."submissionId" = s.id
     LEFT JOIN "ImageProcessingJob" j ON j.id = m."jobId"
@@ -954,7 +1049,13 @@ export async function activitySubmission(db: Database, id: string) {
   return activitySubmissionOutput
     .extend({
       createdAt: z.coerce.date().transform((date) => date.toISOString()),
-      estimatedCost: z.coerce.number().nullable(),
+      standardCost: z.coerce.number(),
+      chargedCost: z.coerce.number(),
+      standardUnpricedCount: z.coerce.number(),
+      chargedUnpricedCount: z.coerce.number(),
+      savings: z.coerce.number(),
+      comparedCalls: z.coerce.number(),
+      count: z.coerce.number(),
     })
     .parse(query.rows[0]);
 }

@@ -209,7 +209,13 @@ describe("runHistoryItems", () => {
         updated: 1,
         skipped: 1,
         failureCode: "login_expired",
-        estimatedCost: 0,
+        standardCost: 0,
+        chargedCost: 0,
+        standardUnpricedCount: 0,
+        chargedUnpricedCount: 0,
+        savings: 0,
+        comparedCalls: 0,
+        count: 0,
       },
     ]);
     expect(row).toMatchObject({

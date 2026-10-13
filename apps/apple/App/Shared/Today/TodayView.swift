@@ -783,7 +783,9 @@ private func formattedDueDate(_ raw: String) -> String {
                         iconEntity: .inventory, workLabel: "Photo inventory", targetPreview: [],
                         changedCount: 0,
                         state: "running", active: true, createdAt: .now,
-                        attempts: 1, executors: [], hasDiagnostics: false, canRetry: false)
+                        attempts: 1, executors: [], standardCost: 0, chargedCost: 0, standardUnpricedCount: 0,
+                        chargedUnpricedCount: 0, savings: 0, comparedCalls: 0, count: 0,
+                        hasDiagnostics: false, canRetry: false)
                 ],
                 entries: [
                     AuditLogEntryOut(
@@ -890,7 +892,9 @@ private func formattedDueDate(_ raw: String) -> String {
                             iconEntity: .inventory, workLabel: "Photo inventory", targetPreview: [],
                             changedCount: 0,
                             state: "running", active: true, createdAt: .now,
-                            attempts: 1, executors: [], hasDiagnostics: false, canRetry: false)
+                            attempts: 1, executors: [], standardCost: 0, chargedCost: 0,
+                            standardUnpricedCount: 0, chargedUnpricedCount: 0, savings: 0, comparedCalls: 0,
+                            count: 0, hasDiagnostics: false, canRetry: false)
                     ]))
         }
         .frame(width: 1240, height: 900)

@@ -85,3 +85,35 @@ describe("telemetryMessageV1Schema", () => {
     ).toBe(false);
   });
 });
+
+it("preserves a charge already queued by a previous deployment without inventing a comparison", () => {
+  const result = telemetryMessageV1Schema.parse({
+    version: 1,
+    queueType: "telemetry",
+    eventId: "00000000-0000-4000-8000-000000000001",
+    occurredAt: "2026-01-01T00:00:00Z",
+    release: "synthetic",
+    type: "ai_usage",
+    feature: "synthetic",
+    provider: "synthetic",
+    model: "synthetic",
+    operation: "synthetic",
+    inputTokens: 100,
+    outputTokens: 10,
+    durationMs: 1,
+    cacheStatus: null,
+    entityKind: null,
+    entityId: null,
+    estimatedCost: 0.004,
+  });
+  expect(result).toMatchObject({
+    standardCost: null,
+    chargedCost: 0.004,
+    costEvidence: {
+      original: { estimatedCost: 0.004 },
+      standard: null,
+      charged: { source: "historical_recorded" },
+    },
+  });
+  expect(result).not.toHaveProperty("estimatedCost");
+});

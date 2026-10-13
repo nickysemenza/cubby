@@ -6,7 +6,7 @@ import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { useMemo } from "react";
 
 import { formatMinutesSeconds } from "~/lib/format-duration";
-import { formatSmallCurrency } from "~/lib/utils";
+import { AiCost, formatAiCostSubtotal } from "~/ui/common/ai-cost";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -131,9 +131,15 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
     <Collapsible>
       <CollapsibleTrigger className="flex w-full items-center gap-1 text-left text-xs text-muted-foreground hover:text-foreground">
         <CaretDownIcon className="size-3" />
-        Run report — {formatSmallCurrency(report.total_cost_usd)}
-        {!report.cost_complete && "+"} · {formatMinutesSeconds(report.wall_ms)}{" "}
-        · {countLabel(calls.length, "call")}
+        Run report —{" "}
+        {formatAiCostSubtotal(
+          report.chargedCost,
+          report.chargedUnpricedCount,
+          report.count,
+          report.chargedComplete,
+        )}{" "}
+        charged · {formatMinutesSeconds(report.wall_ms)} ·{" "}
+        {countLabel(calls.length, "call")}
       </CollapsibleTrigger>
       <CollapsibleContent>
         <Stack gap="sm" className="mt-2 border border-border p-2">
@@ -143,18 +149,23 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
             {recall != null && ` · recall ${(recall * 100).toFixed(0)}%`}
             {report.incomplete && " · incomplete"}
             {report.cancelled && " · cancelled"}
-            {!report.cost_complete &&
-              " · cost incomplete (an unpriced model was used)"}
+            {report.chargedUnpricedCount > 0 && " · charge subtotal incomplete"}
           </Description>
 
+          <AiCost cost={report} />
+          <Description size="xs">
+            {report.comparedCalls > 0
+              ? formatAiCostSubtotal(report.savings, 0)
+              : "Unavailable"}{" "}
+            savings · {report.comparedCalls} of {report.count} calls compared
+          </Description>
           {report.usage_by_model.length > 0 && (
             <ul className="space-y-0.5 text-2xs text-muted-foreground">
               {report.usage_by_model.map((usage) => (
                 <li key={usage.model}>
                   <span className="font-mono">{usage.model}</span> ·{" "}
                   {countLabel(usage.calls, "call")}
-                  {usage.cost_usd != null &&
-                    ` · ${formatSmallCurrency(usage.cost_usd)}`}
+                  <AiCost cost={usage} />
                 </li>
               ))}
             </ul>
@@ -190,7 +201,9 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
                     <TableHead>Chunk</TableHead>
                     <TableHead className="text-right">Latency</TableHead>
                     <TableHead className="text-right">Status</TableHead>
-                    <TableHead className="text-right">Cost</TableHead>
+                    <TableHead className="text-right">
+                      Charged / standard
+                    </TableHead>
                     <TableHead>Outcome</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -220,9 +233,7 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
                         {call.status ?? ""}
                       </TableCell>
                       <TableCell className="text-right text-2xs tabular-nums">
-                        {call.cost_usd != null
-                          ? formatSmallCurrency(call.cost_usd)
-                          : "—"}
+                        <AiCost cost={call} />
                       </TableCell>
                       <TableCell className="text-2xs">
                         {call.outcome?.outcome ?? ""}

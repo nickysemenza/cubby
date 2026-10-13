@@ -1,3 +1,4 @@
+import type { AiCostEvidence } from "./pricing";
 import {
   createProvider,
   type Api,
@@ -49,13 +50,18 @@ function gatewayAuth(route: ChatGatewayProvider) {
   };
 }
 
+const comparisonCosts = new WeakMap<object, number>();
+const comparisonEvidence = new WeakMap<object, AiCostEvidence["standard"]>();
+
 function throughFetch(
   streams: ProviderStreams,
   fetchForCall: (onUnbilledResponse: () => void) => typeof fetch,
 ): ProviderStreams {
   const run = (
     start: (fetchFn: typeof fetch) => AssistantMessageEventStream,
+    model: Model<Api>,
   ) => {
+    const capturedAt = new Date().toISOString();
     let unbilled = false;
     const markUnbilled = () => {
       unbilled = true;
@@ -71,7 +77,38 @@ function throughFetch(
     });
     const output = createAssistantMessageEventStream();
     const normalize = (message: AssistantMessage) => {
-      if (unbilled)
+      const prompt =
+        message.usage.input +
+        message.usage.cacheRead +
+        message.usage.cacheWrite;
+      const rates =
+        (model.cost.tiers ?? [])
+          .filter((tier) => prompt > tier.inputTokensAbove)
+          .reduce<NonNullable<Model<Api>["cost"]["tiers"]>[number] | undefined>(
+            (widest, tier) =>
+              widest && widest.inputTokensAbove >= tier.inputTokensAbove
+                ? widest
+                : tier,
+            undefined,
+          ) ?? model.cost;
+      comparisonEvidence.set(message, {
+        source: "estimate",
+        pricingSource: "pi_sdk",
+        pricingSnapshot: {
+          provider: model.provider,
+          model: model.id,
+          capturedAt,
+          rates: {
+            input: rates.input,
+            output: rates.output,
+            cache_read: rates.cacheRead,
+            cache_write: rates.cacheWrite,
+          },
+        },
+      });
+      if (unbilled) {
+        if (message.usage.cost.total !== 0 || !comparisonCosts.has(message))
+          comparisonCosts.set(message, message.usage.cost.total);
         message.usage.cost = {
           input: 0,
           output: 0,
@@ -79,6 +116,7 @@ function throughFetch(
           cacheWrite: 0,
           total: 0,
         };
+      }
     };
     // pi-ai's event stream resolves generation failures as terminal error
     // events; its iterator and result promise do not reject.
@@ -101,10 +139,14 @@ function throughFetch(
   };
   return {
     stream: (model, context, options) =>
-      run((fetch) => streams.stream(model, context, { ...options, fetch })),
+      run(
+        (fetch) => streams.stream(model, context, { ...options, fetch }),
+        model,
+      ),
     streamSimple: (model, context, options) =>
-      run((fetch) =>
-        streams.streamSimple(model, context, { ...options, fetch }),
+      run(
+        (fetch) => streams.streamSimple(model, context, { ...options, fetch }),
+        model,
       ),
   };
 }
@@ -219,12 +261,34 @@ export function piTokenUsage(message: {
   usage: Pick<
     AssistantMessage["usage"],
     "input" | "output" | "cacheRead" | "cacheWrite" | "totalTokens"
-  >;
+  > &
+    Partial<Pick<AssistantMessage["usage"], "cost">>;
 }) {
   const unknown =
     (message.stopReason === "error" || message.stopReason === "aborted") &&
     message.usage.totalTokens === 0;
   return {
+    costEvidence: message.usage.cost
+      ? {
+          standard: unknown
+            ? null
+            : (comparisonEvidence.get(message) ?? {
+                source: "estimate" as const,
+                pricingSource: "pi_sdk" as const,
+              }),
+          charged: unknown
+            ? null
+            : (comparisonEvidence.get(message) ?? {
+                source: "estimate" as const,
+                pricingSource: "pi_sdk" as const,
+              }),
+          billingReason: "standard" as const,
+        }
+      : null,
+    standardCost: unknown
+      ? null
+      : (comparisonCosts.get(message) ?? message.usage.cost?.total ?? null),
+    chargedCost: unknown ? null : (message.usage.cost?.total ?? null),
     inputTokens: unknown ? null : message.usage.input,
     outputTokens: unknown ? null : message.usage.output,
     cacheReadTokens: unknown ? null : message.usage.cacheRead,

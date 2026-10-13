@@ -2,6 +2,7 @@ import {
   type AiTokenUsage,
   createAiModelPricing,
   estimateAiUsageCost,
+  priceAiUsage,
   quoteAiDecisionRequest,
   quoteAiChatRequest,
 } from "@cubby/shared/ai/pricing";
@@ -53,4 +54,12 @@ export async function quoteAiChatRequestUsd(
   request: Parameters<typeof quoteAiChatRequest>[1],
 ) {
   return quoteAiChatRequest(await pricing.current(), request);
+}
+
+export async function snapshotAiUsagePrice(
+  provider: string,
+  model: string,
+  usage: AiTokenUsage,
+) {
+  return priceAiUsage(await pricing.current(), provider, model, usage);
 }

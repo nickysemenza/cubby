@@ -4,12 +4,11 @@ import type {
   AiUsageTransport,
 } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
-import type { AiTokenUsage } from "@cubby/shared/ai/pricing";
+import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import { and, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { estimateAiUsageCostUsd } from "~/server/ai/pricing";
 import type { Database } from "~/server/db";
 import { aiUsage } from "~/server/db/schema";
 import {
@@ -28,7 +27,20 @@ export function isUnbilledAiTransport(transport: AiUsageTransport): boolean {
   return transport === "cache" || transport === "chatgpt";
 }
 
-const unbilledTransportSql = sql`${aiUsage.transport} in ('cache', 'chatgpt')`;
+export function aiCostSummarySql() {
+  return {
+    standardCost: sql<number>`coalesce(sum(${aiUsage.standardCost}), 0)`,
+    chargedCost: sql<number>`coalesce(sum(${aiUsage.chargedCost}), 0)`,
+    standardUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.standardCost} is null))::int`,
+    chargedUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.chargedCost} is null))::int`,
+    savings: sql<number>`coalesce(sum(${aiUsage.standardCost} - ${aiUsage.chargedCost}) filter (where ${aiUsage.standardCost} is not null and ${aiUsage.chargedCost} is not null), 0)`,
+    comparedCalls: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.standardCost} is not null and ${aiUsage.chargedCost} is not null))::int`,
+    count: sql<number>`count(${aiUsage.id})::int`,
+    billingReasons: sql<
+      AiCostEvidence["billingReason"][]
+    >`coalesce(jsonb_agg(distinct ${aiUsage.costEvidence}->>'billingReason') filter (where ${aiUsage.costEvidence}->>'billingReason' is not null), '[]'::jsonb)`,
+  };
+}
 
 function recentFilterConditions(filters: AiUsageRecentFilters = {}) {
   const pattern = filters.query ? ilikeContains(filters.query) : null;
@@ -90,7 +102,9 @@ export async function listRecentAiUsage(
       attempt: aiUsage.attempt,
       status: aiUsage.status,
       gatewayLogId: aiUsage.gatewayLogId,
-      estimatedCost: aiUsage.estimatedCost,
+      standardCost: aiUsage.standardCost,
+      costEvidence: aiUsage.costEvidence,
+      chargedCost: aiUsage.chargedCost,
       durationMs: aiUsage.durationMs,
       cacheStatus: aiUsage.cacheStatus,
       applicationCacheStatus: aiUsage.applicationCacheStatus,
@@ -104,20 +118,7 @@ export async function listRecentAiUsage(
     .orderBy(desc(aiUsage.createdAt), desc(aiUsage.id))
     .limit(input.limit);
 
-  return Promise.all(
-    rows.map(async (row) => ({
-      ...row,
-      estimatedCost: isUnbilledAiTransport(row.transport)
-        ? (row.estimatedCost ?? 0)
-        : (row.estimatedCost ??
-          (await estimateAiUsageCostUsd(row.provider, row.model, {
-            inputTokens: row.inputTokens,
-            outputTokens: row.outputTokens,
-            cacheReadTokens: row.cacheReadTokens,
-            cacheWriteTokens: row.cacheWriteTokens,
-          }))),
-    })),
-  );
+  return rows;
 }
 
 export async function summarizeAiUsage(db: Database, days: number) {
@@ -137,18 +138,13 @@ export async function summarizeAiUsage(db: Database, days: number) {
       cacheStatus: aiUsage.cacheStatus,
       applicationCacheStatus: aiUsage.applicationCacheStatus,
       transport: aiUsage.transport,
-      count: sql<number>`count(*)::int`,
       // bigint to avoid int4 overflow on cumulative token/duration sums; the pg
       // driver returns bigint as a string, so these are Number()-coerced below.
       inputTokens: sql<string>`coalesce(sum(${aiUsage.inputTokens}), 0)::bigint`,
       outputTokens: sql<string>`coalesce(sum(${aiUsage.outputTokens}), 0)::bigint`,
       cacheReadTokens: sql<string>`coalesce(sum(${aiUsage.cacheReadTokens}), 0)::bigint`,
       cacheWriteTokens: sql<string>`coalesce(sum(${aiUsage.cacheWriteTokens}), 0)::bigint`,
-      estimatedCost: sql<number | null>`sum(${aiUsage.estimatedCost})`,
-      unpricedCalls: sql<AiTokenUsage[]>`coalesce(jsonb_agg(jsonb_build_object(
-        'inputTokens', ${aiUsage.inputTokens}, 'outputTokens', ${aiUsage.outputTokens},
-        'cacheReadTokens', ${aiUsage.cacheReadTokens}, 'cacheWriteTokens', ${aiUsage.cacheWriteTokens}
-      )) filter (where ${aiUsage.estimatedCost} is null), '[]'::jsonb)`,
+      ...aiCostSummarySql(),
       durationMs: sql<string>`coalesce(sum(${aiUsage.durationMs}), 0)::bigint`,
     })
     .from(aiUsage)
@@ -169,44 +165,22 @@ export async function summarizeAiUsage(db: Database, days: number) {
     )
     .orderBy(sql`${usageDayGroup} DESC`, aiUsage.feature, aiUsage.model);
 
-  // Every group shares one transport, so an unbilled group is free whole.
-  return Promise.all(
-    rows.map(
-      async ({
-        unpricedCalls,
-        inputTokens,
-        outputTokens,
-        cacheReadTokens,
-        cacheWriteTokens,
-        durationMs,
-        ...row
-      }) => {
-        // Context tiers apply to each prompt, never the group's combined tokens.
-        const callCosts = isUnbilledAiTransport(row.transport)
-          ? []
-          : await Promise.all(
-              unpricedCalls.map((usage) =>
-                estimateAiUsageCostUsd(row.provider, row.model, usage),
-              ),
-            );
-        const computedUnstoredCost = callCosts.some((cost) => cost === null)
-          ? null
-          : callCosts.reduce<number>((sum, cost) => sum + (cost ?? 0), 0);
-        return {
-          ...row,
-          inputTokens: Number(inputTokens),
-          outputTokens: Number(outputTokens),
-          cacheReadTokens: Number(cacheReadTokens),
-          cacheWriteTokens: Number(cacheWriteTokens),
-          durationMs: Number(durationMs),
-          estimatedCost: isUnbilledAiTransport(row.transport)
-            ? 0
-            : computedUnstoredCost === null
-              ? null
-              : (row.estimatedCost ?? 0) + computedUnstoredCost,
-        };
-      },
-    ),
+  return rows.map(
+    ({
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+      durationMs,
+      ...row
+    }) => ({
+      ...row,
+      inputTokens: Number(inputTokens),
+      outputTokens: Number(outputTokens),
+      cacheReadTokens: Number(cacheReadTokens),
+      cacheWriteTokens: Number(cacheWriteTokens),
+      durationMs: Number(durationMs),
+    }),
   );
 }
 
@@ -241,8 +215,7 @@ export async function listAiUsageForRun(
   const [totals, rows] = await Promise.all([
     database
       .select({
-        pricedSubtotal: sql<number>`coalesce(sum(${aiUsage.estimatedCost}) filter (where ${aiUsage.estimatedCost} is not null), 0)`,
-        unpricedCount: sql<number>`(count(*) filter (where ${aiUsage.estimatedCost} is null and ${aiUsage.status} = 'succeeded' and not ${unbilledTransportSql}))::int`,
+        ...aiCostSummarySql(),
       })
       .from(aiUsage)
       .where(and(eq(aiUsage.runId, runId), notDeleted(aiUsage))),
@@ -265,7 +238,9 @@ export async function listAiUsageForRun(
         applicationCacheStatus: aiUsage.applicationCacheStatus,
         transport: aiUsage.transport,
         durationMs: aiUsage.durationMs,
-        estimatedCost: aiUsage.estimatedCost,
+        standardCost: aiUsage.standardCost,
+        costEvidence: aiUsage.costEvidence,
+        chargedCost: aiUsage.chargedCost,
       })
       .from(aiUsage)
       .where(
@@ -286,15 +261,19 @@ export async function listAiUsageForRun(
       .orderBy(desc(aiUsage.createdAt), desc(aiUsage.id))
       .limit(limit + 1),
   ]);
-  const records = rows.slice(0, limit).map((row) => ({
-    ...row,
-    estimatedCost:
-      row.estimatedCost ?? (isUnbilledAiTransport(row.transport) ? 0 : null),
-  }));
+  const records = rows.slice(0, limit);
   const last = records.at(-1);
   return {
-    pricedSubtotal: totals[0]?.pricedSubtotal ?? 0,
-    unpricedCount: totals[0]?.unpricedCount ?? 0,
+    ...(totals[0] ?? {
+      standardCost: 0,
+      chargedCost: 0,
+      standardUnpricedCount: 0,
+      chargedUnpricedCount: 0,
+      savings: 0,
+      comparedCalls: 0,
+      count: 0,
+      billingReasons: [],
+    }),
     records,
     nextCursor:
       rows.length > limit && last

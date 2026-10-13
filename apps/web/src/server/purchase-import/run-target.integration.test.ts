@@ -109,8 +109,8 @@ describe("import run summary pricing", () => {
   it.each([
     { costs: [], expected: 0 },
     { costs: [0.125, 0.25], expected: 0.375 },
-    { costs: [null], expected: null },
-    { costs: [0.125, null], expected: null },
+    { costs: [null], expected: 0 },
+    { costs: [0.125, null], expected: 0.125 },
   ])("preserves spend for $costs", async ({ costs, expected }) => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic pricing member",
@@ -125,7 +125,7 @@ describe("import run summary pricing", () => {
       await getDb(ctx.db)
         .insert(aiUsage)
         .values(
-          costs.map((estimatedCost): typeof aiUsage.$inferInsert => ({
+          costs.map((chargedCost): typeof aiUsage.$inferInsert => ({
             feature: "synthetic",
             provider: "openai",
             model: "gpt-6-sol",
@@ -133,18 +133,18 @@ describe("import run summary pricing", () => {
             runId: runEntityId.parse(run.id),
             durationMs: 1,
             transport: "gateway",
-            estimatedCost,
+            chargedCost,
           })),
         );
     const [summary] = await listRuns(ctx.db, party.id);
-    expect(summary?.estimatedCost).toBe(expected);
+    expect(summary?.chargedCost).toBe(expected);
     expect(
       runSummary.parse({
         ...summary,
         startedAt: summary!.startedAt.toISOString(),
         endedAt: summary!.endedAt?.toISOString() ?? null,
-      }).estimatedCost,
-    ).toBe(summary!.estimatedCost);
+      }).chargedCost,
+    ).toBe(summary!.chargedCost);
   });
 });
 

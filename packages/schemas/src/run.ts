@@ -1,3 +1,4 @@
+import { aiCostSummaryFields } from "./ai-cost";
 import { z } from "zod";
 
 import { runPurpose } from "./run-fields";
@@ -26,7 +27,7 @@ export const runSummary = z.object({
   updated: z.number().int(),
   skipped: z.number().int(),
   failureCode: z.string().nullable(),
-  estimatedCost: z.number().nullable(),
+  ...aiCostSummaryFields,
 });
 export type RunSummary = z.infer<typeof runSummary>;
 

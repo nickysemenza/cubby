@@ -995,8 +995,13 @@ describe("runLogBlocks", () => {
 
 describe("aiUsageBlocks", () => {
   const usage = {
-    pricedSubtotal: 0.0123,
-    unpricedCount: 2,
+    chargedCost: 0.0123,
+    chargedUnpricedCount: 2,
+    standardCost: 0.03,
+    standardUnpricedCount: 1,
+    savings: 0.01,
+    comparedCalls: 1,
+    count: 3,
     nextCursor: "cursor-2",
     records: [
       {
@@ -1017,15 +1022,23 @@ describe("aiUsageBlocks", () => {
         cacheStatus: "miss" as const,
         applicationCacheStatus: "hit" as const,
         transport: "chatgpt" as const,
-        estimatedCost: null,
+        chargedCost: null,
+        standardCost: null,
+        costEvidence: null,
       },
     ],
   };
 
   it("flags an estimated subtotal", () => {
     expect(notes(aiUsageBlocks(usage))[0]).toBe(
-      "Estimated subtotal $0.0123 · 2 unpriced",
+      "Charged $0.0123 · 2 unpriced · Standard $0.0300 · 1 unpriced · Savings $0.0100 (1/3 calls compared)",
     );
+  });
+
+  it("does not call an absent comparison zero savings", () => {
+    expect(
+      notes(aiUsageBlocks({ ...usage, savings: 0, comparedCalls: 0 }))[0],
+    ).toContain("Savings unavailable");
   });
 
   it("describes each call with its tokens, cache and cost", () => {
@@ -1041,7 +1054,7 @@ describe("aiUsageBlocks", () => {
       // `cacheStatus` is the caller's cache (an analysis or prompt cache),
       // never a claim that the Gateway carried the call.
       "Application hit · no model call · Cache miss · 5 read / — write",
-      "1.5s · unpriced · log-1",
+      "1.5s · unpriced · Standard unpriced · unknown · log-1",
     ]);
   });
 });

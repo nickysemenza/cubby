@@ -18,6 +18,7 @@ import {
   type CookbookExtraction,
   type CookbookRecipe,
   type CookbookRunReport,
+  cookbookRunReportSchema,
   cookbookExtractionSchema,
   flattenCookbookRecipes,
   isLegacyCookbookRawJson,
@@ -609,7 +610,7 @@ export const getCookbookSource = async (
     id,
     name: cb.name,
     cookbook: parseStoredExtraction(id, cb.rawJson),
-    report: cb.report ?? null,
+    report: cb.report ? cookbookRunReportSchema.parse(cb.report) : null,
   };
 };
 

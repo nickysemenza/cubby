@@ -1,13 +1,16 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Database } from "~/server/db";
 
+import type { snapshotAiUsagePrice } from "./pricing";
 import {
   type AiUsagePort,
   type RecordAiUsageInput,
   recordAiUsage,
 } from "./usage";
+const snapshot = vi.fn<typeof snapshotAiUsagePrice>();
+beforeEach(() => snapshot.mockResolvedValue({ amount: null, evidence: null }));
 
 const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
@@ -35,13 +38,13 @@ describe("recordAiUsage", () => {
         applicationCacheStatus: "hit",
         transport: "cache",
         attempt: 0,
-        estimatedCost: 0,
+        chargedCost: 0,
         entity: {
           entityKind: "product",
           entityId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
         },
       },
-      { emit },
+      { emit, snapshot },
     );
 
     expect(emit).toHaveBeenCalledWith(
@@ -56,7 +59,7 @@ describe("recordAiUsage", () => {
         applicationCacheStatus: "hit",
         transport: "cache",
         attempt: 0,
-        estimatedCost: 0,
+        chargedCost: 0,
         outputTokens: 0,
         entityKind: "product",
         entityId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
@@ -80,7 +83,7 @@ describe("recordAiUsage", () => {
         transport: "gateway",
         ...input,
       },
-      { emit },
+      { emit, snapshot },
     );
     return emit.mock.calls[0]?.[1];
   }
@@ -98,7 +101,7 @@ describe("recordAiUsage", () => {
       transport: "cache",
       cacheStatus: "hit",
       attempt: 0,
-      estimatedCost: 0,
+      chargedCost: 0,
     });
   });
 
@@ -108,9 +111,15 @@ describe("recordAiUsage", () => {
         transport: "chatgpt",
         attempt: 2,
         inputTokens: 1_000,
-        estimatedCost: 0.42,
+        standardCost: 0.42,
+        chargedCost: 0.42,
       }),
-    ).toMatchObject({ transport: "chatgpt", attempt: 2, estimatedCost: 0 });
+    ).toMatchObject({
+      transport: "chatgpt",
+      attempt: 2,
+      standardCost: 0.42,
+      chargedCost: 0,
+    });
   });
 
   // A Gateway response-cache HIT still crossed the gateway and repeats the
@@ -125,25 +134,86 @@ describe("recordAiUsage", () => {
       outputTokens: 10,
       cacheReadTokens: 40,
       cacheWriteTokens: 5,
-      estimatedCost: 0.003,
+      standardCost: 0.003,
+      chargedCost: 0.003,
     });
     expect(event).toMatchObject({
       transport: "gateway",
       gatewayLogId: "log-synthetic",
+      standardCost: 0.003,
       cacheStatus: "miss",
       attempt: 1,
       inputTokens: 100,
       outputTokens: 10,
       cacheReadTokens: 40,
       cacheWriteTokens: 5,
-      estimatedCost: 0,
+      chargedCost: 0,
     });
     expect(event).not.toHaveProperty("gatewayCacheStatus");
   });
 
+  it("uses the same canonical standard rates for SDK and token-only calls", async () => {
+    const canonical = {
+      source: "estimate" as const,
+      pricingSource: "models.dev" as const,
+      pricingSnapshot: {
+        provider: "openai",
+        model: "gpt-6-luna",
+        capturedAt: "2026-01-01T00:00:00Z",
+        rates: { input: 2, output: 0 },
+      },
+    };
+    const sdk = {
+      ...canonical,
+      pricingSource: "pi_sdk" as const,
+      pricingSnapshot: {
+        ...canonical.pricingSnapshot,
+        rates: { input: 3, output: 0 },
+      },
+    };
+    snapshot.mockResolvedValue({ amount: 0.002, evidence: canonical });
+    const usage = { inputTokens: 1000, outputTokens: 0 };
+    const sdkCall = await emitted({
+      ...usage,
+      standardCost: 0.003,
+      chargedCost: 0.003,
+      costEvidence: { standard: sdk, charged: sdk, billingReason: "standard" },
+    });
+    const tokenCall = await emitted(usage);
+    expect(sdkCall).toMatchObject({
+      standardCost: 0.002,
+      chargedCost: 0.003,
+      costEvidence: { standard: canonical, charged: sdk },
+    });
+    expect(tokenCall).toMatchObject({
+      standardCost: 0.002,
+      chargedCost: 0.002,
+      costEvidence: { standard: canonical },
+    });
+  });
+
+  it("labels a supplied comparison fallback when the canonical quote is unavailable", async () => {
+    expect(
+      await emitted({ standardCost: 0.003, chargedCost: 0.002 }),
+    ).toMatchObject({
+      standardCost: 0.003,
+      chargedCost: 0.002,
+      costEvidence: {
+        standard: { source: "estimate", pricingSource: "caller" },
+      },
+    });
+    expect(
+      await emitted({
+        transport: "cache",
+        standardCost: 0.003,
+        inputTokens: 1000,
+      }),
+    ).toMatchObject({ standardCost: null, chargedCost: 0 });
+  });
+
   it("keeps a gateway miss's own cost", async () => {
     expect(
-      await emitted({ gatewayCacheStatus: "miss", estimatedCost: 0.003 }),
-    ).toMatchObject({ estimatedCost: 0.003 });
+      await emitted({ gatewayCacheStatus: "miss", chargedCost: 0.003 }),
+    ).toMatchObject({ chargedCost: 0.003 });
   });
 });

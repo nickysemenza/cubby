@@ -79,8 +79,9 @@ fn round_half_away(abs: f64, max: usize) -> (String, String) {
 }
 
 /// USD text: grouping, `min..=max` fraction digits (half away from zero), a
-/// leading `-` for a negative value that does not round to zero (`-$5.00`; the
-/// sign is never spelled `+`). Non-finite values print as `$NaN` / `$∞`.
+/// leading `-` for a negative value (`-$5.00`; the sign is never spelled `+`).
+/// Nonzero amounts below display precision use a signed threshold; only exact
+/// zero prints as zero. Non-finite values print as `$NaN` / `$∞`.
 pub fn format_currency_usd(
     value: f64,
     min_fraction_digits: u32,
@@ -96,6 +97,15 @@ pub fn format_currency_usd(
     };
     if value.is_infinite() {
         return format!("{sign}$∞");
+    }
+    let quantum = 10_f64.powf(-f64::from(max_fraction_digits));
+    if value != 0.0 && value.abs() < quantum {
+        let threshold = if max_fraction_digits == 0 {
+            "1".to_string()
+        } else {
+            format!("0.{}1", "0".repeat(max_fraction_digits as usize - 1))
+        };
+        return format!("{sign}<${threshold}");
     }
     let min = min_fraction_digits.min(max_fraction_digits) as usize;
     let (int, mut frac) = round_half_away(value.abs(), max_fraction_digits as usize);
@@ -433,8 +443,13 @@ mod tests {
     }
 
     #[test]
-    fn a_negative_that_rounds_to_zero_drops_its_sign() {
-        assert_eq!(format_currency_usd(-0.004, 2, 2), "$0.00");
+    fn nonzero_money_never_displays_as_zero() {
+        assert_eq!(format_currency_usd(0.004, 2, 2), "<$0.01");
+        assert_eq!(format_currency_usd(-0.004, 2, 2), "-<$0.01");
+        assert_eq!(format_currency_usd(0.00000001, 4, 6), "<$0.000001");
+        assert_eq!(format_currency_usd(-0.00000001, 4, 6), "-<$0.000001");
+        assert_eq!(format_currency_usd(f64::MIN_POSITIVE, 2, 2), "<$0.01");
+        assert_eq!(format_currency_usd(0.25, 0, 0), "<$1");
         assert_eq!(format_currency_usd(-0.0, 2, 2), "$0.00");
     }
 

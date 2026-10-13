@@ -1,3 +1,4 @@
+import { aiCallCostFields } from "./ai-cost";
 import { z } from "zod";
 import { entitySchema } from "./entity-core";
 import { queueMessageEnvelope } from "./queue-messages";
@@ -97,17 +98,54 @@ export const aiUsageTelemetrySchema = z.strictObject({
   transport: aiUsageTransport.optional(),
   entityKind: z.string().min(1).nullable(),
   entityId: z.uuid().nullable(),
-  // The caller's own cost figure (the cookbook crate prices every model it
-  // calls); absent on messages minted before this field existed and for
-  // callers that leave pricing to the app-side registry.
-  estimatedCost: z.number().nonnegative().nullable().optional(),
+  // Prices and evidence are captured before enqueueing; consumers never reprice.
+  ...aiCallCostFields,
 });
 export type AiUsageTelemetry = z.infer<typeof aiUsageTelemetrySchema>;
 
-export const telemetryMessageV1Schema = z.discriminatedUnion("type", [
+const currentTelemetryMessageV1Schema = z.discriminatedUnion("type", [
   mcpToolCallTelemetrySchema,
   aiUsageTelemetrySchema,
 ]);
+/** Migration ingress for messages already queued by the previous deployment. */
+export const telemetryMessageV1Schema = z.preprocess((input) => {
+  if (
+    !input ||
+    typeof input !== "object" ||
+    !("type" in input) ||
+    input.type !== "ai_usage" ||
+    "chargedCost" in input
+  )
+    return input;
+  const parsed = z
+    .object({
+      estimatedCost: z.number().nullable().optional(),
+      transport: aiUsageTransport.optional(),
+    })
+    .passthrough()
+    .safeParse(input);
+  if (!parsed.success) return input;
+  const legacy = parsed.data;
+  const { estimatedCost, ...event } = legacy;
+  const free = legacy.transport === "chatgpt" || legacy.transport === "cache";
+  const chargedCost = estimatedCost ?? (free ? 0 : null);
+  return {
+    ...event,
+    standardCost: null,
+    chargedCost,
+    costEvidence: {
+      standard: null,
+      charged: chargedCost === null ? null : { source: "historical_recorded" },
+      billingReason:
+        legacy.transport === "chatgpt"
+          ? "plan"
+          : legacy.transport === "cache"
+            ? "cache"
+            : "unknown",
+      original: { estimatedCost: estimatedCost ?? null },
+    },
+  };
+}, currentTelemetryMessageV1Schema);
 export type TelemetryMessageV1 = z.infer<typeof telemetryMessageV1Schema>;
 
 export const mcpTelemetryIdentitySchema = z.strictObject({

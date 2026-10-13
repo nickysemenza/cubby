@@ -7,6 +7,7 @@
  * a party, account, vendor, SQL, script, or generic mutation target.
  */
 import { z } from "zod";
+import { aiCallCostFields } from "./ai-cost";
 import { runProgressStamp } from "./run-fields";
 
 import { aiUsageTransport } from "./telemetry";
@@ -49,6 +50,7 @@ export const reconcileSettledRunInput = purchaseAgentOperationRef
 
 /** One model turn's token and cost accounting, recorded once per `eventId`. */
 export const agentUsageEvent = purchaseAgentEventRef.extend({
+  ...z.object(aiCallCostFields).partial().shape,
   provider: z.string(),
   model: z.string(),
   feature: z.literal("purchase_import_agent"),

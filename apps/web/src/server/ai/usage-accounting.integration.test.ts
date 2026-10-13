@@ -178,7 +178,7 @@ describe("AiUsage accounting", () => {
       cacheStatus: "none",
       attempt: 1,
       inputTokens: 100,
-      estimatedCost: 0,
+      chargedCost: 0,
     });
   });
 
@@ -328,7 +328,7 @@ describe("AiUsage accounting", () => {
       transport: "cache",
       // Regression: replays defaulted to one attempt and an unset cost.
       attempt: 0,
-      estimatedCost: 0,
+      chargedCost: 0,
     });
   });
 
@@ -400,7 +400,13 @@ describe("AiUsage accounting", () => {
         outputTokens: 30,
         cacheReadTokens: 400,
         cacheWriteTokens: 50,
-        estimatedCost: gatewayCacheStatus === "hit" ? 0 : null,
+        chargedCost: gatewayCacheStatus === "hit" ? 0 : 0.4,
+        standardCost: 0.4,
+        costEvidence: {
+          standard: { source: "estimate", pricingSource: "pi_sdk" },
+          charged: { source: "estimate", pricingSource: "pi_sdk" },
+          billingReason: gatewayCacheStatus === "hit" ? "cache" : "standard",
+        },
       });
     },
   );
@@ -422,7 +428,7 @@ describe("AiUsage accounting", () => {
       model: "typesafe/jev",
       inputTokens: 0,
       outputTokens: 0,
-      estimatedCost: 0,
+      chargedCost: 0,
       attempt: 0,
       applicationCacheStatus: "hit",
       durationMs: 7,
@@ -469,7 +475,7 @@ describe("AiUsage accounting", () => {
       transport: "chatgpt",
       inputTokens: null,
       outputTokens: null,
-      estimatedCost: 0,
+      chargedCost: 0,
     });
   });
 
@@ -537,7 +543,7 @@ describe("AiUsage accounting", () => {
     });
 
     const rows = await usageRows();
-    expect(rows[0]).toMatchObject({ transport: "chatgpt", estimatedCost: 0 });
+    expect(rows[0]).toMatchObject({ transport: "chatgpt", chargedCost: 0 });
   });
 
   // A message queued by the preceding deployment carries no cost; the
@@ -561,6 +567,9 @@ describe("AiUsage accounting", () => {
       durationMs: 1,
       cacheStatus: "hit" as const,
       transport,
+      standardCost: transport === "cache" ? null : 0.003,
+      chargedCost: transport === "cache" ? 0 : 0.003,
+      costEvidence: null,
       entityKind: null,
       entityId: null,
     });
@@ -571,7 +580,7 @@ describe("AiUsage accounting", () => {
 
     const rows = await usageRows();
     const cost = Object.fromEntries(
-      rows.map((row) => [row.transport, row.estimatedCost]),
+      rows.map((row) => [row.transport, row.chargedCost]),
     );
     expect(cost.cache).toBe(0);
     expect(cost.gateway).toBe(0.003);

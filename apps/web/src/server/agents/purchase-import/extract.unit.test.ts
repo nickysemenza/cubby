@@ -149,7 +149,11 @@ describe("purchase import audit recovery", () => {
       usage: (
         database: Parameters<PurchaseAuditPorts["usage"]>[0],
         input: Parameters<PurchaseAuditPorts["usage"]>[1],
-      ) => recordAiUsage(database, input, { emit }),
+      ) =>
+        recordAiUsage(database, input, {
+          emit,
+          snapshot: async () => ({ amount: null, evidence: null }),
+        }),
     });
     const db = new Database(() => {
       throw new Error(
@@ -177,7 +181,7 @@ describe("purchase import audit recovery", () => {
       cacheWriteTokens: 4,
       gatewayLogId: "log-recovery",
       transport: "gateway",
-      estimatedCost: 0,
+      chargedCost: 0,
     });
   });
 });

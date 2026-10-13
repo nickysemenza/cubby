@@ -136,8 +136,14 @@ export async function loadMailDiscoveryRead(
     usage: {
       callCount: counts?.callCount ?? 0,
       retryCount: counts?.retryCount ?? 0,
-      pricedSubtotal: totals.pricedSubtotal,
-      unpricedCount: totals.unpricedCount,
+      standardCost: totals.standardCost,
+      chargedCost: totals.chargedCost,
+      standardUnpricedCount: totals.standardUnpricedCount,
+      chargedUnpricedCount: totals.chargedUnpricedCount,
+      savings: totals.savings,
+      comparedCalls: totals.comparedCalls,
+      count: totals.count,
+      billingReasons: totals.billingReasons,
     },
   };
 }

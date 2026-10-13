@@ -191,7 +191,7 @@ describe("activity image processing projection", () => {
           runId,
           jobKind: "image_processing_attempt",
           jobId: firstAttempt,
-          estimatedCost: 0.12,
+          chargedCost: 0.12,
           durationMs: 1,
         },
         {
@@ -202,7 +202,7 @@ describe("activity image processing projection", () => {
           runId,
           jobKind: "image_processing_attempt",
           jobId: laterAttempt,
-          estimatedCost: 0.34,
+          chargedCost: 0.34,
           durationMs: 1,
         },
       ]);
@@ -224,11 +224,11 @@ describe("activity image processing projection", () => {
     expect(deviceRuns.items[0]).toMatchObject({
       id: expect.stringMatching(/^IPR-/u),
       canRetry: true,
-      estimatedCost: 0.46,
+      chargedCost: 0.46,
     });
 
     const summary = await activitySubmission(ctx.db, submission.publicId);
-    expect(summary.estimatedCost).toBe(0.12);
+    expect(summary.chargedCost).toBe(0.12);
 
     // A historical job-level call and a later attempt are distinct spend.
     const legacyJob = await createImageProcessingJob(ctx.db, {
@@ -257,7 +257,7 @@ describe("activity image processing projection", () => {
           runId,
           jobKind: "describe_image",
           jobId: legacyJob,
-          estimatedCost: 0.5,
+          chargedCost: 0.5,
           durationMs: 1,
         },
         {
@@ -268,7 +268,7 @@ describe("activity image processing projection", () => {
           runId,
           jobKind: "image_processing_attempt",
           jobId: legacyRetryAttempt,
-          estimatedCost: 0.2,
+          chargedCost: 0.2,
           durationMs: 1,
         },
       ]);
@@ -277,21 +277,19 @@ describe("activity image processing projection", () => {
       limit: 20,
       sort: "newest",
     });
+    expect(allRuns.items.find((run) => run.chargedCost === 0.7)).toBeDefined();
     expect(
-      allRuns.items.find((run) => run.estimatedCost === 0.7),
-    ).toBeDefined();
-    expect(
-      allRuns.items.find((row) => row.recordType === "run")?.estimatedCost,
+      allRuns.items.find((row) => row.recordType === "run")?.chargedCost,
     ).toBeCloseTo(1.16);
     expect(
       allRuns.items.filter((row) => row.recordType === "image_job"),
     ).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ estimatedCost: 0.46 }),
-        expect.objectContaining({ estimatedCost: 0.7 }),
+        expect.objectContaining({ chargedCost: 0.46 }),
+        expect.objectContaining({ chargedCost: 0.7 }),
       ]),
     );
-    expect(deviceRuns.items[0]?.estimatedCost).toBe(0.46);
+    expect(deviceRuns.items[0]?.chargedCost).toBe(0.46);
 
     // This exceeds the detail page's first window. Keyset cursors must keep
     // event pages complete even when a long-running import emits many events.

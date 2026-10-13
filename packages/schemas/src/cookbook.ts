@@ -1,3 +1,4 @@
+import { aiCostSummaryFields, aiCostEvidenceSchema } from "./ai-cost";
 import { z } from "zod";
 
 // The stored shape of a cookbook extraction is the `cookbook` crate's book
@@ -184,12 +185,12 @@ export type CookbookExtraction = z.infer<typeof cookbookExtractionSchema>;
  * call, chunk, cross-check, and cost. Cubby only reads a few summary fields;
  * the rest is displayed as-is.
  */
-export const cookbookRunReportSchema = passthrough({
+const currentCookbookRunReportSchema = passthrough({
   run_id: z.string().min(1),
   started_at: z.string(),
   finished_at: z.string(),
-  total_cost_usd: z.number(),
-  cost_complete: z.boolean(),
+  ...aiCostSummaryFields,
+  costEvidence: aiCostEvidenceSchema.nullable().optional(),
   wall_ms: z.number().int().nonnegative(),
   incomplete: z.boolean(),
   cancelled: z.boolean(),
@@ -207,11 +208,122 @@ export const cookbookRunReportSchema = passthrough({
       passthrough({
         model: z.string(),
         calls: z.number().int().nonnegative(),
-        cost_usd: z.number().nullable().optional(),
+        ...aiCostSummaryFields,
       }),
     )
     .default([]),
 });
+const legacyCookbookCostReportSchema = z
+  .object({
+    total_cost_usd: z.number(),
+    cost_complete: z.boolean(),
+    calls: z.array(z.record(z.string(), z.json())).optional(),
+    usage_by_model: z.array(z.record(z.string(), z.json())).optional(),
+  })
+  .passthrough();
+
+/** The external EPUB engine still reports a single catalog charge; preserve it at its boundary. */
+export function normalizeCookbookCostReport(
+  input: z.output<typeof legacyCookbookCostReportSchema>,
+  source: "estimate" | "historical_recorded" = "historical_recorded",
+) {
+  const {
+    total_cost_usd,
+    cost_complete,
+    calls = [],
+    usage_by_model = [],
+    ...report
+  } = input;
+  const convertCall = (
+    call: Record<string, z.infer<ReturnType<typeof z.json>>>,
+  ) => {
+    const { cost_usd, ...rest } = call;
+    const amount = typeof cost_usd === "number" ? cost_usd : null;
+    // The engine's charge may have been zeroed for cache coverage. No standard inference is invented.
+    return {
+      ...rest,
+      standardCost: null,
+      chargedCost: amount,
+      costEvidence: {
+        standard: null,
+        charged:
+          amount === null
+            ? null
+            : {
+                source,
+                ...(source === "estimate" ? { pricingSource: "caller" } : {}),
+              },
+        billingReason: call.cached === true ? "cache" : "unknown",
+        original: { estimatedCost: amount },
+      },
+    };
+  };
+  const converted = calls.map(convertCall);
+  const noWork =
+    input.calls?.length === 0 &&
+    input.usage_by_model?.length === 0 &&
+    total_cost_usd === 0 &&
+    cost_complete;
+  return {
+    ...report,
+    standardComplete: noWork,
+    chargedComplete: cost_complete,
+    costEvidence: {
+      standard: null,
+      charged: {
+        source,
+        ...(source === "estimate" ? { pricingSource: "caller" } : {}),
+      },
+      billingReason: "unknown",
+      original: {
+        estimatedCost: total_cost_usd,
+        chargedComplete: cost_complete,
+      },
+    },
+    billingReasons: [
+      ...new Set(converted.map((call) => call.costEvidence.billingReason)),
+    ],
+    standardCost: 0,
+    chargedCost: total_cost_usd,
+    standardUnpricedCount: calls.length,
+    chargedUnpricedCount: cost_complete
+      ? 0
+      : calls.filter((call) => typeof call.cost_usd !== "number").length,
+    savings: 0,
+    comparedCalls: 0,
+    count: calls.length,
+    calls: converted,
+    usage_by_model: usage_by_model.map((usage) => {
+      const { cost_usd, ...rest } = usage;
+      const count = typeof usage.calls === "number" ? usage.calls : 0;
+      return {
+        ...rest,
+        standardCost: 0,
+        chargedCost: typeof cost_usd === "number" ? cost_usd : 0,
+        standardUnpricedCount: count,
+        chargedUnpricedCount: typeof cost_usd === "number" ? 0 : count,
+        savings: 0,
+        comparedCalls: 0,
+        count,
+        billingReasons: ["unknown"],
+        standardComplete: count === 0,
+        chargedComplete: typeof cost_usd === "number" || count === 0,
+      };
+    }),
+  };
+}
+function cookbookReportBoundary(source: "estimate" | "historical_recorded") {
+  return z.preprocess((input) => {
+    const legacy = legacyCookbookCostReportSchema.safeParse(input);
+    return legacy.success
+      ? normalizeCookbookCostReport(legacy.data, source)
+      : input;
+  }, currentCookbookRunReportSchema);
+}
+export const cookbookRunReportSchema = cookbookReportBoundary(
+  "historical_recorded",
+);
+export const freshCookbookRunReportSchema = cookbookReportBoundary("estimate");
 export type CookbookRunReport = z.infer<typeof cookbookRunReportSchema>;
 
 /** Every recipe item in reading order, with its chapter's title. */

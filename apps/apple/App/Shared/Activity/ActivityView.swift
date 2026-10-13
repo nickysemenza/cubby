@@ -831,8 +831,25 @@ struct ActivityDetailView: View {
             LabeledContent(
                 "State", value: activityStateLabel(detail.run.state))
             LabeledContent("Started") { DateDisplay(date: detail.run.createdAt) }
-            if let cost = detail.run.estimatedCost {
-                LabeledContent("Estimated cost", value: cost.usd)
+            LabeledContent(
+                "Charged cost",
+                value: aiCostSubtotal(
+                    detail.run.chargedCost, unpriced: detail.run.chargedUnpricedCount, count: detail.run.count
+                ))
+            LabeledContent(
+                "Standard cost",
+                value: aiCostSubtotal(
+                    detail.run.standardCost, unpriced: detail.run.standardUnpricedCount,
+                    count: detail.run.count))
+            if let reasons = detail.run.billingReasons, !reasons.isEmpty {
+                LabeledContent(
+                    "Billing",
+                    value: reasons.map { aiBillingReasonLabel($0.rawValue) }.joined(separator: " · "))
+            }
+            if detail.run.recordType == .imageJob, detail.run.parentRunId != nil {
+                Text("Job cost may already be included in its parent Run total.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             if let error = detail.run.error {
                 Text(detail.run.state == "skipped" ? imageSkipReasonText(error) : error)

@@ -1,3 +1,4 @@
+import { aiCostSummaryFields } from "./ai-cost";
 import { z } from "zod";
 import { dataQuality } from "./data-quality";
 import { parseShortcode } from "@cubby/shared";
@@ -105,7 +106,7 @@ export const activityRun = z.object({
   durationMs: z.number().nonnegative().nullable(),
   attempts: z.int().nonnegative(),
   executors: z.array(activityExecutor),
-  estimatedCost: z.number().nullable(),
+  ...aiCostSummaryFields,
   error: z.string().nullable(),
   hasDiagnostics: z.boolean(),
   canRetry: z.boolean(),
@@ -261,7 +262,7 @@ export const activitySubmissionOutput = z.object({
   skipped: z.int(),
   failed: z.int(),
   remaining: z.int(),
-  estimatedCost: z.number().nullable(),
+  ...aiCostSummaryFields,
 });
 export const imageAnalysisHistoryInput = z.object({
   id: imageShortcode,

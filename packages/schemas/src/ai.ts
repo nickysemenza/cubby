@@ -1,3 +1,4 @@
+import { aiCallCostFields, aiCostSummaryFields } from "./ai-cost";
 import {
   aiProvenance,
   suggestionAcceptanceReceipt,
@@ -10,7 +11,6 @@ import { fieldResolutionsSchema } from "./field-resolution";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { shortcodeEntities } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifier-fields";
-import { moneyNullable } from "./money";
 import {
   runShortcode,
   ingredientShortcode,
@@ -359,7 +359,7 @@ export const aiUsageEntrySchema = z.object({
   attempt: z.number().int().nonnegative(),
   status: aiUsageStatus,
   gatewayLogId: z.string().nullable(),
-  estimatedCost: moneyNullable,
+  ...aiCallCostFields,
   durationMs: z.number().int(),
   entityKind: z.string().nullable(),
   entityId: z.string().nullable(),
@@ -384,8 +384,7 @@ export const aiRunUsageInput = z.object({
 
 export const aiRunUsageOut = z.object({
   /** Sum over every priced call in the run, not just this page. */
-  pricedSubtotal: z.number().nonnegative(),
-  unpricedCount: z.number().int().nonnegative(),
+  ...aiCostSummaryFields,
   records: z.array(
     aiUsageEntrySchema.pick({
       id: true,
@@ -405,7 +404,9 @@ export const aiRunUsageOut = z.object({
       cacheStatus: true,
       applicationCacheStatus: true,
       transport: true,
-      estimatedCost: true,
+      standardCost: true,
+      chargedCost: true,
+      costEvidence: true,
     }),
   ),
   nextCursor: z.string().nullable(),
@@ -419,12 +420,11 @@ export const aiUsageSummaryInput = z.object({
 export const aiUsageSummaryRowSchema = z.object({
   day: z.string(),
   ...aiUsageGroupFields,
-  count: z.number().int(),
   inputTokens: z.number().int(),
   outputTokens: z.number().int(),
   cacheReadTokens: z.number().int(),
   cacheWriteTokens: z.number().int(),
-  estimatedCost: moneyNullable,
+  ...aiCostSummaryFields,
   durationMs: z.number().int(),
 });
 

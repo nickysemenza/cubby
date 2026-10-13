@@ -1,26 +1,34 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { getErrorMessage } from "@cubby/shared";
+import { accountAiUsage, type AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
 import { emitTelemetry } from "~/server/telemetry";
 
+import { snapshotAiUsagePrice } from "./pricing";
+
 const log = createLogger("ai-usage");
 
 export interface AiUsagePort {
   emit: typeof emitTelemetry;
+  snapshot?: typeof snapshotAiUsagePrice;
 }
 
-const productionAiUsagePort: AiUsagePort = { emit: emitTelemetry };
+const productionAiUsagePort: AiUsagePort = {
+  emit: emitTelemetry,
+  snapshot: snapshotAiUsagePrice,
+};
 
-// `provider`/`model` are open strings: the cookbook extractor walks a model
-// ladder priced by its own catalog and reports the cost per call
-// (`estimatedCost`); the app-side registry prices the models it calls itself.
+// Open provider/model strings retain external extractor usage; the registry
+// captures the standard quote, and supplied charged estimates keep their evidence.
 export type RecordAiUsageInput = {
   provider: string;
   model: string;
-  estimatedCost?: number | null;
+  standardCost?: number | null;
+  chargedCost?: number | null;
+  costEvidence?: AiCostEvidence | null;
   feature: string;
   operation: string;
   /** Every AI call belongs to a run; see `ensureRun`. */
@@ -37,7 +45,7 @@ export type RecordAiUsageInput = {
   gatewayLogId?: string | null;
   /**
    * The gateway's own response-cache verdict. Not persisted: a `hit` was not
-   * billed, so it only zeroes the cost; `cacheStatus` stays the caller's.
+   * billed, so charged cost is zero; comparison evidence and caller cache stay.
    */
   gatewayCacheStatus?: "hit" | "miss" | null;
   eventId?: string;
@@ -54,19 +62,54 @@ export type RecordAiUsageInput = {
  * Best-effort AI usage telemetry; never changes the owning AI operation.
  *
  * Every row passes through here, so the accounting rules live here: a `cache`
- * replay made no model call (zero attempts, no cost), and neither ChatGPT plan
+ * replay made no model call (zero attempts and charged cost), and neither ChatGPT plan
  * usage nor a gateway response-cache hit is API spend — both keep their
  * attempts, transport, and token evidence.
  */
-function usageBilling(input: RecordAiUsageInput) {
+async function usageBilling(
+  input: RecordAiUsageInput,
+  snapshotPrice: NonNullable<AiUsagePort["snapshot"]>,
+) {
   const replayed = input.transport === "cache";
-  const unbilled =
-    replayed ||
-    input.transport === "chatgpt" ||
-    input.gatewayCacheStatus === "hit";
+  const reason =
+    input.transport === "chatgpt"
+      ? "plan"
+      : replayed || input.gatewayCacheStatus === "hit"
+        ? "cache"
+        : (input.costEvidence?.billingReason ?? "standard");
+  // Caller replay counts alone are not evidence of an equivalent inference.
+  const supportedComparison =
+    !replayed ||
+    (input.standardCost != null &&
+      input.costEvidence?.standard?.pricingSnapshot != null);
+  const snapshot = supportedComparison
+    ? await snapshotPrice(input.provider, input.model, input)
+    : null;
+  const standardCost =
+    snapshot?.amount ??
+    (supportedComparison ? (input.standardCost ?? null) : null);
+  const fallback: AiCostEvidence["standard"] =
+    input.costEvidence?.standard ??
+    (standardCost === null ? null : { source: "estimate" as const });
+  const standard =
+    snapshot?.evidence ??
+    (standardCost === null || !fallback
+      ? null
+      : {
+          ...fallback,
+          pricingSource: fallback.pricingSource ?? ("caller" as const),
+        });
   return {
     attempt: replayed ? 0 : (input.attempt ?? 1),
-    estimatedCost: unbilled ? 0 : (input.estimatedCost ?? null),
+    ...accountAiUsage(
+      { amount: standardCost, evidence: standard },
+      {
+        ...input.costEvidence,
+        billingReason: reason,
+        chargedCost: input.chargedCost,
+      },
+      input,
+    ),
   };
 }
 
@@ -102,7 +145,7 @@ export async function recordAiUsage(
       transport: input.transport,
       entityKind: input.entity?.entityKind ?? null,
       entityId: input.entity?.entityId ?? null,
-      ...usageBilling(input),
+      ...(await usageBilling(input, port.snapshot ?? snapshotAiUsagePrice)),
     });
   } catch (error) {
     log.error("failed to record usage", {

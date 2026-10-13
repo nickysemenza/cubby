@@ -58,7 +58,7 @@ describe("cubbyPiProviders OpenAI route", () => {
 });
 
 // A gateway cache HIT replays a stored answer the gateway does not bill, so
-// its pi-ai catalog price must not reach the transcript or usage ledger.
+// charged cost stays zero while its comparison price and evidence survive.
 describe("cubbyPiProviders cost normalization", () => {
   const completed = (headers: Record<string, string>) =>
     new Response(
@@ -83,14 +83,21 @@ describe("cubbyPiProviders cost normalization", () => {
     const model = models.getModel("openai", "gpt-6-sol");
     if (!model) throw new Error("gpt-6-sol is not declared");
     const message = await models.complete(model, { messages: [] });
-    return { cost: message.usage.cost.total, input: message.usage.input };
+    return {
+      cost: message.usage.cost.total,
+      standardCost: piTokenUsage(message).standardCost,
+      input: message.usage.input,
+    };
   }
 
   it("zeroes a gateway cache hit's cost but keeps its token evidence", async () => {
-    expect(await costFor({ "cf-aig-cache-status": "HIT" })).toEqual({
+    expect(await costFor({ "cf-aig-cache-status": "HIT" })).toMatchObject({
       cost: 0,
       input: 100,
     });
+    expect(
+      (await costFor({ "cf-aig-cache-status": "HIT" })).standardCost,
+    ).toBeGreaterThan(0);
   });
 
   it("keeps the catalog price on a cache miss", async () => {

@@ -32,7 +32,8 @@
     "build:cf": "tsx tooling/build-cf.ts",
     "deploy:cf": "pnpm run build:cf && wrangler deploy --config dist/server/wrangler.json",
     "preview:cf": "tsx tooling/dev/index.ts preview",
-    "test:calendar": "pnpm --dir ../web-worker-tests test:workers"
+    "test:calendar": "pnpm --dir ../web-worker-tests test:workers",
+    "db:backfill-ai-costs": "tsx tooling/ai-cost-backfill.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

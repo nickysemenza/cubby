@@ -1,3 +1,4 @@
+import { cookbookRunReportSchema } from "@cubby/schemas/cookbook";
 import { entityReportOut } from "@cubby/schemas/entity-report";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -15,7 +16,7 @@ import {
 
 import { buildEntityReport } from "./index";
 
-const runReport = {
+const runReport = cookbookRunReportSchema.parse({
   run_id: "synthetic-run",
   started_at: "2026-01-01T00:00:00Z",
   finished_at: "2026-01-01T00:01:00Z",
@@ -37,7 +38,7 @@ const runReport = {
     { model: "synthetic-large", calls: 3 },
     { model: "synthetic-small", calls: 1 },
   ],
-};
+});
 
 /**
  * What one extraction of a cookbook cost and how complete it was, worded once on the server so web
@@ -81,7 +82,18 @@ describe("cookbook.extraction-report", () => {
       {
         kind: "stats",
         figures: [
-          { label: "Cost", value: 1.5, format: "text", text: "$1.50+" },
+          {
+            label: "Charged cost",
+            value: 1.5,
+            format: "text",
+            text: "$1.5000 · coverage unknown",
+          },
+          {
+            label: "Standard cost",
+            value: 0,
+            format: "text",
+            text: "Unpriced",
+          },
           { label: "Wall time", value: 37.4, format: "text", text: "37s" },
           {
             label: "Contents titles matched",
