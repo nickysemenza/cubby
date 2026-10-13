@@ -15,7 +15,11 @@ import {
   createEvidenceHarnessContext,
   ensureMemberParty,
 } from "./fixtures-core";
-import { escapeRegExp, gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  openDetailActions,
+  escapeRegExp,
+  gotoAuthenticatedPage,
+} from "./e2e-helpers";
 import { prepareCapturedRetailerOrder } from "./prepare-retailer-source";
 import { expect, test } from "./e2e-test";
 
@@ -249,6 +253,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
   expect(await allocationRows()).toHaveLength(0);
   const firstCode = purchaseCodes[0]!;
   await gotoAuthenticatedPage(page, `/purchases/${firstCode}#work`);
+  await openDetailActions(page);
   await page
     .getByRole("button", { name: "Match statement activity", exact: true })
     .click();
@@ -277,6 +282,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
     42.5, 42.5,
   ]);
   await gotoAuthenticatedPage(page, `/purchases/${firstCode}#work`);
+  await openDetailActions(page);
   await page
     .getByRole("button", { name: "Match statement activity", exact: true })
     .click();

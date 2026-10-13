@@ -389,12 +389,12 @@ that list as is, with no fallback grouping of their own. The image-block keys
 (`pendingImageIds`, `pendingImagePurposes`, `removeImageIds`, `imageOrder`)
 stay out, since the editors' image block owns them on both platforms.
 `presentation.spans` (`[{ start, end, label }]`, date fields only) declares a
-start/optional-end pair: detail and list render one row in the start field's
-place through `CalendarDate` and `formatDateSpan` ("Sep 22 (today)",
-"Sep 22 – 25 (ongoing)"),
-including present/future context shared with scalar dates on web, hide the end field,
-and the editor rejects an end before its start; the native catalog's
-`editDateRanges` is generated from it. `capabilities.timeline`
+start/optional-end pair. Web lists fold it into the start field's row through
+`CalendarDate` and `formatDateSpan` ("Sep 22 (today)", "Sep 22 – 25 (ongoing)")
+and hide the end field. Web details and inspectors show both endpoints as
+independently editable, human-readable dates with their contextual quality
+results. The editor rejects an end before its start; the native catalog's
+`editDateRanges` is generated from the declaration. `capabilities.timeline`
 (`"default"`: audit log plus the declared date fields; `"custom"`: the
 `extensions.ports.timeline` implementation) publishes
 `resources.<entity>.timeline`. The compiler checks every named field,

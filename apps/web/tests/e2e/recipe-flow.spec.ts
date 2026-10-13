@@ -171,10 +171,10 @@ test.describe("Recipe Flow", () => {
     await expect(
       actions.getByRole("button", { name: "copy parse", exact: true }),
     ).toBeVisible();
-    await page.keyboard.press("Escape");
     await expect(
-      page.getByRole("button", { name: /Add to meal/i }),
+      actions.getByRole("button", { name: /Add to meal/i }),
     ).toBeVisible();
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Flow view", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "E2E Branching Biscuits", level: 2 }),

@@ -51,11 +51,12 @@ test("related Runs show account labels and shared quality", async ({
   await row
     .getByRole("button", { name: "How quality is determined", exact: true })
     .click();
-  await page.getByText("2 satisfied checks", { exact: true }).click();
   await expect(
-    page.getByText("Actor attribution", { exact: true }),
+    page.getByText("Actor attributed", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Run timeline", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Timeline recorded", { exact: true }),
+  ).toBeVisible();
 
   await gotoAuthenticatedPage(page, "/runs");
   const listRow = page

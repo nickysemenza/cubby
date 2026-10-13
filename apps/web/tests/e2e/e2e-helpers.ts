@@ -150,6 +150,13 @@ export async function waitForAppHydration(page: Page) {
   }
 }
 
+/** Resolve the owning inline disclosure rather than a table popover. */
+export async function inlineExplanation(page: Page, control: Locator) {
+  const panelId = await control.getAttribute("aria-controls");
+  expect(panelId).toBeTruthy();
+  return page.locator(`[id="${panelId}"]`);
+}
+
 /** Explicitly enter the contextual record overflow before using a secondary action. */
 export async function openDetailActions(page: Page) {
   const panel = page.getByRole("dialog", { name: "More actions", exact: true });
@@ -523,7 +530,9 @@ export async function createProduct(
   await dialog.getByRole("button", { name: /^Create$/ }).click();
   await expect(dialog).not.toBeVisible({ timeout: 15000 });
   await openProductFromPalette(page, name);
-  await expect(page.getByRole("heading", { name: "Details" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Identity", exact: true }),
+  ).toBeVisible();
 }
 
 /** Reach a product's detail page by name and assert its URL and heading. */

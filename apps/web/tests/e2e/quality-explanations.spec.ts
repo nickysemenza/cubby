@@ -4,6 +4,7 @@ import { superJsonResultSchema } from "~/lib/superjson-wire";
 import superjson from "superjson";
 import { z } from "zod";
 import {
+  inlineExplanation,
   gotoAuthenticatedPage,
   reloadAuthenticatedPage,
   expectViewportBounded,
@@ -89,12 +90,14 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     .first();
   await expect(technicalDisclosure).not.toHaveAttribute("open");
   await expect(
-    popover.locator("summary").filter({ hasText: /satisfied checks/ }),
+    popover
+      .locator("[data-quality-check]")
+      .filter({ hasText: "Satisfied" })
+      .first(),
   ).toBeVisible();
+  await popover.getByText("Score arithmetic", { exact: true }).click();
   await expect(popover).toContainText("applicable weight");
-  await expect(popover).toContainText(
-    "Only this record's applicable weighted checks",
-  );
+
   await expect(popover).toContainText("product.data-quality");
   const calculation = popover.getByRole("heading", {
     name: "Score calculation",
@@ -686,14 +689,16 @@ test("explanation evidence formats links and dates without exposing internal ent
   await expect(times.first()).not.toContainText(/T\d{2}:\d{2}/);
   await page.setViewportSize({ width: 402, height: 874 });
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
-  await page
-    .getByRole("button", { name: /How external ids is determined/ })
-    .click();
+  const externalIdsExplanation = page.getByRole("button", {
+    name: /How external ids is determined/,
+  });
+  await externalIdsExplanation.click();
+  const inline = await inlineExplanation(page, externalIdsExplanation);
   await expect(
-    popover.getByRole("link", { name: vendorName, exact: true }),
+    inline.getByRole("link", { name: vendorName, exact: true }),
   ).toBeVisible();
   await expectViewportBounded(page);
   expect(
-    await popover.evaluate((panel) => panel.scrollWidth),
-  ).toBeLessThanOrEqual(await popover.evaluate((panel) => panel.clientWidth));
+    await inline.evaluate((panel) => panel.scrollWidth),
+  ).toBeLessThanOrEqual(await inline.evaluate((panel) => panel.clientWidth));
 });

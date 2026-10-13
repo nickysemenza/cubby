@@ -15,7 +15,12 @@ import {
   ensureMemberParty,
   seedConcurrently,
 } from "./fixtures-core";
-import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
+import {
+  inlineExplanation,
+  escapeRegExp,
+  gotoAuthenticatedPage,
+  uniqueName,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 function recordRows(container: Page | Locator) {
@@ -468,7 +473,7 @@ test("feature explanation ladders ancestry and calls a root binding set here", a
     explanation,
   );
   await explanation.click();
-  const popover = page.locator("[data-slot=popover-content]");
+  let popover = await inlineExplanation(page, explanation);
   await expect(popover.getByText("Inherited", { exact: true })).toBeVisible();
   await expect(
     popover.getByText("Resolution order", { exact: true }),
@@ -486,6 +491,7 @@ test("feature explanation ladders ancestry and calls a root binding set here", a
     explanation,
   );
   await explanation.click();
+  popover = await inlineExplanation(page, explanation);
   await expect(popover.getByText("Set here", { exact: true })).toBeVisible();
   await expect(popover.getByText(/override|inherit/i)).toHaveCount(0);
   await expect(
