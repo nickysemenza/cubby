@@ -19,7 +19,7 @@ interface TestRow {
 }
 
 const rows = (...ids: string[]) =>
-  ids.map((id) => fromPartial<Row<TestRow>>({ original: { id } }));
+  ids.map((id) => fromPartial<Row<TestRow>>({ id, original: { id } }));
 
 const noop: BulkAction<TestRow> = {
   id: "delete",

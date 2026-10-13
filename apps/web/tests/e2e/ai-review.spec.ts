@@ -115,7 +115,8 @@ test("Review bulk-accepts and bulk-rejects a Run's Suggestions with read-back", 
     await expect(rejectRow).toBeChecked();
   } finally {
     acceptance.resolve();
-    await page.unroute(`**${BROWSER_OPERATION_PATH}`, holdAcceptance);
+    // Finish fulfillment before disabling interception for the held request.
+    await page.unrouteAll({ behavior: "wait" });
   }
   await expect(reject).toBeEnabled();
   await expect(rejectRow).toBeChecked();

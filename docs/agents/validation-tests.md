@@ -117,7 +117,11 @@ retailer documents to the retailer page, never the shared browser context or
 the Cubby application page. Install transient interception immediately before
 the action that needs it, including opening UI that fetches automatically.
 Remove it once its regression has been observed,
-before later navigations or reloads. Image prerequisites upload synthetic bytes
+before later navigations or reloads. When a test holds a response, release its
+gate and await `page.unrouteAll({ behavior: "wait" })` so fulfillment finishes
+before interception is disabled. Table-row fixtures used by selection actions
+must include TanStack's `row.id`, not only `row.original.id`.
+Image prerequisites upload synthetic bytes
 to the isolated worker object store; do not fulfill application image URLs with
 page routes. Assert image decoding as well as visibility. Retired-route HTTP status
 contracts use `request.get`; browser scenarios own visible not-found behavior.
