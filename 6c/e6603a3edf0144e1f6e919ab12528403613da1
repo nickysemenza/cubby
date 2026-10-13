@@ -1,0 +1,79 @@
+.github/actions/deploy-worker/action.yml
+  s_73fe69dd841a24::t_9fe229480a20e3 3-6,46,49-54,71,75-80
+.github/actions/playwright/action.yml
+  s_73fe69dd841a24::t_952e6cc09cfdde 1,3-16,21-40,42-44,46-48,51,53-60
+.github/actions/setup-apple-build-cache/action.yml
+  s_73fe69dd841a24::t_9d5dfbcca2ff42 25,28-29
+.github/actions/setup-apple-test-runner-cache/action.yml
+  s_73fe69dd841a24::t_0ff01214464513 24-25,31-32,36-39
+.github/actions/setup-node-with-deps/action.yml
+  s_73fe69dd841a24::t_3f847872556343 48,56
+.github/ci-lanes.yml
+  s_73fe69dd841a24::t_b0860ab3249f9d 1-282
+.github/workflows/apple-testflight.yaml
+  s_73fe69dd841a24::t_3bebb8b860e7f4 24,30,38-39,111-125,199,201,210,260-262,266,268-269,271,273,284-285,287-292
+.github/workflows/ci.yaml
+  s_73fe69dd841a24::t_46c42b5a87b3db 9-10,34-36,38-40,42-45,50,65-121,125-126,138-155,167-172,175-179,181,199,206-208,216-222,224-231,233,236,238,244-248,250-255,260-261,263-265,267-274,276-282,284-287,289,295-300,303-305,307-308,340,364,366-367,415-431,435-441
+.github/workflows/deploy.yaml
+  s_73fe69dd841a24::t_391ede87310edc 45
+.github/workflows/e2e-journeys.yaml
+  s_73fe69dd841a24::t_ee4e2fab7f3438 349-350
+AGENTS.md
+  s_73fe69dd841a24::t_420de855152390 23
+apps/apple/AGENTS.md
+  s_73fe69dd841a24::t_797c3e59de0bb2 83
+cubby-ffi/project.json
+  s_73fe69dd841a24::t_705772f8a35f9c 11
+docs/adr/0009-content-hash-merge-gate.md
+  s_73fe69dd841a24::t_5c6118f947944a 3-4,35-36,39-40
+docs/agents/validation-tests.md
+  s_73fe69dd841a24::t_076cb4f850f73d 251
+docs/agents/validation.md
+  s_73fe69dd841a24::t_d53b33858016d3 109-116
+docs/ci.md
+  s_73fe69dd841a24::t_4e2be82aaabf6a 3-15,21-22,61-65,232,257-259,344-374,382-383,388-390,420-421,430,464-471,484-487,491-504,508
+docs/tester-army.md
+  s_73fe69dd841a24::t_45d5e8119280bd 246,251
+knip.json
+  s_73fe69dd841a24::t_ce8fa56a7de5e1 20
+nx.json
+  s_73fe69dd841a24::t_b3ab09ef5394fd 74-87
+package.json
+  s_73fe69dd841a24::t_a2c917c5563c56 11,14,60,71
+pnpm-lock.yaml
+  s_73fe69dd841a24::t_2dd572a52c6ca2 233-235,266-268,6380-6384,12282,15894-15895
+project.json
+  s_73fe69dd841a24::t_f6cf66f4f5ca92 94-105
+recipebridge/project.json
+  s_73fe69dd841a24::t_c78ea75bd54fed 11
+scripts/apple-release.test.ts
+  s_73fe69dd841a24::t_5c457414e9d639 11,14,45-46,48,56-89,176-193,195,197-243,282-283,285
+scripts/apple-release.ts
+  s_73fe69dd841a24::t_045efbdd01dce7 13,24,102,104,123-124,130-132,134-137,139-156,158-160,201-202,215-217,293
+scripts/ci-lanes.test.ts
+  s_73fe69dd841a24::t_ce87b8565a52f3 1-118
+scripts/ci-lanes.ts
+  s_73fe69dd841a24::t_c947c5b604eb93 1-326
+scripts/tester-army-ci.ts
+  s_73fe69dd841a24::t_e21b8683101f0e 2,5,16,19,130
+.github/workflows/tester-army-pr.yaml
+  s_73fe69dd841a24::t_1588a3b5ac10ab 3-5,21,23,27-44
+docs/adr/0014-path-routed-ci-lanes.md
+  s_73fe69dd841a24::t_7d1687e102d314 1-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6ce6603a3edf0144e1f6e919ab12528403613da1",
+  "prompts": {},
+  "sessions": {
+    "s_73fe69dd841a24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96d21c32-0fd2-4535-be08-daa98aa3f469",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
