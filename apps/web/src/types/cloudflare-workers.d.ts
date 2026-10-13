@@ -4,7 +4,6 @@
 // boundary aligned with the current Workers release without merging globals.
 declare module "cloudflare:workers" {
   import type {
-    Rpc,
     DurableObjectState,
     ExecutionContext,
     WorkflowEvent,
@@ -12,9 +11,6 @@ declare module "cloudflare:workers" {
   } from "@cloudflare/workers-types";
 
   export type { WorkflowEvent, WorkflowStep };
-  export abstract class RpcTarget implements Rpc.RpcTargetBranded {
-    [Rpc.__RPC_TARGET_BRAND]: never;
-  }
 
   export abstract class DurableObject<Environment> {
     protected readonly ctx: DurableObjectState;

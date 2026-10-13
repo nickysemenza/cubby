@@ -7,7 +7,6 @@ import {
 import { type JSONType, z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import { withDatabaseWorkPriority } from "~/server/database-work";
 import { AppError } from "~/server/errors/app-error";
 import { withErrorReporting } from "~/server/errors/report-error";
 import { normalizeStartOperationError } from "~/server/start-operation.server";
@@ -208,77 +207,71 @@ async function serveAuthenticatedMcp(
 
   const actor = await verifyMcpToken(request);
   if (!actor) return unauthorizedResponse();
-  return withDatabaseWorkPriority(
-    actor.purchaseAgentRunId ? "background" : "interactive",
-    async () => {
-      progress.authenticated();
-      const { request: served, parsedBody } = await progress.readBody();
+  progress.authenticated();
+  const { request: served, parsedBody } = await progress.readBody();
 
-      const ctx = requireActor(
-        await createRequestContext({
-          headers: request.headers,
-          actor: {
-            userId: actor.userId,
-            sessionId: actor.sessionId,
-            channel: "mcp",
-            oauthClientId: actor.clientId,
-            // The agent's token is scoped to its run, so everything it writes
-            // inherits that run (validated against the grant below).
-            runId: actor.purchaseAgentRunId
-              ? runEntityId.parse(actor.purchaseAgentRunId)
-              : null,
-          },
-        }),
-      );
-      if (actor.purchaseAgentRunId) {
-        const grant = actor.purchaseAgentGrantId
-          ? await findActivePurchaseAgentGrant(
-              ctx.db,
-              actor.userId,
-              actor.purchaseAgentGrantId,
-            )
-          : null;
-        if (!grant) return unauthorizedResponse();
-        const { loadRunScope } =
-          await import("~/server/purchase-import/run-service");
-        const [scope, party] = await Promise.all([
-          loadRunScope(ctx.db, actor.purchaseAgentRunId),
-          ctx.currentParty(),
-        ]);
-        if (
-          scope.actorUserId !== actor.userId ||
-          !party ||
-          party.id !== scope.ledgerPartyId
-        ) {
-          return unauthorizedResponse();
-        }
-      }
-
-      return await handleMcpRequest(served, parsedBody, {
-        token: "",
-        clientId: actor.clientId ?? "unknown-oauth-client",
-        scopes: [],
-        extra: {
-          operationContext: new McpOperationContext(ctx),
-          purchaseAgent:
-            actor.purchaseAgentRunId && actor.purchaseAgentGrantId
-              ? {
-                  runId: actor.purchaseAgentRunId,
-                  grantId: actor.purchaseAgentGrantId,
-                }
-              : undefined,
-          telemetry: {
-            identity: {
-              userId: actor.userId,
-              clientId: actor.clientId,
-              surface: "external_mcp",
-            },
-            emit: (event: Parameters<typeof emitTelemetry>[1]) =>
-              emitTelemetry(ctx.db, event),
-          },
-        },
-      });
-    },
-    request.signal,
+  const ctx = requireActor(
+    await createRequestContext({
+      headers: request.headers,
+      actor: {
+        userId: actor.userId,
+        sessionId: actor.sessionId,
+        channel: "mcp",
+        oauthClientId: actor.clientId,
+        // The agent's token is scoped to its run, so everything it writes
+        // inherits that run (validated against the grant below).
+        runId: actor.purchaseAgentRunId
+          ? runEntityId.parse(actor.purchaseAgentRunId)
+          : null,
+      },
+    }),
   );
+  if (actor.purchaseAgentRunId) {
+    const grant = actor.purchaseAgentGrantId
+      ? await findActivePurchaseAgentGrant(
+          ctx.db,
+          actor.userId,
+          actor.purchaseAgentGrantId,
+        )
+      : null;
+    if (!grant) return unauthorizedResponse();
+    const { loadRunScope } =
+      await import("~/server/purchase-import/run-service");
+    const [scope, party] = await Promise.all([
+      loadRunScope(ctx.db, actor.purchaseAgentRunId),
+      ctx.currentParty(),
+    ]);
+    if (
+      scope.actorUserId !== actor.userId ||
+      !party ||
+      party.id !== scope.ledgerPartyId
+    ) {
+      return unauthorizedResponse();
+    }
+  }
+
+  return await handleMcpRequest(served, parsedBody, {
+    token: "",
+    clientId: actor.clientId ?? "unknown-oauth-client",
+    scopes: [],
+    extra: {
+      operationContext: new McpOperationContext(ctx),
+      purchaseAgent:
+        actor.purchaseAgentRunId && actor.purchaseAgentGrantId
+          ? {
+              runId: actor.purchaseAgentRunId,
+              grantId: actor.purchaseAgentGrantId,
+            }
+          : undefined,
+      telemetry: {
+        identity: {
+          userId: actor.userId,
+          clientId: actor.clientId,
+          surface: "external_mcp",
+        },
+        emit: (event: Parameters<typeof emitTelemetry>[1]) =>
+          emitTelemetry(ctx.db, event),
+      },
+    },
+  });
 }

@@ -3,14 +3,12 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
-import { acquireDatabaseWork } from "./database-work";
 import { createDatabaseClientConstructor } from "./db-pg-client";
 import {
   acquireTracedConnection,
   type RequestDbRole,
   tracePool,
   traceStandaloneClient,
-  releaseStandaloneDatabaseWork,
 } from "./db-pg-tracing";
 import {
   DatabaseRuntimeResolver,
@@ -29,20 +27,6 @@ export type { RequestDbConnections };
 
 const requestDbStore = new AsyncLocalStorage<RequestDatabaseRuntimeScope>();
 
-/** Each typed owner gets values tied to the current request, never its successor. */
-export function createRequestMemo<T>(create: () => T): () => T {
-  const values = new WeakMap<RequestDatabaseRuntimeScope, T>();
-  return () => {
-    const scope = requestDbStore.getStore();
-    if (!scope) return create();
-    const existing = values.get(scope);
-    if (existing !== undefined) return existing;
-    const value = create();
-    values.set(scope, value);
-    return value;
-  };
-}
-
 const runtimeForClient = (client: DatabaseClient): DatabaseRuntime => ({
   client,
   withConnection: (fn) => fn(client),
@@ -52,7 +36,7 @@ const runtimeForPool = (
   pool: pg.Pool,
   role: RequestDbRole,
 ): DatabaseRuntime => {
-  const tracedPool = tracePool(pool, role, () => acquireDatabaseWork());
+  const tracedPool = tracePool(pool, role);
   const client = drizzleNodePostgres({ client: tracedPool, schema });
   return {
     client,
@@ -106,23 +90,14 @@ export const withRequestDb = async <T>(
 export const withRequestDbClient = async <T>(
   connectionString: string,
   fn: () => Promise<T>,
-  {
-    acquireWork = () => acquireDatabaseWork("background"),
-  }: { acquireWork?: () => Promise<Disposable> } = {},
 ): Promise<T> => {
   const Client = createDatabaseClientConstructor("strong");
   const client = traceStandaloneClient(
     new Client({ connectionString }),
     "strong",
-    acquireWork,
   );
   try {
-    // Capacity covers setup or SQL, never time awaiting a model or another
-    // Worker. Otherwise two coordinators could deadlock their delegated tools.
-    {
-      using _permit = await acquireWork();
-      await client.connect();
-    }
+    await client.connect();
     const runtime = runtimeForClient(drizzleNodePostgres({ client, schema }));
     const holder: RequestDatabaseRuntimeScope = {
       connections: {
@@ -134,11 +109,7 @@ export const withRequestDbClient = async <T>(
     };
     return await requestDbStore.run(holder, fn);
   } finally {
-    try {
-      await client.end();
-    } finally {
-      releaseStandaloneDatabaseWork(client);
-    }
+    await client.end();
   }
 };
 

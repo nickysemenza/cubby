@@ -66,11 +66,6 @@ Traps, all seen for real:
 
 `Database` is a request-scoped handle: routers pass it onward, services
 orchestrate, and repos alone call `getDb`; transactions use `withTransaction`.
-Transaction bodies use their transaction-bound handle for every query; prepare
-root-owned Run identity before opening a transaction. Never await models,
-external services or delegated workers while holding a transaction. Runtime
-admission covers promise-based queries; callback/stream query forms are not
-supported application paths.
 Its callback receives a Drizzle transaction directly. Use
 `withTransactionDatabase` when a called domain module needs a transaction-bound
 `Database`; `getDb` accepts that facade, not a raw Drizzle transaction.

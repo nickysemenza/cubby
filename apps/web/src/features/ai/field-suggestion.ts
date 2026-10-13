@@ -5,8 +5,7 @@ import type {
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseShortcode } from "@cubby/shared";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { readReferenceField } from "~/entity/entity-references";
@@ -326,44 +325,23 @@ export function useEntitySuggestionsQuery({
   operations?: EntitySuggestionsOperations;
 }) {
   const effective = source ?? INACTIVE_SUGGESTION_SOURCE;
-  const manual = useRef(false);
-  const client = useQueryClient();
-  const input = useMemo(
-    () => ({
-      entityId:
-        effective.entityId ?? effective.basis.__financeEntityId ?? undefined,
-      basisMode: effective.basisMode,
-      entity: effective.entity,
-      targets: [...effective.targets],
-      basis: effective.basis,
-      runKey: effective.runKey,
-    }),
-    [effective],
-  );
-  const opts = operations.suggestFields.queryOptions(input);
+  const opts = operations.suggestFields.queryOptions({
+    entityId:
+      effective.entityId ?? effective.basis.__financeEntityId ?? undefined,
+    basisMode: effective.basisMode,
+    entity: effective.entity,
+    targets: [...effective.targets],
+    basis: effective.basis,
+    runKey: effective.runKey,
+  });
   const query = useQuery({
     ...opts,
-    queryFn: ({ signal }) =>
-      operations.suggestFields.call(input, {
-        signal,
-        priority: manual.current ? "interactive" : undefined,
-      }),
     enabled: enabled && source != null,
     retry: false,
     meta: { ...opts.meta, silentErrors: true },
   });
   return {
-    refetch: async () => {
-      // A manual refresh replaces a queued automatic read rather than sharing
-      // its lower-priority promise. The query key still owns basis freshness.
-      await client.cancelQueries({ queryKey: opts.queryKey, exact: true });
-      manual.current = true;
-      try {
-        return await query.refetch();
-      } finally {
-        manual.current = false;
-      }
-    },
+    refetch: query.refetch,
     suggestions: query.data?.suggestions ?? EMPTY_SUGGESTIONS,
     fieldResolutions: query.data?.fieldResolutions ?? EMPTY_FIELD_RESOLUTIONS,
     eligibleTargets: query.data?.eligibleTargets ?? [],

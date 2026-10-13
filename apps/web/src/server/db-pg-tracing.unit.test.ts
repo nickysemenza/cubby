@@ -6,7 +6,6 @@ import { withDatabaseOperationMetrics } from "./db-observability";
 import {
   createPoolQueryOwnershipBoundary,
   traceStandaloneClient,
-  tracePool,
   createPoolConnectAdapter,
   createPoolQueryAdapter,
   createObservedQuery,
@@ -27,69 +26,6 @@ const queryResult = (): pg.QueryResult => ({
 // Failures: queued work can look like database execution, a rejected query can
 // poison the client tail, or reused leases can inherit the wrong role/owner.
 describe("node-postgres tracing adapters", () => {
-  // A coordinator awaiting a model or another Worker must not retain database
-  // capacity. A transaction, however, retains it through rollback after failure.
-  it("admits standalone statements and retains one permit through rollback", async () => {
-    const dispose = vi.fn();
-    const acquire = vi.fn(async () => ({ [Symbol.dispose]: dispose }));
-    const rawQuery = vi
-      .fn()
-      .mockResolvedValueOnce(queryResult())
-      .mockRejectedValueOnce(new Error("statement sentinel"))
-      .mockResolvedValue(queryResult());
-    const client = traceStandaloneClient(
-      fromPartial<pg.Client>({ query: rawQuery }),
-      "strong",
-      acquire,
-    );
-    await client.query("BEGIN");
-    await expect(client.query("SELECT broken")).rejects.toThrow(
-      "statement sentinel",
-    );
-    expect(acquire).toHaveBeenCalledOnce();
-    expect(dispose).not.toHaveBeenCalled();
-    await client.query("ROLLBACK");
-    expect(dispose).toHaveBeenCalledOnce();
-    await client.query("SELECT recovered");
-    expect(acquire).toHaveBeenCalledTimes(2);
-    expect(dispose).toHaveBeenCalledTimes(2);
-  });
-
-  // Admission must precede Hyperdrive connection setup and remain held across
-  // every statement on a leased transaction connection, including failure.
-  it("holds one admission permit for a connection lease and releases it once", async () => {
-    const gate = Promise.withResolvers<Disposable>();
-    const dispose = vi.fn();
-    const release = vi.fn();
-    const rawQuery = vi.fn(async () => queryResult());
-    const client = fromPartial<pg.PoolClient>({ query: rawQuery, release });
-    const connect = vi.fn(async () => client);
-    const pool = tracePool(
-      fromPartial<pg.Pool>({
-        connect,
-        query: rawQuery,
-        totalCount: 0,
-        idleCount: 0,
-        waitingCount: 0,
-      }),
-      "strong",
-      () => gate.promise,
-    );
-    const leased = pool.connect();
-    await Promise.resolve();
-    expect(connect).not.toHaveBeenCalled();
-    gate.resolve({ [Symbol.dispose]: dispose });
-    const connection = await leased;
-    await connection.query("BEGIN");
-    await connection.query("SELECT 1");
-    await connection.query("COMMIT");
-    expect(dispose).not.toHaveBeenCalled();
-    connection.release();
-    connection.release();
-    expect(dispose).toHaveBeenCalledOnce();
-    expect(release).toHaveBeenCalledOnce();
-  });
-
   it("measures serialized client waits separately and continues after rejection", async () => {
     let rejectFirst: (error: Error) => void = () => {};
     const firstGate = new Promise<pg.QueryResult>((_resolve, reject) => {

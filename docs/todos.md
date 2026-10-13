@@ -888,6 +888,11 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   decision-grading skill). Keep one global share unless a per-field gap
   exceeds the sample's noise.
 
+- 🤔 🛠️ **Bound coordinator database concurrency.** Queue delivery concurrency
+  alone cannot bound active purchase-agent/coordinator database work. Evaluate
+  background limits against backlog/oldest age, pool waits and interactive
+  latency before introducing runtime admission control.
+
 Per-row household policies (SpendingCategory `productExpectation`) stay
 columns; algorithms (allocation, reconciliation, fingerprints) stay code and
 consume the declarations.

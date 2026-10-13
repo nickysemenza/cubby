@@ -1,7 +1,4 @@
-import type {
-  WebSocket as CfWebSocket,
-  DurableObjectState,
-} from "@cloudflare/workers-types";
+import type { WebSocket as CfWebSocket } from "@cloudflare/workers-types";
 import {
   imageProcessingClientMessage,
   imageProcessingServerMessage,
@@ -13,7 +10,6 @@ import { createLogger } from "@cubby/worker-tracing";
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 
-import { setCfEnv } from "~/server/cf-env";
 import { db, withRequestDbClient } from "~/server/db";
 
 import {
@@ -71,12 +67,6 @@ export class ImageProcessingDurableObject
   extends DurableObject<Env>
   implements ImageProcessingCompanionRpc
 {
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
-    // RPC and hibernating socket events need the bindings even on a cold DO.
-    setCfEnv(env);
-  }
-
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
       return new Response("WebSocket upgrade required", { status: 426 });

@@ -1,18 +1,12 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import {
-  databaseWorkRequest,
-  type DatabaseWorkRequest,
-  type DatabaseWorkReady,
-} from "@cubby/schemas/database-work";
-import {
   type ProblemsCount,
   problemsCountSchema,
 } from "@cubby/schemas/problems";
 import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/tanstackstart-react";
-import { DurableObject, RpcTarget } from "cloudflare:workers";
+import { DurableObject } from "cloudflare:workers";
 
-import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import type { findProblemCounts } from "~/server/services/problems.service";
 import { withInvocationTrace } from "~/server/tracing";
@@ -23,67 +17,6 @@ const log = createLogger("problems.counts");
 
 const REFRESH_DELAY_MS = 15 * 60_000;
 const MAX_SNAPSHOT_AGE_MS = 24 * 60 * 60_000;
-
-/** RPC lifetime returns capacity when a caller fails or its context ends. */
-class DatabaseTicket extends RpcTarget {
-  #release: (() => void) | undefined;
-  #controller = new AbortController();
-  #ready: Promise<void>;
-  #error: unknown;
-  #timer: ReturnType<typeof setTimeout>;
-  constructor(
-    limiter: ReturnType<typeof createConcurrencyLimiter>,
-    input: DatabaseWorkRequest,
-  ) {
-    super();
-    const request = databaseWorkRequest.parse(input);
-    this.#timer = setTimeout(
-      () =>
-        this.#controller.abort(
-          new Error(
-            `Database admission wait exceeded ${request.waitTimeoutMs}ms (${request.priority}): ${JSON.stringify(limiter.snapshot())}`,
-          ),
-        ),
-      request.waitTimeoutMs,
-    );
-    this.#ready = limiter
-      .acquire(request.priority, this.#controller.signal)
-      .then(
-        (release) => {
-          clearTimeout(this.#timer);
-          if (this.#controller.signal.aborted) release();
-          else this.#release = release;
-        },
-        (error: unknown) => {
-          clearTimeout(this.#timer);
-          this.#error = error;
-        },
-      );
-  }
-  async ready(): Promise<DatabaseWorkReady> {
-    await this.#ready;
-    return this.#error === undefined
-      ? { ok: true }
-      : {
-          ok: false,
-          error:
-            this.#error instanceof Error
-              ? this.#error.message
-              : String(this.#error),
-        };
-  }
-  release(): void {
-    clearTimeout(this.#timer);
-    this.#controller.abort(
-      new DOMException("Database admission cancelled", "AbortError"),
-    );
-    this.#release?.();
-    this.#release = undefined;
-  }
-  [Symbol.dispose](): void {
-    this.release();
-  }
-}
 
 // SAFETY: this module's named export is declared locally and remains lazy so
 // workerd does not initialize the WASM-backed problem implementation at boot.
@@ -103,19 +36,6 @@ export class DatabaseFreshnessDurableObject
   implements DatabaseFreshnessRpc
 {
   private refreshTail: Promise<void> = Promise.resolve();
-  // The strong origin has twelve slots. Leave two outside this owner and
-  // reserve eight of our ten for navigation rather than advisory/background work.
-  private readonly databaseWork = createConcurrencyLimiter(10, {
-    backgroundLimit: 2,
-  });
-
-  requestDatabaseWork(request: DatabaseWorkRequest): DatabaseTicket {
-    return new DatabaseTicket(this.databaseWork, request);
-  }
-
-  databaseWorkSnapshot() {
-    return this.databaseWork.snapshot();
-  }
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -302,24 +222,8 @@ export class DatabaseFreshnessDurableObject
     return runWithExecutionCtx(
       { waitUntil: (task) => this.ctx.waitUntil(task) },
       () =>
-        withRequestDbClient(
-          connectionString,
-          () => service.findProblemCounts(db, createUpcLookupService(db)),
-          {
-            acquireWork: async () => {
-              const ticket = this.requestDatabaseWork({
-                priority: "background",
-              });
-              try {
-                const ready = await ticket.ready();
-                if (!ready.ok) throw new Error(ready.error);
-                return ticket;
-              } catch (error) {
-                ticket.release();
-                throw error;
-              }
-            },
-          },
+        withRequestDbClient(connectionString, () =>
+          service.findProblemCounts(db, createUpcLookupService(db)),
         ),
       this.env.APP_ORIGIN,
     );

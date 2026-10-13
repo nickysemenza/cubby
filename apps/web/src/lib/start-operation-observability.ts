@@ -35,7 +35,6 @@ export type StartOperationDefinition<
   readonly kind: RegisteredStartOperationKind<Id>;
   readonly entities: readonly string[];
   readonly productPhases: readonly ProductDetailPhase[];
-  readonly priority?: "advisory";
 };
 
 export type StartOperationTraceContext = {
@@ -83,7 +82,6 @@ export const startOperationDefinition = <Id extends StartOperationId>(
     entities: "entities" in registered ? registered.entities : [],
     productPhases:
       "productPhases" in registered ? registered.productPhases : [],
-    priority: "priority" in registered ? registered.priority : undefined,
   } satisfies StartOperationDefinition<Id>;
 };
 
