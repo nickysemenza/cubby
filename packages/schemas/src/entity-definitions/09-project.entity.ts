@@ -722,13 +722,13 @@ Rules:
       {
         key: "locationsMode",
         defaultValue: "'inherit'",
-        specialized: "enum:locationsMode",
+        specialized: "enum:inheritance-mode",
       },
       { key: "assigneeId", reference: "ledgerParty" },
       {
         key: "assigneeMode",
         defaultValue: "'inherit'",
-        specialized: "enum:assigneeMode",
+        specialized: "enum:inheritance-mode",
       },
       { key: "defaultTrade", specialized: "enum:defaultTrade" },
       { key: "costEstimate", specialized: "double-precision" },

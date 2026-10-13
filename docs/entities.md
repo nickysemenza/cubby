@@ -783,8 +783,8 @@ nullable sentinels into presence filters and static range presets into their
 declared patches. A saved range preset must have a declarative expansion;
 generation refuses an unsupported expansion rather than dropping its scope.
 Applying a native saved view replaces filters and sort in one refresh. Storage
-enum fields without a registered column expression derive their values from
-the field's Zod read/create/update schema, including inheritance modes.
+fields declared as `enum:inheritance-mode` derive their values from the field's
+Zod read/create/update schema; existing enum storage contracts stay unchanged.
 Native manual reference selection applies the declaration's explicit-intent
 patch before its selected value, so choosing a value after Use inherited
 replaces the staged reset. Every filtered task presentation, including Next,

@@ -84,10 +84,10 @@ export const effectiveProjectLocationsSql = (
 `;
 
 /** Nearest explicit live project default, including an explicit None. */
-const projectAssigneeResolutionSql = (
+const projectAssigneeResolutionSql = <Key extends "id" | "assigneeId">(
   projectId: SQL,
-  field: "id" | "assigneeId",
-) => sql`(
+  field: Key,
+) => sql<(typeof project.$inferSelect)[Key] | null>`(
   WITH RECURSIVE ancestors AS (
     SELECT p."id", p."parentProjectId", p."assigneeId", p."assigneeMode", 0 AS depth
     FROM "Project" p WHERE p."id" = ${projectId} AND p."deletedAt" IS NULL
@@ -111,7 +111,7 @@ const parentTaskAssigneeSql = (
     ELSE ${effectiveProjectAssigneeSql(effectiveTaskProjectSql("parent"))} END
   FROM "Task" parent WHERE parent."id" = ${taskColumn(alias, "parentTaskId")} AND parent."deletedAt" IS NULL
 )`;
-const parentTaskAssigneeIsNoneSql = (alias: string) => sql`EXISTS (
+const parentTaskAssigneeIsNoneSql = (alias: string) => sql<boolean>`EXISTS (
   SELECT 1 FROM "Task" parent WHERE parent."id" = ${taskColumn(alias, "parentTaskId")}
     AND parent."deletedAt" IS NULL AND (
       (parent."assigneeMode" = ${explicitModeSql} AND parent."assigneeId" IS NULL)

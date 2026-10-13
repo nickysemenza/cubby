@@ -95,10 +95,12 @@ const enumColumnExpression = (
   } as const satisfies Readonly<Record<string, string>>;
   const existing = lookupGeneratedType(expressions, key);
   if (existing) return existing;
+  if (field.specialized !== "enum:inheritance-mode") return null;
   const validation = entity.fieldModel.fields.find(
     ({ key }) => key === field.key,
   )?.validation;
-  let schema = validation?.read ?? validation?.create ?? validation?.update;
+  let schema: z.core.$ZodType | null | undefined =
+    validation?.read ?? validation?.create ?? validation?.update;
   while (
     schema instanceof z.ZodOptional ||
     schema instanceof z.ZodNullable ||

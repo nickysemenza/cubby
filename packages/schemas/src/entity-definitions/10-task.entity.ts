@@ -687,19 +687,19 @@ export default defineEntity({
       {
         key: "projectMode",
         defaultValue: "'inherit'",
-        specialized: "enum:projectMode",
+        specialized: "enum:inheritance-mode",
       },
       { key: "assigneeId", reference: "ledgerParty" },
       {
         key: "assigneeMode",
         defaultValue: "'inherit'",
-        specialized: "enum:assigneeMode",
+        specialized: "enum:inheritance-mode",
       },
       { key: "subjectProductId", reference: "product" },
       {
         key: "subjectProductMode",
         defaultValue: "'inherit'",
-        specialized: "enum:subjectProductMode",
+        specialized: "enum:inheritance-mode",
       },
       { key: "parentTaskId", reference: "task" },
       "dueDate",
