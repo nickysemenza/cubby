@@ -19,7 +19,11 @@ twin.
 
 Compiled default fact sections reuse the declaration's edit groups, with
 remaining read-only coverage and summaries grouped afterward; a record's own
-facts come before workflow slots. Explicit detail sections retain their order. Web detail renders every section in one full-width
+facts come before workflow slots. These synthesized groups explicitly use the
+Overview workspace, independently of the legacy `overviewSections` IDs used by
+native overview metadata; otherwise new edit-group IDs would fall into Evidence
+after workflow sections. Explicit detail sections retain their order and declared
+workspace. Web detail renders every section in one full-width
 column in declaration order — there is no supporting rail. A section's
 `placement` is `primary` (shares a ruled plane with its neighbors) or `full`
 (its own plane); journal presentations keep their relation-first ordering. Web identity/media composition follows

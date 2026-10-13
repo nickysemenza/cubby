@@ -482,6 +482,7 @@ export const compilePresentation = (
             id: section.id === "main" ? "overview" : `fields-${section.id}`,
             title: section.title ?? "Record",
             placement: "primary" as const,
+            workspace: "overview" as const,
             fields,
           },
         ];
@@ -498,6 +499,7 @@ export const compilePresentation = (
             id: grouped.length === 0 ? "overview" : "summaries",
             title: grouped.length === 0 ? "Record" : "Coverage and summaries",
             placement: "primary" as const,
+            workspace: "overview" as const,
             fields: remaining,
           },
         ]),

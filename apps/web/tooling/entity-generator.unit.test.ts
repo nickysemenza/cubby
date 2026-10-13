@@ -859,6 +859,7 @@ describe("typed entity compiler", () => {
         id: "overview",
         title: "Record",
         placement: "primary",
+        workspace: "overview",
         overview: true,
         fields: ["name"],
       },

@@ -69,3 +69,8 @@ Nx-cached `cubby-checks:generate` target (a hit also restores missing output);
 `pnpm generate` forces a run. The
 Swift OpenAPI client is built by the swift-openapi-generator SwiftPM plugin
 and the UniFFI shim by `apps/apple/scripts/build-rust.sh`.
+
+When changing compiled entity declaration shapes, run the affected compiler
+contracts in `apps/web/tooling/entity-generator.unit.test.ts` as well as the
+consumer regression. Successful generation does not check existing exact-shape
+expectations.
