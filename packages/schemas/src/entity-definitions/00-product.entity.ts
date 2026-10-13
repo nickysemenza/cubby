@@ -6,8 +6,8 @@ import { plainDate } from "@cubby/schemas/base-entity";
 import { valueCollectionPatch } from "@cubby/schemas/entity-collection";
 import {
   externalIdInputs,
-  externalIdPatch,
   externalIdOut,
+  externalIdUpdate,
   gtin,
 } from "@cubby/schemas/external-id";
 import {
@@ -1167,7 +1167,7 @@ Rules:
         validation: {
           read: z.array(externalIdOut),
           create: externalIdInputs.default([]),
-          update: z.union([externalIdInputs, externalIdPatch]).optional(),
+          update: externalIdUpdate.optional(),
         },
       },
       {

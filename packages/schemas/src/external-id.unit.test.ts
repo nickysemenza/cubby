@@ -3,6 +3,7 @@ import {
   canonicalExternalIdUrl,
   externalIdInputs,
   externalIdSource,
+  externalIdUpdate,
   storedExternalIdUrl,
 } from "./external-id";
 
@@ -25,6 +26,22 @@ describe("external identifiers", () => {
         { source: "home-depot", kind: "retailer_sku", externalId: "2" },
       ]).success,
     ).toBe(true);
+  });
+
+  it("never reads a malformed patch item as a full replacement set", () => {
+    const asin = { source: "amazon", kind: "asin", externalId: "B000000001" };
+    expect(
+      externalIdUpdate.safeParse([{ op: "remove", ...asin }]).success,
+    ).toBe(false);
+    expect(externalIdUpdate.safeParse([{ op: "add", ...asin }]).success).toBe(
+      false,
+    );
+    expect(externalIdUpdate.parse([{ op: "remove", key: asin }])).toEqual([
+      { op: "remove", key: asin },
+    ]);
+    expect(externalIdUpdate.parse([asin])).toEqual([
+      expect.objectContaining(asin),
+    ]);
   });
 
   it("derives Amazon product URLs from ASIN instead of storing them", () => {

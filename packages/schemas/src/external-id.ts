@@ -287,6 +287,19 @@ export const externalIdPatch = keyedCollectionPatch(
   }
 });
 export type ExternalIdPatch = z.infer<typeof externalIdPatch>;
+
+/**
+ * `externalIds` on `entity.update`: a full replacement set or patch items.
+ * Regression: a replacement row stripped unknown keys, so a malformed patch
+ * item (`{op: "remove", source, kind, externalId}`, no `key`) parsed as a
+ * one-row replacement and silently dropped every other identifier on the
+ * Product. Replacement rows here are strict, so such an item falls through to
+ * the patch schema and fails there with the expected shape.
+ */
+export const externalIdUpdate = z.union([
+  uniqueExternalIdSlots(externalIdInput.strict()),
+  externalIdPatch,
+]);
 export const externalIdValues = uniqueExternalIdSlots(externalIdValueInput);
 
 export const externalIdOut = z.object({
