@@ -23,8 +23,14 @@ member need not supply transaction or account candidates.
    and sign. Propose a new transaction only for `ready_to_create` with a
    uniquely verified account and Purchase allocation. Generic settlement
    mutations retain exact typed approval and stable run-operation identities.
-4. Report each order's settlement outcome: already matched, awaiting approval,
-   ambiguous, or source evidence absent. Keep conflicting dispositions and
+4. Report each order's settlement outcome: already matched, awaiting posting,
+   awaiting approval, ambiguous, or source evidence absent. For recent charges,
+   refunds and transfer counterparts, allow at least two business days for
+   posting before investigating absent settlement. A provider's pending status
+   or the member's confirmation that a leg has not settled keeps it awaiting
+   posting beyond that window; age alone never establishes a defect. Recheck
+   after posting or when the member requests it, rather than repeatedly asking
+   for evidence during the normal delay. Keep conflicting dispositions and
    ambiguous allocations reviewable. In the web settlement review, the member
    can ask for a ranked suggestion among candidates tied at the top
    deterministic rank; it never settles, and agents keep the deterministic
