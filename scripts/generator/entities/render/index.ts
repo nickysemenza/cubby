@@ -480,14 +480,15 @@ export const renderEntityArtifacts = (
         `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:z.string().min(1).optional()})`,
     )
     .join(",\n  ");
+  // Strict: an unknown filter name is a 400, not a silently wider list.
   const listFilterSchemas = listEntitySpecs
     .map(({ key, filterSchema, descriptor }) =>
       filterSchema === null
         ? `const ${key}ListFiltersSchema = z.record(z.string(), z.unknown());`
         : `const ${key}ListFiltersSchema = ${
             descriptor.searchable === true
-              ? `z.object(${key}ListFilterFields).extend({searchQuery:z.string().trim().min(1).max(100).optional()})`
-              : `z.object(${key}ListFilterFields)`
+              ? `z.strictObject(${key}ListFilterFields).extend({searchQuery:z.string().trim().min(1).max(100).optional()})`
+              : `z.strictObject(${key}ListFilterFields)`
           }.extend({ids:z.array(z.string()).max(500).optional()});`,
     )
     .join("\n");

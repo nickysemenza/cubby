@@ -32,31 +32,35 @@ pushes and the nightly run start none. `tester-army` selects the web smoke
 journeys, `tester-army:ios` the two native shards, `tester-army:import` the
 coupled import journeys, and `simulator-e2e` the deterministic simulator
 journey. Journey jobs are never in `CI passed`'s needs, so they add no
-required check and no wall time to the required path. See
+required check and no wall time to the required path; they spend runner time
+and model credits only on a head whose CI passed. See
 [Tester Army](tester-army.md) for replay, evidence and timing limits.
 
 `Plan` runs in one of two modes:
 
 - **Normal CI** (opened, synchronize, reopened, push, schedule, and a dispatch
-  with an empty `journey`): the lanes route as described below, and journey
-  labels present at a push or reopen run their journeys alongside, in CI's
-  concurrency group, so the next push cancels them. `opened` leaves labels to
-  the `labeled` events GitHub sends after it, so they start once.
+  with an empty `journey`): the lanes route as described below, and the PR's
+  current journey labels (read from the API, not the event) run their
+  journeys after `CI passed` succeeds, so the next push cancels them. `opened`
+  leaves labels to the `labeled` events GitHub sends after it, so they start
+  once.
 - **Journey-only** (a `labeled` event for a journey label, or a dispatch with a
   `journey` input): `Plan` selects no lane, `CI passed` is skipped under a
   different job name (a skipped job counts as success, so it must not carry
   the gate's name), and no `tested-tree-*` artifact is recorded. A labeled
   run reads the PR's current labels and exits cleanly if the PR is closed,
   comes from a fork, or its head moved past the event's head; that push's
-  own run starts the still-labeled journeys.
+  own run starts the still-labeled journeys. It starts nothing unless the
+  head's latest `CI passed` check succeeded, and skips a lane whose check
+  already passed or failed on the head.
 
-Concurrency keeps ordinary PR events in their unchanged group. A journey
-label's run uses the same group suffixed `-journeys` (adding a second journey
-label supersedes the first label's run, which then reads both labels). Any
+Concurrency keeps ordinary PR events in one group per PR. A journey label's
+run joins that group without `cancel-in-progress`, so it waits for a running
+CI run instead of cancelling it, and a later push or closure cancels it (a
+second label replaces a waiting label run, which then reads both labels). Any
 other label's run gets a group of its own and its `Plan` job is skipped, so
 nothing starts. A journey dispatch uses a group suffixed with its journey, so
-it never cancels a full manual run on the same ref. A journey-only run is not
-cancelled by a later push or by closure; it stops at its own timeout.
+it never cancels a full manual run on the same ref.
 
 Journeys test the PR head (or the dispatched ref), not the merge commit. A
 dispatch keeps the Nx cache on and skips the live Email entry; for example
@@ -66,8 +70,8 @@ journeys are `simulator-search`, `simulator-inputs`, `tester-army-web`,
 `tester-army-both`, `tester-army-import` and `tester-army-all`; `Plan` fails
 on any other value.
 
-The native journey jobs need `apple-simulator` but run unless it failed (it is
-skipped on a probe hit or an unselected lane). `setup-apple`'s `probe` input
+Every journey job needs `CI passed` and runs unless it failed (a journey-only
+run skips it). `setup-apple`'s `probe` input
 replays the cached `apple:simulator-build` pass before the SPM clone and
 DerivedData restores, which run only on a miss; the journey command then
 builds a missing app. Native journey jobs take macOS slots beyond the two

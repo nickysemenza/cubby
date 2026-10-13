@@ -31,7 +31,8 @@ test("kernel HTTP round trip preserves fields, audit identity, and calendar effe
   );
   const inspectFeed = async () =>
     calendarContract.ops.inspectFeed.output.parse(
-      (await startOperation(page, "calendar.inspectFeed", undefined)).body,
+      (await startOperation(page.request, "calendar.inspectFeed", undefined))
+        .body,
     );
   const feedBefore = await settledCalendarFeedRevision(inspectFeed);
   const name = `Kernel acceptance ${Date.now()}`;
@@ -141,6 +142,17 @@ test("kernel HTTP round trip preserves fields, audit identity, and calendar effe
         validationIssues: expect.any(Array),
       });
     }
+    // A misspelled filter must fail, not return the unfiltered list.
+    const typo = await api.list(
+      "vendor",
+      { filters: { searchQuerry: "Synthetic" } },
+      { headers },
+    );
+    expect(typo.status()).toBe(400);
+    expect(typo.parsedBody).toMatchObject({
+      code: "BAD_REQUEST",
+      validationIssues: expect.any(Array),
+    });
     const unsupported = await page.request.get("/api/v1/entity/detail");
     expect(unsupported.status()).toBe(405);
     expect(unsupported.headers().allow).toBe("POST");

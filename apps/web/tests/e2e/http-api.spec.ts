@@ -94,7 +94,7 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
     expect(Object.keys(counts.body).length).toBeGreaterThan(0);
     const inspectFeed = async () => {
       const calendar = await startOperation(
-        page,
+        page.request,
         "calendar.inspectFeed",
         undefined,
       );

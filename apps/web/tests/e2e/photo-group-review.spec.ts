@@ -39,10 +39,14 @@ test("approves two selected photo groups with one reviewed batch action", async 
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const proposed = await startOperation(page, "photoImport.saveGroups", {
-    runId: seed.runId,
-    groups: seed.groups,
-  });
+  const proposed = await startOperation(
+    page.request,
+    "photoImport.saveGroups",
+    {
+      runId: seed.runId,
+      groups: seed.groups,
+    },
+  );
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
   await page
@@ -91,10 +95,14 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   ).toBeEnabled();
   await page.keyboard.press("Escape");
   if (recordingVideo) await page.waitForTimeout(1_500);
-  const proposed = await startOperation(page, "photoImport.saveGroups", {
-    runId: seed.runId,
-    groups: seed.groups,
-  });
+  const proposed = await startOperation(
+    page.request,
+    "photoImport.saveGroups",
+    {
+      runId: seed.runId,
+      groups: seed.groups,
+    },
+  );
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
   // Both proposed groups render, and every seeded photo is assigned to one.
@@ -253,10 +261,14 @@ test("suggests an existing variant and previews every merge decision for a creat
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const proposed = await startOperation(page, "photoImport.saveGroups", {
-    runId: seed.runId,
-    groups: seed.groups,
-  });
+  const proposed = await startOperation(
+    page.request,
+    "photoImport.saveGroups",
+    {
+      runId: seed.runId,
+      groups: seed.groups,
+    },
+  );
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
   const group = page.locator('[data-slot="card"]').filter({
@@ -410,7 +422,7 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const saved = await startOperation(page, "photoImport.saveGroups", {
+  const saved = await startOperation(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups,
   });
@@ -538,7 +550,7 @@ test("distinguishes blocking description failure from optional cutout failure", 
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const saved = await startOperation(page, "photoImport.saveGroups", {
+  const saved = await startOperation(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups: seed.groups,
   });
@@ -615,7 +627,7 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const saved = await startOperation(page, "photoImport.saveGroups", {
+  const saved = await startOperation(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
     groups,
   });

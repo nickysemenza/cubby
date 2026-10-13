@@ -26,17 +26,19 @@ on:
 concurrency:
   # A merged PR's github.ref becomes main; retain its pre-merge group so
   # closure cancels the PR run without touching main's push run. A journey
-  # label's run and a journey dispatch get their own groups, so they neither
-  # cancel nor are cancelled by CI; any other label's run is alone and exits.
-  # The journey labels are repeated in plan's `if` and its journey step.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.ref }}-${{ github.event_name }}${{ github.event.action == 'labeled' && (contains(fromJSON('["tester-army", "tester-army:ios", "tester-army:import", "simulator-e2e"]'), github.event.label.name) && '-journeys' || format('-{0}', github.run_id)) || inputs.journey && format('-{0}', inputs.journey) || '' }}
+  # label's run shares the PR's group but cancels nothing: it waits for a
+  # running CI run, and a push or closure cancels it. A journey dispatch gets
+  # its own group; any other label's run is alone and exits. The journey
+  # labels are repeated in plan's `if` and its journey step.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.ref }}-${{ github.event_name }}${{ github.event.action == 'labeled' && !contains(fromJSON('["tester-army", "tester-army:ios", "tester-army:import", "simulator-e2e"]'), github.event.label.name) && format('-{0}', github.run_id) || inputs.journey && format('-{0}', inputs.journey) || '' }}
   # PR updates supersede old results. Main must finish publishing reusable
   # caches. The default single pending slot retains only the newest waiting run.
-  cancel-in-progress: ${{ github.event_name != 'push' }}
+  cancel-in-progress: ${{ github.event_name != 'push' && github.event.action != 'labeled' }}
 
 permissions:
   contents: read
   actions: read
+  checks: read
   pull-requests: read
 
 env:
@@ -77,9 +79,10 @@ jobs:
       # Journeys are informational and opt-in: a PR's journey labels, or a
       # dispatch naming one. A labeled event or a journey dispatch is a
       # journey-only run that checks out the PR head (or dispatched ref);
-      # otherwise labels present at a push ride along in CI's concurrency
-      # group. `opened` leaves labels to the `labeled` events GitHub sends
-      # after it. Fork PRs never run journeys.
+      # otherwise the PR's current labels ride along and wait for CI to pass.
+      # A label run needs the head's latest `CI passed` to have succeeded and
+      # skips a lane that already ran on the head. `opened` leaves labels to
+      # the `labeled` events GitHub sends after it. Fork PRs never run journeys.
       - name: Select journeys
         id: journeys
         env:
@@ -88,8 +91,6 @@ jobs:
           JOURNEY: ${{ inputs.journey }}
           PR: ${{ github.event.pull_request.number }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
           set -euo pipefail
           labels='[]'
@@ -98,10 +99,11 @@ jobs:
               | tester-army-ios | tester-army-both | tester-army-import | tester-army-all) ;;
             *) echo "::error::Unknown journey '$JOURNEY'"; exit 1 ;;
           esac
-          if [[ "$GITHUB_EVENT_NAME" == pull_request && "$ACTION" == labeled ]]; then
-            mode=journeys
-            # A later push supersedes this run; that push's CI run starts the
-            # still-labeled journeys on the new head.
+          mode=ci
+          [[ "$ACTION" == labeled || -n "$JOURNEY" ]] && mode=journeys
+          if [[ "$GITHUB_EVENT_NAME" == pull_request && "$ACTION" != opened ]]; then
+            # Current labels, not the event's: one removed while this run
+            # queued starts nothing. A later push supersedes this run.
             pull="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")"
             if jq -e --arg head "$HEAD" --arg repo "$GITHUB_REPOSITORY" \
               '.state == "open" and .head.sha == $head and .head.repo.full_name == $repo' <<< "$pull" > /dev/null; then
@@ -109,12 +111,21 @@ jobs:
             else
               echo "::notice::PR $PR moved past $HEAD, closed, or comes from a fork; no journey runs"
             fi
-          elif [[ -n "$JOURNEY" ]]; then
-            mode=journeys
-          else
-            mode=ci
-            if [[ "$GITHUB_EVENT_NAME" == pull_request && "$ACTION" != opened && "$HEAD_REPO" == "$GITHUB_REPOSITORY" ]]; then
-              labels="$LABELS"
+          fi
+          if [[ "$ACTION" == labeled && "$labels" != '[]' ]]; then
+            checks="$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$HEAD/check-runs?per_page=100" \
+              --jq '.check_runs[] | select(.status == "completed") | {name, conclusion, completed_at}' | jq -sc .)"
+            ci="$(jq -r '[.[] | select(.name == "CI passed")] | max_by(.completed_at).conclusion // "none"' <<< "$checks")"
+            if [[ "$ci" != success ]]; then
+              echo "::notice::CI on $HEAD concluded $ci; no journey runs"
+              labels='[]'
+            else
+              # A lane that passed or failed on this head ran already.
+              ran="$(jq -c '[.[] | select(.conclusion == "success" or .conclusion == "failure") | .name]' <<< "$checks")"
+              labels="$(jq -c --argjson ran "$ran" 'map(select(
+                {"tester-army": "Tester Army web (informational)", "tester-army:import": "Tester Army import (informational)",
+                 "tester-army:ios": "Tester Army ios 1/2 (informational)", "simulator-e2e": "iPhone simulator E2E (informational)"}[.]
+                as $check | $check == null or ($ran | index($check)) == null))' <<< "$labels")"
             fi
           fi
           selected="$(jq -nc --argjson labels "$labels" --arg journey "$JOURNEY" '
@@ -582,8 +593,9 @@ jobs:
   # The GitHub reporter comments on the PR from the pull_request event.
   tester-army-web:
     name: Tester Army ${{ matrix.lane }} (informational)
-    needs: plan
-    if: needs.plan.outputs.web != '[]'
+    needs: [plan, ci-passed]
+    # A journey-only run skips the gate; a CI run's journeys wait for it.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.ci-passed.result != 'failure' && needs.plan.outputs.web != '[]' }}
     permissions:
       contents: read
       actions: read
@@ -664,13 +676,12 @@ jobs:
             apps/web/.e2e/runs/web/**/results/*/attempt-*/video/*.mp4
 
   # Native journeys reuse the simulator app the simulator build or an earlier
-  # run cached; that job is skipped on a probe hit or an unselected lane, so
-  # only its failure stops them. setup-apple probes the app before the large
+  # run cached (the gate they wait on covers that build). setup-apple probes the app before the large
   # SPM clone and DerivedData restores, and the journey command builds a miss.
   tester-army-ios:
     name: Tester Army ios ${{ matrix.shard }}/2 (informational)
-    needs: [plan, apple-simulator]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.apple-simulator.result != 'failure' && needs.plan.outputs.ios == 'true' }}
+    needs: [plan, ci-passed]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.ci-passed.result != 'failure' && needs.plan.outputs.ios == 'true' }}
     permissions:
       contents: read
       actions: read
@@ -771,8 +782,8 @@ jobs:
 
   simulator-e2e:
     name: iPhone simulator E2E (informational)
-    needs: [plan, apple-simulator]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.apple-simulator.result != 'failure' && needs.plan.outputs.simulator != '' }}
+    needs: [plan, ci-passed]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.ci-passed.result != 'failure' && needs.plan.outputs.simulator != '' }}
     runs-on: xcode-27
     timeout-minutes: 40
     steps:

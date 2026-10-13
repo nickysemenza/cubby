@@ -108,7 +108,7 @@ enum PreviewFixtures {
         next: sampleTodayTasks, nextCount: sampleTodayTasks.count + 1, laterCount: 2,
         blockedCount: 1, overdueCount: 0, dueThisWeekCount: 2)
 
-    /// Today's `GET /api/v1/meals` rows, for `TodayView`'s preview.
+    /// Today's meal list rows, for `TodayView`'s preview.
     static let sampleTodayMeals: [MealListItem] = fixture("sampleTodayMeals")
 
     /// `PhotoDiagnosticsView`'s preview: one entity passing its routing policy, one missing, and a

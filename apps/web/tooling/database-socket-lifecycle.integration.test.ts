@@ -8,6 +8,7 @@ import { z } from "zod";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { getDb } from "~/server/repo/database-helpers";
 
+import { entityApi } from "../tests/e2e/entity-api";
 import { buildEntity } from "./factories/build";
 import { retryStaleKeepAlive } from "./stale-keep-alive";
 import { withTestDb } from "./test-setup";
@@ -47,6 +48,7 @@ it("real Worker reads and freshness writes release database sockets after quiet"
         extraHTTPHeaders: { Origin: baseURL },
       });
       retryStaleKeepAlive(api);
+      const projects = entityApi(api);
       try {
         const signedUp = await api.post("/api/auth/sign-up/email", {
           data: {
@@ -91,7 +93,7 @@ it("real Worker reads and freshness writes release database sockets after quiet"
         const reads = async () => {
           for (let batch = 0; batch < 4; batch++) {
             const responses = await Promise.all(
-              Array.from({ length: 8 }, () => api.get("/api/v1/projects")),
+              Array.from({ length: 8 }, () => projects.list("project")),
             );
             for (const response of responses)
               expect({
@@ -103,13 +105,14 @@ it("real Worker reads and freshness writes release database sockets after quiet"
         try {
           await census("cold");
           const name = `Synthetic socket lifecycle ${randomUUID()}`;
-          const created = await api.post("/api/v1/projects", {
-            data: buildEntity("project", { name, kind: "household" }),
-          });
+          const created = await projects.create(
+            "project",
+            buildEntity("project", { name, kind: "household" }),
+          );
           expect({
             status: created.status(),
             body: scrubErrorMessage(await created.text()),
-          }).toMatchObject({ status: 201 });
+          }).toMatchObject({ status: 200 });
           const id = z
             .object({ item: z.object({ id: z.string() }) })
             .parse(await created.json()).item.id;
@@ -120,8 +123,8 @@ it("real Worker reads and freshness writes release database sockets after quiet"
           const baseline = await census("warm quiet");
           const quietSamples = [];
           for (let round = 1; round <= 3; round++) {
-            const changed = await api.patch(`/api/v1/projects/${id}`, {
-              data: { name: `${name} round ${round}` },
+            const changed = await projects.update("project", id, {
+              name: `${name} round ${round}`,
             });
             expect({
               status: changed.status(),

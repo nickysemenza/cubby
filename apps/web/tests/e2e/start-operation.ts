@@ -1,34 +1,33 @@
-import type { Page } from "@playwright/test";
+import type { APIRequestContext } from "@playwright/test";
 import superjson from "superjson";
 import { z } from "zod";
 
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { superJsonResultSchema } from "~/lib/superjson-wire";
+import { BROWSER_OPERATION_PATH } from "../../src/lib/browser-operation-path";
+import { superJsonResultSchema } from "../../src/lib/superjson-wire";
 
-/** Runs browser-only operations through the same Start dispatch as the app. */
+const requestOrigins = new WeakMap<APIRequestContext, Promise<string>>();
+
+/**
+ * Runs browser-only operations through the same Start dispatch as the app,
+ * from a signed-in request context (the dispatch requires a same-origin
+ * `Origin`).
+ */
 export async function startOperation(
-  page: Page,
+  request: APIRequestContext,
   operation: string,
   input: unknown,
 ) {
-  if (page.url() === "about:blank") {
-    const session = await page.request.get("/api/auth/get-session");
-    await page.goto(new URL("/", session.url()).href);
+  let origin = requestOrigins.get(request);
+  if (!origin) {
+    origin = request
+      .get("/api/auth/get-session")
+      .then((response) => new URL(response.url()).origin);
+    requestOrigins.set(request, origin);
   }
-  const response = await page.evaluate(
-    async ({ path, payload }) => {
-      const result = await fetch(path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      return { status: result.status, text: await result.text() };
-    },
-    {
-      path: BROWSER_OPERATION_PATH,
-      payload: superjson.serialize({ operation, input }),
-    },
-  );
+  const response = await request.post(BROWSER_OPERATION_PATH, {
+    headers: { Origin: await origin, "Content-Type": "application/json" },
+    data: JSON.stringify(superjson.serialize({ operation, input })),
+  });
   const envelope = z
     .object({
       ok: z.boolean(),
@@ -37,14 +36,14 @@ export async function startOperation(
     })
     .parse(
       superjson.deserialize(
-        superJsonResultSchema.parse(JSON.parse(response.text)),
+        superJsonResultSchema.parse(JSON.parse(await response.text())),
       ),
     );
   const body = envelope.ok ? envelope.data : envelope.error;
   return {
     body,
-    status: () => response.status,
-    ok: () => response.status >= 200 && response.status < 300 && envelope.ok,
+    status: () => response.status(),
+    ok: () => response.ok() && envelope.ok,
     json: async () => body,
     text: async () => JSON.stringify(body),
   };

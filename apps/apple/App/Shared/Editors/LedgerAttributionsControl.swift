@@ -161,8 +161,7 @@ struct LedgerAttributionsControl: View {
         attributionError = nil
         if let partyID, let name { pickedTitles[partyID] = name }
         var updated = attributions
-        guard let value = encoded(partyID: partyID, weight: 1) else { return }
-        updated.append(value)
+        updated.append(encoded(partyID: partyID, weight: 1))
         model.draft[field.key] = .array(updated)
     }
 
@@ -171,10 +170,9 @@ struct LedgerAttributionsControl: View {
     }
 
     private func replace(at index: Int, partyID: String?, weight: Int) {
-        guard attributions.indices.contains(index), let value = encoded(partyID: partyID, weight: weight)
-        else { return }
+        guard attributions.indices.contains(index) else { return }
         var updated = attributions
-        updated[index] = value
+        updated[index] = encoded(partyID: partyID, weight: weight)
         model.draft[field.key] = .array(updated)
     }
 
@@ -186,8 +184,10 @@ struct LedgerAttributionsControl: View {
         attributionError = nil
     }
 
-    private func encoded(partyID: LedgerPartyShortcode?, weight: Int) -> JSONValue? {
-        try? JSONValue(encoding: LedgerAttributionInputRequest(partyId: partyID, weight: weight))
+    private func encoded(partyID: LedgerPartyShortcode?, weight: Int) -> JSONValue {
+        var attribution: [String: JSONValue] = ["weight": .number(Double(weight))]
+        if let partyID { attribution["partyId"] = .string(partyID) }
+        return .object(attribution)
     }
 }
 

@@ -241,7 +241,7 @@ export async function createConvergenceHarness(
   ): Promise<Output> => {
     const response =
       path === "photoImport/saveGroups"
-        ? await startOperation(page, "photoImport.saveGroups", input)
+        ? await startOperation(page.request, "photoImport.saveGroups", input)
         : await page.request.post(`/api/v1/${path}`, {
             data: input,
             headers: { Origin: baseURL },

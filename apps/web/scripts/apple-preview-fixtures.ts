@@ -211,7 +211,7 @@ function buildTodayTasks(): z.infer<typeof taskTodayBriefingItemOut>[] {
 }
 
 // ---------------------------------------------------------------------------
-// sampleTodayMeals: [MealListItem] — today's `GET /api/v1/meals` rows, for
+// sampleTodayMeals: [MealListItem] — today's meal list rows, for
 // `TodayView`'s preview.
 
 interface RecipeSpec {
