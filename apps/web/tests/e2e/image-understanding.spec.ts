@@ -1,9 +1,14 @@
 import { eq, and } from "drizzle-orm";
-import { image, aiAnalysis, entityAttachment } from "~/server/db/schema";
+import {
+  image,
+  aiAnalysis,
+  entityAttachment,
+  imageProcessingJob,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   createImageProcessingJob,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   saveImageDescriptionAnalysis,
 } from "~/server/repo/image-processing";
 import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
@@ -68,6 +73,57 @@ test("image results compare descriptions and require explicit attachment confirm
       },
     });
   }
+  const history = await insertWithShortcode(db, "run", {
+    actorUserId: await fixtureUserId(page),
+    actorName: "Fixture member",
+    actorEmail: "fixture@example.test",
+    purpose: "background",
+    trigger: "manual",
+    status: "completed",
+  });
+  await writeOutcomeReceipts(db, [
+    {
+      runId: parseEntityId("run", history.id),
+      entityKind: "email",
+      entityId: crypto.randomUUID(),
+      state: "completed",
+      targetFingerprint: "a".repeat(64),
+    },
+  ]);
+  const jobId = await createImageProcessingJob(db, {
+    imageId,
+    kind: "identify_image",
+    sourceContentHash: row.sha256,
+    processorRevision: IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
+  });
+  if (!jobId) throw new Error("Synthetic image job missing");
+  await page.clock.install();
+  await gotoAuthenticatedPage(page, `/images/${source.id}`);
+  const description = page.getByRole("region", {
+    name: "Selected image description",
+  });
+  await expect(
+    description
+      .getByText("Detailed cloud observation of a blue utility jacket.", {
+        exact: true,
+      })
+      .filter({ visible: true }),
+  ).toBeVisible();
+  await description
+    .getByText("Compare Apple and cloud descriptions", { exact: true })
+    .click();
+  await expect(
+    description.getByText("Short Apple observation.", { exact: true }),
+  ).toBeVisible();
+  const identification = page.getByRole("region", {
+    name: "Product identification",
+  });
+  await expect(
+    identification.getByText(
+      "No current identification result. Queue missing processing to evaluate this image.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   await getDb(db)
     .insert(aiAnalysis)
     .values({
@@ -98,48 +154,17 @@ test("image results compare descriptions and require explicit attachment confirm
         truncated: false,
       },
     });
-  const history = await insertWithShortcode(db, "run", {
-    actorUserId: await fixtureUserId(page),
-    actorName: "Fixture member",
-    actorEmail: "fixture@example.test",
-    purpose: "background",
-    trigger: "manual",
-    status: "completed",
-  });
-  await writeOutcomeReceipts(db, [
-    {
-      runId: parseEntityId("run", history.id),
-      entityKind: "email",
-      entityId: crypto.randomUUID(),
-      state: "completed",
-      targetFingerprint: "a".repeat(64),
-    },
-  ]);
-  await createImageProcessingJob(db, {
-    imageId,
-    kind: "describe_image",
-    sourceContentHash: row.sha256,
-    processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  });
-  await gotoAuthenticatedPage(page, `/images/${source.id}`);
-  const description = page.getByRole("region", {
-    name: "Selected image description",
-  });
+  await getDb(db)
+    .update(imageProcessingJob)
+    .set({ state: "ready", lastError: null, completedAt: new Date() })
+    .where(eq(imageProcessingJob.id, jobId));
+  await page.clock.fastForward(15_000);
   await expect(
-    description.getByText(
-      "Detailed cloud observation of a blue utility jacket.",
-      { exact: true },
-    ),
+    identification.getByRole("button", {
+      name: "Confirm and attach",
+      exact: true,
+    }),
   ).toBeVisible();
-  await description
-    .getByText("Compare Apple and cloud descriptions", { exact: true })
-    .click();
-  await expect(
-    description.getByText("Short Apple observation.", { exact: true }),
-  ).toBeVisible();
-  const identification = page.getByRole("region", {
-    name: "Product identification",
-  });
   const attachments = () =>
     getDb(db)
       .select()
@@ -169,7 +194,7 @@ test("image results compare descriptions and require explicit attachment confirm
   await description.scrollIntoViewIfNeeded();
   await page.screenshot({ path: "/tmp/cubby-image-results-mobile.png" });
   await page
-    .getByRole("link", { name: "Image description", exact: true })
+    .getByRole("link", { name: "Image identification", exact: true })
     .click();
   await expect(page).toHaveURL(/\/runs\?selected=IPR-[A-Z0-9]+$/);
   await expect(

@@ -5,8 +5,12 @@ import {
   scheduleImageProcessingInput,
   selectImageDescription,
 } from "@cubby/schemas/image-processing";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import {
@@ -17,12 +21,14 @@ import {
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import {
   image as imageOperations,
   activity,
   imageProcessing,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatInstant } from "~/lib/date-format";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -268,6 +274,16 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
       query.state.data?.items.some((run) => run.active) ? 15_000 : false,
     refetchIntervalInBackground: false,
   });
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!recentRuns.data) return;
+    // Background completion happens outside this browser's mutation cache.
+    // Refresh detail records without invalidating activity and triggering this effect again.
+    void invalidateOperationTags(
+      queryClient,
+      exactRippleTags([["entity", "detail"]]),
+    );
+  }, [id, queryClient, recentRuns.data]);
   const [correction, setCorrection] = useState("");
   const save = useActionMutation({
     mutationFn: imageProcessing.correctDescription.mutationOptions,
