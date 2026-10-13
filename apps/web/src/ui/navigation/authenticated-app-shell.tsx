@@ -26,6 +26,7 @@ import {
   useVirtualKeyboard,
 } from "~/ui/hooks/useVirtualKeyboard";
 import { MainNav } from "~/ui/MainNav";
+import { QuickActionsMenu } from "~/ui/navbar/quick-actions-menu";
 import { Button } from "~/ui/primitives/button";
 
 import {
@@ -127,13 +128,14 @@ export function AuthenticatedAppShell({
       data-hydrated={hydrated ? "true" : "false"}
       data-mobile-keyboard={keyboardOpen ? "open" : "closed"}
       className={cn(
-        "min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+1px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+1px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:var(--app-command-band-height)]",
+        "min-h-dvh bg-card [--app-chrome-bottom:calc(3.5rem+1px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+1px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:0rem]",
         keyboardOpen && "[--app-chrome-bottom:0rem]",
       )}
     >
       <WorkspaceSidebar
         expanded={expanded}
         onToggle={() => setCollapsed((value) => !value)}
+        onSearchClick={onSearchClick}
       />
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         {/* Today owns the Cubby mark. Working routes use semantic local chrome
@@ -142,14 +144,10 @@ export function AuthenticatedAppShell({
           <MobileRouteBar pathname={pathname} onSearchClick={onSearchClick} />
           {navigationProgress}
         </div>
-        <DesktopCommandHeader
-          onSearchClick={onSearchClick}
-          navigationProgress={navigationProgress}
-        />
-        {/* Flush to the rail and the command header: the table's own border
-            is the page edge, so main spends no gutter. Phone clearance tracks
-            the actual fixed bar, including the home-indicator inset, so the
-            last row can never land underneath the navigation. */}
+        <div className="fixed inset-x-0 top-0 z-40 hidden h-0.5 md:block print:hidden">
+          {navigationProgress}
+        </div>
+        {/* Phone clearance tracks the fixed bar and home-indicator inset. */}
         <main
           id={mainContentId}
           tabIndex={-1}
@@ -215,55 +213,14 @@ function MobileRouteBar({
   );
 }
 
-function DesktopCommandHeader({
-  onSearchClick,
-  navigationProgress,
-}: Pick<AuthenticatedAppShellProps, "onSearchClick" | "navigationProgress">) {
-  return (
-    <header className="sticky top-0 z-40 hidden h-(--app-command-band-height) items-center border-b border-border bg-card px-4 md:flex md:px-6 print:hidden">
-      <p className="text-xs font-medium text-muted-foreground">Cubby</p>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onSearchClick}
-        onPointerEnter={preloadCommandMenu}
-        onFocus={preloadCommandMenu}
-        onTouchStart={preloadCommandMenu}
-        className="ml-auto h-7 px-2 lg:hidden"
-        aria-label="Search"
-        title="Search"
-      >
-        <MagnifyingGlassIcon className="size-3.5" />
-        <span className="sr-only">Search Cubby</span>
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onSearchClick}
-        onPointerEnter={preloadCommandMenu}
-        onFocus={preloadCommandMenu}
-        onTouchStart={preloadCommandMenu}
-        className="ml-auto hidden h-7 min-w-52 justify-start px-2 text-muted-foreground lg:flex"
-        aria-label="Search"
-      >
-        <MagnifyingGlassIcon className="size-3.5" />
-        Search Cubby
-        <span className="ml-auto font-mono text-2xs">⌘K</span>
-      </Button>
-      <Suspense fallback={<div className="ml-2 h-8 w-28" aria-hidden="true" />}>
-        <ShellControls />
-      </Suspense>
-      {navigationProgress}
-    </header>
-  );
-}
-
 function WorkspaceSidebar({
   expanded,
   onToggle,
+  onSearchClick,
 }: {
   expanded: boolean;
   onToggle: () => void;
+  onSearchClick: () => void;
 }) {
   const activeTo = useActiveTo();
   const [utilityOpen, setUtilityOpen] = useState(false);
@@ -277,7 +234,7 @@ function WorkspaceSidebar({
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden h-dvh shrink-0 border-r border-border bg-card md:flex md:w-[var(--app-sidebar-collapsed-width)] md:flex-col lg:transition-[width] lg:duration-150 print:hidden",
+        "sticky top-0 hidden h-dvh shrink-0 border-r border-border bg-sidebar md:flex md:w-[var(--app-sidebar-collapsed-width)] md:flex-col print:hidden",
         expanded
           ? "lg:w-[var(--app-sidebar-expanded-width)]"
           : "lg:w-[var(--app-sidebar-collapsed-width)]",
@@ -285,7 +242,7 @@ function WorkspaceSidebar({
       aria-label="Workspace navigation"
       data-app-rail
     >
-      <div className="flex h-(--app-command-band-height) shrink-0 items-center border-b border-border px-2.5">
+      <div className="flex h-(--app-sidebar-header-height) shrink-0 items-center px-2.5">
         <Link
           to="/"
           aria-label="Cubby home"
@@ -298,6 +255,32 @@ function WorkspaceSidebar({
             </span>
           )}
         </Link>
+      </div>
+      <div className="flex shrink-0 flex-col gap-1 px-1.5 pb-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onSearchClick}
+          onPointerEnter={preloadCommandMenu}
+          onFocus={preloadCommandMenu}
+          onTouchStart={preloadCommandMenu}
+          className={cn(
+            "size-7 p-0 text-muted-foreground",
+            expanded && "lg:w-full lg:justify-start lg:px-2",
+          )}
+          aria-label="Search"
+          title="Search Cubby"
+        >
+          <MagnifyingGlassIcon className="size-3.5" />
+          {expanded && (
+            <span className="hidden lg:contents">
+              Search<span className="ml-auto font-mono text-2xs">⌘K</span>
+            </span>
+          )}
+        </Button>
+        <Suspense fallback={<div className="h-7" aria-hidden="true" />}>
+          <QuickActionsMenu expanded={expanded} />
+        </Suspense>
       </div>
       <nav
         // `relative`: the nav's sr-only counts are absolutely positioned; without

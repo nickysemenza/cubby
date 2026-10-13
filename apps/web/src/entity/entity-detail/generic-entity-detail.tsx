@@ -668,7 +668,6 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const declaredVerbs = heroActions.filter(
     (verb): verb is ActionVerbId => verb !== "edit" && verb in actionVerbs,
   );
-  const hasVerbs = declaredVerbs.length > 0;
   const breadcrumbChain = breadcrumbField
     ? ancestry(record, breadcrumbField)
     : [];
@@ -684,23 +683,19 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         onClick={() => setEditing(true)}
       />
     ) : undefined,
-    // Overflow-aware: the plate spells every verb out at `md+` and
-    // falls back to a primary + "More actions" popover on phone.
     secondary: (
-      <>
-        {hasVerbs ? (
-          <EntityActionButtons
-            entity={entity}
-            // The whole record, not just its id: a verb's availability
-            // reads the fields it gates on (a planting's status hides
-            // "Start planting" once it has started).
-            record={{ ...record, id: bag.id }}
-            verbs={declaredVerbs}
-            overflow="responsive"
-          />
-        ) : null}
-        <DetailActionTarget entity={entity} record={record} />
-      </>
+      <EntityActionButtons
+        entity={entity}
+        // The whole record, not just its id: a verb's availability
+        // reads the fields it gates on (a planting's status hides
+        // "Start planting" once it has started).
+        record={{ ...record, id: bag.id }}
+        verbs={declaredVerbs}
+        overflow="panel"
+        additionalActions={
+          <DetailActionTarget entity={entity} record={record} />
+        }
+      />
     ),
   };
 
@@ -711,7 +706,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         entity={entity}
         wayfinding={detailWayfinding(entity, record)}
         title={
-          <span className="inline-flex items-baseline gap-2">
+          <span className="flex min-w-0 items-start gap-2">
             <RecordEmoji
               entity={entity}
               record={record}
@@ -721,7 +716,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
               }
               size={20}
             />
-            {title}
+            <span className="min-w-0">{title}</span>
           </span>
         }
         rawData={record}
@@ -743,11 +738,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
             .filter((field) => field.display.detail)
             .map((field) => field.key)}
         >
-          <DetailSections
-            sections={sections}
-            rawData={record}
-            heroImages={heroImages}
-          />
+          <DetailSections sections={sections} rawData={record} />
         </RecordSuggestionsProvider>
         {editable && editing ? (
           EditOverride ? (

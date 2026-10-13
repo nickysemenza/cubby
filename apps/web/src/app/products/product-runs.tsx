@@ -9,6 +9,7 @@ import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { entityListFor } from "~/entity/entity-list";
 import { ProductRelatednessActions } from "~/entity/relatedness/relatedness-rail";
 import { purchaseLabel } from "~/lib/purchase-label";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
 
@@ -23,17 +24,19 @@ function JourneyStep({
 }) {
   const Icon = complete ? CheckCircleIcon : CircleDashedIcon;
   return (
-    <div className="flex min-w-0 items-start gap-2 border border-border bg-background p-2.5">
-      <Icon
-        className={`mt-0.5 size-4 shrink-0 ${complete ? "text-positive" : "text-muted-foreground"}`}
-      />
-      <div className="min-w-0">
-        <span className="block text-xs font-semibold">{label}</span>
-        <span className="block text-xs break-words text-muted-foreground">
-          {detail}
-        </span>
-      </div>
-    </div>
+    <RecordRow
+      leading={
+        <Icon
+          className={`size-3.5 shrink-0 ${complete ? "text-positive" : "text-muted-foreground"}`}
+          aria-hidden
+        />
+      }
+      primary={<span className="text-xs font-semibold">{label}</span>}
+      secondary={
+        <span className="text-xs text-muted-foreground">{detail}</span>
+      }
+      clip={false}
+    />
   );
 }
 
@@ -62,7 +65,7 @@ export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
             : "Ownership is uncertain: recorded movements do not establish the current quantity."}
       </p>
       {evidence.state !== "exited" ? (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <RecordList>
           <JourneyStep
             label="Your photos"
             detail={ownPhotos ? `${ownPhotos} own photos` : "Add an item photo"}
@@ -79,7 +82,7 @@ export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
             }
             complete={product.onHandUnits !== null && product.onHandUnits > 0}
           />
-        </div>
+        </RecordList>
       ) : null}
       {purchases.isPending ? (
         <StatusText>Loading purchase evidence…</StatusText>

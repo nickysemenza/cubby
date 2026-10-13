@@ -42,8 +42,8 @@ const buttonVariants = cva(
         "icon-lg": "size-10 [&_svg:not([class*='size-'])]:size-4",
       },
       /**
-       * Cubby is used on an iOS PWA as well as at a desktop desk. Interactive
-       * controls therefore grow to the 44px iOS phone floor by default while
+       * Web is desktop-first, but interactive controls still grow to the
+       * 44px phone floor by default while
        * retaining their compact ledger density at the `md` desktop shell.
        *
        * `compact` is only for a composite whose enclosing interactive target

@@ -318,7 +318,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
             data-field-layout={fieldLayout}
             className={cn(
               "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-1 pb-4",
-              fieldLayout === "ledger" ? "space-y-2.5" : "space-y-3.5",
+              fieldLayout === "ledger" ? "space-y-2" : "space-y-3",
             )}
           >
             {children}

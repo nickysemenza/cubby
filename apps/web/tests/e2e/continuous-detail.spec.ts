@@ -1,6 +1,150 @@
-import { seedProductPrerequisite } from "./fixtures-catalog";
+import {
+  seedProductPrerequisite,
+  seedProductCategoryPrerequisite,
+} from "./fixtures-catalog";
+import { createEntityFixture, seedConcurrently } from "./fixtures-core";
+import {
+  attachProductImagePrerequisite,
+  seedImagePrerequisite,
+} from "./fixtures-photos";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+
+// Long record identity and many actions must never compete for the same pixels.
+// Overflow must retain registry dialogs and lazy workflow controls on every width.
+test("dense record header preserves identity, actions, and the editor", async ({
+  page,
+  e2eRuntime,
+}) => {
+  const name =
+    "Canvas utility jacket with a deliberately long product name for constrained desktop record headers";
+  const category = await seedProductCategoryPrerequisite(page, {
+    name: "Example essentials",
+  });
+  const product = await seedProductPrerequisite(page, {
+    name,
+    categoryId: category.id,
+  });
+  const image = await seedImagePrerequisite(
+    "example-record-cover",
+    e2eRuntime.objectStorageUrl,
+  );
+  await attachProductImagePrerequisite(page, image.id, product.id, "item");
+  for (const width of [1440, 1024, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await gotoAuthenticatedPage(page, `/products/${product.id}`);
+    const header = page.getByTestId("detail-spec-plate");
+    const title = header.getByRole("heading", { level: 1 });
+    await expect(title).toHaveText(name);
+    await expect(
+      header.getByRole("button", { name: "Edit Product" }),
+    ).toBeVisible();
+    await expect(
+      header.getByRole("button", { name: "Add to inventory", exact: true }),
+    ).toBeVisible();
+    const geometry = await header.evaluate((element) => {
+      const heading = element.querySelector("h1")!.getBoundingClientRect();
+      const actions = [...element.querySelectorAll("button")]
+        .filter((button) => button.getAttribute("title") !== "Copy shortcode")
+        .map((button) => button.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0);
+      return {
+        titleWidth: heading.width,
+        overlaps: actions.some(
+          (rect) =>
+            rect.left < heading.right &&
+            rect.right > heading.left &&
+            rect.top < heading.bottom &&
+            rect.bottom > heading.top,
+        ),
+      };
+    });
+    expect(geometry.titleWidth).toBeGreaterThan(200);
+    expect(geometry.overlaps).toBe(false);
+    const cover = header.getByRole("img", { name: "example-record-cover.png" });
+    await expect
+      .poll(() =>
+        cover.evaluate(
+          (node) => node instanceof HTMLImageElement && node.naturalWidth > 0,
+        ),
+      )
+      .toBe(true);
+    if (width === 1440)
+      await expect(
+        page.getByRole("navigation", { name: "Section index" }),
+      ).toBeVisible();
+    if (width !== 1024)
+      await page.screenshot({
+        path: test.info().outputPath(`dense-header-${width}.png`),
+      });
+    await header
+      .getByRole("button", { name: "More actions", exact: true })
+      .click();
+    const overflow = page.getByRole("dialog", {
+      name: "More actions",
+      exact: true,
+    });
+    await expect(
+      overflow.getByRole("button", { name: "Copy codes", exact: true }),
+    ).toBeVisible();
+    await expect(
+      overflow.getByRole("button", { name: "Discard...", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(overflow).toBeHidden();
+    await header.getByRole("button", { name: "Edit Product" }).click();
+    const editor = page.getByRole("dialog", {
+      name: "Edit product",
+      exact: true,
+    });
+    await expect(editor).toBeVisible();
+    await expect(
+      editor.getByRole("textbox", { name: "Name", exact: true }),
+    ).toHaveValue(name);
+    if (width !== 1024)
+      await page.screenshot({
+        path: test.info().outputPath(`dense-editor-${width}.png`),
+      });
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(editor).toBeHidden();
+    await expectViewportBounded(page);
+  }
+  const owner = await createEntityFixture(page, "ledgerParty", {
+    name: "Example wardrobe owner",
+    kind: "member",
+  });
+  await gotoAuthenticatedPage(page, `/ledger-parties/${owner.id}`);
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  const wardrobe = page
+    .getByRole("dialog", { name: "More actions", exact: true })
+    .getByRole("link", { name: "Open wardrobe", exact: true });
+  await expect(wardrobe).toHaveAttribute(
+    "href",
+    `/collections/wardrobe/${owner.id}`,
+  );
+  await page.keyboard.press("Escape");
+  await seedConcurrently(
+    Array.from({ length: 18 }, (_, index) => index),
+    (index) =>
+      seedProductPrerequisite(page, {
+        name: `Example household item ${String(index + 1).padStart(2, "0")}`,
+        manufacturer: "Example maker",
+        categoryId: category.id,
+      }),
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await gotoAuthenticatedPage(page, "/products");
+  await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
+  const row = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("link", { name, exact: true }) });
+  await expect(
+    row.getByRole("link", { name: "Example essentials", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath("dense-list-1440.png"),
+  });
+});
 
 // Regressions: empty declared sections disappear; a hash selects a hidden view;
 // jump navigation replaces history; scrolling never updates the current entry.

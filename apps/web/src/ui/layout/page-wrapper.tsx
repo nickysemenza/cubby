@@ -23,7 +23,7 @@ export const PageWrapper = ({
         // Dense tables opt into `full`; immersive tools reserve the viewport
         // between the shell's fixed top and bottom chrome.
         layout === "contained" &&
-          "mx-auto max-w-7xl px-2 md:px-6 2xl:max-w-[90rem]",
+          "mx-auto max-w-7xl px-2 pt-3 md:px-4 2xl:max-w-[90rem]",
         layout === "viewport" &&
           "h-[calc(100dvh-var(--app-chrome-top)-var(--app-chrome-bottom))] overflow-hidden",
         className,

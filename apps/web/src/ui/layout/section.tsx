@@ -4,7 +4,49 @@ import type { ReactNode } from "react";
 import { cn } from "~/lib/utils";
 import { stackVariants } from "~/styles/layouts";
 
-import { Stack } from "./stack";
+/** One compact heading band for page regions, record sections, and dashboards. */
+export function SectionHeading({
+  title,
+  description,
+  actions,
+  meta,
+  as: Heading = "h2",
+  id,
+  muted = false,
+}: {
+  title?: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  meta?: ReactNode;
+  as?: "h2" | "h3" | "h4";
+  id?: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-sm bg-muted/60 px-2 py-1">
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          {title && (
+            <Heading
+              id={id}
+              className={cn(
+                "flex min-w-0 items-center gap-2 text-[0.8125rem] font-semibold",
+                muted && "text-muted-foreground",
+              )}
+            >
+              {title}
+            </Heading>
+          )}
+          {meta}
+        </div>
+        {description && (
+          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        )}
+      </div>
+      {actions && <div className="max-w-full min-w-0">{actions}</div>}
+    </div>
+  );
+}
 
 interface SectionProps extends Omit<
   React.HTMLAttributes<HTMLElement>,
@@ -37,16 +79,7 @@ export function Section({
       ref={ref}
       {...props}
     >
-      {hasHeader && (
-        <Stack gap="tight" className="border-b border-border pb-1">
-          {title && (
-            <h2 className="font-heading text-sm font-semibold">{title}</h2>
-          )}
-          {description && (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          )}
-        </Stack>
-      )}
+      {hasHeader && <SectionHeading title={title} description={description} />}
       {children}
     </section>
   );

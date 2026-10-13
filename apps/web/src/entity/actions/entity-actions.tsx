@@ -2,7 +2,14 @@ import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import type { ReactNode } from "react";
-import { createContext, Fragment, useContext, useMemo, useRef } from "react";
+import {
+  createContext,
+  Fragment,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { copyIdentifiers, copyShortcodes } from "~/lib/clipboard";
 import { Button } from "~/ui/primitives/button";
@@ -12,6 +19,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 
 import type {
   BulkAction,
@@ -805,6 +818,7 @@ export function EntityActionButtons({
   surface = "detail",
   verbs,
   overflow = "menu",
+  additionalActions,
 }: {
   entity: Entity;
   record: EntityActionRow;
@@ -816,17 +830,17 @@ export function EntityActionButtons({
    */
   verbs?: readonly ActionVerbId[];
   /**
-   * "menu" (default, unchanged behaviour): one primary button plus a "More
-   * actions" popover for the rest. "inline": every visible verb renders as
-   * its own button, no split. "responsive": inline at `md+` and the menu
-   * below it — one action registry and one set of dialogs for both widths,
-   * where two components would each mount every dialog.
+   * "menu": a primary verb and keyboard-navigable menu. "inline": all verbs.
+   * "panel": a primary verb and a Tab-navigable overflow panel that can also
+   * host workflow controls. Registry dialogs stay outside the popup, and
+   * custom owners remain mounted when the panel closes.
    */
-  overflow?: "inline" | "menu" | "responsive";
+  overflow?: "inline" | "menu" | "panel";
+  additionalActions?: ReactNode;
 }) {
   const { detailActions, inspectorActions, dialogs } = useEntityActions(entity);
   const actions = surface === "inspector" ? inspectorActions : detailActions;
-  if (actions.length === 0) return null;
+  if (actions.length === 0 && additionalActions === undefined) return null;
   const visible: VisibleAction[] = actions.flatMap((action) => {
     if (
       verbs !== undefined &&
@@ -838,22 +852,16 @@ export function EntityActionButtons({
     return availability.status === "hidden" ? [] : [{ action, availability }];
   });
 
-  if (overflow === "responsive")
-    return (
-      <>
-        <div className="hidden flex-wrap items-center gap-2 md:flex">
-          <InlineActionButtons visible={visible} record={record} />
-        </div>
-        <div className="flex flex-wrap items-center gap-2 md:hidden">
-          <MenuActionButtons visible={visible} record={record} />
-        </div>
-        {dialogs}
-      </>
-    );
   return (
     <>
       {overflow === "inline" ? (
         <InlineActionButtons visible={visible} record={record} />
+      ) : overflow === "panel" ? (
+        <PanelActionButtons
+          visible={visible}
+          record={record}
+          additionalActions={additionalActions}
+        />
       ) : (
         <MenuActionButtons visible={visible} record={record} />
       )}
@@ -887,13 +895,7 @@ function InlineActionButtons({
   ));
 }
 
-function MenuActionButtons({
-  visible,
-  record,
-}: {
-  visible: readonly VisibleAction[];
-  record: EntityActionRow;
-}) {
+function splitRecordActions(visible: readonly VisibleAction[]) {
   const primaryIndex = visible.findIndex(
     ({ action, availability }) =>
       action.group !== "destructive" &&
@@ -902,6 +904,102 @@ function MenuActionButtons({
   );
   const primary = primaryIndex >= 0 ? visible[primaryIndex] : undefined;
   const menuOverflow = visible.filter((_, index) => index !== primaryIndex);
+  return { primary, menuOverflow };
+}
+
+function PanelActionButtons({
+  visible,
+  record,
+  additionalActions,
+}: {
+  visible: readonly VisibleAction[];
+  record: EntityActionRow;
+  additionalActions?: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const { primary, menuOverflow } = splitRecordActions(visible);
+  return (
+    <>
+      {primary && (
+        <VerbButton
+          verb={primary.action.verb}
+          variant="default"
+          onClick={() => primary.action.run(record)}
+        />
+      )}
+      {(menuOverflow.length > 0 || additionalActions !== undefined) && (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="More actions"
+                title="More actions"
+              />
+            }
+          >
+            <DotsThreeIcon />
+          </PopoverTrigger>
+          <PopoverContent
+            keepMounted
+            align="end"
+            className="max-h-[70dvh] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto p-2"
+          >
+            <PopoverTitle className="sr-only">More actions</PopoverTitle>
+            <div className="space-y-1">
+              {menuOverflow.map(({ action, availability }, index) => (
+                <div
+                  key={action.id}
+                  className={
+                    action.group === "destructive" &&
+                    menuOverflow[index - 1]?.action.group !== "destructive"
+                      ? "mt-2 border-t border-border pt-2"
+                      : undefined
+                  }
+                >
+                  <VerbButton
+                    verb={action.verb}
+                    variant="ghost"
+                    className="w-full justify-start"
+                    disabledReason={
+                      availability.status === "disabled"
+                        ? availability.reason
+                        : undefined
+                    }
+                    onClick={() => {
+                      setOpen(false);
+                      action.run(record);
+                    }}
+                  />
+                  {availability.status === "disabled" && (
+                    <p className="px-2 text-xs text-muted-foreground">
+                      {availability.reason}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+            {additionalActions && (
+              <div className="border-t border-border pt-2 [&_a]:w-full [&_a]:justify-start [&_button]:w-full [&_button]:justify-start [&_fieldset]:flex-col [&_fieldset]:items-stretch [&_fieldset>div]:flex-col">
+                {additionalActions}
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+      )}
+    </>
+  );
+}
+
+function MenuActionButtons({
+  visible,
+  record,
+}: {
+  visible: readonly VisibleAction[];
+  record: EntityActionRow;
+}) {
+  const { primary, menuOverflow } = splitRecordActions(visible);
   return (
     <>
       {primary ? (

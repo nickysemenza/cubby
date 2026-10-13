@@ -8,7 +8,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -61,13 +61,11 @@ function renderDetail({
   rawData = { filename: "fixture.jpg" },
   pageRawData = rawData,
   detailSections = sections,
-  heroMedia,
 }: {
   entity?: Entity;
   rawData?: unknown;
   pageRawData?: unknown;
   detailSections?: DetailSection[];
-  heroMedia?: ReactNode;
 } = {}) {
   return render(
     <Page
@@ -76,11 +74,7 @@ function renderDetail({
       entity={entity}
       rawData={pageRawData}
     >
-      <DetailSections
-        sections={detailSections}
-        rawData={rawData}
-        heroMedia={heroMedia}
-      />
+      <DetailSections sections={detailSections} rawData={rawData} />
     </Page>,
     { wrapper: harness.wrapper },
   );

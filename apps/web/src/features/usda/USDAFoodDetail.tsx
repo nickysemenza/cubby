@@ -301,14 +301,12 @@ export const USDAFoodDetail: React.FC<{
         // `usda-food`) — `DetailSections` no longer surfaces registry verbs
         // in the strip, so this is now the only place either renders.
         secondary: (
-          <>
-            <UsdaFoodActions food={food} />
-            <EntityActionButtons
-              entity="usda-food"
-              record={{ id: String(fdc_id) }}
-              overflow="responsive"
-            />
-          </>
+          <EntityActionButtons
+            entity="usda-food"
+            record={{ id: String(fdc_id) }}
+            overflow="panel"
+            additionalActions={<UsdaFoodActions food={food} />}
+          />
         ),
       }}
     >

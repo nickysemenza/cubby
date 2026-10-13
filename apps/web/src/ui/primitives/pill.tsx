@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "~/lib/utils";
 
 const pillVariants = cva(
-  "inline-flex h-5 items-center rounded-[var(--brand-radius-chip)] border px-1.5 py-0.5 text-2xs font-medium",
+  "inline-flex h-5 items-center rounded-[var(--brand-web-radius-chip)] border px-1.5 py-0.5 text-2xs font-medium",
   {
     variants: {
       mode: {

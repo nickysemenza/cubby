@@ -2,6 +2,7 @@ import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { Link } from "@tanstack/react-router";
 
 import { EntityIcon, entities } from "~/entity/entities";
+import { cn } from "~/lib/utils";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -21,7 +22,7 @@ import { actionsForSurface } from "../../entity/actions/action-items";
 
 const createActions = actionsForSurface("navbar-create");
 
-export const QuickActionsMenu = () => {
+export const QuickActionsMenu = ({ expanded }: { expanded?: boolean }) => {
   return (
     <DropdownMenu>
       <Tooltip>
@@ -30,9 +31,13 @@ export const QuickActionsMenu = () => {
             <DropdownMenuTrigger
               render={
                 <Button
-                  variant="ghost"
+                  variant={expanded ? "default" : "ghost"}
                   size="sm"
-                  className="h-8 px-2"
+                  className={cn(
+                    "h-8 px-2",
+                    expanded !== undefined && "size-7 p-0",
+                    expanded && "lg:w-full lg:justify-start lg:px-2",
+                  )}
                   aria-label="Quick actions"
                 />
               }
@@ -40,6 +45,7 @@ export const QuickActionsMenu = () => {
           }
         >
           <PlusIcon className="size-4" />
+          {expanded && <span className="hidden lg:inline">Create</span>}
         </TooltipTrigger>
         <TooltipContent>
           <p>Quick actions</p>

@@ -11,6 +11,15 @@ test("desktop workspace sidebar marks the current page and collapses", async ({
     name: "Workspace navigation",
   });
   await expect(sidebar).toBeVisible();
+  const search = sidebar.getByRole("button", { name: "Search", exact: true });
+  await search.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await sidebar
+    .getByRole("button", { name: "Quick actions", exact: true })
+    .click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(176);
   await expect(
     page.getByRole("link", { name: "Home", exact: true }),
