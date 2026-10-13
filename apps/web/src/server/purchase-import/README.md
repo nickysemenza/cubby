@@ -41,6 +41,10 @@ pending: nothing here starts Product research.
    and retains its missing-evidence guard. Hidden image destinations on pictures
    explicitly at most one pixel in both dimensions are tracking metadata;
    their labels and surrounding links still participate in evidence checks.
+   Hidden HTTP(S) links and their labels are retained in the bounded link set;
+   omitted cue-bearing links and cues lost during URL normalization still mark
+   evidence incomplete. Hidden receipt text
+   and image evidence keep their completeness checks.
    Confident positives proceed to extraction/matching; only uncertain relevance
    reaches the relevance fallback. Related originals become `OrderMail`; unrelated
    mail keeps only its provider identity. Coverage is checkpointed with a

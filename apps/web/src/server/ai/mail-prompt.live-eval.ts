@@ -125,6 +125,11 @@ const syntheticCases = [
       "More community news. ".repeat(2500),
     html: "",
   },
+  {
+    label: "unrelated",
+    body: "Community newsletter with gardening tips and upcoming neighborhood events.",
+    html: '<p>Community newsletter with gardening tips and upcoming neighborhood events.</p><a href="https://example.test/subscription" style="display:none">Manage preferences</a>',
+  },
 ] as const;
 
 const inputSchema = z

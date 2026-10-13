@@ -55,7 +55,6 @@ describe("transient original attachment relevance", () => {
   it("keeps unresolved inline image pixels and truncated preheaders uncertain", async () => {
     for (const bodyHtml of [
       '<p>Community newsletter with gardening tips and upcoming events.</p><div style="display:none"><img src="https://shop.example.test/receipt.png" alt="Receipt total $24"></div>',
-      '<p>Community newsletter with gardening tips and upcoming events.</p><a style="display:none" href="https://shop.example.test/receipt">Learn more</a>',
       '<p>Community newsletter with gardening tips and upcoming events.</p><div style="display:none">Receipt for order #SYN-12345</div>',
       '<img src="data:image/png;base64,c3ludGhldGlj">',
       `<div style="display:none">${"x".repeat(1200)} Receipt for order #SYN-12345</div><p>Community newsletter with gardening tips and the upcoming neighborhood events.</p>`,
@@ -72,6 +71,33 @@ describe("transient original attachment relevance", () => {
         ),
       ).resolves.toEqual({ classification: "uncertain" });
     }
+  });
+
+  it("shows hidden account links to the interpreter before accepting a negative", async () => {
+    const interpret = vi.fn<MailRelevance>(async () => ({
+      classification: "unrelated",
+    }));
+    const result = await interpretMailRelevance(
+      gmail(500),
+      {
+        ...original,
+        attachments: [],
+        mail: {
+          ...original.mail,
+          bodyText: "",
+          bodyHtml:
+            '<p>Community newsletter with gardening tips and upcoming events.</p><a style="display:none" href="https://shop.example.test/receipt">Learn more</a>',
+        },
+      },
+      interpret,
+    );
+    expect(JSON.stringify(interpret.mock.calls[0]?.[0].messages)).toContain(
+      "https://shop.example.test/receipt",
+    );
+    expect(JSON.stringify(interpret.mock.calls[0]?.[0].messages)).toContain(
+      "Learn more",
+    );
+    expect(result).toEqual({ classification: "unrelated" });
   });
 
   it("includes hidden preheader order evidence in the relevance request", async () => {
