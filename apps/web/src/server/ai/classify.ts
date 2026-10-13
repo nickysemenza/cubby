@@ -33,7 +33,7 @@ type ClassificationResult<Value extends string> = Pick<
 
 /** One runner-up: the caller (`resolveEnumTarget`) applies its own
  * `labelOf`/`describe` to render this into the wire's `label`/`detail`. */
-export interface ClassifyAlternative<Value extends string> {
+interface ClassifyAlternative<Value extends string> {
   value: Value;
   probability: number;
 }
