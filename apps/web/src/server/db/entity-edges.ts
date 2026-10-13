@@ -87,6 +87,7 @@ import type { AnyColumn } from "drizzle-orm";
 import {
   vendor,
   aiUsage,
+  aiEvaluation,
   auditLog,
   cookbook,
   device,
@@ -1410,6 +1411,18 @@ export const ENTITY_EDGES = {
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
   run: edges({
+    "AiEvaluation.runId": {
+      column: aiEvaluation.runId,
+      role: "history",
+      label: "AI evaluations",
+      description:
+        "Durable target evaluation and publication history owned by this Run.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Evaluation receipts retain their generating Run through archival and deletion.",
+      },
+    },
     "SourceOrderObservation.runId": {
       column: sourceOrderObservation.runId,
       role: "history",

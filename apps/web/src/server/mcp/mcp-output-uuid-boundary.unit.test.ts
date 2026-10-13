@@ -78,6 +78,8 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "entity.results[].id",
   // The producing read: entity_read.suggestion_queue row ids.
   "entity_read.items[].id",
+  // Audit rows are opaque receipts, not entity links; these identify the exact acceptance writes.
+  "entity_read.items[].acceptanceReceipt.auditIds[]",
   "run.id",
   // run.approve_execution returns the authorization Run's internal id beside
   // its approvalFingerprint: the exact reference discovery records.

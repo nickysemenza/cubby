@@ -1,4 +1,5 @@
 import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import {
@@ -29,7 +30,11 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { rejectSuggestion } from "~/server/repo/suggestion-review";
 import { controlWorkflowRun } from "~/server/workflow-runs/control";
 
-import { discoverAiRefresh, executeAiRefreshTarget } from "./ai-refresh";
+import {
+  aiRefreshRelaunchCandidates,
+  discoverAiRefresh,
+  executeAiRefreshTarget,
+} from "./ai-refresh";
 import {
   categoryPorts,
   kernelCtx,
@@ -43,6 +48,95 @@ import {
 // Real database/publication boundaries; only the external decision model is scripted.
 describe("targeted prompt refresh", () => {
   const ctx = withTestDb();
+  it("spends its relaunch budget on failed or unstarted Runs instead of healthy instances", async () => {
+    const item = await productFixture(ctx, "Synthetic recovery backlog");
+    await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts(0.6) },
+    );
+    await activateAiRefresh(ctx.db, "synthetic-recovery-backlog", {
+      enabled: true,
+    });
+    await discoverAiRefresh(ctx.db, {
+      context: kernelCtx(ctx),
+      suggestPorts: categoryPorts(0.6).suggestPorts,
+    });
+    const [evaluation] = await getDb(ctx.db).select().from(aiEvaluation);
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, evaluation!.runId));
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        progress: {
+          attempt: 1,
+          selected: 1,
+          completed: 0,
+          blocked: 0,
+          failed: 0,
+        },
+      })
+      .where(eq(run.id, owner!.id));
+    const siblings = Array.from({ length: 30 }, () => ({
+      ...owner!,
+      id: runEntityId.parse(crypto.randomUUID()),
+      shortcode: generateShortcode("run"),
+      clientKey: null,
+      progress: {
+        attempt: 1,
+        selected: 1,
+        completed: 0,
+        blocked: 0,
+        failed: 0,
+      },
+    }));
+    await getDb(ctx.db).insert(run).values(siblings);
+    await getDb(ctx.db)
+      .insert(aiEvaluation)
+      .values(
+        siblings.map((row) => ({
+          ...evaluation!,
+          id: crypto.randomUUID(),
+          runId: row.id,
+          workKey: `synthetic-backlog:${row.id}`,
+        })),
+      );
+    const failedStatus: typeof run.$inferInsert.status = "failed";
+    const failed = {
+      ...owner!,
+      id: runEntityId.parse(crypto.randomUUID()),
+      shortcode: generateShortcode("run"),
+      clientKey: null,
+      status: failedStatus,
+      progress: {
+        attempt: 1,
+        selected: 1,
+        completed: 0,
+        blocked: 0,
+        failed: 0,
+      },
+      updatedAt: new Date(),
+    };
+    await getDb(ctx.db).insert(run).values(failed);
+    await getDb(ctx.db)
+      .insert(aiEvaluation)
+      .values({
+        ...evaluation!,
+        id: crypto.randomUUID(),
+        runId: failed.id,
+        workKey: `synthetic-recovery:${failed.id}`,
+      });
+    expect(
+      (await aiRefreshRelaunchCandidates(ctx.db)).map((row) => row.id),
+    ).toEqual([failed.id]);
+  });
+
   it("advances discovery past a broken roster and schedules another eligible target", async () => {
     const broken = await productFixture(ctx, "Synthetic broken roster");
     const healthy = await productFixture(ctx, "Synthetic healthy roster");

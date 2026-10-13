@@ -98,6 +98,7 @@ export const ENTITY_EDGE_OWNERS = {
   ImageDescriptionCorrection: { owner: imageDescriptionCorrection.imageId },
   ImageProcessingJob: { owner: imageProcessingJob.imageId },
   ImageSighting: { owner: imageSighting.imageId },
+  AiEvaluation: { excluded: "Durable inference and publication history." },
   AiUsage: { excluded: "Telemetry attribution." },
   ExternalSource: {
     excluded: "Registry metadata naming the vendor a source slug is.",

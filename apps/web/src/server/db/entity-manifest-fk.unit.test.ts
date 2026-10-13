@@ -61,6 +61,8 @@ for (const entity of entities) {
 // internal edges (session -> user, oauth_refresh_token -> oauth_client, etc.)
 // all need an entry here as well, since none of them are app-domain entities.
 const NON_ENTITY_FK_TARGETS = {
+  AiEvaluation:
+    "durable per-target inference and publication bookkeeping owned by a Run",
   // Durable identity (ADR 0006): every payload binds to its own row, and an
   // attachment names its subject here because a subject can be any entity.
   Entity: "durable identity, not a domain entity of its own",
@@ -121,6 +123,10 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  "AiEvaluation.runId": {
+    classification: "metadata",
+    reason: "records the Run that owns the durable target evaluation",
+  },
   "PhotoRunImage.runId": {
     classification: "ownership",
     reason: "actual photo membership owned by its Run",

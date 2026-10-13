@@ -782,6 +782,29 @@ export async function executeAiRefreshTarget(
   return true;
 }
 
+export async function aiRefreshRelaunchCandidates(db: Database) {
+  return getDb(db)
+    .select({ id: run.id })
+    .from(run)
+    .where(
+      and(
+        eq(run.purpose, "ai_refresh"),
+        notDeleted(run),
+        or(
+          eq(run.status, "failed"),
+          and(
+            eq(run.status, "running"),
+            sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = 0`,
+          ),
+        ),
+        sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
+        sql`EXISTS (SELECT 1 FROM "AiEvaluation" AS eligible WHERE eligible."runId" = ${run.id} AND eligible.state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.running}, ${aiEvaluationState.enum.result_ready}, ${aiEvaluationState.enum.retry_wait}))`,
+      ),
+    )
+    .orderBy(asc(run.updatedAt), asc(run.id))
+    .limit(10);
+}
+
 export async function recoverAiRefresh(db: Database) {
   const { getAiRefreshEnabled } = await import("~/server/cf-env");
   const enabled = getAiRefreshEnabled();
@@ -792,19 +815,7 @@ export async function recoverAiRefresh(db: Database) {
   const { reconcileWorkflowRuns } =
     await import("~/server/workflow-runs/lifecycle");
   await reconcileWorkflowRuns(db);
-  const unfinished = await getDb(db)
-    .select({ id: run.id })
-    .from(run)
-    .where(
-      and(
-        eq(run.purpose, "ai_refresh"),
-        notDeleted(run),
-        inArray(run.status, ["running", "failed"]),
-        sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-        sql`EXISTS (SELECT 1 FROM "AiEvaluation" AS eligible WHERE eligible."runId" = ${run.id} AND eligible.state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.running}, ${aiEvaluationState.enum.result_ready}, ${aiEvaluationState.enum.retry_wait}))`,
-      ),
-    )
-    .limit(10);
+  const unfinished = await aiRefreshRelaunchCandidates(db);
   const { launchWorkflowRun } =
     await import("~/server/workflow-runs/lifecycle");
   const launch = async (ids: Iterable<string>) => {

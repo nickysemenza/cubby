@@ -58,7 +58,9 @@ and abandoned requests expire after the bounded deadline.
 
 Discovery isolates preparation and launch failures per target or Run, emits a
 scrubbed diagnostic, and advances its bounded cursor; the next cursor pass retries
-preparation. Existing unfinished Runs launch before new discovery. Workflow target
+preparation. Recovery spends its ten-Run budget on failed or unstarted Runs, oldest first;
+healthy active instances cannot starve relaunches. Existing unfinished Runs launch
+before new discovery. Workflow target
 steps retry infrastructure failures twice with exponential backoff; an exhausted
 instance records a failed Run for recovery. The five-minute recovery tick also
 reconciles instances quiet for 30 minutes. Imported or historical Email sources
