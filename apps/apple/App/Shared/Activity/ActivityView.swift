@@ -568,6 +568,28 @@ private extension String {
     }
 }
 
+func imageSkipReasonText(_ reason: String) -> String {
+    switch reason {
+    case "no_subject": "Apple found no foreground subject."
+    case "unsupported_format": "This image format is unsupported for the operation."
+    case "not_suitable":
+        "The image was already transparent, or a previous eligibility policy skipped subject lift."
+    case "Image is attached only as label evidence":
+        "The previous label-only policy skipped subject lift. Queue missing processing to retry."
+    default: reason
+    }
+}
+
+private func activityStateLabel(_ state: String) -> String {
+    switch state {
+    case "ready", "completed": "Completed"
+    case "pending": "Queued"
+    case "leased", "running": "Processing"
+    case "waiting_for_device": "Waiting for Apple"
+    default: state.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+}
+
 struct ActivityRunRow: View {
     let run: ActivityRun
 
@@ -579,12 +601,18 @@ struct ActivityRunRow: View {
         ) {
             Text(([run.workLabel] + run.executors.map(\.name)).joined(separator: " · "))
         } rail: {
-            Text(run.state.replacingOccurrences(of: "_", with: " ").capitalized)
-                .foregroundStyle(run.active ? FieldGuideTokens.interaction : Color.secondary)
+            Text(activityStateLabel(run.state))
+                .foregroundStyle(
+                    run.state == "ready" || run.state == "completed"
+                        ? FieldGuideTokens.positive
+                        : run.active ? FieldGuideTokens.interaction : Color.secondary)
             RecordRowTimestamp(date: run.createdAt)
         } supplement: {
             if let progress = run.progressLine { Text(progress).monospacedDigit() }
-            if let error = run.error { Text(error).foregroundStyle(FieldGuideTokens.destructive) }
+            if let error = run.error {
+                Text(run.state == "skipped" ? imageSkipReasonText(error) : error)
+                    .foregroundStyle(run.state == "skipped" ? Color.secondary : FieldGuideTokens.destructive)
+            }
         }
     }
 }
@@ -798,13 +826,15 @@ struct ActivityDetailView: View {
                 LabeledContent("Changed", value: "\(detail.run.changedCount) records")
             }
             LabeledContent(
-                "State", value: detail.run.state.replacingOccurrences(of: "_", with: " ").capitalized)
+                "State", value: activityStateLabel(detail.run.state))
             LabeledContent("Started") { Text(detail.run.createdAt, style: .relative) }
             if let cost = detail.run.estimatedCost {
                 LabeledContent("Estimated cost", value: cost.usd)
             }
             if let error = detail.run.error {
-                Text(error).foregroundStyle(FieldGuideTokens.destructive)
+                Text(detail.run.state == "skipped" ? imageSkipReasonText(error) : error)
+                    .foregroundStyle(
+                        detail.run.state == "skipped" ? Color.secondary : FieldGuideTokens.destructive)
             }
         }
     }

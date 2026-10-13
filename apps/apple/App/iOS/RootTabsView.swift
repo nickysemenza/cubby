@@ -160,19 +160,8 @@ struct RootTabsView: View {
 }
 
 extension View {
-    /// `.tabViewBottomAccessory(isEnabled:content:)` (dynamic show/hide, reserving no space while
-    /// hidden) only exists on iOS 26.1+; the deployment target stays iOS 26.0, so below 26.1 the
-    /// accessory is always attached and its own content decides whether to render anything —
-    /// leaving an empty reserved strip is the accepted trade-off on that one OS point release.
-    @ViewBuilder
     fileprivate func backgroundActivityAccessory(isEnabled: Bool) -> some View {
-        if #available(iOS 26.1, *) {
-            self.tabViewBottomAccessory(isEnabled: isEnabled) { BackgroundActivityBar() }
-        } else {
-            self.tabViewBottomAccessory {
-                if isEnabled { BackgroundActivityBar() }
-            }
-        }
+        self.tabViewBottomAccessory(isEnabled: isEnabled) { BackgroundActivityBar() }
     }
 }
 

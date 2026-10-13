@@ -1,14 +1,8 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobKind } from "@cubby/schemas/image-processing";
-import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { entityAttachment } from "~/server/db/schema";
-import {
-  getDb,
-  notDeleted,
-  withTransactionDatabase,
-} from "~/server/repo/database-helpers";
+import { withTransactionDatabase } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -18,7 +12,6 @@ import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-  loadImageRepresentations,
 } from "./image-processing";
 import {
   createImageProcessingSubmission,
@@ -52,23 +45,6 @@ export async function persistImageProcessingSubmission(
     );
     if (!source)
       throw new Error("Image must be uploaded and integrity-verified first");
-    // Labels are supporting evidence: describe them, but never spend a
-    // subject-lift job on package text. Null is the legacy item role.
-    const productAttachments = await getDb(transactionDb)
-      .select({ purpose: entityAttachment.purpose })
-      .from(entityAttachment)
-      .where(
-        and(
-          eq(entityAttachment.imageId, imageId),
-          notDeleted(entityAttachment),
-        ),
-      );
-    const labelOnly =
-      productAttachments.length > 0 &&
-      productAttachments.every((attachment) => attachment.purpose === "label");
-    const representation = (
-      await loadImageRepresentations(transactionDb, [source.shortcode])
-    ).get(source.shortcode);
     const submission = input.automatic
       ? null
       : (input.submission ??
@@ -76,10 +52,7 @@ export async function persistImageProcessingSubmission(
     const jobIds: string[] = [];
     for (const kind of new Set(input.kinds)) {
       if (kind === "subject_lift") {
-        // A label and an image with a ready transparent derivative are both
-        // terminal for cutout scheduling. Keep rendering the retained
-        // original when a cutout failed or was never produced.
-        if (labelOnly || representation?.transparent != null) continue;
+        // Job identity reuses retained results; a new policy revision schedules independent work.
         const scheduled = await createTransparentDerivativeAndJob(
           transactionDb,
           {
@@ -87,7 +60,6 @@ export async function persistImageProcessingSubmission(
             sourceContentHash: source.sha256,
             // Every actual dispatch rotates this placeholder to a fresh key.
             key: `pending/${crypto.randomUUID()}.png`,
-            reviveLabelOnlySkip: !input.automatic,
             runId: input.runId,
           },
         );

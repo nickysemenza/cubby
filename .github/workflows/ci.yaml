@@ -308,10 +308,11 @@ jobs:
     name: Swift formatting and state rules
     needs: plan
     if: contains(fromJSON(needs.plan.outputs.lanes), 'apple-lint')
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-apple-toolchain
       - uses: ./.github/actions/setup-node-with-deps
         with:
           workspace-filter: cubby
@@ -348,7 +349,7 @@ jobs:
     name: Apple host tests
     needs: [plan, apple-probe]
     if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.lanes), 'apple') && needs.apple-probe.outputs.host != 'success' }}
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 40
     env:
       # The restore and save steps must name the same paths.
@@ -359,6 +360,7 @@ jobs:
         apps/apple/CubbyKit/.build/xcode/SourcePackages
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-apple-toolchain
       - uses: ./.github/actions/setup-node-with-deps
       - uses: ./.github/actions/setup-apple-ffi
         with:
@@ -393,10 +395,11 @@ jobs:
     name: Apple simulator build
     needs: [plan, apple-probe]
     if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.lanes), 'apple') && needs.apple-probe.outputs.simulator != 'success' }}
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-apple-toolchain
       - uses: ./.github/actions/setup-node-with-deps
       - uses: ./.github/actions/setup-apple-ffi
         with:

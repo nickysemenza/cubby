@@ -461,7 +461,7 @@ A durable record of coordinated work, identified by `RUN-`, with a purpose, trig
 _Avoid_: image processing job, individual attempt, search job
 
 **Image processing job**:
-One image operation, identified by `IPR-`, with its own kind, state, attempts, and diagnostics. It may belong to a Run or stand alone. Its cost is a component of a parent Run total when both are shown, not an additional household expense.
+One image operation, identified by `IPR-`, with its own kind, state, attempts, and diagnostics. The stored `ready` state means successfully completed work; clients display it as Completed. A skipped operation retains its reason and does not imply successful processing. It may belong to a Run or stand alone. Its cost is a component of a parent Run total when both are shown, not an additional household expense.
 _Avoid_: Run, merged work record
 
 **Image observation**:

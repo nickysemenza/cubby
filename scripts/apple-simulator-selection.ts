@@ -9,7 +9,10 @@ export function selectIOSSimulator(
   preferred?: string,
 ) {
   const phones = Object.entries(inventory.devices)
-    .filter(([runtime]) => runtime.includes(".iOS-"))
+    .filter(([runtime]) => {
+      const version = /\.iOS-(\d+)-/.exec(runtime);
+      return version !== null && Number(version[1]) >= 27;
+    })
     .flatMap(([runtime, devices]) =>
       devices.map((device) => ({ ...device, runtime })),
     )

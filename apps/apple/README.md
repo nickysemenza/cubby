@@ -10,6 +10,15 @@ shared Rust computation. Agent rules, including the generated-file list, live in
 photos, Garden, links, and App Intents. See [DESIGN.md](DESIGN.md) for native UX
 contracts and [the backlog](../../docs/todos.md) for deeper inventory and web parity.
 
+## Toolchain and device requirements
+
+Native builds require Xcode 27 with Swift 6.4 or newer and target iOS/macOS 27.
+The image-description implementation must compile in every build; runtime
+Apple Intelligence and vision availability remain device-dependent. Settings →
+This device reports the current image-description availability reason.
+GitHub runner and toolchain selection live in the Apple workflows and shared
+`setup-apple-toolchain` action.
+
 ## Build order
 
 Run `pnpm apple gen` or the appropriate `pnpm apple <command>`: the launcher

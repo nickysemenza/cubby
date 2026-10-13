@@ -1,8 +1,38 @@
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { eq } from "drizzle-orm";
+import { imageProcessingJob } from "~/server/db/image-processing-schema";
+import { getDb } from "~/server/repo/database-helpers";
 
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { fixtureUserId, getFixtureDb } from "./fixtures-core";
+import { seedActivityHistory } from "./fixtures-photos";
+
+// A successful image result must not look queued; skipped work must explain the actual outcome.
+test("image jobs show completed status and an Apple skip reason", async ({
+  page,
+}) => {
+  const sample = await seedActivityHistory(page, "Synthetic image outcome");
+  const db = getDb(getFixtureDb());
+  await db
+    .update(imageProcessingJob)
+    .set({ state: "ready", lastError: null, completedAt: new Date() })
+    .where(eq(imageProcessingJob.publicId, sample.jobId));
+  await db
+    .update(imageProcessingJob)
+    .set({ state: "skipped", lastError: "no_subject", completedAt: new Date() })
+    .where(eq(imageProcessingJob.publicId, sample.standaloneJobId));
+  await gotoAuthenticatedPage(page, `/runs?subjectId=${sample.imageId}`);
+  const table = page.getByRole("table", { name: "Runs and image jobs" });
+  const completed = table
+    .getByRole("row")
+    .filter({ hasText: "Image description" });
+  await expect(
+    completed.getByText("Completed", { exact: true }),
+  ).toHaveAttribute("data-variant", "positive");
+  const skipped = table.getByRole("row").filter({ hasText: "Subject lift" });
+  await expect(skipped).toContainText("Apple found no foreground subject.");
+});
 
 test("related Runs show account labels and shared quality", async ({
   page,

@@ -192,14 +192,7 @@ struct RunPhotoReviewSections: View {
                         Label(
                             image.localAnalysisReady ? "Device ready" : "Device analysis pending",
                             systemImage: image.localAnalysisReady ? "checkmark.circle" : "clock")
-                        // The server parks a cutout as waiting-for-device until the description
-                        // decides whether the photo is worth cutting out.
-                        if image.cutout == .waitingForDevice, image.describe != .ready {
-                            Label("Cutout: Waiting for description", systemImage: "clock")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            processingLabel("Cutout", state: image.cutout, reason: image.cutoutReason)
-                        }
+                        processingLabel("Cutout", state: image.cutout, reason: image.cutoutReason)
                         processingLabel("AI description", state: image.describe, reason: image.describeReason)
                     }
                     .font(.caption)
@@ -354,17 +347,20 @@ struct RunPhotoReviewSections: View {
         let title: String
         let symbol: String
         switch state {
-        case .ready: (title, symbol) = ("Done", "checkmark.circle")
+        case .ready: (title, symbol) = ("Completed", "checkmark.circle")
         case .skipped: (title, symbol) = ("Skipped", "minus.circle")
         case .failed: (title, symbol) = ("Failed", "exclamationmark.triangle")
         case .waitingForDevice: (title, symbol) = ("Waiting for device", "iphone")
         case .leased: (title, symbol) = ("Working", "hourglass")
-        case .pending, nil: (title, symbol) = ("Queued", "clock")
+        case .pending: (title, symbol) = ("Queued", "clock")
+        case nil: (title, symbol) = ("Not queued", "clock")
         }
         return VStack(alignment: .leading, spacing: 2) {
             Label("\(name): \(title)", systemImage: symbol)
                 .foregroundStyle(state == .ready ? FieldGuideTokens.positive : .secondary)
-            if let reason, !reason.isEmpty { Text(reason).foregroundStyle(.secondary) }
+            if let reason, !reason.isEmpty {
+                Text(state == .skipped ? imageSkipReasonText(reason) : reason).foregroundStyle(.secondary)
+            }
         }
     }
 }

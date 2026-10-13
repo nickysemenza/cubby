@@ -21,7 +21,7 @@ import { getProductClassificationEvidence } from "./classification-evidence";
 
 const ctx = withTestDb();
 describe("retained classification evidence", () => {
-  it("schedules an item cutout but leaves labels available for original analysis only", async () => {
+  it("schedules subject lift for item and label images and reuses shared jobs", async () => {
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic item",
       manufacturer: "Example",
@@ -58,7 +58,7 @@ describe("retained classification evidence", () => {
       automatic: true,
     });
     expect(itemJobs.jobIds).toHaveLength(1);
-    expect(labelJobs.jobIds).toHaveLength(2);
+    expect(labelJobs.jobIds).toHaveLength(3);
     expect(
       (
         await getDb(ctx.db)
@@ -67,8 +67,10 @@ describe("retained classification evidence", () => {
           .where(
             eq(imageProcessingJob.imageId, parseEntityId("image", label.id)),
           )
-      ).map((row) => row.kind),
-    ).toEqual(["describe_image", "describe_image"]);
+      )
+        .map((row) => row.kind)
+        .sort(),
+    ).toEqual(["describe_image", "describe_image", "subject_lift"]);
     // Purpose belongs to the attachment. A second Product may legitimately
     // use the same original as an item; that use still permits a rendition.
     const secondProduct = await insertWithShortcode(ctx.db, "product", {
@@ -86,6 +88,7 @@ describe("retained classification evidence", () => {
       automatic: true,
     });
     expect(sharedJobs.jobIds).toHaveLength(1);
+    expect(labelJobs.jobIds).toContain(sharedJobs.jobIds[0]);
   });
 
   it("uses original descriptions and confirmed label corrections, refreshes taxonomy evidence, and never schedules vision on read", async () => {

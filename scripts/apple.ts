@@ -179,19 +179,7 @@ const xcodebuild = (
     "build",
   ]);
 
-/// Xcode 27 replaced Simulator.app with Device Hub. Prefer its device canvas,
-/// but keep the Xcode 26 app as a fallback so the same command remains usable
-/// on older developer machines.
-const openSimulatorInterface = () => {
-  const started = performance.now();
-  const result = spawnSync("open", ["-a", "Device Hub"], { stdio: "inherit" });
-  if (!result.error && result.status === 0) {
-    const seconds = ((performance.now() - started) / 1000).toFixed(1);
-    process.stdout.write(`==> Device Hub (${seconds}s)\n`);
-    return;
-  }
-  run("open", ["-a", "Simulator"]);
-};
+const openSimulatorInterface = () => run("open", ["-a", "Device Hub"]);
 
 const productPath = (platformDirectory: string) =>
   join(DERIVED, "Build/Products", platformDirectory, PRODUCT);

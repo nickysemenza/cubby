@@ -76,12 +76,13 @@ jobs:
     name: iPhone simulator E2E (manual)
     if: needs.route.outputs.simulator == 'true'
     needs: route
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.route.outputs.ref }}
+      - uses: ./.github/actions/setup-apple-toolchain
       - name: Set PR context for the GitHub reporter
         if: needs.route.outputs.pull-request != ''
         env:
@@ -288,7 +289,7 @@ jobs:
       contents: read
       actions: read
       pull-requests: write
-    runs-on: macos-26
+    runs-on: xcode-27
     strategy:
       fail-fast: false
       matrix:
@@ -309,6 +310,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.route.outputs.ref }}
+      - uses: ./.github/actions/setup-apple-toolchain
       - name: Set PR context for the GitHub reporter
         if: needs.route.outputs.pull-request != ''
         env:

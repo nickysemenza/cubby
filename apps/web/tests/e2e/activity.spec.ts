@@ -148,19 +148,19 @@ test("Grouped research refreshes collapsed roots and expanded or reopened childr
   await expect(table).toContainText("1 working · 1 completed");
   await setResearchHistoryStatus(sample.rootId, "failed");
   await page.clock.fastForward(15_000);
-  await expect(table.getByText("failed", { exact: true })).toBeVisible();
+  await expect(table.getByText("Failed", { exact: true })).toBeVisible();
   await expand.click();
-  await expect(table.getByText("running", { exact: true })).toBeVisible();
+  await expect(table.getByText("Processing", { exact: true })).toBeVisible();
   await setResearchHistoryStatus(sample.childId, "completed");
   await page.clock.fastForward(15_000);
-  await expect(table.getByText("running", { exact: true })).toHaveCount(0);
-  await expect(table.getByText("completed", { exact: true })).toBeVisible();
+  await expect(table.getByText("Processing", { exact: true })).toHaveCount(0);
+  await expect(table.getByText("Completed", { exact: true })).toBeVisible();
   await page
     .getByRole("button", { name: `Collapse jobs for ${sample.rootId}` })
     .click();
   await setResearchHistoryStatus(sample.childId, "failed");
   await expand.click();
-  await expect(table.getByText("failed", { exact: true })).toHaveCount(2);
+  await expect(table.getByText("Failed", { exact: true })).toHaveCount(2);
 });
 
 test("Mail import exposes its persisted counts in the shared Run detail", async ({
