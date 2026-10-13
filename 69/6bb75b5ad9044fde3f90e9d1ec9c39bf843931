@@ -1,0 +1,25 @@
+apps/web/src/ui/data-table/detail-page.tsx
+  s_4e0c543cf9c195::t_ba866b03e71f7c 89,469-474
+apps/web/src/ui/data-table/detail-page.unit.test.tsx
+  s_4e0c543cf9c195::t_15445fc2295fca 147
+docs/agents/web-ui-reference.md
+  s_4e0c543cf9c195::t_54524036252ae2 148
+docs/entities.md
+  s_4e0c543cf9c195::t_cddabcc9f692d4 425
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "696bb75b5ad9044fde3f90e9d1ec9c39bf843931",
+  "prompts": {},
+  "sessions": {
+    "s_4e0c543cf9c195": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dfa7bc84-abc1-4e91-bc12-57c501fb9f26",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
