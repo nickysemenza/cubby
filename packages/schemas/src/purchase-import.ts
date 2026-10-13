@@ -500,10 +500,18 @@ export const prepareSourceOrderReconciliationOut = z.union([
 export type PrepareSourceOrderReconciliationOut = z.infer<
   typeof prepareSourceOrderReconciliationOut
 >;
+/** A Product-only decision; the host re-reads and validates current state. */
 export const commitAcceptedSourceOrderReconciliationInput = z.object({
   sourceOrderId: z.uuid(),
-  review: sourceOrderReconciliationReview.extend({
-    resolution: sourceOrderReconciliationResolution.options[0],
+  resolution: z.object({
+    kind: z.literal("attach_only"),
+    lines: z
+      .array(
+        sourceReconciliationLineBinding.extend({
+          newProduct: newProductResolution.optional(),
+        }),
+      )
+      .max(500),
   }),
 });
 export type CommitAcceptedSourceOrderReconciliationInput = z.infer<

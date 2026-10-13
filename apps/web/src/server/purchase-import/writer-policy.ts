@@ -70,6 +70,9 @@ export type LineWriteDecision =
 const linesTotal = (lines: ExtractedPurchaseLine[]): number =>
   lines.reduce((total, line) => total + cents(line.amount), 0);
 
+export const sameLineTitle = (left: string, right: string) =>
+  left.trim().replace(/\s+/gu, " ") === right.trim().replace(/\s+/gu, " ");
+
 export const importedLineMatchesExpense = (
   row: Pick<
     ExistingExpenseSnapshot,
@@ -77,8 +80,7 @@ export const importedLineMatchesExpense = (
   >,
   line: ExtractedPurchaseLine,
 ) =>
-  line.title.trim().replace(/\s+/gu, " ") ===
-    row.title.trim().replace(/\s+/gu, " ") &&
+  sameLineTitle(line.title, row.title) &&
   row.amount !== null &&
   cents(line.amount) === cents(row.amount) &&
   line.lineKind === row.lineKind &&

@@ -51,12 +51,16 @@ resolution; it creates no ledger or stock changes.
 The same read's `acceptedSourceOrders` separates accepted source orders from
 lifecycle-only links. Each carries its `sourceOrderId` review handle, Purchase
 code, deletion status and stored source identity. Use the handle with
-`purchase_import.prepare_reconciliation`; it grants no permission to repair an
-unknown original. A holding claim can use a historical alias key while the
-review normalizes it to the canonical family key. Commit the full returned
-review unchanged, rather than replacing its source identity from this read.
+`purchase_import.commit_accepted_reconciliation` and explicit attach-only
+Product choices; an optional preview is available through
+`prepare_reconciliation`. The Product-only transaction re-reads and validates
+the current records instead of requiring a preview token. This handle grants
+no permission to repair an unknown primary original. A holding claim can use a
+historical alias key while the writer resolves its canonical family.
 
 When a new-Product repair refuses an exact unbound item Expense, its diagnostic
-reports the selected row's role and basis, exact-match count, ledger source-claim
-count and other accepted source-order count. Use these to identify the evidence
-gap; do not bypass a source-ownership refusal with generic Product creation.
+identifies the exact-item or claim conflict. Mere additional shipping, delivery
+or cash-back sources remain provenance, without separate quotes or clearance.
+Unknown historical observations remain unknown. Do not bypass a genuine
+source-ownership refusal with generic Product creation. Financial corrections
+that change spend or allocations retain their existing reviewed-preview checks.

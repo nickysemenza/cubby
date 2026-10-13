@@ -9,12 +9,13 @@ import {
   type PrepareSourceOrderReconciliationInput,
 } from "@cubby/schemas/purchase-import";
 import { cents } from "@cubby/shared";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   auditLog,
+  expense,
   importSourceClaim,
   importSourceOrder,
   ledgerParty,
@@ -22,6 +23,7 @@ import {
 } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import {
   commitSourceOrderReconciliation,
@@ -29,12 +31,10 @@ import {
 } from "./reconciliation";
 import {
   promoteHistoricalAcceptedObservation,
-  reconciliationFingerprint,
   sourceObservationIdentityMatches,
 } from "./reconciliation-observations";
 import {
   loadSourceReconciliationState,
-  sourceReconciliationStateFingerprint,
   type ReconciliationFix,
   type ReconciliationState,
 } from "./reconciliation-state";
@@ -45,20 +45,15 @@ type AcceptedInput = Extract<
   PrepareSourceOrderReconciliationInput,
   { sourceOrderId: string }
 >;
-const appliedReview = z.object({
-  sourceOrderId: z.uuid(),
-  reviewedFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-  observationId: z.uuid(),
-  postFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-  reviewPayloadFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-});
+type AcceptedResolution =
+  | AcceptedInput["resolution"]
+  | CommitAcceptedSourceOrderReconciliationInput["resolution"];
 
 async function acceptedFix(
   tx: DrizzleTransaction,
   id: string,
   actor: ActorContext,
-  observationId?: string,
-  promoteHistorical = false,
+  promoteHistorical: boolean,
 ) {
   const selectOwned = () =>
     tx
@@ -107,10 +102,7 @@ async function acceptedFix(
     .select()
     .from(sourceOrderObservation)
     .where(
-      eq(
-        sourceOrderObservation.id,
-        observationId ?? current.association.acceptedObservationId,
-      ),
+      eq(sourceOrderObservation.id, current.association.acceptedObservationId),
     );
   if (!observation)
     throw new Error("Accepted source immutable observation changed.");
@@ -131,12 +123,12 @@ async function acceptedFix(
   return { fix, ownerId: current.claim.ledgerPartyId };
 }
 
-/** Only accepted prepare expands omitted lines; commit reviews the complete returned roster. */
+/** Accepted preview and commit expand omitted lines the same way. */
 async function completeAcceptedAttachmentResolution(
   tx: DrizzleTransaction,
   state: ReconciliationState,
-  input: AcceptedInput["resolution"],
-): Promise<AcceptedInput["resolution"]> {
+  input: AcceptedResolution,
+): Promise<AcceptedResolution> {
   const candidate = state.observation.extraction.candidate;
   if (!candidate || input.lines.length === candidate.lines.length) return input;
   const lines = [...input.lines];
@@ -212,7 +204,6 @@ export async function prepareAcceptedSourceOrderReconciliation(
       tx,
       input.sourceOrderId,
       actor,
-      undefined,
       !input.resolution.lines.some((binding) => binding.newProduct),
     );
     const state = await loadSourceReconciliationState(
@@ -226,7 +217,13 @@ export async function prepareAcceptedSourceOrderReconciliation(
       state,
       input.resolution,
     );
-    const review = await reviewResolution(tx, state, fix, resolution);
+    const review = await reviewResolution(
+      tx,
+      state,
+      fix,
+      resolution,
+      "product_binding",
+    );
     if (review.spend.delta !== 0)
       throw new Error("Accepted-source association must preserve spend.");
     return prepareSourceOrderReconciliationOut.options[1].parse({
@@ -236,115 +233,195 @@ export async function prepareAcceptedSourceOrderReconciliation(
   });
 }
 
-/** The AuditLog records a completed review, never work waiting for execution. */
+/** New Product decisions leave one receipt on their Expense for replay. */
+const appliedNewProduct = z.object({
+  acceptedSourceProduct: z.object({
+    to: z.object({
+      sourceOrderId: z.uuid(),
+      lineIndex: z.number().int().nonnegative(),
+      productId: z.uuid(),
+    }),
+  }),
+});
+
+/**
+ * An unchanged command is recognized from the current item binding, never a
+ * caller token: each requested line's live Expense still matches its source
+ * line, the accepted observation binds the same Product, and a new Product
+ * decision has its receipt. Anything else is a fresh decision for review.
+ */
+async function appliedAcceptedBinding(
+  tx: DrizzleTransaction,
+  state: ReconciliationState,
+  sourceOrderId: string,
+  resolution: CommitAcceptedSourceOrderReconciliationInput["resolution"],
+) {
+  if (!resolution.lines.some((row) => row.productId || row.newProduct))
+    return false;
+  const candidate = state.observation.extraction.candidate;
+  for (const binding of resolution.lines) {
+    const line = candidate?.lines[binding.lineIndex];
+    const selected = state.expenses.find(
+      (row) => row.shortcode === binding.expenseId,
+    );
+    const accepted = state.observation.productBindings.find(
+      (row) => row.lineIndex === binding.lineIndex,
+    )?.productId;
+    if (
+      !line ||
+      !selected ||
+      selected.purchaseId !== state.target.id ||
+      selected.cost === null ||
+      cents(selected.cost) !== cents(line.amount) ||
+      selected.lineKind !== line.lineKind
+    )
+      return false;
+    if (!selected.productId) {
+      if (binding.productId || binding.newProduct || accepted) return false;
+      continue;
+    }
+    if (
+      !accepted ||
+      !(await sourceObservationIdentityMatches(
+        tx,
+        "product",
+        accepted,
+        selected.productId,
+      ))
+    )
+      return false;
+    if (binding.productId) {
+      if (
+        (selected.productQuantity !== null &&
+          selected.productQuantity !== (line.quantity ?? 1)) ||
+        !(await sourceObservationIdentityMatches(
+          tx,
+          "product",
+          await resolveOrThrow(tx, "product", binding.productId),
+          selected.productId,
+        ))
+      )
+        return false;
+      continue;
+    }
+    if (!binding.newProduct) return false;
+    const receipts = await tx
+      .select({ changes: auditLog.changes })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityKind, "expense"),
+          eq(auditLog.entityId, selected.id),
+        ),
+      );
+    let created = false;
+    for (const receipt of receipts) {
+      const parsed = appliedNewProduct.safeParse(receipt.changes);
+      const to = parsed.success ? parsed.data.acceptedSourceProduct.to : null;
+      if (
+        to?.sourceOrderId === sourceOrderId &&
+        to.lineIndex === binding.lineIndex &&
+        (await sourceObservationIdentityMatches(
+          tx,
+          "product",
+          to.productId,
+          selected.productId,
+        ))
+      )
+        created = true;
+    }
+    if (!created) return false;
+  }
+  return true;
+}
+
+/** Product-only: binds existing exact item Expenses after re-reading and
+ * validating current state in this transaction; money is never changed. */
 export async function commitAcceptedSourceOrderReconciliation(
   db: Database,
   rawInput: CommitAcceptedSourceOrderReconciliationInput,
   actor: ActorContext,
 ) {
   const input = commitAcceptedSourceOrderReconciliationInput.parse(rawInput);
-  if (input.review.resolution.kind !== "attach_only")
-    throw new Error(
-      "Accepted-source association only supports explicit attach-only review.",
-    );
   return withTransaction(db, async (tx) => {
-    const current = await acceptedFix(tx, input.sourceOrderId, actor);
-    const [receipt] = await tx
-      .select({ changes: auditLog.changes })
-      .from(auditLog)
-      .where(
-        and(
-          eq(auditLog.entityKind, "purchase"),
-          eq(auditLog.entityId, current.fix.purchaseId),
-          sql`${auditLog.changes}->${"sourceOrderReconciliation"}->${"to"}->>${"sourceOrderId"} = ${input.sourceOrderId}`,
-          sql`${auditLog.changes}->${"sourceOrderReconciliation"}->${"to"}->>${"reviewedFingerprint"} = ${input.review.reviewedFingerprint}`,
-        ),
-      )
-      .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
-      .limit(1);
-    const recorded = receipt
-      ? z
-          .object({
-            sourceOrderReconciliation: z.object({ to: appliedReview }),
-          })
-          .parse(receipt.changes).sourceOrderReconciliation.to
-      : null;
-    const { fix, ownerId } = recorded
-      ? await acceptedFix(
-          tx,
-          input.sourceOrderId,
-          actor,
-          recorded.observationId,
-        )
-      : current;
-    fix.review = input.review;
-    fix.reviewedFingerprint = input.review.reviewedFingerprint;
+    const { fix, ownerId } = await acceptedFix(
+      tx,
+      input.sourceOrderId,
+      actor,
+      !input.resolution.lines.some((binding) => binding.newProduct),
+    );
     const state = await loadSourceReconciliationState(
       tx,
       fix,
       ownerId,
-      input.review.resolution,
+      input.resolution,
     );
-    if (recorded) {
-      if (
-        (await reconciliationFingerprint(input.review)) !==
-        recorded.reviewPayloadFingerprint
+    const purchaseId = parseShortcodeFor("purchase", state.target.shortcode);
+    if (
+      await appliedAcceptedBinding(
+        tx,
+        state,
+        input.sourceOrderId,
+        input.resolution,
       )
-        throw new Error(
-          "The reviewed reconciliation payload changed; prepare it again.",
-        );
-      if (
-        (await sourceReconciliationStateFingerprint(
-          state,
-          fix,
-          input.review.resolution,
-        )) !== recorded.postFingerprint
-      )
-        throw new Error(
-          "Reconciliation state changed after applying this review; prepare it again.",
-        );
+    )
       return commitAcceptedSourceOrderReconciliationOut.parse({
-        purchaseId: state.target.shortcode,
+        purchaseId,
         alreadyApplied: true,
       });
-    }
-    if (input.review.spend.delta !== 0)
-      throw new Error(
-        "Accepted-source association must preserve reviewed spend.",
-      );
-    await commitSourceOrderReconciliation(tx, fix, actor, ownerId);
-    const after = await loadSourceReconciliationState(
+    const resolution = await completeAcceptedAttachmentResolution(
+      tx,
+      state,
+      input.resolution,
+    );
+    const review = await reviewResolution(
+      tx,
+      state,
+      fix,
+      resolution,
+      "product_binding",
+    );
+    if (review.spend.delta !== 0)
+      throw new Error("Accepted-source association must preserve spend.");
+    fix.review = review;
+    fix.reviewedFingerprint = review.reviewedFingerprint;
+    await commitSourceOrderReconciliation(
       tx,
       fix,
+      actor,
       ownerId,
-      input.review.resolution,
+      "product_binding",
     );
-    await logAuditEntry(tx, actor, {
-      entityKind: "purchase",
-      entityId: state.target.id,
-      action: "update",
-      changes: {
-        sourceOrderReconciliation: {
-          from: null,
-          to: {
-            sourceOrderId: input.sourceOrderId,
-            reviewedFingerprint: input.review.reviewedFingerprint,
-            reviewPayloadFingerprint: await reconciliationFingerprint(
-              input.review,
-            ),
-            observationId: fix.observationId!,
-            postFingerprint: await sourceReconciliationStateFingerprint(
-              after,
-              fix,
-              input.review.resolution,
-            ),
+    for (const binding of input.resolution.lines) {
+      if (!binding.newProduct) continue;
+      const selected = state.expenses.find(
+        (row) => row.shortcode === binding.expenseId,
+      )!;
+      const [bound] = await tx
+        .select({ productId: expense.productId })
+        .from(expense)
+        .where(eq(expense.id, selected.id));
+      if (!bound?.productId)
+        throw new Error("The reviewed new Product was not bound.");
+      await logAuditEntry(tx, actor, {
+        entityKind: "expense",
+        entityId: selected.id,
+        action: "update",
+        changes: {
+          acceptedSourceProduct: {
+            from: null,
+            to: {
+              sourceOrderId: input.sourceOrderId,
+              lineIndex: binding.lineIndex,
+              productId: bound.productId,
+            },
           },
         },
-      },
-    });
-    return {
-      purchaseId: parseShortcodeFor("purchase", state.target.shortcode),
+      });
+    }
+    return commitAcceptedSourceOrderReconciliationOut.parse({
+      purchaseId,
       alreadyApplied: false,
-    };
+    });
   });
 }

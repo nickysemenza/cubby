@@ -30,7 +30,11 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { resolveRunFinding } from "./findings";
 import { memberImport, retainedMailFixture } from "./order-import.fixtures";
-import { prepareSourceOrderReconciliation } from "./reconciliation";
+import {
+  prepareSourceOrderReconciliation,
+  reviewResolution,
+  commitSourceOrderReconciliation,
+} from "./reconciliation";
 import {
   loadSourceReconciliationState,
   sourceReconciliationStateFingerprint,
@@ -490,6 +494,61 @@ describe("accepted source financial reconciliation", () => {
       ),
     ).rejects.toThrow(/changed|stale/u);
     expect(await state()).toEqual(changed);
+  });
+
+  it("keeps accepted-observation payment reconciliation on the financial path", async () => {
+    const { initial, accepted, database, state } = await world();
+    const order = initial.orders[0]!;
+    const claim = initial.source[0]!;
+    await database.update(purchasePaymentEvidence).set({ amount: 39 });
+    const fix = storedImportFix.parse({
+      kind: "reconcile_source_order",
+      purchaseId: accepted.id,
+      source: {
+        kind: "vendor_export",
+        externalKey: claim.externalKey,
+        checksum: order.checksum,
+      },
+      orderKey: order.orderKey,
+      acceptedChecksum: order.checksum,
+      proposedExtraction: { status: "ready", candidate },
+      observationId: order.acceptedObservationId,
+      reviewedFingerprint: "0".repeat(64),
+    });
+    if (!fix || fix.kind !== "reconcile_source_order")
+      throw new Error("Synthetic correction missing");
+    await withTransaction(ctx.db, async (tx) => {
+      const locked = await loadSourceReconciliationState(
+        tx,
+        fix,
+        claim.ledgerPartyId,
+      );
+      const review = await reviewResolution(tx, locked, fix, {
+        kind: "attach_only",
+        lines: [
+          {
+            lineIndex: 0,
+            expenseId: parseShortcodeFor(
+              "expense",
+              initial.expenses[0]!.shortcode,
+            ),
+            productId: null,
+          },
+        ],
+      });
+      fix.review = review;
+      fix.reviewedFingerprint = review.reviewedFingerprint;
+      await commitSourceOrderReconciliation(
+        tx,
+        fix,
+        ctx.actor,
+        claim.ledgerPartyId,
+      );
+    });
+    const after = await state();
+    expect(after.payments[0]?.amount).toBe(40);
+    expect(after.expenses).toEqual(initial.expenses);
+    expect(after.allocations).toEqual(initial.allocations);
   });
 
   it("refuses accepted payment changes that disagree with a statement allocation", async () => {

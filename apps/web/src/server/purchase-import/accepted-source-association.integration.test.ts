@@ -1,15 +1,18 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { promoteHistoricalAcceptedOrders } from "tooling/historical-accepted-orders";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  email as emailTable,
   expense,
   expenseAttribution,
+  financialTransactionAllocation,
   importSourceClaim,
   importSourceOrder,
+  importSourceProduct,
   importPreparedLine,
   inventoryEntry,
   ledgerParty,
@@ -33,7 +36,12 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { mergeVendors } from "~/server/repo/vendor";
 
-import { memberImport, memberImportWorld } from "./order-import.fixtures";
+import {
+  mailSource,
+  memberImport,
+  memberImportWorld,
+  retainedMailFixture,
+} from "./order-import.fixtures";
 import {
   commitAcceptedSourceOrderReconciliation,
   prepareSourceOrderReconciliation,
@@ -147,6 +155,26 @@ describe("reviewed accepted source Product association", () => {
         { sourceOrderId: association.id, resolution },
         ctx.actor,
       );
+    const newProductResolution = {
+      kind: "attach_only" as const,
+      lines: [
+        {
+          lineIndex: 0,
+          expenseId: parseShortcodeFor("expense", item.shortcode),
+          productId: null,
+          newProduct: { kind: "new" as const },
+        },
+      ],
+    };
+    // The caller names only the decision; commit re-reads and validates it.
+    const commit = (
+      decision: typeof resolution | typeof newProductResolution = resolution,
+    ) =>
+      commitAcceptedSourceOrderReconciliation(
+        ctx.db,
+        { sourceOrderId: association.id, resolution: decision },
+        ctx.actor,
+      );
     const snapshot = async () => ({
       expenses: await db.select().from(expense),
       attributions: await db.select().from(expenseAttribution),
@@ -164,7 +192,10 @@ describe("reviewed accepted source Product association", () => {
       photographed,
       retainedItem,
       retainedProduct,
+      resolution,
+      newProductResolution,
       prepare,
+      commit,
       snapshot,
     };
   }
@@ -342,6 +373,7 @@ describe("reviewed accepted source Product association", () => {
         : null;
       expect(promoted).toBeNull();
       await expect(w.prepare()).rejects.toThrow(refusal);
+      await expect(w.commit()).rejects.toThrow(refusal);
       expect(await snapshot()).toEqual(before);
       expect(
         (
@@ -385,12 +417,7 @@ describe("reviewed accepted source Product association", () => {
       checksum: w.association.checksum,
       runId: null,
     });
-    const review = await w.prepare();
-    await commitAcceptedSourceOrderReconciliation(
-      ctx.db,
-      { sourceOrderId: w.association.id, review },
-      ctx.actor,
-    );
+    await w.commit();
     const after = await w.snapshot();
     expect(after.expenses).toEqual(
       before.expenses.map((row) => ({
@@ -414,7 +441,7 @@ describe("reviewed accepted source Product association", () => {
 
   // Historical snapshots can be promoted only from checksum-matching stored
   // extraction; mutable ledger state cannot reconstruct missing source facts.
-  it("promotes a verifiable historical accepted snapshot before photo association", async () => {
+  it("promotes a verifiable historical accepted snapshot during photo association without a preview", async () => {
     const w = await world();
     await w.db
       .update(importSourceOrder)
@@ -422,27 +449,22 @@ describe("reviewed accepted source Product association", () => {
       .where(eq(importSourceOrder.id, w.association.id));
     await w.db.delete(sourceOrderObservation);
     const before = await w.snapshot();
-    const review = await w.prepare();
+    const result = await w.commit();
+    expect(result.alreadyApplied).toBe(false);
     const promoted = await w.db.query.importSourceOrder.findFirst();
     expect(promoted?.acceptedObservationId).toBeTruthy();
     expect(promoted?.originalOrder).toEqual(w.association.originalOrder);
     expect(promoted?.checksum).toBe(w.association.checksum);
     const observations = await w.db.select().from(sourceOrderObservation);
-    expect(observations).toHaveLength(1);
-    expect(observations[0]).toMatchObject({
+    expect(
+      observations.find((row) => row.productBindings[0]?.productId === null),
+    ).toMatchObject({
       extraction: w.association.originalOrder?.extraction,
       checksum: w.association.checksum,
-      productBindings: [{ lineIndex: 0, productId: null }],
       runId: null,
       primaryDocumentImageId: null,
       screenshotImageId: null,
     });
-    const result = await commitAcceptedSourceOrderReconciliation(
-      ctx.db,
-      { sourceOrderId: w.association.id, review },
-      ctx.actor,
-    );
-    expect(result.alreadyApplied).toBe(false);
     const after = await w.snapshot();
     expect(after.expenses).toHaveLength(1);
     expect(after.expenses[0]).toMatchObject({
@@ -455,15 +477,7 @@ describe("reviewed accepted source Product association", () => {
     expect(after.payments).toEqual(before.payments);
     expect(after.stock).toEqual(before.stock);
     expect(after.findings).toEqual(before.findings);
-    expect(
-      (
-        await commitAcceptedSourceOrderReconciliation(
-          ctx.db,
-          { sourceOrderId: w.association.id, review },
-          ctx.actor,
-        )
-      ).alreadyApplied,
-    ).toBe(true);
+    expect((await w.commit()).alreadyApplied).toBe(true);
     expect(await w.snapshot()).toEqual(after);
   });
 
@@ -475,7 +489,8 @@ describe("reviewed accepted source Product association", () => {
       const w = await world();
       const original = (await w.snapshot()).observations;
       const before = await w.snapshot();
-      const staleReview = await w.prepare();
+      // A preview taken before the merges is inspection only, never a token.
+      await w.prepare();
       let survivingPurchase = w.association.purchaseId;
       for (let step = 0; step < 2; step++) {
         if (kind === "purchase") {
@@ -521,20 +536,8 @@ describe("reviewed accepted source Product association", () => {
         }
       }
       expect((await w.snapshot()).observations).toEqual(original);
-      await expect(
-        commitAcceptedSourceOrderReconciliation(
-          ctx.db,
-          { sourceOrderId: w.association.id, review: staleReview },
-          ctx.actor,
-        ),
-      ).rejects.toThrow(/changed|review/i);
       const afterMerge = await w.snapshot();
-      const review = await w.prepare();
-      const result = await commitAcceptedSourceOrderReconciliation(
-        ctx.db,
-        { sourceOrderId: w.association.id, review },
-        ctx.actor,
-      );
+      const result = await w.commit();
       const after = await w.snapshot();
       expect(after.expenses).toHaveLength(1);
       expect(after.expenses[0]).toMatchObject({
@@ -560,15 +563,7 @@ describe("reviewed accepted source Product association", () => {
         ),
       ).toEqual(original);
       expect(result.alreadyApplied).toBe(false);
-      expect(
-        (
-          await commitAcceptedSourceOrderReconciliation(
-            ctx.db,
-            { sourceOrderId: w.association.id, review },
-            ctx.actor,
-          )
-        ).alreadyApplied,
-      ).toBe(true);
+      expect((await w.commit()).alreadyApplied).toBe(true);
       expect(await w.snapshot()).toEqual(after);
     },
   );
@@ -620,11 +615,7 @@ describe("reviewed accepted source Product association", () => {
     const review = await w.prepare();
     expect(review.source.externalKey).toBe(root.externalKey);
     expect(await w.snapshot()).toEqual(before);
-    await commitAcceptedSourceOrderReconciliation(
-      ctx.db,
-      { sourceOrderId: w.association.id, review },
-      ctx.actor,
-    );
+    await w.commit();
     const after = await w.snapshot();
     expect(after.expenses).toHaveLength(1);
     expect(after.expenses[0]).toMatchObject({
@@ -646,15 +637,7 @@ describe("reviewed accepted source Product association", () => {
         where: eq(importSourceClaim.id, alias.id),
       }),
     ).toEqual(aliasedClaim);
-    expect(
-      (
-        await commitAcceptedSourceOrderReconciliation(
-          ctx.db,
-          { sourceOrderId: w.association.id, review },
-          ctx.actor,
-        )
-      ).alreadyApplied,
-    ).toBe(true);
+    expect((await w.commit()).alreadyApplied).toBe(true);
   });
   it.each(["exact", "cosmetic"] as const)(
     "canonical %s replay preserves the historical alias and conserves money and stock",
@@ -772,11 +755,8 @@ describe("reviewed accepted source Product association", () => {
     ]);
     expect(review.spend).toEqual({ before: 65, after: 65, delta: 0 });
     expect(await w.snapshot()).toEqual(before);
-    await commitAcceptedSourceOrderReconciliation(
-      ctx.db,
-      { sourceOrderId: w.association.id, review },
-      ctx.actor,
-    );
+    // Commit expands the same one-line decision against current state.
+    await w.commit();
     const after = await w.snapshot();
     expect(after.expenses).toHaveLength(3);
     expect(after.expenses.find((row) => row.id === w.item.id)).toMatchObject({
@@ -791,38 +771,21 @@ describe("reviewed accepted source Product association", () => {
     expect(after.payments).toEqual(before.payments);
     expect(after.stock).toEqual(before.stock);
     expect(after.findings).toEqual(before.findings);
-    expect(
-      (
-        await commitAcceptedSourceOrderReconciliation(
-          ctx.db,
-          { sourceOrderId: w.association.id, review },
-          ctx.actor,
-        )
-      ).alreadyApplied,
-    ).toBe(true);
+    expect((await w.commit()).alreadyApplied).toBe(true);
     expect(await w.snapshot()).toEqual(after);
-    const nextReview = await w.prepare();
-    await w.db
-      .update(expense)
-      .set({ cost: 21 })
-      .where(eq(expense.id, w.retainedItem.id));
-    const staleState = await w.snapshot();
-    await expect(
-      commitAcceptedSourceOrderReconciliation(
-        ctx.db,
-        { sourceOrderId: w.association.id, review: nextReview },
-        ctx.actor,
-      ),
-    ).rejects.toThrow(/changed|review|preserve/i);
-    expect(await w.snapshot()).toEqual(staleState);
   });
 
-  it.each(["ambiguous", "missing"] as const)(
-    "refuses %s untouched accepted line mappings before preparing a partial association",
+  it.each(["ambiguous", "missing", "changed cost"] as const)(
+    "refuses %s untouched accepted line mappings before a partial association",
     async (kind) => {
       const w = await world(false, true);
       if (!w.retainedItem) throw new Error("Synthetic retained line missing");
-      if (kind === "missing")
+      if (kind === "changed cost")
+        await w.db
+          .update(expense)
+          .set({ cost: 21 })
+          .where(eq(expense.id, w.retainedItem.id));
+      else if (kind === "missing")
         await w.db
           .update(expense)
           .set({ deletedAt: new Date() })
@@ -843,6 +806,9 @@ describe("reviewed accepted source Product association", () => {
       await expect(w.prepare()).rejects.toThrow(
         /ambiguous|explicit|binding|unknown/i,
       );
+      await expect(w.commit()).rejects.toThrow(
+        /ambiguous|explicit|binding|unknown/i,
+      );
       expect(await w.snapshot()).toEqual(before);
     },
   );
@@ -853,11 +819,7 @@ describe("reviewed accepted source Product association", () => {
     const review = await w.prepare();
     expect(review.spend).toEqual({ before: 40, after: 40, delta: 0 });
     expect(await w.snapshot()).toEqual(before);
-    const result = await commitAcceptedSourceOrderReconciliation(
-      ctx.db,
-      { sourceOrderId: w.association.id, review },
-      ctx.actor,
-    );
+    const result = await w.commit();
     expect(result.alreadyApplied).toBe(false);
     const after = await w.snapshot();
     expect(after.expenses).toHaveLength(1);
@@ -872,37 +834,16 @@ describe("reviewed accepted source Product association", () => {
     expect(after.stock).toEqual(before.stock);
     expect(after.findings).toEqual(before.findings);
     expect(after.observations[0]).toEqual(before.observations[0]);
-    expect(
-      (
-        await commitAcceptedSourceOrderReconciliation(
-          ctx.db,
-          { sourceOrderId: w.association.id, review },
-          ctx.actor,
-        )
-      ).alreadyApplied,
-    ).toBe(true);
+    expect((await w.commit()).alreadyApplied).toBe(true);
     expect(await w.snapshot()).toEqual(after);
-    await expect(
-      commitAcceptedSourceOrderReconciliation(
-        ctx.db,
-        {
-          sourceOrderId: w.association.id,
-          review: { ...review, spend: { ...review.spend, before: 0 } },
-        },
-        ctx.actor,
-      ),
-    ).rejects.toThrow(/changed|review/i);
+    // A replay revalidates the bound item itself, not a caller token.
     await w.db
       .update(expense)
       .set({ cost: 41 })
       .where(eq(expense.id, w.item.id));
-    await expect(
-      commitAcceptedSourceOrderReconciliation(
-        ctx.db,
-        { sourceOrderId: w.association.id, review },
-        ctx.actor,
-      ),
-    ).rejects.toThrow(/changed|review/i);
+    const changed = await w.snapshot();
+    await expect(w.commit()).rejects.toThrow(/preserve|amount/i);
+    expect(await w.snapshot()).toEqual(changed);
   });
 
   // A prior silent-success import has a known accepted original and immutable
@@ -951,11 +892,7 @@ describe("reviewed accepted source Product association", () => {
     expect(review.spend).toEqual({ before: 65, after: 65, delta: 0 });
     expect(await w.snapshot()).toEqual(before);
     expect(await w.db.select().from(product)).toEqual(productsBefore);
-    await commitAcceptedSourceOrderReconciliation(
-      ctx.db,
-      { sourceOrderId: w.association.id, review },
-      ctx.actor,
-    );
+    await w.commit(resolution);
     const created = await w.db.query.product.findFirst({
       where: eq(product.name, "Synthetic household item"),
     });
@@ -986,42 +923,307 @@ describe("reviewed accepted source Product association", () => {
       lineIndex: 0,
       productId: created.id,
     });
-    expect(
-      (
-        await commitAcceptedSourceOrderReconciliation(
-          ctx.db,
-          { sourceOrderId: w.association.id, review },
-          ctx.actor,
-        )
-      ).alreadyApplied,
-    ).toBe(true);
+    // The unchanged command recognizes its own applied binding: no fork.
+    expect((await w.commit(resolution)).alreadyApplied).toBe(true);
     expect(await w.snapshot()).toEqual(after);
+    expect(await w.db.select().from(product)).toHaveLength(
+      productsBefore.length + 1,
+    );
+    // A different decision for the bound item never rebinds it blindly.
+    await expect(w.commit()).rejects.toThrow(/Product/);
+    expect(await w.snapshot()).toEqual(after);
+  });
+
+  it("refuses a new Product request for an item already bound to an existing Product", async () => {
+    const w = await world();
+    await w.commit();
+    const bound = await w.snapshot();
+    const products = await w.db.select().from(product);
+    await expect(w.commit(w.newProductResolution)).rejects.toThrow(
+      /selected Product bound/i,
+    );
+    expect(await w.snapshot()).toEqual(bound);
+    expect(await w.db.select().from(product)).toEqual(products);
+  });
+
+  /** Another accepted source on the same Purchase. A null extraction leaves
+   * its history unknown, like legacy rows that never retained one. */
+  async function addAcceptedSibling(
+    w: World,
+    key: string,
+    checksumDigit: string,
+    extraction: AcceptedExtraction | null,
+  ) {
+    const primary = await w.db.query.importSourceClaim.findFirst({
+      where: eq(importSourceClaim.id, w.association.sourceClaimId),
+    });
+    if (!primary) throw new Error("Synthetic primary source missing");
+    const mail = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: w.party.id,
+      messageId: `synthetic-${key}`,
+      checksum: checksumDigit.repeat(64),
+    });
+    const [claim] = await w.db
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: w.party.id,
+        kind: "mail_message",
+        externalKey: mailSource(mail).externalKey,
+        checksum: mail.rawChecksum,
+        firstRunId: primary.firstRunId,
+        lastRunId: primary.lastRunId,
+      })
+      .returning();
+    if (!claim) throw new Error("Synthetic sibling source missing");
+    const [order] = await w.db
+      .insert(importSourceOrder)
+      .values({
+        sourceClaimId: claim.id,
+        orderKey: `synthetic-mail/order/${key}`,
+        purchaseId: w.association.purchaseId,
+        checksum: mail.rawChecksum,
+        outputFingerprint: w.association.outputFingerprint,
+        originalOrder: extraction
+          ? { checksum: mail.rawChecksum, extraction }
+          : null,
+        acceptedObservationId: null,
+      })
+      .returning();
+    if (!order) throw new Error("Synthetic sibling accepted order missing");
+    return { claim, order, mail };
+  }
+  type AcceptedExtraction = NonNullable<
+    World["association"]["originalOrder"]
+  >["extraction"];
+  const lifecycle = (
+    w: World,
+    candidate: Partial<NonNullable<AcceptedExtraction["candidate"]>>,
+  ): AcceptedExtraction => {
+    const original = w.association.originalOrder?.extraction.candidate;
+    if (!original) throw new Error("Synthetic original missing");
+    return {
+      status: "ready",
+      candidate: {
+        ...original,
+        printedGrandTotal: null,
+        payments: [],
+        allShipmentsDelivered: false,
+        ...candidate,
+      },
+    };
+  };
+
+  // Legacy lifecycle and cash-back Emails on the same Purchase corroborate or
+  // stay unknown; neither is a competing claim on the exact unbound item.
+  it("creates an exact new Product beside legacy lifecycle and unknown sources, preserving them and all money, then replays", async () => {
+    const w = await world();
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Synthetic settlement account",
+      ledgerPartyId: w.party.id,
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+    });
+    const transaction = await insertWithShortcode(
+      ctx.db,
+      "financialTransaction",
+      {
+        accountId: account.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 40,
+        postedDate: "2026-09-02",
+        merchant: "Synthetic retailer",
+      },
+    );
+    await w.db.insert(financialTransactionAllocation).values({
+      transactionId: transaction.id,
+      purchaseId: w.association.purchaseId,
+      amount: 40,
+    });
+    const shipped = await addAcceptedSibling(
+      w,
+      "partial-shipment",
+      "c",
+      lifecycle(w, {
+        sourceEvent: "shipped",
+        lines: [
+          {
+            title: "Synthetic household item",
+            amount: 20,
+            quantity: 1,
+            lineKind: "principal",
+          },
+        ],
+      }),
+    );
+    const cashback = await addAcceptedSibling(
+      w,
+      "cash-back",
+      "d",
+      lifecycle(w, {
+        sourceEvent: "refunded",
+        lines: [],
+        payments: [{ amount: -2, chargedAt: "2026-09-03T18:00:00Z" }],
+      }),
+    );
+    const unknown = await addAcceptedSibling(w, "unknown-history", "e", null);
+    await w.db.insert(purchasePaymentEvidence).values({
+      purchaseId: w.association.purchaseId,
+      sourceClaimId: cashback.claim.id,
+      evidenceIndex: 0,
+      amount: -2,
+      chargedAt: new Date("2026-09-03T18:00:00Z"),
+    });
+    const siblings = async () => ({
+      allocations: await w.db.select().from(financialTransactionAllocation),
+      orders: await w.db
+        .select()
+        .from(importSourceOrder)
+        .where(
+          inArray(importSourceOrder.id, [
+            shipped.order.id,
+            cashback.order.id,
+            unknown.order.id,
+          ]),
+        ),
+      claims: await w.db
+        .select()
+        .from(importSourceClaim)
+        .where(
+          inArray(importSourceClaim.id, [
+            shipped.claim.id,
+            cashback.claim.id,
+            unknown.claim.id,
+          ]),
+        ),
+      bindings: await w.db.select().from(importSourceProduct),
+      emails: await w.db.select().from(emailTable),
+    });
+    // An optional preview, then unrelated Email metadata changes.
+    await w.prepare();
+    await w.db
+      .update(emailTable)
+      .set({ subject: "Synthetic relabelled shipment", status: "completed" })
+      .where(eq(emailTable.orderMailId, shipped.mail.id));
+    const before = await w.snapshot();
+    const siblingsBefore = await siblings();
+    const productsBefore = await w.db.select().from(product);
+    const result = await w.commit(w.newProductResolution);
+    expect(result.alreadyApplied).toBe(false);
+    const created = await w.db.query.product.findFirst({
+      where: eq(product.name, "Synthetic household item"),
+    });
+    if (!created) throw new Error("Exact new Product not created");
+    const after = await w.snapshot();
+    expect(after.expenses.find((row) => row.id === w.item.id)).toMatchObject({
+      cost: 40,
+      productId: created.id,
+      productQuantity: 2,
+    });
+    expect(after.expenses.filter((row) => row.id !== w.item.id)).toEqual(
+      before.expenses.filter((row) => row.id !== w.item.id),
+    );
+    expect(after.attributions).toEqual(before.attributions);
+    expect(after.payments).toEqual(before.payments);
+    expect(after.stock).toEqual(before.stock);
+    expect(after.findings).toEqual(before.findings);
+    expect(await siblings()).toEqual(siblingsBefore);
+    expect((await w.commit(w.newProductResolution)).alreadyApplied).toBe(true);
+    expect(await w.snapshot()).toEqual(after);
+    expect(await siblings()).toEqual(siblingsBefore);
     expect(await w.db.select().from(product)).toHaveLength(
       productsBefore.length + 1,
     );
   });
 
+  // Root Email metadata may move after acceptance; a Product-only binding
+  // neither depends on nor rewrites it.
+  it("binds after unrelated source metadata changes without rewriting source identity", async () => {
+    const w = await world();
+    await w.prepare();
+    await w.db
+      .update(importSourceClaim)
+      .set({ checksum: "f".repeat(64), updatedAt: new Date() })
+      .where(eq(importSourceClaim.id, w.association.sourceClaimId));
+    const claims = await w.db.select().from(importSourceClaim);
+    const before = await w.snapshot();
+    expect((await w.commit()).alreadyApplied).toBe(false);
+    expect((await w.snapshot()).expenses[0]).toMatchObject({
+      id: w.item.id,
+      productId: w.photographed.entityId,
+    });
+    expect((await w.snapshot()).payments).toEqual(before.payments);
+    expect(await w.db.select().from(importSourceClaim)).toEqual(claims);
+  });
+
   // A combined refusal hid whether exact item matching or another accepted
-  // source blocked a repair; both must remain safe and identify their cause.
-  it.each(["item mismatch", "competing source"] as const)(
-    "explains accepted new Product repair refusal for %s without writes",
-    async (cause) => {
+  // source blocked a repair. A blanket count of other sources also refused
+  // corroborating lifecycle mail; only an actual competing binding or a
+  // contradicting known extraction blocks, and each names its cause.
+  it.each([
+    { cause: "item mismatch", refusal: /exact matching item Expenses: 0/i },
+    {
+      cause: "competing Product binding",
+      refusal: /competing accepted source bindings: 1/i,
+    },
+    {
+      cause: "unknown-history Product binding",
+      refusal: /competing accepted source bindings: 1/i,
+    },
+    {
+      cause: "contradicting order identity",
+      refusal: /contradicting accepted sources: 1/i,
+    },
+    {
+      cause: "contradicting item quantity",
+      refusal: /contradicting accepted sources: 1/i,
+    },
+  ] as const)(
+    "explains accepted new Product repair refusal for $cause without writes",
+    async ({ cause, refusal }) => {
       const w = await world();
+      const sameItem = {
+        title: "Synthetic household item",
+        amount: 40,
+        quantity: 2,
+        lineKind: "principal" as const,
+      };
       if (cause === "item mismatch")
         await w.db
           .update(expense)
           .set({ name: "Synthetic changed item" })
           .where(eq(expense.id, w.item.id));
-      else
-        await w.db.insert(importSourceOrder).values({
-          sourceClaimId: w.association.sourceClaimId,
-          orderKey: "synthetic:another-accepted-order",
-          checksum: w.association.checksum,
-          outputFingerprint: w.association.outputFingerprint,
-          purchaseId: w.association.purchaseId,
-          originalOrder: w.association.originalOrder,
-          acceptedObservationId: w.association.acceptedObservationId,
+      if (
+        cause === "competing Product binding" ||
+        cause === "unknown-history Product binding"
+      ) {
+        const other = await addAcceptedSibling(
+          w,
+          "competing-binding",
+          "c",
+          cause === "unknown-history Product binding"
+            ? null
+            : lifecycle(w, { lines: [sameItem] }),
+        );
+        await w.db.insert(importSourceProduct).values({
+          sourceOrderId: other.order.id,
+          lineIndex: 0,
+          productId: w.photographed.entityId,
         });
+      }
+      if (cause === "contradicting order identity")
+        await addAcceptedSibling(
+          w,
+          "other-order",
+          "c",
+          lifecycle(w, { orderId: "SYNTHETIC-OTHER-ORDER", lines: [] }),
+        );
+      if (cause === "contradicting item quantity")
+        await addAcceptedSibling(
+          w,
+          "more-items",
+          "c",
+          lifecycle(w, { lines: [{ ...sameItem, amount: 60, quantity: 3 }] }),
+        );
       const before = await w.snapshot();
       const products = await w.db.select().from(product);
       await expect(
@@ -1029,58 +1231,27 @@ describe("reviewed accepted source Product association", () => {
           ctx.db,
           {
             sourceOrderId: w.association.id,
-            resolution: {
-              kind: "attach_only",
-              lines: [
-                {
-                  lineIndex: 0,
-                  expenseId: parseShortcodeFor("expense", w.item.shortcode),
-                  productId: null,
-                  newProduct: { kind: "new" },
-                },
-              ],
-            },
+            resolution: w.newProductResolution,
           },
           ctx.actor,
         ),
-      ).rejects.toThrow(
-        cause === "item mismatch"
-          ? /exact matching item Expenses: 0/i
-          : /other accepted source orders: 1/i,
-      );
+      ).rejects.toThrow(refusal);
+      await expect(w.commit(w.newProductResolution)).rejects.toThrow(refusal);
       expect(await w.snapshot()).toEqual(before);
       expect(await w.db.select().from(product)).toEqual(products);
     },
   );
 
-  it.each([
-    "prepared identity drift",
-    "exact Product appears",
-    "unknown preparation",
-  ] as const)(
+  it.each(["exact Product appears", "unknown preparation"] as const)(
     "refuses accepted new Product repair after %s without partial Products or binding writes",
     async (change) => {
       const w = await world();
-      const resolution = {
-        kind: "attach_only" as const,
-        lines: [
-          {
-            lineIndex: 0,
-            expenseId: parseShortcodeFor("expense", w.item.shortcode),
-            productId: null,
-            newProduct: { kind: "new" as const },
-          },
-        ],
-      };
-      const review = await prepareSourceOrderReconciliation(
+      // An earlier preview is inspection only; commit re-reads current state.
+      await prepareSourceOrderReconciliation(
         ctx.db,
-        { sourceOrderId: w.association.id, resolution },
+        { sourceOrderId: w.association.id, resolution: w.newProductResolution },
         ctx.actor,
       );
-      if (change === "prepared identity drift")
-        await w.db
-          .update(importPreparedLine)
-          .set({ identifiers: { sku: "synthetic-changed-identity" } });
       if (change === "unknown preparation")
         await w.db.delete(importPreparedLine);
       if (change === "exact Product appears")
@@ -1091,13 +1262,9 @@ describe("reviewed accepted source Product association", () => {
         );
       const before = await w.snapshot();
       const products = await w.db.select().from(product);
-      await expect(
-        commitAcceptedSourceOrderReconciliation(
-          ctx.db,
-          { sourceOrderId: w.association.id, review },
-          ctx.actor,
-        ),
-      ).rejects.toThrow(/changed|prepar|exact|match|identity/i);
+      await expect(w.commit(w.newProductResolution)).rejects.toThrow(
+        /changed|prepar|exact|match|identity/i,
+      );
       expect(await w.snapshot()).toEqual(before);
       expect(await w.db.select().from(product)).toEqual(products);
     },
@@ -1153,55 +1320,50 @@ describe("reviewed accepted source Product association", () => {
     },
   );
 
-  it.each([
-    "cost",
-    "quantity",
-    "product",
-    "ownership",
-    "accepted observation",
-  ] as const)("rejects stale %s before any association", async (change) => {
-    const w = await world(change === "quantity");
-    const review = await w.prepare();
-    if (change === "cost")
-      await w.db
-        .update(expense)
-        .set({ cost: 41 })
-        .where(eq(expense.id, w.item.id));
-    if (change === "quantity")
-      await w.db
-        .update(expense)
-        .set({ productQuantity: 3 })
-        .where(eq(expense.id, w.item.id));
-    if (change === "product")
-      await w.db
-        .update(expense)
-        .set({ productId: w.photographed.entityId, productQuantity: 2 })
-        .where(eq(expense.id, w.item.id));
-    if (change === "ownership") {
-      const other = await insertWithShortcode(ctx.db, "ledgerParty", {
-        name: "Synthetic other owner",
-        kind: "guest",
-      });
-      await w.db
-        .update(importSourceClaim)
-        .set({ ledgerPartyId: other.id })
-        .where(eq(importSourceClaim.id, w.association.sourceClaimId));
-    }
-    if (change === "accepted observation")
-      await w.db
-        .update(importSourceOrder)
-        .set({ acceptedObservationId: null })
-        .where(eq(importSourceOrder.id, w.association.id));
-    const before = await w.snapshot();
-    await expect(
-      commitAcceptedSourceOrderReconciliation(
-        ctx.db,
-        { sourceOrderId: w.association.id, review },
-        ctx.actor,
-      ),
-    ).rejects.toThrow(/changed|review|owner|member|immutable/i);
-    expect(await w.snapshot()).toEqual(before);
-  });
+  // Without a caller token, commit itself refuses the current invalid item.
+  it.each(["cost", "quantity", "different Product", "ownership"] as const)(
+    "refuses a current %s mismatch after a preview before any association",
+    async (change) => {
+      const w = await world(change === "quantity");
+      await w.prepare();
+      if (change === "cost")
+        await w.db
+          .update(expense)
+          .set({ cost: 41 })
+          .where(eq(expense.id, w.item.id));
+      if (change === "quantity")
+        await w.db
+          .update(expense)
+          .set({ productQuantity: 3 })
+          .where(eq(expense.id, w.item.id));
+      if (change === "different Product") {
+        const other = await createProductFixture(
+          ctx.db,
+          makeProductInput({ name: "Synthetic other bound item" }),
+          ctx.actor,
+        );
+        await w.db
+          .update(expense)
+          .set({ productId: other.entityId, productQuantity: 2 })
+          .where(eq(expense.id, w.item.id));
+      }
+      if (change === "ownership") {
+        const other = await insertWithShortcode(ctx.db, "ledgerParty", {
+          name: "Synthetic other owner",
+          kind: "guest",
+        });
+        await w.db
+          .update(importSourceClaim)
+          .set({ ledgerPartyId: other.id })
+          .where(eq(importSourceClaim.id, w.association.sourceClaimId));
+      }
+      const before = await w.snapshot();
+      await expect(w.commit()).rejects.toThrow(
+        /preserve|owner|member|not found/i,
+      );
+      expect(await w.snapshot()).toEqual(before);
+    },
+  );
 
   it("refuses an existing quantity disagreement instead of stamping an association", async () => {
     const w = await world(true);

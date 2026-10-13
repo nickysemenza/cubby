@@ -795,12 +795,12 @@ export const MCP_TOOLS = defineMcpTools({
       prepare_reconciliation: mcpAction({
         op: purchaseImportContract.ops.prepareReconciliation,
         description:
-          "Persist a reviewed source-order preview with line bindings, Expenses, party cents, payments, allocations and spend delta. A known accepted original may request line.newProduct {kind:'new'} from its exact retained preparation; the returned preparedFingerprint freezes that identity review. Changes no ledger or stock. Apply the finding with reviewedFingerprint or commit the full accepted-source review; changed state refuses.",
+          "Persist a reviewed source-order preview with line bindings, Expenses, party cents, payments, allocations and spend delta. Changes no ledger or stock. Apply a finding with its reviewedFingerprint; changed state refuses. With sourceOrderId it is an optional read-only preview of commit_accepted_reconciliation.",
       }),
       commit_accepted_reconciliation: mcpAction({
         op: purchaseImportContract.ops.commitAcceptedReconciliation,
         description:
-          "Commit the full accepted-source preview as review with sourceOrderId. Binds existing item Expenses to existing Products, or reviewed line.newProduct choices from exact retained preparation with host-filled preparedFingerprint. Rechecks ownership, source, identity, money, party cents and allocations; drift refuses. Creates no Expense or Inventory.",
+          "Product-only repair of a known accepted original: sourceOrderId plus attach_only lines. Each line binds an existing exact item Expense to productId, or productId null with newProduct {kind:'new'} from the exact retained preparation. Reads and validates current ownership, item, identity and source claims in one transaction; an unchanged repeat returns alreadyApplied. Changes no money, payments, Expense or Inventory.",
       }),
       prepare: mcpAction({
         op: purchaseImportContract.ops.prepare,

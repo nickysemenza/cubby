@@ -219,14 +219,17 @@ same outcome without prescribing an agent runtime.
    source-order reconciliation review. `imports_read.mail.acceptedSourceOrders`
    supplies accepted order handles and exact source identities; lifecycle-only
    Purchase links do not supply a repair handle. A known accepted original with missing
-   Product bindings uses `purchase_import.prepare_reconciliation` and
-   `commit_accepted_reconciliation`. Each reviewed line names an existing
+   Product bindings uses `purchase_import.commit_accepted_reconciliation`
+   with its `sourceOrderId` and deliberate attach-only line resolution.
+   An optional `prepare_reconciliation` preview helps inspect the current
+   records; no preview token is required for this Product-only write. Each line names an existing
    `productId`, or sets `productId: null` and deliberate `newProduct: {kind:
    "new"}`. New creation requires the known immutable original and its exact
    original preparation, a unique unbound item Expense, and no competing source
-   ownership. Prepare returns the host's `newProduct.preparedFingerprint` for
-   its stored identity, identifiers and candidates; commit the complete returned
-   review unchanged. Creation rechecks exact identities and retains the source
+   ownership. The transaction reads and validates current Expense, preparation,
+   identity and claim state before binding. Extra lifecycle and cash-back
+   source associations alone do not conflict or require individual clearance.
+   Actual conflicting bindings, claims or evidence still refuse. Creation retains the source
    line and reviewed current binding; the original snapshot stays immutable.
    Unknown historical observations or missing preparations require evidence
    review and cannot use this path. Re-importing an accepted original with

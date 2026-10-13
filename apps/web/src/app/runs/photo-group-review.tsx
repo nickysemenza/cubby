@@ -1787,7 +1787,10 @@ function ExpenseLinkReview({
             <Button
               disabled={link.isPending}
               onClick={() =>
-                link.mutate({ sourceOrderId: review.sourceOrderId, review })
+                link.mutate({
+                  sourceOrderId: review.sourceOrderId,
+                  resolution: review.resolution,
+                })
               }
             >
               Confirm reviewed link
