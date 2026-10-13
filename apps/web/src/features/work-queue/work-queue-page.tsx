@@ -390,7 +390,10 @@ function queueColumns(
         id: "reason",
         enableSorting: false,
         header: "Reason",
-        size: 320,
+        // Two gap chips side by side need this much room; the generic
+        // column floor squeezed them to one truncated chip and "+N".
+        size: 400,
+        minSize: 260,
         meta: attachCubbyColumnMeta<QueueTableRow>({
           mobile: { slot: "subtitle", priority: 0, label: "Reason" },
           cellData: textCellData<QueueTableRow>("text", (row) => row.reason),
