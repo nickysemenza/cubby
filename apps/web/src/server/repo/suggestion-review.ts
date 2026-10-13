@@ -278,7 +278,7 @@ async function writeSuggestionValue(
   );
 }
 
-export async function applySuggestionValue(
+async function applySuggestionValue(
   db: Database,
   context: EntityKernelContext,
   row: Parameters<typeof writeSuggestionValue>[2],

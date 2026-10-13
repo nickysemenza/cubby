@@ -15,8 +15,7 @@ export const gatewayEgressInput = z.object({
     collectPayload: z.boolean().optional(),
   }),
 });
-export type GatewayEgressInput = z.infer<typeof gatewayEgressInput>;
-export const gatewayAdmission = z.discriminatedUnion("kind", [
+const gatewayAdmission = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("admitted"), token: z.uuid() }),
   z.object({ kind: z.literal("wait"), until: z.number() }),
 ]);

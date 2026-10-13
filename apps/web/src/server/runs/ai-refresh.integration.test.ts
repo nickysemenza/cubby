@@ -67,10 +67,10 @@ describe("targeted prompt refresh", () => {
         registry: {
           "product.categoryId": {
             ...spec,
-            roster: async (_db, basis) => {
-              if (basis.name === "Synthetic broken roster")
+            roster: async (...args: Parameters<typeof spec.roster>) => {
+              if (args[1].name === "Synthetic broken roster")
                 throw new Error("Synthetic roster failure");
-              return spec.roster();
+              return spec.roster(...args);
             },
           },
         },
