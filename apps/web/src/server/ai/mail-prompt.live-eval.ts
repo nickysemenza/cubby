@@ -36,6 +36,12 @@ const candidateRules = process.env.MAIL_PROMPT_CANDIDATE_RULES?.trim();
 
 const syntheticCases = [
   {
+    label: "unrelated",
+    subject: "Weekend dispatch: a shopping trip",
+    body: "Read this weekly column online. Last Sunday, we skipped our usual walk and drove to a hardware store. We bought a lamp, paid $45 at checkout, and carried it home. The cashier handed us a receipt. I remembered shopping trips with my parents and how they decorated our house. Next week I will share another story from our travels. Subscribe for more essays. Unsubscribe from this newsletter.",
+    html: "",
+  },
+  {
     label: "uncertain",
     body:
       "Explore our seasonal offers. ".repeat(2500) +
