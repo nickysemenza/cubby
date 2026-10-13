@@ -3,6 +3,7 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, closed]
   push:
     branches: [main]
   schedule:
@@ -12,7 +13,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  # A merged PR's github.ref becomes main; retain its pre-merge group so
+  # closure cancels the PR run without touching main's push run.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.ref }}-${{ github.event_name }}
   # PR updates supersede old results. Main must finish publishing reusable
   # caches. The default single pending slot retains only the newest waiting run.
   cancel-in-progress: ${{ github.event_name != 'push' }}
@@ -37,6 +40,8 @@ env:
 jobs:
   plan:
     name: Plan
+    # The closed event only enters concurrency to cancel the previous run.
+    if: github.event.action != 'closed'
     runs-on: ubuntu-slim
     timeout-minutes: 5
     outputs:
@@ -437,7 +442,7 @@ jobs:
         apple-host,
         apple-simulator,
       ]
-    if: always()
+    if: always() && github.event.action != 'closed'
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
