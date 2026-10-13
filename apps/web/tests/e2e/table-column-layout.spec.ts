@@ -246,7 +246,7 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
   // the sortable preview showed it (here: back in its own slot).
   await pointerDrag(
     page,
-    dragHandle("Evidence expectation"),
+    dragHandle("Itemization expectation"),
     row("itemizationExpectation"),
     row("notes"),
   );

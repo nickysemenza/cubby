@@ -266,6 +266,6 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
       ),
     );
   await expect(
-    row.getByRole("cell").nth(headerLabels.indexOf("Evidence expectation")),
+    row.getByRole("cell").nth(headerLabels.indexOf("Itemization expectation")),
   ).toContainText("Not expected");
 });

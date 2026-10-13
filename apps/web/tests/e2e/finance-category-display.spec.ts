@@ -131,7 +131,7 @@ test("linked Expense categories display their readable label and transaction exp
           "",
       ),
     );
-  const expectationIndex = headers.indexOf("Evidence expectation");
+  const expectationIndex = headers.indexOf("Itemization expectation");
   expect(expectationIndex).toBeGreaterThanOrEqual(0);
   await expect(row.getByRole("cell").nth(expectationIndex)).toContainText(
     "Not expected",
