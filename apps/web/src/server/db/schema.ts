@@ -853,6 +853,9 @@ export const aiUsage = pgTable(
       .default("succeeded"),
     gatewayLogId: text("gatewayLogId"),
     estimatedCost: real("estimatedCost"),
+    standardCost: doublePrecision("standardCost"),
+    chargedCost: doublePrecision("chargedCost"),
+    costEvidence: jsonb("costEvidence"),
     durationMs: integer("durationMs").notNull(),
     cacheStatus: text("cacheStatus").$type<"hit" | "miss" | "none">(),
     applicationCacheStatus: text("applicationCacheStatus").$type<
