@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import type { TaskFilters, TaskTimelineOut } from "@cubby/schemas/project";
 
 import type { Database } from "~/server/db";
@@ -9,6 +10,7 @@ import { taskList } from "./lookup";
 export async function getTaskTimeline(
   db: Database,
   filters: TaskFilters,
+  actor?: ActorContext,
 ): Promise<TaskTimelineOut> {
   const explicitlyUndated = filters.duePresenceFilter === "none";
   const dateWindowActive = Boolean(filters.dueFrom || filters.dueTo);
@@ -21,15 +23,24 @@ export async function getTaskTimeline(
           { ...filters, duePresenceFilter: "has" },
           [{ orderBy: "dueDate", direction: "asc" }],
           pagination,
+          "page",
+          actor,
         ),
       );
   const undatedPromise =
     filters.duePresenceFilter === "has" || dateWindowActive
       ? Promise.resolve({ data: [], count: 0 })
-      : taskList(db, { ...filters, duePresenceFilter: "none" }, [], {
-          pageIndex: 0,
-          pageSize: 1,
-        });
+      : taskList(
+          db,
+          { ...filters, duePresenceFilter: "none" },
+          [],
+          {
+            pageIndex: 0,
+            pageSize: 1,
+          },
+          "page",
+          actor,
+        );
 
   const [dated, undated] = await Promise.all([datedPromise, undatedPromise]);
   return { tasks: dated.data, undatedCount: undated.count };

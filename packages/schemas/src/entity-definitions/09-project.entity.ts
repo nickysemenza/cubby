@@ -2,7 +2,10 @@ import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
-import { projectShortcode } from "../identifier-fields.js";
+import {
+  ledgerPartyShortcode,
+  projectShortcode,
+} from "../identifier-fields.js";
 import { positiveMoneyNullable } from "@cubby/schemas/money";
 import {
   googleDriveFolderUrl,
@@ -138,6 +141,8 @@ export default defineEntity({
         ],
         derived: [
           "defaultTrade",
+          "assigneeId",
+          "assigneeName",
           "fieldResolutions",
           "rollup",
           "spent",
@@ -306,6 +311,72 @@ Rules:
           create: inheritanceModeSchema.optional(),
           update: inheritanceModeSchema.optional(),
         },
+      },
+      {
+        key: "assigneeId",
+        labelOverride: "Default assignee",
+        kind: "identifier",
+        nullable: true,
+        reference: {
+          entity: "ledgerParty",
+          filters: [{ field: "kind", values: ["member"] }],
+        },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: {
+          columnLabel: "Assignee",
+          list: true,
+          detail: true,
+          width: "md",
+          mobile: { slot: "meta", priority: 40, interactive: true },
+        },
+        resolution: {
+          reset: { assigneeMode: "inherit", assigneeId: null },
+          none: { assigneeMode: "explicit", assigneeId: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "project.effective-assignee",
+          description:
+            "An explicit default assignee or None wins; otherwise follow the parent project default.",
+          projections: {
+            list: "fieldResolutions.assigneeId.value",
+            detail: "fieldResolutions.assigneeId.value",
+            summary: "fieldResolutions.assigneeId.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.assigneeId.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.assigneeId.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.assigneeId.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
+        validation: {
+          read: ledgerPartyShortcode.nullable(),
+          create: ledgerPartyShortcode.nullable().optional(),
+          update: ledgerPartyShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "assigneeMode",
+        kind: "enum",
+        validation: {
+          read: null,
+          create: inheritanceModeSchema.optional(),
+          update: inheritanceModeSchema.optional(),
+        },
+      },
+      {
+        key: "assigneeName",
+        kind: "text",
+        validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
         key: "defaultTrade",
@@ -653,6 +724,12 @@ Rules:
         defaultValue: "'inherit'",
         specialized: "enum:locationsMode",
       },
+      { key: "assigneeId", reference: "ledgerParty" },
+      {
+        key: "assigneeMode",
+        defaultValue: "'inherit'",
+        specialized: "enum:assigneeMode",
+      },
       { key: "defaultTrade", specialized: "enum:defaultTrade" },
       { key: "costEstimate", specialized: "double-precision" },
       { key: "parentProjectId", reference: "project" },
@@ -670,6 +747,8 @@ Rules:
       "kind",
       "locations",
       "locationsMode",
+      "assigneeId",
+      "assigneeMode",
       "defaultTrade",
       "costEstimate",
       "parentProjectId",
@@ -686,6 +765,8 @@ Rules:
       "kind",
       "locations",
       "locationsMode",
+      "assigneeId",
+      "assigneeMode",
       "defaultTrade",
       "costEstimate",
       "parentProjectId",
@@ -703,6 +784,8 @@ Rules:
       "kind",
       "locations",
       "locationsMode",
+      "assigneeId",
+      "assigneeMode",
       "defaultTrade",
       "costEstimate",
       "parentProjectId",
@@ -714,6 +797,7 @@ Rules:
     ],
     sort: {
       fields: [
+        "assigneeId",
         "name",
         "status",
         "kind",
@@ -722,6 +806,7 @@ Rules:
         "createdAt",
         "updatedAt",
       ],
+      computed: ["assigneeId"],
     },
     intents: {
       fields: {
@@ -734,6 +819,8 @@ Rules:
           "parentProjectId",
           "locations",
           "locationsMode",
+          "assigneeId",
+          "assigneeMode",
           "defaultTrade",
           "startDate",
         ],
@@ -748,6 +835,8 @@ Rules:
           "costEstimate",
           "locations",
           "locationsMode",
+          "assigneeId",
+          "assigneeMode",
           "defaultTrade",
           "googleDriveFolderUrl",
           "notionPageUrl",
@@ -765,6 +854,8 @@ Rules:
     output: [
       "emoji",
       "fieldResolutions",
+      "assigneeId",
+      "assigneeName",
       "id",
       "name",
       "status",
@@ -809,6 +900,7 @@ Rules:
       },
     ],
     relations: {
+      assignee: "assigneeId",
       tasks: { many: "task" },
       expenses: { many: "expense" },
       images: { many: "entityAttachment" },
@@ -823,6 +915,17 @@ Rules:
     audit: true,
     schema: { module: "@cubby/schemas/project", export: "projectFilterFields" },
     descriptors: [
+      {
+        columnId: "assigneeId",
+        urlKey: "assignee",
+        field: "assigneeId",
+        kind: "idMulti",
+        placeholder: "Filter by assignee...",
+        optionsKey: "ledgerParty",
+        brandRef: { entity: "ledgerParty" },
+        nullable: { field: "assigneePresenceFilter", label: "assignee" },
+      },
+
       {
         columnId: "image",
         field: "imagePresenceFilter",

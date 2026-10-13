@@ -720,14 +720,22 @@ Rules:
         wire: { kind: "param", name: "lastBulkInventoryOlderThanDays" },
         placeholder: "Filter recounts...",
         options: [
-          { value: "30", label: "Not counted in 30 days" },
-          { value: "60", label: "Not counted in 60 days" },
-          { value: "90", label: "Not counted in 90 days" },
+          {
+            value: "30",
+            label: "Not counted in 30 days",
+            expand: { lastBulkInventoryOlderThanDays: 30 },
+          },
+          {
+            value: "60",
+            label: "Not counted in 60 days",
+            expand: { lastBulkInventoryOlderThanDays: 60 },
+          },
+          {
+            value: "90",
+            label: "Not counted in 90 days",
+            expand: { lastBulkInventoryOlderThanDays: 90 },
+          },
         ],
-        expandRef: {
-          module: "~/entity/filter-behavior",
-          export: "resolveRecountAge",
-        },
       },
       {
         columnId: "children",
@@ -801,16 +809,22 @@ Rules:
         },
         placeholder: "Filter inventory...",
         options: [
-          { value: "has", label: "Has items", meta: true },
-          { value: "none", label: "(none)", meta: true },
-          { value: "1", label: "1+ items" },
-          { value: "2", label: "2+ items" },
-          { value: "5", label: "5+ items" },
+          {
+            value: "has",
+            label: "Has items",
+            meta: true,
+            expand: { directItemCountMin: 1 },
+          },
+          {
+            value: "none",
+            label: "(none)",
+            meta: true,
+            expand: { directItemCountMax: 0 },
+          },
+          { value: "1", label: "1+ items", expand: { directItemCountMin: 1 } },
+          { value: "2", label: "2+ items", expand: { directItemCountMin: 2 } },
+          { value: "5", label: "5+ items", expand: { directItemCountMin: 5 } },
         ],
-        expandRef: {
-          module: "~/entity/filter-behavior",
-          export: "resolveLocationItems",
-        },
       },
       {
         columnId: "valuation",

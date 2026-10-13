@@ -1,6 +1,10 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
-import { type ProjectId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  type LedgerPartyId,
+  type ProjectId,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type {
   ProjectDateWindow,
   ProjectOut,
@@ -16,6 +20,8 @@ export type ProjectRow = {
   name: string;
   status: ProjectOut["status"];
   kind: ProjectOut["kind"];
+  assigneeId: LedgerPartyId | null;
+  assigneeMode: "inherit" | "explicit";
   locations: string[];
   locationsMode: "inherit" | "explicit";
   defaultTrade: ProjectOut["defaultTrade"];
@@ -38,12 +44,18 @@ const resolveInheritedProjectSettings = (
 ) => {
   let current: ProjectParentRow | ProjectRow | undefined = row;
   const seen = new Set<ProjectId>();
+  let assignee: ProjectParentRow | null = null;
+  let assigneeResolved = false;
   let locations: string[] | null = null;
   let defaultTrade: ProjectOut["defaultTrade"] = null;
   let locationsSource: string | null = null;
   let tradeSource: string | null = null;
   while (current && !seen.has(current.id)) {
     seen.add(current.id);
+    if (!assigneeResolved && current.assigneeMode === "explicit") {
+      assignee = byId.get(current.id) ?? null;
+      assigneeResolved = true;
+    }
     if (locations === null && current.locationsMode === "explicit") {
       locations = current.locations;
       locationsSource = current.shortcode;
@@ -57,6 +69,7 @@ const resolveInheritedProjectSettings = (
       : undefined;
   }
   return {
+    assignee,
     locations: locations ?? [],
     defaultTrade,
     locationsSource,
@@ -169,7 +182,13 @@ const dbProjectToAPI = <Q extends DataQuality | undefined>({
 }): Omit<ProjectOut, "dataQuality"> & { dataQuality: Q } => {
   const resolved = resolveInheritedProjectSettings(row, rowsById);
   const fallback = resolveInheritedProjectSettings(
-    { ...row, locationsMode: "inherit", defaultTrade: null },
+    {
+      ...row,
+      assigneeMode: "inherit",
+      assigneeId: null,
+      locationsMode: "inherit",
+      defaultTrade: null,
+    },
     rowsById,
   );
   const reference = (shortcode: string | null) =>
@@ -182,12 +201,45 @@ const dbProjectToAPI = <Q extends DataQuality | undefined>({
       : null;
   return {
     id: parseShortcodeFor("project", row.shortcode),
+    assigneeId: resolved.assignee?.assigneeShortcode
+      ? parseShortcodeFor("ledgerParty", resolved.assignee.assigneeShortcode)
+      : null,
+    assigneeName: resolved.assignee?.assigneeName ?? null,
     name: row.name,
     status: row.status,
     kind: row.kind,
     locations: resolved.locations,
     defaultTrade: resolved.defaultTrade,
     fieldResolutions: {
+      assigneeId: {
+        mode:
+          row.assigneeMode === "explicit"
+            ? row.assigneeId === null
+              ? "none"
+              : "explicit"
+            : "inherit",
+        storedValue:
+          row.assigneeMode === "explicit"
+            ? (rowsById.get(row.id)?.assigneeShortcode ?? null)
+            : null,
+        value: resolved.assignee?.assigneeShortcode ?? null,
+        fallbackValue: fallback.assignee?.assigneeShortcode ?? null,
+        source:
+          row.assigneeMode === "explicit"
+            ? "Project override"
+            : resolved.assignee
+              ? "Parent project"
+              : "Unassigned",
+        sourceEntity:
+          row.assigneeMode === "inherit"
+            ? reference(resolved.assignee?.shortcode ?? null)
+            : null,
+        matchesFallback:
+          row.assigneeMode === "explicit" &&
+          row.assigneeId !== null &&
+          row.assigneeId === fallback.assignee?.assigneeId,
+        canReset: row.assigneeMode === "explicit",
+      },
       locations: {
         mode:
           row.locationsMode === "explicit"

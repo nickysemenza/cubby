@@ -48,6 +48,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { bulkPatchEntities } from "~/server/repo/entity-patch";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
+import { resolveMemberAssignee } from "~/server/repo/ledger-party-reference";
 /**
  * Task CRUD operations.
  *
@@ -68,6 +69,7 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
+  effectiveTaskAssigneeSql,
   effectiveTaskProjectSql,
   effectiveTaskSubjectProductSql,
   effectiveTaskTradeSql,
@@ -263,10 +265,12 @@ async function assertEffectiveTaskTrade(
 const taskEffectiveValues = async (tx: DrizzleTransaction, id: TaskId) => {
   const result = await tx.execute<{
     projectId: ProjectId | null;
+    assigneeId: import("@cubby/schemas/identifiers").LedgerPartyId | null;
     subjectProductId: ProductId | null;
     trade: Trade | null;
   }>(sql`
     SELECT
+      ${effectiveTaskAssigneeSql()} AS "assigneeId",
       ${effectiveTaskProjectSql()} AS "projectId",
       ${effectiveTaskSubjectProductSql()} AS "subjectProductId",
       ${effectiveTaskTradeSql()} AS "trade"
@@ -406,6 +410,13 @@ export const createTask = async (
 
     const created = await insertWithShortcode(tx, "task", {
       name: data.name,
+      assigneeId:
+        data.assigneeMode === "inherit"
+          ? null
+          : ((await resolveMemberAssignee(tx, data.assigneeId)) ?? null),
+      assigneeMode:
+        data.assigneeMode ??
+        (data.assigneeId === undefined ? "inherit" : "explicit"),
       status: data.status,
       projectId,
       projectMode:
@@ -500,6 +511,15 @@ async function resolveTaskUpdateAssignments(
     data.subjectProductId == null
       ? data.subjectProductId
       : await resolveSubjectProductId(tx, data.subjectProductId);
+  const assignee = assignmentAfterParentChange(
+    data.assigneeMode === "inherit"
+      ? null
+      : await resolveMemberAssignee(tx, data.assigneeId),
+    data.assigneeMode,
+    before.assigneeMode,
+    previous?.assigneeId ?? null,
+    detaching,
+  );
   const project = assignmentAfterParentChange(
     projectId,
     data.projectMode,
@@ -519,6 +539,8 @@ async function resolveTaskUpdateAssignments(
     trade = previous?.trade ?? null;
   return {
     parentTaskId,
+    assigneeId: assignee.value,
+    assigneeMode: assignee.mode,
     projectId: project.value,
     projectMode: project.mode,
     subjectProductId: subject.value,
@@ -641,7 +663,14 @@ const resolveLiveTaskProjectId = (
 
 type TaskBulkPatch = Pick<
   TaskUpdateData,
-  "projectId" | "projectMode" | "status" | "trade" | "dueDate" | "dueEndDate"
+  | "assigneeId"
+  | "assigneeMode"
+  | "projectId"
+  | "projectMode"
+  | "status"
+  | "trade"
+  | "dueDate"
+  | "dueEndDate"
 >;
 
 export const updateTasksInBulk = (
@@ -663,6 +692,13 @@ export const updateTasksInBulk = (
       entity: "task",
       table: task,
       values: async (tx) => ({
+        assigneeId:
+          data.assigneeMode === "inherit"
+            ? null
+            : await resolveMemberAssignee(tx, data.assigneeId),
+        assigneeMode:
+          data.assigneeMode ??
+          (data.assigneeId === undefined ? undefined : "explicit"),
         projectId:
           data.projectMode === "inherit" || data.projectId === null
             ? null

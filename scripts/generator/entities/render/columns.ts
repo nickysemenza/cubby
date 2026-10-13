@@ -1,4 +1,5 @@
 import { compactLiteral } from "../../artifacts.ts";
+import { z } from "zod";
 import type {
   CompiledEntity,
   DeclarationValue,
@@ -55,11 +56,11 @@ const lookupGeneratedType = (
 ): string | undefined => values[key];
 
 const enumColumnExpression = (
-  entity: string,
+  entity: CompiledEntity,
   field: EntityStorageField,
 ): string | null => {
   const column = JSON.stringify(field.column);
-  const key = `${entity}.${field.key}`;
+  const key = `${entity.key}.${field.key}`;
   const expressions = {
     "expense.economicRole": `text(${column},{enum:["vendor", "reimbursement"]})`,
     "product.acquisitionOrigin": `text(${column},{enum:["unknown", "purchased", "gift", "previously_owned"]})`,
@@ -83,9 +84,6 @@ const enumColumnExpression = (
     "inventory.ownershipMode": `text(${column},{enum:inventoryOwnershipModeValues})`,
     "project.defaultTrade": `text(${column},{enum:tradeValues})`,
     "purchase.defaultTrade": `text(${column},{enum:tradeValues})`,
-    "project.locationsMode": `text(${column},{enum:["inherit","explicit"]})`,
-    "task.projectMode": `text(${column},{enum:["inherit","explicit"]})`,
-    "task.subjectProductMode": `text(${column},{enum:["inherit","explicit"]})`,
     "productCategory.feature": `text(${column},{enum:productCategoryFeatureValues})`,
     "image.source": `text(${column},{enum:["own", "catalog", "unknown", "screenshot"]})`,
     "image.captureAttribution": `text(${column},{enum:["none","derived","ambiguous","confirmed"]})`,
@@ -95,7 +93,22 @@ const enumColumnExpression = (
     "task.status": `text(${column},{enum:taskStatusValues})`,
     "task.trade": `text(${column},{enum:tradeValues})`,
   } as const satisfies Readonly<Record<string, string>>;
-  return lookupGeneratedType(expressions, key) ?? null;
+  const existing = lookupGeneratedType(expressions, key);
+  if (existing) return existing;
+  const validation = entity.fieldModel.fields.find(
+    ({ key }) => key === field.key,
+  )?.validation;
+  let schema = validation?.read ?? validation?.create ?? validation?.update;
+  while (
+    schema instanceof z.ZodOptional ||
+    schema instanceof z.ZodNullable ||
+    schema instanceof z.ZodDefault ||
+    schema instanceof z.ZodPrefault
+  )
+    schema = schema.unwrap();
+  return schema instanceof z.ZodEnum
+    ? `text(${column},{enum:${compactLiteral(schema.options)}})`
+    : null;
 };
 
 const literalDefaultExpression = (value: DeclarationValue): string => {
@@ -180,7 +193,7 @@ export const renderStorageColumn = (
     );
     if (jsonType !== undefined) expression += `.$type<${jsonType}>()`;
   } else {
-    expression = enumColumnExpression(entity.key, field) ?? `text(${column})`;
+    expression = enumColumnExpression(entity, field) ?? `text(${column})`;
     if (entity.key === "ledgerParty" && field.key === "kind")
       expression += ".$type<LedgerPartyKind>()";
   }

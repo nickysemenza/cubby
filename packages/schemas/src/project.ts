@@ -182,6 +182,8 @@ export type EmbeddedProjectScope = z.infer<typeof embeddedProjectScopeSchema>;
 
 export const projectFilterFields = {
   ...projectBaseFilterFields,
+  assigneeId: entityFilterList(ledgerPartyShortcode).optional(),
+  assigneePresenceFilter: presenceFilter,
   ...dateRangeFields("date"),
   completionYear,
   parentProjectPresenceFilter: presenceFilter,
@@ -310,6 +312,9 @@ export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 
 export const taskFilterFields = {
   ...taskBaseFilterFields,
+  assigneeId: entityFilterList(ledgerPartyShortcode).optional(),
+  assigneePresenceFilter: presenceFilter,
+  assignedToMe: z.boolean().optional(),
   projectId: entityFilterList(projectShortcode).optional(),
   subjectProductId: entityFilterList(productShortcode).optional(),
   topLevelOnly: z.boolean().optional(),

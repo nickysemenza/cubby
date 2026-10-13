@@ -112,6 +112,12 @@ public final class GenericEntityListModel {
 
     public var views: [ListView] { descriptor.presentation.listViews }
 
+    public var activeSavedView: SavedView? {
+        descriptor.presentation.savedViews.first { savedView in
+            filters == savedView.filterState && sort == savedView.sortParameter
+        }
+    }
+
     private let client: CubbyClient
     private let pageSize: Int
     private let progressive: Bool
@@ -245,6 +251,17 @@ public final class GenericEntityListModel {
     public func apply(filters newFilters: EntityFilterState) async {
         guard newFilters != filters else { return }
         filters = newFilters
+        await refreshQuery()
+    }
+
+    /// Apply filters and ordering together so a saved view never sends an intermediate scope.
+    public func apply(savedView: SavedView) async {
+        guard source == nil else { return }
+        let newFilters = savedView.filterState
+        let newSort = savedView.sortParameter
+        guard filters != newFilters || sort != newSort else { return }
+        filters = newFilters
+        sort = newSort
         await refreshQuery()
     }
 

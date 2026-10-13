@@ -2,6 +2,10 @@ import { assertManifestWire, renderManifestWire } from "./manifest-wire.ts";
 import type { ManifestWire } from "../../../../packages/schemas/src/manifest-wire.ts";
 import { capitalize } from "../../../../packages/shared/src/text-case.ts";
 import {
+  FILTER_ANY,
+  FILTER_NONE,
+} from "../../../../packages/schemas/src/filter-sentinel-fields.ts";
+import {
   entityFieldControlKinds,
   entityFieldKinds,
   FILTER_KINDS,
@@ -416,9 +420,73 @@ const listViewJSON = (
   }
 };
 
+/** Native saved views send the same wire patch as the browser, never column ids or sentinels. */
+const savedViewFilters = (
+  view: CompiledEntity["inspector"]["list"]["savedViews"][number],
+  descriptors: CompiledEntity["filterDescriptors"],
+) =>
+  view.filters.flatMap((filter) => {
+    const descriptor = descriptors.find(
+      ({ columnId }) => columnId === filter.id,
+    );
+    if (!descriptor)
+      throw new Error(`Saved view ${view.id} has no filter ${filter.id}.`);
+    const values = Array.isArray(filter.value)
+      ? [...filter.value]
+      : [filter.value];
+    const wireFilter = (id: string, values: string[], isList = false) => ({
+      id,
+      values,
+      isList,
+    });
+    if (descriptor.kind === "range") {
+      const value = values[0];
+      const expansion = descriptor.options?.find(
+        (option) => option.value === value,
+      )?.expand;
+      if (expansion)
+        return Object.entries(expansion).map(([id, value]) =>
+          wireFilter(id, [String(value)]),
+        );
+      const presence =
+        descriptor.wire.kind === "range"
+          ? descriptor.wire.presence
+          : descriptor.wire.name;
+      if (presence && (value === "has" || value === "none"))
+        return [wireFilter(presence, [value])];
+      throw new Error(
+        `Native saved view ${view.id} needs a declarative expansion for ${filter.id}:${value}.`,
+      );
+    }
+    if (descriptor.wire.kind !== "param")
+      throw new Error(
+        `Saved view ${view.id} has a non-parameter filter ${filter.id}.`,
+      );
+    const isList =
+      descriptor.kind === "multiselect" || descriptor.kind === "idMulti";
+    if (isList && descriptor.nullable) {
+      const none = values.includes(FILTER_NONE);
+      const any = values.includes(FILTER_ANY);
+      if (none && any) return [];
+      const selected = values.filter(
+        (value) => value !== FILTER_NONE && value !== FILTER_ANY,
+      );
+      return [
+        ...(selected.length
+          ? [wireFilter(descriptor.wire.name, selected, true)]
+          : []),
+        ...(none || any
+          ? [wireFilter(descriptor.nullable.field, [none ? "none" : "has"])]
+          : []),
+      ];
+    }
+    return [wireFilter(descriptor.wire.name, values, isList)];
+  });
+
 const presentationJSON = (
   entity: string,
   presentation: CompiledEntity["inspector"],
+  filterDescriptors: CompiledEntity["filterDescriptors"],
 ) => {
   const { detail, list, edit } = presentation;
   // SAFETY: entity is a compiled declaration key, and the exhaustive connected-view roster covers every declaration key.
@@ -471,13 +539,7 @@ const presentationJSON = (
       id: view.id,
       label: view.label,
       description: view.description,
-      filters: view.filters.map((filter) => ({
-        id: filter.id,
-        values: Array.isArray(filter.value)
-          ? [...filter.value]
-          : [filter.value],
-        isList: Array.isArray(filter.value),
-      })),
+      filters: savedViewFilters(view, filterDescriptors),
       sort: (view.sort ?? []).map(({ id, desc }) => ({ id, desc })),
       flow:
         view.flow === null
@@ -548,7 +610,11 @@ const entityJSON = (
       ),
       cardinality: relation.cardinality,
     })),
-    presentation: presentationJSON(entity.key, entity.inspector),
+    presentation: presentationJSON(
+      entity.key,
+      entity.inspector,
+      entity.filterDescriptors,
+    ),
   };
 };
 

@@ -31,6 +31,8 @@ import {
   meal,
   mealRecipe,
   mealRecipePortion,
+  project,
+  task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
@@ -111,6 +113,16 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     code: "block-accounts",
     effect: "block",
     description: "Live accounts retain their ledger party.",
+  },
+  "Task.assigneeId": {
+    code: "block-assigned-tasks",
+    effect: "block",
+    description: "Live task assignments retain their member.",
+  },
+  "Project.assigneeId": {
+    code: "block-project-defaults",
+    effect: "block",
+    description: "Live project assignee defaults retain their member.",
   },
   "InventoryEntry.ownerLedgerPartyId": {
     code: "block-inventory-owners",
@@ -215,6 +227,16 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     code: "repoint-accounts",
     effect: "repoint",
     description: "Accounts move to the surviving party.",
+  },
+  "Task.assigneeId": {
+    code: "repoint-assigned-tasks",
+    effect: "repoint",
+    description: "Task assignments move to the surviving member.",
+  },
+  "Project.assigneeId": {
+    code: "repoint-project-defaults",
+    effect: "repoint",
+    description: "Project assignee defaults move to the surviving member.",
   },
   "InventoryEntry.ownerLedgerPartyId": {
     code: "merge-inventory-owners",
@@ -336,6 +358,27 @@ const assertKindTransition = async (
       "CONSTRAINT_VIOLATION",
       "The singleton household ledger party cannot change kind.",
     );
+  }
+  if (
+    data.kind !== undefined &&
+    data.kind !== "member" &&
+    before.kind === "member"
+  ) {
+    const assignments = await unwrapDb(tx)
+      .select({ id: task.id })
+      .from(task)
+      .where(and(eq(task.assigneeId, id), notDeleted(task)))
+      .limit(1);
+    const defaults = await unwrapDb(tx)
+      .select({ id: project.id })
+      .from(project)
+      .where(and(eq(project.assigneeId, id), notDeleted(project)))
+      .limit(1);
+    if (assignments.length || defaults.length)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A member assigned to live work cannot change kind.",
+      );
   }
   if (before.kind !== "guest" && data.kind === "guest") {
     const [mappedAccount] = await unwrapDb(tx)

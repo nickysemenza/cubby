@@ -768,6 +768,24 @@ be re-sequenced), and `display.columnId` keeps a stable column id when the
 field key differs — ids are saved layouts, filter bindings, sort ids and
 saved-view keys, so a rename is never free.
 
+Task and Project assignees use the identifier field’s member-scoped LedgerParty
+picker and `assigneeId` / `assigneeMode` inheritance contract. Reads expose
+effective `assigneeId`, `assigneeName`, and `fieldResolutions.assigneeId`;
+list filters and sorts use the same effective SQL as hydration. Explicit null
+means None and reset clears the stored override. Project’s field label is
+Default assignee; task’s is Assignee. The static My tasks saved view combines
+open status with actor-aware boolean `assignedToMe` (decoded by the generic
+HTTP query path); Unassigned uses the assignee
+presence filter. Both reuse the generic saved-view and resolution-badge paths.
+
+Native saved views compile column filters to HTTP query parameters, expanding
+nullable sentinels into presence filters and static range presets into their
+declared patches. A saved range preset must have a declarative expansion;
+generation refuses an unsupported expansion rather than dropping its scope.
+Applying a native saved view replaces filters and sort in one refresh. Storage
+enum fields without a registered column expression derive their values from
+the field's Zod read/create/update schema, including inheritance modes.
+
 Three generic display rules follow from declarations rather than code. A
 select option's `description` is shown as the tooltip of its pill wherever
 the value renders. A `number` field whose provenance is `derived` from one

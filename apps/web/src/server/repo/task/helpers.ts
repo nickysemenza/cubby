@@ -1,5 +1,6 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type {
+  LedgerPartyId,
   ProductId,
   ProjectId,
   TaskId,
@@ -34,6 +35,8 @@ type TaskRow<T extends TaskOut["trade"] | null = TaskOut["trade"]> = {
   shortcode: string;
   name: string;
   status: TaskOut["status"];
+  assigneeId: LedgerPartyId | null;
+  assignee?: { name: string; shortcode: string; deletedAt: Date | null } | null;
   projectId: ProjectId | null;
   subjectProductId: ProductId | null;
   parentTaskId: TaskId | null;
@@ -70,6 +73,11 @@ export const dbTaskToAPI = <
   dataQuality: Q,
 ): Omit<TaskOut, "dataQuality" | "trade"> & { dataQuality: Q; trade: T } => ({
   id: parseShortcodeFor("task", row.shortcode),
+  assigneeId: brandJoinShortcode(
+    "ledgerParty",
+    resolveLiveJoinShortcode(row.assignee ?? null),
+  ),
+  assigneeName: resolveLiveJoinName(row.assignee ?? null),
   name: row.name,
   status: row.status,
   // Resolved through the join rather than the raw FK column — the permanent

@@ -138,6 +138,8 @@ async function applyPreviewSuggestions(args: {
       "projectMode",
       "subjectProductId",
       "subjectProductMode",
+      "assigneeId",
+      "assigneeMode",
       "trade",
     ]) {
       dependencyKeys.add(key);
@@ -222,6 +224,8 @@ const inheritanceDraftSchema = z.looseObject({
   projectMode: z.string().optional(),
   subjectProductId: z.string().nullable().optional(),
   subjectProductMode: z.string().optional(),
+  assigneeId: z.string().nullable().optional(),
+  assigneeMode: z.enum(["inherit", "explicit"]).optional(),
   parentTaskId: z.string().nullable().optional(),
   productId: z.string().nullable().optional(),
   purchaseId: z.string().nullable().optional(),

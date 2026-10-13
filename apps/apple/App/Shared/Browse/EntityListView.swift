@@ -228,6 +228,11 @@ struct EntityListView: View {
                 }
             }
         #else
+            if let model, !descriptor.presentation.savedViews.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    savedViewsMenu(model)
+                }
+            }
             if let model, presentationChoices.count > 1 {
                 ToolbarItem(placement: .primaryAction) {
                     presentationPicker(model)
@@ -260,11 +265,14 @@ struct EntityListView: View {
 
     private var hasControls: Bool {
         (model != nil && presentationChoices.count > 1) || !descriptor.filters.isEmpty
-            || descriptor.primarySearch != nil
+            || descriptor.primarySearch != nil || !descriptor.presentation.savedViews.isEmpty
     }
 
     @ViewBuilder
     private var controlsMenu: some View {
+        if let model, !descriptor.presentation.savedViews.isEmpty {
+            savedViewsMenu(model)
+        }
         if descriptor.primarySearch != nil {
             Button("Search", systemImage: "magnifyingglass") { searchPresented = true }
             if !searchText.isEmpty {
@@ -291,6 +299,24 @@ struct EntityListView: View {
             }
             .accessibilityIdentifier("browse.\(key.rawValue).filter")
         }
+    }
+
+    private func savedViewsMenu(_ model: GenericEntityListModel) -> some View {
+        Menu("Saved views", systemImage: "line.3.horizontal.decrease.circle") {
+            ForEach(descriptor.presentation.savedViews) { savedView in
+                Button {
+                    Task { await model.apply(savedView: savedView) }
+                } label: {
+                    if model.activeSavedView?.id == savedView.id {
+                        Label(savedView.label, systemImage: "checkmark")
+                    } else {
+                        Text(savedView.label)
+                    }
+                }
+                .accessibilityIdentifier("browse.\(key.rawValue).saved-view.\(savedView.id)")
+            }
+        }
+        .accessibilityIdentifier("browse.\(key.rawValue).saved-views")
     }
 
     private func clearSearch() {

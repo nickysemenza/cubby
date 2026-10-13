@@ -17,19 +17,19 @@
  * files, and `projectDashboardSummary` ran it twice per request because
  * `computeAttentionItems` re-derived the same thing independently).
  */
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import type { LedgerPartyId, ProjectId } from "@cubby/schemas/identifiers";
 import type { ProjectOut } from "@cubby/schemas/project";
 import {
   MAX_PROJECT_TREE_DEPTH,
   type ProjectDateWindow,
   type ProjectStatus,
 } from "@cubby/schemas/project";
-import { asc } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { project } from "~/server/db/schema";
+import { ledgerParty, project } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 import {
@@ -64,6 +64,10 @@ export type ProjectParentRow = {
   status: ProjectStatus;
   /** Completion-year fallback when the folded effective end is null. */
   updatedAt: Date;
+  assigneeId: LedgerPartyId | null;
+  assigneeMode: "inherit" | "explicit";
+  assigneeShortcode: string | null;
+  assigneeName: string | null;
   locations: string[];
   locationsMode: "inherit" | "explicit";
   defaultTrade: ProjectOut["defaultTrade"];
@@ -85,11 +89,23 @@ async function allProjectParentRows(db: Database): Promise<ProjectParentRow[]> {
       endDate: project.endDate,
       status: project.status,
       updatedAt: project.updatedAt,
+      assigneeId: project.assigneeId,
+      assigneeMode: project.assigneeMode,
+      assigneeShortcode: ledgerParty.shortcode,
+      assigneeName: ledgerParty.name,
       locations: project.locations,
       locationsMode: project.locationsMode,
       defaultTrade: project.defaultTrade,
     })
     .from(project)
+    .leftJoin(
+      ledgerParty,
+      and(
+        eq(ledgerParty.id, project.assigneeId),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
+      ),
+    )
     .where(notDeleted(project))
     .orderBy(asc(project.name));
 }

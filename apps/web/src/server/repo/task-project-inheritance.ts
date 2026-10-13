@@ -1,8 +1,14 @@
+import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import type {
   FieldResolution,
   FieldResolutions,
 } from "@cubby/schemas/field-resolution";
-import type { ProductId, ProjectId, TaskId } from "@cubby/schemas/identifiers";
+import type {
+  LedgerPartyId,
+  ProductId,
+  ProjectId,
+  TaskId,
+} from "@cubby/schemas/identifiers";
 import type { TaskCreateInput } from "@cubby/schemas/project";
 import { tradeSchema, type Trade } from "@cubby/schemas/task-fields";
 /**
@@ -16,9 +22,11 @@ import { tradeSchema, type Trade } from "@cubby/schemas/task-fields";
 import { type SQL, and, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { product, project, task } from "~/server/db/schema";
+import { ledgerParty, product, project, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+
+const assignmentMode = fieldResolutionSchema.shape.mode.enum;
 
 const taskColumn = (alias: string, column: string) =>
   sql.raw(`"${alias}"."${column}"`);
@@ -65,11 +73,58 @@ export const effectiveProjectLocationsSql = (
     )
     SELECT "locations"
     FROM project_ancestors
-    WHERE "locationsMode" = 'explicit'
+    WHERE "locationsMode" = ${assignmentMode.explicit}
     ORDER BY depth
     LIMIT 1
   ), '{}'::text[])
 `;
+
+/** Nearest explicit live project default, including an explicit None. */
+const projectAssigneeResolutionSql = (
+  projectId: SQL,
+  field: "id" | "assigneeId",
+) => sql`(
+  WITH RECURSIVE ancestors AS (
+    SELECT p."id", p."parentProjectId", p."assigneeId", p."assigneeMode", 0 AS depth
+    FROM "Project" p WHERE p."id" = ${projectId} AND p."deletedAt" IS NULL
+    UNION ALL
+    SELECT p."id", p."parentProjectId", p."assigneeId", p."assigneeMode", ancestors.depth + 1
+    FROM "Project" p JOIN ancestors ON p."id" = ancestors."parentProjectId"
+    WHERE p."deletedAt" IS NULL AND ancestors.depth < 100
+  ) SELECT ${sql.identifier(field)} FROM ancestors WHERE "assigneeMode" = ${assignmentMode.explicit} ORDER BY depth LIMIT 1
+)`;
+export const effectiveProjectAssigneeSql = (
+  projectId: SQL,
+): SQL<LedgerPartyId | null> =>
+  projectAssigneeResolutionSql(projectId, "assigneeId");
+const projectAssigneeSourceSql = (projectId: SQL): SQL<ProjectId | null> =>
+  projectAssigneeResolutionSql(projectId, "id");
+
+const parentTaskAssigneeSql = (
+  alias: string,
+): SQL<LedgerPartyId | null> => sql`(
+  SELECT CASE WHEN parent."assigneeMode" = ${assignmentMode.explicit} THEN parent."assigneeId"
+    ELSE ${effectiveProjectAssigneeSql(effectiveTaskProjectSql("parent"))} END
+  FROM "Task" parent WHERE parent."id" = ${taskColumn(alias, "parentTaskId")} AND parent."deletedAt" IS NULL
+)`;
+const parentTaskAssigneeIsNoneSql = (alias: string) => sql`EXISTS (
+  SELECT 1 FROM "Task" parent WHERE parent."id" = ${taskColumn(alias, "parentTaskId")}
+    AND parent."deletedAt" IS NULL AND (
+      (parent."assigneeMode" = ${assignmentMode.explicit} AND parent."assigneeId" IS NULL)
+      OR (parent."assigneeMode" = ${assignmentMode.inherit} AND ${projectAssigneeSourceSql(effectiveTaskProjectSql("parent"))} IS NOT NULL
+        AND ${effectiveProjectAssigneeSql(effectiveTaskProjectSql("parent"))} IS NULL)
+    )
+)`;
+const fallbackTaskAssigneeSql = (
+  alias: string,
+): SQL<LedgerPartyId | null> => sql`CASE
+  WHEN ${parentTaskAssigneeIsNoneSql(alias)} THEN NULL
+  ELSE coalesce(${parentTaskAssigneeSql(alias)}, ${effectiveProjectAssigneeSql(effectiveTaskProjectSql(alias))}) END`;
+export const effectiveTaskAssigneeSql = (
+  alias = "Task",
+): SQL<LedgerPartyId | null> => sql`CASE
+  WHEN ${taskColumn(alias, "assigneeMode")} = ${assignmentMode.explicit} THEN ${taskColumn(alias, "assigneeId")}
+  ELSE ${fallbackTaskAssigneeSql(alias)} END`;
 
 /** Effective task project: an explicit value (including NULL) or live parent. */
 export const effectiveTaskProjectSql = (
@@ -79,9 +134,9 @@ export const effectiveTaskProjectSql = (
   const value = taskColumn(alias, "projectId");
   const parentId = taskColumn(alias, "parentTaskId");
   return sql`
-    CASE WHEN ${mode} = 'explicit' OR ${value} IS NOT NULL THEN ${value}
+    CASE WHEN ${mode} = ${assignmentMode.explicit} OR ${value} IS NOT NULL THEN ${value}
     ELSE (
-      SELECT CASE WHEN parent."projectMode" = 'explicit' OR parent."projectId" IS NOT NULL THEN parent."projectId"
+      SELECT CASE WHEN parent."projectMode" = ${assignmentMode.explicit} OR parent."projectId" IS NOT NULL THEN parent."projectId"
         ELSE NULL END
       FROM "Task" parent
       WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL
@@ -97,9 +152,9 @@ export const effectiveTaskSubjectProductSql = (
   const value = taskColumn(alias, "subjectProductId");
   const parentId = taskColumn(alias, "parentTaskId");
   return sql`
-    CASE WHEN ${mode} = 'explicit' OR ${value} IS NOT NULL THEN ${value}
+    CASE WHEN ${mode} = ${assignmentMode.explicit} OR ${value} IS NOT NULL THEN ${value}
     ELSE (
-      SELECT CASE WHEN parent."subjectProductMode" = 'explicit' OR parent."subjectProductId" IS NOT NULL THEN parent."subjectProductId"
+      SELECT CASE WHEN parent."subjectProductMode" = ${assignmentMode.explicit} OR parent."subjectProductId" IS NOT NULL THEN parent."subjectProductId"
         ELSE NULL END
       FROM "Task" parent
       WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL
@@ -131,10 +186,13 @@ const taskInheritanceReadExtras = (alias = "Task") => ({
   effectiveProjectId: effectiveTaskProjectSql(alias),
   effectiveSubjectProductId: effectiveTaskSubjectProductSql(alias),
   effectiveTrade: effectiveTaskTradeSql(alias),
+  effectiveAssigneeId: effectiveTaskAssigneeSql(alias),
 });
 
 type AssignmentMode = "inherit" | "explicit";
 type TaskAssignment = {
+  assigneeId: LedgerPartyId | null;
+  assigneeMode: AssignmentMode;
   projectId: ProjectId | null;
   projectMode: AssignmentMode;
   subjectProductId: ProductId | null;
@@ -152,6 +210,12 @@ const taskResolutionExtras = (alias: string) => {
   const parentTrade = eligibleParentTaskTradeSql(alias);
   return {
     ...taskInheritanceReadExtras(alias),
+    assigneeSourceProjectId: projectAssigneeSourceSql(
+      effectiveTaskProjectSql(alias),
+    ),
+    fallbackAssigneeId: fallbackTaskAssigneeSql(alias),
+    parentAssigneeId: parentTaskAssigneeSql(alias),
+    parentAssigneeIsNone: parentTaskAssigneeIsNoneSql(alias),
     fallbackProjectId: parentProject,
     fallbackSubjectProductId: parentProduct,
     fallbackTrade: sql<Trade | null>`coalesce(${parentTrade}, ${effectiveProjectTradeSql(effectiveTaskProjectSql(alias))})`,
@@ -165,6 +229,11 @@ const taskResolutionExtras = (alias: string) => {
   };
 };
 type ResolvedAssignment = {
+  assigneeSourceProjectId: ProjectId | null;
+  effectiveAssigneeId: LedgerPartyId | null;
+  fallbackAssigneeId: LedgerPartyId | null;
+  parentAssigneeId: LedgerPartyId | null;
+  parentAssigneeIsNone: boolean;
   effectiveProjectId: ProjectId | null;
   effectiveSubjectProductId: ProductId | null;
   effectiveTrade: Trade | null;
@@ -185,9 +254,11 @@ async function assignmentReferences(
     ...new Set([
       ...rows.flatMap((row) => (row.projectId ? [row.projectId] : [])),
       ...extras.flatMap((row) =>
-        [row.effectiveProjectId, row.fallbackProjectId].filter(
-          (id): id is ProjectId => id !== null,
-        ),
+        [
+          row.effectiveProjectId,
+          row.fallbackProjectId,
+          row.assigneeSourceProjectId,
+        ].filter((id): id is ProjectId => id !== null),
       ),
     ]),
   ];
@@ -203,7 +274,17 @@ async function assignmentReferences(
       ),
     ]),
   ];
-  const [projects, products] = await Promise.all([
+  const assigneeIds = [
+    ...new Set([
+      ...rows.flatMap((row) => (row.assigneeId ? [row.assigneeId] : [])),
+      ...extras.flatMap((row) =>
+        [row.effectiveAssigneeId, row.fallbackAssigneeId].filter(
+          (id): id is LedgerPartyId => id !== null,
+        ),
+      ),
+    ]),
+  ];
+  const [projects, products, assignees] = await Promise.all([
     projectIds.length
       ? getDb(db).query.project.findMany({
           where: and(inArray(project.id, projectIds), notDeleted(project)),
@@ -216,8 +297,18 @@ async function assignmentReferences(
           columns: { id: true, shortcode: true, name: true, deletedAt: true },
         })
       : [],
+    assigneeIds.length
+      ? getDb(db).query.ledgerParty.findMany({
+          where: and(
+            inArray(ledgerParty.id, assigneeIds),
+            notDeleted(ledgerParty),
+          ),
+          columns: { id: true, shortcode: true, name: true, deletedAt: true },
+        })
+      : [],
   ]);
   return {
+    assignees: new Map(assignees.map((row) => [row.id, row])),
     projects: new Map(projects.map((row) => [row.id, row])),
     products: new Map(products.map((row) => [row.id, row])),
   };
@@ -295,7 +386,36 @@ function assignmentResolutions(
         name: extra.parentName,
       }
     : null;
+  const assigneeCode = (id: LedgerPartyId | null) =>
+    id ? (refs.assignees.get(id)?.shortcode ?? null) : null;
+  const assignee = referenceResolution(
+    row.assigneeMode === "explicit",
+    assigneeCode(row.assigneeId),
+    assigneeCode(extra.effectiveAssigneeId),
+    assigneeCode(extra.fallbackAssigneeId),
+    parent,
+  );
+  const fromParent =
+    extra.parentAssigneeId !== null || extra.parentAssigneeIsNone;
+  if (row.assigneeMode !== "explicit") {
+    assignee.source = fromParent
+      ? "Parent task"
+      : extra.assigneeSourceProjectId
+        ? "Project default"
+        : "Unassigned";
+    assignee.sourceEntity = fromParent
+      ? parent
+      : extra.assigneeSourceProjectId
+        ? {
+            entityKind: "project",
+            entityId: projectCode(extra.assigneeSourceProjectId)!,
+            name:
+              refs.projects.get(extra.assigneeSourceProjectId)?.name ?? null,
+          }
+        : null;
+  }
   return {
+    assigneeId: assignee,
     projectId: referenceResolution(
       row.projectMode === "explicit" || row.projectId !== null,
       projectCode(row.projectId),
@@ -348,6 +468,12 @@ export async function hydrateTaskInheritanceRows<
     if (row.parentTaskId || row.projectId) continue;
     extras.push({
       id: row.id,
+      assigneeSourceProjectId: null,
+      effectiveAssigneeId:
+        row.assigneeMode === "explicit" ? row.assigneeId : null,
+      fallbackAssigneeId: null,
+      parentAssigneeId: null,
+      parentAssigneeIsNone: false,
       effectiveProjectId: null,
       effectiveSubjectProductId: row.subjectProductId,
       effectiveTrade: row.trade,
@@ -367,6 +493,10 @@ export async function hydrateTaskInheritanceRows<
       throw new Error(`Live task ${row.id} absent from inheritance projection`);
     return {
       ...row,
+      assigneeId: extra.effectiveAssigneeId,
+      assignee: extra.effectiveAssigneeId
+        ? (refs.assignees.get(extra.effectiveAssigneeId) ?? null)
+        : null,
       projectId: extra.effectiveProjectId,
       subjectProductId: extra.effectiveSubjectProductId,
       trade: tradeSchema.parse(extra.effectiveTrade),
@@ -383,6 +513,8 @@ export async function hydrateTaskInheritanceRows<
 
 type TaskDraft = Pick<
   TaskCreateInput,
+  | "assigneeId"
+  | "assigneeMode"
   | "projectId"
   | "projectMode"
   | "subjectProductId"
@@ -397,6 +529,13 @@ export async function resolveDraftTaskFields(
   draft: TaskDraft,
 ): Promise<FieldResolutions> {
   const row: TaskAssignment = {
+    assigneeId:
+      draft.assigneeMode === "inherit" || !draft.assigneeId
+        ? null
+        : await resolveOrThrow(db, "ledgerParty", draft.assigneeId),
+    assigneeMode:
+      draft.assigneeMode ??
+      (draft.assigneeId === undefined ? "inherit" : "explicit"),
     projectId: draft.projectId
       ? await resolveOrThrow(db, "project", draft.projectId)
       : null,
@@ -421,7 +560,7 @@ export async function resolveDraftTaskFields(
     sql`, `,
   );
   const result = await getDb(db).execute<ResolvedAssignment>(sql`
-    WITH candidate AS (SELECT ${row.projectId}::uuid AS "projectId", ${row.projectMode}::text AS "projectMode",
+    WITH candidate AS (SELECT ${row.assigneeId}::uuid AS "assigneeId", ${row.assigneeMode}::text AS "assigneeMode", ${row.projectId}::uuid AS "projectId", ${row.projectMode}::text AS "projectMode",
       ${row.subjectProductId}::uuid AS "subjectProductId", ${row.subjectProductMode}::text AS "subjectProductMode",
       ${row.parentTaskId}::uuid AS "parentTaskId", ${row.trade}::text AS "trade")
     SELECT ${selection} FROM candidate

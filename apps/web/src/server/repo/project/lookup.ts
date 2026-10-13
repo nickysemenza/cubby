@@ -27,6 +27,7 @@ import {
   type ListReadIntent,
   notDeleted,
   presenceCondition,
+  uuidArrayParam,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
@@ -37,8 +38,12 @@ import {
   wantsListGroup,
   type ListProjection,
 } from "~/server/repo/list-projection";
-import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import {
+  resolveAllPresent,
+  resolveShortcodes,
+} from "~/server/repo/shortcode-resolver";
+import {
+  effectiveProjectAssigneeSql,
   effectiveProjectLocationsSql,
   effectiveTaskProjectSql,
 } from "~/server/repo/task-project-inheritance";
@@ -164,6 +169,29 @@ export const buildProjectListQuery = async (
         .map((item) => item.entityId)
     : undefined;
 
+  const assigneeIds = await resolveAllPresent(
+    db,
+    "ledgerParty",
+    filters.assigneeId ? [filters.assigneeId].flat() : [],
+  );
+  const effectiveAssignee = effectiveProjectAssigneeSql(
+    sql.raw('"Project"."id"'),
+  );
+  const assigneePresence =
+    filters.assigneePresenceFilter === "has"
+      ? sql`${effectiveAssignee} IS NOT NULL`
+      : filters.assigneePresenceFilter === "none"
+        ? sql`${effectiveAssignee} IS NULL`
+        : undefined;
+  const assigneeCondition =
+    filters.assigneeId && [filters.assigneeId].flat().length
+      ? or(
+          assigneeIds.length
+            ? sql`${effectiveAssignee} = ANY(${uuidArrayParam(assigneeIds)})`
+            : sql`false`,
+          assigneePresence,
+        )
+      : assigneePresence;
   const parentCodes = filters.parentProjectId
     ? [filters.parentProjectId].flat()
     : [];
@@ -256,6 +284,7 @@ export const buildProjectListQuery = async (
     completionIds ? inArray(project.id, completionIds) : undefined,
     filters.topLevelOnly ? isNull(project.parentProjectId) : undefined,
     parentCondition,
+    assigneeCondition,
     filters.location && [filters.location].flat().length > 0
       ? sql`${effectiveProjectLocationsSql(sql`${project.id}`)} && ARRAY[${sql.join(
           [filters.location].flat().map((location) => sql`${location}`),
@@ -293,7 +322,13 @@ export const buildProjectListQuery = async (
     sorts,
     {
       resolve: (s) =>
-        s.orderBy === "startDate" ? [effectiveStartSortSql(s.direction)] : null,
+        s.orderBy === "assigneeId"
+          ? [
+              sql`(SELECT member."name" FROM "LedgerParty" member WHERE member."id" = ${effectiveAssignee} AND member."deletedAt" IS NULL) ${sql.raw(s.direction === "asc" ? "asc" : "desc")} nulls last`,
+            ]
+          : s.orderBy === "startDate"
+            ? [effectiveStartSortSql(s.direction)]
+            : null,
     },
     filters,
   );

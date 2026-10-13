@@ -143,6 +143,10 @@ async function resolveSuggestionInheritance(
   for (const [field, resolution] of Object.entries(context)) {
     const stored = scalarBasisValue(resolution.storedValue);
     draft[field] = stored;
+    if (input.entity === "task" && field === "assigneeId") {
+      draft.assigneeMode =
+        resolution.mode === "inherit" ? "inherit" : "explicit";
+    }
     if (input.entity === "task" && field === "projectId") {
       draft.projectMode =
         resolution.mode === "inherit" ? "inherit" : "explicit";

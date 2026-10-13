@@ -80,8 +80,10 @@ export const taskHandlers = implementOperationDomain(taskContract, {
     ).data,
   summary: (context) => getTaskSummary(context.db),
   todayBriefing: (context) => getTaskTodayBriefing(context.db),
-  board: (context, input) => getTaskBoard(context.db, input),
-  timeline: (context, input) => getTaskTimeline(context.db, input),
+  board: (context, input) =>
+    getTaskBoard(context.db, input, context.actorContext),
+  timeline: (context, input) =>
+    getTaskTimeline(context.db, input, context.actorContext),
   bulkReorder: (context, input) =>
     taskBulkReorderWorkflow(context.db, input, context.actorContext),
 });
