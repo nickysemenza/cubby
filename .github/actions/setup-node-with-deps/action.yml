@@ -1,17 +1,13 @@
 name: "Setup Node.js with Dependencies"
-description: "Sets up Node.js with caching and installs dependencies"
+description: "Sets up Node.js and pnpm, installs dependencies, and optionally restores packages/wasm"
 inputs:
   wasm:
     description: >-
-      How to obtain packages/wasm. "restore" restores it from the shared cache
-      and builds it in-place on a miss (needs a compiler toolchain). "false"
-      skips it.
+      How to obtain packages/wasm. "restore" replays the Nx `wasm` target from
+      the shared Nx cache and builds it with the runner's Rust on a miss.
+      "false" skips it.
     required: false
     default: "false"
-  pnpm-store-cache:
-    description: Cache the pnpm store; disable when packing costs exceed installation time
-    required: false
-    default: "true"
   workspace-filter:
     description: "Optional space-separated pnpm workspace filters for a narrower install"
     required: false
@@ -54,72 +50,10 @@ runs:
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
       with:
         node-version-file: .nvmrc
-        cache: ${{ inputs.pnpm-store-cache == 'true' && 'pnpm' || '' }}
         package-manager-cache: false
 
-    # WASM is restored independently so consumers can start in parallel. See
-    # docs/ci.md for the measured producer-job and cache tradeoffs.
-    # This runs before `pnpm install`: build-wasm.sh needs only Rust and wasm-pack.
-    - name: Restore cached WASM pkg
-      if: inputs.wasm == 'restore'
-      id: wasm-cache
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-      with:
-        path: packages/wasm
-        # WASM/JS outputs are portable; retain the existing Linux cache namespace
-        # so native lanes reuse main's exact source revision without Rust compilation.
-        # Exact key only: a prefix hit would restore the wrong parser revision.
-        key: wasm-pkg-Linux-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/**', 'scripts/build-wasm.sh', 'packages/wasm/package.json', 'rust-toolchain.toml') }}
-
-    - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
-      if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
-      with:
-        cache: true
-        # Must match CARGO_TARGET_DIR on the build step below.
-        cache-workspaces: ". -> target"
-        # wasm32 and native artifacts must not share a cache bucket.
-        cache-key: wasm32
-
-    # Also needed on a restore: the Nx `wasm` target's runtime input
-    # (ensure-wasm.ts --fingerprint) runs `wasm-pack --version`.
-    - name: Install wasm-pack
-      if: inputs.wasm == 'restore'
-      uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
-      with:
-        tool: wasm-pack
-
-    - name: Build recipebridge WASM
-      if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
-      shell: bash
-
-      # pnpm 12 otherwise installs dependencies before running this script,
-      # breaking the WASM-before-install ordering above.
-      run: bash scripts/build-wasm.sh
-      env:
-        RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
-        # Match rust-cache's cache-workspaces above.
-        CARGO_TARGET_DIR: ${{ github.workspace }}/target
-
-    - name: Save WASM pkg to cache
-      if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
-      # Several jobs can miss and build concurrently; the first to finish wins
-      # the key and the rest get a harmless 409. Never fail a test job over it.
-      continue-on-error: true
-      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-      with:
-        path: packages/wasm
-        key: wasm-pkg-Linux-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/**', 'scripts/build-wasm.sh', 'packages/wasm/package.json', 'rust-toolchain.toml') }}
-
-    # packages/wasm now matches the exact recipebridge sources in the cache
-    # key (restored or just built), so the Nx `wasm` target need not rebuild
-    # it (project.json).
-    - name: Mark WASM pkg ready
-      if: inputs.wasm == 'restore'
-      shell: bash
-      run: echo "CUBBY_WASM_PKG_READY=1" >> "$GITHUB_ENV"
-
-    # Recreating links from the pnpm store is faster than restoring node_modules;
-    # measurements live in docs/ci.md.
+    # A cold registry install beats restoring and saving a store cache, which
+    # also evicts other entries from the 10 GB Actions cache (docs/ci.md).
     - name: Install dependencies
       env:
         WORKSPACE_FILTER: ${{ inputs.workspace-filter }}
@@ -135,3 +69,16 @@ runs:
           pnpm install --frozen-lockfile --prefer-offline
         fi
       shell: bash
+
+    # The Nx `wasm` target's key fingerprints the local crates and wasm-pack,
+    # so a pass from any runner or Mac in the shared Nx cache restores
+    # packages/wasm; a miss builds it here (scripts/build-wasm.sh).
+    - name: Install wasm-pack
+      if: inputs.wasm == 'restore'
+      uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
+      with:
+        tool: wasm-pack
+    - name: Restore or build packages/wasm
+      if: inputs.wasm == 'restore'
+      shell: bash
+      run: pnpm exec nx run cubby-checks:wasm --outputStyle=stream

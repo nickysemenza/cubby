@@ -380,11 +380,17 @@ action, a composite action that downloads the Lychee binary (no Docker).
 Paths written as inline code are informational; link a repository file when
 its existence should be checked.
 
-Apple jobs disable the pnpm-store cache through the shared action's existing
-input: a [host-job setup](https://github.com/nickysemenza/cubby/actions/runs/38310595561/job/115015310842)
-on 2026-10-12 spent about 65 seconds extracting a 710 MB store before a
-6.4-second install. The uncached-install comparison is pending; retain the
-compiler and SwiftPM caches separately.
+`setup-node-with-deps` installs from the registry with no pnpm store cache:
+on [PR #1945's first run](https://github.com/nickysemenza/cubby/actions/runs/38330171871)
+a cold install of 1,607 packages took 10.4 seconds, while saving a missed store
+cost 18–28 seconds per job, and an Apple host job on 2026-10-12 spent about 65
+seconds extracting a 710 MB store before a 6.4-second install. With
+`wasm: restore` it then replays the Nx `wasm` target from the shared Nx cache
+(R2, outside the 10 GB Actions cache) and builds it with the runner's Rust only
+on a miss. The same run rebuilt WASM in every job for about 3.5 minutes each
+because the Actions cache, at 10.9 GB, had evicted its `wasm-pkg` entry, while
+the Nx cache already held that build. Retain the compiler and SwiftPM caches
+separately.
 
 Generated output is never committed, except `.github/ci-lanes.yml`, which
 `Plan` reads before any install; web and Apple jobs generate it during
@@ -599,10 +605,9 @@ database contracts; it does not establish a five-minute full suite.
   depend on the Nx `build-cf` target, and concurrent shards on a new revision
   would all miss its cache at once anyway. A separate build job would add its
   own runner start and install ahead of every shard.
-- Caching `node_modules` was slower than installing from the warm pnpm store.
-  Saving the pnpm store from Playwright containers likewise cost more than the
-  filtered install. Retain exact-key caches for generated artifacts and Apple
-  dependencies where the measured build work exceeds restore cost.
+- Caching `node_modules` or the pnpm store cost more than a registry install.
+  Retain exact-key caches for Apple dependencies where the measured build work
+  exceeds restore cost.
 - Local full verification runs Nx targets sequentially because the individual
   test/build tiers are parallel internally. The parallel `run-many` trial took
   10:54 and failed under contention; the sequential trial took 6:49 and passed

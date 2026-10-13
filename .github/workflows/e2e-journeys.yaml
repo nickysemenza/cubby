@@ -93,7 +93,6 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-          pnpm-store-cache: "false"
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim
@@ -321,7 +320,6 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-          pnpm-store-cache: "false"
       - name: Restore verified action recordings
         if: inputs.pull-request != ''
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
