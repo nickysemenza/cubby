@@ -33,7 +33,9 @@ hero and Progress report to completed without manual refresh. The fixture is syn
 the runner reads the completed Run and committed proposal back and saves checksummed
 evidence through the usual QA artifact path. This guard also runs in the full QA lane.
 
-`pnpm test:e2e:sim -- --qa` seeds a synthetic household (`tooling/scenarios/native-qa.ts`) and replays
+`pnpm test:e2e:sim -- --qa` seeds the shared connected exploration household
+(`tooling/scenarios/corpus.ts`, also used by dev and browser screenshots), adds
+journey-specific fixtures (`tooling/scenarios/native-qa.ts`), and replays
 every `apps/apple/e2e/qa-*.ad` journey against it: hero Discard with a shelf choice, statement match
 save, Run approval, approving only the selected ready group of a photo Run, a structured
 unit-mapping edit, external-ID Source/Identifier keyboard entry with saved-value reopen,

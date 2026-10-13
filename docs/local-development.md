@@ -80,9 +80,29 @@ random filler does not decide whether work is failed, pending, or complete.
 
 ## Fixtures
 
-The core pack contains locations, taxonomy, products, inventory, finance,
-projects, tasks, purchases, expenses, and a photo-inventory run. Optional packs
-add small synthetic graphs to the running session:
+The default core pack is a connected synthetic household of a few hundred
+records, shared with browser screenshot exploration and the native QA lane.
+`tooling/scenarios/corpus.ts` owns curated pantry/recipes/meals, garden/seed
+products/plantings, maintenance/tools, wardrobe/photos, purchases/expenses/accounts,
+calendar work, email evidence, and pending/failed photo Runs. Faker adds list
+density; it never chooses the story relationships or activity states. Every
+persisted declared entity has records. Coverage is read back from the generated
+entity manifest and missing seed cases fail startup; USDA is reported separately
+because its synthetic release belongs to the Worker rather than PostgreSQL.
+
+The household includes stored shirt/boots/label photos, Inventory's related
+Product images, emoji/entity-icon fallbacks, an explicitly missing image attachment,
+long names and multiline facts. Writes use the entity kernel or the existing
+specialist repositories (cookbook provenance, meal food, image attachments, Runs).
+Email evidence uses the synthetic mail fixture shape without importing or dispatching
+providers. Inventory remains unchanged when meals are logged.
+
+Faker uses a fixed independent seed. Story chronology (projects, purchases,
+expenses, settlement, transfers, sowing work, plantings, journal entries, email,
+and meals) is anchored to the household-local day when the database is seeded; an explicit
+`referenceDate` makes artifact dates reproducible. Reseeding a completed pack is a
+no-op, so reset the ephemeral database to refresh its dates or version.
+Optional packs still add small focused graphs to the running session:
 
 ```sh
 pnpm dev seed recipes
@@ -102,7 +122,19 @@ table, `cubby_dev_fixture`, records the pack version and `seeding`, `complete`,
 or `failed` state. A completed current pack skips reseeding. Partial or outdated
 packs require `pnpm dev reset`, so a failed seed cannot silently duplicate its graph
 or report ready based on an unrelated Product count. This marker table is
-created by development tooling and has no production migration.
+created by development tooling and has no production migration. The shared
+household has its own `cubby_household_fixture` completion marker using the same
+`LOCAL_FIXTURE_VERSION` as the dev pack, with
+the same refusal of partial or outdated seeds. Dev databases are ephemeral;
+fixture upgrades use `pnpm dev reset` followed by `pnpm dev`.
+
+Browser screenshot/exploration specs opt in with the worker-scoped
+`test.use({ household: true })` from `tests/e2e/e2e-test.ts`; this gives them
+their own Worker/database and leaves focused regression specs on the small base
+world. `household-exploration.spec.ts` exercises the graph through the browser and
+attaches a synthetic wardrobe screenshot to the normal Playwright report.
+`pnpm test:e2e:sim -- --qa` loads this same household before its journey-specific
+fixtures. The focused `--qa-photo-completion` guard keeps its small fixture.
 
 ## Profiles and inspection
 
