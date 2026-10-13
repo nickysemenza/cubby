@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
  */
 function useAnchoredOverlayStyle(
   anchorEl: HTMLElement | null,
+  overlayRef: React.RefObject<HTMLDivElement | null>,
   opts?: { maxWidth?: number },
 ): React.CSSProperties | null {
   const maxWidth = opts?.maxWidth ?? 420;
@@ -26,21 +27,34 @@ function useAnchoredOverlayStyle(
       rect.width + 16,
       viewportWidth - viewportPadding * 2,
     );
+    const overlay = overlayRef.current?.getBoundingClientRect();
+    const width = Math.min(
+      overlay?.width ?? minWidth,
+      viewportWidth - viewportPadding * 2,
+    );
     const left = Math.min(
       Math.max(rect.left - 8, viewportPadding),
-      Math.max(viewportPadding, viewportWidth - minWidth - viewportPadding),
+      Math.max(viewportPadding, viewportWidth - width - viewportPadding),
     );
     setStyle({
       position: "fixed",
-      top: rect.top - 4,
+      top: Math.max(
+        viewportPadding,
+        Math.min(
+          rect.top - 4,
+          window.innerHeight - viewportPadding - (overlay?.height ?? 0),
+        ),
+      ),
+      maxHeight: window.innerHeight - viewportPadding * 2,
+      overflowY: "auto",
       left,
       minWidth,
-      maxWidth,
+      maxWidth: Math.min(maxWidth, viewportWidth - viewportPadding * 2),
       // Above the sticky table chrome, below the combobox dropdown (z-200)
       // so a picker's options always paint over the editor surface.
       zIndex: 100,
     });
-  }, [anchorEl, maxWidth]);
+  }, [anchorEl, maxWidth, overlayRef]);
 
   React.useEffect(() => {
     if (!anchorEl) {
@@ -55,6 +69,17 @@ function useAnchoredOverlayStyle(
       window.removeEventListener("scroll", update, true);
     };
   }, [anchorEl, update]);
+
+  const mounted = style !== null;
+  React.useLayoutEffect(() => {
+    const element = overlayRef.current;
+    if (!mounted || !element) return;
+    update();
+    if (!("ResizeObserver" in window)) return;
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [mounted, overlayRef, update]);
 
   return style;
 }
@@ -88,8 +113,8 @@ export function CellEditorOverlay({
   cancelOnOutside?: boolean;
   children: React.ReactNode;
 }) {
-  const style = useAnchoredOverlayStyle(anchorEl);
   const overlayRef = React.useRef<HTMLDivElement>(null);
+  const style = useAnchoredOverlayStyle(anchorEl, overlayRef);
 
   // Document-level Escape: focus can legitimately sit OUTSIDE the overlay
   // (the trigger keeps focus after the opening click), where the overlay's

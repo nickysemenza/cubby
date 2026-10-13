@@ -472,6 +472,8 @@ export default defineEntity({
       checks: [
         {
           id: "plant_crop",
+          satisfiedLabel: "Crop recorded",
+          placement: { field: "gardenGuideKey" },
           facet: "linkage",
           weight: 1,
           label: "Crop",

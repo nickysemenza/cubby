@@ -416,6 +416,8 @@ export default defineEntity({
       checks: [
         {
           id: "ledger_party_financial_account",
+          satisfiedLabel: "Financial account linked",
+          placement: { section: "financial-accounts" },
           facet: "linkage",
           weight: 1,
           label: "Financial account",

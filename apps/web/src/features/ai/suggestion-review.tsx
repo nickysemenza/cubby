@@ -11,7 +11,6 @@ import {
 } from "react";
 
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { useIsMobile } from "~/ui/hooks/useMobile";
 import { Description } from "~/ui/primitives/description";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";
@@ -239,8 +238,8 @@ export function SuggestionReview({
    * mark even when there's no actionable proposal (or none at all). */
   outcome?: FieldSuggestionOutcome | null;
   /** `"cell"` folds the whole body into the mark's popover so a dense table
-   * row stays 32px, as does `"inline"` on a phone; otherwise the body
-   * renders directly, on the value's own line. */
+   * row stays 32px. Inline values show the proposal and Accept, with
+   * evidence expanded only by an explicit Review disclosure. */
   surface?: SuggestionOutcomeSurface;
   autoFilled?: boolean;
   /** Whether the target is a `mode: "prune"` field — changes the mark's
@@ -259,7 +258,6 @@ export function SuggestionReview({
     pending,
     onDismiss,
   );
-  const isMobile = useIsMobile();
   const rowActive = useRowActive();
   const markCurrentLabel = stringLabelOf(currentLabel);
   // Cleared the bar or not is a fact about the proposal itself, independent
@@ -307,6 +305,7 @@ export function SuggestionReview({
   const runnerUp = suggestion.alternatives[0];
   const body = (
     <SuggestionBody
+      compact={surface === "inline"}
       current={
         !isRemove && currentValue?.trim()
           ? (children ?? currentLabel ?? currentValue)
@@ -347,10 +346,7 @@ export function SuggestionReview({
       onUseDifferent={onUseDifferent}
     />
   );
-  // Phones fold every inline review into the glyph too: an inline review
-  // arriving after load grew the page under the reader's finger (+96px), and
-  // neither engine's scroll anchoring held the tapped control in place.
-  if (surface === "cell" || (surface === "inline" && isMobile)) {
+  if (surface === "cell") {
     return (
       <MarkedValue
         surface={surface}

@@ -525,6 +525,8 @@ export default defineEntity({
       checks: [
         {
           id: "garden_entry_note",
+          satisfiedLabel: "Note recorded",
+          placement: { field: "notes" },
           facet: "content",
           weight: 1,
           label: "Note",
@@ -532,6 +534,8 @@ export default defineEntity({
         },
         {
           id: "garden_entry_harvest_amount",
+          satisfiedLabel: "Harvest amount recorded",
+          placement: { field: "harvestAmount" },
           facet: "content",
           weight: 1,
           label: "Harvest amount",

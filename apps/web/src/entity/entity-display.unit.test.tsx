@@ -281,6 +281,7 @@ describe("declared entity displays", () => {
     render(
       <EntityBasicInfo
         entity="ledgerParty"
+        fields={["name", "kind", "notes"]}
         record={{ name: "Guest fixture", kind: "guest", notes: null }}
         overrides={{
           kind: (record) => ({
@@ -925,4 +926,92 @@ describe("generic enum fields", () => {
     expect(suggestionTargets[0]).toContain('"basisMode":"provided"');
     harness.dispose();
   });
+});
+
+// An inherited nullable checkbox displays the resolved value without writing
+// it until the person changes it; clearing an override restores inheritance.
+it("edits the effective inherited checkbox and restores the nullable override", async () => {
+  const harness = createBrowserTestHarness();
+  const record = {
+    id: "PRD-4K7M",
+    stockTracked: null,
+    fieldResolutions: {
+      stockTracked: {
+        mode: "inherit",
+        storedValue: null,
+        value: true,
+        fallbackValue: true,
+        source: "category",
+        sourceEntity: null,
+        matchesFallback: true,
+        canReset: false,
+      },
+    },
+  };
+  const save = vi.fn(async () => undefined);
+  const overrides = editableFieldOverrides(
+    "product",
+    record,
+    ["stockTracked"],
+    save,
+  );
+  const view = render(<>{overrides.stockTracked!().value}</>, {
+    wrapper: harness.wrapper,
+  });
+  expect(screen.getByRole("checkbox")).toBeChecked();
+  fireEvent.click(screen.getByRole("checkbox"));
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith({
+      id: record.id,
+      data: { stockTracked: false },
+    }),
+  );
+  const explicit = {
+    ...record,
+    stockTracked: false,
+    fieldResolutions: {
+      stockTracked: {
+        ...record.fieldResolutions.stockTracked,
+        mode: "explicit",
+        storedValue: false,
+        value: false,
+        matchesFallback: false,
+        canReset: true,
+      },
+    },
+  };
+  const explicitOverrides = editableFieldOverrides(
+    "product",
+    explicit,
+    ["stockTracked"],
+    save,
+  );
+  view.rerender(<>{explicitOverrides.stockTracked!().value}</>);
+  fireEvent.click(screen.getByRole("button", { name: "Use inherited value" }));
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith({
+      id: record.id,
+      data: { stockTracked: null },
+    }),
+  );
+  const undecided = {
+    ...record,
+    fieldResolutions: {
+      stockTracked: {
+        ...record.fieldResolutions.stockTracked,
+        value: null,
+        fallbackValue: null,
+      },
+    },
+  };
+  const undecidedOverrides = editableFieldOverrides(
+    "product",
+    undecided,
+    ["stockTracked"],
+    save,
+  );
+  view.rerender(<>{undecidedOverrides.stockTracked!().value}</>);
+  expect(screen.getByRole("checkbox")).toHaveAttribute("aria-checked", "mixed");
+  expect(screen.getByText("Undecided")).toBeVisible();
+  harness.dispose();
 });

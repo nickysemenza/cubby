@@ -206,7 +206,7 @@ function renderInspector({
 }
 
 describe("EntityWorkbenchInspector", () => {
-  it("keeps the compact overview local until a real relationship or activity tab is selected", async () => {
+  it("keeps record fields mounted while relationships and activity open inline", async () => {
     seedVendorInspector();
     let closeCount = 0;
     renderInspector({ onClose: () => (closeCount += 1) });
@@ -219,20 +219,34 @@ describe("EntityWorkbenchInspector", () => {
         name: "Fixture vendor relationships",
       }),
     ).toBeVisible();
-    expect(screen.getByRole("tab", { name: "Relations" })).toBeVisible();
-    expect(screen.getByRole("tab", { name: "Activity" })).toBeVisible();
+    expect(
+      screen.getByText("Relations", { exact: true, selector: "summary" }),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Activity", { exact: true, selector: "summary" }),
+    ).toBeVisible();
     expect(screen.getByLabelText("Open full vendor details")).toHaveAttribute(
       "href",
       `/vendors/${VENDOR_ID}`,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
+    const recordFields = screen.getByText("Website", { exact: true });
+    fireEvent.click(
+      screen.getByText("Relations", { exact: true, selector: "summary" }),
+    );
     expect(await screen.findByText("Fixture purchase")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
+    fireEvent.click(
+      screen.getByText("Activity", { exact: true, selector: "summary" }),
+    );
     await waitFor(() => {
-      expect(screen.getByText("No activity yet")).toBeVisible();
+      expect(
+        screen.getByText("Activity", { exact: true, selector: "summary" })
+          .parentElement,
+      ).toHaveAttribute("open");
     });
+    expect(screen.getByText("Website", { exact: true })).toBe(recordFields);
+    expect(recordFields).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
     expect(closeCount).toBe(1);
@@ -245,20 +259,13 @@ describe("EntityWorkbenchInspector", () => {
     expect(
       await screen.findByRole("heading", { name: "fixture.jpg" }),
     ).toBeVisible();
-    expect(screen.getByRole("tab", { name: "Relations" })).toBeVisible();
+    expect(
+      screen.getByText("Relations", { exact: true, selector: "summary" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Edit record" })).toBeVisible();
     expect(screen.getByLabelText("Open full image details")).toHaveAttribute(
       "href",
       `/images/${IMAGE_ID}`,
     );
   });
-
-  // A test formerly lived here covering a route-less selection (rerendering
-  // with `entity="ledgerParty"` mid-session): once `LedgerParty`/
-  // `LedgerTransfer` gained browser routes, no `Entity` variant is route-less
-  // any more, so `UnsupportedOverview`'s "route-less" copy branch and the
-  // "no Open full record link" assertion it covered are dead code with
-  // nothing left to construct a fixture from. Removed rather than kept
-  // failing or weakened; `isBrowserRoutedEntity`'s guard in
-  // `entity-workbench-inspector.tsx` still exists for a future route-less
-  // entity, but it currently has no live caller to exercise it.
 });

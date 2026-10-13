@@ -8,25 +8,7 @@ import {
   type FilterDescriptor,
 } from "./declarations.ts";
 
-type CompiledDataQualityCheck = Readonly<{
-  id: string;
-  facet: string;
-  kind: "missing" | "defect";
-  weight: number;
-  scoring: "weighted" | "unscored";
-  scoreCap?: number;
-  exceptions: "inherit" | "forbidden";
-  label: string;
-  message: string;
-  coverage?: string;
-}>;
-
-type CompiledDataQuality = Readonly<{
-  checks: readonly CompiledDataQualityCheck[];
-  exceptions: boolean;
-  related: readonly string[];
-}>;
-
+type CompiledDataQuality = NonNullable<CompiledEntity["dataQuality"]>;
 /** What one declaration's block compiles to, beside the field model it extends. */
 export interface CompiledDataQualityResult {
   dataQuality: CompiledDataQuality | null;
@@ -115,23 +97,7 @@ const qualityField = (entityKey: string): EntityField => ({
  * owns `createdAt`/`updatedAt`.
  */
 export const compileDataQuality = (
-  raw: {
-    checks: readonly {
-      id: string;
-      facet: string;
-      kind: "missing" | "defect";
-      weight: number;
-      scoring: "weighted" | "unscored";
-      scoreCap?: number;
-      exceptions: "inherit" | "forbidden";
-      label: string;
-      message: string;
-      coverage?: string;
-    }[];
-    exceptions: boolean;
-    related: readonly string[];
-    listOrder?: number;
-  } | null,
+  raw: CompiledEntity["dataQuality"],
   entityKey: string,
   fieldModel: EntityFieldModel,
   descriptors: readonly FilterDescriptor[],
@@ -339,6 +305,31 @@ export const validateDataQualityDeclarations = (
   const owners = new Map<string, string>();
   for (const entity of entities) {
     for (const check of entity.dataQuality?.checks ?? []) {
+      const placement = check.placement;
+      if (
+        placement &&
+        "field" in placement &&
+        !entity.inspector.detail.sections.some(
+          (section) =>
+            section.kind === "fields" &&
+            section.fields.includes(placement.field),
+        )
+      )
+        throw new EntityDeclarationError(
+          `${entity.key}.dataQuality.${check.id} places a check on a field absent from detail: ${placement.field}`,
+        );
+      if (
+        placement &&
+        "section" in placement &&
+        !["images", "documents", "sources"].includes(placement.section) &&
+        !entity.inspector.detail.sections.some(
+          (section) => section.id === placement.section,
+        )
+      )
+        throw new EntityDeclarationError(
+          `${entity.key}.dataQuality.${check.id} places a check on an unknown section: ${placement.section}`,
+        );
+
       const owner = owners.get(check.id);
       if (owner !== undefined)
         throw new EntityDeclarationError(

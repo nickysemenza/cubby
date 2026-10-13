@@ -1068,6 +1068,8 @@ export default defineEntity({
       checks: [
         {
           id: "run_attribution",
+          satisfiedLabel: "Actor attributed",
+          placement: { field: "actorName" },
           facet: "provenance",
           kind: "defect",
           weight: 1,
@@ -1077,6 +1079,8 @@ export default defineEntity({
         },
         {
           id: "run_timeline",
+          satisfiedLabel: "Timeline recorded",
+          placement: { section: "import-timeline" },
           facet: "integrity",
           kind: "defect",
           weight: 1,
@@ -1087,6 +1091,8 @@ export default defineEntity({
         },
         {
           id: "run_target_outcomes",
+          satisfiedLabel: "Target outcomes recorded",
+          placement: { section: "import-targets" },
           facet: "integrity",
           kind: "defect",
           weight: 3,

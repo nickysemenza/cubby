@@ -93,11 +93,11 @@ test("detected label nutrition stays editable and requires Save before replacing
     "Not a significant source of total fat.",
   );
   await page
-    .getByRole("heading", { name: "Nutrition", exact: true })
+    .getByRole("heading", { name: "Nutrition summary", exact: true })
     .scrollIntoViewIfNeeded();
   await expect(page.getByText(/inferred zero/).first()).toBeVisible();
   await page
-    .getByRole("heading", { level: 2, name: "Overview", exact: true })
+    .getByRole("heading", { name: "Labels", exact: true })
     .scrollIntoViewIfNeeded();
   await page.reload();
   await expect(

@@ -17,8 +17,9 @@ For generic behavior shared across entities, follow
 generic renderer, declaration-to-renderer parity, then delete the per-entity
 twin.
 
-The compiled default Details section leads the dossier: a record's own facts
-come before workflow slots. Web detail renders every section in one full-width
+Compiled default fact sections reuse the declaration's edit groups, with
+remaining read-only coverage and summaries grouped afterward; a record's own
+facts come before workflow slots. Explicit detail sections retain their order. Web detail renders every section in one full-width
 column in declaration order — there is no supporting rail. A section's
 `placement` is `primary` (shares a ruled plane with its neighbors) or `full`
 (its own plane); journal presentations keep their relation-first ordering. Web identity/media composition follows
@@ -388,12 +389,12 @@ that list as is, with no fallback grouping of their own. The image-block keys
 (`pendingImageIds`, `pendingImagePurposes`, `removeImageIds`, `imageOrder`)
 stay out, since the editors' image block owns them on both platforms.
 `presentation.spans` (`[{ start, end, label }]`, date fields only) declares a
-start/optional-end pair: detail and list render one row in the start field's
-place through `CalendarDate` and `formatDateSpan` ("Sep 22 (today)",
-"Sep 22 – 25 (ongoing)"),
-including present/future context shared with scalar dates on web, hide the end field,
-and the editor rejects an end before its start; the native catalog's
-`editDateRanges` is generated from it. `capabilities.timeline`
+start/optional-end pair. Web lists fold it into the start field's row through
+`CalendarDate` and `formatDateSpan` ("Sep 22 (today)", "Sep 22 – 25 (ongoing)")
+and hide the end field. Web details and inspectors show both endpoints as
+independently editable, human-readable dates with their contextual quality
+results. The editor rejects an end before its start; the native catalog's
+`editDateRanges` is generated from the declaration. `capabilities.timeline`
 (`"default"`: audit log plus the declared date fields; `"custom"`: the
 `extensions.ports.timeline` implementation) publishes
 `resources.<entity>.timeline`. The compiler checks every named field,
@@ -975,11 +976,16 @@ no tombstone predicate.
 `capabilities.dataQuality` on an entity definition
 (`entityDataQualityMetadataSchema` in
 `packages/schemas/src/entity-definitions/definition.ts`) declares
-`checks[{id, facet, kind, weight, scoreCap?, label, message}]`, `exceptions` (true where
+`checks[{id, facet, kind, weight, scoreCap?, label, satisfiedLabel, message, placement}]`, `exceptions` (true where
 the entity may record `DataException` rows), `related` (other
 scored entities whose gaps roll up into this one), and `listOrder`. `id` must
 be globally unique across every entity's checks — it doubles as the `dataGap`
-filter option value.
+filter option value. `satisfiedLabel` describes a passed check positively;
+`label` remains the gap/filter label. `placement` names one owning `{field}` or
+`{section}` for contextual web results; null uses the unplaced-check fallback.
+The compiler validates that field owners render in a detail fields section and
+that section owners exist after deriving relation sections. Placement changes presentation only: weighted scoring, caps,
+applicability, and exceptions retain the shared record-level calculation.
 
 The Research queue ([terminology](guide/terminology.md#purchase-research)) is no table: it is the
 `research-queue` saved views on Product, Purchase and Expense, which filter
@@ -1019,7 +1025,7 @@ uniqueness and turns each `related` entity's own check ids into `dataGap`
 filter options on the rolling-up entity. The generated leaf
 (`packages/schemas/src/generated/data-quality-checks.gen.ts`) exports
 `dataCheck`, `dataChecksByEntity`, the per-check facet/kind/weight/label/
-message maps, `dataQualityFacets`, `relatedDataQualityEntities`,
+message maps, `dataCheckPresentation` (satisfied labels and ownership), `dataQualityFacets`, `relatedDataQualityEntities`,
 `dataQualityExceptionEntities`, and `scoredEntities`; `data-quality.ts`
 composes the public schema from that leaf.
 

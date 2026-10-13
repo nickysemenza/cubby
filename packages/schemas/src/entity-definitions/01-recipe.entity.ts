@@ -1264,6 +1264,8 @@ export default defineEntity({
       checks: [
         {
           id: "recipe_deleted_dependency",
+          satisfiedLabel: "Dependencies available",
+          placement: { section: "contents" },
           facet: "integrity",
           kind: "defect",
           weight: 3,
@@ -1274,6 +1276,8 @@ export default defineEntity({
         },
         {
           id: "recipe_ingredients",
+          satisfiedLabel: "Ingredients recorded",
+          placement: { section: "contents" },
           facet: "content",
           weight: 3,
           scoreCap: 69,
@@ -1282,6 +1286,8 @@ export default defineEntity({
         },
         {
           id: "recipe_instructions",
+          satisfiedLabel: "Instructions recorded",
+          placement: { section: "contents" },
           facet: "content",
           weight: 3,
           scoreCap: 69,
@@ -1290,6 +1296,8 @@ export default defineEntity({
         },
         {
           id: "recipe_source",
+          satisfiedLabel: "Source recorded",
+          placement: { field: "source" },
           facet: "provenance",
           weight: 1,
           label: "Source",

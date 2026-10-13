@@ -1,6 +1,10 @@
 import { spendingClassificationReviewPreview } from "@cubby/schemas/spending-classification-review";
 import { z } from "zod";
-import { gotoAuthenticatedPage, selectComboboxItem } from "./e2e-helpers";
+import {
+  inlineExplanation,
+  gotoAuthenticatedPage,
+  selectComboboxItem,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { createEntityFixture } from "./fixtures-core";
 
@@ -234,10 +238,12 @@ test("reviews historical item classification and preserves explicit purpose", as
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 402, height: 874 });
-  await page
-    .getByRole("button", { name: "How trade is determined", exact: true })
-    .click();
-  const popover = page.locator("[data-slot=popover-content]");
+  const tradeExplanation = page.getByRole("button", {
+    name: "How trade is determined",
+    exact: true,
+  });
+  await tradeExplanation.click();
+  const popover = await inlineExplanation(page, tradeExplanation);
   await expect(
     popover.getByRole("heading", { name: "Technical details" }),
   ).toBeVisible();

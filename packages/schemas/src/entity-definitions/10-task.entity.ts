@@ -1231,6 +1231,8 @@ export default defineEntity({
       checks: [
         {
           id: "task_due_date",
+          satisfiedLabel: "Due date recorded",
+          placement: { field: "dueDate" },
           facet: "paperwork",
           weight: 1,
           label: "Due date",
@@ -1238,6 +1240,8 @@ export default defineEntity({
         },
         {
           id: "task_due_range",
+          satisfiedLabel: "Due window in order",
+          placement: { field: "dueEndDate" },
           facet: "integrity",
           kind: "defect",
           weight: 2,
@@ -1247,6 +1251,8 @@ export default defineEntity({
         },
         {
           id: "task_trade",
+          satisfiedLabel: "Trade recorded",
+          placement: { field: "trade" },
           facet: "identity",
           weight: 1,
           label: "Trade",

@@ -915,6 +915,8 @@ Rules:
       checks: [
         {
           id: "meal_recipe_cost_incomplete",
+          satisfiedLabel: "Recipe costs complete",
+          placement: { section: "composition" },
           facet: "integrity",
           kind: "defect",
           weight: 1,
@@ -926,6 +928,8 @@ Rules:
         },
         {
           id: "meal_contents",
+          satisfiedLabel: "Contents recorded",
+          placement: { section: "composition" },
           facet: "content",
           weight: 3,
           scoreCap: 69,

@@ -112,6 +112,17 @@ export const renderDataQualityArtifacts = (
       "Record<DataCheck, string>",
       byCheck((check) => JSON.stringify(check.message)),
     ) +
+    "\n" +
+    record(
+      "dataCheckPresentation",
+      'Record<DataCheck, Pick<NonNullable<import("../entity-definitions/definition").EntityDeclarationMetadata["capabilities"]["dataQuality"]>["checks"][number], "satisfiedLabel" | "placement">>',
+      byCheck((check) =>
+        JSON.stringify({
+          satisfiedLabel: check.satisfiedLabel,
+          placement: check.placement,
+        }),
+      ),
+    ) +
     "\n/** Facet order per entity: first appearance in the declared checks. */\n" +
     record(
       "dataQualityFacets",

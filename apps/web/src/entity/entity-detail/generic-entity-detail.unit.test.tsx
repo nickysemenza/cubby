@@ -1,5 +1,6 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { imageWithEntitySchema } from "@cubby/schemas/image";
 import { cookbookSummary } from "@cubby/schemas/recipe";
 import { runOut } from "@cubby/schemas/run";
@@ -20,11 +21,13 @@ import {
 } from "~/entity/generated/entity-details.gen";
 import { inventoryListItem } from "~/entity/generated/entity-lists.gen";
 import {
+  fieldExplanation,
   entityList,
   entityTimeline,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
+import { buildQualityBreakdown } from "~/server/repo/data-quality/hydrate";
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
@@ -172,6 +175,50 @@ describe("GenericEntityDetail", () => {
     expect(titles).not.toContain("Photos");
   });
 
+  it("keeps a gated Run quality check visible with a working issue anchor", async () => {
+    const record = { ...recordFor("run"), purpose: "photo_inventory" as const };
+    const query = fieldExplanation.explain.queryOptions({
+      entityKind: "run",
+      entityId: record.id,
+      field: "dataQuality",
+      surface: "detail",
+    });
+    harness.queryClient.setQueryDefaults(query.queryKey, {
+      staleTime: Infinity,
+    });
+    harness.queryClient.setQueryData(
+      query.queryKey,
+      mock(fieldExplanationOutput, {
+        overrides: {
+          qualityBreakdown: buildQualityBreakdown(
+            ["run_target_outcomes"],
+            ["run_target_outcomes"],
+            [],
+          ),
+        },
+      }),
+    );
+    const { container } = render(
+      <GenericEntityDetail
+        entity="run"
+        record={record}
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(container.querySelector("section#import-targets")).toBeNull();
+    expect(
+      await screen.findByText(/Target outcomes · Defect/, {
+        selector: "summary span",
+      }),
+    ).toBeVisible();
+    const jump = screen
+      .getByRole("navigation", { name: "Quality issues" })
+      .querySelector("a");
+    expect(jump).not.toBeNull();
+    expect(document.getElementById(jump!.hash.slice(1))).not.toBeNull();
+  });
+
   it("links a reference field to its target's detail route", () => {
     const record = recordFor("task");
     // SAFETY: `testShortcode` mints a valid project shortcode.
@@ -304,24 +351,28 @@ describe("GenericEntityDetail", () => {
     expect(screen.queryByText("UPC", { exact: true })).not.toBeInTheDocument();
     const labels = Array.from(
       container.querySelectorAll(
-        '#overview [data-ledger="facts"] [data-slot="basic-info-label"]',
+        '[data-ledger="facts"] [data-slot="basic-info-label"]',
       ),
       (element) => element.textContent,
     );
     expect(labels).toContain("Name");
     expect(labels).toContain("ISBN-13");
-    const section = entitySummary.product.detail.sections.find(
-      (candidate) => candidate.id === "overview",
-    );
-    const declared = (section?.kind === "fields" ? section.fields : []).map(
-      (key) =>
+    for (const section of entitySummary.product.detail.sections) {
+      if (section.kind !== "fields") continue;
+      const sectionLabels = Array.from(
+        container.querySelectorAll(
+          `section#${section.id} [data-slot="basic-info-label"]`,
+        ),
+        (element) => element.textContent,
+      );
+      const declared = section.fields.map((key) =>
         key === "primaryGtin"
           ? "ISBN-13"
           : (entityFieldModels.product.fields.find((field) => field.key === key)
               ?.label ?? key),
-    );
-    // Declared order, minus the fields whose value is empty on this record.
-    expect(labels).toEqual(declared.filter((label) => labels.includes(label)));
+      );
+      expect(sectionLabels).toEqual(declared);
+    }
   });
 
   it("relation section header carries the loaded count and actions", async () => {
