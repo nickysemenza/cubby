@@ -24,6 +24,21 @@ public struct DatePresentation: Sendable, Equatable {
             exact: format(date, pattern: "MMM d, yyyy, h:mm:ss a zzz"))
     }
 
+    /// Capture provenance preserves the camera's recorded offset, without a live age.
+    public static func captureTimestamp(_ date: Date, offsetMinutes: Int?) -> String {
+        guard let offsetMinutes else { return timestamp(date).exact }
+        let seconds = offsetMinutes.multipliedReportingOverflow(by: 60)
+        guard !seconds.overflow, let timeZone = TimeZone(secondsFromGMT: seconds.partialValue) else {
+            return timestamp(date).exact
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = calendar
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "MMM d, yyyy, h:mm:ss a (xxx)"
+        return formatter.string(from: date)
+    }
+
     public static func plainDate(_ value: String, now: Date = .now, compact: Bool = false) -> Self? {
         guard let date = HouseholdDay.date(from: value) else { return nil }
         let today = calendar.startOfDay(for: now)

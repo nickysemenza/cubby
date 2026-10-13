@@ -506,7 +506,8 @@ private struct ProvenanceRows: View {
         if let capturedAt = detail.capturedAt {
             LabeledContent(
                 "Captured",
-                value: Self.captureDateText(capturedAt, offsetMinutes: detail.capturedAtOffsetMinutes))
+                value: DatePresentation.captureTimestamp(
+                    capturedAt, offsetMinutes: detail.capturedAtOffsetMinutes))
         }
         if let placeName = detail.capturePlaceName {
             LabeledContent("Place", value: placeName)
@@ -531,15 +532,6 @@ private struct ProvenanceRows: View {
             ProvenanceMapRow(location: location)
                 .listRowInsets(EdgeInsets())
         }
-    }
-
-    private static func captureDateText(_ date: Date, offsetMinutes: Int?) -> String {
-        let base = DatePresentation.timestamp(date).exact
-        guard let offsetMinutes else { return base }
-        let sign = offsetMinutes < 0 ? "-" : "+"
-        let magnitude = abs(offsetMinutes)
-        let offset = String(format: "%@%02d:%02d", sign, magnitude / 60, magnitude % 60)
-        return "\(base) (\(offset))"
     }
 
     private static func sourceLabel(_ source: ImageWithEntity.SourcePayload) -> String {
