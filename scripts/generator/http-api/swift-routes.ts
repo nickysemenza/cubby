@@ -14,7 +14,7 @@ export const swiftString = (value: string) => {
     throw new Error(`Non-ASCII in Swift literal: ${value}`);
   return literal;
 };
-const httpVerbs = new Set([
+export const httpVerbs = new Set([
   "get",
   "post",
   "put",
@@ -142,3 +142,42 @@ export const updateBodyHas = (
 
 export const swiftList = (values: readonly string[]) =>
   `[${values.map(swiftString).join(", ")}]`;
+
+// The native client carries every resources.<entity>.{list,get,create,update,delete,
+// timeline} operation the HTTP document exposes: the generic list, detail and
+// editor screens run over every resource entity, so the op set is the
+// document's, not an opt-in list (the hero-action runner needs delete, and
+// confirms it behind the connection-impact preview). RPC ids are opt-in through
+// `native:` on the contract member; the generator config is written from
+// the document and those flags so they cannot drift.
+const isAutomaticResourceOperation = (id: string) =>
+  /^resources\.[^.]+\.(?:list|get|create|update|delete|timeline)$/u.test(id);
+/**
+ * The operation ids the swift-openapi-generator client carries: every
+ * automatic one plus the flagged ones (sorted, deduplicated by the caller).
+ */
+export const nativeOperationIds = (
+  swiftRoutes: readonly SwiftRoute[],
+  nativeOperations: readonly string[],
+): string[] => {
+  const operationIds = new Set(swiftRoutes.map((entry) => entry.id));
+  for (const id of nativeOperations) {
+    if (!operationIds.has(id))
+      throw new Error(
+        `${id} is flagged native but has no HTTP route (an \`http: false\` member cannot be native)`,
+      );
+    if (isAutomaticResourceOperation(id))
+      throw new Error(
+        `${id} is flagged native, but resource list/get/create/update/timeline operations are automatic; drop the flag`,
+      );
+  }
+  const generatedOperations = [
+    ...new Set([
+      ...swiftRoutes
+        .map((entry) => entry.id)
+        .filter((id) => isAutomaticResourceOperation(id)),
+      ...nativeOperations,
+    ]),
+  ].sort();
+  return generatedOperations;
+};

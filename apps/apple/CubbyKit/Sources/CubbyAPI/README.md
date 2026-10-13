@@ -5,7 +5,13 @@ plugin (`OpenAPIGenerator`, declared in `CubbyKit/Package.swift`) generates the
 typed client from `openapi.json` and `openapi-generator-config.yaml` in this
 directory. Both are gitignored and written by `pnpm generate`
 (`scripts/generator/http-api/`), which install, the Xcode scheme pre-action
-and `apps/apple/scripts/prepare-project.sh` run.
+and `apps/apple/scripts/prepare-project.sh` run. The Apple document contains
+only automatic resource operations and RPC operations flagged `native:`, with
+their reachable components, discriminator mappings, and security metadata. The
+web document remains the complete HTTP API; edits to unused HTTP contracts do
+not rewrite the Apple document. The same operation selection writes the Swift
+generator config. Redocly bundles the projection and removes unused components,
+so reference and security handling follow the maintained OpenAPI tooling.
 
 Positional `_schemaNN` names are assigned at schema registration and can
 renumber when a new schema is added; `apps/apple/AGENTS.md` forbids naming

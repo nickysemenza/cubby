@@ -8,6 +8,7 @@
 //   node scripts/ci-lanes.ts          write the filter file
 //   node scripts/ci-lanes.ts --check  fail when it is stale (cubby-checks:ci-lanes)
 import { readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import picomatch from "picomatch";
@@ -33,8 +34,7 @@ export type LaneSpec = {
   deleted?: string[];
 };
 export const LANES = {
-  // `pnpm check:all`, less `format` (the docs lane) and the uncached `security`
-  // audit, which runs whenever this lane does.
+  // Named Validation steps, less the uncached audit and deduplication checks.
   validation: {
     tasks: [
       "cubby-checks:generate",
@@ -63,6 +63,7 @@ export const LANES = {
   e2e: { tasks: ["@cubby/web:e2e"] },
   "purchase-import": { tasks: ["@cubby/web:e2e-purchase-import"] },
   rust: { tasks: ["*:rust"] },
+  "apple-lint": { tasks: ["apple:lint"] },
   apple: { tasks: ["apple:host-tests", "apple:simulator-build"] },
 } satisfies Record<string, LaneSpec>;
 
@@ -105,11 +106,11 @@ const RUNTIME = new Map<string, RuntimeRoute>([
     "git ls-files --others --ignored --exclude-standard -- ':(glob)**/.env*' | git hash-object --stdin-paths",
     {},
   ],
-  // The ignored generated Swift.
-  [
-    "git ls-files -o -i --exclude-standard -- apps/apple/App/Shared/Previews/Fixtures apps/apple/CubbyKit/Sources apps/apple/Generated ':!apps/apple/CubbyKit/Sources/CubbyFFI' | xargs shasum -a 256",
+  // Generated output bytes decide cache reuse; producer inputs route the probe.
+  ...["host", "app"].map((scope): [string, RuntimeRoute] => [
+    `node scripts/apple-inputs.ts ${scope}`,
     { producedBy: ["cubby-checks:generate"] },
-  ],
+  ]),
 ]);
 
 type Input = string | InputDefinition;
@@ -346,9 +347,62 @@ function render(lanes: Record<string, Group[]>) {
 }
 
 if (import.meta.main) {
+  process.env.NX_DAEMON = "false";
   const graph = await createProjectGraphAsync({ exitOnError: true });
   const nxJson = readJsonFile<NxJsonConfiguration>(path.join(ROOT, "nx.json"));
-  const text = render(await laneGroups(graph, nxJson.namedInputs ?? {}));
+  const groups = await laneGroups(graph, nxJson.namedInputs ?? {});
+  if (process.argv[2] === "--explain") {
+    const base = process.argv[3] ?? "origin/main";
+    const git = (...args: string[]) =>
+      execFileSync("git", args, { cwd: ROOT, encoding: "utf8" });
+    const diff = git(
+      "diff",
+      "--no-renames",
+      "--name-status",
+      "-z",
+      base,
+      "--",
+    ).split("\0");
+    const changed: { file: string; deleted: boolean }[] = [];
+    for (let index = 0; index + 1 < diff.length; index += 2)
+      changed.push({ file: diff[index + 1]!, deleted: diff[index] === "D" });
+    for (const file of git("ls-files", "--others", "--exclude-standard", "-z")
+      .split("\0")
+      .filter(Boolean))
+      changed.push({ file, deleted: false });
+    const matches = (patterns: string[], file: string) =>
+      patterns.length > 0 && picomatch(patterns, { dot: true })(file);
+    console.log(
+      JSON.stringify(
+        {
+          base,
+          note: "CI candidates, not a local gate. Apple probes generated output hashes; unchanged output can replay. Choose focused local checks from docs/agents/validation.md.",
+          lanes: Object.entries(groups).flatMap(([lane, filters]) => {
+            const files = changed
+              .filter(({ file, deleted }) =>
+                filters.some(
+                  (filter) =>
+                    (matches(filter.include, file) ||
+                      (deleted && matches(filter.deleted ?? [], file))) &&
+                    !matches(filter.exclude, file),
+                ),
+              )
+              .map(({ file }) => file);
+            const spec = Object.entries(LANES).find(
+              ([name]) => name === lane,
+            )?.[1];
+            return files.length
+              ? [{ lane, ...spec, files: [...new Set(files)].sort() }]
+              : [];
+          }),
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(0);
+  }
+  const text = render(groups);
   const file = path.join(ROOT, LANES_FILE);
   if (process.argv[2] === "--check") {
     if (readFileSync(file, "utf8") !== text) {

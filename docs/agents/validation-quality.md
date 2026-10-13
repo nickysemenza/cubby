@@ -6,9 +6,11 @@ include `pnpm typecheck` as an affected check: passing Vitest does not
 prove those files typecheck. This checks the full program that `pnpm check` and
 CI run. Tests use the configured TypeScript libraries; runtime support for an
 API does not establish that the configured libraries expose it.
-Use these rather than a raw `tsc`: the wrapper discards a stale incremental
-cache and holds one of two machine-wide slots, since each web check keeps
-5–7 GB resident ([measurements](../reports/local-check-performance.md#typechecking)).
+Use these entry points so generation and WASM are ready. They run `tsc`
+directly; there is no machine-wide typecheck queue. Preserve incremental
+build-info within a checkout, reuse unchanged results, and coordinate heavy
+checks across sessions: a cold web program measured about 5.8 GB resident
+([dated measurements](../reports/local-check-performance.md#typechecking)).
 `pnpm check` runs the root
 static checks, type checking, entity freshness, Knip, and script types.
 `pnpm check:all` adds bindings, OpenAPI, orchestration tests, security checks,

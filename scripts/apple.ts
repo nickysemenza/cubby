@@ -12,7 +12,7 @@
 //   pnpm apple sim           build Cubby-iOS, install + launch on a simulator
 //   pnpm apple gen           build-rust.sh → pnpm generate → xcodegen
 //   pnpm apple test          swift test for CubbyKit
-//   pnpm apple check         native formatting, tests, API drift, and simulator build
+//   pnpm apple check [host|app|lint]  cached native checks (all by default)
 //
 // Options: --device <name> (ios; default: the first paired iPhone),
 // --sim <name> (sim; default: the booted simulator, else the first iPhone),
@@ -27,6 +27,7 @@ import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../packages/shared/src/apple
 import { installedApprovalVerifier } from "./lib/mac-app-approval.ts";
 import { installMacApp, stopMacAppProcesses } from "./lib/mac-app-install.ts";
 import { spawnSync } from "node:child_process";
+import { checkApple } from "./apple-validation.ts";
 
 import { captureSyncChecked, runSyncChecked } from "./lib/run.ts";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -71,7 +72,7 @@ const parseArguments = (argv: readonly string[]): Options => {
   const options: Options = { command, verbose: false, timing: false, rest: [] };
   // Everything after `cli` belongs to the CLI, flags included; the other
   // commands take only the options above.
-  if (command === "cli") {
+  if (command === "cli" || command === "check") {
     options.rest = [...tail];
     return options;
   }
@@ -198,6 +199,7 @@ const productPath = (platformDirectory: string) =>
 // ---------------------------------------------------------------------------
 
 const cli = (options: Options) => {
+  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
   ensureFfi();
   run("swift", [
     "build",
@@ -355,6 +357,7 @@ const pickDevice = (name: string | undefined) => {
 
 const ios = (options: Options) => {
   const device = pickDevice(options.device);
+  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
   ensureFfi();
   ensureProject();
   xcodebuild("Cubby-iOS", `platform=iOS,id=${device.id}`, options);
@@ -402,6 +405,7 @@ const sim = (options: Options) => {
   if (simulator.state !== "Booted") {
     run("xcrun", ["simctl", "boot", simulator.udid]);
   }
+  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
   ensureFfi();
   ensureProject();
   xcodebuild(
@@ -434,6 +438,7 @@ const gen = () => {
 };
 
 const test = () => {
+  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
   ensureFfi();
   run("swift", [
     "test",
@@ -462,11 +467,9 @@ const main = () => {
     case "test":
       return test();
     case "check":
-      // Before Nx hashes: the Apple key reads the generated Swift, and both
-      // halves run under one Nx process, where a nested `nx run
-      // cubby-checks:apple-ffi` from each is rejected as already invoked.
-      gen();
-      return run("pnpm", ["exec", "nx", "run", "apple:check"]);
+      if (options.rest.length > 1)
+        throw new Error("usage: pnpm apple check [host|app|lint]");
+      return checkApple(ROOT, options.rest[0]);
     case "help":
     case "--help":
     case "-h":

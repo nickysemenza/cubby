@@ -53,18 +53,53 @@ Forward named-case flags directly, for example `pnpm test:postgres src/...
 does not apply the intended filter. Likewise, use `pnpm db:generate
 --name=description` without an extra separator.
 
-Before a PR, run focused checks for the change and the automated client checks
-that cover it: Apple host tests, a simulator build, a TestFlight build, and the
-server version-gate test. An automated phone-width browser check may supplement
-these checks for web layout or interaction. No manual device verification is
-required. CI runs the PostgreSQL, fast, typecheck, lint, and knip tiers on every
-PR; do not repeat them locally as a gate.
+## Before opening a PR
+
+Open a reviewable PR after the implementation, owning docs, and focused local
+checks are ready. CI and independent review can run together; a pending CI run
+is compatible with a ready-for-review PR. Merge still requires the final
+content's `CI passed`. Publication itself adds no checks.
+
+Choose local evidence by the changed behavior:
+
+- Web/server behavior: the affected regression or real user journey. Run one
+  app typecheck when TypeScript behavior or signatures change; include the
+  test program when tests/tooling change (see [quality](validation-quality.md)).
+- Generated native labels, fixtures, constants, or incidental Swift changes:
+  verify generation and relevant focused contracts. CI owns native compilation;
+  these edits alone do not require local host tests, app builds or simulators.
+- Native wire shapes or decoding: focused host/contract coverage. Compile
+  locally when the change has a specific native compilation risk; CI always
+  covers changed native inputs before merge.
+- Hand-written Swift behavior: the affected host tests or app target. Native
+  navigation/interaction additionally needs the changed interaction exercised;
+  compiling a simulator target does not require booting a simulator.
+- Signing, entitlements or release configuration: the relevant archive/release
+  check. TestFlight builds are not an ordinary pre-PR requirement.
+
+`pnpm apple check host`, `app`, or `lint` selects one native check;
+`pnpm apple check` runs all three when full native diagnosis is needed. Each
+native pass is probed before FFI setup, and local misses run sequentially.
+The server client-version gate test is relevant when changing compatibility
+behavior, not merely because generated Swift changed.
+
+CI selects broad tiers from their declared inputs; avoid repeating the full
+PostgreSQL, fast, lint, Knip, or build suites locally as a gate. Use scoped lint
+while iterating; the commit hook owns staged lint/format. Run Knip for changed
+entry points/dependencies, generator validation for changed declarations, and
+workflow/routing checks for CI changes. `pnpm check:plan [base]` explains CI
+candidate lanes and matching changed files (default `origin/main`); it is not
+an instruction to run those lanes locally. CI uses its last green main as base.
 
 One root agent owns any broad validation that the change needs. A subagent runs
 only focused tests and returns its result, command, duration, relevant output,
 and limits. Reuse valid results at handoff; choose checks for the changed behavior
 rather than running a blanket `pnpm check` or affected suite. Keep expensive
-local gates sequential.
+local gates sequential, including across active sessions on a constrained host.
+Reuse valid input-hash results at handoff. Finish edits to build inputs before
+starting immutable-build verification; use healthy HMR for suitable iteration.
+Nx reports task durations/cache hits, the dev supervisor records startup phase
+timings, and GitHub records named check steps; use those before adding telemetry.
 Wait for a build runner's terminal success before starting a dependent prebuilt
 Worker or browser check. A yielded session is still running; a completed client
 bundle alone does not establish a finished Worker build and provenance stamp.
@@ -100,6 +135,10 @@ formats them in place, with the existing rules and ignore patterns. Partial
 staging is preserved. Never run Oxfmt by hand; commit and let the hook format.
 Fix reported lint issues explicitly and stage the intended corrections. Use the
 commit hook normally; bypass it only when the user explicitly requests that.
+
+Checkout and merge hooks run no builds: build, test and dev entry points ensure
+the artifacts they consume. After a branch switch, use `pnpm apple gen` before
+opening the generated Xcode project directly.
 
 Pushes run no validation and do not require a clean working tree or a refreshed
 base ref. Committing, pushing, or handing off work does not trigger additional

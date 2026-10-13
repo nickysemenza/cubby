@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 
 import { withErrorReporting } from "~/server/errors/report-error";
+import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 
 import { callMcpTool, registerTestTool } from "./mcp-test-utils";
 import { McpOperationContext } from "./operation-context";
@@ -644,5 +645,134 @@ describe("MCP catalog schemas", () => {
     expect(
       [...uuidExceptions].filter((key) => !stillExceptional.has(key)).sort(),
     ).toEqual([]);
+  });
+});
+
+const readOnly = (openWorld = false) => ({
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: openWorld,
+});
+const write = ({ destructive = false, openWorld = false } = {}) => ({
+  readOnlyHint: false,
+  destructiveHint: destructive,
+  idempotentHint: false,
+  openWorldHint: openWorld,
+});
+
+/**
+ * The purchase agent resends every mounted tool's input schema on every model call, so each
+ * published schema has a ceiling. Before consolidation the largest tool was
+ * `entity` at 242,971 characters and the largest non-kernel tool
+ * `prepare_purchase_import` at 8,616. The two entity-kernel tools carry every
+ * kind's schema and get their own ceiling; every other tool stays under the
+ * workflow ceiling, about twice that largest pre-consolidation workflow tool.
+ */
+const KERNEL_SCHEMA_BUDGET = 131_072;
+const WORKFLOW_SCHEMA_BUDGET = 16_384;
+const KERNEL_TOOLS = new Set(["entity", "entity_read"]);
+
+function isObject(value: JSONType | undefined): value is JsonObject {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Every `$ref` target and every `properties` map in a schema tree. */
+function schemaFaults(schema: JsonObject): string[] {
+  const definitions = isObject(schema.definitions) ? schema.definitions : {};
+  const faults: string[] = [];
+  const visit = (node: JSONType, path: string) => {
+    if (Array.isArray(node)) {
+      node.forEach((item, index) => visit(item, `${path}[${index}]`));
+      return;
+    }
+    if (!isObject(node)) return;
+    const ref = z.string().safeParse(node.$ref).data;
+    if (ref) {
+      const name = ref.replace("#/definitions/", "");
+      if (!definitions[name]) faults.push(`${path}: dangling ${ref}`);
+    }
+    if (isObject(node.properties) && "$ref" in node.properties)
+      faults.push(`${path}.properties is a $ref, not a map of schemas`);
+    for (const [key, value] of Object.entries(node))
+      visit(value, `${path}.${key}`);
+  };
+  visit(schema, "");
+  return faults;
+}
+
+describe("MCP catalog publication without services", () => {
+  it("publishes the exact tool catalog with annotations derived from its actions", async () => {
+    const { tools } = await listMcpToolCatalog();
+    expect(
+      Object.fromEntries(tools.map((tool) => [tool.name, tool.annotations])),
+    ).toEqual({
+      entity_read: readOnly(),
+      entity: write({ destructive: true }),
+      search: readOnly(),
+      usda_food: readOnly(true),
+      project_overview: readOnly(),
+      tasks_overview: readOnly(),
+      recipe_insights: readOnly(true),
+      nutrition: readOnly(),
+      finance_read: readOnly(),
+      spending_classification_read: readOnly(),
+      spending_classification_write: write(),
+      imports_read: readOnly(true),
+      mail: write(),
+      activity: readOnly(),
+      statement_rows: write({ destructive: true }),
+      purchase_import: write(),
+      expenses: write(),
+      product_enrichment: write({ destructive: true }),
+      upc: write(),
+      photo_run: write(),
+      run: write({ destructive: true, openWorld: true }),
+      meal_recipe: write(),
+      recipe_import: write({ openWorld: true }),
+      image: write(),
+      data_exception: write(),
+    });
+  });
+
+  it("keeps every tool read-only-homogeneous", async () => {
+    const { tools } = await listMcpToolCatalog();
+    for (const tool of tools) {
+      const binding = Object.entries(MCP_TOOL_BINDINGS).find(
+        ([name]) => name === tool.name,
+      )?.[1];
+      if (!binding) throw new Error(`${tool.name} has no generated binding`);
+      const kinds = new Set(
+        Object.values(binding.actions).map((action) => action.kind),
+      );
+      expect([tool.name, [...kinds]]).toEqual([
+        tool.name,
+        [tool.annotations?.readOnlyHint ? "query" : "mutation"],
+      ]);
+    }
+  });
+
+  it("keeps each published input schema portable and under its budget", async () => {
+    const { tools } = await listMcpToolCatalog();
+    const oversized: string[] = [];
+    for (const tool of tools) {
+      const schema = z.json().parse(tool.inputSchema);
+      if (!isObject(schema)) throw new Error(`${tool.name}: no object schema`);
+      // Anthropic rejects anyOf/oneOf/allOf at the ROOT of input_schema.
+      expect([tool.name, schema.type, "anyOf" in schema]).toEqual([
+        tool.name,
+        "object",
+        false,
+      ]);
+      expect("oneOf" in schema || "allOf" in schema).toBe(false);
+      expect(schema.required).toEqual(["action"]);
+      expect(schemaFaults(schema)).toEqual([]);
+      const size = JSON.stringify(schema).length;
+      const budget = KERNEL_TOOLS.has(tool.name)
+        ? KERNEL_SCHEMA_BUDGET
+        : WORKFLOW_SCHEMA_BUDGET;
+      if (size > budget) oversized.push(`${tool.name}: ${size} > ${budget}`);
+    }
+    expect(oversized).toEqual([]);
   });
 });

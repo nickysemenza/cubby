@@ -23,9 +23,8 @@ the app TypeScript check before handoff. Helper-only tests and lint do not
 establish that a list or detail header can render with its actual props.
 
 Do not overlap PostgreSQL and E2E locally: they contend for
-containers, workerd, browsers, and database connections. Other workspace
-packages need `pnpm -r --filter '!@cubby/web' run test` after changing
-`packages/*`.
+containers, workerd, browsers, and database connections. For changed workspace packages, run their affected test rather than every
+package. A cross-package contract change may need its consumers too.
 Verify every named test path exists before invoking a runner: Vitest can ignore
 a nonexistent selector when another supplied file matches. Report only the
 files and cases the run actually exercised.
