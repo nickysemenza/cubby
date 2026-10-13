@@ -1,0 +1,19 @@
+apps/web/src/lib/http-api/native-document.unit.test.ts
+  s_73fe69dd841a24::t_6d9029507103b3 5-8,88-92,99-100,107,136,142,144,148-197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3ea054647f5109661b6a138c1f26a24bc1dd5374",
+  "prompts": {},
+  "sessions": {
+    "s_73fe69dd841a24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96d21c32-0fd2-4535-be08-daa98aa3f469",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
