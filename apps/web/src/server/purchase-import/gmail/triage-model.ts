@@ -14,13 +14,14 @@ import {
   MAILBOX_RELEVANCE_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
 } from "~/server/ai/features";
+import { mailTriageChoices } from "~/server/ai/prompts/mail";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { paidResearchPreflight } from "~/server/runs/execution-transport";
 
 import { gmailRelevanceAllowed } from "./execution-policy";
 import type { MailRelevance } from "./relevance";
-import { mailTriageChoices, mailTriagePrompt, type MailTriage } from "./triage";
+import type { MailTriage } from "./triage";
 
 export type GmailClassificationCall = Pick<
   z.output<typeof emailClassificationObservationInput>,
@@ -38,7 +39,7 @@ export const productionMailTriage =
     decisionModel?: SupportedDecisionModel,
   ): MailTriage =>
   async (subject) => {
-    const prompt = mailTriagePrompt(subject);
+    const prompt = MAILBOX_TRIAGE_FEATURE.prompt(subject);
     if (!decisionChoiceFitsContext(prompt)) return "uncertain";
     const model = decisionModel ?? selectDecisionModel();
     const result = await runDecisionChoice({

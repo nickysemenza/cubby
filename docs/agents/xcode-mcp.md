@@ -1,6 +1,6 @@
 # Xcode MCP: previews and device interaction
 
-Xcode 27's MCP server renders `#Preview`s, builds, runs tests, and drives a
+Xcode's MCP server renders `#Preview`s, builds, runs tests, and drives a
 simulator without Xcode.app open. It is the fastest visual loop for SwiftUI:
 edit → `RenderPreview` → read the PNG. Tools are `mcp__xcode__*`; the `xcode`
 server is registered as `xcrun mcpbridge`.
@@ -17,8 +17,8 @@ Also Xcode → Settings → Intelligence → "Allow External Agents to Use Xcode
 Tools". A new agent's first tool call fails with "isn't approved"; the operator
 approves it once (dialog or `sudo xcrun mcp-server approve <id> --always`), and
 a signed client such as Claude Code keeps that grant. `xcrun mcp-server status`
-lists permitted agents, folders, and open workspaces. Xcode 27.0 has no
-`mcp-server start`: opening a workspace starts the server.
+lists permitted agents, folders, and open workspaces. Opening a workspace starts the server; inspect `xcrun mcp-server --help` for
+the installed toolchain's controls.
 
 ## Session bootstrap
 

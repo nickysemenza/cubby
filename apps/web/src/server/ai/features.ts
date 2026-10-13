@@ -56,6 +56,35 @@ import {
 } from "@cubby/shared/ai/models";
 import type { z } from "zod";
 
+import {
+  usdaFoodSpec,
+  usdaMatchSubject,
+  ingredientMergeSpec,
+  ingredientMergeSubject,
+} from "./prompts/ingredient-selection";
+import { mailRelevanceRequest, mailTriagePrompt } from "./prompts/mail";
+import {
+  purchaseExtractionPrompt,
+  purchaseAuditPrompt,
+  purchaseReceiptRequest,
+  purchaseRepairPrompt,
+  orderMailRequest,
+} from "./prompts/purchase-import";
+import {
+  purchaseLinePrompt,
+  purchaseLinePrompts,
+  PRODUCT_IDENTITY_RULES,
+} from "./prompts/purchase-lines";
+import { buildRecipeFlowRequest } from "./prompts/recipe-flow";
+import { selectionOverflowRequest } from "./prompts/selection";
+import {
+  buildProductIdentificationRequest,
+  buildInventoryDetectionRequest,
+  buildLocationDescriptionRequest,
+  descriptionRequest,
+} from "./prompts/vision";
+import type { AiChatRequest } from "./run-feature";
+
 /** Embeddings share the catalog, while retaining their vector runner. */
 type AiTier = "fast" | "quality" | "decision" | "embedding";
 
@@ -97,7 +126,6 @@ type AiChatFeatureTier = {
 /** The decision tier has no output to cap and no reasoning dial. */
 type AiDecisionFeatureTier = { tier: "decision" };
 
-type AiFeatureTier = AiChatFeatureTier | AiDecisionFeatureTier;
 type AiEmbeddingFeatureTier = { tier: "embedding" };
 
 // `model` is derived from {@link MODEL_FOR_TIER}, never written by hand; it
@@ -135,7 +163,12 @@ export type AiAnalysisFeature<T> = WithField<"analysisSchema", T>;
 
 /** Fill in the tier-derived `model`. */
 function defineFeature<
-  S extends AiFeatureShared & (AiFeatureTier | AiEmbeddingFeatureTier),
+  S extends AiFeatureShared &
+    (
+      | (AiChatFeatureTier & { request: (...args: never[]) => AiChatRequest })
+      | AiDecisionFeatureTier
+      | AiEmbeddingFeatureTier
+    ),
 >(declaration: S): S & { model: (typeof MODEL_FOR_TIER)[S["tier"]] } {
   // SAFETY: indexing `MODEL_FOR_TIER` with a `S["tier"]`-typed value yields
   // exactly `(typeof MODEL_FOR_TIER)[S["tier"]]`, but the compiler widens the
@@ -155,6 +188,8 @@ function defineFeature<
 // ---------------------------------------------------------------------------
 
 export const USDA_FOOD_SUGGEST_FEATURE = defineFeature({
+  selection: usdaFoodSpec,
+  subject: usdaMatchSubject,
   feature: "usda-food-suggest",
   tier: "decision",
   cache: true,
@@ -162,6 +197,8 @@ export const USDA_FOOD_SUGGEST_FEATURE = defineFeature({
 }) satisfies AiDecisionFeature;
 
 export const INGREDIENT_MERGE_FEATURE = defineFeature({
+  selection: ingredientMergeSpec,
+  subject: ingredientMergeSubject,
   feature: "ingredient-merge",
   tier: "decision",
   cache: true,
@@ -196,6 +233,7 @@ export const SETTLEMENT_CANDIDATE_RANK_FEATURE = defineFeature({
 }) satisfies AiDecisionFeature;
 
 export const MAILBOX_TRIAGE_FEATURE = defineFeature({
+  prompt: mailTriagePrompt,
   feature: "mailbox-triage",
   promptVersion: "2026-10-12.4",
   cache: false,
@@ -204,6 +242,7 @@ export const MAILBOX_TRIAGE_FEATURE = defineFeature({
 });
 
 export const MAILBOX_RELEVANCE_FEATURE = defineFeature({
+  request: mailRelevanceRequest,
   feature: "mailbox-relevance",
   promptVersion: "2026-10-07.1",
   cache: false,
@@ -215,6 +254,7 @@ export const MAILBOX_RELEVANCE_FEATURE = defineFeature({
 });
 
 export const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
+  rules: PRODUCT_IDENTITY_RULES,
   feature: "product-line-identity",
   tier: "decision",
   cache: true,
@@ -222,6 +262,9 @@ export const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
 }) satisfies AiDecisionFeature;
 
 export const PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE = defineFeature({
+  ...purchaseLinePrompts.role,
+  prompt: (line: Parameters<typeof purchaseLinePrompt>[1]) =>
+    purchaseLinePrompt("role", line),
   feature: "expense-line-role",
   tier: "decision",
   cache: true,
@@ -229,6 +272,9 @@ export const PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE = defineFeature({
 }) satisfies AiDecisionFeature;
 
 export const PURCHASE_IMPORT_KIT_DETECTION_FEATURE = defineFeature({
+  ...purchaseLinePrompts.kit,
+  prompt: (line: Parameters<typeof purchaseLinePrompt>[1]) =>
+    purchaseLinePrompt("kit", line),
   feature: "kit-detection",
   tier: "decision",
   cache: true,
@@ -236,6 +282,9 @@ export const PURCHASE_IMPORT_KIT_DETECTION_FEATURE = defineFeature({
 }) satisfies AiDecisionFeature;
 
 export const PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE = defineFeature({
+  ...purchaseLinePrompts.promotion,
+  prompt: (line: Parameters<typeof purchaseLinePrompt>[1]) =>
+    purchaseLinePrompt("promotion", line),
   feature: "product-promotion",
   tier: "decision",
   cache: true,
@@ -243,11 +292,22 @@ export const PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE = defineFeature({
 }) satisfies AiDecisionFeature;
 
 export const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
+  ...purchaseLinePrompts.reversal,
+  prompt: (line: Parameters<typeof purchaseLinePrompt>[1]) =>
+    purchaseLinePrompt("reversal", line),
   feature: "reversal-kind",
   tier: "decision",
   cache: true,
   promptVersion: "2026-09-19.1",
 }) satisfies AiDecisionFeature;
+
+/** Closed purchase-line stages share their live renderers with the decision catalog. */
+export const PURCHASE_LINE_DECISIONS = {
+  role: PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
+  kit: PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
+  promotion: PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
+  reversal: PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Chat tiers. Quality — GPT-6 Sol: purchase evidence (extraction, receipts,
@@ -264,6 +324,7 @@ export const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
  * gateway metadata's `operation` says which one overflowed.
  */
 export const SELECTION_OVERFLOW_FEATURE = defineFeature({
+  request: selectionOverflowRequest,
   feature: "selection-overflow",
   tier: "fast",
   maxTokens: 500,
@@ -274,6 +335,7 @@ export const SELECTION_OVERFLOW_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<AiSelectionResult>;
 
 export const PRODUCT_IDENTIFICATION_FEATURE = defineFeature({
+  request: buildProductIdentificationRequest,
   feature: "product-identification",
   tier: "quality",
   maxTokens: 500,
@@ -284,6 +346,7 @@ export const PRODUCT_IDENTIFICATION_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ProductIdentification>;
 
 export const LOCATION_INVENTORY_DETECTION_FEATURE = defineFeature({
+  request: buildInventoryDetectionRequest,
   feature: "location-inventory-detection",
   tier: "quality",
   maxTokens: 2000,
@@ -296,6 +359,7 @@ export const LOCATION_INVENTORY_DETECTION_FEATURE = defineFeature({
   AiAnalysisFeature<DetectedInventoryAiResult>;
 
 export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
+  request: purchaseExtractionPrompt,
   feature: "purchase-import-extraction",
   tier: "quality",
   maxTokens: 4_000,
@@ -306,6 +370,7 @@ export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
+  request: purchaseReceiptRequest,
   feature: "purchase-import-receipt-extraction",
   tier: "quality",
   maxTokens: 4_000,
@@ -316,6 +381,7 @@ export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
+  request: orderMailRequest,
   feature: "purchase-import-mail-classification",
   tier: "quality",
   maxTokens: 1_000,
@@ -334,6 +400,7 @@ export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
  * retried on the Anthropic recovery model (`extract.ts`).
  */
 export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
+  request: purchaseAuditPrompt,
   feature: "purchase-import-audit",
   tier: "quality",
   maxTokens: 8_000,
@@ -353,6 +420,7 @@ export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
  * that parity does not cover.
  */
 export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
+  request: purchaseRepairPrompt,
   feature: "purchase-import-repair",
   tier: "quality",
   maxTokens: 4_000,
@@ -371,6 +439,7 @@ export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
  * Flows a previous model stored stay current (`recipe-flow.service.ts`).
  */
 export const RECIPE_FLOW_PRIMARY_FEATURE = defineFeature({
+  request: buildRecipeFlowRequest,
   feature: "recipe-flow",
   tier: "quality",
   maxTokens: 16000,
@@ -391,6 +460,7 @@ export const RECIPE_FLOW_PRIMARY_FEATURE = defineFeature({
 // ---------------------------------------------------------------------------
 
 export const LOCATION_DESCRIPTION_FEATURE = defineFeature({
+  request: buildLocationDescriptionRequest,
   feature: "location-description",
   tier: "fast",
   maxTokens: 1500,
@@ -404,6 +474,7 @@ export const LOCATION_DESCRIPTION_FEATURE = defineFeature({
 
 /** Cloud is the preferred image-description provider until an explicit policy changes it. */
 export const IMAGE_DESCRIPTION_FEATURE = defineFeature({
+  request: descriptionRequest,
   feature: "image-description",
   tier: "fast",
   maxTokens: 2_500,
@@ -429,7 +500,9 @@ export const ENTITY_EMBEDDING_FEATURE = defineFeature({
   promptVersion: "1",
 }) satisfies AiEmbeddingFeature;
 
-/** Every declared feature, for the registry assertions in the unit test. */
+/** Typed runtime catalog: routing, schemas and pure request renderers.
+ * Decision targets reuse the field/selection declarations rendered by decision-catalog.ts.
+ * Embeddings have no authored prompt. */
 export const AI_FEATURES = [
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,

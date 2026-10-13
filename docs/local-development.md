@@ -261,3 +261,29 @@ Read the failed scenario and artifact summary before rerunning. Use
 `--last-failed` after a relevant fix; do not repeat an unchanged failure merely
 to retrieve its diagnostics. Browser execution remains uncached even when a
 matching build and the shared services are reused.
+
+## Build and cache constraints
+
+Package contents are shared through pnpm's store; a checkout's apparent
+`node_modules` size is not its exclusive disk use. Compare filesystem free
+space before and after cleanup. Manifest peer extensions preserve types that
+would otherwise work only through checkout-local hoisting. The workspace
+manifest and lockfile own install settings and pins.
+
+Generated/WASM/native preparation is owned by `scripts/ensure.ts` and the
+commands that consume its outputs. Missing output must be restored even when
+inputs are unchanged; a cheap marker that overlooks incomplete packages is
+unsafe. Shared Cargo target output uses content fingerprints and the tracked
+workspace lockfile. Check a local Cargo path patch before diagnosing an upstream
+API mismatch as an installer problem.
+
+Keep Xcode DerivedData and SwiftPM build products isolated by checkout:
+intermediates encode source paths and concurrent builds share a build database.
+Compiler caches can share content-addressed work, not that mutable graph.
+Preserve TypeScript incremental build-info within its checkout rather than
+copying an old one after a large rebase. Under `--noEmit`, the first edit can
+invalidate importer signatures even when only a function body changes. Keep
+RPC interfaces in type-only leaves and generated environment types off the
+Worker entry/route tree; global declarations can widen invalidation to the
+whole program. Declaration emit and aggressive Go memory limits measured
+worse than this structure in the retained diagnostics.

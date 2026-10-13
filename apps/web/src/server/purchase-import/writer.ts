@@ -1,9 +1,6 @@
 import { plainDate } from "@cubby/schemas/base-entity";
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
-import {
-  expenseLineKindValues,
-  type ExpenseLineKind,
-} from "@cubby/schemas/expense-line-kind";
+import { type ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import { GTIN_KIND, GTIN_SOURCE } from "@cubby/schemas/external-id";
 import {
   parseEntityId,
@@ -30,12 +27,7 @@ import {
   runDecisionChoice,
   type DecisionChoiceResult,
 } from "~/server/ai/decision-model";
-import {
-  PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
-  PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
-  PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
-  PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,
-} from "~/server/ai/features";
+import { PURCHASE_LINE_DECISIONS } from "~/server/ai/features";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityAttachment,
@@ -120,8 +112,6 @@ import {
 } from "./writer-policy";
 
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
-export const PRODUCT_IDENTITY_RULES =
-  "Choose an existing product only when the title, model, size, count, and variant identify the same sellable item. Choose none for a distinct or uncertain variant.";
 
 /**
  * Preserve a printed calendar day; an instant uses the household-local day.
@@ -396,46 +386,6 @@ export type LineIdentityDecision = {
   distinctFrom?: ExplicitDistinctFrom[];
 };
 
-export const lineDecisionSubject = (line: ExtractedPurchaseLine) =>
-  JSON.stringify({
-    title: line.title,
-    amount: line.amount,
-    extractedLineKind: line.lineKind,
-    quantity: line.quantity ?? null,
-    sku: line.sku ?? null,
-    seller: line.seller ?? null,
-    productUrl: line.productUrl ?? null,
-  });
-
-/** One closed choice per import line stage; the Decisions catalog renders
- * these same rules and choices. */
-export const PURCHASE_LINE_DECISIONS = {
-  role: {
-    feature: PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
-    choices: expenseLineKindValues,
-    rules:
-      "Classify the receipt row's financial role. Principal is a purchased or returned item; taxes, shipping, discounts, fees, tips, and other adjustments are not products.",
-  },
-  kit: {
-    feature: PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
-    choices: ["kit_with_components", "single", "n_pack"] as const,
-    rules:
-      "Classify the sellable item. A kit has distinct reusable components, an n-pack is repeated units of one item, and a single is one sellable product.",
-  },
-  promotion: {
-    feature: PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
-    choices: ["promote", "coarse_only"] as const,
-    rules:
-      "Choose promote only when the line identifies a durable sellable product worth creating or linking. Choose coarse_only for services, vague bundles, fees, warranties, or insufficient identity.",
-  },
-  reversal: {
-    feature: PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,
-    choices: ["return", "concession", "cancellation", "replacement"] as const,
-    rules:
-      "Classify a negative item row: return means units left the household; concession means the item was kept; cancellation means it was never acquired; replacement means the money line accompanies a replacement rather than a returned unit.",
-  },
-} as const;
-
 export async function chooseLineStage(
   db: Database,
   runId: string,
@@ -445,11 +395,8 @@ export async function chooseLineStage(
 ) {
   const spec = PURCHASE_LINE_DECISIONS[stage];
   return runDecisionChoice({
-    feature: spec.feature,
-    subject: lineDecisionSubject(line),
-    rules: spec.rules,
-    choices: spec.choices,
-    allowNone: false,
+    feature: spec,
+    ...spec.prompt(line),
     usage: {
       db,
       operation: `purchaseImport.${stage}.${index}`,

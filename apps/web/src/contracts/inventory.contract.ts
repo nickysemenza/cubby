@@ -36,7 +36,6 @@ export const inventoryContract = defineContract("inventory", {
   receiveExpense: mutation({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
     },
     native: "Explicit Expense inventory receiving",
     input: inventoryReceiveExpenseInput,
@@ -46,7 +45,6 @@ export const inventoryContract = defineContract("inventory", {
   receivingContext: query({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
     },
     native: "Expense receiving context",
     input: inventoryReceivingContextInput,
@@ -66,7 +64,6 @@ export const inventoryContract = defineContract("inventory", {
   bulkDiscard: mutation({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
     },
     input: inventoryBulkDiscardPayload,
     output: inventoryBulkDiscardOut,

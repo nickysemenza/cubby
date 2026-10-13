@@ -79,35 +79,17 @@ deletion as history, exposes later account drift, and never writes financial
 allocations. `mail.resolve` can link a lifecycle Email to several existing
 Purchases through `purchaseIds`.
 
-### Deployed contracts and remaining live acceptance
+The contracts above are deployed. Remaining live acceptance work belongs in
+[the backlog](todos.md#import-pipeline-architecture). Deployment, stored fields
+and terminal Runs alone do not establish source-specific acceptance: blocked
+bindings still need public writer/readback verification, and missing original
+preparations remain evidence gaps. Historical restart readiness requires
+authorized scope and transport/coverage evidence; missing evidence stays unknown,
+never reconstructed from current defaults. Continuous financial processing needs
+acceptance beyond classification-only discovery. Existing-Purchase attachment and
+accepted-source reconciliation preserve money and stock and refuse ambiguous or
+changed original bindings.
 
-- Owned discovery status reads expose frozen mailbox scope, current checkpoints,
-  retained authorization evidence and recorded AI usage without executing the
-  coordinator. Historical Runs missing frozen query or execution-policy fields
-  still expose status and findings, with `mailDiscovery: null`: their readiness
-  evidence is unavailable, rather than reconstructed from current defaults.
-  Reads preserve the stored input and cannot authorize or restart discovery.
-  Missing historical transport or cumulative coverage evidence
-  stays unknown; the remaining durable evidence work is in `docs/todos.md`.
-- Existing-Purchase imports bind deliberate Product choices to uniquely matching
-  unbound manual item Expenses. Accepted originals instead use an exact reviewed
-  reconciliation; a new Product requires the retained original preparation and
-  its frozen identity fingerprint. Ambiguous, claimed or changed rows refuse.
-  Neither path receives inventory or adds booked spend during attach-only repair.
-- Deployment establishes these contracts, not every source-specific repair.
-  Blocked bindings still need public writer/readback acceptance; missing original
-  preparations remain evidence gaps. Historical restart readiness still needs
-  authorized scope and transport/coverage evidence, and continuous financial
-  processing needs its own acceptance beyond classification-only discovery.
-
-Private financial acceptance now includes original Apple Card statements and
-order-specific installment settlement. Separate orders and trade-ins remain
-distinct even when devices share a model. Estimated confirmation tax yields to
-the exact current order and independently matched posted charge; conflicting
-trade-in notices require the final order/device identity and actual adjustment.
-Unbilled installment principal remains an explained future balance, never a
-fabricated posted transaction. Original statements and preservation evidence
-remain outside repository content.
 
 ## Validation boundaries
 
@@ -150,9 +132,7 @@ quality remain distinct from deterministic import convergence.
 
 ## Migration and rollout
 
-The migration adds nullable references and conservative defaults. Existing
-Vendor order-evidence policies are backfilled only when the new override is
-unset. Existing Products retain unknown acquisition origin. Neither old bank
-transactions nor old Expenses are automatically reclassified or booked.
-The PR requires production migration and schema readback before merge under
-[validation policy](agents/validation.md); deployment does not apply migrations.
+Follow [production change rules](agents/domain-rules.md#production-changes).
+Historical backfills must preserve unknown acquisition origin and evidence;
+existing bank transactions and Expenses are not automatically reclassified or
+booked. Deployment never applies migrations.

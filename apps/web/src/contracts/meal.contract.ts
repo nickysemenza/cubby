@@ -120,7 +120,6 @@ export const mealContract = defineContract("meal", {
   saveFood: mutation({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
     },
     input: schemas.saveMealFoodInput,
     output: schemas.mealFoodMutationOut,
@@ -129,7 +128,6 @@ export const mealContract = defineContract("meal", {
   removeFood: mutation({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
     },
     input: schemas.removeMealFoodInput,
     output: schemas.mealFoodMutationOut,
@@ -183,7 +181,6 @@ export const mealContract = defineContract("meal", {
   duplicate: mutation({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
     },
     input: mealDuplicateInput,
     output: schemas.mealOut,
@@ -192,7 +189,6 @@ export const mealContract = defineContract("meal", {
   copyRange: mutation({
     mcp: {
       omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
     },
     input: mealCopyRangeInput,
     output: mealCopyRangeOut,

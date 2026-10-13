@@ -1,5 +1,4 @@
 import { pascalCase } from "../../../packages/shared/src/text-case.ts";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
@@ -11,7 +10,6 @@ import {
   assertContractPurity,
   collectStartOperationHandlers,
   loadContracts,
-  ROOT,
   SOURCE_ROOT,
 } from "./collect.ts";
 
@@ -76,21 +74,18 @@ export const toolKind = (
   return first.kind;
 };
 
-const TODOS_PATH = "docs/todos.md";
-
 /**
  * Every query and mutation is either an MCP tool action or declares why not
  * (`mcp` in `contracts/define.ts`), never both. An omission's reference must
  * hold: a kernel alternative names a verb some tool exposes, an agent twin is
- * itself an action, and a deferred capability names a docs/todos.md entry that
- * lists the operation. Subscriptions are not tool actions and are skipped.
+ * itself an action. Deferred capabilities live in these typed declarations;
+ * subscriptions are not tool actions and are skipped.
  * Every violation is reported at once.
  */
 export const assertMcpExposure = ({
   operations,
   exposedOperations,
   kernelActions,
-  todos,
 }: {
   operations: ReadonlyArray<{
     operation: string;
@@ -99,8 +94,6 @@ export const assertMcpExposure = ({
   }>;
   exposedOperations: ReadonlySet<string>;
   kernelActions: ReadonlySet<string>;
-  /** The text of docs/todos.md. */
-  todos: string;
 }): void => {
   const errors: string[] = [];
   for (const { operation, kind, mcp } of operations) {
@@ -137,23 +130,6 @@ export const assertMcpExposure = ({
       errors.push(
         `${operation} names agent twin ${omission.twin}, which is not an MCP tool action.`,
       );
-    if (omission.omit === "deferred_capability") {
-      const start = todos.indexOf(`**${omission.todo}.**`);
-      if (start === -1) {
-        errors.push(
-          `${operation} defers to ${TODOS_PATH} entry **${omission.todo}.**, which does not exist.`,
-        );
-        continue;
-      }
-      // The entry runs to the next top-level bullet or heading.
-      const rest = todos.slice(start);
-      const end = rest.search(/\n(?:- |#)/u);
-      const entry = end === -1 ? rest : rest.slice(0, end);
-      if (!entry.includes(`\`${operation}\``))
-        errors.push(
-          `${TODOS_PATH} does not name \`${operation}\` in its **${omission.todo}.** entry.`,
-        );
-    }
   }
   if (errors.length > 0)
     throw new Error(
@@ -263,7 +239,6 @@ const resolveMcpTools = async (): Promise<ResolvedTool[]> => {
     kernelActions: new Set(
       actions.flatMap((action) => ("kernel" in action ? [action.kernel] : [])),
     ),
-    todos: readFileSync(join(ROOT, TODOS_PATH), "utf8"),
   });
   return resolved;
 };

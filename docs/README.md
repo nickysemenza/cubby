@@ -27,8 +27,18 @@ the repository.
 | `application-framework/` | Entity framework design and ownership records.                         |
 | `guide/`                 | Household-facing guide bundled into the app's Documentation route.     |
 | `plans/`                 | Proposed or in-progress work; status at the top of each plan governs.  |
-| `reports/`               | Dated measurements and audits; a snapshot, not current behavior.       |
 | `runbooks/`              | Operational procedures that require current-environment checks.        |
 
-Current behavior lives in code and maintained contracts. Historical experiment
-tables removed during cleanup remain available in Git history.
+## Ownership and pruning
+
+Keep each fact at one authoritative home. Executable declarations, manifests,
+lockfiles and configuration own versions, command composition, rosters and
+numeric settings; prose links to those sources and records the rationale or trap
+they cannot explain. Maintained behavior docs own contracts, ADRs own decisions,
+and the work list owns remaining work. A pointer names the condition for loading
+its target instead of copying the rule.
+
+Delete completed plans and dated reports after moving durable rationale to its
+behavior owner and unresolved work to the backlog. Verify status against
+implementation before removing active work. Git history is the archive; this
+policy requires no new drift checks.

@@ -82,14 +82,10 @@ test("native pass replay needs no FFI; misses prepare once and execute sequentia
   // Match the real workspace instead of relying on Node's module detection.
   writeFileSync(join(root, "package.json"), '{"type":"module"}');
   mkdirSync(join(root, "bin"));
-  mkdirSync(join(root, "scripts/generator"), { recursive: true });
+  mkdirSync(join(root, "scripts"));
   writeFileSync(
-    join(root, "scripts/generator/ensure.ts"),
-    'import {appendFileSync} from "node:fs"; appendFileSync("calls", "generate\\n");',
-  );
-  writeFileSync(
-    join(root, "scripts/ensure-apple-ffi.ts"),
-    'import {appendFileSync} from "node:fs"; appendFileSync("calls", "ffi\\n");',
+    join(root, "scripts/ensure.ts"),
+    'import {appendFileSync} from "node:fs"; appendFileSync("calls", process.argv[2] + "\\n");',
   );
   const pnpm = join(root, "bin/pnpm");
   writeFileSync(
@@ -111,7 +107,10 @@ test("native pass replay needs no FFI; misses prepare once and execute sequentia
   writeFileSync(join(root, "miss"), "");
   checkApple(root);
   const calls = readFileSync(join(root, "calls"), "utf8");
-  assert.equal(calls.split("\n").filter((line) => line === "ffi").length, 1);
+  assert.equal(
+    calls.split("\n").filter((line) => line === "apple-ffi").length,
+    1,
+  );
   assert.match(calls, /--targets=host-tests,simulator-build/);
   assert.match(calls, /--parallel=1/);
 });

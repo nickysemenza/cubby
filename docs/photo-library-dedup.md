@@ -154,30 +154,10 @@ over-50-MiB files fail explicitly. Subject lifting is an intentional full-resolu
 edit. Temporary encoded files remain alive through retries and are removed when
 their last owning reference is released.
 
-Add to offers existing image-attachable records and New garden entries. Garden
-imports choose one bed/location and optional planting, group photos by local
-Gregorian capture day, and review editable observation drafts with a note per day.
-Photos creation dates take precedence, including corrections in Photos; file
-fallbacks use capture metadata, never modification/upload dates. Undated photos
-need an explicit date. Prefills say Date from photo; explicit date edits survive
-selection changes and existing-entry dates are preserved.
-
-Existing-record destinations keep capture-date matches and unscoped recents in
-independent paged lists. Recents skip capture-day rows and continue until a
-visible destination is available or the source ends. Selection changes retarget
-that model-owned drain; replacing a SwiftUI scope task does not cancel a recent
-request still wanted by the new selection. Dismissal stops further paging and
-invalidates pending refresh continuations. Reappearance waits for a surviving
-initial or refresh page to land before evaluating its visible recents, even when
-cached rows are already available. Refresh supersedes obsolete pages without
-waiting for their loaders to honor cancellation.
-
-Garden review enforces 20 photos per entry before uploading. Saves are sequential;
-confirmed entry IDs and successful upload IDs survive failures. Reuse, including
-references to other selected photos, transfers no image bytes. The destination
-stays fixed after a batch starts so retries cannot split its saved days across
-locations. Ordinary Garden forms retain their existing selection flow, with a
-12-photo chooser bounded by remaining entry capacity.
+Destination creation uses the generic image-ingress declaration. Garden-entry
+creation and capture-date prefills follow [Garden](garden.md#native-photo-import-and-calendar).
+Saved entry/upload IDs survive retries; a destination stays fixed once a batch
+starts so recovery cannot split writes across locations.
 
 ## Device validation
 
@@ -186,5 +166,3 @@ limited-access fallback, progressive-filter interaction, and PhotoKit
 current-rendition fixture parity still need device checks. Mac interaction
 requires an unlocked Photos library with authorization. Simulator and browser
 emulation do not establish physical-device behavior.
-
-The additive production database expansion is complete.

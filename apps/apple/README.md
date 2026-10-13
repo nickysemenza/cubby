@@ -12,35 +12,24 @@ contracts and [the backlog](../../docs/todos.md) for deeper inventory and web pa
 
 ## Build order
 
-1. `apps/apple/scripts/build-rust.sh` — builds `cubby-ffi` for iOS device/sim + macOS, generates
-   Swift bindings, stages `CubbyKit/Frameworks/CubbyFFI.xcframework` and
-   `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` (both gitignored).
-2. `pnpm generate` (run by `pnpm install`, `pnpm apple gen` and the Xcode schemes' build
-   pre-action) — writes the gitignored generated Swift: `CubbyKit/Generated/*.swift`, the
-   `openapi.json` and `openapi-generator-config.yaml` that swift-openapi-generator's SwiftPM
-   build plugin turns into the `CubbyAPI` target at build time, and the preview fixtures. That
-   target is separate so a hand-written CubbyKit edit does not recompile ~58k generated lines;
-   app code names its types through the aliases in `CubbyKit/Generated/APITypes.swift`, with the
-   branded codes and `PlainDate` supplied by the tiny `CubbyAPISupport` target. The first
-   Xcode build asks to trust the `OpenAPIGenerator` plugin; command-line builds pass
-   `-skipPackagePluginValidation`.
-3. `xcodegen generate --spec apps/apple/project.yml` — produces `Cubby.xcodeproj` (gitignored).
-4. Optional: `brew install getsentry/tools/sentry-cli` and put an org auth token in
-   `~/.sentryclirc`. Only the `Upload dSYMs to Sentry` archive phase needs it (project
-   `cubby-apple`; the org is derived from the token), so a TestFlight build symbolicates. A
-   missing `sentry-cli` or token is a build warning, never a failure.
+Run `pnpm apple gen` or the appropriate `pnpm apple <command>`: the launcher
+prepares generated contracts, the cached Rust xcframework/UniFFI shim, and the
+Xcode project in dependency order. Outputs are gitignored. The
+[generated-file rules](AGENTS.md#generated-files-read-only) own their inputs.
+Direct `build-rust.sh --targets sim` is useful for a one-slice FFI iteration;
+restore all slices before a Mac/CLI build. The first GUI build asks to trust
+OpenAPIGenerator; command-line builds skip package-plugin validation.
+
+For archive symbolication, install `getsentry/tools/sentry-cli` and put the org
+auth token in `~/.sentryclirc`. Only the archive phase needs it; a missing CLI
+or token warns rather than fails ordinary builds.
 
 If you see the literal error text `artifact of binary target 'CubbyFFIBinary' not found`, the
-xcframework hasn't been built yet — run step 1 (`build-rust.sh`) first.
+xcframework hasn't been built yet — prepare the native artifacts first.
 
-Step 1 is wrapped by [scripts/ensure-apple-ffi.ts](../../scripts/ensure-apple-ffi.ts): the
-xcframework and `cubby_ffi.swift` are outputs of the Nx-cached `apple-ffi` target
-(`project.json`), keyed by the same path-independent Rust content fingerprint the WASM build uses
-(`scripts/rust-fingerprint.ts`). Nx shares that cache across every worktree, so a checkout with
-unchanged Rust restores both in seconds instead of recompiling the path crates for three targets;
-a matching fingerprint marker inside the xcframework skips Nx entirely. `build-rust.sh` itself
-always builds (cargo's fingerprints make an unchanged rerun cheap) — run it directly for one-slice
-iteration (`--targets sim`).
+The shared `scripts/ensure.ts apple-ffi` path fingerprints Rust contents and
+restores the full xcframework/Swift shim from Nx. An incomplete artifact must
+not be treated as ready merely because a fingerprint matches.
 
 ## Running
 
@@ -134,7 +123,7 @@ launchd's SIGTERM-to-SIGKILL window (20s by default) is longer than the 10s stop
 - `pnpm apple check` runs native formatting, probes cached CubbyKit host tests
   and iOS simulator compilation, then prepares FFI and runs only misses.
   Use `pnpm apple check host`, `app`, or `lint` for one scope. A pass is cached
-  for its input hash, and CI replays it on a PR with the same content and Xcode.
+  for its input hash, and CI replays it on a PR with the same declared input hash.
 - `pnpm apple test` runs package tests only. It does **not** run the hosted app tests.
 - Hosted CI runs formatting separately as `Apple lint` without FFI setup,
   and native compilation as parallel macOS jobs: `Apple host tests`
@@ -165,7 +154,8 @@ launchd's SIGTERM-to-SIGKILL window (20s by default) is longer than the 10s stop
 ## TestFlight releases
 
 See [release policy and manual dispatch](../../docs/ci.md#apple-testflight-release).
-Versions come from the shared compatibility declaration; release tags are unnecessary.
+Versions come from the shared compatibility declaration; completed-upload tags
+are maintained by the release workflow.
 
 ### One-time Apple and GitHub setup
 

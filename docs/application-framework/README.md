@@ -1,6 +1,6 @@
 # Declarative application framework
 
-Cubby's 19 entity declarations own scalar fields across storage, validation,
+Cubby's entity declarations own scalar fields across storage, validation,
 mutations, audit policy, and shared browser presentation. Application workflows
 make sequencing, branches, commits, effects, and streaming behavior inspectable.
 Repositories and specialized controls retain the domain rules that cannot be
@@ -103,39 +103,14 @@ onto its member. There are no per-domain client wrapper modules.
 
 ## Compatibility
 
-The migration preserves the 19 entities, 249 operation IDs and kinds, and 111
-routes present at `a65b1f68f982876a98de33470df1ea9f31f40aaf`. Git retains the
-baseline; generated registries and their exhaustive contract checks own the
-current catalog. Separate migration inventories would duplicate that information
-without validating behavior.
-
-Cookbook and USDA food retain their existing workflow-only/read-only contracts.
-The physical schema snapshot guards column compatibility. Any future physical
-schema change needs a compatible migration independently of source generation.
+Source generation does not change stored data. Physical changes require their
+own preserving migration under [domain rules](../agents/domain-rules.md#production-changes).
+Read-only and workflow-only entities retain explicit capability boundaries;
+the generated registries own the current catalog rather than a dated count.
 
 ## Validation and delivery
 
-Follow [agent validation](../agents/validation.md). Run focused behavioral tests
-while editing, then the full relevant gates:
-
-1. Regenerate artifacts and run `pnpm check:all` for types, lint, formatting,
-   entity freshness, bindings, OpenAPI, schema/identifier guards, and tooling.
-2. Run unit/UI and PostgreSQL contracts. Tests cover partial updates, auditing,
-   failure settlement, streaming finalization, declaration-backed presentation,
-   and domain invariants.
-3. Build with `pnpm --filter @cubby/web run build:cf` before browser tests.
-   Validate desktop/mobile presentation, editing, pantry persistence, copy/print
-   behavior, and navigation through the built Worker.
-4. Commit with mandatory hooks and run `pnpm verify:local:full` on the exact clean
-   final commit before merge. Record that commit and its results in the PR.
-
-Required GitHub checks must pass for the final PR head's content. A local run
-satisfies one only through the shared Nx remote cache for the same input hash,
-and an earlier working-tree result is not final-commit validation.
-
-Test shared compilers and runtime behavior with representative contracts, then
-retain domain-specific exceptions and real database/browser integration coverage.
-Do not repeat generated operation-name rosters or primitive form-field enumeration
-in each entity's test file. Generated files are marked in `.gitattributes` for
-GitHub review; handwritten declarations remain visible, and freshness/type checks
-still validate generated outputs.
+[Agent validation](../agents/validation.md) owns check selection and delivery.
+Exercise shared compiler/runtime behavior with representative contracts and
+retain real database/browser coverage for domain exceptions. Generated
+operation rosters and primitive field enumeration do not establish behavior.

@@ -14,7 +14,6 @@ import { wasm } from "~/lib/wasm";
  * and hands the model one shortlist to pick from.
  */
 import { USDA_FOOD_SUGGEST_FEATURE } from "~/server/ai/features";
-import type { AiSelectionSpec } from "~/server/ai/selection";
 import type { USDAService } from "~/server/services/usda.service";
 
 export interface UsdaLookupPort {
@@ -128,17 +127,7 @@ export async function buildUsdaShortlist(
   return [...byId.values()].slice(0, limit);
 }
 
-const USDA_MATCH_RULES = `You map a recipe ingredient to the single best USDA FoodData Central entry, for nutrition and cost.
-
-Rules:
-1. Prefer the generic whole-food form. Prefer sr_legacy_food over foundation_food.
-2. Choose a branded_food ONLY when the ingredient is itself a brand/specific product (e.g. "Biscoff cookies", "Oreos").
-3. Decline if nothing suitable is shown.`;
-
-export const usdaFoodSpec: AiSelectionSpec<UsdaShortlistEntry> = {
+export const usdaFoodSpec = {
+  ...USDA_FOOD_SUGGEST_FEATURE.selection,
   feature: USDA_FOOD_SUGGEST_FEATURE,
-  rules: USDA_MATCH_RULES,
-  idOf: (entry) => String(entry.fdcId),
-  renderLine: (entry) => entry.line,
-  maxCandidates: 25,
 };

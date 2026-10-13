@@ -8,8 +8,9 @@
   verification, PR screenshots, and the merge gate.
 - Production migrations have one exclusive owner; establish that household data
   survives before pushing, then verify the schema afterward.
-- Update the doc that owns a behavior in the same change; docs agree with the
-  code and with each other.
+- Update the doc that owns a behavior in the same change. Follow
+  [documentation ownership](docs/README.md#ownership-and-pruning): one home per
+  fact, executable configuration in code, completed plans/reports in Git history.
 - Keep edits disjoint across agents/worktrees. Work directly by default; before
   spawning (including a Codex hand-off), load [model
   routing](docs/agents/model-routing.md) and use its lane, effort, review, and

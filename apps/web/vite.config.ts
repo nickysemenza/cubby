@@ -22,7 +22,7 @@ import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Generated output is never committed; bring it current before any module
 // graph (or TanStack's route scan) reads it. A no-op when inputs are unchanged.
-execFileSync(process.execPath, ["../../scripts/generator/ensure.ts"], {
+execFileSync(process.execPath, ["../../scripts/ensure.ts", "generate"], {
   cwd: import.meta.dirname,
   stdio: "inherit",
 });
@@ -143,7 +143,7 @@ function cfPgNativeStub(): Plugin {
 }
 
 /**
- * Resolves @cubby/recipebridge per environment (scripts/build-wasm.sh).
+ * Resolves @cubby/recipebridge per environment (scripts/ensure.ts wasm --build).
  *
  * SSR gets a CF Workers wrapper over the full build. It uses the ?init pattern
  * @cloudflare/vite-plugin supports: vite-plugin-wasm doesn't apply to the

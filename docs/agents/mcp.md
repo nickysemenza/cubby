@@ -134,15 +134,15 @@ reason on the member itself — there is no contract-level default — and add a
 - `agent_twin` names the exposed operation (`twin`) agents call instead.
 - `kernel_alternative` names the entity-kernel verbs (`kernel`) that can do the
   work, with a `note` on how. It records an omission, not proven parity.
-- `deferred_capability` is real agent work not yet exposed: `todo` names the
-  [todos](../todos.md) entry, which must list the operation id.
+- `deferred_capability` is real agent work not yet exposed. Its optional
+  `note` explains the missing contract; the operation declaration is authoritative.
 - `client_view`, `model_assist`, `upload_transport`, `device_protocol`,
   `auth_connection`, and `operator_maintenance` are the closed reasons agents
   do without it. A person's review or approval is not one: expose it and gate
   it with the `member_decision` capability.
 
 Exposing an operation means adding its action and deleting its `mcp`
-declaration (and its todo line when deferred). A write's review handle
+declaration. Update any active backlog item when its remaining work changes. A write's review handle
 (suggestion id, fingerprint, event id, finding id) must be produced by an
 exposed read; when the producer cannot be exposed, defer the write too. A member input publishes as an
 object, an optional object, a union of objects, or no input; a tool's
