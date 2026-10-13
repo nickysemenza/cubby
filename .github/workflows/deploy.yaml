@@ -42,7 +42,7 @@ jobs:
   # and CACHE_TOKEN secret are provisioned once; this deploys only the code.
   deploy-nx-cache:
     name: Deploy Nx cache
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 10
     concurrency:
       group: deploy-cubby-nx-cache

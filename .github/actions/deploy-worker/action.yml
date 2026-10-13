@@ -1,8 +1,9 @@
 name: "Deploy a Cloudflare Worker"
 description: >-
-  Checks out current main twice (before building and again before deploying)
-  and installs, optionally builds, then deploys one package's Worker via its
-  own deploy-command (every package has wrangler as a devDependency). Shared
+  Checks that this push is still current main (before building and again
+  before deploying) and installs, optionally builds, then deploys one
+  package's Worker via its own deploy-command (every package has wrangler as
+  a devDependency). Shared
   by every job in deploy.yaml; each job's own concurrency/environment/
   timeout-minutes stay on the job because a composite action cannot own them.
 
@@ -42,9 +43,15 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # A newer push supersedes this one; only current main deploys.
     - name: Check current main before building
       id: current_main
-      uses: ./.github/actions/check-current-main
+      shell: bash
+      run: |
+        current="$(git ls-remote origin refs/heads/main | cut -f1)"
+        [[ -n "$current" ]] || { echo "::error::Could not resolve refs/heads/main"; exit 1; }
+        echo "current=$([[ "$current" == "$GITHUB_SHA" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        [[ "$current" == "$GITHUB_SHA" ]] || echo "::notice::Skipping stale deployment for $GITHUB_SHA; main is $current"
 
     - uses: ./.github/actions/setup-node-with-deps
       if: steps.current_main.outputs.current == 'true'
@@ -61,10 +68,16 @@ runs:
         SENTRY_AUTH_TOKEN: ${{ inputs.sentry-auth-token }}
       run: ${{ inputs.build-command }}
 
+    # Stops a deploy whose build outlived a newer push.
     - name: Re-check current main before deployment
       if: steps.current_main.outputs.current == 'true'
       id: deploy_current
-      uses: ./.github/actions/check-current-main
+      shell: bash
+      run: |
+        current="$(git ls-remote origin refs/heads/main | cut -f1)"
+        [[ -n "$current" ]] || { echo "::error::Could not resolve refs/heads/main"; exit 1; }
+        echo "current=$([[ "$current" == "$GITHUB_SHA" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        [[ "$current" == "$GITHUB_SHA" ]] || echo "::notice::Skipping stale deployment for $GITHUB_SHA; main is $current"
 
     - name: Deploy ${{ inputs.package }}
       if: steps.deploy_current.outputs.current == 'true'

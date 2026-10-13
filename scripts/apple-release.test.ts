@@ -8,9 +8,10 @@ import { test } from "node:test";
 import {
   BUILD_NUMBER_OFFSET,
   commitExists,
+  checkpointTag,
   decide,
-  findCheckpoint,
   newerRunThatBegan,
+  readCheckpoint,
   refuseUnsafeRun,
   type Checkpoint,
   type GitHub,
@@ -41,45 +42,50 @@ const facts = (overrides: Partial<Parameters<typeof decide>[0]> = {}) => ({
   ...overrides,
 });
 
-// Synthetic GitHub REST API: a path → JSON map, plus artifact contents.
-// Any unmapped path fails like a permission error would.
+// Synthetic GitHub REST API: a path → JSON map. Any unmapped path fails
+// like a permission error would.
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
-const fakeGitHub = (
-  routes: Record<string, Json>,
-  artifacts: Record<number, string> = {},
-): GitHub => ({
+const fakeGitHub = (routes: Record<string, Json>): GitHub => ({
   get: async <T>(route: string) => {
     const body = routes[route];
     if (body === undefined) throw new Error(`GET ${route}: 403 forbidden`);
     return body as T;
   },
-  artifactText: async (id) => {
-    const text = artifacts[id];
-    if (text === undefined) throw new Error(`artifact ${id}: 410 gone`);
-    return text;
-  },
 });
-const artifactsPage = (page: number) =>
-  `/actions/artifacts?name=apple-testflight-uploaded&per_page=100&page=${page}`;
-const artifact = (
-  id: number,
-  runId: number,
-  createdAt: string,
-  expired = false,
-) => ({
-  id,
-  name: "apple-testflight-uploaded",
-  expired,
-  created_at: createdAt,
-  workflow_run: { id: runId },
-});
-const run = (id: number, overrides: Record<string, string | number> = {}) => ({
-  id,
-  workflow_id: WORKFLOW_ID,
-  path: ".github/workflows/apple-testflight.yaml",
-  head_branch: "main",
-  ...overrides,
-});
+
+// A throwaway repository with one synthetic commit.
+const withRepository = (
+  body: (
+    root: string,
+    head: string,
+    git: (...args: string[]) => string,
+  ) => void,
+) => {
+  const root = mkdtempSync(path.join(tmpdir(), "cubby-apple-release-"));
+  try {
+    const git = (...args: string[]) =>
+      execFileSync(
+        "git",
+        [
+          "-C",
+          root,
+          "-c",
+          "user.name=Test",
+          "-c",
+          "user.email=test@example.test",
+          ...args,
+        ],
+        { encoding: "utf8" },
+      ).trim();
+    git("init", "-q");
+    writeFileSync(path.join(root, "file.txt"), "synthetic\n");
+    git("add", ".");
+    git("commit", "-qm", "synthetic");
+    body(root, git("rev-parse", "HEAD"), git);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+};
 
 test("only a main-branch first attempt may plan or publish", () => {
   assert.throws(
@@ -167,52 +173,74 @@ test("a later main version bump cannot turn a comment-only push into a release",
   });
 });
 
-test("the newest authentic checkpoint wins across pages; expired and foreign artifacts never count", async () => {
-  const filler = Array.from({ length: 100 }, (_, index) =>
-    artifact(1000 + index, 9000, daysAgo(80), true),
-  );
-  const github = fakeGitHub(
-    {
-      [artifactsPage(1)]: { artifacts: [...filler] },
-      [artifactsPage(2)]: {
-        artifacts: [
-          artifact(1, 11, daysAgo(10)),
-          artifact(2, 12, daysAgo(3)),
-          // Uploaded by another workflow or from a non-main dispatch.
-          artifact(3, 13, daysAgo(1)),
-          artifact(4, 14, daysAgo(1)),
-        ],
-      },
-      "/actions/runs/11": run(11),
-      "/actions/runs/12": run(12),
-      "/actions/runs/13": run(13, {
-        workflow_id: 1,
-        path: ".github/workflows/ci.yaml",
-      }),
-      "/actions/runs/14": run(14, { head_branch: "feature" }),
-    },
-    {
-      1: JSON.stringify(checkpoint({ sha: "c".repeat(40) })),
-      2: JSON.stringify(checkpoint()),
-    },
-  );
-  assert.deepEqual(await findCheckpoint(github, WORKFLOW_ID), checkpoint());
+test("the highest-build checkpoint tag wins; no tag is missing history", () => {
+  withRepository((root, head, git) => {
+    assert.equal(readCheckpoint(root), null);
+    const tag = (upload: Checkpoint) =>
+      git(
+        "tag",
+        "-a",
+        checkpointTag(upload),
+        "-m",
+        JSON.stringify(upload),
+        upload.sha,
+      );
+    const older = checkpoint({ sha: head, build: BUILD_NUMBER_OFFSET + 9 });
+    const newest = checkpoint({ sha: head, build: BUILD_NUMBER_OFFSET + 10 });
+    tag(newest);
+    tag(older);
+    // Numeric, not lexical: build 10 outranks build 9.
+    assert.deepEqual(readCheckpoint(root), newest);
+  });
 });
 
-test("no checkpoint is missing history, but malformed evidence or an API error fails", async () => {
-  const empty = fakeGitHub({ [artifactsPage(1)]: { artifacts: [] } });
-  assert.equal(await findCheckpoint(empty, WORKFLOW_ID), null);
-
-  const routes = {
-    [artifactsPage(1)]: { artifacts: [artifact(2, 12, daysAgo(1))] },
-    "/actions/runs/12": run(12),
-  };
-  const malformed = fakeGitHub(routes, {
-    2: JSON.stringify({ ...checkpoint(), version: "3.1" }),
-  });
-  await assert.rejects(findCheckpoint(malformed, WORKFLOW_ID), /malformed/u);
-
-  await assert.rejects(findCheckpoint(fakeGitHub({}), WORKFLOW_ID), /403/u);
+test("lightweight, malformed, or mismatched checkpoint tags fail", () => {
+  const cases: [string, (head: string) => string[], RegExp][] = [
+    ["lightweight", () => ["tag", "testflight/3.1.0-10007"], /not annotated/u],
+    [
+      "unnumbered",
+      () => ["tag", "-a", "testflight/next", "-m", "{}"],
+      /names no build/u,
+    ],
+    [
+      "malformed",
+      (head) => [
+        "tag",
+        "-a",
+        checkpointTag(checkpoint()),
+        "-m",
+        JSON.stringify({ ...checkpoint({ sha: head }), version: "3.1" }),
+      ],
+      /malformed/u,
+    ],
+    [
+      "renamed",
+      (head) => [
+        "tag",
+        "-a",
+        "testflight/3.1.0-10008",
+        "-m",
+        JSON.stringify(checkpoint({ sha: head })),
+      ],
+      /malformed/u,
+    ],
+    [
+      "retargeted",
+      () => [
+        "tag",
+        "-a",
+        checkpointTag(checkpoint()),
+        "-m",
+        JSON.stringify(checkpoint()),
+      ],
+      /points away/u,
+    ],
+  ];
+  for (const [label, args, error] of cases)
+    withRepository((root, head, git) => {
+      git(...args(head));
+      assert.throws(() => readCheckpoint(root), error, label);
+    });
 });
 
 test("a higher-numbered run that began blocks an older publisher; pending ones do not", async () => {
@@ -251,25 +279,8 @@ test("a higher-numbered run that began blocks an older publisher; pending ones d
 });
 
 test("a baseline commit absent from the checkout is unavailable history", () => {
-  const root = mkdtempSync(path.join(tmpdir(), "cubby-apple-release-"));
-  try {
-    const git = (...args: string[]) =>
-      execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
-    git("init", "-q");
-    writeFileSync(path.join(root, "file.txt"), "synthetic\n");
-    git("add", ".");
-    git(
-      "-c",
-      "user.name=Test",
-      "-c",
-      "user.email=test@example.test",
-      "commit",
-      "-qm",
-      "synthetic",
-    );
-    assert.equal(commitExists(root, git("rev-parse", "HEAD")), true);
+  withRepository((root, head) => {
+    assert.equal(commitExists(root, head), true);
     assert.equal(commitExists(root, "d".repeat(40)), false);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+  });
 });

@@ -17,6 +17,7 @@
         // ci.yaml, and the Nx targets.
         "scripts/check-outward-text.ts!",
         "scripts/tester-army-ci.ts!",
+        "scripts/ci-lanes.ts!",
         "scripts/dev-db.ts!",
         "scripts/generator/ensure.ts!"
       ],

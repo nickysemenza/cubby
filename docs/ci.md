@@ -1,22 +1,25 @@
 # Continuous integration
 
-Every required check is an Nx target, and GitHub Actions runs each one on
-every pull request and `main` push. A target's `inputs` decide its cache key;
-a passing result for the same key in the shared Nx remote cache, whether CI or
-the developer's Mac produced it, replays in seconds and satisfies the merge
-gate ([ADR 0009](adr/0009-content-hash-merge-gate.md),
-[validation policy](agents/validation.md)). Merging to `main` independently
-deploys every production Worker, including after a documentation-only change;
-deployment never waits for post-merge CI.
+Every required check is an Nx target. A target's `inputs` decide its cache
+key; a passing result for the same key in the shared Nx remote cache, whether
+CI or the developer's Mac produced it, replays in seconds and satisfies the
+merge gate ([ADR 0009](adr/0009-content-hash-merge-gate.md),
+[validation policy](agents/validation.md)). Before any lane starts, the `Plan`
+job compares the tree with the last green `main` run and starts only the lanes
+whose tasks' inputs changed, so a documentation-only PR starts no test runner
+([ADR 0014](adr/0014-path-routed-ci-lanes.md)). Merging to `main`
+independently deploys every production Worker, including after a
+documentation-only change; deployment never waits for post-merge CI.
 
-`ci.yaml` holds the required checks and an optional purchase-import browser lane. The six required status contexts below own the merge gate.
+`ci.yaml` holds the required checks and an optional purchase-import browser
+lane. One status context, `CI passed`, owns the merge gate.
 Tester Army background coverage lives in `e2e-journeys.yaml`: three web smoke
 journeys after successful same-repository PR CI, opt-in iOS with the
 `tester-army:ios` label, and coupled
 imports for affected import/shared/backend changes. All remain informational,
 with verified action replay, SDK evidence uploads and the built-in GitHub
-reporter. `tester-army-pr.yaml` dispatches the exact still-open PR head after CI
-completes and its six required jobs pass; an optional purchase-import failure does not suppress dispatch. Updates and closure cancel its automatic runs, independently of CI,
+reporter. `tester-army-pr.yaml` dispatches the exact still-open PR head after its
+CI run succeeds; the optional purchase-import lane may fail without failing the run. Updates and closure cancel its automatic runs, independently of CI,
 deployment and manual/weekly coverage. One routing step selects the jobs.
 The weekly matrix disables action replay. Manual dispatch and PR labels can
 select additional journeys; deterministic simulator journeys stay optional.
@@ -41,7 +44,7 @@ flowchart LR
 
 The required test lanes key on the `gate` named input in `nx.json`: every
 non-documentation file (the lockfile and `.github/` included), the Markdown
-that the Worker bundles (`docs/README.md` and the
+that the Worker bundles (`docs/README.md`, the `docs/guide` pages, and the
 purchase-import, product-enrichment, and
 photo-inventory-import skills). Platform, Node version, locale, and `CI`
 stay out, so a developer Mac's pass counts for the Linux lanes. Web targets add
@@ -55,11 +58,11 @@ the Apple build reads instead of the whole tree (`appleGate` in
 scripts and CI configuration, the shared golden vectors, and the generated
 Swift, but no toolchain version, so a Mac pass on a newer Xcode than the
 runner's counts for CI; `pnpm apple check` regenerates before hashing,
-so a web-only change replays the Apple lanes. Linux validation probes both Apple
-passes using its existing dependency installation before scheduling macOS. A
-miss or unavailable probe runs the corresponding native job; a skipped native
-job satisfies the Apple aggregate only with its successful probe. Nightly runs
-force both native jobs. Workflows that only deploy,
+so a web-only change replays the Apple lanes. When `Plan` selects the Apple
+lane, the Linux `Apple cache probe` job probes both Apple passes in parallel
+with the other lanes before scheduling macOS. A miss or unavailable probe runs
+the corresponding native job; a skipped native job satisfies `CI passed` only
+with its successful probe. Nightly runs force both native jobs. Workflows that only deploy,
 publish or review (`deploy.yaml`, `apple-testflight.yaml`, the Claude
 workflows) are outside every key. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
 the whole workflow, so every lane, nested Nx calls included, runs uncached on
@@ -226,13 +229,14 @@ contracts (`SubjectLift`, `FeaturePrintIndex`) when running on the Simulator,
 for whichever caller — local or hosted — ends up running that scheme there.
 
 Two hosted macOS jobs, `Apple host tests` and `Apple simulator build`, run in
-parallel on every PR and `main` push. Each installs the workspace (which also
-generates the Swift inputs) and, outside the nightly run, first runs its Nx target with
-`CUBBY_NX_CACHE_PROBE=1`: Nx replays a cached pass for the same input hash,
-and on a miss the script fails before building (Nx never caches that failure).
-Only a miss pays for the FFI, XcodeGen, and Xcode build caches and the real
-run. The nightly run skips the probe and runs both with `--skip-nx-cache` on
-the runner's own Xcode.
+parallel when the Apple lane is selected and its Linux probe did not verify a
+cached pass. The probe runs each Nx target with `CUBBY_NX_CACHE_PROBE=1`: Nx
+replays a cached pass for the same input hash, and on a miss the script fails
+before building (Nx never caches that failure). Only a miss or failed probe
+pays for a macOS runner, which installs the workspace (generating the Swift
+inputs), the FFI, XcodeGen, and Xcode build caches, and runs the target. The
+nightly run skips the probe and runs both with `--skip-nx-cache` on the
+runner's own Xcode.
 The host job runs the automatically generated
 `CubbyKit-Package` scheme with `xcodebuild test` on the ARM macOS host — no
 simulator. The aggregate package scheme includes all CubbyKit tests and the CLI
@@ -251,12 +255,9 @@ the cached `.build` directory; unchanged document, config, generator pin,
 toolchain, and check script reuse that pass without rebuilding or regenerating.
 Changed inputs run the full check, and warnings or generator failures never
 record a pass. The simulator job restores its simulator-only FFI framework and
-runs the generic-simulator build with no tests or simulator boot. The
-lightweight `Apple checks` job preserves the required status context and
-succeeds only when both macOS jobs succeed; failures, cancellations, or
-unexpected skips fail that gate. Aggregate checks use `!cancelled()` so
-whole-workflow cancellation can stop them while ordinary failed dependencies
-still reach their result checks.
+runs the generic-simulator build with no tests or simulator boot. Both jobs
+use `!cancelled()` so whole-workflow cancellation can stop them while a failed
+probe still falls through to macOS.
 
 Each SDK keeps its own compilation cache. Parallel jobs use two macOS
 runner slots to avoid adding the host and simulator compile times after a
@@ -341,30 +342,65 @@ canceled by later merges, so native checks can publish reusable caches.
 GitHub concurrency keeps
 one main run active and at most one pending; a newer push replaces the pending
 run. This does not add parallel main runs or jobs. The newest main CI result may
-wait for the active run; deployment remains independent. `Scope` keeps its
-stable required name and rejects live entity codes in PR text; no lane waits
-for it. `Validation` runs `pnpm check:all` (the cached generate, types, lint,
-format, knip, bindings, script, and Worker-test targets plus the uncached
-security audit), `pnpm dedupe:check`, and the offline relative-link check through
-the pinned Lychee action. Paths written as inline code are informational; link a
-repository file when its existence should be checked.
+wait for the active run; deployment remains independent.
 
-Apple jobs disable the pnpm-store cache through the shared action's existing
-input: a [host-job setup](https://github.com/nickysemenza/cubby/actions/runs/38310595561/job/115015310842)
-on 2026-10-12 spent about 65 seconds extracting a 710 MB store before a
-6.4-second install. The uncached-install comparison is pending; retain the
-compiler and SwiftPM caches separately.
+`Plan` runs on the `ubuntu-slim` container runner. It rejects live entity
+codes in PR text, finds the commit of the newest successful `main` push run of
+`ci.yaml`, and runs `dorny/paths-filter` with git (`token: ""`) on the
+two-dot diff from that commit to the tested tree, matching
+`.github/ci-lanes.yml`. `scripts/ci-lanes.ts` generates that file from the Nx
+inputs of the tasks each lane runs (`LANES`), resolving named inputs,
+`dependentTasksOutputFiles` producers, each task's own configuration, and the
+runtime inputs classified by exact command; an unclassified runtime input
+fails generation, and `cubby-checks:ci-lanes` fails when the file is stale.
+`scripts/ci-lanes.test.ts` asserts that every file Nx's hash plan reads for a
+lane's tasks selects that lane, and that every Nx task a lane's `ci.yaml`
+commands run is one that lane routes. Any deleted or renamed file also
+selects the docs lane, because it may be a relative link's target. `Plan`
+runs the outward-text check on the slim image's own Node 24, without
+`setup-node`; a missing or older Node fails `Plan` closed. Any tree compared with a green tree is
+correct, ancestor or not: a lane whose inputs match would replay that tree's
+pass. Nightly and manual runs, and a repository with no green main run, start
+every lane. Lanes with identical groups share one filter entry, named
+`<lane>+<lane>.<n>`. `Plan` outputs the selected lanes, the matrix of web
+lanes, and the exact jobs it skipped.
 
-Generated output is never committed; web and Apple jobs generate it during
+`CI passed` is the single required check (`re-actors/alls-green` on
+`ubuntu-slim`). It needs every lane and fails on any failure or cancellation,
+and on any skip other than the jobs `Plan` skipped or an Apple job whose probe
+verified a cached pass. A failed probe is allowed: it only sends both Apple
+lanes to macOS.
+
+`Validation` runs `pnpm check:all` (the cached generate, types, lint, format,
+knip, CI-lane, bindings, script, and Worker-test targets plus the uncached
+security audit) and `pnpm dedupe:check`.
+`Docs and formatting` runs on `ubuntu-slim` with a root-only install: the
+`format` target and the offline relative-link check through the pinned Lychee
+action, a composite action that downloads the Lychee binary (no Docker).
+Paths written as inline code are informational; link a repository file when
+its existence should be checked.
+
+`setup-node-with-deps` installs from the registry with no pnpm store cache:
+on [PR #1945's first run](https://github.com/nickysemenza/cubby/actions/runs/38330171871)
+a cold install of 1,607 packages took 10.4 seconds, while saving a missed store
+cost 18–28 seconds per job, and an Apple host job on 2026-10-12 spent about 65
+seconds extracting a 710 MB store before a 6.4-second install. With
+`wasm: restore` it then replays the Nx `wasm` target from the shared Nx cache
+(R2, outside the 10 GB Actions cache) and builds it with the runner's Rust only
+on a miss. The same run rebuilt WASM in every job for about 3.5 minutes each
+because the Actions cache, at 10.9 GB, had evicted its `wasm-pkg` entry, while
+the Nx cache already held that build. Retain the compiler and SwiftPM caches
+separately.
+
+Generated output is never committed, except `.github/ci-lanes.yml`, which
+`Plan` reads before any install; web and Apple jobs generate it during
 `postinstall`. The Rust job's root-only install skips web generation, and
 `Validation`'s `generate` gate checks that it generates cleanly and that the OpenAPI
 document lints.
 
-`Web checks` is the stable required aggregate over the Worker runtime,
-fast-test, PostgreSQL, and browser jobs. Its shell-only status check uses the
-standard `ubuntu-slim` container runner; it needs no checkout, dependencies,
-services, or privileged operations. Queue and startup time remain part of
-measured gate latency.
+The `lanes` job is one dynamic matrix over the selected web lanes, one
+standard runner per entry; only database entries start the PostgreSQL and
+IntegreSQL service containers (an empty service `image` starts none).
 `Auxiliary tests and builds` runs `nx run-many -t test`: every auxiliary
 package's tests and the `unit`, `mcp-contract`, `worker-safety`, and `ui`
 Vitest projects of the web app, each a cached target. Node projects run first,
@@ -394,7 +430,8 @@ or credentials.
 that name (`purchase-import-run.spec.ts`: the purchase agent with a scripted
 model and gateway, driven through the browser) through the
 `e2e-purchase-import` target, building its own Worker. It is informative only:
-it is not in `Web checks` or the ruleset. It uses the same `webGate` key as the
+it is outside `CI passed` and `continue-on-error`, so its failure leaves the run
+successful. It uses the same `webGate` key as the
 other web lanes and uploads the same Playwright report.
 The `integration` Vitest project runs as two `postgres` target shards
 (`CUBBY_POSTGRES_SHARD`, Vitest `--shard`), each with four fork workers. The
@@ -403,7 +440,7 @@ The `integration` Vitest project runs as two `postgres` target shards
 Workers and runtime tests`. A workerd consumer missing from that list runs in
 an ordinary integration shard and fails there, because in CI the harness
 refuses to rebuild a missing or stale Worker. Jobs that need the databases
-declare native GitHub Actions service containers; YAML anchors reuse the
+declare native GitHub Actions service containers; a YAML anchor reuses the
 pgvector PostgreSQL and pinned IntegreSQL definitions. GitHub owns the network, container
 startup, PostgreSQL health wait, logs, and cleanup. PostgreSQL also maps port
 55432 for guarded named-database tests. `POSTGRES_INITDB_ARGS` sets the disposable
@@ -437,9 +474,14 @@ gh workflow run apple-testflight.yaml --ref main
 Publishing uses one pinned current-main commit, increasing build numbers, and
 one active workflow. Reruns are refused, including checkpoint-only retries.
 Each platform archives, verifies, and uploads on its own macOS runner. Only
-both uploads succeeding writes the `apple-testflight-uploaded` checkpoint;
-no-op and partial releases do not advance it. Missing or expired checkpoints
-rebuild. A partial failure's next fresh run rebuilds both platforms.
+both uploads succeeding records the upload as an immutable annotated tag,
+`testflight/<version>-<build>`, on the uploaded commit, its message the
+checkpoint JSON (`sha`, `version`, `build`, `uploadedAt`); only that job has
+`contents: write`. The highest build among those tags is the last complete
+upload, and `git tag --list 'testflight/*'` is the upload history. No-op and
+partial releases do not advance it. No tag rebuilds; a malformed or
+lightweight tag fails the plan. A partial failure's next fresh run rebuilds
+both platforms.
 
 Uploads are internal-only with automatic group distribution. Verify processing
 and installation in TestFlight after publishing: upload acceptance alone does
@@ -452,35 +494,31 @@ GitHub can disable public-repository schedules after 60 inactive days; the
 
 ## Deployment
 
-`.github/workflows/deploy.yaml` runs on `main` pushes and deploys all four
-production Workers every time. The purchase-agent deploy waits for the web
-Worker, while the auxiliary Workers run
-independently. Each Worker serializes production deployments and checks that
-the commit is still current main before building and again before deploying.
+`.github/workflows/deploy.yaml` runs on `main` pushes and deploys both
+production Workers, web and the Nx cache, every time, in parallel and without
+waiting for CI. Each serializes production deployments and checks that the
+commit is still current main before building and again before deploying.
 Production never depends on a test job.
 This trusts required PR checks before merging. Public-repository standard
 GitHub-hosted runners are free; no self-hosted runner or Cloudflare Builds is
-required.
+required. The Nx cache deploy builds nothing and runs on `ubuntu-slim`.
 
-All three jobs call the shared `.github/actions/deploy-worker` composite
-(`check-current-main` → `setup-node-with-deps` → an optional build command →
-`check-current-main` again → the deploy command), differing only in package,
-workspace filter, whether WASM is needed, and the build/deploy commands;
-`concurrency`, `environment`, and `timeout-minutes` stay on each job because
-a composite action cannot own them. Every deploy is a plain shell command
-with `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the environment: the
-auxiliary Workers and purchase-agent run their package's own `deploy`
-script, and web runs `wrangler deploy --config dist/server/wrangler.json`
-directly rather than its `deploy:cf` script (`build:cf && wrangler deploy`),
-which would rerun `build:cf` a second time after the composite's own build
-step already ran it. The second `check-current-main` is what stops a manual
-re-run of an old Deploy run from rolling production back to a stale commit.
+Both jobs call the shared `.github/actions/deploy-worker` composite (current-main
+check → `setup-node-with-deps` → an optional build command → current-main
+check again → the deploy command), differing only in package, workspace
+filter, whether WASM is needed, and the build/deploy commands; `concurrency`,
+`environment`, and `timeout-minutes` stay on each job because a composite
+action cannot own them. Every deploy is a plain shell command with
+`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the environment: the Nx cache
+runs its package's `wrangler deploy`, and web runs `wrangler deploy --config
+dist/server/wrangler.json` directly rather than its `deploy:cf` script
+(`build:cf && wrangler deploy`), which would rerun `build:cf` after the
+composite's own build step. The second check is what stops a manual re-run of
+an old Deploy run from rolling production back to a stale commit.
 
 ## Branch protection and measurement
 
-The `main` ruleset requires `Scope`, `Validation`, `Web checks`, auxiliary,
-Rust, and Apple checks. Every lane runs on every PR; the aggregates verify
-their matrix and macOS jobs. Keep `strict` disabled so
+The `main` ruleset requires only `CI passed`, from GitHub Actions. Keep `strict` disabled so
 a green non-conflicting branch need not rebase, allow administrator bypasses,
 and do not require human review.
 
@@ -567,10 +605,9 @@ database contracts; it does not establish a five-minute full suite.
   depend on the Nx `build-cf` target, and concurrent shards on a new revision
   would all miss its cache at once anyway. A separate build job would add its
   own runner start and install ahead of every shard.
-- Caching `node_modules` was slower than installing from the warm pnpm store.
-  Saving the pnpm store from Playwright containers likewise cost more than the
-  filtered install. Retain exact-key caches for generated artifacts and Apple
-  dependencies where the measured build work exceeds restore cost.
+- Caching `node_modules` or the pnpm store cost more than a registry install.
+  Retain exact-key caches for Apple dependencies where the measured build work
+  exceeds restore cost.
 - Local full verification runs Nx targets sequentially because the individual
   test/build tiers are parallel internally. The parallel `run-many` trial took
   10:54 and failed under contention; the sequential trial took 6:49 and passed

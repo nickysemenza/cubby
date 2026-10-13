@@ -69,8 +69,27 @@
       // Workflows that deploy, publish or review run no check.
       "!{workspaceRoot}/.github/workflows/{deploy.yaml,apple-testflight.yaml,claude.yml,claude-code-review.yml}",
       {
-        "runtime": "git ls-files -z -co --exclude-standard -- docs/README.md .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256"
+        "runtime": "git ls-files -z -co --exclude-standard -- docs/README.md docs/guide .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256"
       }
+    ],
+    // What Cargo reads for the recipebridge and cubby-ffi merge-gate lanes:
+    // the workspace crates, the golden vectors their tests read, and the CI
+    // configuration that runs them. rust-toolchain.toml names a floating
+    // channel, so the compiler version is keyed too.
+    "rustGate": [
+      "{workspaceRoot}/recipebridge/**/*",
+      "{workspaceRoot}/cubby-ffi/**/*",
+      "{workspaceRoot}/Cargo.{toml,lock}",
+      "{workspaceRoot}/rust-toolchain.toml",
+      // Cargo, rustfmt, and Clippy read configuration from ancestor directories.
+      "{workspaceRoot}/.cargo/**/*",
+      "{workspaceRoot}/{.rustfmt,rustfmt,.clippy,clippy}.toml",
+      "{workspaceRoot}/packages/shared/golden-vectors/**/*",
+      "{workspaceRoot}/.github/workflows/ci.yaml",
+      "{workspaceRoot}/.github/actions/**/*",
+      { "runtime": "rustc -V" },
+      // Cargo never reads JavaScript dependencies, which Nx hashes by default.
+      { "externalDependencies": [] }
     ]
   },
   "analytics": false,
