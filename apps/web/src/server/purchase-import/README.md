@@ -24,8 +24,8 @@ pending: nothing here starts Product research.
    classifies each message (`gmail/triage.ts` rule/decision model, then
    `gmail/relevance.ts` for uncertain mail) and records the deciding stage and
    reason on `Email`. Completeness follows missing purchase evidence: a clipped
-   tracking URL is usable only when its full label and URL purchase tokens
-   survive. Labeled non-cue catalog pictures can explain an image-only promotion;
+   tracking URL or image source is usable only when its full label and URL
+   purchase tokens survive. Labeled non-cue catalog pictures can explain an image-only promotion;
    unresolved sources, omitted pictures, lost receipt-image cues, clipped purchase
    text/structured data, hidden purchase evidence, attachments and dropped MIME
    parts remain exceptions. The relevance fallback uses the same Email compactor,

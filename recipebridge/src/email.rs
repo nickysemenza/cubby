@@ -42,6 +42,8 @@ pub struct WEmailImage {
     pub alt: String,
     /// The source or alt text names a purchase, or the alt text carries an amount.
     pub cue: bool,
+    /// Purchase tokens in the image source that must survive caller clipping.
+    pub url_cues: Vec<String>,
 }
 
 /// Purchase cues and how many distinct ones fell past the cue bound.
@@ -653,6 +655,16 @@ fn cue_hits(value: &str) -> usize {
     LINK_CUES.iter().filter(|cue| lower.contains(**cue)).count()
 }
 
+fn url_purchase_cues(value: &str) -> Vec<String> {
+    let lower = value.to_lowercase();
+    LINK_CUES
+        .iter()
+        .filter(|cue| lower.contains(**cue))
+        .map(|cue| (*cue).to_string())
+        .chain(purchase_cues(value).cues)
+        .collect()
+}
+
 fn is_tracking_pixel(image: &ElementRef) -> bool {
     let declarations = image
         .value()
@@ -782,13 +794,7 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
                 .unwrap_or_default();
         }
         let score = cue_hits(&text) * 2 + cue_hits(&href);
-        let lower_href = href.to_lowercase();
-        let url_cues: Vec<String> = LINK_CUES
-            .iter()
-            .filter(|cue| lower_href.contains(**cue))
-            .map(|cue| (*cue).to_string())
-            .chain(purchase_cues(&href).cues)
-            .collect();
+        let url_cues = url_purchase_cues(&href);
         links.push((
             score,
             WEmailLink {
@@ -822,10 +828,15 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
                 return None;
             };
             let alt = clean(image.value().attr("alt").unwrap_or_default());
-            let cue = cue_hits(&alt) > 0
-                || cue_hits(&src) > 0
-                || !purchase_cues(&format!("{alt}\n{src}")).cues.is_empty();
-            Some(WEmailImage { src, alt, cue })
+            let url_cues = url_purchase_cues(&src);
+            let cue =
+                cue_hits(&alt) > 0 || !url_cues.is_empty() || !purchase_cues(&alt).cues.is_empty();
+            Some(WEmailImage {
+                src,
+                alt,
+                cue,
+                url_cues,
+            })
         })
         .collect();
     let cue_images_omitted = images
