@@ -682,7 +682,7 @@ function manifestEnumSpecs(): Record<EnumSuggestKey, FieldSuggestSpec> {
   // value still comes from the generated field model declared below.
   const models = Object.entries(entityFieldModels) as [
     string,
-    { fields: readonly EntityFieldModel[] },
+    Pick<EntityFieldModel, "fields">,
   ][];
   for (const [entity, model] of models)
     for (const field of model.fields) {
