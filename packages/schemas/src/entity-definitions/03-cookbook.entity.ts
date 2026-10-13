@@ -32,7 +32,6 @@ export default defineEntity({
           kind: "fields",
           id: "physical-copy",
           title: "Physical copy",
-          placement: "supporting",
           fields: ["product"],
         },
         { kind: "slot", id: "toc", title: "Contents" },

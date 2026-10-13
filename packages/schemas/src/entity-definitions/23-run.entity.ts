@@ -153,7 +153,6 @@ export default defineEntity({
           id: "runtime",
           workspace: "evidence",
           title: "Runtime",
-          placement: "supporting",
           fields: [
             "coordinatorModel",
             "skillRevision",

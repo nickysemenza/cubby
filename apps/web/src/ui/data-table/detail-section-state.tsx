@@ -26,7 +26,13 @@ export function useSectionEmpty(empty: boolean) {
   }, [report, empty]);
 }
 
-export const SectionEmptyRegistryContext = createContext<
-  ((id: string, empty: boolean) => void) | null
+/** What the section index shows for one section: list sections carry a row
+ * count (0 included); other sections only report emptiness. */
+export interface SectionIndexState {
+  empty: boolean;
+  count: number | undefined;
+}
+export const SectionIndexRegistryContext = createContext<
+  ((id: string, state: SectionIndexState | undefined) => void) | null
 >(null);
 export const ContinuousDetailContext = createContext(false);

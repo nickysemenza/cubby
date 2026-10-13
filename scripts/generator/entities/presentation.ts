@@ -498,7 +498,7 @@ export const compilePresentation = (
             kind: "fields" as const,
             id: "record-identity",
             title: "Identity",
-            placement: "supporting" as const,
+            placement: "primary" as const,
             fields: [emojiField],
           },
         ]

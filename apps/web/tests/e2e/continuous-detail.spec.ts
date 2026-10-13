@@ -15,9 +15,7 @@ for (const width of [1440, 390]) {
     await gotoAuthenticatedPage(page, `/products/${product.id}#plantings`);
     const emptySection = page.locator("#plantings");
     await expect(emptySection).toBeVisible();
-    await expect(
-      emptySection.getByText("Empty", { exact: true }),
-    ).toBeVisible();
+    await expect(emptySection.getByText("0", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Work", exact: true }),
     ).toBeVisible();
@@ -29,7 +27,7 @@ for (const width of [1440, 390]) {
       await expect(contents).toBeVisible();
       await expect(
         contents.getByRole("link", { name: "Plantings", exact: true }),
-      ).toContainText("Empty");
+      ).toContainText("0");
       await contents
         .getByRole("link", { name: "History", exact: true })
         .click();
@@ -37,7 +35,7 @@ for (const width of [1440, 390]) {
       await page.getByRole("button", { name: /Jump to:/ }).click();
       await expect(
         page.getByRole("menuitem", { name: "Plantings", exact: true }),
-      ).toHaveAccessibleDescription("Empty");
+      ).toHaveAccessibleDescription("0");
       await page
         .getByRole("menuitem", { name: "History", exact: true })
         .click();
@@ -58,7 +56,7 @@ for (const width of [1440, 390]) {
       ).toBeVisible();
     }
     await expect(
-      page.locator("#documents").getByText("Empty", { exact: true }),
+      page.locator("#documents").getByText("0", { exact: true }),
     ).toBeVisible();
     await expect(emptySection).toBeVisible();
     await page.goBack();
