@@ -106,12 +106,12 @@ describe("Gmail classification stage and reason", () => {
     });
   });
 
-  it("lets the relevance model decide an attachment-bearing message the decision model called unrelated", async () => {
+  it("lets the relevance model decide an attachment-bearing message the decision model called uncertain", async () => {
     expect(
       await classify(
         "rule-attachment",
         message("See attached", true),
-        async () => "unrelated",
+        async () => "uncertain",
         async () => ({ classification: "related", reason: "Itemized receipt" }),
       ),
     ).toEqual({
@@ -119,6 +119,24 @@ describe("Gmail classification stage and reason", () => {
       stage: "model",
       reason: "Itemized receipt",
     });
+  });
+
+  it("settles a definite unrelated attachment message without calling the relevance fallback", async () => {
+    const relevance = vi.fn(async () => ({
+      classification: "related" as const,
+    }));
+    expect(
+      await classify(
+        "definite-attachment",
+        message("Weekly catalog attached", true),
+        async () => "unrelated",
+        relevance,
+      ),
+    ).toMatchObject({
+      classification: "unrelated",
+      stage: "decision",
+    });
+    expect(relevance).not.toHaveBeenCalled();
   });
 
   it("preserves authorized relevance fallback after uncertain bounded triage", async () => {
@@ -137,8 +155,8 @@ describe("Gmail classification stage and reason", () => {
     });
   });
 
-  it.each(["related", "unrelated"] as const)(
-    "retains the full oversized original after a partial %s verdict without admitting import",
+  it.each(["related", "unrelated", "uncertain"] as const)(
+    "applies retention to a partial %s verdict without admitting import",
     async (verdict) => {
       const body =
         "Your order shipped. " +
@@ -150,8 +168,8 @@ describe("Gmail classification stage and reason", () => {
       expect(
         await classify(`partial-${verdict}`, message(body), triage),
       ).toMatchObject({
-        classification: verdict === "related" ? "related" : "uncertain",
-        stage: verdict === "related" ? "decision" : "rule",
+        classification: verdict,
+        stage: "decision",
       });
       expect(triage).toHaveBeenCalledOnce();
       expect(
@@ -164,10 +182,10 @@ describe("Gmail classification stage and reason", () => {
         .from(emailTable)
         .innerJoin(orderMail, eq(orderMail.id, emailTable.orderMailId))
         .where(eq(emailTable.messageId, `partial-${verdict}`));
-      expect(retained).toMatchObject({
-        content: { bodyText: body },
-        runId: null,
-      });
+      expect(retained?.content?.bodyText).toEqual(
+        verdict === "unrelated" ? undefined : body,
+      );
+      expect(retained?.runId).toBe(verdict === "unrelated" ? undefined : null);
       expect(
         await getDb(ctx.db)
           .select({ id: run.id })
