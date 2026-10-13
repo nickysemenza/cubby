@@ -217,12 +217,16 @@ describe("reviewed accepted source Product association", () => {
     { differentPayments: true, legacy: false, mismatch: null },
     { differentPayments: false, legacy: false, mismatch: null },
     { differentPayments: false, legacy: true, mismatch: null },
+    { differentPayments: false, legacy: true, mismatch: "canonical" },
+    { differentPayments: false, legacy: true, mismatch: "legacy-canonical" },
     { differentPayments: false, legacy: true, mismatch: "body" },
     { differentPayments: false, legacy: true, mismatch: "ambiguous" },
     { differentPayments: true, legacy: false, mismatch: "checksum" },
   ])(
     "records a current retained-original review without inventing history $differentPayments/$legacy/$mismatch",
     async ({ differentPayments, legacy, mismatch }) => {
+      const alreadyCanonical =
+        mismatch === "canonical" || mismatch === "legacy-canonical";
       const w = await world(false, true, true);
       const original = await w.db.query.sourceOrderObservation.findFirst({
         where: eq(
@@ -280,6 +284,13 @@ describe("reviewed accepted source Product association", () => {
             externalKey: `gmail:${mail.messageId}:order:${target.orderId}`,
           })
           .where(eq(importSourceClaim.id, w.association.sourceClaimId));
+        if (alreadyCanonical)
+          await linkCanonicalRoot(
+            w,
+            mismatch === "canonical"
+              ? mailSource(mail).externalKey
+              : `gmail:legacy:synthetic-owner:${mail.messageId}`,
+          );
       } else if (!differentPayments) {
         await w.db
           .update(importSourceClaim)
@@ -304,7 +315,7 @@ describe("reviewed accepted source Product association", () => {
           },
         ],
       });
-      if (mismatch && mismatch !== "checksum") {
+      if (mismatch && !alreadyCanonical && mismatch !== "checksum") {
         if (!legacyMail) throw new Error("Synthetic legacy original missing");
         if (mismatch === "body")
           await w.db
@@ -325,7 +336,7 @@ describe("reviewed accepted source Product association", () => {
             content: mail.content,
           });
       }
-      if (mismatch) {
+      if (mismatch && !alreadyCanonical) {
         await assertCurrentOriginalRefusal(
           w,
           preparation.prepared.runId,
@@ -335,6 +346,7 @@ describe("reviewed accepted source Product association", () => {
         );
         return;
       }
+      const historicalClaims = await w.db.select().from(importSourceClaim);
       const before = await w.snapshot();
       await commitAcceptedSourceOrderReconciliation(
         ctx.db,
@@ -349,6 +361,24 @@ describe("reviewed accepted source Product association", () => {
         ctx.actor,
       );
       const after = await w.snapshot();
+      const retainedClaims = await w.db.select().from(importSourceClaim);
+      for (const claim of historicalClaims)
+        expect(retainedClaims.find((row) => row.id === claim.id)).toMatchObject(
+          {
+            id: claim.id,
+            ledgerPartyId: claim.ledgerPartyId,
+            kind: claim.kind,
+            externalKey: claim.externalKey,
+            checksum:
+              claim.externalKey === mailSource(mail).externalKey
+                ? mail.rawChecksum
+                : claim.checksum,
+            firstRunId: claim.firstRunId,
+            lastRunId: claim.lastRunId,
+          },
+        );
+      expect(await w.db.select().from(importSourceOrder)).toHaveLength(1);
+
       expect(
         after.expenses.find((row) => row.id === w.item.id)?.productId,
       ).not.toBeNull();
