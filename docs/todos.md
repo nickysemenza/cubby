@@ -69,6 +69,35 @@ history is the archive. Permanent product constraints live in the
   `image-processing-panel.tsx`); the
   [design interview](plans/photo-identification.md) owns the wider use cases.
   Keep processing automatic and simple, without regions or manual tuning.
+
+  **Next implementation brief — retrieval and coverage (steps 1–3).** Improve
+  existing-Product identification when the visual category is plausible but
+  narrower than the catalog identity. Deliver one automatic, bounded retrieval
+  path and an honest explanation of what was searched and compared.
+
+  Start with synthetic regressions for a wrong category, a correct Product
+  outside the initial roster, truncated searches, and candidates with only the
+  source image as reference. Inspect existing search/ranking helpers before
+  choosing category expansion, lexical/semantic blending, deduplication and
+  deterministic ordering. Preserve retrieval provenance through visual ranking
+  so “not retrieved,” “no independent reference,” and “compared but rejected”
+  remain distinguishable. Existing attachment context is separate from match
+  confidence; it must never validate itself.
+
+  Before implementation, decide the retained coverage/result shape, revision
+  invalidation and preservation of historical observations; establish whether
+  a data migration is needed rather than assuming one. Use the same coverage
+  contract in the image UI and generic reports/MCP. Present bounded no-match
+  and incomplete comparison separately, with diagnostic detail behind disclosure.
+  Keep multi-item proposals, frontier escalation and native chooser integration
+  outside this slice.
+
+  Acceptance: the correct Product reaches retrieval despite category mismatch;
+  source/revision/live-Product guards survive expansion; confirmation remains
+  required for consequential changes; and the visible explanation matches the
+  retained coverage. Measure retrieval recall separately from match quality on
+  held-out cases, with latency/call limits explicit before any live replay.
+
   1. 🤔 ✨ **Retrieve across plausible categories.** Use category as a ranking
      hint rather than a hard filter; combine lexical/semantic identity evidence
      and broaden a bounded search when it misses. A flower-and-fruit catalog
