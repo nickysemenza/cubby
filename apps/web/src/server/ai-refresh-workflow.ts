@@ -49,7 +49,6 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
             },
             () =>
               withDb(async (db) => {
-                if (!(await claimWorkflowRun(db, event.payload))) return false;
                 const { readAiRefreshActivation, readAiDiscoveryCursor } =
                   await import("./repo/ai-refresh");
                 const current = await readAiRefreshActivation(db);

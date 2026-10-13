@@ -167,6 +167,7 @@ export async function saveAiDiscoveryCursor(
   value: z.input<typeof discoveryCursor>,
 ) {
   return withTransactionDatabase(db, async (tx) => {
+    // Every revision writer locks this row, serializing the check through the cursor write.
     const current = await readAiRefreshActivation(tx, "update");
     const cursor = discoveryCursor.parse({
       ...value,
