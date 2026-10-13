@@ -14,9 +14,9 @@ export const spendingCategoryChecks = defineEntityChecks({
   entity: "spendingCategory",
   table: spendingCategory,
   checks: {
-    spending_category_evidence_expectation: {
+    spending_category_itemization_expectation: {
       missing: (t: SpendingCategory) =>
-        sql`${t.evidenceExpectation} = 'unknown'`,
+        sql`${t.itemizationExpectation} = 'unknown'`,
     },
     spending_category_product_expectation: {
       missing: (t: SpendingCategory) =>

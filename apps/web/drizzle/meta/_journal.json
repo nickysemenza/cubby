@@ -330,6 +330,20 @@
       "when": 1791904986490,
       "tag": "0046_drop_purchase_itemization_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1791910934364,
+      "tag": "0047_itemization_expectation",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1791910945686,
+      "tag": "0048_derived_ddl",
+      "breakpoints": true
     }
   ]
 }

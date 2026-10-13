@@ -13,7 +13,7 @@ describe("ResolutionExplanation", () => {
     render(
       <ResolutionExplanation
         entity="financialTransaction"
-        field="evidenceExpectation"
+        field="itemizationExpectation"
         resolution={{
           mode: "allocated",
           storedValue: "required",

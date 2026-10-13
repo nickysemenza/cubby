@@ -15,10 +15,10 @@ describe("receipt Purchase itemization", () => {
 
   it.each(["unknown", "not_expected"] as const)(
     "asks for itemization once a receipt is attached (vendor policy %s)",
-    async (evidenceExpectation) => {
+    async (itemizationExpectation) => {
       const vendor = await insertWithShortcode(ctx.db, "vendor", {
-        name: `Receipt shop ${evidenceExpectation}`,
-        evidenceExpectation,
+        name: `Receipt shop ${itemizationExpectation}`,
+        itemizationExpectation,
       });
       const purchase = await insertWithShortcode(ctx.db, "purchase", {
         vendorId: vendor.id,
@@ -41,7 +41,7 @@ describe("receipt Purchase itemization", () => {
 
       const image = await createImageFixture(
         ctx.db,
-        `receipt-${evidenceExpectation}`,
+        `receipt-${itemizationExpectation}`,
       );
       await insertEntityAttachments(ctx.db, {
         entityId: purchase.id,

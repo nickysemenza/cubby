@@ -68,9 +68,9 @@ export function suggestionContextKeys(
         : [];
   const financeKeys =
     entity === "financialTransaction"
-      ? ["purchaseId", "spendingCategoryId", "evidenceExpectation"]
+      ? ["purchaseId", "spendingCategoryId", "itemizationExpectation"]
       : entity === "purchase"
-        ? ["vendorId", "spendingCategoryId", "evidenceExpectation"]
+        ? ["vendorId", "spendingCategoryId", "itemizationExpectation"]
         : [];
   return [...new Set([...targets.basisKeys, ...inheritedKeys, ...financeKeys])];
 }

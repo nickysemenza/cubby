@@ -13,7 +13,7 @@ import { mergePurchases, getPurchaseByID } from "./purchase";
 import {
   financialTransactionCoverageSql,
   purchaseCoverageSql,
-  purchaseEvidenceExpectationSql,
+  purchaseItemizationExpectationSql,
 } from "./purchase-evidence-policy";
 import { createImageFixture, insertEntityAttachments } from "./repo.fixtures";
 
@@ -27,12 +27,12 @@ describe("purchase evidence policy", () => {
   async function fixture() {
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Fixture merchandise",
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
       productExpectation: "required",
     });
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Fixture shop",
-      evidenceExpectation: "not_expected",
+      itemizationExpectation: "not_expected",
     });
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
@@ -46,19 +46,19 @@ describe("purchase evidence policy", () => {
     const { purchase } = await fixture();
     const policy = async () => {
       const result = await unwrapDb(ctx.db).execute(sql`
-        SELECT ${purchaseEvidenceExpectationSql("p")} AS policy
+        SELECT ${purchaseItemizationExpectationSql("p")} AS policy
         FROM "Purchase" p WHERE p.id = ${purchase.id}
       `);
       return result.rows[0]?.policy;
     };
     expect(await policy()).toBe("not_expected");
     await unwrapDb(ctx.db).execute(sql`
-      UPDATE "Purchase" SET "evidenceExpectation" = 'required'
+      UPDATE "Purchase" SET "itemizationExpectation" = 'required'
       WHERE id = ${purchase.id}
     `);
     expect(await policy()).toBe("required");
     await unwrapDb(ctx.db).execute(sql`
-      UPDATE "Purchase" SET "evidenceExpectation" = 'unknown'
+      UPDATE "Purchase" SET "itemizationExpectation" = 'unknown'
       WHERE id = ${purchase.id}
     `);
     expect(await policy()).toBe("unknown");
@@ -89,7 +89,7 @@ describe("purchase evidence policy", () => {
   it("derives itemization from the order's lines", async () => {
     const { purchase } = await fixture();
     await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "evidenceExpectation" = 'required' WHERE id = ${purchase.id}`,
+      sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
     );
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture hardware cloth",
@@ -143,15 +143,15 @@ describe("purchase evidence policy", () => {
     });
   });
 
-  it("carries receipt policy and refuses silently discarding conflicting Purchase policy", async () => {
+  it("carries itemization policy and refuses silently discarding conflicting Purchase policy", async () => {
     const { purchase: donor, vendor, category } = await fixture();
     await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "evidenceExpectation" = 'required' WHERE id = ${donor.id}`,
+      sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${donor.id}`,
     );
     const keeper = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
-      evidenceExpectation: "not_expected",
+      itemizationExpectation: "not_expected",
     });
     await expect(
       mergePurchases(
@@ -161,7 +161,7 @@ describe("purchase evidence policy", () => {
       ),
     ).rejects.toThrow(/expectation/i);
     await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "evidenceExpectation" = NULL WHERE id = ${keeper.id}`,
+      sql`UPDATE "Purchase" SET "itemizationExpectation" = NULL WHERE id = ${keeper.id}`,
     );
     await mergePurchases(
       ctx.db,
@@ -169,11 +169,11 @@ describe("purchase evidence policy", () => {
       ctx.actor,
     );
     expect(await getPurchaseByID(ctx.db, keeper.id)).toMatchObject({
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
       spendingCategoryId: category.shortcode,
     });
   });
-  it("uses transaction receipt policy before a Purchase allocation exists", async () => {
+  it("uses transaction itemization policy before a Purchase allocation exists", async () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Policy fixture cash",
       identity: { kind: "cash" },
@@ -184,7 +184,7 @@ describe("purchase evidence policy", () => {
       kind: "purchase",
       status: "posted",
       postedDate: "2026-09-01",
-      evidenceExpectation: "not_expected",
+      itemizationExpectation: "not_expected",
     });
     const read = async () =>
       (
@@ -198,7 +198,7 @@ describe("purchase evidence policy", () => {
       itemization: "not_expected",
     });
     await unwrapDb(ctx.db).execute(
-      sql`UPDATE "FinancialTransaction" SET "evidenceExpectation" = 'required' WHERE id = ${transaction.entityId}`,
+      sql`UPDATE "FinancialTransaction" SET "itemizationExpectation" = 'required' WHERE id = ${transaction.entityId}`,
     );
     expect(await read()).toMatchObject({
       booking: "missing",
@@ -210,7 +210,7 @@ describe("purchase evidence policy", () => {
   it("scores required transaction evidence and goods identity while excluding optional evidence", async () => {
     const { purchase, category } = await fixture();
     await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "evidenceExpectation" = 'required' WHERE id = ${purchase.id}`,
+      sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
     );
     await insertWithShortcode(ctx.db, "expense", {
       purchaseId: purchase.id,
@@ -249,7 +249,7 @@ describe("purchase evidence policy", () => {
     ]);
     expect(required?.score).toBeLessThan(100);
     await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "evidenceExpectation" = 'not_expected' WHERE id = ${purchase.id}`,
+      sql`UPDATE "Purchase" SET "itemizationExpectation" = 'not_expected' WHERE id = ${purchase.id}`,
     );
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "SpendingCategory" SET "productExpectation" = 'not_expected' WHERE id = ${category.id}`,
@@ -271,7 +271,7 @@ describe("purchase evidence policy", () => {
     async (role) => {
       const { purchase } = await fixture();
       await unwrapDb(ctx.db).execute(
-        sql`UPDATE "Purchase" SET "evidenceExpectation" = 'required' WHERE id = ${purchase.id}`,
+        sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
       );
       await insertWithShortcode(ctx.db, "expense", {
         purchaseId: purchase.id,
@@ -369,7 +369,7 @@ describe("purchase evidence policy", () => {
   it("keeps an accepted itemization gap accepted when Expense gains productNotExpected", async () => {
     const { purchase } = await fixture();
     await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "evidenceExpectation" = 'required' WHERE id = ${purchase.id}`,
+      sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
     );
     await insertWithShortcode(ctx.db, "expense", {
       purchaseId: purchase.id,
@@ -413,7 +413,7 @@ describe("purchase evidence policy", () => {
     async (reason) => {
       const { purchase } = await fixture();
       await unwrapDb(ctx.db).execute(
-        sql`UPDATE "Purchase" SET "evidenceExpectation" = 'required' WHERE id = ${purchase.id}`,
+        sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
       );
       await insertWithShortcode(ctx.db, "expense", {
         purchaseId: purchase.id,

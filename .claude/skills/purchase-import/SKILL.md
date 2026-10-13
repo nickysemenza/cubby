@@ -263,7 +263,7 @@ Create or update the Vendor deliberately, then configure:
 
 - `orderEvidence`: `online_account`, `receipt_only`, or `not_expected`. It says
   where to look, never whether evidence is wanted; the resolved
-  `evidenceExpectation` (transaction, then vendor, then category) decides
+  `itemizationExpectation` (transaction, then vendor, then category) decides
   that. An explicit choice is never overwritten and weaker signals stay unset
   for the `vendor_order_evidence` gap. Contradictory choices (`not_expected` source
   with a required vendor policy, or a not-expected policy with a source) show

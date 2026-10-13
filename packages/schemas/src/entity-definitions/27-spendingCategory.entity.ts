@@ -16,11 +16,12 @@ export default defineEntity({
     recordEmojiField: "emoji",
     titleField: "name",
     domain: "finance",
-    description: "Spending classification and household evidence expectations.",
+    description:
+      "Spending classification and household itemization expectations.",
     emptyState: {
       title: "No spending categories yet",
       description:
-        "Classify spending and decide which purchases need receipt lines.",
+        "Classify spending and decide which purchases should be itemized.",
       actionLabel: "Add spending category",
     },
     icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
@@ -114,14 +115,14 @@ export default defineEntity({
         },
       },
       {
-        key: "evidenceExpectation",
+        key: "itemizationExpectation",
         kind: "enum",
         control: {
           kind: "select",
           suggest: {
             basis: ["name", "parentId"],
             rules: [
-              `Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.`,
+              `Suggest whether the household expects these purchases to be itemized: recorded as the order's own item lines, each goods line naming its Product. Online orders with retrievable order history (Amazon, Home Depot) are expected (required). Restaurant meals, groceries, in-store shops whose receipts are usually not kept, one-amount services, subscriptions and friend reimbursements are not_expected. No policy ever requires a receipt document. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Return a reviewed proposal only; never overwrite explicit decisions.`,
             ],
           },
           options: [
@@ -129,18 +130,19 @@ export default defineEntity({
               value: "unknown",
               label: "Unclassified",
               description:
-                "Insufficient or mixed evidence; leave receipt expectation unclassified",
+                "Insufficient or mixed evidence; leave itemization expectation unclassified",
             },
             {
               value: "required",
               label: "Expected",
-              description: "Household expects a receipt or order evidence",
+              description:
+                "Household expects the order's item lines with their Products",
             },
             {
               value: "not_expected",
               label: "Not expected",
               description:
-                "Household does not expect receipt or order evidence",
+                "Household does not expect item lines; one amount is enough",
             },
           ],
         },
@@ -163,7 +165,7 @@ export default defineEntity({
           suggest: {
             basis: ["name", "parentId"],
             rules: [
-              `Suggest Product expectation independently from receipt expectation using the spending category and parent context. Durable goods such as tools, furniture, clothing and tracked software require Product records (required). Groceries, services and friend reimbursements do not require one but may link one (not_expected). Restaurant meals, event tickets, rides and donations can never be a Product (not_allowed); choose not_allowed only when every Expense in the category is such spending. A mixed or unclear category must remain unknown. Do not infer that every receipted purchase requires Products. Return a reviewed proposal only; never overwrite explicit decisions.`,
+              `Suggest Product expectation independently from itemization expectation using the spending category and parent context. Durable goods such as tools, furniture, clothing and tracked software require Product records (required). Groceries, services and friend reimbursements do not require one but may link one (not_expected). Restaurant meals, event tickets, rides and donations can never be a Product (not_allowed); choose not_allowed only when every Expense in the category is such spending. A mixed or unclear category must remain unknown. Do not infer that every itemized purchase requires Products. Return a reviewed proposal only; never overwrite explicit decisions.`,
             ],
           },
           options: [
@@ -230,8 +232,8 @@ export default defineEntity({
       { key: "aliases", defaultValue: "'{}'::text[]" },
       { key: "parentId", reference: "spendingCategory" },
       {
-        key: "evidenceExpectation",
-        specialized: "enum:evidenceExpectation",
+        key: "itemizationExpectation",
+        specialized: "enum:itemizationExpectation",
         defaultValue: "unknown",
       },
       {
@@ -248,7 +250,7 @@ export default defineEntity({
       "name",
       "aliases",
       "parentId",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "productExpectation",
     ],
     update: [
@@ -256,7 +258,7 @@ export default defineEntity({
       "name",
       "aliases",
       "parentId",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "productExpectation",
     ],
     bulk: [],
@@ -264,7 +266,7 @@ export default defineEntity({
       "name",
       "aliases",
       "parentId",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "productExpectation",
     ],
     output: [
@@ -274,7 +276,7 @@ export default defineEntity({
       "name",
       "aliases",
       "parentId",
-      "evidenceExpectation",
+      "itemizationExpectation",
       "productExpectation",
       "createdAt",
       "updatedAt",
@@ -282,13 +284,18 @@ export default defineEntity({
     sort: { fields: ["name", "updatedAt"] },
     intents: {
       fields: {
-        capture: ["emoji", "name", "evidenceExpectation", "productExpectation"],
+        capture: [
+          "emoji",
+          "name",
+          "itemizationExpectation",
+          "productExpectation",
+        ],
         full: [
           "emoji",
           "name",
           "aliases",
           "parentId",
-          "evidenceExpectation",
+          "itemizationExpectation",
           "productExpectation",
         ],
       },
@@ -312,7 +319,7 @@ export default defineEntity({
   },
   storage: {
     checks: [
-      { column: "evidenceExpectation" },
+      { column: "itemizationExpectation" },
       { column: "productExpectation" },
     ],
   },
@@ -429,15 +436,15 @@ export default defineEntity({
     dataQuality: {
       checks: [
         {
-          id: "spending_category_evidence_expectation",
-          satisfiedLabel: "Receipt expectation classified",
-          placement: { field: "evidenceExpectation" },
+          id: "spending_category_itemization_expectation",
+          satisfiedLabel: "Itemization expectation classified",
+          placement: { field: "itemizationExpectation" },
           facet: "paperwork",
           exceptions: "forbidden",
           weight: 2,
-          label: "Receipt expectation",
+          label: "Itemization expectation",
           message:
-            "Whether spending in this category needs a receipt is unclassified.",
+            "Whether spending in this category should be itemized is unclassified.",
         },
         {
           id: "spending_category_product_expectation",

@@ -11,12 +11,12 @@ test("declared expectation colors and spending category navigation counts", asyn
   const name = `Synthetic color category ${Date.now()}`;
   const category = await createFixture(page, "spendingCategory", {
     name,
-    evidenceExpectation: "unknown",
+    itemizationExpectation: "unknown",
     productExpectation: "required",
   });
   await createFixture(page, "spendingCategory", {
     name: `${name} resolved`,
-    evidenceExpectation: "required",
+    itemizationExpectation: "required",
     productExpectation: "not_expected",
   });
   await gotoAuthenticatedPage(
@@ -27,7 +27,7 @@ test("declared expectation colors and spending category navigation counts", asyn
     .getByRole("row")
     .filter({ has: page.getByRole("link", { name, exact: true }) });
   const unknown = record.locator(
-    '[data-cell-col="evidenceExpectation"] [style*="--enum-pill-color"]',
+    '[data-cell-col="itemizationExpectation"] [style*="--enum-pill-color"]',
   );
   const expected = record.locator(
     '[data-cell-col="productExpectation"] [style*="--enum-pill-color"]',

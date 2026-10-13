@@ -18,7 +18,7 @@ test("linked Expense categories display their readable label and transaction exp
     "spendingCategory",
     {
       name: categoryName,
-      evidenceExpectation: "not_expected",
+      itemizationExpectation: "not_expected",
       productExpectation: "not_expected",
     },
   );
@@ -36,7 +36,7 @@ test("linked Expense categories display their readable label and transaction exp
   const { id: purchaseId } = await createEntityFixture(page, "purchase", {
     vendorId,
     date: "2026-09-10",
-    evidenceExpectation: "not_expected",
+    itemizationExpectation: "not_expected",
   });
   const { id: productId } = await createEntityFixture(page, "product", {
     name: `${tag} item`,
@@ -77,10 +77,10 @@ test("linked Expense categories display their readable label and transaction exp
       .object({
         spendingCategoryId: z.null(),
         spendingCategorySummary: spendingCategorySummarySchema,
-        evidenceExpectation: z.null(),
+        itemizationExpectation: z.null(),
         coverage: z.object({ expectation: z.string() }),
         fieldResolutions: z.object({
-          evidenceExpectation: fieldResolutionSchema,
+          itemizationExpectation: fieldResolutionSchema,
         }),
       })
       .parse(await saved.json()),
@@ -92,10 +92,10 @@ test("linked Expense categories display their readable label and transaction exp
       complete: true,
       amountsKnown: false,
     },
-    evidenceExpectation: null,
+    itemizationExpectation: null,
     coverage: { expectation: "not_expected" },
     fieldResolutions: {
-      evidenceExpectation: {
+      itemizationExpectation: {
         mode: "inherit",
         storedValue: null,
         value: "not_expected",
@@ -177,14 +177,17 @@ test("linked Expense categories display their readable label and transaction exp
   );
   expect(
     z
-      .object({ evidenceExpectation: z.null(), spendingCategoryId: z.null() })
+      .object({
+        itemizationExpectation: z.null(),
+        spendingCategoryId: z.null(),
+      })
       .parse(await unchanged.json()),
-  ).toEqual({ evidenceExpectation: null, spendingCategoryId: null });
+  ).toEqual({ itemizationExpectation: null, spendingCategoryId: null });
   const updated = await page.request.patch(
     `/api/v1/financial-transactions/${transactionId}`,
     {
       headers: { Origin: baseURL! },
-      data: { evidenceExpectation: "required" },
+      data: { itemizationExpectation: "required" },
     },
   );
   expect(updated.ok(), await updated.text()).toBeTruthy();
@@ -206,12 +209,12 @@ test("linked Expense categories display their readable label and transaction exp
   expect(
     z
       .object({
-        evidenceExpectation: z.string(),
+        itemizationExpectation: z.string(),
         coverage: z.object({ expectation: z.string() }),
       })
       .parse(await explicit.json()),
   ).toEqual({
-    evidenceExpectation: "required",
+    itemizationExpectation: "required",
     coverage: { expectation: "required" },
   });
   await gotoAuthenticatedPage(page, `/financial-transactions/${transactionId}`);
@@ -229,17 +232,17 @@ test("linked Expense categories display their readable label and transaction exp
       );
       return z
         .object({
-          evidenceExpectation: z.string().nullable(),
+          itemizationExpectation: z.string().nullable(),
           fieldResolutions: z.object({
-            evidenceExpectation: fieldResolutionSchema,
+            itemizationExpectation: fieldResolutionSchema,
           }),
         })
         .parse(await response.json());
     })
     .toMatchObject({
-      evidenceExpectation: null,
+      itemizationExpectation: null,
       fieldResolutions: {
-        evidenceExpectation: { mode: "inherit", value: "not_expected" },
+        itemizationExpectation: { mode: "inherit", value: "not_expected" },
       },
     });
   await expect(
@@ -260,7 +263,7 @@ test("draft category edits hide obsolete policy provenance while the replacement
     "spendingCategory",
     {
       name: `${tag} original`,
-      evidenceExpectation: "required",
+      itemizationExpectation: "required",
       productExpectation: "not_expected",
     },
   );
@@ -270,7 +273,7 @@ test("draft category edits hide obsolete policy provenance while the replacement
     "spendingCategory",
     {
       name: newCategoryName,
-      evidenceExpectation: "not_expected",
+      itemizationExpectation: "not_expected",
       productExpectation: "not_expected",
     },
   );
@@ -296,10 +299,10 @@ test("draft category edits hide obsolete policy provenance while the replacement
     z
       .object({
         fieldResolutions: z.object({
-          evidenceExpectation: fieldResolutionSchema,
+          itemizationExpectation: fieldResolutionSchema,
         }),
       })
-      .parse(await persisted.json()).fieldResolutions.evidenceExpectation,
+      .parse(await persisted.json()).fieldResolutions.itemizationExpectation,
   ).toMatchObject({
     mode: "inherit",
     value: "required",
@@ -346,11 +349,14 @@ test("draft category edits hide obsolete policy provenance while the replacement
   const saved = await page.request.get(`/api/v1/purchases/${purchaseId}`);
   expect(
     z
-      .object({ spendingCategoryId: z.string(), evidenceExpectation: z.null() })
+      .object({
+        spendingCategoryId: z.string(),
+        itemizationExpectation: z.null(),
+      })
       .parse(await saved.json()),
   ).toEqual({
     spendingCategoryId: oldCategory,
-    evidenceExpectation: null,
+    itemizationExpectation: null,
   });
   await dialog
     .getByRole("button", { name: "Save changes", exact: true })
@@ -364,18 +370,18 @@ test("draft category edits hide obsolete policy provenance while the replacement
       return z
         .object({
           spendingCategoryId: z.string(),
-          evidenceExpectation: z.null(),
+          itemizationExpectation: z.null(),
           fieldResolutions: z.object({
-            evidenceExpectation: fieldResolutionSchema,
+            itemizationExpectation: fieldResolutionSchema,
           }),
         })
         .parse(await response.json());
     })
     .toMatchObject({
       spendingCategoryId: newCategory,
-      evidenceExpectation: null,
+      itemizationExpectation: null,
       fieldResolutions: {
-        evidenceExpectation: {
+        itemizationExpectation: {
           mode: "inherit",
           value: "not_expected",
           sourceEntity: { entityId: newCategory },
@@ -396,7 +402,7 @@ test("expense category pills agree with quality for direct, allocated, and missi
     "spendingCategory",
     {
       name: categoryName,
-      evidenceExpectation: "not_expected",
+      itemizationExpectation: "not_expected",
       productExpectation: "not_expected",
     },
   );
@@ -406,7 +412,7 @@ test("expense category pills agree with quality for direct, allocated, and missi
   const { id: purchaseId } = await createEntityFixture(page, "purchase", {
     vendorId,
     date: "2026-09-10",
-    evidenceExpectation: "not_expected",
+    itemizationExpectation: "not_expected",
   });
   const { id: principal } = await createEntityFixture(page, "expense", {
     name: `${tag} principal`,
@@ -423,7 +429,7 @@ test("expense category pills agree with quality for direct, allocated, and missi
     "spendingCategory",
     {
       name: secondCategoryName,
-      evidenceExpectation: "not_expected",
+      itemizationExpectation: "not_expected",
       productExpectation: "not_expected",
     },
   );

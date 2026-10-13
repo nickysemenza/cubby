@@ -386,7 +386,7 @@ const purchaseColumns = {
   spendingCategoryName: sql<
     string | null
   >`(SELECT name FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
-  evidenceExpectation: purchase.evidenceExpectation,
+  itemizationExpectation: purchase.itemizationExpectation,
   statedTotal: purchase.statedTotal,
   notes: purchase.notes,
   createdAt: purchase.createdAt,
@@ -424,7 +424,7 @@ type PurchaseRow = Pick<
   spendingCategoryOrigin: string;
   spendingCategoryShortcode: string | null;
   spendingCategoryName: PurchaseOut["spendingCategoryName"];
-  evidenceExpectation: PurchaseOut["evidenceExpectation"];
+  itemizationExpectation: PurchaseOut["itemizationExpectation"];
   defaultProjectShortcode: string | null;
   defaultTrade: PurchaseOut["defaultTrade"];
   vendorName: string | null;
@@ -465,7 +465,7 @@ const dbPurchaseToAPI = (
     ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
     : null,
   spendingCategoryName: row.spendingCategoryName,
-  evidenceExpectation: row.evidenceExpectation,
+  itemizationExpectation: row.itemizationExpectation,
   coverage: row.coverage,
   fieldResolutions: row.fieldResolutions,
   spendingCategorySummary,
@@ -1104,7 +1104,7 @@ export const createPurchase = async (
         ? await resolveOrThrow(tx, "spendingCategory", data.spendingCategoryId)
         : null,
       spendingCategoryOrigin: data.spendingCategoryId ? "manual" : "legacy",
-      evidenceExpectation: data.evidenceExpectation,
+      itemizationExpectation: data.itemizationExpectation,
       defaultTrade: data.defaultTrade,
       vendorId,
       vendorAccountId,
@@ -1248,7 +1248,7 @@ export const updatePurchase = async (
           data.spendingCategoryId,
           options.spendingCategoryOrigin,
         ),
-        evidenceExpectation: data.evidenceExpectation,
+        itemizationExpectation: data.itemizationExpectation,
         defaultTrade: data.defaultTrade,
         orderId:
           data.orderId === undefined ? undefined : data.orderId?.trim() || null,
@@ -1906,7 +1906,7 @@ const carryChargeMetadata = async (
   const selection = {
     spendingCategoryId: purchase.spendingCategoryId,
     spendingCategoryOrigin: purchase.spendingCategoryOrigin,
-    evidenceExpectation: purchase.evidenceExpectation,
+    itemizationExpectation: purchase.itemizationExpectation,
 
     statedTotal: purchase.statedTotal,
     displayLabel: purchase.displayLabel,
@@ -1926,13 +1926,13 @@ const carryChargeMetadata = async (
   if (!dead || !survivor)
     throw new Error("Both Purchases must exist before merging their metadata.");
   if (
-    survivor.evidenceExpectation != null &&
-    dead.evidenceExpectation != null &&
-    survivor.evidenceExpectation !== dead.evidenceExpectation
+    survivor.itemizationExpectation != null &&
+    dead.itemizationExpectation != null &&
+    survivor.itemizationExpectation !== dead.itemizationExpectation
   )
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "These Purchases have conflicting receipt expectations. Review their expectations before merging.",
+      "These Purchases have conflicting itemization expectations. Review their expectations before merging.",
     );
   if (
     survivor.spendingCategoryId != null &&
@@ -1952,9 +1952,9 @@ const carryChargeMetadata = async (
       survivor.spendingCategoryId == null && dead.spendingCategoryId != null
         ? dead.spendingCategoryOrigin
         : undefined,
-    evidenceExpectation: carryMissing(
-      survivor.evidenceExpectation,
-      dead.evidenceExpectation,
+    itemizationExpectation: carryMissing(
+      survivor.itemizationExpectation,
+      dead.itemizationExpectation,
     ),
 
     statedTotal: carryMissing(survivor.statedTotal, dead.statedTotal),

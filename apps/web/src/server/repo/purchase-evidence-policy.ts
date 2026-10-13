@@ -1,7 +1,7 @@
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { primaryPurchaseDocumentKinds } from "@cubby/schemas/purchase";
-import { evidenceExpectation } from "@cubby/schemas/purchase-evidence-policy";
+import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import type {
   FinancialTransactionCoverage,
   PurchaseEvidenceCoverage,
@@ -23,25 +23,25 @@ const column = (alias: string, name: string) =>
 
 const categoryPolicy = (
   categoryId: SQL,
-  field: "evidenceExpectation" | "productExpectation",
+  field: "itemizationExpectation" | "productExpectation",
 ) => sql`(
   SELECT ${column("ep_category", field)} FROM "SpendingCategory" ep_category
   WHERE ep_category.id = ${categoryId} AND ep_category."deletedAt" IS NULL
 )`;
 
 const purchaseEvidenceFallbackSql = (alias: string): SQL => sql`COALESCE(
-  (SELECT ep_vendor."evidenceExpectation" FROM "Vendor" ep_vendor
+  (SELECT ep_vendor."itemizationExpectation" FROM "Vendor" ep_vendor
    WHERE ep_vendor.id = ${column(alias, "vendorId")} AND ep_vendor."deletedAt" IS NULL),
-  ${categoryPolicy(column(alias, "spendingCategoryId"), "evidenceExpectation")},
+  ${categoryPolicy(column(alias, "spendingCategoryId"), "itemizationExpectation")},
   'unknown'
 )`;
 
-export const purchaseEvidenceExpectationSql = (
+export const purchaseItemizationExpectationSql = (
   alias: string,
   transactionOverride?: SQL,
 ): SQL => sql`COALESCE(
   ${transactionOverride ?? sql`NULL`},
-  ${column(alias, "evidenceExpectation")},
+  ${column(alias, "itemizationExpectation")},
   ${purchaseEvidenceFallbackSql(alias)}
 )`;
 
@@ -49,7 +49,7 @@ const categoryEvidenceSourceSql = (alias: string): SQL => sql`(
   SELECT jsonb_build_object('entityKind','spendingCategory','entityId',ep_source_category.shortcode,'name',ep_source_category.name)
   FROM "SpendingCategory" ep_source_category
   WHERE ep_source_category.id = ${column(alias, "spendingCategoryId")}
-    AND ep_source_category."deletedAt" IS NULL AND ep_source_category."evidenceExpectation" IS NOT NULL
+    AND ep_source_category."deletedAt" IS NULL AND ep_source_category."itemizationExpectation" IS NOT NULL
 )`;
 
 const evidenceFieldResolutionsSql = (values: {
@@ -60,7 +60,7 @@ const evidenceFieldResolutionsSql = (values: {
   sourceEntity: SQL;
   allocated?: SQL;
 }): SQL<FieldResolutions> => sql<FieldResolutions>`(
-  SELECT jsonb_build_object('evidenceExpectation',jsonb_build_object(
+  SELECT jsonb_build_object('itemizationExpectation',jsonb_build_object(
     'mode',CASE WHEN policy.allocated THEN 'allocated' WHEN policy.stored IS NOT NULL THEN 'explicit' ELSE 'inherit' END,
     'storedValue',policy.stored,'value',policy.value,'fallbackValue',policy.fallback,
     'source',policy.source,'sourceEntity',policy."sourceEntity",
@@ -74,13 +74,13 @@ export const purchaseEvidenceFieldResolutionsSql = (
 ): SQL<FieldResolutions> => {
   const vendorSource = sql`(SELECT jsonb_build_object('entityKind','vendor','entityId',ep_source_vendor.shortcode,'name',ep_source_vendor.name)
     FROM "Vendor" ep_source_vendor WHERE ep_source_vendor.id = ${column(alias, "vendorId")}
-      AND ep_source_vendor."deletedAt" IS NULL AND ep_source_vendor."evidenceExpectation" IS NOT NULL)`;
+      AND ep_source_vendor."deletedAt" IS NULL AND ep_source_vendor."itemizationExpectation" IS NOT NULL)`;
   const inheritedSource = sql`COALESCE(${vendorSource},${categoryEvidenceSourceSql(alias)})`;
   return evidenceFieldResolutionsSql({
-    stored: column(alias, "evidenceExpectation"),
-    value: purchaseEvidenceExpectationSql(alias),
+    stored: column(alias, "itemizationExpectation"),
+    value: purchaseItemizationExpectationSql(alias),
     fallback: purchaseEvidenceFallbackSql(alias),
-    source: sql`CASE WHEN ${column(alias, "evidenceExpectation")} IS NOT NULL THEN 'purchase override'
+    source: sql`CASE WHEN ${column(alias, "itemizationExpectation")} IS NOT NULL THEN 'purchase override'
       WHEN ${vendorSource} IS NOT NULL THEN 'vendor policy'
       WHEN ${categoryEvidenceSourceSql(alias)} IS NOT NULL THEN 'spending category policy' ELSE 'unclassified policy' END`,
     sourceEntity: inheritedSource,
@@ -139,7 +139,7 @@ export const purchaseHasItemizationSql = (alias: string): SQL => sql`(
 export const purchaseEvidenceFingerprintSql = (
   alias: string,
 ): SQL => sql`jsonb_build_object(
-  'expectation', ${purchaseEvidenceExpectationSql(alias)},
+  'expectation', ${purchaseItemizationExpectationSql(alias)},
   'itemizationEvidence', false,
   'primaryDocument', ${purchaseHasPrimaryDocumentSql(alias)},
   'documents', (SELECT jsonb_agg(jsonb_build_array(ep_changed_document.id, ep_changed_document."imageId", ep_changed_document."documentKind") ORDER BY ep_changed_document.id)
@@ -179,11 +179,11 @@ const documentPresence = (present: SQL): SQL =>
 /** A retained receipt or invoice is itemizable whatever the policy says: a
  * member's receipt photo enters the Research queue this way. Every itemization
  * surface (Purchase gap, coverage, transaction axis) reads this one value. */
-export const purchaseItemizationExpectationSql = (
+export const effectivePurchaseItemizationExpectationSql = (
   alias: string,
   transactionOverride?: SQL,
 ): SQL => sql`(CASE WHEN ${purchaseHasPrimaryDocumentSql(alias)} THEN 'required'
-  ELSE ${purchaseEvidenceExpectationSql(alias, transactionOverride)} END)`;
+  ELSE ${purchaseItemizationExpectationSql(alias, transactionOverride)} END)`;
 
 const evidencePresence = (present: SQL, expectation: SQL): SQL => sql`(CASE
   WHEN ${present} THEN 'present'
@@ -212,7 +212,7 @@ export const purchaseCoverageSql = (
   alias: string,
   transactionOverride?: SQL,
 ): SQL<PurchaseEvidenceCoverage> => {
-  const expectation = purchaseEvidenceExpectationSql(
+  const expectation = purchaseItemizationExpectationSql(
     alias,
     transactionOverride,
   );
@@ -220,7 +220,7 @@ export const purchaseCoverageSql = (
     'expectation', ${expectation},
     'booking', ${purchaseBookingSql(alias)},
     'document', ${documentPresence(purchaseHasPrimaryDocumentSql(alias))},
-    'itemization', ${evidencePresence(purchaseHasItemizationSql(alias), purchaseItemizationExpectationSql(alias, transactionOverride))},
+    'itemization', ${evidencePresence(purchaseHasItemizationSql(alias), effectivePurchaseItemizationExpectationSql(alias, transactionOverride))},
     'products', ${purchaseProductsSql(alias)}
   )`;
 };
@@ -245,26 +245,26 @@ const financialTransactionIsReimbursementSql = (alias: string): SQL => sql`(
     AND ep_reimbursement."deletedAt" IS NULL
 )`;
 
-const linkedPurchaseEvidenceExpectationSql = (
+const linkedPurchaseItemizationExpectationSql = (
   alias: string,
   purchaseOverride?: SQL,
 ): SQL =>
   purchaseOverride !== undefined
-    ? sql`(SELECT ${purchaseEvidenceExpectationSql("ep_linked")} FROM "Purchase" ep_linked WHERE ep_linked.id = ${purchaseOverride} AND ep_linked."deletedAt" IS NULL)`
+    ? sql`(SELECT ${purchaseItemizationExpectationSql("ep_linked")} FROM "Purchase" ep_linked WHERE ep_linked.id = ${purchaseOverride} AND ep_linked."deletedAt" IS NULL)`
     : sql`(SELECT CASE
     WHEN bool_or(ep_linked_policy.expectation = 'required') THEN 'required'
     WHEN bool_or(ep_linked_policy.expectation = 'unknown') THEN 'unknown'
     WHEN count(*) > 0 THEN 'not_expected' ELSE NULL END
    FROM "FinancialTransactionAllocation" ep_allocation
    JOIN "Purchase" ep_linked ON ep_linked.id = ep_allocation."purchaseId" AND ep_linked."deletedAt" IS NULL
-   CROSS JOIN LATERAL (SELECT ${purchaseEvidenceExpectationSql("ep_linked")} AS expectation OFFSET 0) ep_linked_policy
+   CROSS JOIN LATERAL (SELECT ${purchaseItemizationExpectationSql("ep_linked")} AS expectation OFFSET 0) ep_linked_policy
    WHERE ep_allocation."transactionId" = ${column(alias, "id")} AND ep_allocation."deletedAt" IS NULL)`;
 
 const financialTransactionPolicyExpectationSql = (
   alias: string,
   purchaseOverride?: SQL,
 ): SQL =>
-  sql`COALESCE(${linkedPurchaseEvidenceExpectationSql(alias, purchaseOverride)},${categoryPolicy(column(alias, "spendingCategoryId"), "evidenceExpectation")},'unknown')`;
+  sql`COALESCE(${linkedPurchaseItemizationExpectationSql(alias, purchaseOverride)},${categoryPolicy(column(alias, "spendingCategoryId"), "itemizationExpectation")},'unknown')`;
 
 const financialTransactionEvidenceFallbackSql = (
   alias: string,
@@ -276,19 +276,22 @@ const financialTransactionEvidenceFallbackSql = (
 // Not `COALESCE(override, fallback)`: the fallback would re-test reimbursement
 // that this CASE already excluded, and this expectation is inlined many times
 // per data-quality score.
-export const financialTransactionEvidenceExpectationSql = (
+export const financialTransactionItemizationExpectationSql = (
   alias: string,
   purchaseOverride?: SQL,
 ): SQL => sql`CASE
   WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'
-  ELSE COALESCE(${column(alias, "evidenceExpectation")},${financialTransactionPolicyExpectationSql(alias, purchaseOverride)}) END`;
+  ELSE COALESCE(${column(alias, "itemizationExpectation")},${financialTransactionPolicyExpectationSql(alias, purchaseOverride)}) END`;
 
 export const financialTransactionEvidenceFieldResolutionsSql = (
   alias: string,
   purchaseOverride?: SQL,
 ): SQL<FieldResolutions> => {
   const reimbursed = financialTransactionIsReimbursementSql(alias);
-  const linked = linkedPurchaseEvidenceExpectationSql(alias, purchaseOverride);
+  const linked = linkedPurchaseItemizationExpectationSql(
+    alias,
+    purchaseOverride,
+  );
   // Aggregate policy has a single source link only when exactly one live
   // Purchase participates; choosing one of several would misstate provenance.
   const purchaseSource =
@@ -300,12 +303,15 @@ export const financialTransactionEvidenceFieldResolutionsSql = (
     JOIN "Purchase" ep_source_purchase ON ep_source_purchase.id = ep_source_allocation."purchaseId" AND ep_source_purchase."deletedAt" IS NULL
     WHERE ep_source_allocation."transactionId" = ${column(alias, "id")} AND ep_source_allocation."deletedAt" IS NULL)`;
   return evidenceFieldResolutionsSql({
-    stored: column(alias, "evidenceExpectation"),
-    value: financialTransactionEvidenceExpectationSql(alias, purchaseOverride),
+    stored: column(alias, "itemizationExpectation"),
+    value: financialTransactionItemizationExpectationSql(
+      alias,
+      purchaseOverride,
+    ),
     fallback: financialTransactionEvidenceFallbackSql(alias, purchaseOverride),
     allocated: reimbursed,
     source: sql`CASE WHEN ${reimbursed} THEN 'reviewed reimbursement'
-      WHEN ${column(alias, "evidenceExpectation")} IS NOT NULL THEN 'transaction override'
+      WHEN ${column(alias, "itemizationExpectation")} IS NOT NULL THEN 'transaction override'
       WHEN ${linked} IS NOT NULL THEN 'linked purchase policies'
       WHEN ${categoryEvidenceSourceSql(alias)} IS NOT NULL THEN 'spending category policy' ELSE 'unclassified policy' END`,
     sourceEntity: sql`CASE WHEN ${reimbursed} THEN NULL WHEN ${linked} IS NOT NULL THEN ${purchaseSource} ELSE ${categoryEvidenceSourceSql(alias)} END`,
@@ -338,15 +344,15 @@ export const financialTransactionCoverageAxisSql = (
         ? documentPresence(purchaseHasPrimaryDocumentSql("ep_axis_purchase"))
         : evidencePresence(
             purchaseHasItemLinesSql("ep_axis_purchase"),
-            purchaseItemizationExpectationSql(
+            effectivePurchaseItemizationExpectationSql(
               "ep_axis_purchase",
-              column(alias, "evidenceExpectation"),
+              column(alias, "itemizationExpectation"),
             ),
           );
   const unallocated =
     axis === "itemization"
       ? sql`CASE WHEN ${financialTransactionRequiresBookingSql(alias)}
-        THEN ${evidencePresence(sql`false`, financialTransactionEvidenceExpectationSql(alias))}
+        THEN ${evidencePresence(sql`false`, financialTransactionItemizationExpectationSql(alias))}
         ELSE 'not_expected' END`
       : sql`'not_expected'`;
   return sql`(
@@ -383,7 +389,7 @@ export const financialTransactionEvidenceFingerprintSql = (
 export const financialTransactionCoverageSql = (
   alias: string,
 ): SQL<FinancialTransactionCoverage> => sql<FinancialTransactionCoverage>`jsonb_build_object(
-  'expectation', ${financialTransactionEvidenceExpectationSql(alias)},
+  'expectation', ${financialTransactionItemizationExpectationSql(alias)},
   'booking', ${financialTransactionBookingSql(alias)},
   'document', ${financialTransactionCoverageAxisSql(alias, "document")},
   'itemization', ${financialTransactionCoverageAxisSql(alias, "itemization")},
@@ -395,7 +401,7 @@ const draftEvidenceRow = z.object({
   shortcode: z.string(),
   vendorId: z.string().nullable(),
   spendingCategoryId: z.string().nullable(),
-  evidenceExpectation: evidenceExpectation.nullable(),
+  itemizationExpectation: itemizationExpectation.nullable(),
 });
 
 /** Draft policy uses the same SQL resolver as persisted reads. It never
@@ -433,7 +439,7 @@ export async function resolveDraftEvidenceFields(
   const table = purchase ? "Purchase" : "FinancialTransaction";
   const persisted = id
     ? await unwrapDb(db).execute(sql`SELECT id,shortcode,
-    ${purchase ? sql`"vendorId"` : sql`NULL::uuid`} AS "vendorId","spendingCategoryId","evidenceExpectation"
+    ${purchase ? sql`"vendorId"` : sql`NULL::uuid`} AS "vendorId","spendingCategoryId","itemizationExpectation"
     FROM ${sql.identifier(table)} WHERE id=${id} AND "deletedAt" IS NULL`)
     : null;
   const baseline = persisted?.rows[0]
@@ -452,12 +458,12 @@ export async function resolveDraftEvidenceFields(
     foreignId("vendorId", "vendor"),
     foreignId("spendingCategoryId", "spendingCategory"),
   ]);
-  const stored = evidenceExpectation
+  const stored = itemizationExpectation
     .nullable()
     .parse(
-      Object.hasOwn(input.basis, "evidenceExpectation")
-        ? (input.basis.evidenceExpectation ?? null)
-        : (baseline?.evidenceExpectation ?? null),
+      Object.hasOwn(input.basis, "itemizationExpectation")
+        ? (input.basis.itemizationExpectation ?? null)
+        : (baseline?.itemizationExpectation ?? null),
     );
   const purchaseId = purchase
     ? undefined
@@ -471,7 +477,7 @@ export async function resolveDraftEvidenceFields(
   const result = await unwrapDb(db)
     .execute(sql`SELECT ${resolver} AS resolutions FROM (SELECT
     ${id}::uuid AS id,${baseline?.shortcode ?? null}::text AS shortcode,${vendorId}::uuid AS "vendorId",
-    ${categoryId}::uuid AS "spendingCategoryId",${stored}::text AS "evidenceExpectation") ep_draft`);
+    ${categoryId}::uuid AS "spendingCategoryId",${stored}::text AS "itemizationExpectation") ep_draft`);
   return z.object({ resolutions: fieldResolutionsSchema }).parse(result.rows[0])
     .resolutions;
 }

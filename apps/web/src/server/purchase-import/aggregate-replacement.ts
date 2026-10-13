@@ -135,7 +135,7 @@ export async function loadAggregateReplacementSnapshot(
       defaultProjectId: purchase.defaultProjectId,
       defaultTrade: purchase.defaultTrade,
       spendingCategoryId: purchase.spendingCategoryId,
-      evidenceExpectation: purchase.evidenceExpectation,
+      itemizationExpectation: purchase.itemizationExpectation,
       statedTotal: purchase.statedTotal,
     })
     .from(purchase)

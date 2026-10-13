@@ -60,19 +60,19 @@ describe("reviewed finance suggestions", () => {
     async (entity) => {
       const parent = await insertWithShortcode(ctx.db, "spendingCategory", {
         name: "Fixture food",
-        evidenceExpectation: "unknown",
+        itemizationExpectation: "unknown",
         productExpectation: "unknown",
       });
       const child = await insertWithShortcode(ctx.db, "spendingCategory", {
         name: "Fixture dining",
         parentId: parent.id,
-        evidenceExpectation: "not_expected",
+        itemizationExpectation: "not_expected",
         productExpectation: "not_expected",
       });
       await insertWithShortcode(ctx.db, "spendingCategory", {
         name: "Retired fixture dining",
         deletedAt: new Date(),
-        evidenceExpectation: "unknown",
+        itemizationExpectation: "unknown",
         productExpectation: "unknown",
       });
       const before = await getDb(ctx.db).select().from(spendingCategory);
@@ -118,12 +118,12 @@ describe("reviewed finance suggestions", () => {
         {
           entity: "spendingCategory",
           basisMode: "provided",
-          targets: ["evidenceExpectation"],
+          targets: ["itemizationExpectation"],
           basis: { name: "Fixture groceries", parentId: parent.shortcode },
         },
         modelPicking("not_expected:"),
       );
-      expect(policy.suggestions.evidenceExpectation?.value).toBe(
+      expect(policy.suggestions.itemizationExpectation?.value).toBe(
         "not_expected",
       );
       expect(
@@ -132,7 +132,7 @@ describe("reviewed finance suggestions", () => {
             .select()
             .from(spendingCategory)
             .where(eq(spendingCategory.id, parent.id))
-        )[0]?.evidenceExpectation,
+        )[0]?.itemizationExpectation,
       ).toBe("unknown");
       await executeEntity(
         entityKernelContextSchema.parse({
@@ -143,7 +143,7 @@ describe("reviewed finance suggestions", () => {
           action: "update",
           entity: "spendingCategory",
           id: spendingCategoryShortcode.parse(parent.shortcode),
-          data: { evidenceExpectation: "not_expected" },
+          data: { itemizationExpectation: "not_expected" },
         },
       );
       expect(
@@ -152,7 +152,7 @@ describe("reviewed finance suggestions", () => {
             .select()
             .from(spendingCategory)
             .where(eq(spendingCategory.id, parent.id))
-        )[0]?.evidenceExpectation,
+        )[0]?.itemizationExpectation,
       ).toBe("not_expected");
     },
   );
@@ -164,7 +164,7 @@ describe("reviewed finance suggestions", () => {
       ["Fixture garden", "Fixture groceries"].map((name) =>
         insertWithShortcode(ctx.db, "spendingCategory", {
           name,
-          evidenceExpectation: "unknown",
+          itemizationExpectation: "unknown",
           productExpectation: "unknown",
         }),
       ),
@@ -224,7 +224,7 @@ describe("reviewed finance suggestions", () => {
     await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Deleted fixture",
       deletedAt: new Date(),
-      evidenceExpectation: "unknown",
+      itemizationExpectation: "unknown",
       productExpectation: "unknown",
     });
     const decisionPort = modelPicking("invented");
@@ -254,42 +254,42 @@ describe("reviewed finance suggestions", () => {
     async (name, expected) => {
       const row = await insertWithShortcode(ctx.db, "vendor", {
         name,
-        evidenceExpectation: "not_expected",
+        itemizationExpectation: "not_expected",
       });
       const result = await suggest(
         {
           entity: "vendor",
           basisMode: "provided",
-          targets: ["evidenceExpectation"],
+          targets: ["itemizationExpectation"],
           basis: { name },
         },
         modelPicking(`${expected}:`),
       );
-      expect(result.suggestions.evidenceExpectation).toMatchObject({
+      expect(result.suggestions.itemizationExpectation).toMatchObject({
         value: expected,
         operation: "set",
       });
       expect(
         (
           await getDb(ctx.db).select().from(vendor).where(eq(vendor.id, row.id))
-        )[0]?.evidenceExpectation,
+        )[0]?.itemizationExpectation,
       ).toBe("not_expected");
     },
   );
 
   it.each(["purchase", "financialTransaction"] as const)(
-    "%s resolves source/vendor evidence while leaving explicit receipt policy unchanged",
+    "%s resolves source/vendor evidence while leaving explicit itemization policy unchanged",
     async (entity) => {
       const row = await insertWithShortcode(ctx.db, "vendor", {
         name: "Home Depot",
-        evidenceExpectation: "not_expected",
+        itemizationExpectation: "not_expected",
       });
       const decisionPort = modelPicking("required:");
       const result = await suggest(
         {
           entity,
           basisMode: "provided",
-          targets: ["evidenceExpectation"],
+          targets: ["itemizationExpectation"],
           basis: {
             vendorId: row.shortcode,
             merchant: "Home Depot",
@@ -299,28 +299,30 @@ describe("reviewed finance suggestions", () => {
         },
         decisionPort,
       );
-      expect(result.suggestions.evidenceExpectation?.value).toBe("required");
+      expect(result.suggestions.itemizationExpectation?.value).toBe("required");
       expect(decisionPort.mock.calls[0]![0].state).toContain("Home Depot");
       expect(
         (
           await getDb(ctx.db).select().from(vendor).where(eq(vendor.id, row.id))
-        )[0]?.evidenceExpectation,
+        )[0]?.itemizationExpectation,
       ).toBe("not_expected");
     },
   );
 
-  it("offers category product policy independently from receipt policy", async () => {
+  it("offers category product policy independently from itemization policy", async () => {
     const result = await suggest(
       {
         entity: "spendingCategory",
         basisMode: "provided",
-        targets: ["productExpectation", "evidenceExpectation"],
+        targets: ["productExpectation", "itemizationExpectation"],
         basis: { name: "Fixture durable tools" },
       },
       modelPicking("Durable goods", "not_expected:"),
     );
     expect(result.suggestions.productExpectation?.value).toBe("required");
-    expect(result.suggestions.evidenceExpectation?.value).toBe("not_expected");
+    expect(result.suggestions.itemizationExpectation?.value).toBe(
+      "not_expected",
+    );
     expect(await getDb(ctx.db).select().from(spendingCategory)).toHaveLength(0);
   });
 });

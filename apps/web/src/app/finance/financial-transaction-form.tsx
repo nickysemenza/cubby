@@ -3,7 +3,7 @@ import {
   financialTransactionKind,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
-import { evidenceExpectation } from "@cubby/schemas/purchase-evidence-policy";
+import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
@@ -38,7 +38,7 @@ export const financialTransactionFormSchema = z
     accountId: z.string().min(1, "Account shortcode is required"),
     purchaseId: z.string(),
     spendingCategoryId: z.string().nullable(),
-    evidenceExpectation: evidenceExpectation.nullable(),
+    itemizationExpectation: itemizationExpectation.nullable(),
     kind: financialTransactionKind,
     status: financialTransactionStatus,
     amount: z
@@ -72,7 +72,7 @@ export const emptyFinancialTransactionForm: FinancialTransactionFormValues = {
   accountId: "",
   purchaseId: "",
   spendingCategoryId: null,
-  evidenceExpectation: null,
+  itemizationExpectation: null,
   kind: "purchase",
   status: "pending",
   amount: 0,

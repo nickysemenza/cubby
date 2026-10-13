@@ -45,13 +45,13 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
   };
   await create("spending-categories", {
     name: "Synthetic reviewed dining",
-    evidenceExpectation: "not_expected",
+    itemizationExpectation: "not_expected",
     productExpectation: "not_expected",
   });
   const vendorName = "Synthetic review cafe";
   await create("vendors", {
     name: vendorName,
-    evidenceExpectation: "not_expected",
+    itemizationExpectation: "not_expected",
   });
   const accountId = await create("financial-accounts", {
     name: "Synthetic review card",
@@ -160,7 +160,7 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     kind: "income",
     status: "posted",
     postedDate: "2026-09-12",
-    evidenceExpectation: "required",
+    itemizationExpectation: "required",
   });
   await gotoAuthenticatedPage(
     page,
@@ -213,9 +213,9 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
   expect(
     z
       .object({
-        evidenceExpectation: z.string(),
+        itemizationExpectation: z.string(),
         fieldResolutions: z.object({
-          evidenceExpectation: z.object({
+          itemizationExpectation: z.object({
             mode: z.string(),
             storedValue: z.string(),
             value: z.string(),
@@ -228,9 +228,9 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
       })
       .parse(await reviewed.json()),
   ).toEqual({
-    evidenceExpectation: "required",
+    itemizationExpectation: "required",
     fieldResolutions: {
-      evidenceExpectation: {
+      itemizationExpectation: {
         mode: "allocated",
         storedValue: "required",
         value: "not_expected",

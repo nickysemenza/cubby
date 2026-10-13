@@ -131,7 +131,7 @@ const crud = createEntityCrud({
     "name",
     "aliases",
     "parentId",
-    "evidenceExpectation",
+    "itemizationExpectation",
     "productExpectation",
   ],
 });

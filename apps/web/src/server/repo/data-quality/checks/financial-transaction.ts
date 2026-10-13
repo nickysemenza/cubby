@@ -6,7 +6,7 @@ import {
   financialTransactionBookingSql,
   financialTransactionCoverageAxisSql,
   financialTransactionEvidenceFingerprintSql,
-  financialTransactionEvidenceExpectationSql,
+  financialTransactionItemizationExpectationSql,
   financialTransactionRequiresBookingSql,
 } from "~/server/repo/purchase-evidence-policy";
 
@@ -15,12 +15,12 @@ import { defineEntityChecks } from "../registry";
 type FinancialTransaction = typeof financialTransaction;
 
 const requiresEvidence = (t: FinancialTransaction) =>
-  sql`(${financialTransactionRequiresBookingSql(getTableName(t))} AND ${financialTransactionEvidenceExpectationSql(getTableName(t))} = 'required')`;
+  sql`(${financialTransactionRequiresBookingSql(getTableName(t))} AND ${financialTransactionItemizationExpectationSql(getTableName(t))} = 'required')`;
 const axis = (t: FinancialTransaction, name: "itemization" | "products") =>
   financialTransactionCoverageAxisSql(getTableName(t), name);
 const evidenceFingerprint = (t: FinancialTransaction) => [
   financialTransactionRequiresBookingSql(getTableName(t)),
-  financialTransactionEvidenceExpectationSql(getTableName(t)),
+  financialTransactionItemizationExpectationSql(getTableName(t)),
   financialTransactionEvidenceFingerprintSql(getTableName(t)),
 ];
 
@@ -54,12 +54,12 @@ export const financialTransactionChecks = defineEntityChecks({
       missing: (t) => sql`(${t.merchant} IS NULL OR trim(${t.merchant}) = '')`,
       fingerprint: (t) => [sql`${t.merchant}`],
     },
-    financial_transaction_evidence_expectation: {
+    financial_transaction_itemization_expectation: {
       expected: (t) => financialTransactionRequiresBookingSql(getTableName(t)),
       missing: (t) =>
-        sql`${financialTransactionEvidenceExpectationSql(getTableName(t))} = 'unknown'`,
+        sql`${financialTransactionItemizationExpectationSql(getTableName(t))} = 'unknown'`,
       fingerprint: (t) => [
-        financialTransactionEvidenceExpectationSql(getTableName(t)),
+        financialTransactionItemizationExpectationSql(getTableName(t)),
       ],
     },
     financial_transaction_booking: {

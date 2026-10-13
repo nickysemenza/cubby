@@ -21,7 +21,7 @@ struct FieldResolutionPresentationTests {
     }
     private func field() throws -> FieldDescriptor {
         let source =
-            #"{"key":"evidenceExpectation","label":"Receipt expectation","kind":"enum","nullable":true,"controlKind":"select","controlOptions":[{"value":"unknown","label":"Unclassified"},{"value":"required","label":"Expected"},{"value":"not_expected","label":"Not expected"}],"resolution":{"reset":{"evidenceExpectation":null},"none":null,"redundancy":"eligible"},"inCreate":true,"requiredOnCreate":false,"inUpdate":true,"showInList":true,"showInDetail":true,"listHidden":false,"mobileInteractive":false}"#
+            #"{"key":"itemizationExpectation","label":"Receipt expectation","kind":"enum","nullable":true,"controlKind":"select","controlOptions":[{"value":"unknown","label":"Unclassified"},{"value":"required","label":"Expected"},{"value":"not_expected","label":"Not expected"}],"resolution":{"reset":{"itemizationExpectation":null},"none":null,"redundancy":"eligible"},"inCreate":true,"requiredOnCreate":false,"inUpdate":true,"showInList":true,"showInDetail":true,"listHidden":false,"mobileInteractive":false}"#
         return try JSONDecoder().decode(FieldDescriptor.self, from: Data(source.utf8))
     }
 
@@ -30,9 +30,9 @@ struct FieldResolutionPresentationTests {
         canReset: Bool = false, sourceEntity: JSONValue = .null
     ) -> JSONValue {
         [
-            "evidenceExpectation": stored,
+            "itemizationExpectation": stored,
             "fieldResolutions": [
-                "evidenceExpectation": [
+                "itemizationExpectation": [
                     "mode": .string(mode), "storedValue": stored, "value": value,
                     "fallbackValue": "not_expected",
                     "source": "allocated_purchases", "sourceEntity": sourceEntity, "matchesFallback": true,
@@ -65,7 +65,7 @@ struct FieldResolutionPresentationTests {
                 raw: row(mode: "explicit", stored: "unknown", value: "unknown", canReset: true), field: field)
         )
         #expect(explicit.storedValue == .string("unknown"))
-        #expect(explicit.resetPayload(field: field) == ["evidenceExpectation": .null])
+        #expect(explicit.resetPayload(field: field) == ["itemizationExpectation": .null])
     }
 
     // Regression: an explicit value with nothing to inherit was labelled an override.
@@ -74,7 +74,7 @@ struct FieldResolutionPresentationTests {
         func state(_ fallback: JSONValue, matches: Bool) throws -> FieldResolutionState {
             let raw: JSONValue = [
                 "fieldResolutions": [
-                    "evidenceExpectation": [
+                    "itemizationExpectation": [
                         "mode": "explicit", "storedValue": "required", "value": "required",
                         "fallbackValue": fallback, "source": "explicit", "sourceEntity": .null,
                         "matchesFallback": .bool(matches), "canReset": true,
@@ -92,7 +92,7 @@ struct FieldResolutionPresentationTests {
         let field = try field()
         #expect(
             FieldResolutionPresentation.readValue(
-                in: ["evidenceExpectation": "unknown"], field: field, surface: "detail") == .string("unknown")
+                in: ["itemizationExpectation": "unknown"], field: field, surface: "detail") == .string("unknown")
         )
         #expect(
             FieldResolutionPresentation.readValue(in: row(), field: field, surface: "list")

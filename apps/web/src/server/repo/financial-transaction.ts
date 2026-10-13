@@ -150,7 +150,7 @@ const columns = {
   spendingCategoryName: sql<
     string | null
   >`(SELECT name FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND "deletedAt" IS NULL)`,
-  evidenceExpectation: financialTransaction.evidenceExpectation,
+  itemizationExpectation: financialTransaction.itemizationExpectation,
   coverage: financialTransactionCoverageSql("FinancialTransaction"),
   fieldResolutions: financialTransactionEvidenceFieldResolutionsSql(
     "FinancialTransaction",
@@ -239,7 +239,7 @@ const toOut = (
     spendingCategoryName: row.spendingCategoryName,
     fieldResolutions: row.fieldResolutions,
     spendingCategorySummary,
-    evidenceExpectation: row.evidenceExpectation,
+    itemizationExpectation: row.itemizationExpectation,
     bookingCoverage: row.coverage.booking,
     documentCoverage: row.coverage.document,
     itemizationCoverage: row.coverage.itemization,

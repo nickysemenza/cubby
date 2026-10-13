@@ -247,10 +247,10 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
   await pointerDrag(
     page,
     dragHandle("Evidence expectation"),
-    row("evidenceExpectation"),
+    row("itemizationExpectation"),
     row("notes"),
   );
-  expected = placedAfter(expected, "evidenceExpectation", "notes");
+  expected = placedAfter(expected, "itemizationExpectation", "notes");
   await expect.poll(() => headerIds(page)).toEqual(expected);
 
   // A reorder inside a pinned region, from the dialog's buttons.

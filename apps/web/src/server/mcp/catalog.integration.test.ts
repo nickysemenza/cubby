@@ -210,7 +210,7 @@ describe("MCP catalog", () => {
       action: "update",
       entity: "purchase",
       id: purchaseId,
-      data: { evidenceExpectation: "required" },
+      data: { itemizationExpectation: "required" },
     });
     // An allocation slice is never an itemization, so the gap is open.
     await call("entity", {

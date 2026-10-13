@@ -669,10 +669,10 @@ type EnumSuggestKey =
   | "expense.trade"
   | "purchase.defaultTrade"
   | "productCategory.feature"
-  | "vendor.evidenceExpectation"
-  | "purchase.evidenceExpectation"
-  | "financialTransaction.evidenceExpectation"
-  | "spendingCategory.evidenceExpectation"
+  | "vendor.itemizationExpectation"
+  | "purchase.itemizationExpectation"
+  | "financialTransaction.itemizationExpectation"
+  | "spendingCategory.itemizationExpectation"
   | "spendingCategory.productExpectation";
 
 // oxlint-disable anti-slop/no-known-value-widening -- The closed generated key union is validated by the final registry satisfies check; this builder must return that map after enumerating model fields.

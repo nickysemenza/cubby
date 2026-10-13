@@ -131,7 +131,7 @@ describe("complete connected record tables", () => {
         name: "Example supplier",
         website: null,
         orderUrlTemplate: null,
-        evidenceExpectation: null,
+        itemizationExpectation: null,
         orderEvidence: null,
         orderEmailSenders: [],
         browserDomains: [],
