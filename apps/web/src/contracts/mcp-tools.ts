@@ -111,7 +111,7 @@ export const MCP_TOOLS = defineMcpTools({
           items: aiContract.ops.listSuggestionReviewQueue.output,
         }),
         description:
-          "Stored field suggestions filtered by entity, field, kind, confidence or recordIds. status defaults to pending (the review queue; each id feeds entity.accept_suggestion(s) or reject_suggestion); applied, rejected and superseded read reviewed history with correctValue — the decision-eval label set. Paired trial rows never appear.",
+          "Stored field suggestions; every filter composes: entity, field or fields, kind, minConfidence, runId, and recordIds (with entity). status defaults to pending (the review queue; each id feeds entity.accept_suggestion(s) or reject_suggestion); applied, rejected and superseded read reviewed history with correctValue — the decision-eval label set. Paired trial rows never appear.",
       }),
       inventory_ownership_context: mcpAction({
         op: expenseContract.ops.inventoryOwnershipContext,

@@ -19,7 +19,6 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   acceptSuggestion,
   acceptSuggestions,
-  listPagePendingSuggestions,
   listSuggestions,
   recordFieldSuggestionMiss,
   rejectSuggestion,
@@ -79,7 +78,8 @@ describe("Suggestion review", () => {
     if (!row) throw new Error("Synthetic Suggestion was not persisted");
     expect(row.suggestedValue).toBe(taxonomyShortcode(SUGGESTED_CATEGORY));
     expect(
-      await listPagePendingSuggestions(ctx.db, {
+      await listSuggestions(ctx.db, {
+        minConfidence: 0,
         entity: "product",
         recordIds: [product.id],
         fields: ["categoryId"],
@@ -114,7 +114,8 @@ describe("Suggestion review", () => {
       taxonomyId(SUGGESTED_CATEGORY),
     );
     expect(
-      await listPagePendingSuggestions(ctx.db, {
+      await listSuggestions(ctx.db, {
+        minConfidence: 0,
         entity: "product",
         recordIds: [product.id],
         fields: ["categoryId"],
@@ -183,8 +184,23 @@ describe("Suggestion review", () => {
     expect(history.map(({ correctValue }) => correctValue).sort()).toEqual(
       [null, taxonomyShortcode("household")].sort(),
     );
+    // A record-scoped history read keeps its status; it once fell through to
+    // a pending-only page read and returned no labels.
     expect(
-      await listPagePendingSuggestions(ctx.db, {
+      await listSuggestions(ctx.db, {
+        entity: "product",
+        recordIds: [dismissed.id, corrected.id],
+        fields: ["categoryId"],
+        status: "rejected",
+        minConfidence: 0,
+      }),
+    ).toHaveLength(2);
+    await expect(
+      listSuggestions(ctx.db, { recordIds: [dismissed.id] }),
+    ).rejects.toThrow(/name its entity/);
+    expect(
+      await listSuggestions(ctx.db, {
+        minConfidence: 0,
         entity: "product",
         recordIds: [dismissed.id, corrected.id],
         fields: ["categoryId"],

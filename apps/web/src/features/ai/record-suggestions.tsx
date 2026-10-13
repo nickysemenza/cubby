@@ -191,7 +191,14 @@ export interface StoredSuggestionOperations {
 }
 
 const productionStoredSuggestionOperations: StoredSuggestionOperations = {
-  list: (input) => ai.listSuggestionReviewQueue.call(input),
+  // A list page shows every pending row for its records, not the Review
+  // tab's confidence floor or page size.
+  list: (input) =>
+    ai.listSuggestionReviewQueue.call({
+      ...input,
+      minConfidence: 0,
+      limit: 1000,
+    }),
   accept: (input) => ai.acceptSuggestion.call(input),
   acceptMany: (input) => ai.acceptSuggestions.call(input),
   reject: (input) => ai.rejectSuggestion.call(input),

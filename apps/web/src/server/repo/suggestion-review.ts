@@ -35,16 +35,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 
 const rowIdInput = z.object({ id: z.string().uuid() });
-const filtersSchema = suggestionReviewListInput.omit({
-  recordIds: true,
-  fields: true,
-});
 const jsonSchema = z.json();
-const pageSuggestionsInput = z.object({
-  entity: fieldSuggestionsInput.shape.entity,
-  recordIds: z.array(z.string().min(1)).max(250),
-  fields: z.array(z.string()).max(100),
-});
 const suggestionRowSchema = z.object({
   id: z.string().uuid(),
   runId: z.string().uuid(),
@@ -88,12 +79,33 @@ function reviewableRow(
 export const reviewableSuggestionSql = sql`(${suggestionTable.pairKey} IS NULL OR ${suggestionTable.model} = ${runTable.input}->>'decisionModel')`;
 
 /** Pending review queue, or reviewed history by `status` (the label set a
- * decision eval replays). Paired evaluation candidates never appear. */
+ * decision eval replays). Every filter composes, including a list page's
+ * `recordIds` and `fields`. Paired evaluation candidates never appear. */
 export async function listSuggestions(
   db: Database,
-  rawInput: z.input<typeof filtersSchema> = {},
+  rawInput: z.input<typeof suggestionReviewListInput> = {},
 ) {
-  const input = filtersSchema.parse(rawInput);
+  const input = suggestionReviewListInput.parse(rawInput);
+  if (
+    (input.recordIds && !input.recordIds.length) ||
+    (input.fields && !input.fields.length)
+  )
+    return [];
+  let recordUuids: string[] | undefined;
+  if (input.recordIds) {
+    if (!input.entity)
+      throw new Error(
+        "recordIds filters one entity's records; name its entity.",
+      );
+    recordUuids = [
+      ...new Set(
+        (
+          await resolveLiveShortcodes(db, input.recordIds, input.entity)
+        ).values(),
+      ),
+    ];
+    if (!recordUuids.length) return [];
+  }
   const conditions = [
     eq(suggestionTable.status, input.status),
     gte(suggestionTable.confidence, input.minConfidence),
@@ -102,6 +114,10 @@ export async function listSuggestions(
   if (input.field) conditions.push(eq(suggestionTable.field, input.field));
   if (input.kind) conditions.push(eq(suggestionTable.kind, input.kind));
   if (input.runId) conditions.push(eq(runTable.shortcode, input.runId));
+  if (recordUuids)
+    conditions.push(inArray(suggestionTable.recordId, recordUuids));
+  if (input.fields)
+    conditions.push(inArray(suggestionTable.field, input.fields));
   const rows = await getDb(db)
     .select({
       suggestion: suggestionTable,
@@ -129,52 +145,6 @@ export async function listSuggestions(
     const ref = refs[index];
     const recordId = ref && codes.get(entityRefKey(ref.entity, ref.id));
     return recordId ? [{ ...row, recordId }] : [];
-  });
-}
-
-/** One bounded shortcode-keyed read for the visible list page. Stored rows take
- * precedence over live suggestions on list surfaces; paired evaluation
- * candidates never reach review. */
-export async function listPagePendingSuggestions(
-  db: Database,
-  rawInput: z.input<typeof pageSuggestionsInput>,
-) {
-  const input = pageSuggestionsInput.parse(rawInput);
-  if (!input.recordIds.length || !input.fields.length) return [];
-  const uuidByPublicId = await resolveLiveShortcodes(
-    db,
-    input.recordIds,
-    input.entity,
-  );
-  const publicIdByUuid = new Map<string, string>();
-  for (const [publicId, uuid] of uuidByPublicId)
-    publicIdByUuid.set(uuid, publicId);
-  const recordUuids = [...new Set(uuidByPublicId.values())];
-  if (recordUuids.length === 0) return [];
-  const rows = await getDb(db)
-    .select({
-      suggestion: suggestionTable,
-      runInput: runTable.input,
-      runCode: runTable.shortcode,
-    })
-    .from(suggestionTable)
-    .innerJoin(runTable, eq(runTable.id, suggestionTable.runId))
-    .where(
-      and(
-        eq(suggestionTable.entity, input.entity),
-        eq(suggestionTable.status, "pending"),
-        inArray(suggestionTable.recordId, recordUuids),
-        inArray(suggestionTable.field, input.fields),
-      ),
-    );
-  return rows.flatMap(({ suggestion, runInput, runCode }) => {
-    const publicRecordId = publicIdByUuid.get(suggestion.recordId);
-    return publicRecordId
-      ? reviewableRow(suggestion, runInput, runCode).map((row) => ({
-          ...row,
-          recordId: publicRecordId,
-        }))
-      : [];
   });
 }
 
