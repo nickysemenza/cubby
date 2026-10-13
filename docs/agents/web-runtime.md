@@ -12,6 +12,8 @@ A mutation function must not read changing selection state from its closure:
 observer options can lag the render that enabled the action.
 Resolve table selection updaters at the event boundary: they look up live rows
 and must not be deferred to a React state replay after optimistic removal.
+Successful bulk actions clear only the row IDs passed to that action. A new
+selection made while its write or refetch is pending survives completion.
 For hook-default and `useQueries` examples, load the relevant heading in the
 [web UI reference](web-ui-reference.md).
 

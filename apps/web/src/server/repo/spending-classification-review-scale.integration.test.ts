@@ -362,6 +362,7 @@ async function seedSyntheticHousehold(db: Database, scale: number) {
 async function referencePreview(
   db: Database,
   draft: ExpenseSpendingCategoryResolutionDraft,
+  before: ExpenseJointAllocationRow[],
 ) {
   const facts = (
     await unwrapDb(db).execute<{
@@ -373,7 +374,6 @@ async function referencePreview(
         ${expenseSpendingCategoryResolutionSql("e", draft)}->>'categoryId' AS after
       FROM "Expense" e WHERE e."deletedAt" IS NULL`)
   ).rows;
-  const before = await loadExpenseJointAllocations(db);
   const after = await loadExpenseJointAllocations(db, undefined, draft);
   const byExpense = (rows: ExpenseJointAllocationRow[]) => {
     const values = new Map<string, string[]>();
@@ -605,7 +605,9 @@ describe("spending classification preview at household scale", () => {
         expect(impact.changedExpenseCount).toBeGreaterThan(0);
         expect({ name, impact }).toEqual({
           name,
-          impact: await referencePreview(ctx.db, draft),
+          // Every preview is read-only; the original allocation baseline is
+          // shared, while each draft's expected result is resolved afresh.
+          impact: await referencePreview(ctx.db, draft, allocations),
         });
       }
     },

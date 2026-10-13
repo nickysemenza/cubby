@@ -255,7 +255,8 @@ describe("workerd test runtime lifecycle", () => {
       await expect(
         withWorkerdRuntime(
           {
-            profile: "purchase-agent",
+            // This failure occurs after an HTTP write, without agent work.
+            profile: "offline",
             database: {
               lease: async () => {
                 const lease = await createE2EDatabase();

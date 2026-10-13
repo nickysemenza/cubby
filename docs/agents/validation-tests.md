@@ -44,6 +44,11 @@ failure and the deleting commit in a `docs/todos.md` entry so it can be
 restored once fixed. Do not skip it in place: the test-run contract fails a
 lane that reports skipped or pending tests. Never raise the retry count.
 
+Scope artificial CPU throttling to the interaction whose race it guards;
+restore normal speed for unrelated setup and read-back. A shared detail
+renderer's section matrix renders once per entity and checks all declared
+sections together; the continuous-detail browser journey owns hash navigation.
+
 Before a focused browser replay, run `pnpm --filter @cubby/web run build:cf
 --ensure` after changing the recorded source revision. The prebuilt provenance
 gate can reject a run after workflow or documentation edits too; a

@@ -72,6 +72,6 @@ export const bulkActionPreview = <TData extends RowData>(
 export interface BulkActionsConfig<TData extends RowData> {
   /** Available actions */
   actions: BulkAction<TData>[];
-  /** Whether to clear selection after action completes (default: true) */
+  /** Clear acted-on rows after success; newer selections survive (default: true). */
   clearSelectionOnComplete?: boolean;
 }

@@ -109,10 +109,12 @@ orders of Gmail, retailer, photo, and CSV evidence against PostgreSQL through
 the same writers the routes dispatch: real normalization, persistence,
 retailer preparation/commit, photo staging/finalization/review, CSV intake,
 booking, finding resolution, and order-mail linking.
-`import-order-convergence.spec.ts` runs four of those orders in the browser —
-cyclic shifts, so each source arrives in every position and every ordered
-pair occurs — adding signed photo upload, photo review approval, CSV browser
-intake, the Problems fix, and the vendor Link. Only external
+`import-order-convergence.spec.ts` retains two browser orders: statement-first
+requires reviewed receipt reconciliation; receipt-first links existing
+itemization. Both retain signed photo upload, photo review approval, CSV browser
+intake, and vendor-to-Purchase-to-Product navigation. The statement-first case
+also retains the Problems fix beyond the overview's first twelve findings.
+The PostgreSQL matrix owns exhaustive arrival-order coverage. Only external
 classifier/image-description output is deterministic. Both assert the final Product, inventory ownership, Expense,
 Purchase allocation, and original source edges; neither seeds the economic
 graph or repair it at the end.

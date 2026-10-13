@@ -26,9 +26,7 @@ test("task list selection delete shows the impact preview, then removes the rows
     await seedTaskPrerequisite(page, { name: names[1]! }),
   ];
 
-  // Replaying a selection updater after optimistic removal must not crash.
   const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
   await gotoAuthenticatedPage(page, "/tasks");
   for (const name of names) {
     await page
@@ -84,6 +82,9 @@ test("task list selection delete shows the impact preview, then removes the rows
     isDelete(response.request()),
   );
   try {
+    // Replaying a selection updater after optimistic removal must not crash.
+    // Only confirmation/removal needs slow CPU, not navigation and setup.
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
     await confirm.click();
     await expect.poll(() => intercepted).toBe(true);
     await expect(
@@ -105,6 +106,7 @@ test("task list selection delete shows the impact preview, then removes the rows
       0,
     );
   }
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   for (const task of tasks) {
     const gone = await page.request.get(`/api/v1/tasks/${task.id}`);
     expect(gone.status()).toBe(404);
