@@ -783,6 +783,7 @@ export async function executeAiRefreshTarget(
 }
 
 export async function aiRefreshRelaunchCandidates(db: Database) {
+  const current = await readAiRefreshActivation(db);
   return getDb(db)
     .select({ id: run.id })
     .from(run)
@@ -798,7 +799,15 @@ export async function aiRefreshRelaunchCandidates(db: Database) {
           ),
         ),
         sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-        sql`EXISTS (SELECT 1 FROM "AiEvaluation" AS eligible WHERE eligible."runId" = ${run.id} AND eligible.state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.running}, ${aiEvaluationState.enum.result_ready}, ${aiEvaluationState.enum.retry_wait}))`,
+        or(
+          and(
+            sql`${run.input}->>${aiRefreshRunInput.keyof().enum.discovery} = 'true'`,
+            current?.discoveryRunId
+              ? eq(run.id, runEntityId.parse(current.discoveryRunId))
+              : sql`false`,
+          ),
+          sql`EXISTS (SELECT 1 FROM "AiEvaluation" AS eligible WHERE eligible."runId" = ${run.id} AND eligible.state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.running}, ${aiEvaluationState.enum.result_ready}, ${aiEvaluationState.enum.retry_wait}))`,
+        ),
       ),
     )
     .orderBy(asc(run.updatedAt), asc(run.id))
@@ -808,10 +817,21 @@ export async function aiRefreshRelaunchCandidates(db: Database) {
 export async function recoverAiRefresh(db: Database) {
   const { getAiRefreshEnabled } = await import("~/server/cf-env");
   const enabled = getAiRefreshEnabled();
-  if (!enabled) return;
+  if (!enabled) return false;
   const current = await readAiRefreshActivation(db);
-  // Only deployment activation can change generations. An old Worker may still receive a cron.
-  if (!current?.enabled || current.release !== __GIT_COMMIT__) return;
+  // The singleton owns activation. An old Worker can still receive recovery work.
+  if (!current?.enabled) return false;
+  const compiled = await compiledRefreshManifest();
+  if (
+    Object.keys(current.manifest).length !== Object.keys(compiled).length ||
+    Object.entries(compiled).some(
+      ([feature, policy]) =>
+        current.manifest[feature]?.promptVersion !== policy.promptVersion ||
+        current.manifest[feature]?.policyFingerprint !==
+          policy.policyFingerprint,
+    )
+  )
+    return false;
   const { reconcileWorkflowRuns } =
     await import("~/server/workflow-runs/lifecycle");
   await reconcileWorkflowRuns(db);
@@ -849,7 +869,8 @@ export async function recoverAiRefresh(db: Database) {
             ),
           )
           .limit(1);
-        if (!runnable) continue;
+        if (!runnable && !aiRefreshRunInput.parse(row.input).discovery)
+          continue;
         await launchWorkflowRun(db, {
           runId: runEntityId.parse(id),
           purpose: "ai_refresh",
@@ -863,4 +884,5 @@ export async function recoverAiRefresh(db: Database) {
   };
   await launch(unfinished.map((row) => row.id));
   await launch(await discoverAiRefresh(db));
+  return true;
 }

@@ -6,6 +6,7 @@ import {
 } from "@cubby/shared/ai/gateway-request";
 import { DurableObject } from "cloudflare:workers";
 
+import { isMaintenanceMode } from "../maintenance";
 import {
   gatewayEgressInput,
   type GatewayAdmission,
@@ -32,6 +33,65 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS cooldowns (bucket TEXT PRIMARY KEY, until_ms INTEGER NOT NULL)",
     );
+  }
+
+  private observation: Promise<void> | undefined;
+
+  /** Callers cannot install their own manifest, including during rollback. */
+  observeAiRefresh() {
+    if (isMaintenanceMode(this.env)) return Promise.resolve();
+    if (this.observation) return this.observation;
+    this.observation = this.observeCurrentVersion().finally(() => {
+      this.observation = undefined;
+    });
+    return this.observation;
+  }
+
+  private async observeCurrentVersion() {
+    const version = this.env.CF_VERSION_METADATA.id;
+    const epoch = await this.ctx.blockConcurrencyWhile(async () => {
+      if ((await this.ctx.storage.get("aiRefreshObservedVersion")) === version)
+        return null;
+      const pending = await this.ctx.storage.get<{
+        version: string;
+        epoch: number;
+      }>("aiRefreshPendingObservation");
+      if (
+        pending?.version === version &&
+        ((await this.ctx.storage.getAlarm()) ?? 0) > Date.now()
+      )
+        return null;
+      const epoch =
+        pending?.version === version
+          ? pending.epoch
+          : ((await this.ctx.storage.get<number>(
+              "aiRefreshObservationEpoch",
+            )) ?? 0) + 1;
+      await this.ctx.storage.put({
+        aiRefreshObservationEpoch: epoch,
+        aiRefreshPendingObservation: { version, epoch },
+      });
+      // Persist before external work. A replacement allocates a newer Neon fencing epoch.
+      await this.ctx.storage.setAlarm(Date.now() + 60_000);
+      return epoch;
+    });
+    if (epoch === null) return;
+    await (
+      await import("../ai-refresh-startup")
+    ).observeAiRefreshFeatures(this.env, epoch);
+    await this.ctx.blockConcurrencyWhile(async () => {
+      await this.ctx.storage.put("aiRefreshObservedVersion", version);
+      await this.ctx.storage.delete("aiRefreshPendingObservation");
+      await this.ctx.storage.deleteAlarm();
+    });
+  }
+
+  async alarm() {
+    if (isMaintenanceMode(this.env)) {
+      await this.ctx.storage.setAlarm(Date.now() + 5 * 60_000);
+      return;
+    }
+    await this.observeAiRefresh();
   }
 
   async admit(bucket: string, now = Date.now()): Promise<GatewayAdmission> {

@@ -1,5 +1,6 @@
 import {
   aiRefreshActivation,
+  aiRefreshRunInput,
   type AiRefreshManifest,
 } from "@cubby/schemas/ai-evaluation";
 import { eq } from "drizzle-orm";
@@ -29,7 +30,12 @@ export async function readAiRefreshActivation(
 export async function activateAiRefresh(
   db: Database,
   release: string,
-  options: { enabled: boolean; manifest?: AiRefreshManifest },
+  options: {
+    enabled: boolean;
+    manifest?: AiRefreshManifest;
+    startDiscovery?: boolean;
+    observationEpoch?: number;
+  },
 ) {
   const compiled = options.manifest ?? (await compiledRefreshManifest());
   return withTransactionDatabase(db, async (tx) => {
@@ -43,12 +49,23 @@ export async function activateAiRefresh(
       .where(eq(appSettings.id, SETTINGS_ID))
       .for("update");
     const prior = aiRefreshActivation.safeParse(row?.metadata);
+    if (
+      prior.success &&
+      options.observationEpoch !== undefined &&
+      prior.data.observationEpoch > options.observationEpoch
+    )
+      return prior.data;
     const manifest: AiRefreshManifest = {};
+    let changed =
+      !prior.success ||
+      prior.data.enabled !== options.enabled ||
+      Object.keys(prior.data.manifest).length !== Object.keys(compiled).length;
     for (const [feature, next] of Object.entries(compiled)) {
       const old = prior.success ? prior.data.manifest[feature] : undefined;
       const same =
         old?.promptVersion === next.promptVersion &&
         old.policyFingerprint === next.policyFingerprint;
+      changed ||= !same;
       manifest[feature] = {
         ...next,
         generation: same ? old.generation : (old?.generation ?? 0) + 1,
@@ -56,6 +73,11 @@ export async function activateAiRefresh(
     }
     const activation = aiRefreshActivation.parse({
       release,
+      observationEpoch:
+        options.observationEpoch ??
+        (prior.success ? prior.data.observationEpoch : 0),
+      revision: (prior.success ? prior.data.revision : 0) + (changed ? 1 : 0),
+      discoveryRunId: prior.success ? prior.data.discoveryRunId : null,
       enabled: options.enabled,
       manifest,
       activatedAt:
@@ -63,6 +85,26 @@ export async function activateAiRefresh(
           ? prior.data.activatedAt
           : new Date().toISOString(),
     });
+    if (
+      options.startDiscovery &&
+      options.enabled &&
+      (changed || !activation.discoveryRunId)
+    ) {
+      await saveAiDiscoveryCursor(tx, { field: null, email: null });
+      const { ensureRun, systemActor } =
+        await import("~/server/runs/ensure-run");
+      activation.discoveryRunId = await ensureRun(tx, systemActor(), {
+        purpose: "ai_refresh",
+        trigger: "scheduled",
+        status: "running",
+        clientKey: `ai-refresh:discovery:${activation.revision}`,
+        input: aiRefreshRunInput.parse({
+          kind: "ai_refresh",
+          discovery: true,
+          activation,
+        }),
+      });
+    }
     await getDb(tx)
       .update(appSettings)
       .set({ metadata: activation, updatedAt: new Date() })

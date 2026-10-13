@@ -108,3 +108,22 @@ describe("shared Gateway admission", () => {
     });
   });
 });
+
+// Idle version nudges must succeed without any usable database binding.
+it("keeps unchanged policy nudges entirely in durable storage without opening Neon", async () => {
+  const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+  await runInDurableObject(stub, async (instance, state) => {
+    Object.defineProperty(instance, "env", {
+      value: {
+        AI_REFRESH_ENABLED: "true",
+        CF_VERSION_METADATA: { id: "synthetic-current-version" },
+      },
+    });
+    await state.storage.put(
+      "aiRefreshObservedVersion",
+      "synthetic-current-version",
+    );
+    await instance.observeAiRefresh();
+    expect(await state.storage.getAlarm()).toBeNull();
+  });
+});

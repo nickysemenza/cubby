@@ -2,7 +2,6 @@ name: Deploy
 
 # Required PR CI gates merging. This workflow builds and deploys current main.
 on:
-  workflow_dispatch:
   push:
     branches: [main]
 
@@ -21,7 +20,6 @@ jobs:
       # Reuse the same content-verified WASM artifacts as required PR CI.
       NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
       NX_CACHE_TOKEN: ${{ secrets.NX_CACHE_TOKEN }}
-      AI_REFRESH_ACTIVATION_TOKEN: ${{ secrets.AI_REFRESH_ACTIVATION_TOKEN }}
     concurrency:
       group: deploy-cubby-production
       cancel-in-progress: false
@@ -31,7 +29,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/deploy-worker
-        id: deploy
         with:
           package: "@cubby/web"
           workspace-filter: "@cubby/web..."
@@ -44,15 +41,3 @@ jobs:
           deploy-command: "pnpm --filter @cubby/web exec wrangler deploy --config dist/server/wrangler.json"
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Activate deployed AI prompt versions
-        if: steps.deploy.outputs.deployed == 'true'
-        run: |
-          [[ -n "$AI_REFRESH_ACTIVATION_TOKEN" ]] || { echo "::error::AI_REFRESH_ACTIVATION_TOKEN is required for activation"; exit 1; }
-          release=$(git rev-parse --short HEAD)
-          body=$(jq -n --arg release "$release" '{release:$release}')
-          curl --fail --silent --show-error --retry 6 --retry-delay 10 --retry-max-time 90 --max-time 30 --retry-all-errors \
-            -H "Authorization: Bearer $AI_REFRESH_ACTIVATION_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data "$body" \
-            https://cubby.nickysemenza.com/api/internal/ai-refresh/activate

@@ -40,11 +40,6 @@ inputs:
     description: "Cloudflare account ID"
     required: true
 
-outputs:
-  deployed:
-    description: "Whether this invocation deployed the current main commit. Stale invocations return an empty value."
-    value: ${{ steps.deploy.outputs.deployed }}
-
 runs:
   using: "composite"
   steps:
@@ -85,12 +80,9 @@ runs:
         [[ "$current" == "$GITHUB_SHA" ]] || echo "::notice::Skipping stale deployment for $GITHUB_SHA; main is $current"
 
     - name: Deploy ${{ inputs.package }}
-      id: deploy
       if: steps.deploy_current.outputs.current == 'true'
       shell: bash
       env:
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
         CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
-      run: |
-        ${{ inputs.deploy-command }}
-        echo "deployed=true" >> "$GITHUB_OUTPUT"
+      run: ${{ inputs.deploy-command }}
