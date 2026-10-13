@@ -270,7 +270,7 @@
     "crons": ["0 12 * * *", "*/5 * * * *"]
   },
   "vars": {
-    "AI_REFRESH_ENABLED": "false",
+    "AI_REFRESH_ENABLED": "true",
     "NODE_ENV": "production",
     // Signup is closed (personal instance). Flip to "true" + deploy to
     // temporarily allow creating an account, then flip back.

@@ -540,7 +540,7 @@ describe("runDecisionChoice", () => {
       expect(sentBody.input).toMatchObject({ state: "pick red" });
       expect(sentBody.input.model).toBe(selector);
       expect(new Headers(call?.init?.headers).get("cf-aig-gateway-id")).toBe(
-        "cubby-evaluation",
+        "cubby-testing",
       );
       expect(sentBody).not.toHaveProperty("options.gateway");
     },

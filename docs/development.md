@@ -59,7 +59,7 @@ JSONL routes    →  cancellable workflow streams
   admits managed-credential traffic under an aggregate rolling window and
   concurrency cap, preserves streaming/provider headers, and shares 429
   cooldowns. ChatGPT subscription traffic bypasses Gateway admission. Local
-  integrations and live evaluations use the separate `cubby-evaluation`
+  integrations and live evaluations use the separate `cubby-testing`
   gateway so they cannot consume production's admission budget. [ChatGPT setup](runbooks/chatgpt-plan.md) explains
   local authorization, the read-only account model catalog, limitations, and
   how each `AiUsage` row records its transport.

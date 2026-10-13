@@ -1,8 +1,9 @@
 # AI prompt refresh
 
 The [entity contract](../entities.md) owns refresh eligibility, history and
-acceptance semantics. `AI_REFRESH_ENABLED` starts false; merging does not enable
-refresh. Gateway coordination applies to production paid inference independently.
+acceptance semantics. `AI_REFRESH_ENABLED` controls admission; authenticated
+deployment activation enables the served feature versions. Gateway coordination
+applies to production paid inference independently.
 
 ## Rollout
 
@@ -11,23 +12,25 @@ refresh. Gateway coordination applies to production paid inference independently
    before merge, then verifies retained household data and `db:check
    --against-production`. Legacy nullable provenance stays unknown; no historical
    row or applied value is backfilled with a guessed version.
-2. Provision `cubby-evaluation` with the same required provider routes/managed
-   credentials for live tools and integration development. Production uses
+2. Use the dedicated `cubby-testing` Gateway for live tools and integration
+   development; verify its provider routes/managed credentials before rollout. Production uses
    `cubby`; subscription calls retain their existing transport. Cloudflare's
    [200 requests/60 seconds/gateway limit](https://developers.cloudflare.com/ai-gateway/reference/limits/)
    concerns Unified Billing managed credentials, not BYOK. The production
    coordinator conservatively admits 180 starts/60 seconds and four streams;
    refresh's two-target cap reserves room for interactive traffic.
-3. Install a matching `AI_REFRESH_ACTIVATION_TOKEN` Worker secret and GitHub
+3. Verify local/development work with synthetic repository examples before
+   household activation: run `pnpm --dir apps/web eval:mail-prompts` through the
+   testing Gateway, plus the durable refresh regressions for affected features,
+   legacy work, repeated activation, no-proposal completion and member decisions
+   during inference. No live source belongs in repository fixtures, reports or
+   PR text.
+4. Install a matching `AI_REFRESH_ACTIVATION_TOKEN` Worker secret and GitHub
    deployment secret (at least 32 characters), then enable the Wrangler flag in
    a reviewed deployment. The serialized deploy job authenticates to
    `/api/internal/ai-refresh/activate` using the build’s short release SHA after deploy.
    Repeated activation is idempotent; rollback changes affected generations.
    Activation compares the served build and queues the existing recovery task.
-4. Start with synthetic staging work. Verify one affected feature, legacy work,
-   repeated activation, no-proposal completion and member decisions during
-   inference before enabling household refresh. No live source belongs in
-   repository fixtures, reports or PR text.
 
 ## Observe and recover
 
@@ -51,6 +54,10 @@ evaluations retain the earlier failed rows and link their receipts.
 Disable `AI_REFRESH_ENABLED` and activate that deployment to pause admission and
 fence publication. Already applied values and immutable history survive disabling
 or rollback. Do not delete the additive ledger/receipt columns during rollback.
+If deployment succeeded but activation failed, rerun the serialized deployment
+with `gh workflow run deploy.yaml --ref main`. Stale deployments skip activation;
+a missing activation credential fails the deploy job.
+
 Use existing Run cancel/retry controls for individual failures; investigate the
 ledger and Run diagnostics before replaying exhausted work. Gateway leases and
 rolling starts survive DO restarts; cancelled/finished streams release capacity,

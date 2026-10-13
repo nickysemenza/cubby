@@ -88,7 +88,7 @@ describe("embedTexts over the AI Gateway", () => {
     expect(sent).toHaveLength(1);
     const [call] = sent;
     expect(call?.url).toBe(
-      "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby-evaluation/openai/embeddings",
+      "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby-testing/openai/embeddings",
     );
     expect(JSON.parse(String(call?.init?.body))).toMatchObject({
       model: "text-embedding-3-small",

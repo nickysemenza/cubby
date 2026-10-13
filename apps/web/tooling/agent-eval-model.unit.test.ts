@@ -48,7 +48,7 @@ it("forwards the swapped candidate to the gateway's OpenAI route", async () => {
 
   const [url, init] = upstream.mock.lastCall ?? [];
   expect(String(url)).toBe(
-    `https://gateway.ai.cloudflare.com/v1/${env.ACCOUNT_ID}/cubby-evaluation/openai/responses?stream=true`,
+    `https://gateway.ai.cloudflare.com/v1/${env.ACCOUNT_ID}/cubby-testing/openai/responses?stream=true`,
   );
   const headers = new Headers(init?.headers);
   expect(headers.get("authorization")).toBeNull();

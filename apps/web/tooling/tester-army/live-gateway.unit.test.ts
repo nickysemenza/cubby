@@ -12,7 +12,7 @@ const env = {
   GATEWAY_TOKEN: "synthetic-token",
   GATEWAY_ENVIRONMENT: "ci" as const,
 };
-const GATEWAY_BASE_URL = `https://gateway.ai.cloudflare.com/v1/${env.ACCOUNT_ID}/cubby-evaluation`;
+const GATEWAY_BASE_URL = `https://gateway.ai.cloudflare.com/v1/${env.ACCOUNT_ID}/cubby-testing`;
 const agentEnv = {
   ...env,
   RESPONSES_MODEL: "gpt-6-luna",
@@ -220,7 +220,7 @@ it("runs Workers AI through the account run route, scoped to evaluation", async 
     `https://api.cloudflare.com/client/v4/accounts/${env.ACCOUNT_ID}/ai/run`,
   );
   expect(sent.headers.get("authorization")).toBe("Bearer synthetic-token");
-  expect(sent.headers.get("cf-aig-gateway-id")).toBe("cubby-evaluation");
+  expect(sent.headers.get("cf-aig-gateway-id")).toBe("cubby-testing");
   expect(sent.headers.get("cf-aig-skip-cache")).toBe("true");
   expect(JSON.parse(sent.headers.get("cf-aig-metadata") ?? "{}")).toEqual({
     environment: "ci",

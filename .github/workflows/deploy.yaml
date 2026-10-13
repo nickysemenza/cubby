@@ -2,6 +2,7 @@ name: Deploy
 
 # Required PR CI gates merging. This workflow builds and deploys current main.
 on:
+  workflow_dispatch:
   push:
     branches: [main]
 
@@ -30,6 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/deploy-worker
+        id: deploy
         with:
           package: "@cubby/web"
           workspace-filter: "@cubby/web..."
@@ -44,11 +46,12 @@ jobs:
           cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Activate deployed AI prompt versions
-        if: env.AI_REFRESH_ACTIVATION_TOKEN != ''
+        if: steps.deploy.outputs.deployed == 'true'
         run: |
+          [[ -n "$AI_REFRESH_ACTIVATION_TOKEN" ]] || { echo "::error::AI_REFRESH_ACTIVATION_TOKEN is required for activation"; exit 1; }
           release=$(git rev-parse --short HEAD)
           body=$(jq -n --arg release "$release" '{release:$release}')
-          curl --fail --silent --show-error --retry 3 --retry-all-errors \
+          curl --fail --silent --show-error --retry 6 --retry-delay 10 --retry-max-time 90 --max-time 30 --retry-all-errors \
             -H "Authorization: Bearer $AI_REFRESH_ACTIVATION_TOKEN" \
             -H 'Content-Type: application/json' \
             --data "$body" \
