@@ -61,6 +61,24 @@ import { receiptProductQuantity, resolveLineProduct } from "./writer";
 import { matchCompletePaymentSet, sourceFinancialFacts } from "./writer-policy";
 export { commitAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
 
+/**
+ * Attach-only review of the current accepted observation is Product-only: its
+ * financial facts were accepted already, and payment evidence may be owned by
+ * any member of the canonical family, so it is neither re-compared nor
+ * rewritten, and the source claim keeps its latest checksum.
+ */
+function reappliesAcceptedObservation(
+  state: ReconciliationState,
+  resolution: SourceOrderReconciliationResolution,
+  intent: "financial" | "product_binding",
+) {
+  return (
+    intent === "product_binding" &&
+    resolution.kind === "attach_only" &&
+    state.association?.acceptedObservationId === state.observation.id
+  );
+}
+
 function partyCentTargets(
   rows: readonly Pick<
     ExpenseAllocationRow,
@@ -91,6 +109,7 @@ export async function reviewResolution(
   state: ReconciliationState,
   fix: ReconciliationFix,
   resolution: SourceOrderReconciliationResolution,
+  intent: "financial" | "product_binding" = "financial",
 ) {
   resolution = await reviewPreparedNewProducts(tx, state, resolution);
   const candidate = fix.proposedExtraction.candidate;
@@ -126,6 +145,7 @@ export async function reviewResolution(
   const paymentFacts = (payments: typeof candidate.payments) =>
     sourceFinancialFacts({ ...candidate, payments }).payments;
   const paymentsChanged =
+    !reappliesAcceptedObservation(state, resolution, intent) &&
     JSON.stringify(
       paymentFacts(
         oldPayments.map((row) => ({
@@ -549,6 +569,7 @@ export async function commitSourceOrderReconciliation(
   fix: ReconciliationFix,
   actor: ActorContext,
   ownerId: typeof ledgerParty.$inferSelect.id,
+  intent: "financial" | "product_binding" = "financial",
 ) {
   if (!fix.review)
     throw new Error(
@@ -566,7 +587,13 @@ export async function commitSourceOrderReconciliation(
     throw new Error(
       "Reconciliation state changed after review; prepare it again.",
     );
-  const current = await reviewResolution(tx, state, fix, fix.review.resolution);
+  const current = await reviewResolution(
+    tx,
+    state,
+    fix,
+    fix.review.resolution,
+    intent,
+  );
   if (
     (await reconciliationFingerprint(current)) !==
     (await reconciliationFingerprint(fix.review))
@@ -900,10 +927,14 @@ export async function commitSourceOrderReconciliation(
             productId: parseEntityId("product", binding.productId),
           })
           .onConflictDoNothing();
-  const ownedPayments = state.payments.filter(
-    (row) => row.sourceClaimId === state.observation.sourceClaimId,
-  );
-  for (const [evidenceIndex, payment] of candidate.payments.entries()) {
+  const productOnly = reappliesAcceptedObservation(state, resolution, intent);
+  const syncedPayments = productOnly ? [] : candidate.payments;
+  const ownedPayments = productOnly
+    ? []
+    : state.payments.filter(
+        (row) => row.sourceClaimId === state.observation.sourceClaimId,
+      );
+  for (const [evidenceIndex, payment] of syncedPayments.entries()) {
     const old = ownedPayments.find(
       (row) => row.evidenceIndex === evidenceIndex,
     );
@@ -933,7 +964,7 @@ export async function commitSourceOrderReconciliation(
       });
   }
   const surplus = ownedPayments.filter(
-    (row) => row.evidenceIndex >= candidate.payments.length,
+    (row) => row.evidenceIndex >= syncedPayments.length,
   );
   if (surplus.length)
     await tx.delete(purchasePaymentEvidence).where(
@@ -944,7 +975,7 @@ export async function commitSourceOrderReconciliation(
     );
   // Historical aliases retain their bytes and timestamps; only the canonical
   // source identity can be refreshed by a reviewed reconciliation.
-  if (state.observation.sourceClaimId === state.family.root.id)
+  if (!productOnly && state.observation.sourceClaimId === state.family.root.id)
     await tx
       .update(importSourceClaim)
       .set({ checksum: fix.source.checksum, updatedAt: new Date() })

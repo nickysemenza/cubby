@@ -2,8 +2,10 @@ import {
   extractedPurchaseLine,
   importExtractionOutcome,
   preparedProductCandidate,
+  type ExtractedPurchaseLine,
   type SourceOrderReconciliationResolution,
 } from "@cubby/schemas/purchase-import";
+import { cents } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -17,16 +19,81 @@ import { notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import {
+  acceptedSourceExtraction,
   reconciliationFingerprint,
   sourceObservationIdentityMatches,
 } from "./reconciliation-observations";
 import type { ReconciliationState } from "./reconciliation-state";
 import { assertNewLineProductIdentity } from "./writer";
-import { importedLineMatchesExpense } from "./writer-policy";
+import { importedLineMatchesExpense, sameLineTitle } from "./writer-policy";
 
 type ReviewedLine = SourceOrderReconciliationResolution["lines"][number];
 
-function newProductRepairLine(
+/**
+ * Other accepted sources on the Purchase block only by an actual claim on the
+ * selected item: a Product binding for the same item, or a known extraction
+ * that contradicts the order identity or the item's quantity or price. Partial
+ * lifecycle mail is a consistent subset, and unknown history stays unknown.
+ */
+async function acceptedSiblingConflicts(
+  tx: DrizzleTransaction,
+  state: ReconciliationState,
+  line: ExtractedPurchaseLine,
+) {
+  const ours = state.observation.extraction.candidate;
+  let competingBindings = 0;
+  let contradicting = 0;
+  for (const order of state.sourceOrders) {
+    if (order.id === state.association?.id) continue;
+    const candidate = (await acceptedSourceExtraction(tx, order))?.extraction
+      .candidate;
+    if (!candidate || !ours) {
+      // A real binding with unknown line history cannot be declared unrelated.
+      if (
+        state.productBindings.some(
+          (binding) => binding.sourceOrderId === order.id,
+        )
+      )
+        competingBindings++;
+      continue;
+    }
+    const items = candidate.lines.flatMap((row, lineIndex) =>
+      sameLineTitle(row.title, line.title) &&
+      (row.lineKind ?? line.lineKind) === line.lineKind
+        ? [{ row, lineIndex }]
+        : [],
+    );
+    const quantity = line.quantity ?? 1;
+    if (
+      (candidate.orderId !== null &&
+        ours.orderId !== null &&
+        candidate.orderId !== ours.orderId) ||
+      (candidate.currency !== null &&
+        ours.currency !== null &&
+        candidate.currency !== ours.currency) ||
+      items.reduce((sum, { row }) => sum + (row.quantity ?? 1), 0) > quantity ||
+      items.some(
+        ({ row }) =>
+          (row.quantity ?? 1) === quantity &&
+          cents(row.amount) !== 0 &&
+          cents(row.amount) !== cents(line.amount),
+      )
+    )
+      contradicting++;
+    if (
+      state.productBindings.some(
+        (binding) =>
+          binding.sourceOrderId === order.id &&
+          items.some(({ lineIndex }) => lineIndex === binding.lineIndex),
+      )
+    )
+      competingBindings++;
+  }
+  return { competingBindings, contradicting };
+}
+
+async function newProductRepairLine(
+  tx: DrizzleTransaction,
   state: ReconciliationState,
   binding: ReviewedLine,
 ) {
@@ -53,9 +120,9 @@ function newProductRepairLine(
   const ledgerClaimCount = state.ledgerClaims.filter(
     (claim) => claim.expenseId === selected?.id,
   ).length;
-  const otherSourceOrderCount = state.sourceOrders.filter(
-    (accepted) => accepted.id !== state.association?.id,
-  ).length;
+  const siblings = line
+    ? await acceptedSiblingConflicts(tx, state, line)
+    : { competingBindings: 0, contradicting: 0 };
   if (
     !line ||
     line.lineKind !== "principal" ||
@@ -67,10 +134,11 @@ function newProductRepairLine(
     sameRows.length !== 1 ||
     sameRows[0]?.id !== selected.id ||
     ledgerClaimCount > 0 ||
-    otherSourceOrderCount > 0
+    siblings.competingBindings > 0 ||
+    siblings.contradicting > 0
   )
     throw new Error(
-      `New Product repair requires one exact unbound item Expense without competing source ownership. Line ${binding.lineIndex}: line kind ${line?.lineKind ?? "missing"}; requested existing Product ${binding.productId ? "yes" : "no"}; selected Expense ${selected ? "found" : "missing"}; selected Product ${selected?.productId ? "bound" : "unbound"}; economic role ${selected?.economicRole ?? "missing"}; line basis ${selected?.lineBasis ?? "missing"}; exact matching item Expenses: ${sameRows.length}; selected exact match ${selected && sameRows[0]?.id === selected.id ? "yes" : "no"}; ledger source claims: ${ledgerClaimCount}; other accepted source orders: ${otherSourceOrderCount}.`,
+      `New Product repair requires one exact unbound item Expense without competing source ownership. Line ${binding.lineIndex}: line kind ${line?.lineKind ?? "missing"}; requested existing Product ${binding.productId ? "yes" : "no"}; selected Expense ${selected ? "found" : "missing"}; selected Product ${selected?.productId ? "bound" : "unbound"}; economic role ${selected?.economicRole ?? "missing"}; line basis ${selected?.lineBasis ?? "missing"}; exact matching item Expenses: ${sameRows.length}; selected exact match ${selected && sameRows[0]?.id === selected.id ? "yes" : "no"}; ledger source claims: ${ledgerClaimCount}; competing accepted source bindings: ${siblings.competingBindings}; contradicting accepted sources: ${siblings.contradicting}.`,
     );
   return line;
 }
@@ -82,7 +150,7 @@ async function freezePreparedNewProductLine(
   order: typeof importPreparedOrder.$inferSelect,
   lines: readonly (typeof importPreparedLine.$inferSelect)[],
 ) {
-  const line = newProductRepairLine(state, binding);
+  const line = await newProductRepairLine(tx, state, binding);
   const stored = lines.find((row) => row.position === binding.lineIndex);
   if (
     !stored ||

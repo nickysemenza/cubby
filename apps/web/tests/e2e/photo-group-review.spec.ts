@@ -514,7 +514,7 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
       context.db,
       {
         sourceOrderId: association.id,
-        review: reviewed,
+        resolution: reviewed.resolution,
       },
       context.actor,
     ),

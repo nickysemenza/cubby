@@ -457,13 +457,13 @@ async function createConvergenceHarness(
       throw new Error("Expected accepted-source review");
     const receipt = await commitAcceptedSourceOrderReconciliation(
       db,
-      { sourceOrderId: accepted.id, review },
+      { sourceOrderId: accepted.id, resolution: review.resolution },
       actor,
     );
     expect(
       await commitAcceptedSourceOrderReconciliation(
         db,
-        { sourceOrderId: accepted.id, review },
+        { sourceOrderId: accepted.id, resolution: review.resolution },
         actor,
       ),
     ).toMatchObject({ purchaseId: receipt.purchaseId, alreadyApplied: true });

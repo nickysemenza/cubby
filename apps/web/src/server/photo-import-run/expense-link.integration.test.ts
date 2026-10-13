@@ -150,7 +150,7 @@ describe("photo review Expense link", () => {
     expect(await snapshot()).toEqual(before);
     await commitAcceptedSourceOrderReconciliation(
       ctx.db,
-      { sourceOrderId: association.id, review },
+      { sourceOrderId: association.id, resolution: review.resolution },
       ctx.actor,
     );
     const [after] = await getDb(ctx.db)
@@ -175,7 +175,7 @@ describe("photo review Expense link", () => {
       (
         await commitAcceptedSourceOrderReconciliation(
           ctx.db,
-          { sourceOrderId: association.id, review },
+          { sourceOrderId: association.id, resolution: review.resolution },
           ctx.actor,
         )
       ).alreadyApplied,
