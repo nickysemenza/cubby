@@ -506,6 +506,7 @@ const presentationJSON = (
       key: view.key,
       title: view.title,
       target: view.target,
+      evidence: "evidence" in view ? view.evidence : false,
     })),
     listViews: list.views.map((view) => listViewJSON(entity, view)),
     listTotals: list.totals.map((total) => ({

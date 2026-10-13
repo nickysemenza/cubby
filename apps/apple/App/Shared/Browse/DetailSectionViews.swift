@@ -649,13 +649,31 @@ struct FieldExplanationLabel: View {
                     if !resolved.verifications.isEmpty {
                         Divider()
                         explanationSectionLabel("Sources")
-                        ForEach(resolved.verifications, id: \.key) { verification in
-                            EntitySourceRow(
-                                label: nil, supportsCurrentValue: verification.supportsCurrentValue,
-                                quote: verification.quote, selectedVariant: verification.selectedVariant,
-                                url: verification.url,
-                                seenAt: verification.observedAt ?? verification.createdAt,
-                                runID: verification.recorder.runId)
+                        ForEach(
+                            Array(
+                                groupedSources(
+                                    resolved.verifications,
+                                    identity: { source in
+                                        source.sourceEntity.map { "\($0.entityKind.rawValue):\($0.entityId)" }
+                                            ?? source.url
+                                    }
+                                ).enumerated()), id: \.offset
+                        ) { _, group in
+                            if let first = group.first {
+                                EntitySourceDocument(
+                                    entity: first.sourceEntity.flatMap {
+                                        EntityKey(rawValue: $0.entityKind.rawValue)
+                                    },
+                                    id: first.sourceEntity?.entityId, name: first.sourceEntity?.name,
+                                    deleted: first.sourceEntity?.deleted ?? false, url: first.url)
+                            }
+                            ForEach(group, id: \.key) { verification in
+                                EntitySourceRow(
+                                    label: nil, supportsCurrentValue: verification.supportsCurrentValue,
+                                    quote: verification.quote, selectedVariant: verification.selectedVariant,
+                                    seenAt: verification.observedAt ?? verification.createdAt,
+                                    runID: verification.recorder.runId)
+                            }
                         }
                     }
                     if !resolved.sources.isEmpty {
@@ -1391,7 +1409,6 @@ struct EntitySourceRow: View {
     let supportsCurrentValue: Bool?
     let quote: String?
     let selectedVariant: String?
-    let url: String?
     let seenAt: Date
     let runID: String?
 
@@ -1412,14 +1429,64 @@ struct EntitySourceRow: View {
             if let selectedVariant, !selectedVariant.isEmpty {
                 Text("Selected variant: \(selectedVariant)").font(.callout.weight(.medium))
             }
-            if let url, let link = URL(string: url) {
-                Link(link.host() ?? url, destination: link).font(.caption)
-            }
             DateDisplay(date: seenAt)
                 .font(.caption).foregroundStyle(.secondary)
             if let runID {
                 NavigationLink(runID, value: Route.entityDetail(.run, id: runID)).font(.caption)
             }
         }
+    }
+}
+
+/// Preserve citation order while consolidating repeated references to the same document.
+func groupedSources<Source>(_ sources: [Source], identity: (Source) -> String?) -> [[Source]] {
+    var indices: [String: Int] = [:]
+    var groups: [[Source]] = []
+    for source in sources {
+        guard let key = identity(source) else {
+            groups.append([source])
+            continue
+        }
+        if let index = indices[key] {
+            groups[index].append(source)
+        } else {
+            indices[key] = groups.count
+            groups.append([source])
+        }
+    }
+    return groups
+}
+
+struct EntitySourceDocument: View {
+    let entity: EntityKey?
+    let id: String?
+    let name: String?
+    let deleted: Bool
+    let url: String?
+
+    var body: some View {
+        if let entity, let id {
+            if deleted {
+                Text("\(name ?? EntityCatalog[entity].singular) (deleted)")
+                    .font(.callout.weight(.medium)).foregroundStyle(.secondary)
+            } else {
+                NavigationLink(
+                    name ?? EntityCatalog[entity].singular,
+                    value: Route.entityDetail(entity, id: id)
+                )
+                .font(.callout.weight(.medium))
+            }
+        }
+        if let url, let link = URL(string: url) {
+            Link(link.host() ?? url, destination: link).font(.caption)
+        }
+    }
+}
+
+#Preview("Source document") {
+    NavigationStack {
+        EntitySourceDocument(
+            entity: .email, id: "EML-4K7M", name: "Order confirmation",
+            deleted: false, url: nil)
     }
 }

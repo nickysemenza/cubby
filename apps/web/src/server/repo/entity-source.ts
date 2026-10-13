@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { Entity } from "@cubby/schemas/entity";
+import { entityRefKey, type Entity } from "@cubby/schemas/entity";
 import {
   type EntityFieldModel,
   entityFieldModels,
@@ -9,17 +9,30 @@ import type {
   EntitySourceInput,
   EntitySourceRead,
 } from "@cubby/schemas/entity-source";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityRef, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { extractShortcodeFromScan, getShortcodeUrl } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, asc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { device, entitySource, run } from "~/server/db/schema";
+import { device, entityIdentity, entitySource, run } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 
 import { unwrapDb } from "./database-helpers";
+import { identityShortcodes, resolveEntityIdentity } from "./entity-identity";
+import { lookupEntityLabels } from "./shortcode-resolver";
+
+const cubbyOrigin = new URL(getShortcodeUrl("")).origin;
+
+/** Only Cubby's own origin may turn a URL into an internal citation. */
+function internalSourceCode(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  const parsed = new URL(url);
+  if (parsed.origin !== cubbyOrigin) return undefined;
+  return extractShortcodeFromScan(url)?.shortcode;
+}
 
 /**
  * Sources (terminology "Source"): where a fact about an entity was seen. One
@@ -117,6 +130,23 @@ export async function recordEntitySources(
   assertEntitySourceFieldPaths(args.entityKind, args.sources);
   const client = unwrapDb(db);
   for (const source of args.sources) {
+    const sourceCode = source.sourceEntity ?? internalSourceCode(source.url);
+    const target = sourceCode
+      ? await resolveEntityIdentity(db, sourceCode)
+      : null;
+    if (target?.state === "missing") {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Source entity not found: ${sourceCode}`,
+      );
+    }
+    const sourceEntityId =
+      target === null
+        ? null
+        : target.state === "redirected"
+          ? target.canonicalId
+          : target.id;
+    const sourceEntityKind = target === null ? null : target.kind;
     const valueFingerprint =
       source.fieldPath === undefined
         ? null
@@ -129,7 +159,9 @@ export async function recordEntitySources(
       entityId: args.entityId,
       entityKind: args.entityKind,
       fieldPath: source.fieldPath ?? null,
-      url: source.url ?? null,
+      url: sourceCode ? null : (source.url ?? null),
+      sourceEntityId,
+      sourceEntityKind,
       quote: source.quote ?? null,
       observedAt: source.observedAt ?? null,
       selectedVariant: source.selectedVariant ?? null,
@@ -156,6 +188,8 @@ type SourceIdentity = Pick<
   typeof entitySource.$inferSelect,
   | "fieldPath"
   | "url"
+  | "sourceEntityId"
+  | "sourceEntityKind"
   | "quote"
   | "observedAt"
   | "selectedVariant"
@@ -166,6 +200,8 @@ const sameSource = (row: SourceIdentity): SQL =>
   and(
     sameText(entitySource.fieldPath, row.fieldPath),
     sameText(entitySource.url, row.url),
+    sameText(entitySource.sourceEntityId, row.sourceEntityId),
+    sameText(entitySource.sourceEntityKind, row.sourceEntityKind),
     sameText(entitySource.quote, row.quote),
     sameText(entitySource.selectedVariant, row.selectedVariant),
     sameText(entitySource.valueFingerprint, row.valueFingerprint),
@@ -183,6 +219,30 @@ export async function repointEntitySources(
   args: { keepId: string; loserIds: readonly string[] },
 ): Promise<void> {
   if (args.loserIds.length === 0) return;
+  // Citations are historical incoming edges: every merge repoints them without
+  // treating them as live dependencies that can refuse deletion.
+  const citations = await tx
+    .select()
+    .from(entitySource)
+    .where(inArray(entitySource.sourceEntityId, [...args.loserIds]))
+    .orderBy(asc(entitySource.createdAt), asc(entitySource.id));
+  for (const citation of citations) {
+    const moved = { ...citation, sourceEntityId: args.keepId };
+    const [duplicate] = await tx
+      .select({ id: entitySource.id })
+      .from(entitySource)
+      .where(
+        and(eq(entitySource.entityId, citation.entityId), sameSource(moved)),
+      )
+      .limit(1);
+    if (duplicate)
+      await tx.delete(entitySource).where(eq(entitySource.id, citation.id));
+    else
+      await tx
+        .update(entitySource)
+        .set({ sourceEntityId: args.keepId })
+        .where(eq(entitySource.id, citation.id));
+  }
   const moving = await tx
     .select()
     .from(entitySource)
@@ -221,6 +281,8 @@ export async function loadEntitySources(
       entityId: entitySource.entityId,
       fieldPath: entitySource.fieldPath,
       url: entitySource.url,
+      sourceEntityId: entitySource.sourceEntityId,
+      sourceEntityKind: entitySource.sourceEntityKind,
       quote: entitySource.quote,
       observedAt: entitySource.observedAt,
       selectedVariant: entitySource.selectedVariant,
@@ -245,6 +307,7 @@ export async function loadEntitySources(
       ),
     )
     .orderBy(sql`${entitySource.createdAt} DESC`, asc(entitySource.id));
+  const targets = await loadEntitySourceTargets(db, rows);
   const fingerprints = new Map<string, Promise<string>>();
   const currentFingerprint = (entityId: string, fieldPath: string) => {
     const key = `${entityId}\u0000${fieldPath}`;
@@ -262,6 +325,9 @@ export async function loadEntitySources(
     list.push({
       fieldPath: row.fieldPath,
       url: row.url,
+      sourceEntity: row.sourceEntityId
+        ? (targets.get(row.sourceEntityId) ?? null)
+        : null,
       quote: row.quote,
       observedAt: row.observedAt,
       selectedVariant: row.selectedVariant,
@@ -285,4 +351,44 @@ export async function loadEntitySources(
     result.set(row.entityId, list);
   }
   return result;
+}
+
+/** Durable identity survives hard deletion; retained payloads supply past labels. */
+export async function loadEntitySourceTargets(
+  db: Database | DrizzleTransaction,
+  rows: ReadonlyArray<{ sourceEntityId: string | null }>,
+): Promise<Map<string, NonNullable<EntitySourceRead["sourceEntity"]>>> {
+  const ids = [
+    ...new Set(
+      rows.flatMap((row) => (row.sourceEntityId ? [row.sourceEntityId] : [])),
+    ),
+  ];
+  if (ids.length === 0) return new Map();
+  const identities = await identityShortcodes(db, ids);
+  const refs = [...identities].map(([id, identity]) =>
+    parseEntityRef(identity.kind, id),
+  );
+  const labels = await lookupEntityLabels(db, refs);
+  // includes-deleted: Source citations deliberately survive target removal.
+  const states = await unwrapDb(db)
+    .select({ id: entityIdentity.id, deletedAt: entityIdentity.deletedAt })
+    .from(entityIdentity)
+    .where(inArray(entityIdentity.id, ids));
+  const deleted = new Set(
+    states.filter((row) => row.deletedAt !== null).map((row) => row.id),
+  );
+  const targets = new Map<
+    string,
+    NonNullable<EntitySourceRead["sourceEntity"]>
+  >();
+  for (const [id, identity] of identities) {
+    if (!identity.shortcode) continue;
+    targets.set(id, {
+      entityKind: identity.kind,
+      entityId: identity.canonicalShortcode ?? identity.shortcode,
+      name: labels.get(entityRefKey(identity.kind, id)) ?? null,
+      deleted: deleted.has(id),
+    });
+  }
+  return targets;
 }

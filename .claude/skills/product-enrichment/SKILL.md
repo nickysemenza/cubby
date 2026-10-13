@@ -82,8 +82,11 @@ external-ID tuple has one live owner; do not invent, relabel, or choose between
 variants. Preserve ambiguity as unresolved work with its competing candidates.
 
 Connect the ordered item to the observed selected variant, then record each fact
-with a Source: `sources: [{fieldPath, url, quote, observedAt, selectedVariant}]`
-on `entity.update` (and record-level `sources` on `image.attach_files`). Quote the
+with a Source on `entity.update` (and record-level `sources` on
+`image.attach_files`); [the generic Source contract](../../../docs/entities.md#identity-attachments-and-the-physical-graph)
+owns its shape. Cite Cubby evidence with `sourceEntity` (the existing record’s
+shortcode), external evidence with `url`; preserve field scope, quote, observation
+time and selected variant. Quote the
 relevant text, not the page; screenshots and full HTML are optional. Structured
 Product data is useful evidence; visible content and selected-variant state can
 also establish facts when JSON-LD is missing or describes a group. A quotation

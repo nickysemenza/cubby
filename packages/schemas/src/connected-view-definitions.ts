@@ -1,9 +1,28 @@
 import type { Entity } from "./entity";
 
+/** Typed hooks for derived terminal relationships; physical routes need no hook. */
+const derivedConnectedRelationships = [
+  {
+    source: "purchase",
+    key: "emails",
+    target: "email",
+    resolver: "purchaseEmails",
+  },
+] as const;
+export type DerivedConnectedRelationship =
+  (typeof derivedConnectedRelationships)[number];
+export const derivedConnectedRelationship = (source: string, key: string) =>
+  derivedConnectedRelationships.find(
+    (relationship) =>
+      relationship.source === source && relationship.key === key,
+  );
+
 export interface ConnectedView {
   key: string;
   title: string;
   target: Entity;
+  /** Related documents supplement citations; they do not verify field values. */
+  evidence?: boolean;
   /** Each route follows named, directional manifest relationships. */
   routes: readonly (readonly string[])[];
 }
@@ -17,6 +36,20 @@ export interface ConnectedView {
 export const connectedViews = {
   email: [],
   product: [
+    {
+      key: "source-emails",
+      title: "Related Emails",
+      target: "email",
+      evidence: true,
+      routes: [["purchases", "emails"]],
+    },
+    {
+      key: "source-documents",
+      title: "Purchase documents",
+      target: "image",
+      evidence: true,
+      routes: [["purchases", "images"]],
+    },
     {
       key: "recipes",
       title: "Recipes",
@@ -303,6 +336,20 @@ export const connectedViews = {
     },
   ],
   purchase: [
+    {
+      key: "source-emails",
+      title: "Related Emails",
+      target: "email",
+      evidence: true,
+      routes: [["emails"]],
+    },
+    {
+      key: "source-documents",
+      title: "Documents",
+      target: "image",
+      evidence: true,
+      routes: [["images"]],
+    },
     {
       key: "inventory",
       title: "Purchased product stock",
