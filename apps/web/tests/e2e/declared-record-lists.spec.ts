@@ -282,6 +282,9 @@ test("purchase and expense totals follow the full filtered set in tables and car
   await purchaseSearch.fill("QuartzRefund");
   await expect(summaryValue("Spend")).toHaveText("-$7.00");
   await expect(summaryValue("Expense lines")).toHaveText("1");
+  // Cold hydration and the first search own the slow-CPU regression.
+  // Persistence and the remaining totals do not need artificial contention.
+  await session.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   await page.reload();
   await expect(summaryValue("Spend")).toHaveText("-$7.00");
   await purchaseSearch.fill("FreeMarker");
@@ -298,9 +301,6 @@ test("purchase and expense totals follow the full filtered set in tables and car
     .getByRole("textbox", { name: "Search expenses or shortcode", exact: true })
     .fill("zero");
   await expect(summaryValue("Ledger cost")).toHaveText("$0.00");
-  // The throttle guards the early typing above; card totals need no typing.
-  await session.send("Emulation.setCPUThrottlingRate", { rate: 1 });
-
   await page.setViewportSize({ width: 390, height: 844 });
   for (const [path, label, value, count] of [
     ["purchases", "Spend", "$8.00", 3],

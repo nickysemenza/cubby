@@ -64,7 +64,7 @@ import {
 /**
  * Every arrival order of the four evidence sources must converge on one
  * Purchase, Product, Expense, settlement, inventory row and linked mail. The
- * browser spec keeps a 4-order Latin square for the UI boundaries; this file
+ * browser spec keeps both statement-first and receipt-first UI paths; this file
  * keeps all 24 orders against the same server writers those UI steps dispatch.
  */
 const EVIDENCE_SOURCES = ["gmail", "retailer", "photo", "csv"] as const;

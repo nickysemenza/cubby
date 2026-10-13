@@ -90,6 +90,7 @@ export function useBulkActions<TData extends RowData>({
 
       setIsExecuting(true);
       setCurrentAction(action);
+      const actedRowIds = new Set(selectedRows.map((row) => row.id));
 
       try {
         const result = await action.onExecute(selectedRows);
@@ -99,7 +100,13 @@ export function useBulkActions<TData extends RowData>({
           !action.preserveSelection &&
           config.clearSelectionOnComplete !== false
         ) {
-          onRowSelectionChange({});
+          // Another row can be selected while the write/refetch is pending.
+          // Completion owns only the selection that this action received.
+          onRowSelectionChange((current) =>
+            Object.fromEntries(
+              Object.entries(current).filter(([id]) => !actedRowIds.has(id)),
+            ),
+          );
         }
       } finally {
         setIsExecuting(false);

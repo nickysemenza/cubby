@@ -1,5 +1,7 @@
+import type { Route } from "@playwright/test";
 import { eq, inArray } from "drizzle-orm";
 
+import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {
   product as productTable,
   run as runTable,
@@ -9,6 +11,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { ensureRun } from "~/server/runs/ensure-run";
 
+import { dispatchesOperation } from "./dispatch-wire";
 import { gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import {
@@ -18,7 +21,8 @@ import {
 
 // Failure modes: bulk Accept skips the shared handler (no record write or
 // status change), bulk Reject applies the suggested value, a Run-filtered
-// link shows another Run's Suggestions, or a settled row hides its result.
+// link shows another Run's Suggestions, a settled row hides its result, or
+// completing Accept clears a newly selected Reject row while refetching.
 test("Review bulk-accepts and bulk-rejects a Run's Suggestions with read-back", async ({
   page,
 }, testInfo) => {
@@ -76,22 +80,47 @@ test("Review bulk-accepts and bulk-rejects a Run's Suggestions with read-back", 
     await rowFor(name)
       .getByRole("checkbox", { name: "Select row", exact: true })
       .check();
-  await page.getByRole("button", { name: "Accept", exact: true }).click();
-  await expect
-    .poll(async () =>
-      (
-        await getDb(db)
-          .select({ status: suggestionTable.status })
-          .from(suggestionTable)
-          .where(inArray(suggestionTable.recordId, recordIds.slice(0, 2)))
-      ).map((row) => row.status),
-    )
-    .toEqual(["applied", "applied"]);
-
-  await rowFor(names[2] ?? "")
-    .getByRole("checkbox", { name: "Select row", exact: true })
-    .check();
-  await page.getByRole("button", { name: "Reject", exact: true }).click();
+  // Hold the real response after the write, so the next selection happens
+  // before completion/refetch can clear it. No timer-dependent race setup.
+  const acceptance = Promise.withResolvers<void>();
+  const holdAcceptance = async (route: Route) => {
+    if (!dispatchesOperation(route.request(), "ai.acceptSuggestions")) {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    await acceptance.promise;
+    await route.fulfill({ response });
+  };
+  const rejectRow = rowFor(names[2] ?? "").getByRole("checkbox", {
+    name: "Select row",
+    exact: true,
+  });
+  const reject = page.getByRole("button", { name: "Reject", exact: true });
+  await page.route(`**${BROWSER_OPERATION_PATH}`, holdAcceptance);
+  try {
+    await page.getByRole("button", { name: "Accept", exact: true }).click();
+    await expect
+      .poll(async () =>
+        (
+          await getDb(db)
+            .select({ status: suggestionTable.status })
+            .from(suggestionTable)
+            .where(inArray(suggestionTable.recordId, recordIds.slice(0, 2)))
+        ).map((row) => row.status),
+      )
+      .toEqual(["applied", "applied"]);
+    await expect(reject).toBeDisabled();
+    await rejectRow.check();
+    await expect(rejectRow).toBeChecked();
+  } finally {
+    acceptance.resolve();
+    // Finish fulfillment before disabling interception for the held request.
+    await page.unrouteAll({ behavior: "wait" });
+  }
+  await expect(reject).toBeEnabled();
+  await expect(rejectRow).toBeChecked();
+  await reject.click();
   await expect
     .poll(async () => {
       const [row] = await getDb(db)

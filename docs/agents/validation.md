@@ -28,6 +28,12 @@ For every deletion, record either the stronger retained regression or why the
 test guarded no runtime behavior in the commit message that deletes it. Preserve named regressions before removal.
 
 Reuse a healthy HMR session for iteration and fingerprint-verified builds.
+For test-speed investigations, extract the existing GitHub reports, traces and
+job logs before considering a local run. Label cache replays and timings from
+other revisions; missing timing artifacts do not justify rerunning a whole tier.
+Optimize both the PR's slowest lane and total work contending across local
+sessions. Consolidate duplicated coverage while retaining its named regressions
+on PRs; moving checks to nightly is not a speed improvement.
 Report setup separately from scenario time. A failed provenance/startup check
 is not a scenario result. Before declaring shared schema inputs ready, run the
 read-only `loadEntityDeclarationBundle` strict probe; do not infer readiness from

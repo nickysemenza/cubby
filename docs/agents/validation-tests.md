@@ -44,6 +44,11 @@ failure and the deleting commit in a `docs/todos.md` entry so it can be
 restored once fixed. Do not skip it in place: the test-run contract fails a
 lane that reports skipped or pending tests. Never raise the retry count.
 
+Scope artificial CPU throttling to the interaction whose race it guards;
+restore normal speed for unrelated setup and read-back. A shared detail
+renderer's section matrix renders once per entity and checks all declared
+sections together; the continuous-detail browser journey owns hash navigation.
+
 Before a focused browser replay, run `pnpm --filter @cubby/web run build:cf
 --ensure` after changing the recorded source revision. The prebuilt provenance
 gate can reject a run after workflow or documentation edits too; a
@@ -112,7 +117,11 @@ retailer documents to the retailer page, never the shared browser context or
 the Cubby application page. Install transient interception immediately before
 the action that needs it, including opening UI that fetches automatically.
 Remove it once its regression has been observed,
-before later navigations or reloads. Image prerequisites upload synthetic bytes
+before later navigations or reloads. When a test holds a response, release its
+gate and await `page.unrouteAll({ behavior: "wait" })` so fulfillment finishes
+before interception is disabled. Table-row fixtures used by selection actions
+must include TanStack's `row.id`, not only `row.original.id`.
+Image prerequisites upload synthetic bytes
 to the isolated worker object store; do not fulfill application image URLs with
 page routes. Assert image decoding as well as visibility. Retired-route HTTP status
 contracts use `request.get`; browser scenarios own visible not-found behavior.

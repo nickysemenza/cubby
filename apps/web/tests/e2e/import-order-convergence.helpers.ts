@@ -53,16 +53,13 @@ import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
 
 type EvidenceSource = "gmail" | "retailer" | "photo" | "csv";
-/** Cyclic shifts of one order: every source arrives in every position once and
- * every ordered pair occurs, so each browser path is exercised first, last and
- * after each other source. All 24 orders run in the PostgreSQL tier, which
- * costs a fraction of the browser time each order takes here. The first row
- * carries the Problems-sample regression in the spec. */
+/** Both booking paths retain browser coverage: a statement aggregate needs
+ * reviewed receipt reconciliation; a receipt first links existing itemization.
+ * Both exercise photo approval and destination navigation. PostgreSQL keeps
+ * all 24 arrival orders; the first row also guards the Problems sample limit. */
 export const BROWSER_SOURCE_ORDERS = [
   ["csv", "photo", "retailer", "gmail"],
-  ["photo", "retailer", "gmail", "csv"],
   ["retailer", "gmail", "csv", "photo"],
-  ["gmail", "csv", "photo", "retailer"],
 ] as const satisfies readonly (readonly EvidenceSource[])[];
 
 /** Itemization that arrives after a booked aggregate stays a `conflict` until

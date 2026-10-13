@@ -124,20 +124,13 @@ describe("GenericEntityDetail", () => {
     harness.dispose();
   });
 
-  // Table-driven over the manifest: every declared fields/relation/timeline
-  // section renders under its declared id and title, so a declaration the
-  // page silently drops fails here rather than in the browser. Slot sections
-  // are registry-dependent and covered by their own `applies` predicates. A
-  const cases = genericDetailEntities.flatMap((entity) =>
-    entitySummary[entity].detail.sections
-      .filter((section) => section.kind !== "slot")
-      .map((section) => ({ entity, section })),
-  );
-
-  it.each(cases)(
-    "$entity renders the declared $section.kind section $section.id",
-    async ({ entity, section }) => {
-      await harness.router.navigate({ to: "/", hash: section.id });
+  // Every declared section must coexist on the continuous page. Render once
+  // per entity; continuous-detail.spec.ts owns hash navigation and history.
+  // Slot sections retain their registry-specific tests.
+  it.each(genericDetailEntities)(
+    "%s renders all declared non-slot sections together",
+    async (entity) => {
+      await harness.router.navigate({ to: "/" });
       const { container } = render(
         <GenericEntityDetail
           entity={entity}
@@ -146,12 +139,15 @@ describe("GenericEntityDetail", () => {
         />,
         { wrapper: harness.wrapper },
       );
-      const element = container.querySelector(`section#${section.id}`);
-      if (!(element instanceof HTMLElement))
-        throw new Error(`${entity} did not render section ${section.id}`);
-      expect(
-        within(element).getByRole("heading", { level: 3 }),
-      ).toHaveTextContent(section.title ?? "");
+      for (const section of entitySummary[entity].detail.sections) {
+        if (section.kind === "slot") continue;
+        const element = container.querySelector(`section#${section.id}`);
+        if (!(element instanceof HTMLElement))
+          throw new Error(`${entity} did not render section ${section.id}`);
+        expect(
+          within(element).getByRole("heading", { level: 3 }),
+        ).toHaveTextContent(section.title ?? "");
+      }
     },
   );
 
