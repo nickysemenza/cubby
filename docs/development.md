@@ -192,7 +192,9 @@ native PostgreSQL installation remain owned by their existing runners.
   application read/freshness timing is owned by
   `apps/web/src/lib/hyperdrive-cache-policy.ts`. Missing freshness state or a
   timeout falls back to strong reads.
-- **Database admission.** The household freshness Durable Object admits ten
+- **Database admission.** Admission applies to Worker builds; Node scripts and
+  host integration tests use their direct database connections even when they
+  supply service bindings. The household freshness Durable Object admits ten
   concurrent SQL leases, with at most two background leases. Navigation passes
   queued advisory work. Promise-based pooled clients hold capacity from connect
   through release; standalone statements release after execution and transactions

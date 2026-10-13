@@ -61,7 +61,9 @@ test.describe("Create Recipe - Full Flow", () => {
     await expect(
       ingredientsSidebar
         .getByRole("listitem")
-        .getByRole("link", { name: ingredientName, exact: true }),
+        .filter({
+          has: page.getByRole("link", { name: ingredientName, exact: true }),
+        }),
     ).toBeVisible();
 
     // Switch to the Data view (table sub-mode) for cost/weight verification.

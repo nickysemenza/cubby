@@ -41,6 +41,10 @@ export const runWithExecutionCtx = <T>(
 export const getExecutionCtx = (): WaitUntilContext | undefined =>
   executionCtxStore.getStore();
 
+declare const __CF_WORKERS__: boolean | undefined;
+const workerBuild =
+  typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
+
 let cfEnv: Env | undefined;
 
 export const setCfEnv = (env?: Env): void => {
@@ -52,7 +56,8 @@ export const isCloudflareRuntime = (): boolean => cfEnv !== undefined;
 
 /** One runtime capacity owner for all isolates, agents, alarms and queues. */
 export const getDatabaseWorkOwner = () => {
-  if (!cfEnv) return undefined;
+  // Node host tests may supply service bindings without a Worker RPC runtime.
+  if (!workerBuild || !cfEnv) return undefined;
   if (!cfEnv.DB_FRESHNESS)
     throw new Error("Database work admission binding is unavailable");
   return cfEnv.DB_FRESHNESS.getByName("household", { locationHint: "wnam" });
