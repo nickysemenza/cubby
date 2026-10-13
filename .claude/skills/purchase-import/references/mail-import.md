@@ -40,10 +40,16 @@ Claude or Codex session researches it later through the Research queue.
      review for that member. The reviewed credit must equal those refund legs,
      whose existing allocations must explain exactly the named Purchases.
      This associates evidence without changing money, allocations or stock.
+     A supported link to an existing Purchase does not require another
+     extraction preview. Unlinked related originals still need extraction;
+     linking never manufactures itemization or resolves unknown Product facts.
    - **An order whose Purchase you cannot establish**: `mail` `resolve` with
      `unresolved` and the concrete gap.
    - **Not about a purchase**: `mail` `resolve` with `unrelated`. Cubby deletes
-     its retained copy.
+     its unprotected retained copy. Confirming an automated unrelated decision
+     still records the member's checksum-bound resolution after disposal;
+     unchanged repeats preserve the existing resolution without duplicating
+     history. The prior prediction remains available for evaluation.
 4. When the order's original is missing (a shipment Email for an order you have
    not seen), `mail` `search` by order number before deciding it is
    unresolved. A search match waits for a later Mail import; it is not
