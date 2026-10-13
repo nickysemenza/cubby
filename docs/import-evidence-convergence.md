@@ -79,7 +79,7 @@ deletion as history, exposes later account drift, and never writes financial
 allocations. `mail.resolve` can link a lifecycle Email to several existing
 Purchases through `purchaseIds`.
 
-### Prepared changes awaiting delivery and live acceptance
+### Deployed contracts and remaining live acceptance
 
 - Owned discovery status reads expose frozen mailbox scope, current checkpoints,
   retained authorization evidence and recorded AI usage without executing the
@@ -94,8 +94,11 @@ Purchases through `purchaseIds`.
   reconciliation; a new Product requires the retained original preparation and
   its frozen identity fingerprint. Ambiguous, claimed or changed rows refuse.
   Neither path receives inventory or adds booked spend during attach-only repair.
-- These changes need deployment and public writer/readback acceptance before
-  blocked source bindings or historical restart readiness can be declared done.
+- Deployment establishes these contracts, not every source-specific repair.
+  Blocked bindings still need public writer/readback acceptance; missing original
+  preparations remain evidence gaps. Historical restart readiness still needs
+  authorized scope and transport/coverage evidence, and continuous financial
+  processing needs its own acceptance beyond classification-only discovery.
 
 Private financial acceptance now includes original Apple Card statements and
 order-specific installment settlement. Separate orders and trade-ins remain

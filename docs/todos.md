@@ -1097,6 +1097,12 @@ device launcher is supported for finite simulator journeys.
   not merge everything into one relational query (its memory cost is
   documented in `repo/product/crud.ts`).
 
+- 🤔 🐛 **Diagnose interactive production pool exhaustion.** Serial MCP
+  `entity_read.get` requests for individual records can fail with SQLSTATE
+  `58000`, "Timed out while waiting for an open slot in the pool." Inspect
+  active connections, request lifetimes and pool limits before choosing a fix;
+  verify that interactive reads recover without masking database diagnostics.
+
 - 🤔 🛠️ **Summary `entity_read.get` without the detail read.** A summary get
   still runs the complete detail read (USDA, quality, ledger, breadcrumbs)
   before projecting to identity. Route it through `listFields` with an `ids`
