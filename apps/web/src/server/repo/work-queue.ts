@@ -1,8 +1,15 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { dataCheck } from "@cubby/schemas/data-quality";
+import {
+  dataCheck,
+  scoredEntities,
+  type ScoredEntity,
+} from "@cubby/schemas/data-quality";
 import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import {
+  shortcodeEntities,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
@@ -381,39 +388,47 @@ const fieldLabel = (entity: Entity, field: string) => {
   );
 };
 
-/** Each row states its own gaps (an Email's missing original, a Purchase's
- * missing item lines) as check ids with messages, not a generic reason. */
-async function stateRowGaps(db: Database, items: WorkQueueRow[]) {
-  for (const gapView of workQueueGapViews) {
-    const { entity, source } = gapView;
-    const rows = items.filter(
-      (item) => item.entity === entity && item.source === source,
+/** Each row carries its source record's quality score, and a gap row states
+ * its own gaps (an Email's missing original, a Purchase's missing item lines)
+ * as check ids with messages, not a generic reason. */
+async function stateRowQuality<E extends ScoredEntity & ShortcodeEntity>(
+  db: Database,
+  entity: E,
+  rows: WorkQueueRow[],
+) {
+  const ids = await resolveLiveShortcodes(
+    db,
+    rows.flatMap((item) => (item.id ? [item.id] : [])),
+    entity,
+  );
+  const qualities = await loadDataQualities(db, entity, [...ids.values()]);
+  for (const item of rows) {
+    const id = item.id ? ids.get(item.id) : undefined;
+    const quality = id ? qualities.get(id) : undefined;
+    if (!quality) continue;
+    item.dataQuality = { status: quality.status, score: quality.score };
+    const gapView = workQueueGapViews.find(
+      (view) => view.entity === entity && view.source === item.source,
     );
-    if (rows.length === 0) continue;
-    const ids = await resolveLiveShortcodes(
-      db,
-      rows.flatMap((item) => (item.id ? [item.id] : [])),
-      entity,
-    );
-    const qualities = await loadDataQualities(db, entity, [...ids.values()]);
+    if (!gapView) continue;
     const relevantChecks = new Set(workQueueGapChecks(gapView));
-    for (const item of rows) {
-      const id = item.id ? ids.get(item.id) : undefined;
-      const quality = id ? qualities.get(id) : undefined;
-      if (!id || !quality) continue;
-      const gaps = new Map<string, WorkQueueGap>();
-      for (const gap of [...quality.gaps, ...quality.relatedGaps]) {
-        const check = dataCheck.safeParse(gap.check).data;
-        if (check && relevantChecks.has(check) && !gaps.has(check))
-          gaps.set(check, { check, message: gap.message });
-      }
-      item.gaps = [...gaps.values()];
-      // Messages are sentences, so the plain-text reason reads as prose.
-      if (item.gaps.length)
-        item.reason = [...new Set(item.gaps.map((gap) => gap.message))].join(
-          " ",
-        );
+    const gaps = new Map<string, WorkQueueGap>();
+    for (const gap of [...quality.gaps, ...quality.relatedGaps]) {
+      const check = dataCheck.safeParse(gap.check).data;
+      if (check && relevantChecks.has(check) && !gaps.has(check))
+        gaps.set(check, { check, message: gap.message });
     }
+    item.gaps = [...gaps.values()];
+    // Messages are sentences, so the plain-text reason reads as prose.
+    if (item.gaps.length)
+      item.reason = [...new Set(item.gaps.map((gap) => gap.message))].join(" ");
+  }
+}
+
+async function stateRowQualities(db: Database, items: WorkQueueRow[]) {
+  for (const entity of scoredEntities) {
+    const rows = items.filter((item) => item.entity === entity);
+    if (rows.length > 0) await stateRowQuality(db, entity, rows);
   }
 }
 
@@ -524,7 +539,7 @@ async function queryWorkQueue(
       coalesce((SELECT jsonb_agg(jsonb_build_object('id', shortcode, 'name', name) ORDER BY name, shortcode) FROM members), '[]'::jsonb) AS members,
       coalesce((SELECT jsonb_agg(jsonb_build_object(
         'entity', entity, 'id', id, 'name', name, 'key', key, 'source', source, 'kind', kind,
-        'reason', reason, 'gaps', '[]'::jsonb, 'amount', amount, 'date', date, 'vendor', ${vendorOf(sql`page.vendor_id`)},
+        'reason', reason, 'gaps', '[]'::jsonb, 'dataQuality', 'null'::jsonb, 'amount', amount, 'date', date, 'vendor', ${vendorOf(sql`page.vendor_id`)},
         'nextAction', "nextAction", 'displayImages', '[]'::jsonb, 'waitingFor', CASE waiting_kind
           WHEN ${either} THEN jsonb_build_object('kind', ${either}::text)
           WHEN ${members} THEN jsonb_build_object('kind', ${members}::text, 'members', (SELECT jsonb_agg(jsonb_build_object('id', member.shortcode, 'name', member.name) ORDER BY member.name, member.shortcode) FROM members member WHERE member.id = ANY(page.owners)))
@@ -539,7 +554,7 @@ async function queryWorkQueue(
       items: workQueueOutSchema.shape.items,
     })
     .parse(result.rows[0]);
-  await stateRowGaps(db, row.items);
+  await stateRowQualities(db, row.items);
   for (const item of row.items)
     if (item.entity && item.suggestionField)
       item.name = `${entitySummary[item.entity].singular} · ${fieldLabel(item.entity, item.suggestionField)}`;

@@ -31,6 +31,7 @@ import type { z } from "zod";
 
 import { verbBulkAction } from "~/entity/actions/action-verb-ui";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { DataQualityValue } from "~/entity/data-quality-value";
 import {
   EntityIcon,
   entities,
@@ -52,7 +53,11 @@ import {
   type BulkActionsConfig,
 } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/BulkActionBar";
-import { selectCellData, textCellData } from "~/ui/data-table/cell-data";
+import {
+  numberCellData,
+  selectCellData,
+  textCellData,
+} from "~/ui/data-table/cell-data";
 import {
   createCurrencyColumn,
   createImageColumn,
@@ -485,6 +490,28 @@ function queueColumns(
           },
         }),
         cell: ({ row }) => <VendorLink vendor={row.original.vendor} />,
+      }),
+    );
+    add(
+      helper.accessor((row) => row.dataQuality?.score ?? undefined, {
+        id: "dataQuality",
+        header: "Quality",
+        enableSorting: false,
+        meta: attachCubbyColumnMeta<QueueTableRow>({
+          className: "w-20",
+          cellData: numberCellData<QueueTableRow>(
+            "number",
+            (row) => row.dataQuality?.score ?? null,
+          ),
+          mobile: { slot: "meta", priority: 1, label: "Quality" },
+        }),
+        cell: ({ row }) =>
+          // Problems and suggested-field rows have no scored record.
+          row.original.dataQuality ? (
+            <DataQualityValue quality={row.original.dataQuality} />
+          ) : (
+            <NoneValue />
+          ),
       }),
     );
     add(

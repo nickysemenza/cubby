@@ -117,6 +117,14 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     expect(product.items[0]?.reason).toBe(
       product.items[0]?.gaps.map((gap) => gap.message).join(" "),
     );
+    // A scored source record's own score rides on its row, so the table can
+    // show it; a row without a scored record carries none.
+    expect(product.items[0]?.dataQuality).toMatchObject({
+      score: expect.any(Number),
+    });
+    expect(
+      all.items.filter((row) => row.entity === null && row.dataQuality),
+    ).toEqual([]);
     // Non-gap rows carry no checks.
     expect(
       all.items
