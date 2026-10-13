@@ -1,0 +1,19 @@
+scripts/rust-fingerprint.ts
+  s_73fe69dd841a24::t_70d21eb03ff4c1 62-64,69,91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2312cdeecab4d170471ac80a2c9a397a9a07ea37",
+  "prompts": {},
+  "sessions": {
+    "s_73fe69dd841a24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96d21c32-0fd2-4535-be08-daa98aa3f469",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
