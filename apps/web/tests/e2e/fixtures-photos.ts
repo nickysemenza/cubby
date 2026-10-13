@@ -14,6 +14,10 @@ import {
   attachExistingImageToEntity,
   createUploadedImageRecord,
 } from "~/server/repo/image";
+import {
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+} from "~/server/repo/image-processing";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
@@ -47,7 +51,10 @@ export async function seedPhotoReviewProcessingFailure(
       kind,
       state: "failed",
       sourceContentHash: row.sha256,
-      processorRevision: 1,
+      processorRevision:
+        kind === "describe_image"
+          ? IMAGE_DESCRIPTION_PROCESSOR_REVISION
+          : IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
       lastError: reason,
     });
 }

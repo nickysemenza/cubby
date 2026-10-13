@@ -150,6 +150,10 @@ by id or content hash. Current corrections or cloud descriptions can improve
 lexical retrieval when already available. Missing descriptions never block
 Clef. Category selection and alphabetical roster caps can miss relevant Products;
 truncation is visible and model probabilities are not calibrated confidence.
+The AI smoke catalog includes the production Clef composition choice using an
+uploaded image; this probe does not run the catalog-matching pipeline or change
+identity. Synthetic failure fixtures select current processor revisions
+explicitly; revision hashes have no chronological meaning.
 
 Current observations appear as unconfirmed suggestions in the existing image
 associations report and analysis summaries. No inference runs on reads. No

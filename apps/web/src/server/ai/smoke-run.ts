@@ -23,6 +23,7 @@ import {
 } from "~/server/ai/decision-model";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import {
+  IMAGE_IDENTIFICATION_FEATURE,
   ENTITY_EMBEDDING_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
@@ -51,6 +52,7 @@ import {
   PRODUCT_IDENTITY_RULES,
 } from "~/server/purchase-import/writer";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getVerifiedImageRenditionKey } from "~/server/repo/image-identification";
 import { getUploadedImageProcessingSource } from "~/server/repo/image-processing";
 import { getLocationById } from "~/server/repo/location/crud";
 import { getProductByID } from "~/server/repo/product/crud";
@@ -67,6 +69,10 @@ import {
   descriptionRequest,
   imageAnalysisRenditionUrl,
 } from "~/server/services/image-description.service";
+import {
+  imageIdentificationCompositionPrompt,
+  readImageIdentificationRendition,
+} from "~/server/services/image-identification.service";
 import {
   assessRecipeFlowCandidate,
   flowPromptInput,
@@ -334,6 +340,36 @@ async function runCase(
                 location.name,
                 usage,
               ),
+      };
+    }
+    case "imageIdentification": {
+      const { imageId } = aiSmokeInputs.imageIdentification.parse(raw);
+      const id = await resolveOrThrow(db, "image", imageId);
+      const source = await getUploadedImageProcessingSource(db, id);
+      if (!source)
+        throw new Error(
+          "Select an uploaded image that passed integrity checks.",
+        );
+      const normalizedKey =
+        source.contentType === "image/avif"
+          ? await getVerifiedImageRenditionKey(db, id)
+          : null;
+      if (source.contentType === "image/avif" && !normalizedKey)
+        throw new Error("Waiting for verified Apple JPEG normalization");
+      const { media } = await readImageIdentificationRendition(
+        getR2PublicUrl(normalizedKey ?? source.key),
+      );
+      return {
+        result: await runDecisionChoice({
+          ...imageIdentificationCompositionPrompt(media),
+          feature: IMAGE_IDENTIFICATION_FEATURE,
+          usage: {
+            db,
+            runId,
+            operation: "smoke.imageIdentification",
+            entity: { entityKind: "image", entityId: id },
+          },
+        }),
       };
     }
     case "imageDescription": {

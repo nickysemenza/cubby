@@ -24,6 +24,7 @@ import {
   type ProductIdentification,
   productIdentificationSchema,
 } from "@cubby/schemas/ai";
+import { IMAGE_IDENTIFICATION_MODEL } from "@cubby/schemas/image-identification";
 import {
   type ImageDescriptionResult,
   imageDescriptionResult,
@@ -415,12 +416,15 @@ export const IMAGE_DESCRIPTION_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImageDescriptionResult> &
   AiAnalysisFeature<ImageDescriptionResult>;
 
-export const IMAGE_IDENTIFICATION_FEATURE = defineFeature({
-  feature: "image-identification",
-  tier: "decision",
-  cache: true,
-  promptVersion: "1",
-}) satisfies AiDecisionFeature;
+export const IMAGE_IDENTIFICATION_FEATURE = {
+  ...defineFeature({
+    feature: "image-identification",
+    tier: "decision",
+    cache: true,
+    promptVersion: "1",
+  }),
+  model: IMAGE_IDENTIFICATION_MODEL,
+} satisfies AiDecisionFeature;
 
 export const SEMANTIC_QUERY_FEATURE = defineFeature({
   feature: "semantic-query",
