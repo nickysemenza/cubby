@@ -4,6 +4,7 @@ import { wasm } from "~/lib/wasm";
 import { MAILBOX_RELEVANCE_FEATURE } from "~/server/ai/features";
 import type { AiChatRequest } from "~/server/ai/run-feature";
 
+import { unreadableMailImages } from "./triage";
 import {
   GmailApiError,
   type GmailNormalizedMessage,
@@ -21,7 +22,7 @@ function readableMailView({
   bodyHtml,
   ...mail
 }: GmailNormalizedMessage["mail"]) {
-  const html = bodyHtml ? wasm.compact_browser_page(bodyHtml, "") : null;
+  const html = bodyHtml ? wasm.compact_email_html(bodyHtml) : null;
   return {
     original: JSON.stringify({
       ...mail,
@@ -32,15 +33,19 @@ function readableMailView({
       links:
         html?.links.map(({ href, text }) => ({ url: href, label: text })) ?? [],
       images: html?.images.map(({ src, alt }) => ({ url: src, alt })) ?? [],
-      jsonLd: html?.json_ld ?? [],
+      preheader: html?.preheader ?? null,
+      structuredData: html?.structured_data ?? [],
     }),
-    // The shared compactor bounds text and links; a bounded view cannot prove absence.
+    // Omitted purchase cues and unreadable images require review; decorative
+    // images and discarded layout bytes do not make a negative incomplete.
     complete:
-      (!bodyHtml ||
-        new TextEncoder().encode(bodyHtml).byteLength < 200 * 1024) &&
-      (!html || (html.links.length < 500 && html.json_ld_omitted === 0)) &&
-      // Labels are useful context; unobserved image pixels cannot prove absence.
-      !/<img\b/iu.test(bodyHtml ?? ""),
+      !html ||
+      (!html.truncated &&
+        html.cue_links_omitted === 0 &&
+        html.cue_images_omitted === 0 &&
+        html.structured_data_omitted === 0 &&
+        html.cues_omitted === 0 &&
+        !unreadableMailImages(html, mail.bodyText ?? "")),
   };
 }
 

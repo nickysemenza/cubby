@@ -67,6 +67,21 @@ const STRUCTURED_DATA_SHOWN = 3;
 /** Fewer letters and digits than this beside content images is an image-only message. */
 const READABLE_CHARS = 64;
 
+/** Catalog labels can explain promotional pictures; a receipt or unlabeled
+ * image still needs pixels when the readable body cannot explain it. */
+export function unreadableMailImages(html: WCompactEmail, plain: string) {
+  if (html.unresolved_images || html.images_omitted) return true;
+  if (!html.images.length) return false;
+  if (html.readable_chars + wasm.readable_chars(plain) >= READABLE_CHARS)
+    return false;
+  return !(
+    html.cue_images_omitted === 0 &&
+    html.images.every((image) => image.alt.trim() && !image.cue) &&
+    wasm.readable_chars(html.images.map((image) => image.alt).join("\n")) >=
+      READABLE_CHARS
+  );
+}
+
 /** Shown evidence lost a cue-bearing item, by position or by its bound. */
 const clippedCue = <T extends { cue: boolean }>(
   all: readonly T[],
@@ -157,19 +172,21 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
   let htmlEvidenceComplete = true;
   if (html) {
     if (html.truncated) reasons.add("compactor_truncated");
-    if (
-      html.images.length &&
-      html.readable_chars + wasm.readable_chars(plain) < READABLE_CHARS
-    )
-      reasons.add("image_only");
+    if (unreadableMailImages(html, plain)) reasons.add("image_only");
     if (
       html.cue_links_omitted ||
-      clippedCue(
-        html.links,
-        links,
-        (link, index) =>
-          links[index]?.href === link.href && links[index].text === link.text,
-      )
+      clippedCue(html.links, links, (link, index) => {
+        const shown = links[index];
+        return (
+          shown !== undefined &&
+          shown.text === link.text &&
+          (shown.href === link.href ||
+            (Boolean(link.text.trim()) &&
+              link.url_cues.every((cue) =>
+                shown.href.toLowerCase().includes(cue.toLowerCase()),
+              )))
+        );
+      })
     )
       reasons.add("links_clipped");
     if (
@@ -178,7 +195,9 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
         html.images,
         images,
         (image, index) =>
-          images[index]?.src === image.src && images[index].alt === image.alt,
+          images[index]?.alt === image.alt &&
+          ((Boolean(image.alt.trim()) && !image.cue) ||
+            images[index].src === image.src),
       )
     )
       reasons.add("images_clipped");
@@ -190,18 +209,9 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
     if (!structuredComplete) reasons.add("structured_data_clipped");
     htmlEvidenceComplete =
       structuredComplete &&
-      links.length === html.links.length &&
-      images.length === html.images.length &&
-      !html.cue_links_omitted &&
-      !html.cue_images_omitted &&
-      html.links.every(
-        ({ href, text }, index) =>
-          links[index]?.href === href && links[index].text === text,
-      ) &&
-      html.images.every(
-        ({ src, alt }, index) =>
-          images[index]?.src === src && images[index].alt === alt,
-      );
+      !unreadableMailImages(html, plain) &&
+      !reasons.has("links_clipped") &&
+      !reasons.has("images_clipped");
   }
   const cueMissing = purchaseCueCheck(html, plain, preheader);
 

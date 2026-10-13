@@ -31,6 +31,8 @@ pub struct WEmailLink {
     pub text: String,
     /// The label or URL names an order, receipt, invoice, shipment or payment.
     pub cue: bool,
+    /// Purchase tokens in the URL that must survive caller clipping.
+    pub url_cues: Vec<String>,
 }
 
 #[derive(Tsify, Serialize, Deserialize, Debug, PartialEq)]
@@ -38,7 +40,7 @@ pub struct WEmailLink {
 pub struct WEmailImage {
     pub src: String,
     pub alt: String,
-    /// The alt text names a purchase or carries an amount.
+    /// The source or alt text names a purchase, or the alt text carries an amount.
     pub cue: bool,
 }
 
@@ -68,6 +70,10 @@ pub struct WCompactEmail {
     /// Content images in document order; declared 1×1 or zero-size pixels are dropped.
     pub images: Vec<WEmailImage>,
     pub cue_images_omitted: u32,
+    /// Non-tracking images whose source could not be represented.
+    pub unresolved_images: u32,
+    /// All content pictures past the image bound, including unlabeled pictures.
+    pub images_omitted: u32,
     /// JSON-LD blocks verbatim, then each top-level microdata item as JSON.
     pub structured_data: Vec<String>,
     pub structured_data_omitted: u32,
@@ -79,7 +85,7 @@ pub struct WCompactEmail {
     /// Letters and digits outside footer lines: near zero means the content
     /// lives in images the view cannot show.
     pub readable_chars: u32,
-    /// The text hit this compactor's own bound.
+    /// Readable purchase evidence was omitted or body/preheader text hit a bound.
     pub truncated: bool,
 }
 
@@ -306,6 +312,21 @@ fn walk(element: ElementRef, footer: bool, state: &mut Walk) {
     }
     let name = element.value().name();
     if is_email_hidden(&element) {
+        if !matches!(
+            name,
+            "script" | "style" | "noscript" | "template" | "svg" | "head"
+        ) {
+            // Hidden text does not include image labels or link destinations.
+            state.truncated |= element
+                .descendants()
+                .filter_map(ElementRef::wrap)
+                .any(|node| {
+                    ["alt", "src", "href"]
+                        .iter()
+                        .filter_map(|name| node.value().attr(name))
+                        .any(|value| cue_hits(value) > 0 || !purchase_cues(value).cues.is_empty())
+                });
+        }
         // The preheader is the hidden summary placed before any visible text.
         if state.preheader.is_none()
             && !state.visible_seen
@@ -315,10 +336,18 @@ fn walk(element: ElementRef, footer: bool, state: &mut Walk) {
             )
         {
             let mut text = clean(&element.text().collect::<String>());
+            state.truncated |= text.len() > MAX_PREHEADER_BYTES;
             truncate_utf8(&mut text, MAX_PREHEADER_BYTES);
             if !text.is_empty() {
                 state.preheader = Some(text);
             }
+        } else if !matches!(
+            name,
+            "script" | "style" | "noscript" | "template" | "svg" | "head"
+        ) {
+            let hidden_text = clean(&element.text().collect::<String>());
+            let omitted = purchase_cues(&hidden_text);
+            state.truncated |= !omitted.cues.is_empty() || omitted.omitted > 0;
         }
         return;
     }
@@ -501,6 +530,13 @@ const RECEIPT_PHRASES: &[&str] = &[
     "refund",
     "tracking number",
     "has shipped",
+    "booking",
+    "reservation",
+    "flight",
+    "payout",
+    "your purchase",
+    "you purchased",
+    "you returned",
 ];
 
 fn trim_token(token: &str) -> &str {
@@ -746,12 +782,20 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
                 .unwrap_or_default();
         }
         let score = cue_hits(&text) * 2 + cue_hits(&href);
+        let lower_href = href.to_lowercase();
+        let url_cues: Vec<String> = LINK_CUES
+            .iter()
+            .filter(|cue| lower_href.contains(**cue))
+            .map(|cue| (*cue).to_string())
+            .chain(purchase_cues(&href).cues)
+            .collect();
         links.push((
             score,
             WEmailLink {
                 href,
                 text,
-                cue: score > 0,
+                cue: score > 0 || !url_cues.is_empty(),
+                url_cues,
             },
         ));
     }
@@ -768,13 +812,19 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
         .map(|(_, link)| link)
         .collect();
 
+    let mut unresolved_images = 0u32;
     let images: Vec<WEmailImage> = select(&document, "img")
         .into_iter()
         .filter(|image| !is_tracking_pixel(image) && !has_hidden_ancestor(image))
         .filter_map(|image| {
-            let src = resolve(None, image_source(&image)?)?;
+            let Some(src) = image_source(&image).and_then(|source| resolve(None, source)) else {
+                unresolved_images = unresolved_images.saturating_add(1);
+                return None;
+            };
             let alt = clean(image.value().attr("alt").unwrap_or_default());
-            let cue = cue_hits(&alt) > 0 || !currency_amounts(&alt).is_empty();
+            let cue = cue_hits(&alt) > 0
+                || cue_hits(&src) > 0
+                || !purchase_cues(&format!("{alt}\n{src}")).cues.is_empty();
             Some(WEmailImage { src, alt, cue })
         })
         .collect();
@@ -783,6 +833,7 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
         .skip(MAX_IMAGES)
         .filter(|image| image.cue)
         .count();
+    let images_omitted = u32::try_from(images.len().saturating_sub(MAX_IMAGES)).unwrap_or(u32::MAX);
     let images = images.into_iter().take(MAX_IMAGES).collect();
 
     let mut structured_data = Vec::new();
@@ -807,6 +858,8 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
         cue_links_omitted: u32::try_from(cue_links_omitted).unwrap_or(u32::MAX),
         images,
         cue_images_omitted: u32::try_from(cue_images_omitted).unwrap_or(u32::MAX),
+        unresolved_images,
+        images_omitted,
         structured_data,
         structured_data_omitted,
         cues,

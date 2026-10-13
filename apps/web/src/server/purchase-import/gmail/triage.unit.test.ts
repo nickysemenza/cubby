@@ -108,6 +108,90 @@ describe("transient Gmail triage", () => {
     expect(view?.incompleteReasons).toEqual(["image_only"]);
   });
 
+  it("settles a labeled catalog promotion without escalating product pictures or tracking URLs", async () => {
+    const html = `<p>Browse our new collection</p>${Array.from(
+      { length: 10 },
+      (_, index) =>
+        `<a href="https://shop.example.test/offer/${"x".repeat(600)}"><img src="https://shop.example.test/images/${index}" alt="Synthetic cotton towels in assorted colors and sizes ${index}"></a>`,
+    ).join("")}`;
+    const { decision, view } = await route(message(html, "text/html"));
+    expect(decision.classification).toBe("unrelated");
+    expect(view?.incompleteReasons).toEqual([]);
+  });
+
+  it("keeps a complete order-link label usable when only tracking URL bytes are clipped", async () => {
+    const { decision, view } = await route(
+      message(
+        `<p>Read this week's community newsletter and upcoming events.</p><a href="https://shop.example.test/orders?tracking=${"x".repeat(600)}">Order history</a>`,
+        "text/html",
+      ),
+    );
+    expect(decision.classification).toBe("unrelated");
+    expect(view?.incompleteReasons).toEqual([]);
+  });
+
+  it("keeps a purchase cue hidden in a clipped URL uncertain despite a generic label", async () => {
+    const { decision, view } = await route(
+      message(
+        `<p>Community newsletter with this week's events and gardening tips.</p><a href="https://shop.example.test/${"x".repeat(600)}/receipt">Learn more</a>`,
+        "text/html",
+      ),
+    );
+    expect(decision.classification).toBe("uncertain");
+    expect(view?.incompleteReasons).toContain("links_clipped");
+  });
+
+  it("keeps omitted or unresolved pictures uncertain despite labeled catalog pictures", async () => {
+    for (const hidden of [
+      '<img src="https://shop.example.test/extra.png">',
+      '<img src="data:image/png;base64,c3ludGhldGlj">',
+    ]) {
+      const html =
+        Array.from(
+          { length: 300 },
+          (_, index) =>
+            `<img src="https://shop.example.test/${index}.png" alt="Synthetic cotton towels in assorted colors and sizes">`,
+        ).join("") + hidden;
+      const { decision } = await route(message(html, "text/html"));
+      expect(decision.classification).toBe("uncertain");
+    }
+  });
+
+  it("keeps a receipt image source uncertain even with a generic catalog label", async () => {
+    const { decision } = await route(
+      message(
+        '<img src="https://shop.example.test/receipt.png" alt="Synthetic cotton towels in assorted colors and sizes for the whole household">',
+        "text/html",
+      ),
+    );
+    expect(decision.classification).toBe("uncertain");
+  });
+
+  it("keeps a confirmed booking omitted from body excerpts uncertain", async () => {
+    const { decision, view } = await route(
+      message(
+        `${"Neighborhood articles and gardening tips. ".repeat(2000)}Your flight booking is confirmed.${"Neighborhood articles and gardening tips. ".repeat(2000)}`,
+      ),
+    );
+    expect(decision.classification).toBe("uncertain");
+    expect(view?.incompleteReasons).toContain("purchase_cue_clipped");
+  });
+
+  it("keeps clipped image sources and omitted booking-image labels uncertain", async () => {
+    for (const pictures of [
+      `<img src="https://shop.example.test/${"x".repeat(600)}/receipt.png" alt="Catalog pictures">`,
+      `${Array.from({ length: 6 }, (_, index) => `<img src="https://shop.example.test/${index}.png" alt="Catalog pictures">`).join("")}<img src="https://shop.example.test/last.png" alt="Your flight booking is confirmed">`,
+    ]) {
+      const { decision } = await route(
+        message(
+          `<p>Community newsletter with gardening tips and upcoming neighborhood events.</p>${pictures}`,
+          "text/html",
+        ),
+      );
+      expect(decision.classification).toBe("uncertain");
+    }
+  });
+
   it("keeps a message whose purchase cue the gate clipped uncertain", async () => {
     const { decision, view, content } = await route(
       message(

@@ -21,31 +21,31 @@ export const EMAIL_HTML_FIXTURES = {
  */
 export const EMAIL_FIXTURE_SUMMARY = {
   forwarded: {
-    bytes: 779,
+    bytes: 863,
     cues: ["$41.10", "$78.90", "$120.00", "INV-20931", "invoice", "amount due"],
     readableChars: 289,
     truncated: false,
   },
   imageOnlyReceipt: {
-    bytes: 576,
+    bytes: 658,
     cues: [] as string[],
     readableChars: 0,
     truncated: false,
   },
   jsonLdOrder: {
-    bytes: 734,
+    bytes: 789,
     cues: [] as string[],
     readableChars: 43,
     truncated: false,
   },
   newsletter: {
-    bytes: 1406,
+    bytes: 1517,
     cues: [] as string[],
     readableChars: 301,
     truncated: false,
   },
   orderTable: {
-    bytes: 1433,
+    bytes: 1586,
     cues: [
       "$24.00",
       "$18.50",
