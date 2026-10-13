@@ -63,19 +63,44 @@ history is the archive. Permanent product constraints live in the
   dictionaries for uploads that still carry EXIF. Nothing reads shutter,
   aperture, or ISO yet; they are kept so the bytes never need refetching.
 
-- 🤔 ✨ **Identify what is in a photo.** Photo import stops at the entity type,
-  and web location detection matches by name only. The
-  [design interview](plans/photo-identification.md) records the agreed
-  Apple-plus-Clef baseline and first single-Product suggestion slice. Multi-item
-  proposals, search expansion, quality evaluation, and budgeted frontier
-  escalation remain. Existing backlog slices:
-  1. 🤔 ✨ Compare detected items visually against Product covers and
-     subject-lift cutouts, not only by exact name then semantic name
-     similarity. Needs an eval set like `inventory-detection-evals.ts`.
-  2. ⏳ ✨ Server vision ranking of a single record (`photo-import.identify`, a
-     `defineFeature` sibling of `product-identification`, fed into
-     `PhotoEvidenceScorer` as an identity score) when deterministic evidence
-     still leaves the chooser in default order often enough to matter.
+- 🤔 ✨ **Improve photo identification recall and explain its limits.** Extend the
+  retained Apple/Clef observation and unconfirmed-Product suggestion paths
+  (`image-identification.service.ts`, `image-identification.ts`,
+  `image-processing-panel.tsx`); the
+  [design interview](plans/photo-identification.md) owns the wider use cases.
+  Keep processing automatic and simple, without regions or manual tuning.
+  1. 🤔 ✨ **Retrieve across plausible categories.** Use category as a ranking
+     hint rather than a hard filter; combine lexical/semantic identity evidence
+     and broaden a bounded search when it misses. A flower-and-fruit catalog
+     image should not search only Produce when its Product is Plants & seeds.
+     Evaluate ranking and expansion before choosing limits or adding indexes.
+  2. 🤔 ✨ **Separate existing attachments from visual matches.** Show “already
+     attached here” as an existing relationship, not a new model suggestion or
+     independent proof. Preserve the no-self-comparison rule. Distinguish
+     insufficient independent reference imagery from a rejected visual match;
+     never infer exact cultivar, model, size, ownership, or physical-instance
+     identity from generic imagery alone.
+  3. 🟢 ✨ **Explain identification coverage in the UI.** Show selected category,
+     candidates considered, truncation, and whether independent visual evidence
+     was available. A bounded no-match result must not imply an exhaustive
+     search. Keep readable reasons primary and raw diagnostics expandable.
+  4. 🤔 🧪 **Evaluate retrieval separately from matching.** Use a small labeled
+     set spanning clothing, packaged goods, visually similar tools, plants,
+     and related parts/views. Measure whether the correct Product reached the
+     roster, match precision/recall, abstentions, category mistakes, truncation,
+     missing reference images, latency, and per-provider cost. Include
+     plant-versus-produce confusion and same-image-only attachments; compare
+     prompt/ranking changes on held-out examples before claiming improvement.
+  5. 🤔 ✨ **Broader workflows and budgeted escalation.** Support multi-item
+     shelf/wardrobe proposals, plants, receipts/documents, older-photo search,
+     and inventory recount review. Escalate useful unresolved questions through
+     AI Gateway within explicit interactive and backfill budgets; preserve
+     confirmation for attachment, creation, merge, and inventory changes.
+  6. ⏳ ✨ **Feed visual identity ranking into native import review.** Connect
+     independently evidenced cover/cutout comparisons to `PhotoEvidenceScorer`
+     when measured wardrobe imports show deterministic evidence leaving the
+     chooser in default order. Reuse the existing single-image ranking path
+     rather than introducing a second matcher.
 
 - ⏳ 🛠️ **Shared Vision gate for photo analysis.** The classification sweep (2 concurrent) and the review sheet's
   `LocalPhotoAnalyzer` (4) share no Vision gate. Promote if a review-sheet
