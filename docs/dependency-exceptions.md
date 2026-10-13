@@ -1,9 +1,8 @@
 # Dependency exceptions
 
-`pnpm audit:security` uses pnpm's native production-only audit and rejects high
-and critical advisories. There are no security advisory exemptions. The small
-set of non-security exceptions below exists because upstream peer metadata
-or transitive deprecations currently lags versions that Cubby verifies directly.
+Dependency advisory audits and deduplication are not validation gates for this
+single-household project. The exceptions below document upstream peer metadata
+or transitive deprecations that lag versions Cubby verifies directly.
 Review these by **2026-10-10** (90 days from the cleanup), and remove an exception
 as soon as the upstream range is corrected.
 
@@ -34,7 +33,6 @@ as soon as the upstream range is corrected.
   top-level-await build plugin. Neither is an application dependency.
 - React Email 1.x subpackages come solely from the pinned Better Auth UI package.
 
-These packages have no active production advisory under `pnpm audit --prod`.
-They are documented rather than overridden: an override could substitute an API-
+These packages are documented rather than overridden: an override could substitute an API-
 incompatible major inside another package. Renovate should continue proposing
 upstream updates normally.

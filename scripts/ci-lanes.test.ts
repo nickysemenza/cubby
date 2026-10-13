@@ -191,9 +191,8 @@ test("each lane's ci.yaml commands run only tasks routed to that lane", async ()
     });
     return tasks;
   };
-  // Run alongside Validation's checks: format is routed to the docs lane,
-  // and the advisory audit is uncached.
-  const elsewhere = new Set(["cubby-checks:format", "cubby-checks:security"]);
+  // Run alongside Validation's checks: format is routed to the docs lane.
+  const elsewhere = new Set(["cubby-checks:format"]);
   const commands: [string, string][] = [];
   const workflow = readFileSync(".github/workflows/ci.yaml", "utf8");
   for (const job of workflow.split(/^ {2}(?=[\w-]+:$)/mu)) {

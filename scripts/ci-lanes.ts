@@ -34,7 +34,7 @@ export type LaneSpec = {
   deleted?: string[];
 };
 export const LANES = {
-  // Named Validation steps, less the uncached audit and deduplication checks.
+  // Named Validation steps.
   validation: {
     tasks: [
       "cubby-checks:generate",

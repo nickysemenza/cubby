@@ -239,41 +239,33 @@ app skips the large Swift package-clone and DerivedData restores; a miss keeps
 the shared compilation setup. FFI verification, project generation and the
 device runner remain necessary even with a cached app.
 
-The **E2E journeys** workflow (`e2e-journeys.yaml`) runs an informational
-trial after successful required CI completes. `tester-army-pr.yaml` validates
-that all six required jobs passed in that CI run and the same-repository PR is still open at the tested head, then dispatches
-`e2e-journeys.yaml` with its number and exact revision. Routing checks that
-state again before checkout. Dispatch requires the CI run to have succeeded; the optional purchase-import lane may fail without failing it. Label-triggered dispatch requires the latest CI run for that head to have succeeded. Both run as one `gh` step in `tester-army-pr.yaml`. Automatic web coverage selects `product-rename`,
-`receive-purchase`, and `field-product-tags`; their persisted-state checks remain
-unchanged. The GitHub reporter receives the PR number and head in the runner's
-event payload and continues to post its normal comment and job summary. The full iOS catalog runs only when explicitly selected
-with the `tester-army:ios` label, manual dispatch, or the weekly schedule;
-native/shared/backend changes retain their required Apple lanes without
-automatically starting paid native journeys. Import/vendor/run changes
-and shared/backend changes also run the coupled import journeys. Prose-only PRs
-and fork PRs do not automatically call paid models. The complete native catalog runs in two parallel SDK shards (`--shard 1/2` and `2/2`), with separate recording caches, reports and reporter keys. The partition preserves all native cases; it lowers work per job while using more concurrent macOS runners. Changed-file routing lives
-in `scripts/tester-army-ci.ts`; renamed files include their old paths.
-The routing step selects every lane for PR, manual and scheduled events; each
-job only checks its selected output, without repeating event/label logic.
-Standard and coupled web harnesses share one matrix job and setup; only the
-harness, lane key, selected journeys and timeout differ.
-Labels `tester-army`, `tester-army:ios` and `tester-army:import` force their lane
-on the PR source revision and subsequent pushes. A label applied after CI
-passes dispatches immediately; one applied while CI is pending is picked up
-when that revision finishes. Manual and weekly runs keep their full catalogs.
+The **E2E journeys** workflow (`e2e-journeys.yaml`) runs only by manual dispatch
+or explicit PR labels. There is no scheduled matrix or changed-file-based
+selection of paid journeys. The labels select independent lanes:
 
-No Tester Army lane is required for merge. PR updates, closure and merge cancel
-unfinished automatic journeys through their PR-specific concurrency group.
-Closed or superseded revisions do not launch new journeys. Completed reports
-and uploaded artifacts remain available. Manual dispatch, weekly runs, required
-CI and deployment use independent groups. Background coverage starts after CI
-so it does not compete with that revision's merge checks; it can still contend
-with other active PRs. Successful hosted timings, costs and reliability must be measured in
-this trial before promoting any journey to a required check. Current lane
-ceilings are 10 minutes for automatic web smoke, 25 for full web, 30 for imports
-and 40 for iOS, including setup;
-these are limits, not measured completion times. The standard catalog's five-second
-pacing adds 1 minute 40 seconds across 20 native journeys, or 50 seconds per native shard; web adds its Email metadata journey for 21 cases.
+- `tester-army`: three web smoke journeys (`product-rename`, `receive-purchase`,
+  and `field-product-tags`).
+- `tester-army:ios`: the native catalog in two SDK shards.
+- `tester-army:import`: coupled import journeys.
+- `simulator-e2e`: deterministic simulator journeys.
+
+`tester-army-pr.yaml` dispatches only labeled, still-open same-repository PRs
+whose current head passed CI. A label added before CI passes waits for its
+completion; a label added afterward dispatches immediately. Labels remain
+active on subsequent pushes. The router rechecks the open PR, exact head,
+repository and current labels before selecting lanes, so removed labels cannot
+start paid work. Manual dispatch selects the requested catalog directly.
+
+No journey lane is required for merge. PR updates, closure and merge cancel
+unfinished label-requested journeys through their PR-specific concurrency
+group. Closed or superseded revisions launch no journeys. Manual dispatch,
+required CI and deployment use independent groups. The GitHub reporter retains
+the PR number and head, comments, summaries and uploaded artifacts.
+
+The web smoke timeout is 10 minutes; full web, imports and iOS have ceilings
+of 25, 30 and 40 minutes, including setup. These are limits, not measured run
+times. Hosted costs, timing and findings must establish value before expanding
+coverage. Verified persisted-state checks and recording replay remain intact.
 
 PR runs enable verified action replay, with separate lane/OS/lockfile caches.
 Each completed run saves a unique recording snapshot even after a journey
@@ -293,7 +285,7 @@ Run each engine three times for the live acceptance sample.
 Append `-- --wrong` to either journey command to deliberately expect wrong
 database values; it must fail the exact assertion. For a local replay comparison,
 run the same command twice with `-- --replay`. This enables Tester Army's local
-read-write cache (`apps/web/.e2e/cache/`); local runs without this flag disable it. PR CI enables it automatically. Compare the
+read-write cache (`apps/web/.e2e/cache/`); local runs without this flag disable it. Label-requested PR journeys enable it. Compare the
 resulting summaries for model calls, tokens, timings, replay hits and handoffs.
 Each run seeds fresh records, so every step passes the journey's seeded
 shortcodes as `unique()` params (`replayParams`): the SDK otherwise reads
