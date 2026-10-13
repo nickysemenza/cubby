@@ -114,7 +114,7 @@ import {
   photoRunImageOrder,
   withPhotoImportTransaction,
 } from "~/server/repo/photo-import";
-import { getRunByShortcode } from "~/server/repo/run";
+import { getRunHeaderByShortcode } from "~/server/repo/run";
 import {
   DEBUG_EVENT_KIND,
   failOperation,
@@ -1575,12 +1575,12 @@ function restartInputSummary(
 export async function loadRunDetail(
   db: Database,
   shortcode: string,
-  preparedHeader?: ReturnType<typeof getRunByShortcode>,
+  preparedHeader?: ReturnType<typeof getRunHeaderByShortcode>,
 ): Promise<RunDetail> {
   const publicId = runShortcode.parse(shortcode);
   const database = getDb(db);
   const [header, [run]] = await Promise.all([
-    preparedHeader ?? getRunByShortcode(db, publicId),
+    preparedHeader ?? getRunHeaderByShortcode(db, publicId),
     database
       .select({
         id: runTable.id,

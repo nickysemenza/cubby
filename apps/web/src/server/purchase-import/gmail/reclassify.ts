@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   emailAtChecksum,
+  mailReclassificationCheckpoint,
   reclassifyEmailsInput,
   reclassifyEmailsOut,
   rerunEmailPreviewOut,
@@ -29,7 +30,10 @@ import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { and, desc, eq, inArray, type SQL } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
-import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import {
+  describeErrorCauses,
+  scrubErrorMessage,
+} from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import {
   email as emailTable,
@@ -145,12 +149,13 @@ async function finishReclassifyRun(
   db: Database,
   runId: RunId,
   notes: readonly string[],
+  receiptFailure = false,
 ) {
   // A budget pause (`needs_review`) keeps its status and failure code.
   await getDb(db)
     .update(run)
     .set({
-      status: "completed",
+      status: receiptFailure ? "failed" : "completed",
       endedAt: new Date(),
       notes: notes.length ? notes.join("\n").slice(0, 2_000) : null,
       updatedAt: new Date(),
@@ -317,53 +322,94 @@ export async function reclassifyEmails(
     );
     runIds.push(created.shortcode);
     const notes: string[] = [];
+    const batchResults: ReclassifyEmailsOut["results"] = [];
+    let receiptFailure = false;
+    async function checkpoint(complete: boolean) {
+      await getDb(db)
+        .update(run)
+        .set({
+          progress: mailReclassificationCheckpoint.parse({
+            kind: "mail_reclassification",
+            version: 1,
+            complete,
+            results: batchResults,
+          }),
+          updatedAt: new Date(),
+        })
+        .where(eq(run.id, created.id));
+    }
     let provider: Awaited<ReturnType<typeof gmailProviderForUser>> | null =
       null;
     try {
+      await checkpoint(false);
       for (const email of group) {
-        const result = {
-          id: parseShortcodeFor("email", email.shortcode),
-          classification: null,
-          stage: null,
-          conflict: false,
-          error: null,
-        };
-        // Always make progress; past the budget, defer the rest to a rerun.
-        if (reached > 0 && Date.now() - started > timeBudgetMs) {
-          results.push({ ...result, outcome: "deferred" });
-          notes.push(`${email.shortcode}: deferred past the time budget`);
-          continue;
-        }
-        reached += 1;
+        const receiptStart = results.length;
         try {
-          // Ingest blocks both before classifying; neither changes Relevance.
-          if (
-            email.classificationVersion ===
-              HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION ||
-            (await deferClassificationRefresh(db, "classification_only", email))
-          ) {
-            results.push({ ...result, outcome: "frozen" });
+          const result = {
+            id: parseShortcodeFor("email", email.shortcode),
+            classification: null,
+            stage: null,
+            conflict: false,
+            error: null,
+          };
+          // Always make progress; past the budget, defer the rest to a rerun.
+          if (reached > 0 && Date.now() - started > timeBudgetMs) {
+            results.push({ ...result, outcome: "deferred" });
+            notes.push(`${email.shortcode}: deferred past the time budget`);
             continue;
           }
-          provider ??= await gmailProviderForUser(
-            db,
-            actor.userId,
-            email.mailboxId,
-          );
-          results.push({
-            ...result,
-            ...(await reclassifyOne(db, provider, email, created.id, ports)),
-          });
-        } catch (error) {
-          const message = scrubErrorMessage(
-            error instanceof Error ? error.message : String(error),
-          );
-          notes.push(`${email.shortcode}: ${message}`);
-          results.push({ ...result, outcome: "failed", error: message });
+          reached += 1;
+          try {
+            // Ingest blocks both before classifying; neither changes Relevance.
+            if (
+              email.classificationVersion ===
+                HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION ||
+              (await deferClassificationRefresh(
+                db,
+                "classification_only",
+                email,
+              ))
+            ) {
+              results.push({ ...result, outcome: "frozen" });
+              continue;
+            }
+            provider ??= await gmailProviderForUser(
+              db,
+              actor.userId,
+              email.mailboxId,
+            );
+            results.push({
+              ...result,
+              ...(await reclassifyOne(db, provider, email, created.id, ports)),
+            });
+          } catch (error) {
+            const message = scrubErrorMessage(
+              error instanceof Error ? error.message : String(error),
+            );
+            notes.push(`${email.shortcode}: ${message}`);
+            results.push({ ...result, outcome: "failed", error: message });
+          }
+        } finally {
+          batchResults.push(...results.slice(receiptStart));
+          if (batchResults.at(-1)?.outcome !== "deferred")
+            await checkpoint(false);
         }
       }
+      await checkpoint(true);
+    } catch (error) {
+      receiptFailure = true;
+      const diagnostic = describeErrorCauses(error)
+        .causes.map(
+          (cause) => `${cause.code ? `${cause.code}: ` : ""}${cause.message}`,
+        )
+        .reverse()
+        .join("\n");
+      notes.push(
+        `Receipt persistence interrupted; unrecorded publication outcomes are unknown: ${diagnostic}`,
+      );
+      throw error;
     } finally {
-      await finishReclassifyRun(db, created.id, notes);
+      await finishReclassifyRun(db, created.id, notes, receiptFailure);
     }
   }
   const order = new Map(input.ids.map((code, index) => [code, index]));
