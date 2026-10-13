@@ -354,7 +354,7 @@ export async function loadEntitySources(
 }
 
 /** Durable identity survives hard deletion; retained payloads supply past labels. */
-export async function loadEntitySourceTargets(
+async function loadEntitySourceTargets(
   db: Database | DrizzleTransaction,
   rows: ReadonlyArray<{ sourceEntityId: string | null }>,
 ): Promise<Map<string, NonNullable<EntitySourceRead["sourceEntity"]>>> {
