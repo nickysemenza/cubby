@@ -14,6 +14,7 @@ import {
   type DetailEntity,
 } from "~/entity/generated/entity-details.gen";
 import { AuditLogList } from "~/features/audit-log/audit-log-list";
+import { CellSelectionContext } from "~/ui/data-table/cell-selection-context";
 
 import { EntityPreviewContent } from "../components/EntityPreviewContent";
 import {
@@ -46,13 +47,15 @@ export function EntityWorkbenchInspector({
   overviewSupplement,
 }: EntityWorkbenchInspectorProps) {
   return (
-    <EntityWorkbenchInspectorContent
-      key={`${entity}:${id}`}
-      entity={entity}
-      id={id}
-      onClose={onClose}
-      overviewSupplement={overviewSupplement}
-    />
+    <CellSelectionContext value={false}>
+      <EntityWorkbenchInspectorContent
+        key={`${entity}:${id}`}
+        entity={entity}
+        id={id}
+        onClose={onClose}
+        overviewSupplement={overviewSupplement}
+      />
+    </CellSelectionContext>
   );
 }
 
