@@ -1,7 +1,6 @@
 import type {
   AiUsageRecentFilters,
   AiUsageRecentInput,
-  AiUsageTransport,
 } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
@@ -17,15 +16,6 @@ import {
   ilikeContains,
   notDeleted,
 } from "~/server/repo/database-helpers";
-
-/**
- * A `cache` replay made no model call and ChatGPT plan usage is not API
- * spend: neither is ever priced from its tokens, including rows recorded
- * before the writer stored their zero cost.
- */
-export function isUnbilledAiTransport(transport: AiUsageTransport): boolean {
-  return transport === "cache" || transport === "chatgpt";
-}
 
 export function aiCostSummarySql() {
   return {
