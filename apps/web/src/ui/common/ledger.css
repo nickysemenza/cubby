@@ -97,6 +97,13 @@
   justify-self: end;
   align-self: center;
 }
+/* Review grows beneath the proposal without moving its field identity or rail. */
+.ledger[data-ledger="facts"]
+  > .ledger-row:has(> [data-slot="basic-info-value"] .suggestion-review)
+  > :is([data-ledger-slot="primary"], [data-ledger-slot="actions"]) {
+  align-self: start;
+}
+
 .ledger[data-ledger="facts"]
   > .ledger-row[data-full-width="true"]
   > [data-ledger-slot="primary"] {
