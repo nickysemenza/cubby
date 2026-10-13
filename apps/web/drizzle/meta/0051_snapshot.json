@@ -1,5 +1,5 @@
 {
-  "id": "d61dfc06-6a3e-4628-85fd-d83383e75476",
+  "id": "842fdd84-56b5-4011-bf0d-f233c5abe0c7",
   "prevId": "37a7150a-6458-4889-8a26-631fea688e12",
   "version": "7",
   "dialect": "postgresql",
@@ -430,6 +430,24 @@
         "estimatedCost": {
           "name": "estimatedCost",
           "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "standardCost": {
+          "name": "standardCost",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chargedCost": {
+          "name": "chargedCost",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "costEvidence": {
+          "name": "costEvidence",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -6611,18 +6629,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "sourceEntityId": {
-          "name": "sourceEntityId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sourceEntityKind": {
-          "name": "sourceEntityKind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "quote": {
           "name": "quote",
           "type": "text",
@@ -6706,21 +6712,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "EntitySource_target_idx": {
-          "name": "EntitySource_target_idx",
-          "columns": [
-            {
-              "expression": "sourceEntityId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -6733,21 +6724,6 @@
           ],
           "columnsTo": [
             "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "EntitySource_target_fk": {
-          "name": "EntitySource_target_fk",
-          "tableFrom": "EntitySource",
-          "tableTo": "Entity",
-          "columnsFrom": [
-            "sourceEntityId",
-            "sourceEntityKind"
-          ],
-          "columnsTo": [
-            "id",
-            "kind"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -6772,17 +6748,9 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "EntitySource_target_pair_check": {
-          "name": "EntitySource_target_pair_check",
-          "value": "(\"EntitySource\".\"sourceEntityId\" IS NULL) = (\"EntitySource\".\"sourceEntityKind\" IS NULL)"
-        },
-        "EntitySource_one_target_check": {
-          "name": "EntitySource_one_target_check",
-          "value": "\"EntitySource\".\"url\" IS NULL OR \"EntitySource\".\"sourceEntityId\" IS NULL"
-        },
-        "EntitySource_target_or_quote_check": {
-          "name": "EntitySource_target_or_quote_check",
-          "value": "\"EntitySource\".\"url\" IS NOT NULL OR \"EntitySource\".\"sourceEntityId\" IS NOT NULL OR \"EntitySource\".\"quote\" IS NOT NULL"
+        "EntitySource_url_or_quote_check": {
+          "name": "EntitySource_url_or_quote_check",
+          "value": "\"EntitySource\".\"url\" IS NOT NULL OR \"EntitySource\".\"quote\" IS NOT NULL"
         },
         "EntitySource_field_fingerprint_check": {
           "name": "EntitySource_field_fingerprint_check",
