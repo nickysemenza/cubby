@@ -541,7 +541,7 @@ describe("reviewed accepted source Product association", () => {
         {
           sourceOrderId: w.association.id,
           reviewedPreparation: {
-            run,
+            run: parseShortcodeFor("run", run),
             stableOrderId: "review-unknown-original",
           },
           resolution: w.newProductResolution,
