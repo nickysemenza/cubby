@@ -1,0 +1,21 @@
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyClient.swift
+  s_73fe69dd841a24::t_611d512c4c330e 731
+apps/apple/CubbyKit/Tests/CubbyKitTests/JSONNullMiddlewareTests.swift
+  s_73fe69dd841a24::t_f51b45274d0526 84-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5d653d8885e139ffcd7f940ad26238b3707c274b",
+  "prompts": {},
+  "sessions": {
+    "s_73fe69dd841a24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96d21c32-0fd2-4535-be08-daa98aa3f469",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
