@@ -37,8 +37,8 @@ import {
   makeLocationInput,
 } from "~/server/repo/repo.fixtures";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { persistTelemetryMessages } from "~/server/repo/telemetry";
 import { ensureRun } from "~/server/runs/ensure-run";
+import { processTelemetryQueueBatch } from "~/server/telemetry-queue";
 
 // The SDK reads global fetch at request time. Route the catalog separately
 // on every test, including when an inference socket is overridden.
@@ -567,16 +567,17 @@ describe("AiUsage accounting", () => {
       durationMs: 1,
       cacheStatus: "hit" as const,
       transport,
-      standardCost: transport === "cache" ? null : 0.003,
-      chargedCost: transport === "cache" ? 0 : 0.003,
-      costEvidence: null,
       entityKind: null,
       entityId: null,
     });
-    await persistTelemetryMessages(ctx.db, [
-      queued("cache"),
-      queued("gateway"),
-    ]);
+    await processTelemetryQueueBatch(ctx.db, {
+      queue: "cubby-telemetry",
+      messages: [queued("cache"), queued("gateway")].map((body) => ({
+        body,
+        ack: () => undefined,
+        retry: () => undefined,
+      })),
+    });
 
     const rows = await usageRows();
     const cost = Object.fromEntries(
@@ -584,6 +585,17 @@ describe("AiUsage accounting", () => {
     );
     expect(cost.cache).toBe(0);
     expect(cost.gateway).toBe(0.003);
+    expect(rows.find((row) => row.transport === "gateway")).toMatchObject({
+      standardCost: 0.003,
+      costEvidence: {
+        standard: { source: "reconstructed", pricingSource: "models.dev" },
+        charged: { source: "reconstructed", pricingSource: "models.dev" },
+        original: { estimatedCost: null },
+      },
+    });
+    expect(
+      rows.find((row) => row.transport === "cache")?.standardCost,
+    ).toBeNull();
   });
 
   it("records unknown when a failed call never selected a transport", async () => {

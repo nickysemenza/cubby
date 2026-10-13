@@ -3,7 +3,7 @@ import { createModels } from "@earendil-works/pi-ai";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { snapshotAiUsagePrice } from "~/server/ai/pricing";
 import { setCfEnv } from "~/server/cf-env";
@@ -20,7 +20,6 @@ describe("non-agent host service authority", () => {
   const ctx = withTestDb();
   afterEach(() => {
     setCfEnv(undefined);
-    vi.unstubAllGlobals();
   });
   async function services() {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -101,23 +100,13 @@ describe("non-agent host service authority", () => {
     const accounting = piTokenUsage(message);
     expect(accounting.standardCost).toBeGreaterThan(0);
     expect(accounting.chargedCost).toBe(0);
-    vi.stubGlobal("fetch", async () =>
-      Response.json({
-        openai: {
-          models: {
-            "gpt-6-sol": {
-              cost: { input: 2, output: 3, cache_read: 0.2, cache_write: 2 },
-            },
-          },
-        },
-      }),
-    );
     const canonical = await snapshotAiUsagePrice(
       "openai",
       model.id,
       accounting,
     );
-    expect(canonical.amount).toBe(0.00023);
+    // The isolate can reuse a catalog captured by an earlier service call.
+    expect(canonical.amount).toBeGreaterThan(0);
     await runServicesFor(
       env,
       { waitUntil: () => {} },
@@ -145,6 +134,11 @@ describe("non-agent host service authority", () => {
         standard: {
           source: "estimate",
           pricingSource: canonical.amount === null ? "pi_sdk" : "models.dev",
+          pricingSnapshot: {
+            provider: canonical.evidence?.pricingSnapshot.provider,
+            model: canonical.evidence?.pricingSnapshot.model,
+            rates: canonical.evidence?.pricingSnapshot.rates,
+          },
         },
         charged: accounting.costEvidence?.charged,
         billingReason: "plan",

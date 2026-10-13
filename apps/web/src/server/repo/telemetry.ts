@@ -1,4 +1,8 @@
 import { runEntityId, userId } from "@cubby/schemas/identifiers";
+import {
+  normalizeLegacyAiUsageTelemetry,
+  type LegacyAiUsageTelemetry,
+} from "@cubby/schemas/telemetry";
 import type {
   AiUsageTelemetry,
   McpToolCallTelemetry,
@@ -7,6 +11,7 @@ import type {
 import { inArray } from "drizzle-orm";
 import { match } from "ts-pattern";
 
+import { snapshotAiUsagePrice } from "~/server/ai/pricing";
 import type { Database } from "~/server/db";
 import { aiUsage, run as runTable, mcpToolCall } from "~/server/db/schema";
 import { withTransaction } from "~/server/repo/database-helpers";
@@ -19,6 +24,78 @@ import {
 const unreachableFallback = (): never => {
   throw new Error("An orphaned AI usage row always opens a fallback run");
 };
+
+/** Recover only raw legacy queue accounting; current events never enter this path. */
+export async function prepareLegacyAiUsageTelemetry(
+  legacy: LegacyAiUsageTelemetry,
+  snapshotPrice: typeof snapshotAiUsagePrice = snapshotAiUsagePrice,
+): Promise<AiUsageTelemetry> {
+  const event = normalizeLegacyAiUsageTelemetry(legacy);
+  const route = legacy.transport;
+  // Caller cache metadata cannot establish a free billed route; contradictory replay evidence stays unpriced.
+  const applicationReplay =
+    legacy.applicationCacheStatus === "hit" ||
+    legacy.attempt === 0 ||
+    route === "cache";
+  const supportedRoute =
+    route === "gateway" || route === "direct" || route === "chatgpt";
+  const positiveTokens = [
+    legacy.inputTokens,
+    legacy.outputTokens,
+    legacy.cacheReadTokens,
+    legacy.cacheWriteTokens,
+  ].some((tokens) => tokens != null && tokens > 0);
+  const capturedAt = new Date().toISOString();
+  const quote =
+    supportedRoute && positiveTokens && !applicationReplay
+      ? await snapshotPrice(legacy.provider, legacy.model, legacy, {
+          requireCatalog: true,
+        })
+      : null;
+  const standard =
+    quote?.amount != null && quote.evidence
+      ? { ...quote.evidence, source: "reconstructed" as const }
+      : null;
+  const free = route === "chatgpt" || route === "cache";
+  const missingCharged = legacy.estimatedCost == null;
+  const reconstructedCharge =
+    missingCharged &&
+    !free &&
+    (route === "gateway" || route === "direct") &&
+    standard !== null;
+  const chargedCost =
+    legacy.estimatedCost ??
+    (free ? 0 : reconstructedCharge ? (quote?.amount ?? null) : null);
+  return {
+    ...event,
+    standardCost: standard ? (quote?.amount ?? null) : null,
+    chargedCost,
+    costEvidence: {
+      standard,
+      charged:
+        chargedCost === null
+          ? null
+          : reconstructedCharge
+            ? standard
+            : { source: "historical_recorded" },
+      billingReason:
+        chargedCost === null
+          ? "unknown"
+          : route === "chatgpt"
+            ? "plan"
+            : route === "cache"
+              ? "cache"
+              : reconstructedCharge
+                ? "standard"
+                : "unknown",
+      original: { estimatedCost: legacy.estimatedCost ?? null },
+      reconstruction: {
+        capturedAt: standard?.pricingSnapshot.capturedAt ?? capturedAt,
+        outcome: standard ? "priced" : "unavailable",
+      },
+    },
+  };
+}
 
 /** Persist a validated telemetry batch atomically and idempotently. */
 export async function persistTelemetryMessages(

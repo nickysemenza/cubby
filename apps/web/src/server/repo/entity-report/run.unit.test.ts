@@ -1031,7 +1031,22 @@ describe("aiUsageBlocks", () => {
 
   it("flags an estimated subtotal", () => {
     expect(notes(aiUsageBlocks(usage))[0]).toBe(
-      "Charged $0.0123 · 2 unpriced · Standard $0.0300 · 1 unpriced · Savings $0.0100 (1/3 calls compared)",
+      "Charged $0.0123 known · 2 unpriced · Standard $0.0300 known · 1 unpriced · Savings $0.0100 (1/3 calls compared)",
+    );
+  });
+
+  it("keeps fully unknown cost totals unpriced", () => {
+    const allUnknown = {
+      ...usage,
+      chargedCost: 0,
+      standardCost: 0,
+      chargedUnpricedCount: 3,
+      standardUnpricedCount: 3,
+      savings: 0,
+      comparedCalls: 0,
+    };
+    expect(notes(aiUsageBlocks(allUnknown))[0]).toBe(
+      "Charged 3 unpriced · Standard 3 unpriced · Savings unavailable (0/3 calls compared)",
     );
   });
 

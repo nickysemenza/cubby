@@ -60,6 +60,12 @@ export async function snapshotAiUsagePrice(
   provider: string,
   model: string,
   usage: AiTokenUsage,
+  options: { requireCatalog?: boolean } = {},
 ) {
-  return priceAiUsage(await pricing.current(), provider, model, usage);
+  const catalog = await pricing.current();
+  if (options.requireCatalog && catalog === null)
+    throw new Error(
+      "AI pricing catalog unavailable; legacy telemetry recovery must retry",
+    );
+  return priceAiUsage(catalog, provider, model, usage);
 }

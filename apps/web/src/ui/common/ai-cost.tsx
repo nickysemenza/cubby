@@ -73,7 +73,7 @@ export function AiCost({
   ]
     .filter(Boolean)
     .join(". ");
-  const primary = `${charged} ${evidence?.charged?.source === "estimate" && evidence.billingReason === "standard" ? "estimated charge" : "charged"}`;
+  const primary = `${charged} ${(evidence?.charged?.source === "estimate" || evidence?.charged?.source === "reconstructed") && evidence.billingReason === "standard" ? "estimated charge" : "charged"}`;
   const secondary = `${standard} standard${evidence?.standard?.source === "reconstructed" ? " (current-rate estimate)" : evidence?.standard?.source === "estimate" ? " (estimate)" : ""}${reason && evidence?.billingReason !== "standard" ? ` · ${reason}` : ""}`;
   const fullCharged =
     cost.chargedCost == null

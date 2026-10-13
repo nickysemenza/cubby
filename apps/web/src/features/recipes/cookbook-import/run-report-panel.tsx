@@ -149,7 +149,9 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
             {recall != null && ` · recall ${(recall * 100).toFixed(0)}%`}
             {report.incomplete && " · incomplete"}
             {report.cancelled && " · cancelled"}
-            {report.chargedUnpricedCount > 0 && " · charge subtotal incomplete"}
+            {(report.chargedUnpricedCount > 0 ||
+              report.chargedComplete === false) &&
+              " · charge subtotal incomplete"}
           </Description>
 
           <AiCost cost={report} />

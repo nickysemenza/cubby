@@ -20,7 +20,7 @@ import { z } from "zod";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
-import { formatAiCost } from "~/lib/number-format";
+import { formatAiCost, formatAiCostSubtotal } from "~/lib/number-format";
 import { formatCurrency, formatPercent } from "~/lib/number-format";
 import { runHasCapability } from "~/server/purchase-import/capabilities";
 import { phaseLabel } from "~/server/repo/collection-items";
@@ -1015,10 +1015,9 @@ export function suggestionBlocks(
 }
 
 export function aiUsageBlocks(usage: AiRunUsage): ReportBlock[] {
-  const estimated = usage.chargedUnpricedCount > 0;
   return [
     note(
-      `Charged ${formatAiCost(usage.chargedCost)}${estimated ? ` · ${usage.chargedUnpricedCount} unpriced` : ""} · Standard ${formatAiCost(usage.standardCost)}${usage.standardUnpricedCount ? ` · ${usage.standardUnpricedCount} unpriced` : ""} · Savings ${usage.comparedCalls === 0 ? "unavailable" : formatAiCost(usage.savings)} (${usage.comparedCalls}/${usage.count} calls compared)`,
+      `Charged ${formatAiCostSubtotal(usage.chargedCost, usage.chargedUnpricedCount, usage.count, usage.chargedComplete)} · Standard ${formatAiCostSubtotal(usage.standardCost, usage.standardUnpricedCount, usage.count, usage.standardComplete)} · Savings ${usage.comparedCalls === 0 ? "unavailable" : formatAiCost(usage.savings)} (${usage.comparedCalls}/${usage.count} calls compared)`,
       undefined,
       true,
     ),

@@ -361,6 +361,29 @@ describe("cookbook book card", () => {
     expect(screen.getByText(/Run report — \$0\.42/)).toBeVisible();
   });
 
+  it("warns when aggregate charge coverage is unknown without a call roster", () => {
+    render(
+      <BookGroupCard
+        book={baseBook({
+          extraction,
+          report: {
+            ...report,
+            chargedComplete: false,
+            count: 0,
+            calls: [],
+            usage_by_model: [],
+          },
+          hasArchiveBytes: true,
+        })}
+        handlers={handlers()}
+        importing={false}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Run report/ }));
+    expect(screen.getByText(/charge subtotal incomplete/)).toBeVisible();
+  });
+
   it("selecting a recipe pulls in the sub-recipes it depends on", () => {
     // The cascade lives in the page's toggle handler, not the card, so the
     // harness owns selection exactly as the page does — by tree item id.

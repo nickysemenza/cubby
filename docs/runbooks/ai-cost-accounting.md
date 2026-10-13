@@ -33,6 +33,14 @@ estimate, retained legacy reports as historical, and their standard comparison
 remains unknown without equivalent pricing evidence. A linked image job is a component of its parent Run's cost;
 displaying both does not create additional spend.
 
+Current queued messages retain their captured prices through retries. Raw legacy
+in-flight messages without captured costs receive one compatibility upgrade at
+consumption: supported inference usage captures current rates and labels the
+recovered comparison and missing charge as reconstructed estimates. Every
+numeric legacy charge is preserved. Caller-cache metadata alone never proves a
+free gateway call; unsupported usage remains unknown. Catalog outages retry the
+legacy batch rather than permanently marking reconstruction unavailable.
+
 Reads use stored prices and never reprice history from a changing catalog.
 Historical charges and tokens survive migration; original single-cost values
 are retained in evidence. Historical standard comparisons reconstructed using
@@ -58,7 +66,7 @@ matching code. While old writers remain deployed, new rows can still have null
 arrivals, rather than treating live-table fingerprint changes as data loss.
 Retain per-table aggregate fingerprints and compare unrelated household tables.
 After old in-flight writers settle, apply through
-`0052_ai_cost_accounting_contract`; it locks the legacy source while preserving late rows and removing the old
+`0054_ai_cost_accounting_contract`; it locks the legacy source while preserving late rows and removing the old
 column. Read back the catalog and preserved evidence.
 
 After the matching deployment and contract migration, preview the historical
