@@ -15,7 +15,11 @@ import {
   productionWorkflowLauncher,
   type WorkflowLauncher,
 } from "./workflow-runs/launcher";
-import { failWorkflowRun, launchWorkflowRun } from "./workflow-runs/lifecycle";
+import {
+  failWorkflowRun,
+  launchWorkflowRun,
+  runFailureText,
+} from "./workflow-runs/lifecycle";
 
 /** Called only by the singleton's own version, never with a caller-supplied policy. */
 export async function observeAiRefreshFeatures(
@@ -77,7 +81,9 @@ export async function dispatchAiRefreshDiscovery(
         },
         {
           failureCode: "workflow_instance_ended",
-          message: `AI refresh startup Workflow is ${status.state}${status.error ? `: ${status.error}` : ""}`,
+          message: runFailureText(
+            `AI refresh startup Workflow is ${status.state}${status.error ? `: ${status.error}` : ""}`,
+          ),
         },
       ))
     )
