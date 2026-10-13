@@ -12,7 +12,6 @@ import {
   type ImageIdentificationResult,
 } from "@cubby/schemas/image-identification";
 import {
-  imageProcessingCompletedOutcome,
   imageProcessingJobKind,
   imageDescriptionResult,
   imageDescriptionAnalysis,
@@ -37,7 +36,7 @@ import {
   imageProcessingAttempt,
   imageProcessingSubmissionJob,
 } from "~/server/db/image-processing-schema";
-import { aiAnalysis, entityAttachment, image } from "~/server/db/schema";
+import { aiAnalysis, image } from "~/server/db/schema";
 import {
   isCurrentPreferredImageDescription,
   parseImageDescriptionInputFingerprint,
@@ -62,10 +61,10 @@ import {
   recordImageProcessingEvent,
 } from "./image-processing-history";
 
-export const IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION = 1;
-/** A label-only attachment is the sole reversible terminal cutout decision. */
-const LABEL_ONLY_CUTOUT_SKIP_REASON =
-  "Image is attached only as label evidence";
+// Cloud eligibility no longer gates Apple subject lifting; prior skipped work can be rescheduled.
+export const IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION = 2;
+// This policy revision changes eligibility, not the cutout format or algorithm.
+const compatibleSubjectLiftOutputs = [1, IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION];
 
 /**
  * Jobs are unique by an integer revision. Derive that revision from every
@@ -132,22 +131,6 @@ type JobIdentity = {
   processorRevision: number;
   /** The Run that requested this job, when the caller has one. */
   runId?: RunId | null;
-};
-
-const isAttachedOnlyAsLabel = async (
-  tx: DrizzleTransaction,
-  imageId: ImageId,
-): Promise<boolean> => {
-  const [attachments] = await tx
-    .select({
-      hasLabel: sql<boolean>`bool_or(${entityAttachment.purpose} = 'label')`,
-      hasItem: sql<boolean>`bool_or(${entityAttachment.purpose} IS DISTINCT FROM 'label')`,
-    })
-    .from(entityAttachment)
-    .where(
-      and(eq(entityAttachment.imageId, imageId), notDeleted(entityAttachment)),
-    );
-  return attachments?.hasLabel === true && attachments.hasItem !== true;
 };
 
 export type ClaimedImageProcessingJob = {
@@ -282,8 +265,6 @@ export async function createTransparentDerivativeAndJob(
     imageId: ImageId;
     sourceContentHash: string;
     key: string;
-    /** A manual reschedule may undo only the reversible label-only decision. */
-    reviveLabelOnlySkip?: boolean;
     /** The Run that requested this job, when the caller has one. */
     runId?: RunId | null;
   },
@@ -352,30 +333,6 @@ export async function createTransparentDerivativeAndJob(
       columns: { id: true, state: true, lastError: true },
     });
     if (!job) throw new Error("Image processing job was not persisted");
-    if (
-      input.reviveLabelOnlySkip &&
-      job.state === "skipped" &&
-      job.lastError === LABEL_ONLY_CUTOUT_SKIP_REASON &&
-      derivative.status === "skipped" &&
-      derivative.failureReason === LABEL_ONLY_CUTOUT_SKIP_REASON &&
-      !(await isAttachedOnlyAsLabel(tx, input.imageId))
-    ) {
-      await tx
-        .update(imageDerivative)
-        .set({ status: "pending", failureReason: null })
-        .where(eq(imageDerivative.id, derivative.id));
-      await tx
-        .update(imageProcessingJob)
-        .set({
-          state: "pending",
-          attemptId: null,
-          leaseExpiresAt: null,
-          completedAt: null,
-          nextAttemptAt: sql`now()`,
-          lastError: null,
-        })
-        .where(eq(imageProcessingJob.id, job.id));
-    }
     return { derivativeId: derivative.id, jobId: job.id };
   });
 }
@@ -531,38 +488,6 @@ export async function claimImageProcessingJob(
       .limit(1)
       .for("update", { of: [imageProcessingJob, image], skipLocked: true });
     if (!candidate) return null;
-
-    // Product-image purpose belongs to the attachment, rather than the Image.
-    // A shared source still needs a cutout when any live attachment is an
-    // item. Only a confirmed label-only source is
-    // terminal before we mint a device capability.
-    if (candidate.kind === "subject_lift") {
-      if (await isAttachedOnlyAsLabel(tx, candidate.imageId)) {
-        const reason = LABEL_ONLY_CUTOUT_SKIP_REASON;
-        await tx
-          .update(imageProcessingJob)
-          .set({
-            state: "skipped",
-            completedAt: now,
-            attemptId: null,
-            leaseExpiresAt: null,
-            lastError: reason,
-          })
-          .where(eq(imageProcessingJob.id, candidate.id));
-        if (candidate.derivativeId)
-          await tx
-            .update(imageDerivative)
-            .set({ status: "skipped", failureReason: reason })
-            .where(eq(imageDerivative.id, candidate.derivativeId));
-        await recordImageProcessingEvent(tx, {
-          jobId: candidate.id,
-          eventKey: "dispatch:label-only",
-          event: "dispatch.skipped_label_only",
-          details: { reason },
-        });
-        return null;
-      }
-    }
 
     // A subject-lift job without a live output record must not send an upload
     // capability that can be adopted nowhere. Mark it terminal instead.
@@ -726,32 +651,6 @@ export async function markImageProcessingWaitingForDevice(
       });
     }
   });
-}
-
-/** The current cloud decision gates companion cutout work; absent means wait. */
-export async function getCurrentImageCutoutEligibility(
-  db: Database,
-  imageId: ImageId,
-  sourceContentHash: string,
-): Promise<"eligible" | "ineligible" | "review" | null> {
-  const row = await getDb(db).query.imageProcessingJob.findFirst({
-    where: and(
-      eq(imageProcessingJob.imageId, imageId),
-      eq(imageProcessingJob.kind, "describe_image"),
-      eq(
-        imageProcessingJob.processorRevision,
-        IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-      ),
-      eq(imageProcessingJob.sourceContentHash, sourceContentHash),
-      eq(imageProcessingJob.state, "ready"),
-    ),
-    columns: { result: true },
-    orderBy: [desc(imageProcessingJob.completedAt)],
-  });
-  const outcome = imageProcessingCompletedOutcome.safeParse(row?.result);
-  return outcome.success && outcome.data.kind === "describe_image"
-    ? outcome.data.description.cutoutEligibility
-    : null;
 }
 
 /**
@@ -1406,9 +1305,9 @@ export async function loadImageRepresentations(
         eq(imageDerivative.imageId, image.id),
         eq(imageDerivative.purpose, "transparent"),
         eq(imageDerivative.sourceContentHash, image.sha256),
-        eq(
+        inArray(
           imageDerivative.processorRevision,
-          IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+          compatibleSubjectLiftOutputs,
         ),
         eq(imageDerivative.status, "ready"),
         notDeleted(imageDerivative),
@@ -1419,6 +1318,10 @@ export async function loadImageRepresentations(
         inArray(image.shortcode, [...new Set(shortcodes)]),
         notDeleted(image),
       ),
+    )
+    .orderBy(
+      asc(imageDerivative.processorRevision),
+      asc(imageDerivative.createdAt),
     );
   return new Map(
     rows.map((row) => {
@@ -1474,12 +1377,16 @@ export async function getImageProcessingReadProjection(
       and(
         eq(imageDerivative.imageId, imageId),
         eq(imageDerivative.sourceContentHash, source.sha256 ?? ""),
-        eq(
+        inArray(
           imageDerivative.processorRevision,
-          IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+          compatibleSubjectLiftOutputs,
         ),
         notDeleted(imageDerivative),
       ),
+    )
+    .orderBy(
+      desc(eq(imageDerivative.status, "ready")),
+      desc(imageDerivative.processorRevision),
     )
     .limit(1);
   const history = await getDb(db)

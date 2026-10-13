@@ -385,7 +385,7 @@ describe("PhotoImportRunView", () => {
     expect(screen.getAllByText("Device: Not received")).toHaveLength(2);
   });
 
-  it("shows a neutral skipped cutout pill with the label-only reason", async () => {
+  it("does not invent a skipped result for an unqueued label photo", async () => {
     harness.queryClient.setQueryData(
       photoImport.review.queryKey({ runId: RUN_ID }),
       {
@@ -421,8 +421,8 @@ describe("PhotoImportRunView", () => {
           image.id === "IMG-4K7N"
             ? {
                 ...image,
-                cutout: "skipped",
-                cutoutReason: "Image is attached only as label evidence",
+                cutout: null,
+                cutoutReason: null,
               }
             : image,
         ),
@@ -452,15 +452,14 @@ describe("PhotoImportRunView", () => {
     });
     render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
 
-    expect(await screen.findByText("Cutout: Skipped")).toHaveAttribute(
-      "data-slot",
-      "badge",
-    );
+    const labelRow = screen
+      .getByRole("link", { name: "Open photo IMG-4K7N" })
+      .closest("tr");
+    if (!labelRow) throw new Error("Expected label photo row");
     expect(
-      screen.getByLabelText(
-        "Cutout: Skipped. This photo is label evidence, so it does not need a cutout.",
-      ),
+      within(labelRow).getByText("Cutout: not queued"),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Cutout: Skipped")).not.toBeInTheDocument();
     expect(
       await screen.findByRole("region", { name: "Product comparison" }),
     ).toBeInTheDocument();

@@ -14,7 +14,7 @@ const phone = (name: string, udid: string, state = "Shutdown") => ({
 });
 const inventory = {
   devices: {
-    "com.apple.CoreSimulator.SimRuntime.iOS-26-0": [
+    "com.apple.CoreSimulator.SimRuntime.iOS-27-0": [
       phone("Synthetic iPhone 17 A", "00000000-0000-0000-0000-000000000001"),
       phone(
         "Synthetic iPhone 17 B",
@@ -39,7 +39,7 @@ const inventory = {
 test("uses the already booted matching iPhone, then a shutdown matching iPhone", () => {
   assert.equal(selectIOSSimulator(inventory)?.name, "Synthetic iPhone 17 B");
   const shutdown = structuredClone(inventory);
-  shutdown.devices["com.apple.CoreSimulator.SimRuntime.iOS-26-0"][1]!.state =
+  shutdown.devices["com.apple.CoreSimulator.SimRuntime.iOS-27-0"][1]!.state =
     "Shutdown";
   assert.equal(selectIOSSimulator(shutdown)?.name, "Synthetic iPhone 17 A");
 });
@@ -59,4 +59,26 @@ test("honors a preferred name or UDID without silently selecting another phone",
   );
   assert.equal(selectIOSSimulator(inventory, "Synthetic iPhone 16"), undefined);
   assert.equal(selectIOSSimulator({ devices: {} }), undefined);
+});
+
+test("ignores booted and explicitly preferred phones below the app OS floor", () => {
+  const mixed = {
+    devices: {
+      "com.apple.CoreSimulator.SimRuntime.iOS-26-0": [
+        phone("Synthetic old iPhone 17", "old", "Booted"),
+      ],
+      ...inventory.devices,
+    },
+  };
+  assert.equal(selectIOSSimulator(mixed)?.name, "Synthetic iPhone 17 B");
+  assert.equal(selectIOSSimulator(mixed, "old"), undefined);
+  assert.equal(
+    selectIOSSimulator({
+      devices: {
+        "com.apple.CoreSimulator.SimRuntime.iOS-26-0":
+          mixed.devices["com.apple.CoreSimulator.SimRuntime.iOS-26-0"],
+      },
+    }),
+    undefined,
+  );
 });

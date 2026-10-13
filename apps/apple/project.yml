@@ -14,9 +14,9 @@ options:
   createIntermediateGroups: true
   groupSortPosition: top
   deploymentTarget:
-    iOS: "26.0"
-    macOS: "26.0"
-  xcodeVersion: "26.0"
+    iOS: "27.0"
+    macOS: "27.0"
+  xcodeVersion: "27.0"
   # Keep GUI build data inside the checkout so retiring a worktree removes it.
   # Xcode reads these location keys from user settings, not xcshareddata.
   postGenCommand: |
@@ -96,7 +96,7 @@ targetTemplates:
             UIInterfaceOrientationLandscapeLeft,
             UIInterfaceOrientationLandscapeRight,
           ]
-        LSMinimumSystemVersion: "26.0"
+        LSMinimumSystemVersion: "27.0"
         # XcodeGen otherwise hardcodes 1.0/1 here, orphaning MARKETING_VERSION and
         # CURRENT_PROJECT_VERSION. ClientIdentity sends this marketing version to the server.
         CFBundleShortVersionString: $(MARKETING_VERSION)

@@ -130,7 +130,7 @@ jobs:
   release:
     name: Release ${{ matrix.platform }}
     needs: [plan, apple-generated]
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 75
     strategy:
       fail-fast: false
@@ -142,6 +142,7 @@ jobs:
           ref: ${{ needs.plan.outputs.sha }}
 
       # `runner` isn't available in a job-level `env:` block.
+      - uses: ./.github/actions/setup-apple-toolchain
       - name: Resolve output directory
         run: echo "TESTFLIGHT_OUTPUT_DIR=$RUNNER_TEMP/CubbyTestFlight" >> "$GITHUB_ENV"
 

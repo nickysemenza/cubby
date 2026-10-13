@@ -16,7 +16,6 @@ import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   claimImageProcessingJob,
   completeImageProcessingJob,
-  getCurrentImageCutoutEligibility,
   markImageProcessingWaitingForDevice,
   reclaimExpiredImageProcessingLeases,
 } from "~/server/repo/image-processing";
@@ -165,7 +164,7 @@ export async function dispatchImageProcessingWakeup(
   }
 }
 
-/** Both transports mint exactly the same source/output capabilities and eligibility decisions. */
+/** Both transports mint exactly the same source/output capabilities. */
 export async function prepareCompanionImageCommand(
   db: Database,
   claimed: NonNullable<Awaited<ReturnType<typeof claimImageProcessingJob>>>,
@@ -204,34 +203,6 @@ export async function prepareCompanionImageCommand(
     }
     return command;
   }
-  const eligibility = await getCurrentImageCutoutEligibility(
-    db,
-    claimed.imageId,
-    claimed.sourceContentHash,
-  );
-  if (eligibility === null) {
-    await markImageProcessingWaitingForDevice(db, {
-      jobId: claimed.id,
-      attemptId: claimed.attemptId,
-    });
-    return null;
-  }
-  if (eligibility !== "eligible") {
-    await completeImageProcessingJob(db, {
-      result: {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        completedAt: new Date().toISOString(),
-        outcome: {
-          kind: "subject_lift",
-          status: "skipped",
-          reason: "not_suitable",
-        },
-      },
-    });
-    return null;
-  }
-
   if (!claimed.derivativeKey) {
     await markImageProcessingWaitingForDevice(db, {
       jobId: claimed.id,

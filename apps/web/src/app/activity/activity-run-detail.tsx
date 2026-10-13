@@ -19,6 +19,8 @@ import {
 } from "~/ui/primitives/card";
 import { StatusText } from "~/ui/primitives/status-text";
 
+import { workIssueText, workStateLabel } from "./work-state";
+
 export function ActivityRunDetail({
   id,
   onClose,
@@ -71,7 +73,7 @@ export function ActivityRunDetail({
             <CardTitle>{run?.workLabel ?? "Work detail"}</CardTitle>
             <CardDescription>
               {run
-                ? `${run.id} · ${run.recordType === "run" ? "Run" : "Image job"} · ${run.state} · ${formatInstant(run.createdAt, "dateTime")}`
+                ? `${run.id} · ${run.recordType === "run" ? "Run" : "Image job"} · ${workStateLabel(run.state)} · ${formatInstant(run.createdAt, "dateTime")}`
                 : id}
             </CardDescription>
           </div>
@@ -121,8 +123,10 @@ export function ActivityRunDetail({
         {detail.isError ? (
           <StatusText tone="destructive">{detail.error.message}</StatusText>
         ) : null}
-        {run?.error ? (
-          <StatusText tone="destructive">{run.error}</StatusText>
+        {run && workIssueText(run) ? (
+          <StatusText tone={run.state === "skipped" ? "muted" : "destructive"}>
+            {workIssueText(run)}
+          </StatusText>
         ) : null}
         {run ? (
           <p className="mt-3 text-xs text-muted-foreground">

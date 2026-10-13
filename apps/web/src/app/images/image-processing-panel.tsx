@@ -8,6 +8,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
+import { WorkState, workStateLabel } from "~/app/activity/work-state";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
@@ -144,8 +145,14 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
       {status.data ? (
         <>
           <p className="text-xs text-muted-foreground">
-            Description: {status.data.status.description ?? "Not processed"} ·
-            Background removal: {status.data.status.cutout ?? "Not processed"}
+            Description:{" "}
+            {status.data.status.description
+              ? workStateLabel(status.data.status.description)
+              : "Not processed"}{" "}
+            · Background removal:{" "}
+            {status.data.status.cutout
+              ? workStateLabel(status.data.status.cutout)
+              : "Not processed"}
           </p>
           {!status.data.representations.transparent ? (
             <p className="text-muted-foreground">
@@ -164,7 +171,8 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
                 className="block border-b border-border py-2 text-sm hover:bg-muted/40"
                 href={`/runs?selected=${encodeURIComponent(run.id)}`}
               >
-                {run.kind.replaceAll("_", " ")} · {run.state}
+                {run.kind.replaceAll("_", " ")} ·{" "}
+                <WorkState state={run.state} />
               </a>
             ))}
           </section>

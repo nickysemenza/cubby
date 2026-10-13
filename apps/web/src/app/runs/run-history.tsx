@@ -21,6 +21,7 @@ import {
 } from "react";
 
 import { ActivityRunDetail } from "~/app/activity/activity-run-detail";
+import { WorkState, workIssueText } from "~/app/activity/work-state";
 import { RunSubject, RunTargetChips } from "~/app/runs/run-work-summary";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
@@ -72,7 +73,6 @@ type HistoryRow = ActivityRun & {
   loadingChildren?: boolean;
 };
 const kinds = activityKind.options;
-const label = (value: string) => value.replaceAll("_", " ");
 const duration = (value: number | null) =>
   value == null ? "—" : `${(value / 1_000).toFixed(1)} s`;
 const localDateTime = (value?: string) =>
@@ -387,8 +387,16 @@ export function RunHistory({
           helper.accessor("state", {
             header: "State",
             size: 110,
-            cell: ({ getValue }) => (
-              <Badge variant="secondary">{label(getValue())}</Badge>
+            cell: ({ getValue, row }) => (
+              <div className="space-y-1">
+                <WorkState state={getValue()} />
+                {row.original.state === "skipped" &&
+                workIssueText(row.original) ? (
+                  <p className="text-xs whitespace-normal text-muted-foreground">
+                    {workIssueText(row.original)}
+                  </p>
+                ) : null}
+              </div>
             ),
             meta: { mobile: { slot: "meta", priority: 20 } },
           }),
@@ -609,7 +617,7 @@ export function RunHistory({
               clip={false}
               secondary={
                 <span className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">{label(run.state)}</Badge>
+                  <WorkState state={run.state} />
                   <span>{run.workLabel}</span>
                 </span>
               }

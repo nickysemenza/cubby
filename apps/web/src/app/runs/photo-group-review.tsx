@@ -1387,27 +1387,14 @@ const PROCESSING_VARIANT = {
   failed: "destructive",
 } satisfies Record<ImageProcessingJobState, BadgeVariant>;
 
-/**
- * A cutout is parked as `waiting_for_device` until its description decides
- * whether the photo is worth cutting out (`getCurrentImageCutoutEligibility`),
- * so a queued description, not a missing device, is what it waits on.
- */
-const cutoutWaitsOnDescription = (photo: {
-  cutout: ImageProcessingJobState | null;
-  describe: ImageProcessingJobState | null;
-}) => photo.cutout === "waiting_for_device" && photo.describe !== "ready";
-
 function ProcessingBadge({
   label,
   state,
   reason,
-  waitingFor,
 }: {
   label: string;
   state: ImageProcessingJobState | null;
   reason?: string | null;
-  /** Overrides the state label with what the job is actually blocked on. */
-  waitingFor?: string | null;
 }) {
   if (!state)
     return (
@@ -1428,21 +1415,17 @@ function ProcessingBadge({
             : ClockIcon;
   const explanation =
     reason === "not_suitable"
-      ? "Subject lift found no suitable item to cut out."
+      ? "The image was already transparent, or a previous eligibility policy skipped subject lift."
       : reason === "Image is attached only as label evidence"
-        ? "This photo is label evidence, so it does not need a cutout."
+        ? "The previous label-only policy skipped subject lift. Queue missing processing to retry."
         : reason;
   const badge = (
-    <Badge
-      variant={waitingFor ? "secondary" : PROCESSING_VARIANT[state]}
-      className="max-w-full"
-    >
+    <Badge variant={PROCESSING_VARIANT[state]} className="max-w-full">
       <Icon
         className={`size-3 shrink-0 ${state === "leased" ? "animate-spin" : ""}`}
         aria-hidden="true"
       />
-      {label}:{" "}
-      {waitingFor ? `Waiting for ${waitingFor}` : PROCESSING_LABEL[state]}
+      {label}: {PROCESSING_LABEL[state]}
     </Badge>
   );
   if (!explanation) return badge;
@@ -1463,11 +1446,9 @@ function ProcessingBadge({
 function PhotoTable({
   images,
   groupByImage,
-  labelImages,
 }: {
   images: readonly PhotoRunImage[];
   groupByImage: ReadonlyMap<string, string>;
-  labelImages: ReadonlySet<string>;
 }) {
   return (
     <Section aria-label="Run photos" title={`Photos · ${images.length}`}>
@@ -1556,23 +1537,8 @@ function PhotoTable({
                       </Badge>
                       <ProcessingBadge
                         label="Cutout"
-                        state={
-                          photo.cutout ??
-                          (labelImages.has(photo.id) &&
-                          photo.targetState === "completed"
-                            ? "skipped"
-                            : null)
-                        }
-                        reason={
-                          photo.cutoutReason ??
-                          (labelImages.has(photo.id) &&
-                          photo.targetState === "completed"
-                            ? "Image is attached only as label evidence"
-                            : null)
-                        }
-                        waitingFor={
-                          cutoutWaitsOnDescription(photo) ? "description" : null
-                        }
+                        state={photo.cutout}
+                        reason={photo.cutoutReason}
                       />
                       <ProcessingBadge
                         label="AI description"
@@ -1934,12 +1900,9 @@ export function PhotoGroupReview({
       (proposal.product.kind === "existing" && !proposal.product.existing),
   );
   const groupByImage = new Map<string, string>();
-  const labelImages = new Set<string>();
   for (const proposal of review.proposals)
     for (const entry of [...proposal.images, ...proposal.skip]) {
       groupByImage.set(entry.id, proposal.groupKey);
-      if ("purpose" in entry && entry.purpose === "label")
-        labelImages.add(entry.id);
     }
   const busy = action.isPending;
   const selected =
@@ -2182,11 +2145,7 @@ export function PhotoGroupReview({
       ) : null}
 
       {images.length ? (
-        <PhotoTable
-          images={images}
-          groupByImage={groupByImage}
-          labelImages={labelImages}
-        />
+        <PhotoTable images={images} groupByImage={groupByImage} />
       ) : (
         <StatusText tone="muted">
           No photos have been uploaded for this batch.

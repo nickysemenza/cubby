@@ -6,14 +6,13 @@ import {
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
 import { providerFor } from "@cubby/shared/ai/models";
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import {
   aiAnalysis,
-  entityAttachment,
   image,
   imageDerivative,
   imageProcessingJob,
@@ -212,7 +211,40 @@ describe("durable image representations", () => {
     expect(job?.attempts).toBe(0);
   });
 
-  it("skips label-only cutouts at claim time but keeps shared item images eligible", async () => {
+  it("retains a successful earlier cutout when the new policy job fails", async () => {
+    const row = await source();
+    await getDb(ctx.db)
+      .update(imageDerivative)
+      .set({
+        processorRevision: 1,
+        status: "ready",
+        key: "synthetic/retained-cutout.png",
+        sha256: "e".repeat(64),
+        width: 10,
+        height: 10,
+        contentType: "image/png",
+      })
+      .where(eq(imageDerivative.id, row.derivativeId));
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({ state: "failed", lastError: "Synthetic retry failure" })
+      .where(eq(imageProcessingJob.id, row.jobId));
+    expect(
+      (await loadImageRepresentations(ctx.db, [row.shortcode])).get(
+        row.shortcode,
+      )?.transparent,
+    ).toContain("synthetic/retained-cutout.png");
+    expect(
+      (
+        await getImageProcessingReadProjection(
+          ctx.db,
+          parseEntityId("image", row.id),
+        )
+      ).status.cutout,
+    ).toBe("ready");
+  });
+
+  it("attempts subject lift for label-only and shared item images", async () => {
     const labelOnly = await source();
     const labelOwner = await createProductFixture(
       ctx.db,
@@ -226,33 +258,6 @@ describe("durable image representations", () => {
       purpose: "label",
     });
 
-    expect(
-      await claimImageProcessingJob(ctx.db, {
-        jobId: labelOnly.jobId,
-        kinds: ["subject_lift"],
-        leaseMs: 60000,
-      }),
-    ).toBeNull();
-    const [skippedJob] = await getDb(ctx.db)
-      .select({ state: imageProcessingJob.state })
-      .from(imageProcessingJob)
-      .where(eq(imageProcessingJob.id, labelOnly.jobId));
-    const [skippedDerivative] = await getDb(ctx.db)
-      .select({ status: imageDerivative.status })
-      .from(imageDerivative)
-      .where(eq(imageDerivative.id, labelOnly.derivativeId));
-    expect(skippedJob?.state).toBe("skipped");
-    expect(skippedDerivative?.status).toBe("skipped");
-
-    await getDb(ctx.db)
-      .update(entityAttachment)
-      .set({ purpose: "item" })
-      .where(
-        and(
-          eq(entityAttachment.entityId, labelOwner.entityId),
-          eq(entityAttachment.imageId, parseEntityId("image", labelOnly.id)),
-        ),
-      );
     expect(
       (
         await persistImageProcessingSubmission(ctx.db, {
@@ -268,7 +273,6 @@ describe("durable image representations", () => {
         leaseMs: 60000,
       }),
     ).toMatchObject({ id: labelOnly.jobId, kind: "subject_lift" });
-
     const shared = await source();
     const itemOwner = await createProductFixture(
       ctx.db,

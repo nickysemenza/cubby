@@ -396,6 +396,10 @@ private struct DeviceParticipationSection: View {
             Toggle("Automatic work on this device", isOn: automaticWorkBinding)
                 .frame(minHeight: FieldGuideTokens.touchTarget - 12)
                 .accessibilityIdentifier("settings.device.automaticWork")
+            LabeledContent("Apple image descriptions") {
+                Text(FoundationModelsImageDescriber().unavailableReason() ?? "Available")
+                    .textSelection(.enabled)
+            }
             if model.companionImageActivity.remotePaused {
                 LabeledContent("Status") {
                     Text("Paused from the web")

@@ -420,6 +420,13 @@ pending retries still honor backoff. Device participation and advertised image
 capabilities both gate execution. The claim policy belongs to
 `server/repo/image-processing.ts`.
 
+Apple subject lift is independent of cloud cutout eligibility and attachment
+purpose. Supported images reach Apple, which reports a cutout, no foreground
+subject, an already-transparent input, or an unsupported format. The cloud
+classification remains descriptive evidence, not a dispatch gate. A processor
+revision change lets previously policy-skipped images be queued again without
+rewriting their retained history.
+
 Field decision prompts are measured from a Claude/Codex session over Cubby
 MCP, following `.claude/skills/decision-grading`: reviewed Suggestions
 (`entity_read.suggestion_queue` with `status`) are the labels, and
