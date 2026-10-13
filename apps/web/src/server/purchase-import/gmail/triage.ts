@@ -240,7 +240,14 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
     const serialized = JSON.stringify(view).toLowerCase();
     const missing = cueMissing(serialized, full);
     return {
-      content: JSON.stringify({ ...view, omittedPurchaseCues: missing }),
+      content: JSON.stringify({
+        ...view,
+        omittedPurchaseCues: missing,
+        incompleteReasons: [
+          ...reasons,
+          ...(missing ? ["purchase_cue_clipped"] : []),
+        ],
+      }),
       missing,
     };
   };
@@ -265,7 +272,7 @@ function triageView(raw: GmailMessage, normalized: GmailNormalizedMessage) {
   };
 }
 
-/** What the decision model read: its size and why it cannot prove a message unrelated. */
+/** What the decision model read: its size and evidence omitted from the bounded view. */
 type MailTriageView = {
   bytes: number;
   complete: boolean;
@@ -298,15 +305,6 @@ export async function routeGmailMessage(
     incompleteReasons,
   };
   const choice = await choose(content);
-  if (choice === "unrelated" && !view.complete)
-    return {
-      decision: {
-        classification: "uncertain",
-        stage: "rule",
-        reason: `The decision model said unrelated, but the bounded view is incomplete: ${incompleteReasons.join(", ")}`,
-      },
-      view,
-    };
   return {
     decision: {
       classification: choice,

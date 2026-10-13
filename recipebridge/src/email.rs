@@ -2,8 +2,8 @@
 //! kept as `cell | cell` rows and footers demoted to the end, the preheader,
 //! links ranked by purchase cues, content images (tracking pixels dropped),
 //! structured data, and the purchase cues the full text carries. The caller
-//! re-checks every cue against the bounded view it finally sends, so a clipped
-//! amount or order number can never let a message be called unrelated.
+//! re-checks every cue against the bounded view it finally sends, reporting
+//! clipped purchase evidence to the classifier without replacing its verdict.
 
 use scraper::{ElementRef, Html, Node, Selector};
 use serde::{Deserialize, Serialize};

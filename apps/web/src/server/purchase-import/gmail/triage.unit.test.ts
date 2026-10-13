@@ -1,6 +1,5 @@
-/** Failures: missing originals classify negatively; a clipped amount, order
- * number, attachment, image-only body or dropped MIME part lets the decision model's
- * `unrelated` stand; HTML alone forces `uncertain`; escaping, Unicode or
+/** Failures: missing originals classify negatively; completeness diagnostics override a definite model
+ * decision or hide omitted evidence; HTML alone forces `uncertain`; escaping, Unicode or
  * transport headers push the view past the decision model's request gate. */
 import * as recipebridge from "@cubby/recipebridge";
 import { describe, expect, it, vi } from "vitest";
@@ -53,6 +52,30 @@ const withinGate = (content: string) =>
   decisionChoiceFitsContext(mailTriagePrompt(content));
 
 describe("transient Gmail triage", () => {
+  it.each(["related", "unrelated", "uncertain"] as const)(
+    "preserves the decision model's %s choice despite omitted promotional image cues",
+    async (choice) => {
+      const pictures = Array.from(
+        { length: 7 },
+        (_, index) =>
+          `<img src="https://shop.example.test/${index}.png" alt="Seasonal offers and shipping savings from $19">`,
+      ).join("");
+      const { decision, view, content } = await route(
+        message(
+          `<p>Browse this week's catalog and seasonal offers.</p>${pictures}`,
+          "text/html",
+        ),
+        choice,
+      );
+      expect(view?.incompleteReasons).toContain("images_clipped");
+      expect(JSON.parse(content).htmlEvidence.images).toHaveLength(6);
+      expect(decision).toMatchObject({
+        classification: choice,
+        stage: "decision",
+      });
+    },
+  );
+
   it("compacts the shared Email fixtures exactly as workerd does", () => {
     expect(summarizeEmailFixtures(recipebridge.compact_email_html)).toEqual(
       EMAIL_FIXTURE_SUMMARY,
@@ -97,13 +120,13 @@ describe("transient Gmail triage", () => {
     );
   });
 
-  it("keeps an image-only receipt uncertain", async () => {
+  it("reports an image-only receipt without overriding the decision", async () => {
     const { decision, view } = await route(
       message(EMAIL_HTML_FIXTURES.imageOnlyReceipt, "text/html"),
     );
     expect(decision).toMatchObject({
-      classification: "uncertain",
-      stage: "rule",
+      classification: "unrelated",
+      stage: "decision",
     });
     expect(view?.incompleteReasons).toEqual(["image_only"]);
   });
@@ -130,18 +153,18 @@ describe("transient Gmail triage", () => {
     expect(view?.incompleteReasons).toEqual([]);
   });
 
-  it("keeps a purchase cue hidden in a clipped URL uncertain despite a generic label", async () => {
+  it("keeps a purchase cue hidden in a clipped URL flagged despite a generic label", async () => {
     const { decision, view } = await route(
       message(
         `<p>Community newsletter with this week's events and gardening tips.</p><a href="https://shop.example.test/${"x".repeat(600)}/receipt">Learn more</a>`,
         "text/html",
       ),
     );
-    expect(decision.classification).toBe("uncertain");
+    expect(decision.classification).toBe("unrelated");
     expect(view?.incompleteReasons).toContain("links_clipped");
   });
 
-  it("keeps omitted or unresolved pictures uncertain despite labeled catalog pictures", async () => {
+  it("keeps omitted or unresolved pictures flagged despite labeled catalog pictures", async () => {
     for (const hidden of [
       '<img src="https://shop.example.test/extra.png">',
       '<img src="data:image/png;base64,c3ludGhldGlj">',
@@ -152,28 +175,30 @@ describe("transient Gmail triage", () => {
           (_, index) =>
             `<img src="https://shop.example.test/${index}.png" alt="Synthetic cotton towels in assorted colors and sizes">`,
         ).join("") + hidden;
-      const { decision } = await route(message(html, "text/html"));
-      expect(decision.classification).toBe("uncertain");
+      const { decision, view } = await route(message(html, "text/html"));
+      expect(decision.classification).toBe("unrelated");
+      expect(view?.incompleteReasons).toContain("image_only");
     }
   });
 
-  it("keeps a receipt image source uncertain even with a generic catalog label", async () => {
-    const { decision } = await route(
+  it("reports unreadable receipt images without overriding a definite choice", async () => {
+    const { decision, view } = await route(
       message(
         '<img src="https://shop.example.test/receipt.png" alt="Synthetic cotton towels in assorted colors and sizes for the whole household">',
         "text/html",
       ),
     );
-    expect(decision.classification).toBe("uncertain");
+    expect(decision.classification).toBe("unrelated");
+    expect(view?.incompleteReasons).toContain("image_only");
   });
 
-  it("keeps a confirmed booking omitted from body excerpts uncertain", async () => {
+  it("keeps a confirmed booking omitted from body excerpts flagged", async () => {
     const { decision, view } = await route(
       message(
         `${"Neighborhood articles and gardening tips. ".repeat(2000)}Your flight booking is confirmed.${"Neighborhood articles and gardening tips. ".repeat(2000)}`,
       ),
     );
-    expect(decision.classification).toBe("uncertain");
+    expect(decision.classification).toBe("unrelated");
     expect(view?.incompleteReasons).toContain("purchase_cue_clipped");
   });
 
@@ -188,22 +213,23 @@ describe("transient Gmail triage", () => {
     expect(view?.incompleteReasons).toEqual([]);
   });
 
-  it("keeps clipped image sources and omitted booking-image labels uncertain", async () => {
+  it("keeps clipped image sources and omitted booking-image labels flagged", async () => {
     for (const pictures of [
       `<img src="https://shop.example.test/${"x".repeat(600)}/receipt.png" alt="Catalog pictures">`,
       `${Array.from({ length: 6 }, (_, index) => `<img src="https://shop.example.test/${index}.png" alt="Catalog pictures">`).join("")}<img src="https://shop.example.test/last.png" alt="Your flight booking is confirmed">`,
     ]) {
-      const { decision } = await route(
+      const { decision, view } = await route(
         message(
           `<p>Community newsletter with gardening tips and upcoming neighborhood events.</p>${pictures}`,
           "text/html",
         ),
       );
-      expect(decision.classification).toBe("uncertain");
+      expect(decision.classification).toBe("unrelated");
+      expect(view?.incompleteReasons).toContain("images_clipped");
     }
   });
 
-  it("keeps a message whose purchase cue the gate clipped uncertain", async () => {
+  it("keeps a message whose purchase cue the gate clipped flagged", async () => {
     const { decision, view, content } = await route(
       message(
         "Newsletter " +
@@ -219,15 +245,15 @@ describe("transient Gmail triage", () => {
       omittedPurchaseCues: true,
     });
     expect(decision).toMatchObject({
-      classification: "uncertain",
-      stage: "rule",
+      classification: "unrelated",
+      stage: "decision",
     });
     expect(view?.incompleteReasons).toEqual(["purchase_cue_clipped"]);
   });
 
   // Amounts are scanned first, so an advertised price list used to fill the
   // cue bound and hide a receipt clipped from the middle.
-  it("keeps a clipped message uncertain when its cues overflow the scan bound", async () => {
+  it("keeps a clipped message flagged when its cues overflow the scan bound", async () => {
     const prices = Array.from(
       { length: 210 },
       (_, cents) =>
@@ -244,8 +270,8 @@ describe("transient Gmail triage", () => {
     expect(withinGate(content)).toBe(true);
     expect(content).not.toContain("SYN-55123");
     expect(decision).toMatchObject({
-      classification: "uncertain",
-      stage: "rule",
+      classification: "unrelated",
+      stage: "decision",
     });
     expect(view?.incompleteReasons).toEqual(["purchase_cue_clipped"]);
 
@@ -258,7 +284,7 @@ describe("transient Gmail triage", () => {
 
   // The preheader is bounded separately from the body; with cues overflowing,
   // a receipt clipped from the preheader went unchecked.
-  it("keeps a message uncertain when overflowing cues meet a clipped preheader", async () => {
+  it("keeps a message flagged when overflowing cues meet a clipped preheader", async () => {
     const prices = Array.from(
       { length: 210 },
       (_, cents) =>
@@ -274,15 +300,15 @@ describe("transient Gmail triage", () => {
     expect(content).not.toContain("SYN-55123");
     expect(JSON.parse(content)).toMatchObject({ bodyComplete: true });
     expect(decision).toMatchObject({
-      classification: "uncertain",
-      stage: "rule",
+      classification: "unrelated",
+      stage: "decision",
     });
     expect(view?.incompleteReasons).toEqual(["purchase_cue_clipped"]);
   });
 
   // The plain-text alternative's footer used to count as readable text, so an
   // image-only receipt with an unsubscribe footer looked complete.
-  it("keeps an image-only receipt uncertain beside a footer-only text part", async () => {
+  it("reports an image-only receipt without overriding the decision beside a footer-only text part", async () => {
     const raw: GmailMessage = {
       id: "synthetic-multipart",
       payload: {
@@ -301,8 +327,8 @@ describe("transient Gmail triage", () => {
     };
     const { decision, view } = await route(raw);
     expect(decision).toMatchObject({
-      classification: "uncertain",
-      stage: "rule",
+      classification: "unrelated",
+      stage: "decision",
     });
     expect(view?.incompleteReasons).toContain("image_only");
   });
@@ -321,7 +347,7 @@ describe("transient Gmail triage", () => {
     });
   });
 
-  it("keeps a message with attachments uncertain", async () => {
+  it("keeps a message with attachments flagged", async () => {
     const raw = message();
     raw.payload = {
       ...raw.payload,
@@ -337,13 +363,13 @@ describe("transient Gmail triage", () => {
     };
     const { decision, view } = await route(raw);
     expect(decision).toMatchObject({
-      classification: "uncertain",
-      stage: "rule",
+      classification: "unrelated",
+      stage: "decision",
     });
     expect(view?.incompleteReasons).toEqual(["attachments"]);
   });
 
-  it("keeps forwarded multipart mail with dropped text parts uncertain", async () => {
+  it("keeps forwarded multipart mail with dropped text parts flagged", async () => {
     const raw = message();
     raw.payload = {
       ...raw.payload,
@@ -354,15 +380,18 @@ describe("transient Gmail triage", () => {
         part("Second inline note without its own HTML."),
       ],
     };
-    const { decision, view } = await route(raw);
+    const { decision, view, content } = await route(raw);
     expect(decision).toMatchObject({
-      classification: "uncertain",
-      stage: "rule",
+      classification: "unrelated",
+      stage: "decision",
     });
     expect(view?.incompleteReasons).toEqual(["mime_parts_dropped"]);
+    expect(JSON.parse(content).incompleteReasons).toEqual([
+      "mime_parts_dropped",
+    ]);
   });
 
-  it("keeps a clipped cue-bearing link uncertain but ignores clipped plain links", async () => {
+  it("keeps a clipped cue-bearing link flagged but ignores clipped plain links", async () => {
     const plainLinks = Array.from(
       { length: 20 },
       (_, index) =>
@@ -387,7 +416,7 @@ describe("transient Gmail triage", () => {
         "text/html",
       ),
     );
-    expect(clipped.decision.classification).toBe("uncertain");
+    expect(clipped.decision.classification).toBe("unrelated");
     expect(clipped.view?.incompleteReasons).toEqual(["links_clipped"]);
   });
 
@@ -470,6 +499,20 @@ describe("transient Gmail triage", () => {
     expect(content).not.toContain("transport-data");
   });
 
+  it("tells the model when a subject is clipped while preserving its choice", async () => {
+    const raw = message("Weekly catalog of seasonal offers.");
+    if (raw.payload)
+      raw.payload.headers = [{ name: "Subject", value: "Offer ".repeat(400) }];
+    const { decision, view, content } = await route(raw);
+    expect(decision).toMatchObject({
+      classification: "unrelated",
+      stage: "decision",
+    });
+    expect(view?.incompleteReasons).toContain("headers_clipped");
+    expect(JSON.parse(content).incompleteReasons).toContain("headers_clipped");
+    expect(withinGate(content)).toBe(true);
+  });
+
   it("keeps HTML evidence bounded and Unicode-safe", async () => {
     const { content, decision } = await route(
       message(
@@ -485,8 +528,8 @@ describe("transient Gmail triage", () => {
     expect(content).not.toContain("�");
     expect(JSON.parse(content).htmlEvidenceComplete).toBe(false);
     expect(decision).toMatchObject({
-      classification: "uncertain",
-      stage: "rule",
+      classification: "unrelated",
+      stage: "decision",
     });
   });
 });
