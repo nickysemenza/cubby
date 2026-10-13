@@ -36,6 +36,14 @@ const candidateRules = process.env.MAIL_PROMPT_CANDIDATE_RULES?.trim();
 
 const syntheticCases = [
   {
+    label: "uncertain",
+    body:
+      "Explore our seasonal offers. ".repeat(2500) +
+      "Your annual subscription renewed successfully." +
+      "Shop the latest collection. ".repeat(2500),
+    html: "",
+  },
+  {
     label: "unrelated",
     body: "Back in stock: cedar fragrance. Free gift with orders $65+. Your orders and communications are safe. We use DKIM and SPF for reliable email delivery. In the event of an order delay we may contact customers. Shop now.",
     html: Array.from(

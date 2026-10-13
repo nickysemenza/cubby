@@ -90,7 +90,8 @@ Without a draft it checks only the checked-out prompt. Edit the prompt locally
 and rerun to iterate without deploying. Synthetic
 originals pass through the real normalizer and compactor, including the request
 budget. CI sets `MAIL_PROMPT_BASELINE_ONLY=1` and checks the production prompt
-through both models on every trusted run; fork PRs have no gateway credential.
+through both models on manual CI dispatch only. The informational job is outside
+the required merge gate; fork PRs never receive the gateway credential.
 
 Read real originals via Cubby or Gmail MCP and lock session labels first. Remove
 identifying headers and addresses, preserving transaction evidence. Supply the

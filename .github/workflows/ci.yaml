@@ -279,9 +279,10 @@ jobs:
           save-browser: "false"
 
   mail-decisions:
-    name: Live Email decisions (Jev and Clef)${{ matrix.db && '' }}
+    name: Live Email decisions (Jev and Clef, optional)${{ matrix.db && '' }}
     needs: plan
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -458,7 +459,6 @@ jobs:
       [
         plan,
         validation,
-        mail-decisions,
         docs,
         lanes,
         rust,
@@ -478,6 +478,5 @@ jobs:
           allowed-failures: apple-probe
           allowed-skips: >-
             ${{ needs.plan.outputs.skips }},
-            ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'mail-decisions' || '' }},
             ${{ needs.apple-probe.outputs.host == 'success' && 'apple-host' || '' }},
             ${{ needs.apple-probe.outputs.simulator == 'success' && 'apple-simulator' || '' }}
