@@ -133,7 +133,10 @@ asserts idle cycles do not consume attempts. Reuse this behavior.
 The first slice adds `identify_image` to the existing job-kind CHECK. It retains
 structured Clef observations in `AiAnalysis`; no new table or queue is needed.
 Apple description, cloud description, subject lift, and identification are
-independent durable jobs. AVIF identification waits without consuming attempts
+independent durable jobs. Clients queuing missing baseline work use the shared
+scheduling schema defaults rather than a separate list of kinds. MCP describes
+all default work and its billable cloud calls; explicit kinds request a subset.
+AVIF identification waits without consuming attempts
 for a verified JPEG snapshot from the existing normalization job; AVIF catalog
 references are excluded from this first comparison path. The native compatibility version advances because
 older clients cannot decode the new job kind.
