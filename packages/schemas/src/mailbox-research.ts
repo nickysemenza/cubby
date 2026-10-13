@@ -179,8 +179,8 @@ export const mailMessageRef = z.object({
 export type MailMessageRef = z.infer<typeof mailMessageRef>;
 
 /**
- * Why Mail triage's bounded view cannot prove a message unrelated; any one
- * turns the decision model's `unrelated` into `uncertain`.
+ * Evidence omissions in Mail triage's bounded view, supplied to the decision
+ * model and exposed in previews without overriding its definite choice.
  */
 export const mailTriageIncompleteReason = z.enum([
   /** An amount, order/invoice number or receipt phrase fell outside the view,
