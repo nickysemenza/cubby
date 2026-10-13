@@ -1,4 +1,3 @@
-import assert from "node:assert/strict";
 import { appendFileSync } from "node:fs";
 
 const env = process.env;
@@ -19,16 +18,14 @@ async function github(route: string) {
 if (process.argv[2] === "route") {
   const selected = { web: false, ios: false, imports: false, simulator: false };
   const journey = env.TESTER_ARMY_JOURNEY;
-  const automatic =
+  const labelDispatch =
     env.GITHUB_EVENT_NAME === "workflow_dispatch" &&
     journey === "tester-army-pr";
   const pull =
-    automatic && env.TESTER_ARMY_PULL_REQUEST
+    labelDispatch && env.TESTER_ARMY_PULL_REQUEST
       ? await github(`pulls/${env.TESTER_ARMY_PULL_REQUEST}`)
       : undefined;
-  if (env.GITHUB_EVENT_NAME === "schedule") {
-    selected.web = selected.ios = selected.imports = true;
-  } else if (env.GITHUB_EVENT_NAME === "workflow_dispatch" && !automatic) {
+  if (env.GITHUB_EVENT_NAME === "workflow_dispatch" && !labelDispatch) {
     selected.web = [
       "tester-army-web",
       "tester-army-both",
@@ -50,44 +47,10 @@ if (process.argv[2] === "route") {
     pull.head.sha === env.TESTER_ARMY_REVISION &&
     pull.head.repo.full_name === env.GITHUB_REPOSITORY
   ) {
-    const files: string[] = [];
-    for (let page = 1; ; page++) {
-      const batch = await github(
-        `pulls/${pull.number}/files?per_page=100&page=${page}`,
-      );
-      assert(Array.isArray(batch), "Invalid GitHub changed-file list");
-      for (const file of batch) {
-        assert(typeof file.filename === "string", "Invalid GitHub filename");
-        files.push(file.filename);
-        if (file.previous_filename) {
-          assert(
-            typeof file.previous_filename === "string",
-            "Invalid previous GitHub filename",
-          );
-          files.push(file.previous_filename);
-        }
-      }
-      if (batch.length < 100) break;
-      if (page === 30)
-        throw new Error("PR exceeds GitHub's complete-file-list limit");
-    }
-    const code = files.filter((file) => !/\.(?:md|mdx|markdown)$/iu.test(file));
-    const shared = code.some((file) =>
-      /^(?:packages\/|cubby-ffi\/|recipebridge\/|scripts\/|\.github\/|[^/]+$)|^apps\/web\/src\/(?:server|contracts|routes\/api)\//u.test(
-        file,
-      ),
-    );
     const labels = pull.labels.map((label: { name: string }) => label.name);
-    selected.web = code.length > 0 || labels.includes("tester-army");
+    selected.web = labels.includes("tester-army");
     selected.ios = labels.includes("tester-army:ios");
-    selected.imports =
-      shared ||
-      code.some((file) =>
-        /^apps\/web\/(?:src\/.*(?:import|vendor|run)|tooling\/(?:tester-army|scenarios\/tester-army)|tests\/tester-army)/u.test(
-          file,
-        ),
-      ) ||
-      labels.includes("tester-army:import");
+    selected.imports = labels.includes("tester-army:import");
     selected.simulator = labels.includes("simulator-e2e");
   }
   appendFileSync(
@@ -112,8 +75,8 @@ if (process.argv[2] === "route") {
                 : journey === "tester-army-explore"
                   ? "explore"
                   : "agent",
-            timeout: automatic ? 10 : 25,
-            journeys: automatic
+            timeout: labelDispatch ? 10 : 25,
+            journeys: labelDispatch
               ? "product-rename,receive-purchase,field-product-tags"
               : "",
           },

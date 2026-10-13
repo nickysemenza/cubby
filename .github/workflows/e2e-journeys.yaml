@@ -1,13 +1,10 @@
 name: E2E journeys
 
 # Informational background journeys; required merge checks remain in ci.yaml.
-# PR updates and closure cancel background runs; CI completion dispatches them.
+# PR updates and closure cancel runs; CI completion dispatches labeled PRs.
 on:
   pull_request:
     types: [opened, reopened, synchronize, closed]
-  schedule:
-    # Weekly full matrix, with action replay disabled.
-    - cron: "17 9 * * 1"
   workflow_dispatch:
     inputs:
       journey:
@@ -26,14 +23,14 @@ on:
           - tester-army-all
         default: simulator-search
       pull-request:
-        description: PR number for automatic coverage (set by CI dispatcher)
+        description: PR number for label-requested coverage (set by CI dispatcher)
         type: string
       revision:
-        description: Exact PR head for automatic coverage
+        description: Exact PR head for label-requested coverage
         type: string
 
 concurrency:
-  group: tester-army-${{ inputs.pull-request || github.event.pull_request.number || github.ref }}-${{ inputs.pull-request && 'automatic' || inputs.journey || 'automatic' }}
+  group: tester-army-${{ inputs.pull-request || github.event.pull_request.number || github.ref }}-${{ inputs.pull-request && 'labels' || inputs.journey || 'labels' }}
   cancel-in-progress: true
 
 permissions:

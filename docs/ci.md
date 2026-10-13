@@ -8,28 +8,25 @@ merge gate ([ADR 0009](adr/0009-content-hash-merge-gate.md),
 job compares the tree with the last green `main` run and starts only the lanes
 whose tasks' inputs changed, so a documentation-only PR starts no test runner
 ([ADR 0014](adr/0014-path-routed-ci-lanes.md)). Merging to `main`
-independently deploys every production Worker, including after a
+independently deploys the web Worker, including after a
 documentation-only change; deployment never waits for post-merge CI.
 
 `ci.yaml` holds the required checks and an optional purchase-import browser
 lane. Validation exposes generation, tokens, TypeScript, lint, Knip, bindings,
-tooling tests, routing drift, Worker tests, audit and deduplication as named
+tooling tests, routing drift and Worker tests as named
 steps on one runner. Once setup succeeds, independent steps run despite earlier
 check failures; their failures still fail the job. Cancellation stops further
 work. The web matrix likewise keeps `fail-fast: false`. Formatting runs once in
 the docs job. This collects distinct failures without paying a fresh install
 for every static check. One status context, `CI passed`, owns the merge gate.
-Tester Army background coverage lives in `e2e-journeys.yaml`: three web smoke
-journeys after successful same-repository PR CI, opt-in iOS with the
-`tester-army:ios` label, and coupled
-imports for affected import/shared/backend changes. All remain informational,
-with verified action replay, SDK evidence uploads and the built-in GitHub
-reporter. `tester-army-pr.yaml` dispatches the exact still-open PR head after its
-CI run succeeds; the optional purchase-import lane may fail without failing the run. Updates and closure cancel its automatic runs, independently of CI,
-deployment and manual/weekly coverage. One routing step selects the jobs.
-The weekly matrix disables action replay. Manual dispatch and PR labels can
-select additional journeys; deterministic simulator journeys stay optional.
-See [Tester Army](tester-army.md) for routing, replay, evidence and timing limits.
+Tester Army coverage lives in `e2e-journeys.yaml` and runs only by manual
+dispatch or explicit PR labels. `tester-army`, `tester-army:ios`,
+`tester-army:import`, and `simulator-e2e` select only their respective lanes.
+`tester-army-pr.yaml` dispatches a labeled, still-open same-repository PR's
+exact head after CI passes. Labels persist across pushes; unlabeled changes
+never launch journeys. Updates and closure cancel pending PR journeys.
+There is no scheduled AI journey matrix. All journeys remain informational;
+see [Tester Army](tester-army.md) for replay, evidence and timing limits.
 
 ## Cache keys and the remote cache
 
@@ -79,8 +76,8 @@ lane, the Linux `Apple cache probe` job probes both Apple passes in parallel
 with the other lanes before scheduling macOS. A miss or unavailable probe runs
 the corresponding native job; a skipped native job satisfies `CI passed` only
 with its successful probe. Nightly runs force both native jobs. Workflows that only deploy,
-publish or review (`deploy.yaml`, `apple-testflight.yaml`, the Claude
-workflows) are outside every key. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
+publish or review (`deploy.yaml`, `deploy-nx-cache.yaml`, `apple-testflight.yaml`,
+`claude.yml`) are outside every key. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
 the whole workflow, so every lane, nested Nx calls included, runs uncached on
 CI's platform, catching a failure that only Linux or CI's
 toolchain shows; `main` pushes reuse the cache like PRs. The key is deliberately
@@ -399,9 +396,11 @@ and on any skip other than the jobs `Plan` skipped or an Apple job whose probe
 verified a cached pass. A failed probe is allowed: it only sends both Apple
 lanes to macOS.
 
-`Validation` runs `pnpm check:all` (the cached generate, types, lint, format,
-knip, CI-lane, bindings, script, and Worker-test targets plus the uncached
-security audit) and `pnpm dedupe:check`.
+`Validation` runs the cached generate, design-token, types, lint, Knip,
+CI-lane, bindings, script-test and Worker-test targets as individual steps.
+`pnpm check:all` runs those targets plus formatting locally.
+Dependency advisory audits and deduplication are not CI or local validation
+gates; dependency maintenance is handled separately from code validation.
 `Docs and formatting` runs on `ubuntu-slim` with a root-only install: the
 `format` target and the offline relative-link check through the pinned Lychee
 action, a composite action that downloads the Lychee binary (no Docker).
@@ -476,11 +475,9 @@ settings in the fresh PostgreSQL 17 configuration. IntegreSQL retries its
 PostgreSQL connection during startup; its pinned distroless image has no
 `/bin/sh` for Docker shell health checks. The optional purchase-import and
 Tester Army Linux lanes use the same service definitions. The
-`@claude` mention workflow (`claude.yml`) remains manual;
-`claude-code-review.yml` reviews each non-Renovate, non-fork PR once,
-on `opened`/`ready_for_review`/`reopened` (never on `synchronize`, so a push
-does not trigger a re-review), using Sonnet 5. Preview deploys were removed;
-production is the only deployed environment.
+`@claude` mention workflow (`claude.yml`) remains on demand. There is no
+automatic PR review workflow. Preview deploys were removed; production is the
+only deployed environment.
 
 ## Apple TestFlight release
 
@@ -522,27 +519,20 @@ GitHub can disable public-repository schedules after 60 inactive days; the
 
 ## Deployment
 
-`.github/workflows/deploy.yaml` runs on `main` pushes and deploys both
-production Workers, web and the Nx cache, every time, in parallel and without
-waiting for CI. Each serializes production deployments and checks that the
-commit is still current main before building and again before deploying.
-Production never depends on a test job.
-This trusts required PR checks before merging. Public-repository standard
-GitHub-hosted runners are free; no self-hosted runner or Cloudflare Builds is
-required. The Nx cache deploy builds nothing and runs on `ubuntu-slim`.
+`.github/workflows/deploy.yaml` deploys the web Worker on every `main` push,
+without waiting for post-merge CI. Required PR checks gate merging. It uses
+`.github/actions/deploy-worker` to check current main before building and again
+before deploying, preventing stale web deployments. The build runs once;
+Wrangler deploys `dist/server/wrangler.json` directly.
 
-Both jobs call the shared `.github/actions/deploy-worker` composite (current-main
-check → `setup-node-with-deps` → an optional build command → current-main
-check again → the deploy command), differing only in package, workspace
-filter, whether WASM is needed, and the build/deploy commands; `concurrency`,
-`environment`, and `timeout-minutes` stay on each job because a composite
-action cannot own them. Every deploy is a plain shell command with
-`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the environment: the Nx cache
-runs its package's `wrangler deploy`, and web runs `wrangler deploy --config
-dist/server/wrangler.json` directly rather than its `deploy:cf` script
-(`build:cf && wrangler deploy`), which would rerun `build:cf` after the
-composite's own build step. The second check is what stops a manual re-run of
-an old Deploy run from rolling production back to a stale commit.
+`.github/workflows/deploy-nx-cache.yaml` deploys the Nx cache only when its
+source/configuration, dependency inputs, Node version, setup action, or its own
+workflow changes. Manual dispatch can retry a deployment. It checks out current
+`main` when the serialized job starts, so rerunning an old workflow cannot
+roll the service back and a later docs-only push cannot suppress a pending
+cache change. It uses a filtered install and plain `wrangler deploy` on
+`ubuntu-slim`, with no separate build step. Both workflows keep credentials in
+the deployment step's environment and serialize their own service deployments.
 
 ## Branch protection and measurement
 

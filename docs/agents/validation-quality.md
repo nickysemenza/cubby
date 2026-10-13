@@ -13,10 +13,9 @@ checks across sessions: a cold web program measured about 5.8 GB resident
 ([dated measurements](../reports/local-check-performance.md#typechecking)).
 `pnpm check` runs the root
 static checks, type checking, entity freshness, Knip, and script types.
-`pnpm check:all` adds bindings, OpenAPI, orchestration tests, security checks,
-and calendar Worker tests. CI runs `pnpm dedupe:check` when code validation is
-selected; use it
-locally when diagnosing dependency duplication.
+`pnpm check:all` adds bindings, CI routing drift, orchestration tests,
+and Worker tests. Dependency advisory audits and deduplication are not
+validation gates.
 
 The `knip` gate also runs `pnpm knip:production`, which fails on a file or
 dependency the production graph never reaches. A script invoked only by a hook,

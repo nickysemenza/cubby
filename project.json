@@ -113,11 +113,6 @@
       "cache": true,
       "inputs": ["gate"]
     },
-    // The advisory database changes without any repository change.
-    "security": {
-      "command": "pnpm audit:security",
-      "cache": false
-    },
     "fast-tests": {
       // Aux packages (packages/*) run through their own cached `test` target
       // (targetDefaults above) instead of `pnpm -r --workspace-concurrency=2
