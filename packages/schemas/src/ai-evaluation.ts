@@ -83,6 +83,9 @@ export const aiRefreshManifest = z.record(
 );
 export type AiRefreshManifest = z.infer<typeof aiRefreshManifest>;
 export const aiRefreshActivation = z.object({
+  observationEpoch: z.number().int().nonnegative().default(0),
+  revision: z.number().int().nonnegative().default(0),
+  discoveryRunId: z.uuid().nullable().default(null),
   release: z.string(),
   manifest: aiRefreshManifest,
   activatedAt: z.iso.datetime(),
@@ -90,6 +93,7 @@ export const aiRefreshActivation = z.object({
 });
 export const aiRefreshRunInput = z.object({
   kind: z.literal("ai_refresh"),
+  discovery: z.boolean().default(false),
   activation: aiRefreshActivation,
   executionAuthorization: executionAuthorizationRef.optional(),
   emails: z

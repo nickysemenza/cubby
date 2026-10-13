@@ -108,3 +108,65 @@ describe("shared Gateway admission", () => {
     });
   });
 });
+
+// Idle version nudges must succeed without any usable database binding.
+it("keeps unchanged policy nudges entirely in durable storage without opening Neon", async () => {
+  const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+  await runInDurableObject(stub, async (instance, state) => {
+    Object.defineProperty(instance, "env", {
+      value: {
+        AI_REFRESH_ENABLED: "true",
+        CF_VERSION_METADATA: { id: "synthetic-current-version" },
+      },
+    });
+    await state.storage.put(
+      "aiRefreshObservedVersion",
+      "synthetic-current-version",
+    );
+    await instance.observeAiRefresh();
+    expect(await state.storage.getAlarm()).toBeNull();
+  });
+});
+
+it("keeps startup retry cooldown and maintenance alarms out of Neon", async () => {
+  const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+  await runInDurableObject(stub, async (instance, state) => {
+    Object.defineProperty(instance, "env", {
+      value: { CF_VERSION_METADATA: { id: "synthetic-retrying-version" } },
+      configurable: true,
+    });
+    const retryAt = Date.now() + 60_000;
+    await state.storage.put("aiRefreshPendingObservation", {
+      version: "synthetic-retrying-version",
+      epoch: 1,
+    });
+    await state.storage.setAlarm(retryAt);
+    await instance.observeAiRefresh();
+    expect(await state.storage.getAlarm()).toBe(retryAt);
+    Object.defineProperty(instance, "env", {
+      value: { MAINTENANCE_MODE: "true" },
+    });
+    await instance.alarm();
+    expect(await state.storage.getAlarm()).toBeGreaterThan(retryAt);
+  });
+});
+
+// A failed handoff can commit Neon before its Durable Object acknowledgement.
+it("allocates newer ownership when rolling back over a pending newer version", async () => {
+  const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+  await runInDurableObject(stub, async (instance, state) => {
+    Object.defineProperty(instance, "env", {
+      value: { CF_VERSION_METADATA: { id: "synthetic-a" } },
+    });
+    await state.storage.put({
+      aiRefreshObservedVersion: "synthetic-a",
+      aiRefreshObservationEpoch: 2,
+      aiRefreshPendingObservation: { version: "synthetic-b", epoch: 2 },
+    });
+    await instance.observeAiRefresh().catch(() => {});
+    expect(await state.storage.get("aiRefreshPendingObservation")).toEqual({
+      version: "synthetic-a",
+      epoch: 3,
+    });
+  });
+});

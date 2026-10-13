@@ -3,7 +3,7 @@ import { z } from "zod";
 /** Production egress is admitted by the shared gateway Durable Object. */
 export const CUBBY_AI_GATEWAY_ID = "cubby";
 /** Live evaluation has a separate capacity window from production. */
-export const CUBBY_EVALUATION_GATEWAY_ID = "cubby-evaluation";
+export const CUBBY_EVALUATION_GATEWAY_ID = "cubby-testing";
 export const aiGatewayId = (environment: AiGatewayEnvironment): string =>
   environment === "production"
     ? CUBBY_AI_GATEWAY_ID

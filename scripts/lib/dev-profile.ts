@@ -123,6 +123,7 @@ function localVars({
 }: LocalSettings) {
   const vars = {
     NODE_ENV: "development",
+    AI_REFRESH_ENABLED: "false",
     SENTRY_ENVIRONMENT:
       inherited.CUBBY_DEV_TELEMETRY === "true" ? "development" : "test",
     APP_ORIGIN: origin,

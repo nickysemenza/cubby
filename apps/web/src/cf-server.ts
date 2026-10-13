@@ -10,6 +10,7 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { createLogger, originalLoggedError } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
 // CF Workers production entry point.
@@ -174,11 +175,16 @@ const handler = {
     env: Env,
     ctx: { waitUntil(promise: Promise<unknown>): void },
   ) {
-    if (new URL(request.url).pathname === "/api/internal/ai-refresh/activate") {
-      setCfEnv(env);
-      return (
-        await import("./server/ai-refresh-activation")
-      ).activateDeployedAiRefresh(request, env);
+    if (
+      !isMaintenanceMode(env) &&
+      !import.meta.env.CUBBY_LOCAL_RUNTIME &&
+      env.E2E_AUTH_TEST_MODE !== "true"
+    ) {
+      ctx.waitUntil(
+        env.AI_GATEWAY_EGRESS.getByName(CUBBY_AI_GATEWAY_ID)
+          .observeAiRefresh()
+          .catch((error: unknown) => Sentry.captureException(error)),
+      );
     }
     const startedAt = performance.now();
     const invocationOrdinal = ++fetchInvocationOrdinal;
@@ -633,20 +639,19 @@ const handler = {
           cronLog.warn("skipped: maintenance mode");
           return;
         }
-        if (controller.cron === "*/5 * * * *") {
-          await withRequestDbClient(
-            env.HYPERDRIVE.connectionString,
-            async () => {
-              const { db } = await import("./server/db");
-              await (
-                await import("./server/runs/ai-refresh")
-              ).recoverAiRefresh(db);
-            },
-          );
-          return;
-        }
         if (controller.cron !== "0 12 * * *")
           throw new Error(`Unexpected cron trigger: ${controller.cron}`);
+        try {
+          if (
+            !import.meta.env.CUBBY_LOCAL_RUNTIME &&
+            env.E2E_AUTH_TEST_MODE !== "true"
+          )
+            await env.AI_GATEWAY_EGRESS.getByName(
+              CUBBY_AI_GATEWAY_ID,
+            ).observeAiRefresh();
+        } catch (error) {
+          Sentry.captureException(error);
+        }
         await Sentry.withMonitor(
           "daily-maintenance",
           async () => {

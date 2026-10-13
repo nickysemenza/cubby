@@ -20,7 +20,6 @@ jobs:
       # Reuse the same content-verified WASM artifacts as required PR CI.
       NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
       NX_CACHE_TOKEN: ${{ secrets.NX_CACHE_TOKEN }}
-      AI_REFRESH_ACTIVATION_TOKEN: ${{ secrets.AI_REFRESH_ACTIVATION_TOKEN }}
     concurrency:
       group: deploy-cubby-production
       cancel-in-progress: false
@@ -42,14 +41,3 @@ jobs:
           deploy-command: "pnpm --filter @cubby/web exec wrangler deploy --config dist/server/wrangler.json"
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Activate deployed AI prompt versions
-        if: env.AI_REFRESH_ACTIVATION_TOKEN != ''
-        run: |
-          release=$(git rev-parse --short HEAD)
-          body=$(jq -n --arg release "$release" '{release:$release}')
-          curl --fail --silent --show-error --retry 3 --retry-all-errors \
-            -H "Authorization: Bearer $AI_REFRESH_ACTIVATION_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data "$body" \
-            https://cubby.nickysemenza.com/api/internal/ai-refresh/activate

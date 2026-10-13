@@ -349,6 +349,7 @@ export function workerdHarnessOptions(
           ALLOW_SIGNUP: "true",
           INSECURE_AUTH_COOKIES: "true",
           E2E_AUTH_TEST_MODE: "true",
+          AI_REFRESH_ENABLED: "false",
           DATABASE_URL: options.databaseUrl,
           R2_ENDPOINT: storage.endpoint,
           R2_PUBLIC_URL: storage.publicUrl,

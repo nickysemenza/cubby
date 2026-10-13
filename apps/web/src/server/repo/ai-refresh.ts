@@ -1,5 +1,6 @@
 import {
   aiRefreshActivation,
+  aiRefreshRunInput,
   type AiRefreshManifest,
 } from "@cubby/schemas/ai-evaluation";
 import { eq } from "drizzle-orm";
@@ -29,7 +30,12 @@ export async function readAiRefreshActivation(
 export async function activateAiRefresh(
   db: Database,
   release: string,
-  options: { enabled: boolean; manifest?: AiRefreshManifest },
+  options: {
+    enabled: boolean;
+    manifest?: AiRefreshManifest;
+    startDiscovery?: boolean;
+    observationEpoch?: number;
+  },
 ) {
   const compiled = options.manifest ?? (await compiledRefreshManifest());
   return withTransactionDatabase(db, async (tx) => {
@@ -43,12 +49,23 @@ export async function activateAiRefresh(
       .where(eq(appSettings.id, SETTINGS_ID))
       .for("update");
     const prior = aiRefreshActivation.safeParse(row?.metadata);
+    if (
+      prior.success &&
+      options.observationEpoch !== undefined &&
+      prior.data.observationEpoch > options.observationEpoch
+    )
+      return prior.data;
     const manifest: AiRefreshManifest = {};
+    let changed =
+      !prior.success ||
+      prior.data.enabled !== options.enabled ||
+      Object.keys(prior.data.manifest).length !== Object.keys(compiled).length;
     for (const [feature, next] of Object.entries(compiled)) {
       const old = prior.success ? prior.data.manifest[feature] : undefined;
       const same =
         old?.promptVersion === next.promptVersion &&
         old.policyFingerprint === next.policyFingerprint;
+      changed ||= !same;
       manifest[feature] = {
         ...next,
         generation: same ? old.generation : (old?.generation ?? 0) + 1,
@@ -56,6 +73,11 @@ export async function activateAiRefresh(
     }
     const activation = aiRefreshActivation.parse({
       release,
+      observationEpoch:
+        options.observationEpoch ??
+        (prior.success ? prior.data.observationEpoch : 0),
+      revision: (prior.success ? prior.data.revision : 0) + (changed ? 1 : 0),
+      discoveryRunId: prior.success ? prior.data.discoveryRunId : null,
       enabled: options.enabled,
       manifest,
       activatedAt:
@@ -63,10 +85,37 @@ export async function activateAiRefresh(
           ? prior.data.activatedAt
           : new Date().toISOString(),
     });
+    let resetCursor = false;
+    if (
+      options.startDiscovery &&
+      options.enabled &&
+      (changed || !activation.discoveryRunId)
+    ) {
+      resetCursor = true;
+      const { ensureRun, systemActor } =
+        await import("~/server/runs/ensure-run");
+      activation.discoveryRunId = await ensureRun(tx, systemActor(), {
+        purpose: "ai_refresh",
+        trigger: "scheduled",
+        status: "running",
+        clientKey: `ai-refresh:discovery:${activation.revision}`,
+        input: aiRefreshRunInput.parse({
+          kind: "ai_refresh",
+          discovery: true,
+          activation,
+        }),
+      });
+    }
     await getDb(tx)
       .update(appSettings)
       .set({ metadata: activation, updatedAt: new Date() })
       .where(eq(appSettings.id, SETTINGS_ID));
+    if (resetCursor)
+      await saveAiDiscoveryCursor(tx, {
+        revision: activation.revision,
+        field: null,
+        email: null,
+      });
     return activation;
   });
 }
@@ -97,6 +146,9 @@ export async function producingAiManifest(db: Database) {
 
 const DISCOVERY_SETTINGS_ID = "00000000-0000-4000-8000-000000000075";
 const discoveryCursor = z.object({
+  revision: z.number().int().nonnegative().default(0),
+  fieldDone: z.boolean().default(false),
+  emailDone: z.boolean().default(false),
   field: z
     .object({ entity: z.string(), recordId: z.uuid(), field: z.string() })
     .nullable()
@@ -112,13 +164,23 @@ export async function readAiDiscoveryCursor(db: Database) {
 }
 export async function saveAiDiscoveryCursor(
   db: Database,
-  value: z.infer<typeof discoveryCursor>,
+  value: z.input<typeof discoveryCursor>,
 ) {
-  await getDb(db)
-    .insert(appSettings)
-    .values({ id: DISCOVERY_SETTINGS_ID, metadata: value })
-    .onConflictDoUpdate({
-      target: appSettings.id,
-      set: { metadata: value, updatedAt: new Date() },
+  return withTransactionDatabase(db, async (tx) => {
+    // Every revision writer locks this row, serializing the check through the cursor write.
+    const current = await readAiRefreshActivation(tx, "update");
+    const cursor = discoveryCursor.parse({
+      ...value,
+      revision: value.revision ?? current?.revision ?? 0,
     });
+    if (current && current.revision !== cursor.revision) return false;
+    await getDb(tx)
+      .insert(appSettings)
+      .values({ id: DISCOVERY_SETTINGS_ID, metadata: cursor })
+      .onConflictDoUpdate({
+        target: appSettings.id,
+        set: { metadata: cursor, updatedAt: new Date() },
+      });
+    return true;
+  });
 }

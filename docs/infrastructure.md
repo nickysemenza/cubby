@@ -201,6 +201,12 @@ data; profile/provenance contracts belong in
 
 ### PostgreSQL and Hyperdrive
 
+Frequent crons must not open Neon merely to check for work. Keep their idle
+checks in Durable Object storage; pending durable handoffs may use alarms.
+Nightly maintenance is the exception and may reconcile PostgreSQL state.
+AI refresh follows this rule; its scheduling details live in the
+[refresh runbook](runbooks/ai-refresh.md).
+
 Neon owns the PostgreSQL database. Production compute is autoscaling
 0.25–1 CU (it was a fixed 0.25 CU compute until the 2026-09-21 OOM incident).
 The Hyperdrive origin connection caps below remain 12 + 5. The background

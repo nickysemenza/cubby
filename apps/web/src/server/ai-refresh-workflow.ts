@@ -1,3 +1,4 @@
+import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   WorkflowEntrypoint,
@@ -34,6 +35,49 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
         work((await import("./db")).db),
       );
     try {
+      const discovery = await withDb(async (db) => {
+        const owner = await claimWorkflowRun(db, event.payload);
+        return owner ? aiRefreshRunInput.parse(owner.input).discovery : false;
+      });
+      if (discovery) {
+        for (let page = 0; ; page++) {
+          const more = await step.do(
+            `discover:${page}`,
+            {
+              retries: { limit: 2, delay: "5 seconds", backoff: "exponential" },
+              timeout: "15 minutes",
+            },
+            () =>
+              withDb(async (db) => {
+                const { readAiRefreshActivation, readAiDiscoveryCursor } =
+                  await import("./repo/ai-refresh");
+                const current = await readAiRefreshActivation(db);
+                const owner = await claimWorkflowRun(db, event.payload);
+                if (
+                  !owner ||
+                  !current?.enabled ||
+                  current.revision !==
+                    aiRefreshRunInput.parse(owner.input).activation.revision
+                )
+                  return false;
+                if (
+                  !(await (
+                    await import("./runs/ai-refresh")
+                  ).recoverAiRefresh(db))
+                )
+                  throw new Error(
+                    "Discovery Workflow policy differs from activated policy",
+                  );
+                const cursor = await readAiDiscoveryCursor(db);
+                return (
+                  cursor.revision === current.revision &&
+                  !(cursor.fieldDone && cursor.emailDone)
+                );
+              }),
+          );
+          if (!more) break;
+        }
+      }
       for (let cycle = 0; ; cycle++) {
         const pending = await withDb(async (db) => {
           if (!(await claimWorkflowRun(db, event.payload))) return null;
