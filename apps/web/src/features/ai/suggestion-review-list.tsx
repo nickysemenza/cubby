@@ -183,6 +183,7 @@ function RowReview({
 
 function reviewColumns(
   outcomes: ReadonlyMap<string, Outcome>,
+  listed: ReadonlySet<string>,
   onSettle: (action: "accept" | "reject", ids: string[]) => Promise<void>,
 ) {
   return createCubbyColumnCollection<SuggestionReviewRow>((add) => {
@@ -347,7 +348,9 @@ function reviewColumns(
         }),
         cell: ({ row }) => (
           <Row gap="xs" align="center">
-            <RowReview row={row.original} onSettle={onSettle} />
+            {listed.has(row.original.id) ? (
+              <RowReview row={row.original} onSettle={onSettle} />
+            ) : null}
             <OutcomeCell outcome={outcomes.get(row.original.id)} />
           </Row>
         ),
@@ -488,6 +491,11 @@ export function SuggestionReviewList({
   const [outcomes, setOutcomes] = useState<ReadonlyMap<string, Outcome>>(
     new Map(),
   );
+  // Failed rows as they were when settled: accepting one selected row can
+  // supersede another, which then fails and leaves the pending refetch.
+  const [failedRows, setFailedRows] = useState<
+    ReadonlyMap<string, SuggestionReviewRow>
+  >(new Map());
   const settle = async (action: "accept" | "reject", ids: string[]) => {
     const results =
       action === "accept"
@@ -498,6 +506,18 @@ export function SuggestionReviewList({
         new Map([
           ...previous,
           ...results.map((result) => [result.id, result] as const),
+        ]),
+    );
+    const failed = new Set(
+      results.filter((result) => !result.ok).map((result) => result.id),
+    );
+    setFailedRows(
+      (previous) =>
+        new Map([
+          ...[...previous].filter(([id]) => !ids.includes(id)),
+          ...(list.data ?? [])
+            .filter((row) => failed.has(row.id))
+            .map((row) => [row.id, row] as const),
         ]),
     );
     const touched = new Set<ShortcodeEntity>(
@@ -514,17 +534,27 @@ export function SuggestionReviewList({
     ]);
     return results;
   };
-  // Settled rows leave the pending list on refetch; a failed id stays pending,
-  // so its error is read beside its row in Result.
-  const rows = useMemo(() => list.data ?? [], [list.data]);
+  // Settled rows leave the pending list on refetch. A failed row stays beside
+  // its Result even when the refetch dropped it; only a listed row reselects.
+  const listed = useMemo(
+    () => new Set((list.data ?? []).map((row) => row.id)),
+    [list.data],
+  );
+  const rows = useMemo(
+    () => [
+      ...(list.data ?? []),
+      ...[...failedRows.values()].filter((row) => !listed.has(row.id)),
+    ],
+    [list.data, failedRows, listed],
+  );
   const settleRef = useRef(settle);
   settleRef.current = settle;
   const columns = useMemo(
     () =>
-      reviewColumns(outcomes, async (action, ids) => {
+      reviewColumns(outcomes, listed, async (action, ids) => {
         await settleRef.current(action, ids);
       }),
-    [outcomes],
+    [outcomes, listed],
   );
   const bulk: BulkActionsConfig<SuggestionReviewRow> = {
     actions: (["accept", "reject"] as const).map((action) => ({
@@ -556,7 +586,8 @@ export function SuggestionReviewList({
     getRowId: (row) => row.id,
     enableSorting: false,
     enableFilters: false,
-    enableRowSelection: (row) => row.original.status === "pending",
+    enableRowSelection: (row) =>
+      row.original.status === "pending" && listed.has(row.original.id),
     state: { rowSelection: selection.rowSelection },
     onRowSelectionChange: selection.onRowSelectionChange,
     initialState: {
@@ -578,6 +609,7 @@ export function SuggestionReviewList({
         entities={entities}
         onChange={(patch) => {
           setOutcomes(new Map());
+          setFailedRows(new Map());
           selection.clearSelection();
           onFiltersChange(patch);
         }}
