@@ -320,6 +320,16 @@ historical Runs stay readable through generic reports.
   guard broke its `distinctFrom` carry unnoticed. Add a commit → finding →
   approve case whose line carries a Distinct-from decision.
 
+- 🤔 ✨ **Support reviewed category attribution for negative price adjustments.**
+  A subscription upgrade invoice can credit unused time from its prior plan.
+  Preserve that signed `other_adjustment` and its source; do not relabel it as
+  a discount or alter the amount to force category completeness. Current
+  allocation leaves these credits unknown alongside positive principal lines,
+  and the Expense classification constraint rejects direct category assignment.
+  Add a source-backed reviewed attribution path through the generic model, and
+  make its preview reject unsupported assignments before an apply reaches the
+  database constraint. Preserve project/party cents and payment allocations.
+
 - ⏳ 🧪 **Measure paid fallback recovery.** A bounded live attempt saw the exact
   quota refusal inside an HTTP 200 stream; the shared router now qualifies it
   before admission, but live paid recovery after that refusal is unproven.
