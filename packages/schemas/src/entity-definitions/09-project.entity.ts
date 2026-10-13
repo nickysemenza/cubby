@@ -1195,6 +1195,19 @@ Rules:
   },
   relations: [
     {
+      key: "assignee",
+      label: "Default assignee",
+      target: "ledgerParty",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Project.assigneeId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Project.assigneeId", direction: "incoming" }],
+      },
+    },
+    {
       key: "sub-projects",
       label: "Sub-projects",
       target: "project",

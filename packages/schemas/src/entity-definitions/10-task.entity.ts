@@ -1074,6 +1074,17 @@ export default defineEntity({
   },
   relations: [
     {
+      key: "assignee",
+      label: "Assignee",
+      target: "ledgerParty",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Task.assigneeId", direction: "outgoing" }],
+      },
+      inverse: { steps: [{ edge: "Task.assigneeId", direction: "incoming" }] },
+    },
+    {
       key: "subtasks",
       label: "Subtasks",
       target: "task",

@@ -769,8 +769,10 @@ field key differs — ids are saved layouts, filter bindings, sort ids and
 saved-view keys, so a rename is never free.
 
 Task and Project assignees use the identifier field’s member-scoped LedgerParty
-picker and `assigneeId` / `assigneeMode` inheritance contract. Reads expose
-effective `assigneeId`, `assigneeName`, and `fieldResolutions.assigneeId`;
+picker and `assigneeId` / `assigneeMode` inheritance contract.
+Both references declare outgoing graph paths and incoming inverses for their
+stored assignee foreign keys, alongside the member lifecycle policies.
+Reads expose effective `assigneeId`, `assigneeName`, and `fieldResolutions.assigneeId`;
 list filters and sorts use the same effective SQL as hydration. Explicit null
 means None and reset clears the stored override. Project’s field label is
 Default assignee; task’s is Assignee. The static My tasks saved view combines
