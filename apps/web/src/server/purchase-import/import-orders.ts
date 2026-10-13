@@ -248,6 +248,7 @@ export async function assertReviewedPreparationOriginal(
       "A current original review requires the retained full message body.",
     );
   await assertMailSourceIdentityReady(getDb(db), original);
+  return original;
 }
 
 /**

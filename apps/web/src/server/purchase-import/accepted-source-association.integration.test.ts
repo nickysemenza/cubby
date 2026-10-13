@@ -213,9 +213,16 @@ describe("reviewed accepted source Product association", () => {
   }
 
   type World = Awaited<ReturnType<typeof world>>;
-  it.each([true, false])(
-    "records a current retained-original review without inventing history (different payments: %s)",
-    async (differentPayments) => {
+  it.each([
+    { differentPayments: true, legacy: false, mismatch: null },
+    { differentPayments: false, legacy: false, mismatch: null },
+    { differentPayments: false, legacy: true, mismatch: null },
+    { differentPayments: false, legacy: true, mismatch: "body" },
+    { differentPayments: false, legacy: true, mismatch: "ambiguous" },
+    { differentPayments: true, legacy: false, mismatch: "checksum" },
+  ])(
+    "records a current retained-original review without inventing history $differentPayments/$legacy/$mismatch",
+    async ({ differentPayments, legacy, mismatch }) => {
       const w = await world(false, true, true);
       const original = await w.db.query.sourceOrderObservation.findFirst({
         where: eq(
@@ -238,7 +245,10 @@ describe("reviewed accepted source Product association", () => {
       const mail = await retainedMailFixture(ctx.db, {
         ledgerPartyId: w.party.id,
         messageId: "synthetic-reviewed-original",
-        checksum: original.checksum,
+        checksum:
+          legacy || mismatch === "checksum"
+            ? "c".repeat(64)
+            : original.checksum,
       });
       await w.db
         .update(importSourceClaim)
@@ -255,13 +265,33 @@ describe("reviewed accepted source Product association", () => {
         .update(importSourceOrder)
         .set({ acceptedObservationId: null, originalOrder: unknown })
         .where(eq(importSourceOrder.id, w.association.id));
-      if (!differentPayments) {
+      let legacyMail;
+      if (legacy) {
+        legacyMail = await retainedMailFixture(ctx.db, {
+          ledgerPartyId: w.party.id,
+          messageId: mail.messageId,
+          mailboxId: "legacy:synthetic-owner",
+          checksum: original.checksum,
+          content: mail.content,
+        });
+        await w.db
+          .update(importSourceClaim)
+          .set({
+            externalKey: `gmail:${mail.messageId}:order:${target.orderId}`,
+          })
+          .where(eq(importSourceClaim.id, w.association.sourceClaimId));
+      } else if (!differentPayments) {
         await w.db
           .update(importSourceClaim)
           .set({ externalKey: "synthetic:historical-mail-alias" })
           .where(eq(importSourceClaim.id, w.association.sourceClaimId));
         await linkCanonicalRoot(w, mailSource(mail).externalKey);
       }
+      if (mismatch === "checksum")
+        await w.db
+          .update(importSourceClaim)
+          .set({ checksum: mail.rawChecksum })
+          .where(eq(importSourceClaim.id, w.association.sourceClaimId));
       const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
         key: "review-unknown-original",
         orders: [
@@ -274,6 +304,37 @@ describe("reviewed accepted source Product association", () => {
           },
         ],
       });
+      if (mismatch && mismatch !== "checksum") {
+        if (!legacyMail) throw new Error("Synthetic legacy original missing");
+        if (mismatch === "body")
+          await w.db
+            .update(orderMail)
+            .set({
+              content: {
+                ...legacyMail.content,
+                bodyText: "A different original",
+              },
+            })
+            .where(eq(orderMail.id, legacyMail.id));
+        else
+          await retainedMailFixture(ctx.db, {
+            ledgerPartyId: w.party.id,
+            messageId: mail.messageId,
+            mailboxId: "legacy:another-owner",
+            checksum: original.checksum,
+            content: mail.content,
+          });
+      }
+      if (mismatch) {
+        await assertCurrentOriginalRefusal(
+          w,
+          preparation.prepared.runId,
+          mismatch === "checksum"
+            ? /unchanged canonical original/
+            : /legacy retained originals must match/,
+        );
+        return;
+      }
       const before = await w.snapshot();
       await commitAcceptedSourceOrderReconciliation(
         ctx.db,
@@ -468,6 +529,28 @@ describe("reviewed accepted source Product association", () => {
       );
     },
   );
+  const assertCurrentOriginalRefusal = async (
+    w: World,
+    run: string,
+    pattern: RegExp,
+  ) => {
+    const before = await refusalSnapshot(w);
+    await expect(
+      commitAcceptedSourceOrderReconciliation(
+        ctx.db,
+        {
+          sourceOrderId: w.association.id,
+          reviewedPreparation: {
+            run: parseShortcodeFor("run", run),
+            stableOrderId: "review-unknown-original",
+          },
+          resolution: w.newProductResolution,
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(pattern);
+    expect(await refusalSnapshot(w)).toEqual(before);
+  };
   const refusalSnapshot = async (w: World) => ({
     ledger: await w.snapshot(),
     products: await w.db.select().from(product),
