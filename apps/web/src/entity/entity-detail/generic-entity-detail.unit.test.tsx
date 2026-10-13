@@ -374,7 +374,7 @@ describe("GenericEntityDetail", () => {
     ).toBeInTheDocument();
   });
 
-  // Empty relations retain a discoverable heading and their create action.
+  // Empty relations retain a discoverable heading, a 0 count, and their create action.
   it("keeps a real empty relation section discoverable once its first page resolves", async () => {
     await harness.router.navigate({ to: "/", hash: "plantings" });
     const { container } = render(
@@ -389,7 +389,7 @@ describe("GenericEntityDetail", () => {
       const section = container.querySelector<HTMLElement>("section#plantings");
       expect(section).toBeVisible();
       if (!section) throw new Error("Expected the plantings section");
-      expect(within(section).getByText("Empty", { exact: true })).toBeVisible();
+      expect(within(section).getByText("0", { exact: true })).toBeVisible();
     });
   });
 });

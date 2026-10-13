@@ -17,11 +17,13 @@ For generic behavior shared across entities, follow
 generic renderer, declaration-to-renderer parity, then delete the per-entity
 twin.
 
-The compiled default Details section is primary: a record's own facts lead
-its dossier rather than being squeezed into a supporting rail behind workflow
-slots. An explicit section placement remains authoritative, and journal
-presentations keep their relation-first ordering. Real photos sit beside the
-primary facts on wide web surfaces and above identity on phones.
+The compiled default Details section leads the dossier: a record's own facts
+come before workflow slots. Web detail renders every section in one full-width
+column in declaration order — there is no supporting rail. A section's
+`placement` is `primary` (shares a ruled plane with its neighbors) or `full`
+(its own plane); journal presentations keep their relation-first ordering. Real
+photos lead the Overview group on wide web surfaces and sit above identity on
+phones.
 
 `presentation.recordIconEntityField` names a read-only projection containing an
 entity key. Generic web and Apple record surfaces resolve that entity's declared
@@ -420,7 +422,7 @@ delete), so web and native show the same verdict. A list/multi-select verb
 
 A section or slot can declare `workspace: "overview" | "work" | "evidence"` for browser detail grouping. Relations default to Work, timelines to Evidence, and other sections to Overview. The Relations group holds the generated Connected records section (every entry in `connectedViews`, read through one `entity.connectedRecordsPreview`) ahead of Relationships. Every group and body renders continuously; navigation scrolls to stable sections and preserves mounted drafts. Full detail headings and index entries stay present while loading and after a section becomes empty. The old group fragments remain jump aliases; a real section ID takes precedence if it matches an alias. Explicit jumps add history; scrolling only updates the highlighted entry. Photo comparison grids respond to their own width so the outline cannot squeeze identity evidence into a zero-width column. Apple retains native detail renderers and native Contents navigation. The Run evidence pilot renders only the shared Evidence group in its isolated hosted surface. Durable transcript and structured logs remain available for every Run purpose; purchase-import predicates apply only to workflow reports. Workspace vocabulary is presentation metadata, separate from SQL enums.
 
-`detail.overviewSections` still emits independent `overview` metadata for web and Swift. On full web detail, supporting sections outside Overview join Evidence unless their declaration explicitly chooses another group. The native Contents outline follows the native record's reading order; all section bodies remain visible.
+`detail.overviewSections` still emits independent `overview` metadata for web and Swift. On full web detail, sections that set `overview: false` join Evidence unless their declaration explicitly chooses another group. The native Contents outline follows the native record's reading order; all section bodies remain visible.
 
 Relation tables are opt-out. Every `many` relation on a generic detail page
 renders a table: a declared `relation` section, or one the compiler derives

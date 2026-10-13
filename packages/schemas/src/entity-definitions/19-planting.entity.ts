@@ -57,7 +57,6 @@ export default defineEntity({
           kind: "fields",
           id: "overview",
           title: "Planting details",
-          placement: "supporting",
           fields: [
             "plantId",
             "status",

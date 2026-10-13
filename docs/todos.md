@@ -727,6 +727,13 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   Inherited classifications (Vendor → Purchase → Expense) resolve through
   their existing effective-value SQL before a refusal applies.
 
+- 🟢 🛠️ **Rename detail section `placement`.** With the supporting rail gone,
+  `primary` and `full` no longer describe width: `primary` sections share one
+  ruled card and `full` gets its own (`renderDetailGroup` in
+  `apps/web/src/ui/data-table/detail-page.tsx`). Rename it to the grouping it
+  now expresses (possibly folded into `surface`), and give the Apple Run
+  console's full-slots-first ordering (`RunConsoleView.swift`) its own field.
+
 - 🟢 🛠️ **Move the Email report's inferred lists onto derived relations.**
   Purchase, Vendor and Vendor Account `emails` are `derived` relationships read
   through Email list filters. The Email page still hand-composes Purchase

@@ -42,7 +42,8 @@ import {
   ContinuousDetailContext,
   SectionCountContext,
   SectionEmptyContext,
-  SectionEmptyRegistryContext,
+  SectionIndexRegistryContext,
+  type SectionIndexState,
 } from "./detail-section-state";
 
 /** Stable id every auto-appended Activity section uses — also the opt-out key: a
@@ -75,7 +76,7 @@ function detailSourceId(
     : undefined;
 }
 
-type DetailPlacement = "primary" | "supporting" | "full";
+type DetailPlacement = "primary" | "full";
 
 export interface DetailSection {
   /** Stable DOM id and section-index target. */
@@ -85,7 +86,7 @@ export interface DetailSection {
   icon: React.ElementType;
   /** Explicit narrative role; there is deliberately no automatic default. */
   placement: DetailPlacement;
-  /** Supporting sections join Evidence unless an explicit workspace owns them. */
+  /** `false` places the section in Evidence unless an explicit workspace owns it. */
   overview?: boolean;
   workspace?: "overview" | "work" | "evidence" | "relations";
   /** Exclude low-value/debug regions from the jump index. */
@@ -99,6 +100,9 @@ export interface DetailSection {
   surface?: "card" | "plain";
   /** Resolved emptiness for sections whose data is already in the detail record. */
   empty?: boolean;
+  /** Row count for a list section whose rows are already in the detail record;
+   * async lists report theirs through `useSectionCount`. */
+  count?: number;
 }
 
 function SectionCard({
@@ -108,19 +112,20 @@ function SectionCard({
   section: DetailSection;
   className?: string;
 }) {
-  const [count, setCount] = useState<number | undefined>(undefined);
+  const [reportedCount, setCount] = useState<number | undefined>(undefined);
   const [reportedEmpty, setEmpty] = useState(false);
-  const register = useContext(SectionEmptyRegistryContext);
+  const register = useContext(SectionIndexRegistryContext);
   const continuous = useContext(ContinuousDetailContext);
+  const count = section.count ?? reportedCount;
   const empty =
     section.empty === true ||
     reportedEmpty ||
     count === 0 ||
     section.content == null;
   useEffect(() => {
-    register?.(section.id, empty);
-    return () => register?.(section.id, false);
-  }, [register, section.id, empty]);
+    register?.(section.id, { empty, count });
+    return () => register?.(section.id, undefined);
+  }, [register, section.id, empty, count]);
   const Heading = continuous ? "h3" : "h2";
   return (
     <SectionEmptyContext.Provider value={setEmpty}>
@@ -152,18 +157,11 @@ function SectionCard({
                 <section.icon className="size-3.5 shrink-0 text-muted-foreground" />
                 {section.title}
               </Heading>
-              {empty ? (
-                <span
-                  id={`${section.id}-empty`}
-                  className="text-xs text-muted-foreground"
-                >
-                  Empty
-                </span>
-              ) : count !== undefined ? (
-                <span className="text-xs text-muted-foreground">
-                  {formatCount(count)}
-                </span>
-              ) : null}
+              <SectionIndexMarker
+                id={`${section.id}-marker`}
+                state={{ empty, count }}
+                className="text-xs"
+              />
             </div>
             {section.headerAction ? (
               <div className="max-w-full min-w-0">{section.headerAction}</div>
@@ -197,7 +195,7 @@ function renderSectionStack(sections: DetailSection[]) {
     const current = ruled;
     ruled = [];
     blocks.push(
-      <SectionPlane key={`plane-${blocks.length}`}>
+      <SectionPlane key={`plane-${current[0]?.id}`}>
         {current.map((section) => (
           <SectionCard key={section.id} section={section} />
         ))}
@@ -255,17 +253,44 @@ function hashForDetailTarget(id: string, groups: DetailGroup[]) {
 }
 
 const currentDetailAnchorClass =
-  "bg-muted font-medium before:absolute before:inset-y-1.5 before:start-1 before:w-0.5 before:rounded-full before:bg-foreground";
+  "font-medium text-foreground before:absolute before:inset-y-1.5 before:start-0.5 before:w-0.5 before:rounded-full before:bg-foreground";
+
+/** A list section shows its row count, 0 included; an empty non-list section
+ * is marked only for assistive tech, since its muted title already says so. */
+function SectionIndexMarker({
+  id,
+  state,
+  className,
+}: {
+  id?: string;
+  state: SectionIndexState | undefined;
+  className?: string;
+}) {
+  if (state?.count !== undefined)
+    return (
+      <span
+        id={id}
+        className={cn("shrink-0 text-muted-foreground tabular-nums", className)}
+      >
+        {formatCount(state.count)}
+      </span>
+    );
+  return state?.empty ? (
+    <span id={id} className="sr-only">
+      Empty
+    </span>
+  ) : null;
+}
 
 function DetailAnchorIndex({
   groups,
-  emptySections,
+  sectionStates,
   activeId,
   wide,
   onSelect,
 }: {
   groups: DetailGroup[];
-  emptySections: ReadonlyMap<string, boolean>;
+  sectionStates: ReadonlyMap<string, SectionIndexState>;
   activeId: string | undefined;
   wide: boolean;
   onSelect: (id: string) => void;
@@ -292,9 +317,14 @@ function DetailAnchorIndex({
     groups
       .flatMap((group) => [group, ...group.sections])
       .find((entry) => entry.id === activeId)?.title ?? groups[0]?.title;
+  const describedBy = (id: string) => {
+    const state = sectionStates.get(id);
+    return state?.count !== undefined || state?.empty
+      ? `${id}-marker`
+      : undefined;
+  };
   const entryState = (id: string) => ({
     "aria-current": activeId === id ? ("location" as const) : undefined,
-    "aria-describedby": emptySections.get(id) ? `${id}-empty` : undefined,
   });
   return (
     <div
@@ -312,12 +342,12 @@ function DetailAnchorIndex({
         )}
       >
         {groups.map((group) => (
-          <div key={group.id} className="mb-3 last:mb-0">
+          <div key={group.id} className="mb-4 last:mb-0">
             <a
               href={`#${hashForDetailTarget(group.id, groups)}`}
               {...entryState(group.id)}
               className={cn(
-                "relative block rounded-md px-2 py-1.5 font-semibold hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                "relative block rounded-md px-2 py-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                 activeId === group.id && currentDetailAnchorClass,
               )}
               onClick={(event) => {
@@ -327,41 +357,46 @@ function DetailAnchorIndex({
             >
               {group.title}
             </a>
-            <ul className="mt-0.5 space-y-0.5">
+            <ul>
               {group.sections
                 .filter((section) => section.includeInIndex !== false)
-                .map((section) => (
-                  <li key={section.id}>
-                    <a
-                      href={`#${section.id}`}
-                      {...entryState(section.id)}
-                      aria-label={section.title}
-                      aria-describedby={
-                        emptySections.get(section.id)
-                          ? `${section.id}-empty`
-                          : undefined
-                      }
-                      className={cn(
-                        "relative flex min-h-7 items-center justify-between gap-2 rounded-md py-1 pr-2 pl-4 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
-                        activeId === section.id && currentDetailAnchorClass,
-                        activeId === section.id &&
-                          !emptySections.get(section.id) &&
-                          "text-foreground",
-                      )}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        onSelect(section.id);
-                      }}
-                    >
-                      <span>{section.title}</span>
-                      {emptySections.get(section.id) && (
-                        <span className="text-[11px] font-normal text-muted-foreground">
-                          Empty
+                .map((section) => {
+                  const state = sectionStates.get(section.id);
+                  return (
+                    <li key={section.id}>
+                      <a
+                        href={`#${section.id}`}
+                        {...entryState(section.id)}
+                        aria-label={section.title}
+                        aria-describedby={describedBy(section.id)}
+                        title={section.title}
+                        className={cn(
+                          "relative flex h-7 items-center gap-2 rounded-md pr-2 pl-3 hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                          state?.empty
+                            ? "text-muted-foreground/70"
+                            : "text-foreground",
+                          activeId === section.id && currentDetailAnchorClass,
+                        )}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          onSelect(section.id);
+                        }}
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {section.title}
                         </span>
-                      )}
-                    </a>
-                  </li>
-                ))}
+                        {state?.count !== undefined && (
+                          <span
+                            aria-hidden
+                            className="shrink-0 text-[11px] font-normal text-muted-foreground tabular-nums"
+                          >
+                            {formatCount(state.count)}
+                          </span>
+                        )}
+                      </a>
+                    </li>
+                  );
+                })}
             </ul>
           </div>
         ))}
@@ -415,18 +450,36 @@ function DetailAnchorIndex({
                     <DropdownMenuItem
                       key={section.id}
                       render={
-                        <a href={`#${section.id}`} aria-label={section.title} />
+                        <a
+                          href={`#${section.id}`}
+                          aria-label={section.title}
+                          aria-describedby={describedBy(section.id)}
+                        />
                       }
                       {...entryState(section.id)}
+                      className={cn(
+                        sectionStates.get(section.id)?.empty &&
+                          "text-muted-foreground",
+                      )}
                       onClick={(event) => {
                         event.preventDefault();
                         selectMenuTarget(section.id);
                       }}
                     >
-                      <span className="min-w-0 flex-1">{section.title}</span>
-                      {emptySections.get(section.id) && (
-                        <span className="text-xs text-muted-foreground">
-                          Empty
+                      <span
+                        className="min-w-0 flex-1 truncate"
+                        title={section.title}
+                      >
+                        {section.title}
+                      </span>
+                      {sectionStates.get(section.id)?.count !== undefined && (
+                        <span
+                          aria-hidden
+                          className="text-xs text-muted-foreground tabular-nums"
+                        >
+                          {formatCount(
+                            sectionStates.get(section.id)?.count ?? 0,
+                          )}
                         </span>
                       )}
                     </DropdownMenuItem>
@@ -440,7 +493,7 @@ function DetailAnchorIndex({
   );
 }
 
-function renderResponsiveLayout({
+function renderDetailGroup({
   sections,
   visual,
 }: {
@@ -448,62 +501,23 @@ function renderResponsiveLayout({
   visual?: ReactNode;
 }) {
   const blocks: ReactNode[] = [];
-  let visualPlaced = !visual;
-  let run: DetailSection[] = [];
-
-  const flushRun = () => {
-    if (run.length === 0 && visualPlaced) return;
-    const current = run;
-    run = [];
-    const primary = current.filter(
-      (section) => section.placement === "primary",
-    );
-    const supporting = current.filter(
-      (section) => section.placement === "supporting",
-    );
-    const pendingVisual = !visualPlaced ? visual : undefined;
-    const hasSupportingRail = supporting.length > 0 || pendingVisual;
-
-    if (!primary.length && !hasSupportingRail) return;
+  if (visual) {
     blocks.push(
       <div
-        key={`run-${blocks.length}`}
-        className={cn(
-          "grid items-start gap-3 md:gap-3",
-          primary.length > 0 && hasSupportingRail
-            ? "@min-[60rem]/detail-body:grid-cols-[minmax(0,1fr)_20rem]"
-            : "grid-cols-1",
-        )}
+        key="visual"
+        data-testid="detail-media"
+        className="hidden max-w-80 md:block"
       >
-        {primary.length > 0 ? (
-          <div
-            data-testid="detail-primary-stack"
-            className="min-w-0 space-y-4 md:space-y-2"
-          >
-            {renderSectionStack(primary)}
-          </div>
-        ) : null}
-        {hasSupportingRail ? (
-          <aside
-            data-testid="detail-supporting-rail"
-            className="min-w-0 space-y-4 md:space-y-2"
-          >
-            {pendingVisual ? (
-              <div
-                data-testid="detail-rail-media"
-                className="hidden max-w-80 md:block"
-              >
-                {pendingVisual}
-              </div>
-            ) : null}
-            {renderSectionStack(supporting)}
-          </aside>
-        ) : null}
+        {visual}
       </div>,
     );
-    visualPlaced = true;
+  }
+  let run: DetailSection[] = [];
+  const flushRun = () => {
+    if (run.length === 0) return;
+    blocks.push(...renderSectionStack(run));
+    run = [];
   };
-
   for (const section of sections) {
     if (section.placement === "full") {
       flushRun();
@@ -513,11 +527,7 @@ function renderResponsiveLayout({
     }
   }
   flushRun();
-  return (
-    <div className="@container/detail-body space-y-4 md:space-y-2">
-      {blocks}
-    </div>
-  );
+  return <div className="space-y-4 md:space-y-2">{blocks}</div>;
 }
 
 interface DetailSectionsProps {
@@ -579,7 +589,7 @@ function resolveActivityDetail(
     id: ACTIVITY_SECTION_ID,
     title: "History",
     icon: ClockIcon,
-    placement: "supporting",
+    placement: "primary",
     content: (
       <AuditLogList
         entityKind={pageDetail.entity}
@@ -700,14 +710,23 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     ];
     return result.filter((group) => group.sections.length > 0);
   }, [sections, relationship.section, activity.section]);
-  const [emptySections, setEmptySections] = useState<Map<string, boolean>>(
-    new Map(),
+  const [sectionStates, setSectionStates] = useState<
+    Map<string, SectionIndexState>
+  >(new Map());
+  const registerSection = useCallback(
+    (id: string, state: SectionIndexState | undefined) => {
+      setSectionStates((previous) => {
+        const prior = previous.get(id);
+        if (prior?.empty === state?.empty && prior?.count === state?.count)
+          return previous;
+        const next = new Map(previous);
+        if (state) next.set(id, state);
+        else next.delete(id);
+        return next;
+      });
+    },
+    [],
   );
-  const registerEmpty = useCallback((id: string, empty: boolean) => {
-    setEmptySections((previous) =>
-      previous.get(id) === empty ? previous : new Map(previous).set(id, empty),
-    );
-  }, []);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const jumpTargetRef = useRef<
     | {
@@ -916,10 +935,10 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       className={cn("min-w-0", wide ? "flex items-start gap-4" : "space-y-2")}
     >
       <ContinuousDetailContext.Provider value>
-        <SectionEmptyRegistryContext.Provider value={registerEmpty}>
+        <SectionIndexRegistryContext.Provider value={registerSection}>
           <DetailAnchorIndex
             groups={groups}
-            emptySections={emptySections}
+            sectionStates={sectionStates}
             activeId={activeId}
             wide={wide}
             onSelect={selectSection}
@@ -936,7 +955,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
                 <h2 className="px-1 text-base font-semibold tracking-tight">
                   {group.title}
                 </h2>
-                {renderResponsiveLayout({
+                {renderDetailGroup({
                   sections: group.sections,
                   visual: index === 0 ? visual : undefined,
                 })}
@@ -953,7 +972,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
               </Card>
             )}
           </div>
-        </SectionEmptyRegistryContext.Provider>
+        </SectionIndexRegistryContext.Provider>
       </ContinuousDetailContext.Provider>
     </div>
   );

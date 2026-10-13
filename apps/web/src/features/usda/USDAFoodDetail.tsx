@@ -249,14 +249,14 @@ export const USDAFoodDetail: React.FC<{
       id: "food-information",
       title: "Food Information",
       icon: InfoIcon,
-      placement: "supporting",
+      placement: "primary",
       content: foodInfoSection,
     },
     {
       id: "associated-products",
       title: "Associated Products",
       icon: LinkIcon,
-      placement: "supporting",
+      placement: "primary",
       content: linkedProductsSection,
     },
     {
@@ -284,7 +284,7 @@ export const USDAFoodDetail: React.FC<{
       id: "unit-conversions",
       title: "Unit Conversions",
       icon: ScalesIcon,
-      placement: "supporting",
+      placement: "primary",
       content: unitMappingsSection,
     },
   ];

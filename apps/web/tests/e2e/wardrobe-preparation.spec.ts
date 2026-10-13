@@ -109,7 +109,7 @@ test("taxonomy edits keep product classification paths and labels separate from 
   ).toHaveCount(0);
   await expect(
     page
-      .getByTestId("detail-rail-media")
+      .getByTestId("detail-media")
       .getByRole("img", { name: `${labelImageName}.png` }),
   ).toHaveCount(0);
   const labels = page.locator("#labels");

@@ -22,7 +22,7 @@ const sections: DetailSection[] = [
     id: "summary",
     title: "Summary",
     icon: CircleIcon,
-    placement: "supporting",
+    placement: "primary",
     content: <p>Summary content</p>,
   },
   {
@@ -144,7 +144,7 @@ describe("continuous detail sections", () => {
     expect(screen.getByText("Story content")).toBeVisible();
   });
 
-  it("preserves supporting hash targets and offers the same compact jump action", async () => {
+  it("preserves section hash targets and offers the same compact jump action", async () => {
     renderDetail({
       detailSections: [
         ...sections,
@@ -193,7 +193,7 @@ describe("continuous detail sections", () => {
           id: "history",
           title: "History",
           icon: CircleIcon,
-          placement: "supporting",
+          placement: "primary",
           content: <p>Authored activity</p>,
         },
       ],

@@ -41,22 +41,20 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
 
   await gotoAuthenticatedPage(page, `/locations/${emptyShelf.id}#work`);
   await expect(plantingsSection).toBeVisible();
-  await expect(
-    plantingsSection.getByText("Empty", { exact: true }),
-  ).toBeVisible();
+  await expect(plantingsSection.getByText("0", { exact: true })).toBeVisible();
   await expect(
     plantingsSection.getByRole("button", { name: "New planting", exact: true }),
   ).toBeVisible();
   await expect(gardenEntriesSection).toBeVisible();
   await expect(
-    gardenEntriesSection.getByText("Empty", { exact: true }),
+    gardenEntriesSection.getByText("0", { exact: true }),
   ).toBeVisible();
 
   await gotoAuthenticatedPage(page, `/locations/${growingBed.id}#work`);
   await expect(plantingsSection).toBeVisible();
   await expect(gardenEntriesSection).toBeVisible();
   await expect(
-    gardenEntriesSection.getByText("Empty", { exact: true }),
+    gardenEntriesSection.getByText("0", { exact: true }),
   ).toBeVisible();
 
   // Create a second planting through the section's own generic create

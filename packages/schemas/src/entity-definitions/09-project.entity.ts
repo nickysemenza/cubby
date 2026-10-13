@@ -78,27 +78,23 @@ export default defineEntity({
           kind: "slot",
           id: "contribution",
           title: "Contribution",
-          placement: "supporting",
         },
         {
           kind: "fields",
           id: "resource-links",
           title: "Resources",
-          placement: "supporting",
           fields: ["googleDriveFolderUrl", "notionPageUrl"],
         },
         {
           kind: "fields",
           id: "dependencies",
           title: "Dependencies",
-          placement: "supporting",
           fields: ["blockedByIds", "blockingIds"],
         },
         {
           kind: "fields",
           id: "notes",
           title: "Notes",
-          placement: "supporting",
           fields: ["notes"],
         },
         {

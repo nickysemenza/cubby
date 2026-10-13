@@ -332,7 +332,7 @@ function SlotFallback() {
   return <Skeleton className="h-16 w-full" />;
 }
 
-/** The journal variant leads with its relation; the record's own fields become the rail. */
+/** The journal variant leads with its relation; the record's own fields follow. */
 function orderSections(
   variant: CompiledEntityPresentation["detail"]["variant"],
   declared: readonly DeclaredSection[],
@@ -343,13 +343,7 @@ function orderSections(
   const relations = built.filter(
     (section) => kindOf.get(section.id) === "relation",
   );
-  const rest = built
-    .filter((section) => kindOf.get(section.id) !== "relation")
-    .map((section) =>
-      section.placement === "primary"
-        ? { ...section, placement: "supporting" as const }
-        : section,
-    );
+  const rest = built.filter((section) => kindOf.get(section.id) !== "relation");
   return [...relations, ...rest];
 }
 
@@ -627,9 +621,9 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     sections.push({
       id: "images",
       title: "Photos",
-      empty: images.length === 0,
+      count: images.length,
       icon: ImageIcon,
-      placement: "supporting",
+      placement: "primary",
       content: (
         <EntityPhotosSection
           entity={entity as never}
@@ -642,16 +636,16 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     sections.push({
       id: "images",
       title: "Images",
-      empty: images.length === 0,
+      count: images.length,
       icon: ImageIcon,
-      placement: "supporting",
+      placement: "primary",
       content: <EntityImageList images={images} />,
     });
   }
   sections.push({
     id: "documents",
     title: "Documents",
-    empty: documents.length === 0,
+    count: documents.length,
     icon: FileTextIcon,
     placement: "primary",
     content:
@@ -663,9 +657,9 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   sections.push({
     id: "sources",
     title: "Sources",
-    empty: sources.length === 0,
+    count: sources.length,
     icon: QuotesIcon,
-    placement: "supporting",
+    placement: "primary",
     content: <EntitySourcesSection entity={entity} sources={sources} />,
   });
 

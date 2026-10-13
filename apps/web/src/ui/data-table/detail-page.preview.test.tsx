@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 for (const width of [560, 900, 1100, 1400]) {
-  it(`fits the primary and supporting sections to a ${width}px work surface`, async () => {
+  it(`stacks every section at full width on a ${width}px work surface`, async () => {
     await page.viewport(1280, 900);
     render(
       <div style={{ width }}>
@@ -37,7 +37,7 @@ for (const width of [560, 900, 1100, 1400]) {
               id: "support",
               title: "Supporting facts",
               icon: CircleIcon,
-              placement: "supporting",
+              placement: "primary",
               content: <p>Supporting evidence</p>,
             },
           ]}
@@ -47,20 +47,20 @@ for (const width of [560, 900, 1100, 1400]) {
     );
     if (width >= 800)
       await screen.findByRole("navigation", { name: "Section index" });
-    const primary = screen
-      .getByTestId("detail-primary-stack")
+    // A right rail squeezed record facts beside a second column; sections now
+    // share one full-width column in declaration order.
+    expect(document.querySelector("aside")).toBeNull();
+    const facts = document.getElementById("facts")!.getBoundingClientRect();
+    const support = document.getElementById("support")!.getBoundingClientRect();
+    const body = document
+      .querySelector("[data-detail-group]")!
       .getBoundingClientRect();
-    const rail = screen
-      .getByTestId("detail-supporting-rail")
-      .getBoundingClientRect();
-    const body = screen
-      .getByTestId("detail-primary-stack")
-      .closest("[class*=detail-body]")!
-      .getBoundingClientRect();
-    expect(rail.left > primary.left).toBe(body.width >= 960);
-    expect(primary.width).toBeGreaterThanOrEqual(
-      body.width < 960 ? body.width - 2 : 600,
-    );
+    expect(support.top).toBeGreaterThan(facts.top);
+    for (const rect of [facts, support]) {
+      // Only the section plane's hairline border may separate them.
+      expect(rect.left - body.left).toBeLessThanOrEqual(1);
+      expect(rect.width).toBeGreaterThanOrEqual(body.width - 2);
+    }
     const section = document.getElementById("facts")!;
     expect(section.scrollWidth).toBeLessThanOrEqual(section.clientWidth);
     expect(getComputedStyle(section.parentElement!).overflow).toBe("visible");

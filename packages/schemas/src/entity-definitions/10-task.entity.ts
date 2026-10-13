@@ -73,7 +73,6 @@ export default defineEntity({
           kind: "fields",
           id: "dependencies",
           title: "Dependencies",
-          placement: "supporting",
           fields: ["blockedByIds", "blockingIds"],
         },
       ],

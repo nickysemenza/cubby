@@ -50,14 +50,12 @@ export default defineEntity({
           kind: "slot",
           id: "contents-valuation",
           title: "Valuation",
-          placement: "supporting",
           explanationField: "valuation",
         },
         {
           kind: "slot",
           id: "ai-description",
           title: "AI description",
-          placement: "supporting",
         },
         {
           kind: "relation",
@@ -65,7 +63,6 @@ export default defineEntity({
           title: "Plantings",
           relation: "plantings",
           filter: { descriptor: "locationId" },
-          placement: "supporting",
         },
         {
           kind: "relation",
@@ -74,7 +71,6 @@ export default defineEntity({
           relation: "garden-entries",
           filter: { descriptor: "locationId" },
           sort: { field: "observedOn", direction: "desc" },
-          placement: "supporting",
         },
       ],
     },

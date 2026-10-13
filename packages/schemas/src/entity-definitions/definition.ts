@@ -888,7 +888,7 @@ const buildMetadataSchemas = () => {
     .string()
     .regex(/^[a-z][a-z0-9-]*$/u, { error: "must be a kebab-case id" });
   const sectionPlacement = z
-    .enum(["primary", "supporting", "full"])
+    .enum(["primary", "full"])
     .optional()
     .default("primary");
   // Presentation choices are not persisted SQL enum vocabulary.

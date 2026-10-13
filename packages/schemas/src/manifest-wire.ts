@@ -146,7 +146,6 @@ export const manifestWire = {
   ),
   SectionPlacement: raw({
     primary: "primary",
-    supporting: "supporting",
     full: "full",
   }),
   SectionSort: record({ field: "string", direction: "SectionSort.Direction" }),
