@@ -362,22 +362,29 @@
     {
       "idx": 51,
       "version": "7",
+      "when": 1791925900128,
+      "tag": "0051_ai_cost_accounting_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
       "when": 1791927217941,
       "tag": "0051_entity_source_targets",
       "breakpoints": true
     },
     {
-      "idx": 52,
+      "idx": 53,
       "version": "7",
       "when": 1791927282602,
       "tag": "0052_normalize_entity_source_targets",
       "breakpoints": true
     },
     {
-      "idx": 53,
+      "idx": 54,
       "version": "7",
-      "when": 1791931890901,
-      "tag": "0053_product_identifier_sufficiency",
+      "when": 1791932131218,
+      "tag": "0054_product_identifier_sufficiency",
       "breakpoints": true
     }
   ]

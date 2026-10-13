@@ -55,6 +55,12 @@ Traps, all seen for real:
 - Migrations from parallel branches can interleave: drizzle skips a journal
   entry older than the last applied one, so regenerate after merging `main`
   (`db:check` rejects an out-of-order journal).
+  If production already applied an unmerged predecessor, preserve its SQL,
+  hash and timestamp and insert it chronologically into the committed journal.
+  Preserve merged successor SQL and timestamps too; regenerate the snapshot
+  chain and contiguous journal indexes. Filename numbers need not match journal
+  indexes after this repair. Keep unapplied contractions after the repaired
+  prefix and out of an expansion-only repair; never reset production bookkeeping.
 - Enum-like columns are text with a CHECK generated from a `packages/schemas`
   value array. Adding a value widens that CHECK, so `db:generate` emits a
   migration that must reach prod before the code that writes the value deploys.

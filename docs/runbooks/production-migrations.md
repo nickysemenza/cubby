@@ -36,7 +36,7 @@ whose journal already contains an undeployed contract.
 
 ## Product identifier consolidation
 
-Migration `0053_product_identifier_sufficiency` must run before deploying the
+Migration `0054_product_identifier_sufficiency` must run before deploying the
 code that removes the model quality check. It preserves retired model exception
 records in the surviving Identifier exception's note; standalone model exceptions
 remain stale until reviewed against the combined requirement. Existing external-ID
@@ -53,7 +53,7 @@ unrelated household data before pushing, applies through this exact tag, then
 checks the constraint and schema afterward. Use the journal-aware runner:
 
 ```sh
-pnpm --filter @cubby/web db:migrate --target=production --through=0053_product_identifier_sufficiency
+pnpm --filter @cubby/web db:migrate --target=production --through=0054_product_identifier_sufficiency
 ```
 
 ## Typed Source references
