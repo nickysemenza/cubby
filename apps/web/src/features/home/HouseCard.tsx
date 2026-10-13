@@ -16,6 +16,7 @@ import {
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { CalendarDate } from "~/ui/common/calendar-date";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { SectionHeading } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -148,31 +149,30 @@ export function TodayAttention() {
 
   return (
     <section aria-labelledby={titleId} className="min-w-0">
-      <div className="flex items-start justify-between gap-3 border-b border-border pb-2">
-        <div className="flex min-w-0 items-start gap-2">
-          <HammerIcon
-            className="mt-0.5 size-4 shrink-0 text-slate"
-            aria-hidden
-          />
-          <div className="min-w-0">
-            <h2 id={titleId} className="font-heading text-base font-semibold">
-              Next up
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Unblocked household work, in its existing priority order.
-            </p>
-          </div>
-        </div>
-        <Button
-          render={<Link to="/tasks" search={{ view: "agenda" }} />}
-          nativeButton={false}
-          variant="ghost"
-          size="sm"
-          className="h-11 shrink-0 text-xs sm:h-7"
-        >
-          All tasks
-        </Button>
-      </div>
+      <SectionHeading
+        id={titleId}
+        title={
+          <>
+            <HammerIcon
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            Next up
+          </>
+        }
+        description="Unblocked household work, in its existing priority order."
+        actions={
+          <Button
+            render={<Link to="/tasks" search={{ view: "agenda" }} />}
+            nativeButton={false}
+            variant="ghost"
+            size="sm"
+            className="h-11 shrink-0 text-xs sm:h-7"
+          >
+            All tasks
+          </Button>
+        }
+      />
 
       {briefing.isLoading ? (
         <Skeleton className="mt-2 h-4 w-44" />

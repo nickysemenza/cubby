@@ -4,7 +4,7 @@ import { expense, entityLink } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { gotoDetailActions } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { getFixtureDb } from "./fixtures-core";
 
@@ -37,7 +37,7 @@ test.describe("split and attach, with the server's rules", () => {
       purchaseId: target.id,
     });
 
-    await gotoAuthenticatedPage(
+    await gotoDetailActions(
       page,
       `/expenses/${source.shortcode}`,
       page.getByRole("button", { name: "Split..." }),
@@ -98,7 +98,7 @@ test.describe("split and attach, with the server's rules", () => {
       cost: 3,
     });
 
-    await gotoAuthenticatedPage(
+    await gotoDetailActions(
       page,
       `/purchases/${target.shortcode}#work`,
       page.getByRole("button", { name: "Attach existing expenses" }),
@@ -153,7 +153,7 @@ test.describe("split and attach, with the server's rules", () => {
       manufacturer: "Synthetic Maker",
     });
 
-    await gotoAuthenticatedPage(
+    await gotoDetailActions(
       page,
       `/purchases/${target.shortcode}#work`,
       page.getByRole("button", { name: "Attach products" }),

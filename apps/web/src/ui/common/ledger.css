@@ -22,9 +22,9 @@
   grid-template-columns: subgrid;
   align-items: center;
   min-width: 0;
-  min-height: 2rem;
+  min-height: 1.75rem;
   row-gap: var(--brand-space-1);
-  padding-block: var(--brand-space-1);
+  padding-block: 0.125rem;
   border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
 }
 

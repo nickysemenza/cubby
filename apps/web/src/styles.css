@@ -277,8 +277,8 @@
   --phase-site: oklch(0.57 0.065 150); /* landscaping · logistics · specialty */
   --phase-planning: oklch(0.55 0.04 260); /* planning · coordination */
 
-  /* Modest geometry: controls 6–8px, panels 10–14px, pills remain full. */
-  --radius: 0.75rem;
+  /* Web workspace geometry; native retains its platform metrics. */
+  --radius: var(--brand-web-radius-panel);
 
   --domain-cook: var(--brand-domain-cook);
   --domain-cook-surface: color-mix(
@@ -312,7 +312,7 @@
   );
 
   /* Sidebar */
-  --sidebar: var(--brand-cream);
+  --sidebar: var(--brand-canvas);
   --sidebar-foreground: var(--brand-foreground);
   --sidebar-primary: var(--brand-ultramarine);
   --sidebar-primary-foreground: var(--brand-on-accent);
@@ -322,7 +322,7 @@
   --sidebar-ring: var(--brand-ultramarine);
   --app-sidebar-expanded-width: 11rem;
   --app-sidebar-collapsed-width: 2.5rem;
-  --app-command-band-height: 2.5rem;
+  --app-sidebar-header-height: 2.5rem;
 }
 /*
   ---break---
@@ -395,7 +395,7 @@
   --color-chart-positive: var(--chart-positive);
   --color-chart-negative: var(--chart-negative);
   --color-chart-neutral: var(--chart-neutral);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-sm: var(--brand-web-radius-control);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
@@ -596,7 +596,7 @@
      targets so rail and command-band controls never overflow their frame. */
   :root {
     --app-sidebar-collapsed-width: 3.5rem;
-    --app-command-band-height: 3rem;
+    --app-sidebar-header-height: 3rem;
   }
 
   :where([data-app-rail] a, [data-app-rail] button) {

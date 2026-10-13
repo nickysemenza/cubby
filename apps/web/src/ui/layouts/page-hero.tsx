@@ -6,11 +6,19 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { type ReactNode, useState } from "react";
 import { z } from "zod";
 
+/* THESIS: dense household records use one continuous content column and a ToC.
+ * OWN-WORLD: open white work surfaces, compact ink controls, inset section bands.
+ * STORY: identify the record, inspect every fact, and act beside its context.
+ * FIRST VIEWPORT: thumbnail and readable identity precede facts; Edit and one
+ * workflow action remain visible, and secondary actions have one overflow.
+ * FORM: approved A+B composition, seed a9ed9de0; retain the ToC sidebar.
+ * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+ */
+import { EntityCover } from "~/entity/components/entity-cover";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatInstant } from "~/lib/date-format";
 import { cn, formatCount } from "~/lib/utils";
-import { ImageGallery } from "~/ui/media/image-gallery";
 import {
   domainForEntity,
   domainWayfinding,
@@ -18,7 +26,6 @@ import {
 } from "~/ui/navigation/domain-wayfinding";
 import { getEntityNavGroup } from "~/ui/navigation/nav-items";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
-import { Card, CardContent } from "~/ui/primitives/card";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 
 import { WorkbenchBand } from "./workbench-band";
@@ -39,8 +46,8 @@ const heroVariants = cva(
 const titleVariants = cva("font-heading tracking-tight break-words", {
   variants: {
     variant: {
-      list: "text-2xl font-semibold",
-      compact: "text-2xl font-semibold",
+      list: "text-xl leading-7 font-semibold",
+      compact: "text-xl leading-7 font-semibold",
     },
   },
   defaultVariants: { variant: "list" },
@@ -57,10 +64,8 @@ export interface DetailHeroActions {
   /** The single action that should remain visible on every viewport. */
   primary?: ReactNode;
   /**
-   * Supporting and destructive actions. The content owns its width
-   * treatment (`EntityActionButtons overflow="responsive"`: every verb
-   * spelled out at `md+`, a "More actions" popover below); the plate never
-   * nests a second popover around it.
+   * One workflow action and overflow. The caller owns their availability and
+   * dialogs; the header supplies wrapping without a second popover.
    */
   secondary?: ReactNode;
 }
@@ -277,22 +282,13 @@ interface DetailPlateProps {
   heroStats?: DetailHeroStat[];
   /** Deliberate page-level action hierarchy rendered on the plate. */
   heroActions?: DetailHeroActions;
-  /** Images shown as a swipeable hero gallery on mobile (above the plate). */
+  /** Identity thumbnail; the full gallery stays in the Images section. */
   heroImages?: Array<{ id: string; url: string; filename: string }>;
-  /**
-   * Sourced detail media shown in place of the owned-image gallery. The slot
-   * lets a page present related imagery without treating it as editable record
-   * media.
-   */
-  heroMedia?: ReactNode;
 }
 
 /**
- * Detail record hero: a quiet identity surface with a domain breadcrumb,
- * breadcrumb, name, status, added date, compact stats, and page actions.
- *
- * Domain identity and status remain separate semantic signals. The mobile image gallery rides above
- * the plate when heroImages are present.
+ * Identity has a minimum flex basis so actions wrap before squeezing a title.
+ * Domain identity, record status, and the thumbnail remain distinct signals.
  */
 function DetailPlate({
   entity,
@@ -304,35 +300,36 @@ function DetailPlate({
   heroStats,
   heroActions,
   heroImages,
-  heroMedia,
 }: DetailPlateProps) {
   const parsedRawData = detailRawDataSchema.safeParse(rawData);
   const onFileSince = getOnFileSince(
     parsedRawData.success ? parsedRawData.data : undefined,
   );
+  const cover = heroImages?.[0];
   return (
-    <>
-      {/* Phone media precedes identity; desktop pairs it with the facts rail. */}
-      {heroMedia !== undefined ? (
-        <div className="mx-auto mb-2 w-full max-w-80 overflow-hidden rounded-xl bg-muted md:hidden">
-          {heroMedia}
-        </div>
-      ) : (
-        heroImages &&
-        heroImages.length > 0 && (
-          <div className="mx-auto mb-2 w-full max-w-80 overflow-hidden rounded-xl bg-muted md:hidden">
-            <ImageGallery images={heroImages} />
-          </div>
-        )
-      )}
-
-      <Card className="py-3" data-testid="detail-spec-plate">
-        <CardContent className="px-3 py-0 sm:px-4">
-          <div
-            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1" /* tight */
-          >
+    <header
+      className="border-b border-border pb-3"
+      data-testid="detail-spec-plate"
+    >
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+        <div className="flex min-w-0 flex-[1_1_20rem] items-start gap-3">
+          {cover && heroImages && (
+            <Link
+              to="/images/$shortcode"
+              params={{ shortcode: cover.id }}
+              className="shrink-0 overflow-hidden rounded-sm outline-1 outline-[oklch(0_0_0/0.1)]"
+            >
+              <EntityCover
+                images={heroImages}
+                entity={entity}
+                alt={cover.filename}
+                size={48}
+              />
+            </Link>
+          )}
+          <div className="min-w-0 flex-1 space-y-1">
             {wayfinding !== false && (
-              <div className="col-span-2 min-w-0">
+              <div className="min-w-0">
                 <DetailBreadcrumb
                   entity={entity}
                   heroNo={heroNo}
@@ -340,11 +337,10 @@ function DetailPlate({
                 />
               </div>
             )}
-            <h1 className="col-span-2 min-w-0 font-heading text-xl leading-6 font-semibold tracking-tight break-words sm:col-span-1 sm:text-2xl sm:leading-8">
+            <h1 className="min-w-0 font-heading text-xl leading-7 font-semibold tracking-tight break-words">
               {name}
             </h1>
-            <DetailPlateActions actions={heroActions} />
-            <div className="col-span-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {heroNo && (
                 <span className="md:hidden">
                   <CopyableHeroNo heroNo={heroNo} />
@@ -358,26 +354,27 @@ function DetailPlate({
               {onFileSince && <span>Added {onFileSince}</span>}
             </div>
           </div>
-          {heroStats && heroStats.length > 0 && (
-            // Compact record stats — hairline separators, plain-language
-            // labels, and tabular numerals.
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
-              {heroStats.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="flex min-w-0 items-baseline gap-1.5"
-                >
-                  <span className="text-muted-foreground">{stat.label}</span>
-                  <div className="min-w-0 font-semibold tabular-nums">
-                    {stat.value}
-                  </div>
-                </div>
-              ))}
+        </div>
+        <DetailPlateActions actions={heroActions} />
+      </div>
+      {heroStats && heroStats.length > 0 && (
+        // Compact record stats — hairline separators, plain-language
+        // labels, and tabular numerals.
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
+          {heroStats.map((stat) => (
+            <div
+              key={stat.label}
+              className="flex min-w-0 items-baseline gap-1.5"
+            >
+              <span className="text-muted-foreground">{stat.label}</span>
+              <div className="min-w-0 font-semibold tabular-nums">
+                {stat.value}
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
-    </>
+          ))}
+        </div>
+      )}
+    </header>
   );
 }
 
@@ -386,7 +383,7 @@ function DetailPlateActions({ actions }: { actions?: DetailHeroActions }) {
   const secondary = actions.secondary;
 
   return (
-    <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1 print:hidden">
+    <div className="flex max-w-full flex-wrap items-center gap-2 print:hidden">
       {actions.primary}
       {secondary}
     </div>
@@ -409,7 +406,6 @@ interface PageHeaderProps {
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
   heroStats?: DetailHeroStat[];
   heroImages?: Array<{ id: string; url: string; filename: string }>;
-  heroMedia?: ReactNode;
   count?: number;
   listChrome?: "hero" | "workbench";
   workbenchControls?: ReactNode;
@@ -437,7 +433,6 @@ export function PageHeader({
   heroStamp,
   heroStats,
   heroImages,
-  heroMedia,
   count,
   listChrome = "hero",
   workbenchControls,
@@ -458,7 +453,6 @@ export function PageHeader({
         heroStats={heroStats}
         heroActions={heroActions}
         heroImages={heroImages}
-        heroMedia={heroMedia}
       />
     );
   }

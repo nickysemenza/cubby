@@ -6,7 +6,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { createEvidenceHarnessContext } from "./fixtures-core";
 import { seedSplitSettlementPrerequisite } from "./fixtures-finance";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { gotoAuthenticatedPage, gotoDetailActions } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { dispatchesOperation, operationResult } from "./dispatch-wire";
 
@@ -90,7 +90,7 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
     merchant: `${merchant} void`,
     postedDate: "2026-09-10",
   });
-  await gotoAuthenticatedPage(
+  await gotoDetailActions(
     page,
     `/purchases/${seed.first.shortcode}`,
     page.getByRole("button", { name: "Match statement activity" }),
@@ -105,18 +105,6 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
       exact: true,
     }),
   ).toBeVisible();
-  await page
-    .getByRole("heading", { level: 2, name: "Relations", exact: true })
-    .scrollIntoViewIfNeeded();
-  await expect(
-    actions.getByRole("button", {
-      name: "Match statement activity",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await page
-    .getByRole("heading", { level: 2, name: "Overview", exact: true })
-    .scrollIntoViewIfNeeded();
   const advisoryResponse = page.waitForResponse((response) => {
     return dispatchesOperation(
       response.request(),

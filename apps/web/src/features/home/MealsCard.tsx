@@ -9,7 +9,7 @@ import { formatMealCost, mealListLabel } from "~/app/meals/meal-format";
 import { mealKindIcon, mealTypeIcon } from "~/app/meals/meal-options";
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
-import { Row, Stack } from "~/ui/layout";
+import { Row, Stack, SectionHeading } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -42,31 +42,30 @@ export function TodayMeals({
 
   return (
     <section aria-labelledby={titleId} className="min-w-0">
-      <div className="flex items-start justify-between gap-3 border-b border-border pb-2">
-        <div className="flex min-w-0 items-start gap-2">
-          <ForkKnifeIcon
-            className="mt-0.5 size-4 shrink-0 text-slate"
-            aria-hidden
-          />
-          <div className="min-w-0">
-            <h2 id={titleId} className="font-heading text-base font-semibold">
-              Meals ahead
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              The next seven days.
-            </p>
-          </div>
-        </div>
-        <Button
-          render={<Link to="/meals" />}
-          nativeButton={false}
-          variant="ghost"
-          size="sm"
-          className="h-11 shrink-0 text-xs sm:h-7"
-        >
-          Calendar
-        </Button>
-      </div>
+      <SectionHeading
+        id={titleId}
+        title={
+          <>
+            <ForkKnifeIcon
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            Meals ahead
+          </>
+        }
+        description="The next seven days."
+        actions={
+          <Button
+            render={<Link to="/meals" />}
+            nativeButton={false}
+            variant="ghost"
+            size="sm"
+            className="h-11 shrink-0 text-xs sm:h-7"
+          >
+            Calendar
+          </Button>
+        }
+      />
 
       <Stack gap="xs" className="mt-2">
         {mealsQuery.isLoading ? (

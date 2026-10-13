@@ -2,23 +2,11 @@ import type { Icon } from "@phosphor-icons/react/lib";
 import { Link, type LinkComponentProps } from "@tanstack/react-router";
 
 import { cn } from "~/lib/utils";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
+import { Card, CardContent } from "~/ui/primitives/card";
 
-/**
- * The drill-through link in a dashboard card's header ("LEDGER", "INVENTORY").
- *
- * Exists to own the touch target: as six hand-rolled `text-2xs` links these
- * measured 14px tall on a phone, against DESIGN.md's 40–48px phone-control
- * floor — and they are each card's primary way out to the full record. The
- * mono eyebrow look is unchanged; only the hit area grows, and only where
- * there is no pointer.
- */
+import { SectionHeading } from "./section";
+
+/** Dashboard drill-through links retain a 44px phone target even in compact headings. */
 export function CardActionLink({
   className,
   ...props
@@ -26,7 +14,7 @@ export function CardActionLink({
   return (
     <Link
       className={cn(
-        "-mr-1 inline-flex min-h-11 shrink-0 items-center px-1 font-mono text-2xs text-muted-foreground uppercase transition-colors hover:text-foreground sm:mr-0 sm:min-h-0 sm:px-0",
+        "-mr-1 inline-flex min-h-11 shrink-0 items-center rounded-sm px-1 text-xs text-muted-foreground transition-colors hover:text-foreground sm:mr-0 sm:min-h-0 sm:px-0",
         className,
       )}
       {...props}
@@ -65,20 +53,19 @@ export function DashboardCard({
   children,
 }: DashboardCardProps) {
   return (
-    <Card className="flex flex-col rounded-2xl border-border bg-card shadow-none">
-      <CardHeader className="border-b border-border pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Icon className="size-3.5 shrink-0 text-slate" />
-            <CardTitle as={titleAs}>{title}</CardTitle>
-          </div>
-          {action}
-        </div>
-        {description && (
-          <CardDescription className="text-xs">{description}</CardDescription>
-        )}
-      </CardHeader>
-      <CardContent className="flex-1">{children}</CardContent>
+    <Card className="gap-2 rounded-none border-0 bg-transparent p-0 shadow-none">
+      <SectionHeading
+        as={titleAs}
+        title={
+          <>
+            <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+            {title}
+          </>
+        }
+        description={description}
+        actions={action}
+      />
+      <CardContent className="flex-1 px-2">{children}</CardContent>
     </Card>
   );
 }

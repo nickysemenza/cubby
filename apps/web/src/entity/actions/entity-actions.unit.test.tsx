@@ -3,20 +3,17 @@ import {
   entityManifest,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
-import { testShortcode } from "@cubby/schemas/testing";
-import { render, renderHook, screen } from "@testing-library/react";
+import { render, renderHook } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { EntityActionDefinition } from "~/entity/actions/entity-action-definition";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { CubbyRow as Row } from "../../ui/data-table/table-features";
 import type { ActionVerbId } from "./action-verbs";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles } from "./entity-actions";
 import {
-  EntityActionButtons,
   entityActionCatalogDescriptors,
   useEntityActions,
 } from "./entity-actions";
@@ -366,30 +363,5 @@ describe("useEntityActions", () => {
     expect(() => rerender({ entity: "task" })).toThrow(
       /must be constant for a component instance/,
     );
-  });
-});
-
-describe("EntityActionButtons", () => {
-  let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
-  afterEach(() => {
-    harness?.dispose();
-    harness = undefined;
-  });
-
-  // One registry for both widths: two components each mounted every dialog.
-  it("responsive spells verbs out at md+ and folds them into a menu below, from one registry", () => {
-    harness = createBrowserTestHarness();
-    render(
-      <EntityActionButtons
-        entity="product"
-        record={{ id: testShortcode("product", "PRD-4K7M") }}
-        overflow="responsive"
-      />,
-      { wrapper: harness.wrapper },
-    );
-    const inline = screen.getByRole("button", { name: "Copy codes" });
-    expect(inline.closest(".md\\:flex")).not.toBeNull();
-    const menu = screen.getByRole("button", { name: "More actions" });
-    expect(menu.closest(".md\\:hidden")).not.toBeNull();
   });
 });

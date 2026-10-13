@@ -109,9 +109,20 @@ test("taxonomy edits keep product classification paths and labels separate from 
   ).toHaveCount(0);
   await expect(
     page
-      .getByTestId("detail-media")
+      .getByTestId("detail-spec-plate")
       .getByRole("img", { name: `${labelImageName}.png` }),
   ).toHaveCount(0);
+  const cover = page
+    .getByTestId("detail-spec-plate")
+    .getByRole("img", { name: `${itemImageName}.png` });
+  await expect(cover).toBeVisible();
+  await expect
+    .poll(() =>
+      cover.evaluate(
+        (node) => node instanceof HTMLImageElement && node.naturalWidth > 0,
+      ),
+    )
+    .toBe(true);
   const labels = page.locator("#labels");
   await expect(
     labels.getByRole("img", { name: `${labelImageName}.png` }),
@@ -119,6 +130,10 @@ test("taxonomy edits keep product classification paths and labels separate from 
   await expect(
     labels.getByRole("img", { name: `${itemImageName}.png` }),
   ).toHaveCount(0);
+  await page.getByTestId("detail-spec-plate").scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: test.info().outputPath("product-identity-desktop.png"),
+  });
   await page.screenshot({
     path: test.info().outputPath("product-images-desktop.png"),
     fullPage: true,

@@ -1,42 +1,130 @@
 ---
-name: Cubby Native Archive
-summary: Familiar navigation, photo-first record dossiers, and focused work areas.
-sourceOfTruth: packages/design-tokens/tokens.json
-appearance: light
+name: Cubby Dense Utility
+description: Dense light desktop workspaces with open sections and continuous record navigation.
+colors:
+  foreground: "#1D1D1F"
+  graphite-secondary: "#636368"
+  canvas: "#F5F5F7"
+  surface: "#FFFFFF"
+  inset: "#EEEEF0"
+  hairline: "#DCDCE0"
+  interaction: "#1D1D1F"
+  interaction-hover: "#3A3A3E"
+  on-accent: "#FFFFFF"
+  signal: "#C9F45B"
+  domain-cook: "#A86C25"
+  domain-pantry: "#347A51"
+  domain-plan: "#675DAD"
+  domain-house: "#337687"
+  domain-finance: "#9D5A76"
+  positive: "#25734E"
+  warning: "#9B640D"
+  warning-ink: "#75500D"
+  destructive: "#B54336"
+  slate: "#636368"
+typography:
+  title:
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+    fontSize: "20px"
+    fontWeight: 600
+    lineHeight: "28px"
+  body:
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+  label:
+    fontFamily: '"SF Mono", ui-monospace, Menlo, Consolas, monospace'
+rounded:
+  control: "4px"
+  panel: "8px"
+  chip: "4px"
+spacing:
+  space-1: "4px"
+  space-2: "8px"
+  space-3: "12px"
+  space-4: "12px"
+  space-5: "16px"
+  space-6: "16px"
+components:
+  button-primary:
+    backgroundColor: "{colors.interaction}"
+    textColor: "{colors.on-accent}"
+    rounded: "{rounded.control}"
+    height: "32px"
+  button-primary-hover:
+    backgroundColor: "{colors.interaction-hover}"
+  input:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.control}"
+    height: "32px"
+  chip:
+    rounded: "{rounded.chip}"
+    height: "20px"
 ---
 
-# Cubby Native Archive
+# Design System: Cubby
 
-Cubby combines a native archive shell, a compact record dossier, and focused working context. Familiar navigation makes records easy to find; true photography leads their identity; aligned facts make them fast to inspect. Cooking, imports, reconciliation, and project work expose their real actions beside the data those actions use. An ordinary record stays calm rather than becoming an operations dashboard. Ink marks controls and current navigation. Citron marks focus or actionable attention sparingly. Domain colors identify where a record belongs. Positive, warning, and destructive colors describe condition. These roles never substitute for one another.
+## Overview
 
-`packages/design-tokens/tokens.json` owns the shared palette and geometry. `pnpm generate` writes `brand.css` for web, and adaptive Apple color assets and Swift metrics. Edit the source, not those outputs. Web is light-only; Apple follows system light and dark appearances.
+Cubby is a very dense, light desktop utility. Open content, compact contextual identity, aligned facts, and subtle gray section bands make household records easy to inspect and edit. Mobile web remains usable; native Swift apps own fieldwork. Web has no dark mode.
 
-## Visual language
+**Key Characteristics:**
 
-- Canvas `#F5F5F7`, surface `#FFFFFF`, inset `#EEEEF0`, ink `#1D1D1F`, secondary ink `#636368`, hairline `#DCDCE0`. Neutral surfaces let record photography and native controls carry the hierarchy.
-- Interaction uses ink and a light label. Citron `#C9F45B` is a small signal dot, focus mark, or subtle selected-row wash. It is not a success, warning, or domain state.
-- Five stable domain marks come from the entity declaration: Cook, Pantry, Plan, House, and Finance. Put them on navigation and record identity, not every card edge.
-- Page and record identity, body, labels, controls, and tables use the platform system sans through the shared font tokens. Hierarchy comes from size and weight, never a competing editorial face or decorative uppercase kicker. Shortcodes use the system mono stack. Quantities and money use tabular numbers.
-- Spacing comes from the shared token steps 4/8/12/12/16/16px (`packages/design-tokens/tokens.json`); the layout gap scale reads them, so web and native density move together. Desktop inputs, selects, pickers, date fields, and tab lists are 32px, matching the default button; menu items are 28px. Text, picker, date, and textarea controls share one surface: card fill, hairline border, 8px radius.
-- Panels have a 12px radius; controls 8px; compact chips 7px. Native Apple controls keep their system geometry. Nested surfaces follow concentric radii. Resting surfaces use tone and 1px structural rules, with shadow only for floating overlays.
-  Web status, enum, category, and suggestion pills share `Pill` geometry. Saved values retain their semantic tint; suggestion mode uses a quiet dashed boundary with the same height and radius. Applying a suggestion shows pending feedback in that cell while the surrounding records remain readable.
-  Every field suggestion opens one body: the proposal (current → suggested), confidence as "92% · high", the runner-up, the basis fields the model read, a provenance caption (model · time · Run · AI usage), then Accept, Reject and "Use a different value…", whose caption says the value is written and the suggestion recorded as a Miss. Desktop detail shows the body inline; table cells and phone rows keep a compact mark that opens it. Meaning never rides in a `title`. `AiProposalCard` stays only for chat-tier proposals with prose (location descriptions, USDA matches, ingredient merges) and states confidence with the same helper and Accept verb.
-- Images use a faint neutral outline. A real record photo leads detail but has a bounded frame, leaving identity and useful facts nearby. Phone media appears before identity in a frame at most 320px wide and 176px tall, with 44px image selectors when there are several photos; wide detail puts photography beside facts. The full photo opens in preview. When there is no image, begin with identity and facts without an empty media area. Never place an unrelated illustration in an empty hero.
-- Motion explains state or space. High-frequency search, keyboard, table, and navigation actions respond immediately. Transitions name only changed properties and respect reduced motion.
+- Dense desktop workspaces with visible information and actions.
+- One continuous record column beside contents navigation.
+- Restrained color, system typography, and flat structural separators.
 
-## App frame
+The frontmatter records implemented tokens; `packages/design-tokens/tokens.json` owns the palette, spacing, fonts, and separate web geometry. Generation writes `packages/design-tokens/brand.css`; `src/styles.css` binds the web theme. Change those sources rather than generated outputs. Native geometry and appearance remain independent.
 
-Wide web uses a compact 176px expanded or 40px collapsed rail, a 40px command band, central work surface, and optional 400px modeless inspector at 1280px and wider. Intermediate widths use the inspector sheet. Phone uses contextual route navigation and complete detail routes. Preserve safe-area, virtual-keyboard, and history behavior.
+## Colors
 
-Chrome is dense: expanded rail routes are 26px rows with 13px labels, collapsed rail and footer controls are 28px, and roster counts are plain muted tabular numbers rather than chips. The active rail item is a quiet muted fill with ink text and a bold icon. Domain sections fold from their heading, and the fold persists per person; a domain dot on the heading and domain-colored icons in the collapsed rail retain the five domain identities. Search, account, utility, and Settings remain reachable. Page headings, workbench controls, labels, and table headers share the system sans. Compact identity and quiet counts leave room for the work itself.
+### Primary
 
-Today/Home uses only the existing task, problem, meal, activity, nutrition, inventory, and expense data. Put current work first, supporting household context second, and exploration behind disclosure. Summary cards must report real query values. No invented progress score, risk prediction, or AI panel.
+Ink identifies primary controls and current navigation, with light labels. Citron is a sparse attention signal or selected-row wash; it never means success, warning, or domain identity.
 
-## Generic records
+### Secondary
+
+Cook, Pantry, Plan, House, and Finance retain declaration-driven domain marks on navigation and record identity. Positive, warning, and destructive colors communicate condition with text or icons.
+
+### Neutral
+
+Canvas, white surface, gray inset, secondary ink, and hairline borders separate regions without decorating every record. Gray section bands use the shared muted surface.
+
+## Typography
+
+Use the platform system sans for identity, body, labels, controls, and tables. Hierarchy comes from size and weight. Detail titles use the frontmatter title role; section headings are compact semibold text (13px). Shortcodes use system mono; quantities and money use tabular figures. Stacked table values use a primary line (13px type, 15px line height) and muted secondary line (11px type, 13px line height).
+
+## Layout
+
+The desktop shell has a collapsible navigation sidebar containing global search and create, with contextual identity and actions in the page itself. There is no global desktop command header. Preserve sidebar preferences, search, account, utilities, and Settings. Domain headings fold with persisted preferences; counts remain quiet tabular text. The modeless inspector is direct record context, with a sheet at intermediate widths and full detail navigation on phone. Preserve safe areas, virtual-keyboard behavior, and browser history.
+
+Detail content is one scrolling column. Keep the sticky, independently scrolling ToC alongside wide content and the same hierarchy in phone “Jump to”; the switch follows available record width (800px). All empty fields and sections stay visible. A small identity thumbnail (48px) sits beside the title; the full gallery appears later in Images. Header actions wrap before squeezing identity. Lists retain compact workbench controls and horizontal table overflow rather than horizontal page overflow. Ownership evidence uses the shared RecordList in one content column.
+
+Today/Home uses open dashboard frames and shared section bands. Current work leads, household context follows, and exploration stays behind disclosure. Summaries report existing query values; never invent progress scores, risk predictions, or AI panels.
+
+## Elevation & Depth
+
+Resting page and detail sections are open and flat, separated by tone and hairlines. Section headings use a subtle gray band rather than enclosing every section in a card. Floating overlays retain the shared overlay shadow; pinned table boundaries retain their functional edge treatment. Motion explains state, respects reduced motion, and stays immediate for frequent search, navigation, and table work. Do not add page-load or media entrance animation.
+
+## Shapes
+
+Web controls and compact chips use the frontmatter control and chip radii; panels use the panel radius. These web tokens are independent of native geometry. Inputs use a white surface and hairline border; nested surfaces keep concentric corners. Images use a faint neutral outline.
+
+## Components
+
+### Shared headings and actions
+
+`Page` is the sole list/detail shell; `src/ui/layouts/page-hero.tsx` owns contextual headers. Detail identity is an open header with a structural bottom divider, thumbnail, wayfinding, readable title, quiet metadata, and inline stats. Keep Edit and the main workflow action visible; remaining review and destructive actions use accessible overflow. `SectionHeading` owns the wrapping gray heading band for details, forms, and home. `FormSection` uses it with sentence-case headings and retains explicit local disclosure behavior.
+
+### Controls and suggestions
+
+Default desktop buttons and inputs are compact (32px); small buttons and menu items are tighter (28px). Phone interactive targets retain at least 44×44px. Primary buttons use ink; outlined, secondary, ghost, and destructive variants retain distinct treatments. Focus uses a visible ring without layout shift; invalid and disabled states remain distinct.
+
+Status, enum, category, and suggestion values share `Pill` geometry. Saved values retain semantic tint; suggestions have a quiet dashed boundary. Applying a suggestion shows cell-local pending feedback. Every field suggestion exposes current → suggested, confidence, runner-up, basis fields, provenance (model, time, Run, AI usage), Accept, Reject, and “Use a different value…”, explaining that the value is written and recorded as a Miss. Detail shows this inline; table and phone marks open it. Meaning never depends on a title attribute. `AiProposalCard` remains for prose proposals and uses the same confidence and Accept wording.
+
+### Records, forms, and tables
 
 Entity declarations own names, domains, images, fields, view choices, relations, sections, and action availability. Generated route shells and `GenericEntityList`/`GenericEntityDetail` render them. An entity-specific page may supply a declared slot or necessary query adapter; it does not introduce its own page chrome. List workbenches use one compact desktop row: system-sans identity and a quiet count, search and active filters, a Filters disclosure, a manifest-driven view menu, then actions. Controls wrap when their content needs room; the title never steals the search input’s usable width. Inactive filters stay inside the disclosure. Full filtered totals and suggestion sweep/review status share one compact wrapping strip directly above the records; errors and diagnostics remain visible with their controls. Phone identity and query tools get full-width rows; view and creation follow in the same reading and focus order. The filter/sort sheet remains. Filtered empty tables, phone rows, and cards share the same clear-filter recovery action; URL-only scopes retain their own chips. Card placeholders use a quiet entity symbol rather than a repeated decorative title. The external USDA catalog remains an external-reference exception.
 
-A complete record uses a clear human identity, optional true media, compact metadata, declared facts, direct relationships, supporting evidence, and actions the entity can actually perform. The generated default Details section leads the primary dossier; workflow slots follow it, while explicit placements and relation-first journals retain their declared intent. Detail titles and primary actions align on desktop; stats read inline rather than as separate metric blocks. Scalar facts use the shared `Ledger` facts layout: semantic label/value rows, quiet horizontal rules, aligned values, and a separate right-aligned action rail. Labels have a bounded readable column rather than taking half the record width. Provenance captions stay beside the value when space permits and wrap within that slot at narrow widths; they never push the info controls out of alignment. Read-only fact rows may be tighter than controls; phone links and actions keep their 44px target. Prose gets full-width space. Supporting metadata and stats use compact inline text rather than headline metric cards. Detail sections never split into columns: beside the table of contents, every section spans the full work surface in declaration order, and true media leads the Overview group at a bounded width. Section actions wrap at narrow widths, and overflow-enabled sections remain unclipped by their plane. Media uses one quiet figure and thumbnail strip; image-management controls stay in the declared media section. High-frequency record navigation does not introduce media entrance or hover zoom animations. An inspector is a bounded preview of the loaded record and its direct context, never a second canonical detail page or a separate batch selection state. A row click inspects; a checkbox selects for batch work.
+A complete record uses a clear human identity, optional true media, compact metadata, declared facts, direct relationships, supporting evidence, and actions the entity can actually perform. The generated default Details section leads the primary dossier; workflow slots follow it, while explicit placements and relation-first journals retain their declared intent. Detail titles and primary actions align on desktop; stats read inline rather than as separate metric blocks. Scalar facts use the shared `Ledger` facts layout: semantic label/value rows, quiet horizontal rules, aligned values, and a separate right-aligned action rail. Labels have a bounded readable column rather than taking half the record width. Provenance captions stay beside the value when space permits and wrap within that slot at narrow widths; they never push the info controls out of alignment. Read-only fact rows may be tighter than controls; phone links and actions keep their 44px target. Prose gets full-width space. Supporting metadata and stats use compact inline text rather than headline metric cards. Detail sections never split into columns: beside the table of contents, every section spans the full work surface in declaration order, and the full gallery stays in the declared Images section. Section actions wrap at narrow widths, and overflow-enabled sections remain unclipped by their plane. The header uses only a small identity thumbnail; gallery and image-management controls stay in the declared media section. High-frequency record navigation does not introduce media entrance or hover zoom animations. An inspector is a bounded preview of the loaded record and its direct context, never a second canonical detail page or a separate batch selection state. A row click inspects; a checkbox selects for batch work.
 
 Full record details are one continuous, mounted page. Declared sections retain their Overview, Work and Evidence grouping; Relations and Activity follow, and formerly separate supporting views join Evidence. A wide work surface has a sticky, independently scrollable table of contents with every group and its indented subsections expanded. Below 800px of available record width, a compact “Jump to” menu exposes the same hierarchy. Links scroll and focus their stable section targets; scrolling updates the current entry without adding history. Explicit jumps retain URL fragments and browser Back/Forward. Section bodies start open; existing pagination and Show more controls remain. Empty sections stay in the page and outline with secondary titles, while create/actions keep normal contrast. List sections (relations, Connected records, photos, documents, sources) show their row count, 0 included, beside the heading and in the contents; other sections show no number, and an empty one is announced as Empty to assistive tech only. Contents entries are single-line and truncate, counts sit in a right-aligned tabular column, group labels are quiet uppercase, and the current entry is a left bar with foreground text. Relations holds one grouped Connected records section — each curated view with results shows its first three rows and a link to the complete view; views without results fold into one "No connections" line — then Relationships, which on a detail page is the graph explorer alone: the record's own relations, similar products and physical connections already appear elsewhere, so it never lists them again. Loading and failed reads never count as empty. Drafts stay mounted, and navigation responds immediately without entrance or smooth-scroll animation. Apple uses native Contents navigation; only the Run evidence pilot hosts the isolated Evidence surface. Related-record links return to native routes. The authentication and bridge contract lives in `apps/apple/DESIGN.md#run-evidence-pilot`.
 
@@ -66,9 +154,9 @@ creating assignments.
 
 Specialist workflows such as photo review, import, calendar, Gantt, camera, reconciliation, and matrices keep their task-specific controls inside the shared frame. Preserve status wording and raw diagnostics where the product contract requires them.
 
-RTable owns interactive record work: virtualization, pinned and resizable columns, in-session layouts, filters, selection, clipboard, grouping, inline editing, and aggregate footers. Desktop data rows remain 32px by default. Every cell value gets the same 4px start padding; decorated cells render through `CellFrame`. A column is as narrow as its values: info, relation and resolution controls appear only on the hovered or focused row, over the cell's free edge, and reserve no width; a derived value reads muted, and suggestion marks stay visible. Quiet full-height column rules are fainter than the header boundary. Quality scores remain numerically sortable but their pills start at the same padding as other categorical values. Table thumbnail frames match the 32px row height and the image column reserves exactly that frame. The structural selection column is fixed at 32px; info controls use a 16px desktop footprint with a 10px glyph and preserve the coarse-pointer touch floor. Hover, inspected-current, and batch-selected states stay distinct, including pinned cells. The totals strip meets the table directly; a portaled empty toolbar must not leave a separator or spacer behind. The shared table fits columns to rendered headers, aggregate footers, and a bounded sample of current values, within their declared limits. Fits remain stable while inspecting or editing, manual resizing wins, and no column grows past its kind's cap to fit one long value, and spare width goes only to the record's identity, up to 240px ([column widths](../../docs/agents/web-ui-reference.md#column-widths)). Header labels use their short form and wrap to two lines inside the 32px header rather than widening their column; a count of one entity's records is headed by that entity's icon and "#", and a column of links to one entity carries that entity's icon in its header rather than on every row. A header's sort arrow takes width only while the column is sorted, and its source icon appears on hover or focus. A clipped single-line value spills over its neighbours at the same row height on hover or focus; codes (barcodes, order ids) keep their first and last four characters, and other long labels keep their tail. Entity links stack their 12px name over muted context, or wrap a long name to two lines, and quality scores drop "/100". Dates and timestamps stack the day over a muted compact distance ("Oct 7" / "5d ago"; another year leads that line, "’25 · 1y ago"), and chip lists wrap to two lines, then count the rest as "+N"; secondary context is type hierarchy, never parentheses. A table view never becomes a stack of decorative cards on desktop. Phone rows use a semantic projection with a 44px minimum target.
+RTable owns interactive record work: virtualization, pinned and resizable columns, in-session layouts, filters, selection, clipboard, grouping, inline editing, and aggregate footers. Desktop data rows retain 32px (`ROW_DENSITY`) so two-line values have readable separation. Every cell value gets the same 4px start padding; decorated cells render through `CellFrame`. A column is as narrow as its values: info, relation and resolution controls appear only on the hovered or focused row, over the cell's free edge, and reserve no width; a derived value reads muted, and suggestion marks stay visible. Quiet full-height column rules are fainter than the header boundary. Quality scores remain numerically sortable but their pills start at the same padding as other categorical values. Table thumbnail frames match the 32px row height and the image column reserves exactly that frame. The structural selection column is fixed at 32px; info controls use a 16px desktop footprint with a 10px glyph and preserve the coarse-pointer touch floor. Hover, inspected-current, and batch-selected states stay distinct, including pinned cells. The totals strip meets the table directly; a portaled empty toolbar must not leave a separator or spacer behind. The shared table fits columns to rendered headers, aggregate footers, and a bounded sample of current values, within their declared limits. Fits remain stable while inspecting or editing, manual resizing wins, and no column grows past its kind's cap to fit one long value, and spare width goes only to the record's identity, up to 240px ([column widths](../../docs/agents/web-ui-reference.md#column-widths)). Header labels use their short form and wrap to two lines inside the 32px header rather than widening their column; a count of one entity's records is headed by that entity's icon and "#", and a column of links to one entity carries that entity's icon in its header rather than on every row. A header's sort arrow takes width only while the column is sorted, and its source icon appears on hover or focus. A clipped single-line value spills over its neighbours at the same row height on hover or focus; codes (barcodes, order ids) keep their first and last four characters, and other long labels keep their tail. Entity links stack their compact name over muted context, or wrap a long name to two lines, and quality scores drop "/100". Dates and timestamps stack the day over a muted compact distance ("Oct 7" / "5d ago"; another year leads that line, "’25 · 1y ago"), and chip lists wrap to two lines, then count the rest as "+N"; secondary context is type hierarchy, never parentheses. A table view never becomes a stack of decorative cards on desktop. Phone rows use a semantic projection with a 44px minimum target.
 
-## Data visualization
+### Data visualization
 
 Share the visual grammar, never the domain arithmetic. Statistical charts (ranked bars, donuts, spend trends) use `ui/charts/kit.tsx` (`RankedBarBreakdown`, `CategoryDonut`, `SpendTrend`) with `lib/nivo-theme.ts`, `ChartTooltip`, and `ChartEmpty`: one implementation of ranking, sizing, empty state, tooltip, keyboard-safe click, no-motion policy, and screen-reader summary. Keep `ChartTooltip` separate from absolute `VizTooltip`; Nivo owns tooltip placement.
 
@@ -77,10 +165,26 @@ Share the visual grammar, never the domain arithmetic. Statistical charts (ranke
 - **Graph workspace.** `/graph` and detail-page relationship maps use `relationships/graph-explorer.tsx` (React Flow, incremental worker placement, viewport culling, retained camera). Selection inspects without fetching; expansion is explicit; branches over 12 records start collapsed and reveal 12 at a time; one map holds at most 500 records and 1,000 connections; destination-path search keeps its server bounds. Relationship labels appear on hover, focus, or selection (always-visible labels dominated dense layout time). Keep a list alternative and connection evidence. Native Graph uses SwiftUI Canvas with card culling and no third-party package. Recipe and work dependency views keep their own layout and adapters above the generic relationship read.
 - **Every chart** offers an accessible text alternative or summary, distinct loading, error, and empty states, and lazy-loads its renderer.
 
-## Interaction and accessibility
+### Interaction and accessibility
 
 - One leading action per region; secondary actions are nearby and destructive actions are unmistakable. Primary controls use ink and light text. Status chips use text or icons as well as color.
 - Search, filters, current row, batch selection, and inspector opening remain independent. Keep focus, hover, active, loading, empty, error, offline, and disabled states distinct.
 - Keyboard and screen-reader users can reach the same navigation and actions. Focus is visible without layout shift. Phone targets are at least 44×44px. Text and panels reflow without horizontal page overflow.
 - Form labels connect to their input controls; placeholders provide examples and never substitute for the field's accessible name. Adjacent Tags and Collections inputs retain distinct names.
 - Validate the real desktop and phone flows after styling. Use synthetic records in tests, previews, screenshots, and engineering text.
+
+## Do's and Don'ts
+
+### Do:
+
+- **Do** keep all declared empty fields and sections visible, with usable actions.
+- **Do** preserve continuous section navigation, mounted drafts, and URL history.
+- **Do** use shared page, heading, ledger, table, and control primitives.
+- **Do** keep Edit and the main workflow visible and overflow actions keyboard accessible.
+
+### Don't:
+
+- **Don't** restore the global desktop header, rounded detail title card, or duplicate Overview gallery.
+- **Don't** split detail sections into desktop columns or substitute tabs for continuous content.
+- **Don't** use decorative cards, invented metrics, or unrelated placeholder illustrations to fill space.
+- **Don't** trade readable text, visible focus, or phone touch targets for density.

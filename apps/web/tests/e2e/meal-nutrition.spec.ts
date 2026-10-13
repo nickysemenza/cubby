@@ -2,7 +2,11 @@ import type { Route } from "@playwright/test";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { seedMealNutritionPrerequisite } from "./fixtures-recipes";
-import { selectComboboxItem, gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  openDetailActions,
+  selectComboboxItem,
+  gotoAuthenticatedPage,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("meal nutrition keeps entered product and ingredient amounts while deriving current estimates", async ({
@@ -22,6 +26,7 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await expect(guest.getByLabel(/^Carbs: 0 g\./)).toHaveCount(2);
   await expect(guest.getByLabel(/^Fat: —\./)).toHaveCount(2);
 
+  await openDetailActions(page);
   await page.getByRole("button", { name: "Add food", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add food" });
   await selectComboboxItem(
@@ -79,6 +84,7 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await expect(member.getByLabel(/^Carbs: 40 g\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Fat: 8 g\./)).toHaveCount(2);
 
+  await openDetailActions(page);
   await page.getByRole("button", { name: "Add food", exact: true }).click();
   const ingredientDialog = page.getByRole("dialog", { name: "Add food" });
   await ingredientDialog

@@ -19,6 +19,7 @@ import { z } from "zod";
 import { cn, formatCount } from "~/lib/utils";
 import { useDebug } from "~/ui/hooks/useDebug";
 import { useHydrated } from "~/ui/hooks/useHydrated";
+import { SectionHeading } from "~/ui/layout";
 import { usePageDetailContext } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
@@ -30,7 +31,6 @@ import {
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 
-import { EntityHero } from "../../entity/components/EntityHero";
 import {
   EntityRelations,
   supportsEntityGraph,
@@ -138,36 +138,32 @@ function SectionCard({
           data-detail-section
           className={cn(
             "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-            section.surface !== "plain" && "px-3 py-3 md:py-2",
             section.overflowVisible
               ? "overflow-visible"
               : "[contain-intrinsic-size:auto_320px] [content-visibility:auto]",
             className,
           )}
         >
-          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 max-md:items-center">
-            <div className="flex min-w-0 items-center gap-2">
-              <Heading
-                id={`${section.id}-heading`}
-                className={cn(
-                  "flex min-w-0 items-center gap-2 text-sm font-semibold tracking-tight",
-                  empty && "text-muted-foreground",
-                )}
-              >
+          <SectionHeading
+            as={Heading}
+            id={`${section.id}-heading`}
+            muted={empty}
+            title={
+              <>
                 <section.icon className="size-3.5 shrink-0 text-muted-foreground" />
                 {section.title}
-              </Heading>
+              </>
+            }
+            meta={
               <SectionIndexMarker
                 id={`${section.id}-marker`}
                 state={{ empty, count }}
-                className="text-xs"
+                className="text-xs font-normal"
               />
-            </div>
-            {section.headerAction ? (
-              <div className="max-w-full min-w-0">{section.headerAction}</div>
-            ) : null}
-          </div>
-          <div className="mt-2 md:mt-1.5">
+            }
+            actions={section.headerAction}
+          />
+          <div className="mt-1.5 min-w-0 px-2">
             {section.content ?? (
               <p className="text-sm text-muted-foreground">No items.</p>
             )}
@@ -178,67 +174,10 @@ function SectionCard({
   );
 }
 
-function SectionPlane({ children }: { children: ReactNode }) {
-  return (
-    <div className="divide-y divide-border rounded-xl border border-border bg-card">
-      {children}
-    </div>
-  );
-}
-
 function renderSectionStack(sections: DetailSection[]) {
-  const blocks: ReactNode[] = [];
-  let ruled: DetailSection[] = [];
-
-  const flushRuled = () => {
-    if (ruled.length === 0) return;
-    const current = ruled;
-    ruled = [];
-    blocks.push(
-      <SectionPlane key={`plane-${current[0]?.id}`}>
-        {current.map((section) => (
-          <SectionCard key={section.id} section={section} />
-        ))}
-      </SectionPlane>,
-    );
-  };
-
-  for (const section of sections) {
-    if (section.surface === "plain") {
-      flushRuled();
-      blocks.push(<SectionCard key={section.id} section={section} />);
-    } else {
-      ruled.push(section);
-    }
-  }
-  flushRuled();
-
-  return blocks;
-}
-
-function renderFullSection(section: DetailSection) {
-  return section.surface === "plain" ? (
+  return sections.map((section) => (
     <SectionCard key={section.id} section={section} />
-  ) : (
-    <SectionPlane key={section.id}>
-      <SectionCard section={section} />
-    </SectionPlane>
-  );
-}
-
-function heroVisual({
-  heroImages,
-  heroMedia,
-}: {
-  heroImages?: Array<{ id: string; url: string; filename: string }>;
-  heroMedia?: ReactNode;
-}): ReactNode | undefined {
-  if (heroMedia !== undefined) return <div>{heroMedia}</div>;
-  return heroImages && heroImages.length > 0 ? (
-    <div>
-      <EntityHero images={heroImages} />
-    </div>
-  ) : undefined;
+  ));
 }
 
 type DetailGroup = { id: string; title: string; sections: DetailSection[] };
@@ -288,12 +227,14 @@ function DetailAnchorIndex({
   activeId,
   wide,
   onSelect,
+  onFocusTarget,
 }: {
   groups: DetailGroup[];
   sectionStates: ReadonlyMap<string, SectionIndexState>;
   activeId: string | undefined;
   wide: boolean;
   onSelect: (id: string) => void;
+  onFocusTarget: (id: string) => void;
 }) {
   const navigationRef = useRef<HTMLElement>(null);
   const menuTargetRef = useRef<HTMLElement | null>(null);
@@ -330,7 +271,7 @@ function DetailAnchorIndex({
     <div
       className={cn(
         "sticky top-[var(--app-chrome-top)] z-30 self-start",
-        wide ? "w-44 shrink-0" : "bg-background",
+        wide ? "w-40 shrink-0" : "bg-card",
       )}
     >
       <nav
@@ -342,7 +283,7 @@ function DetailAnchorIndex({
         )}
       >
         {groups.map((group) => (
-          <div key={group.id} className="mb-4 last:mb-0">
+          <div key={group.id} className="mb-3 last:mb-0">
             <a
               href={`#${hashForDetailTarget(group.id, groups)}`}
               {...entryState(group.id)}
@@ -373,7 +314,7 @@ function DetailAnchorIndex({
                         className={cn(
                           "relative flex h-7 items-center gap-2 rounded-md pr-2 pl-3 hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                           state?.empty
-                            ? "text-muted-foreground/70"
+                            ? "text-muted-foreground"
                             : "text-foreground",
                           activeId === section.id && currentDetailAnchorClass,
                         )}
@@ -423,7 +364,14 @@ function DetailAnchorIndex({
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="start"
-            finalFocus={() => menuTargetRef.current ?? true}
+            // Final focus keeps the selected section in view after the menu closes
+            // without adding a second history entry.
+            finalFocus={() => {
+              const target = menuTargetRef.current;
+              if (!target) return true;
+              onFocusTarget(target.id);
+              return false;
+            }}
             className="max-h-[70dvh] w-72 overflow-y-auto"
           >
             {groups.map((group, index) => (
@@ -493,49 +441,10 @@ function DetailAnchorIndex({
   );
 }
 
-function renderDetailGroup({
-  sections,
-  visual,
-}: {
-  sections: DetailSection[];
-  visual?: ReactNode;
-}) {
-  const blocks: ReactNode[] = [];
-  if (visual) {
-    blocks.push(
-      <div
-        key="visual"
-        data-testid="detail-media"
-        className="hidden max-w-80 md:block"
-      >
-        {visual}
-      </div>,
-    );
-  }
-  let run: DetailSection[] = [];
-  const flushRun = () => {
-    if (run.length === 0) return;
-    blocks.push(...renderSectionStack(run));
-    run = [];
-  };
-  for (const section of sections) {
-    if (section.placement === "full") {
-      flushRun();
-      blocks.push(renderFullSection(section));
-    } else {
-      run.push(section);
-    }
-  }
-  flushRun();
-  return <div className="space-y-4 md:space-y-2">{blocks}</div>;
-}
-
 interface DetailSectionsProps {
   onlyWorkspace?: "evidence";
   sections: DetailSection[];
   rawData: unknown;
-  heroImages?: Array<{ id: string; url: string; filename: string }>;
-  heroMedia?: ReactNode;
 }
 
 function resolveRelationshipDetail(
@@ -630,8 +539,6 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   onlyWorkspace,
   sections,
   rawData,
-  heroImages,
-  heroMedia,
 }) => {
   const hydrated = useHydrated();
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -917,10 +824,6 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       cancelAnimationFrame(frame);
     };
   }, [hydrated, groups, focusTarget]);
-  const visual = heroVisual({
-    heroImages,
-    heroMedia: heroMedia ?? pageDetail?.heroMedia,
-  });
   if (onlyWorkspace === "evidence")
     return (
       <div className="space-y-2" data-run-evidence>
@@ -942,9 +845,13 @@ export const DetailSections: FC<DetailSectionsProps> = ({
             activeId={activeId}
             wide={wide}
             onSelect={selectSection}
+            onFocusTarget={focusTarget}
           />
-          <div ref={bodyRef} className="min-w-0 flex-1 space-y-6 text-sm/5">
-            {groups.map((group, index) => (
+          <div
+            ref={bodyRef}
+            className="min-w-0 flex-1 space-y-4 text-[0.8125rem]/5"
+          >
+            {groups.map((group) => (
               <div
                 key={group.id}
                 id={group.id}
@@ -952,13 +859,10 @@ export const DetailSections: FC<DetailSectionsProps> = ({
                 tabIndex={-1}
                 className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] space-y-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
-                <h2 className="px-1 text-base font-semibold tracking-tight">
-                  {group.title}
-                </h2>
-                {renderDetailGroup({
-                  sections: group.sections,
-                  visual: index === 0 ? visual : undefined,
-                })}
+                <h2 className="text-sm font-semibold">{group.title}</h2>
+                <div className="space-y-3">
+                  {renderSectionStack(group.sections)}
+                </div>
               </div>
             ))}
             {isDebugEnabled && (

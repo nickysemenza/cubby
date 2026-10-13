@@ -100,7 +100,7 @@ function Home() {
       }
       layout="contained"
     >
-      <div className="flex items-center gap-3 border-b border-border pb-4">
+      <div className="flex items-center gap-3 border-b border-border pb-2">
         <span
           className="size-2.5 shrink-0 rounded-full bg-signal ring-1 ring-foreground/10"
           aria-hidden
@@ -117,20 +117,20 @@ function Home() {
 
       {/* The briefing reads tasks, meals, recurring actions, then nutrition on
           a phone. Desktop keeps tasks and meals side by side. */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-        <div className="contents lg:grid lg:content-start lg:gap-6">
-          <div className="order-1 rounded-2xl border border-border bg-card p-4 lg:order-none lg:p-5">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+        <div className="contents lg:grid lg:content-start lg:gap-4">
+          <div className="order-1 lg:order-none">
             <TodayAttention />
           </div>
-          <div className="order-3 rounded-2xl border border-border bg-card p-4 lg:order-none lg:p-5">
+          <div className="order-3 lg:order-none">
             <DailyPasses />
           </div>
         </div>
-        <div className="contents lg:grid lg:content-start lg:gap-6">
-          <div className="order-2 rounded-2xl border border-border bg-card p-4 lg:order-none lg:p-5">
+        <div className="contents lg:grid lg:content-start lg:gap-4">
+          <div className="order-2 lg:order-none">
             <TodayMeals asOf={asOf} />
           </div>
-          <div className="order-4 rounded-2xl border border-border bg-card p-4 lg:order-none lg:p-5">
+          <div className="order-4 lg:order-none">
             <TodayNutrition initialDate={asOf.meals.from} />
           </div>
         </div>

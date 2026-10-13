@@ -21,7 +21,7 @@ import {
   seedPhotoReviewProcessingFailure,
   seedPhotoReviewLabelText,
 } from "./fixtures-photos";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { openDetailActions, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, recordingVideo, test } from "./e2e-test";
 
 test("approves two selected photo groups with one reviewed batch action", async ({
@@ -82,6 +82,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     page.getByRole("heading", { name: "Photo review" }),
   );
 
+  await openDetailActions(page);
   const actions = page.getByRole("group", {
     name: "Entity actions",
     exact: true,
@@ -89,15 +90,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     actions.getByRole("button", { name: "Start grouping" }),
   ).toBeEnabled();
-  await page
-    .getByRole("heading", { level: 2, name: "Relations", exact: true })
-    .scrollIntoViewIfNeeded();
-  await expect(
-    actions.getByRole("button", { name: "Start grouping" }),
-  ).toBeVisible();
-  await page
-    .getByRole("heading", { level: 2, name: "Work", exact: true })
-    .scrollIntoViewIfNeeded();
+  await page.keyboard.press("Escape");
   if (recordingVideo) await page.waitForTimeout(1_500);
   const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
     data: { runId: seed.runId, groups: seed.groups },
@@ -112,9 +105,11 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
       exact: true,
     }),
   ).toBeVisible();
+  await openDetailActions(page);
   await expect(
     page.getByRole("button", { name: "Start grouping" }),
   ).toHaveCount(0);
+  await page.keyboard.press("Escape");
 
   const g1Card = page.locator('[data-slot="card"]').filter({
     has: page.getByRole("heading", { name: "Gray crew t-shirt — M" }),
@@ -216,6 +211,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     page.getByText("Completed", { exact: true }).first(),
   ).toBeVisible({ timeout: 10_000 });
+  await openDetailActions(page);
   await page
     .getByRole("button", { name: "Start new run with same inputs" })
     .click();

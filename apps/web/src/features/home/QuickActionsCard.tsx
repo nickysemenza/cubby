@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
 import { EntityIcon, entities } from "~/entity/entities";
-import { Grid, Row } from "~/ui/layout";
+import { Grid, Row, SectionHeading } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { actionsForSurface } from "../../entity/actions/action-items";
@@ -18,20 +18,19 @@ export function DailyPasses() {
   const titleId = useId();
   return (
     <section aria-labelledby={titleId}>
-      <div className="flex items-start gap-2 border-b border-border pb-2">
-        <LightningIcon
-          className="mt-0.5 size-4 shrink-0 text-slate"
-          aria-hidden
-        />
-        <div>
-          <h2 id={titleId} className="font-heading text-sm font-semibold">
+      <SectionHeading
+        id={titleId}
+        title={
+          <>
+            <LightningIcon
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
             Daily passes
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Useful household runs.
-          </p>
-        </div>
-      </div>
+          </>
+        }
+        description="Useful household runs."
+      />
       <Grid className="mt-2 grid-cols-2" gap="sm">
         {homeActions.map((action) => (
           // `render` keeps this one element: a <button> inside an <a> is

@@ -171,7 +171,7 @@ export function ShelfCard({
     <div
       data-entity-card
       className={cn(
-        "relative flex min-w-0 flex-col overflow-hidden rounded-[var(--brand-radius-panel)] border bg-card transition-colors duration-150 hover:bg-muted/50",
+        "relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card transition-colors duration-150 hover:bg-muted/50",
         selected
           ? "border-primary ring-2 ring-[var(--brand-signal)]"
           : "border-[var(--border)]",
@@ -271,7 +271,7 @@ function ShelfSkeleton({ compact = false }: { compact?: boolean }) {
       {Array.from({ length: 12 }, (_, i) => (
         <div
           key={i}
-          className="overflow-hidden rounded-[var(--brand-radius-panel)] border border-[var(--border)]"
+          className="overflow-hidden rounded-lg border border-[var(--border)]"
         >
           <Skeleton className="aspect-square w-full rounded-none" />
           <div className="space-y-2 px-2 py-2">

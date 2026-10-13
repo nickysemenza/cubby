@@ -79,7 +79,7 @@ export function usePageIdentity(): PageIdentity | null {
 
 /** Detail-only context keeps shared body sections aware of their owner. */
 const PageDetailContext = createContext<
-  { entity: Entity; rawData: unknown; heroMedia?: ReactNode } | undefined
+  { entity: Entity; rawData: unknown } | undefined
 >(undefined);
 
 export function usePageDetailContext() {
@@ -156,13 +156,7 @@ interface PageDetailProps extends PageBaseProps {
   heroStats?: DetailHeroStat[];
   heroNo?: string;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
-  /**
-   * Detail-only sourced media. This is intentionally separate from
-   * `heroImages`: callers can show related imagery without implying it is an
-   * attachment owned by this record.
-   */
-  heroMedia?: ReactNode;
-  /** One visible primary action plus secondary actions that collapse on phone. */
+  /** Edit, the main workflow action, and overflow at every width. */
   heroActions?: DetailHeroActions;
   rawData?: unknown;
 }
@@ -252,7 +246,7 @@ function ListPageBody({
         <Suspense fallback={<ListLoadingSkeleton label={loadingLabel} />}>
           <div
             className={cn(
-              workbench ? "space-y-0" : "space-y-2 md:space-y-8",
+              workbench ? "space-y-0" : "space-y-3",
               bodyGutter === "standard" && "px-2 md:px-6",
             )}
           >
@@ -277,7 +271,6 @@ function DetailPageShell(props: PageDetailProps) {
             value={{
               entity: props.entity,
               rawData: props.rawData,
-              heroMedia: props.heroMedia,
             }}
           >
             <PageCountContext.Provider value={() => undefined}>
