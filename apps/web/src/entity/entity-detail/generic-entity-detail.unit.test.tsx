@@ -328,6 +328,31 @@ describe("GenericEntityDetail", () => {
     expect(categoryRecord.contains(categoryFilter)).toBe(false);
   });
 
+  it("keeps default record facts before workflow sections despite legacy overview ids", () => {
+    const { container } = render(
+      <GenericEntityDetail
+        entity="product"
+        record={recordFor("product")}
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const overview = container.querySelector("#detail-group-overview");
+    const work = container.querySelector("#detail-group-work");
+    if (!(overview instanceof HTMLElement) || !(work instanceof HTMLElement)) {
+      throw new Error("Record Overview and Work groups must render");
+    }
+    for (const label of ["Name", "Manufacturer", "Category"]) {
+      const fact = within(overview).getByText(label, {
+        selector: '[data-slot="basic-info-label"]',
+      });
+      expect(
+        fact.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+    expect(overview.querySelector("#summaries")).not.toBeNull();
+  });
+
   it("labels a book barcode as its ISBN and keeps the declared field order", () => {
     const record = recordFor("product");
     const book = {
