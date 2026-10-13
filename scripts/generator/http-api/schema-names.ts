@@ -28,6 +28,7 @@ const EXCLUDED_SUBPATHS = new Set(["./testing", "./contract"]);
 
 /** Web-side schema modules the HTTP contract reaches, relative to src. */
 const WEB_SCHEMA_MODULES = [
+  "contracts/entity-kernel-wire.ts",
   "server/entity-kernel/contracts.ts",
   "server/generated/entity-bindings.gen.ts",
   "entity/generated/entity-lists.gen.ts",

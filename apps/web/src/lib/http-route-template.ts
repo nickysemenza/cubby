@@ -41,7 +41,6 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/companion/image-processing/socket",
   "/api/mcp",
   "/api/native-workspace/session",
-  "/api/v1/docs",
   "/auth/native",
   "/calendar",
   "/collections",
@@ -128,7 +127,6 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
     pattern: /^\/api\/calendar\/[^/]+\/[^/]+$/u,
     template: "/api/calendar/:token/:feed",
   },
-  { pattern: /^\/api\/v1\/[^/]+$/u, template: "/api/v1/:resource" },
   {
     pattern: /^\/api\/v1\/[^/]+\/[^/]+$/u,
     template: "/api/v1/:resource/:operation",

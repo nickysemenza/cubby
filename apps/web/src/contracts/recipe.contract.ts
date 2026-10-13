@@ -261,16 +261,14 @@ export const recipeContract = defineContract("recipe", {
     output: importRecipeSchema,
     invalidates: [],
   }),
-  // Agent-facing (MCP `recipe_insights`, `recipe_import`): off the HTTP API.
+  // Agent-facing (MCP `recipe_insights`, `recipe_import`).
   /** Nutrient totals scaled to a serving count, with mapped-line coverage. */
   nutrition: query({
-    http: false,
     input: recipeNutritionInput,
     output: recipeNutritionOut,
   }),
   /** `explainCosting` trimmed to the per-line diagnostics unless `detail: "full"`. */
   costingExplanation: query({
-    http: false,
     readPolicy: "strong",
     input: z.object({
       id: recipeShortcode,
@@ -279,32 +277,27 @@ export const recipeContract = defineContract("recipe", {
     output: recipeCostingExplainMcpOut,
   }),
   tags: query({
-    http: false,
     input: z.undefined(),
     output: recipeTagsOut,
   }),
   /** Parse a recipe URL into structured form without saving it. */
   scrapeUrl: query({
-    http: false,
     input: z.object({ url: scrapeRecipeInput }),
     output: scrapeRecipeMcpOut,
     cache: { tags: [] },
   }),
   importFromUrl: mutation({
-    http: false,
     input: z.object({ url: scrapeRecipeInput }),
     output: recipeImportWriteOut,
     invalidates: ["recipe"],
   }),
   createFromText: mutation({
-    http: false,
     input: mcpRecipeCreateFromTextInput,
     output: recipeImportWriteOut,
     invalidates: ["recipe"],
   }),
   /** Change one ingredient line without resending the recipe's sections. */
   patchLine: mutation({
-    http: false,
     input: recipeLinePatchInput,
     output: recipeLinePatchOut,
     invalidates: ["recipe"],

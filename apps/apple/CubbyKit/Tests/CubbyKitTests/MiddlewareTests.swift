@@ -22,7 +22,7 @@ struct MiddlewareTests {
             HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
             body: nil,
             baseURL: URL(string: "http://localhost:3000")!,
-            operationID: "resources.product.list"
+            operationID: "entity.list"
         ) { request, body, _ in
             #expect(request.headerFields[.authorization] == "Bearer tok.sig")
             #expect(request.headerFields[.xAPIKey] == nil)
@@ -44,7 +44,7 @@ struct MiddlewareTests {
             HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
             body: nil,
             baseURL: URL(string: "http://localhost:3000")!,
-            operationID: "resources.product.list"
+            operationID: "entity.list"
         ) { _, body, _ in
             (HTTPResponse(status: .ok, headerFields: responseHeaders), body)
         }
@@ -53,7 +53,7 @@ struct MiddlewareTests {
             HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/vendors"),
             body: nil,
             baseURL: URL(string: "http://localhost:3000")!,
-            operationID: "resources.vendor.list"
+            operationID: "entity.listBase"
         ) { request, body, _ in
             #expect(request.headerFields[.cookie] == "better-auth.session_data.0=cache-a")
             #expect(request.headerFields[.cookie]?.contains("session_token") == false)
@@ -76,7 +76,7 @@ struct MiddlewareTests {
             HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
             body: nil,
             baseURL: URL(string: "https://cubby.example")!,
-            operationID: "resources.product.list"
+            operationID: "entity.list"
         ) { _, body, _ in
             (HTTPResponse(status: .ok, headerFields: fields), body)
         }
@@ -98,7 +98,7 @@ struct MiddlewareTests {
                 HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
                 body: nil,
                 baseURL: URL(string: "https://cubby.example")!,
-                operationID: "resources.product.list"
+                operationID: "entity.list"
             ) { _, _, _ in
                 try await credentials.set(.bearer("new"))
                 return (HTTPResponse(status: .unauthorized), HTTPBody(body))
@@ -236,7 +236,7 @@ struct MiddlewareTests {
                 HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/x"),
                 body: nil,
                 baseURL: URL(string: "http://localhost:3000")!,
-                operationID: "resources.product.get"
+                operationID: "entity.detail"
             ) { _, _, _ in
                 (HTTPResponse(status: .badGateway), HTTPBody(html))
             }
@@ -244,7 +244,7 @@ struct MiddlewareTests {
         } catch let error as CubbyAPIError {
             #expect(error.status == 502)
             #expect(error.detail == nil)
-            #expect(error.operationID == "resources.product.get")
+            #expect(error.operationID == "entity.detail")
         }
         // A 502 is not an auth failure; the credential survives.
         #expect(try store.load(for: "localhost:3000") == .bearer("fine"))
@@ -262,7 +262,7 @@ struct MiddlewareTests {
             HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
             body: nil,
             baseURL: URL(string: "http://localhost:3000")!,
-            operationID: "resources.product.list"
+            operationID: "entity.list"
         ) { request, body, _ in
             #expect(
                 request.headerFields[.userAgent]
@@ -281,7 +281,7 @@ struct MiddlewareTests {
             HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
             body: nil,
             baseURL: URL(string: "http://localhost:3000")!,
-            operationID: "resources.product.list"
+            operationID: "entity.list"
         ) { request, body, _ in
             #expect(request.headerFields[.userAgent] == "cubby-cli/0 (macos; none)")
             #expect(request.headerFields[.xCubbyDevice] == nil)
@@ -300,12 +300,12 @@ struct MiddlewareTests {
             HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
             body: nil,
             baseURL: URL(string: "http://localhost:3000")!,
-            operationID: "resources.product.list"
+            operationID: "entity.list"
         ) { _, body, _ in
             (HTTPResponse(status: .ok), body)
         }
         let last = await trace.last
-        #expect(last?.operationID == "resources.product.list")
+        #expect(last?.operationID == "entity.list")
         #expect(last?.status == 200)
         #expect((last?.ms ?? -1) >= 0)
     }

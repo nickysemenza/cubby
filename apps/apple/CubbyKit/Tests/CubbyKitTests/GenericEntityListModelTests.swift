@@ -31,10 +31,10 @@ struct GenericEntityListModelTests {
     }
 
     /// Saved views must send wire filters, including nullable presence, and replace the old
-    /// scope in one request. Sending column ids or sentinel ids fails the typed HTTP contract.
+    /// scope in one request. Sending column ids or sentinel ids fails the kernel's filter schema.
     @Test func savedViewsReplaceFiltersUsingWireParameters() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
-        let requests = Mutex<[[URLQueryItem]]>([])
+        let requests = Mutex<[JSONValue]>([])
         var empty = try #require(
             JSONSerialization.jsonObject(with: Fixtures.data(named: "products-list.json"))
                 as? [String: Any])
@@ -42,10 +42,7 @@ struct GenericEntityListModelTests {
         let body = try JSONSerialization.data(withJSONObject: empty)
         ListStub.handler.withLock { handler in
             handler = { request in
-                requests.withLock {
-                    $0.append(
-                        URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? [])
-                }
+                requests.withLock { $0.append(Self.filters(in: request)) }
                 return (200, body)
             }
         }
@@ -58,14 +55,17 @@ struct GenericEntityListModelTests {
         await model.apply(savedView: mine)
         #expect(model.activeSavedView?.id == mine.id)
         #expect(requests.withLock { $0.count } == 1)
-        #expect(requests.withLock { $0[0].contains(URLQueryItem(name: "assignedToMe", value: "true")) })
+        let mineFilters = requests.withLock { $0[0] }
+        #expect(mineFilters["assignedToMe"] == true)
+        #expect(mineFilters["search"] == nil)
         #expect(model.filters["search"] == nil)
         await model.apply(savedView: unassigned)
         #expect(model.filters["assignedToMe"] == nil)
         #expect(model.filters["assigneePresenceFilter"] == .single("none"))
         #expect(requests.withLock { $0.count } == 2)
-        #expect(
-            requests.withLock { $0[1].contains(URLQueryItem(name: "assigneePresenceFilter", value: "none")) })
+        let unassignedFilters = requests.withLock { $0[1] }
+        #expect(unassignedFilters["assigneePresenceFilter"] == "none")
+        #expect(unassignedFilters["assignedToMe"] == nil)
         await model.apply(filters: EntityFilterState())
         #expect(model.activeSavedView == nil)
     }
@@ -74,14 +74,14 @@ struct GenericEntityListModelTests {
     /// subsequent pages. Sorting just the loaded rows gives the wrong global order.
     @Test func sortRestartsPagingAndRetainsFilters() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
-        let requests = Mutex<[[URLQueryItem]]>([])
+        let requests = Mutex<[JSONValue]>([])
         let first = try productPage(id: "PRD-2345", name: "First", page: 1, total: 2)
         let second = try productPage(id: "PRD-3456", name: "Second", page: 2, total: 2)
         ListStub.handler.withLock { handler in
             handler = { request in
-                let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
-                requests.withLock { $0.append(items) }
-                return (200, Self.page(in: request) == 1 ? first : second)
+                let body = Self.body(of: request)
+                requests.withLock { $0.append(body) }
+                return (200, Self.page(of: body) == 1 ? first : second)
             }
         }
         let model = GenericEntityListModel(
@@ -99,10 +99,11 @@ struct GenericEntityListModelTests {
         let sortedRequests = requests.withLock { Array($0.dropFirst(2)) }
         #expect(sortedRequests.count == 2)
         #expect(
-            sortedRequests.allSatisfy { items in
-                items.contains(URLQueryItem(name: "sort", value: "-name"))
-                    && items.contains(URLQueryItem(name: "upcFilter", value: "000000000000"))
+            sortedRequests.allSatisfy { body in
+                body["sort"] == [["orderBy": "name", "direction": "desc"]]
+                    && body["filters"] == ["upcFilter": "000000000000"]
             })
+        #expect(sortedRequests.map { $0["pagination"]?["pageIndex"] } == [0, 1])
         #expect(model.rows.map(\.id) == ["PRD-2345", "PRD-3456"])
     }
 
@@ -116,11 +117,9 @@ struct GenericEntityListModelTests {
         let sorted = try productPage(id: "PRD-4567", name: "New order", page: 1, total: 1)
         ListStub.handler.withLock { handler in
             handler = { request in
-                let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
-                guard items.contains(URLQueryItem(name: search.key, value: "sample")) else {
-                    return (200, base)
-                }
-                if items.contains(URLQueryItem(name: "sort", value: "-name")) { return (200, sorted) }
+                let body = Self.body(of: request)
+                guard body["filters"]?[search.key] == "sample" else { return (200, base) }
+                if body["sort"] == [["orderBy": "name", "direction": "desc"]] { return (200, sorted) }
                 staleGate.holdBlocking()
                 return (200, stale)
             }
@@ -345,12 +344,9 @@ struct GenericEntityListModelTests {
         let scoped = try productPage(id: "PRD-4567", name: "Scoped", page: 1, total: 1)
         ListStub.handler.withLock { handler in
             handler = { request in
-                let items =
-                    URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
-                guard items.contains(where: { $0.name == search.key && $0.value == "sample" }) else {
-                    return (200, base)
-                }
-                if items.contains(where: { $0.name == "upcFilter" }) { return (200, scoped) }
+                let filters = Self.filters(in: request)
+                guard filters[search.key] == "sample" else { return (200, base) }
+                if filters["upcFilter"] != nil { return (200, scoped) }
                 staleGate.holdBlocking()
                 return (200, stale)
             }
@@ -614,9 +610,44 @@ struct GenericEntityListModelTests {
         ListPage(items: items, meta: ListPageMeta(pageIndex: page, pageSize: 1, totalCount: total))
     }
 
+    /// The 1-based native page of an `entity.list` body (its `pageIndex` is 0-based).
+    /// Reads the request's one-shot body stream; a handler that also needs the body reads it
+    /// once with `body(of:)` and uses `page(of:)`.
     nonisolated private static func page(in request: URLRequest) -> Int {
-        URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?
-            .first(where: { $0.name == "page" })?.value.flatMap(Int.init) ?? 1
+        page(of: body(of: request))
+    }
+
+    nonisolated private static func page(of body: JSONValue) -> Int {
+        Int(body["pagination"]?["pageIndex"]?.doubleValue ?? 0) + 1
+    }
+
+    nonisolated private static func filters(in request: URLRequest) -> JSONValue {
+        body(of: request)["filters"] ?? [:]
+    }
+
+    /// The JSON body of a kernel list request; `.null` for anything else, so a stub that sees a
+    /// request off the kernel list route answers it as if unscoped.
+    nonisolated private static func body(of request: URLRequest) -> JSONValue {
+        guard request.url?.path == "/api/v1/entity/list", let data = try? requestBody(request) else {
+            return .null
+        }
+        return (try? JSONDecoder().decode(JSONValue.self, from: data)) ?? .null
+    }
+
+    nonisolated private static func requestBody(_ request: URLRequest) throws -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { throw URLError(.cannotDecodeRawData) }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { throw stream.streamError ?? URLError(.cannotDecodeRawData) }
+            if count == 0 { break }
+            data.append(contentsOf: buffer.prefix(count))
+        }
+        return data
     }
 
     private func productPage(

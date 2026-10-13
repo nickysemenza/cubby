@@ -111,10 +111,8 @@ public struct HeroActionRunner: Sendable {
     /// The generated HTTP operation id the plan executes for `entity`.
     public static func operationID(for plan: HeroActionPlan, on entity: EntityKey) -> String? {
         switch plan.kind {
-        case .delete: return "resources.\(entity.rawValue).delete"
         case .operation(let operation): return operation.operation
-        case .create(let target, _, _): return "resources.\(target.rawValue).create"
-        case .setField, .toggleField: return "resources.\(entity.rawValue).update"
+        case .delete, .create, .setField, .toggleField: return "entity.mutate"
         }
     }
 

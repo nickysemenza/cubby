@@ -3,10 +3,6 @@ import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { generatedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
-import type {
-  HttpResources,
-  HttpResourceVerb,
-} from "../entities/render/index.ts";
 import {
   collectDeclaredOperations,
   collectNativeOperationIds,
@@ -81,15 +77,6 @@ const renderStartOperationHandlers = async (): Promise<string> => {
   );
 };
 
-const RESOURCE_HELPERS = {
-  list: "resourceList",
-  timeline: "resourceTimeline",
-  get: "resourceGet",
-  create: "resourceCreate",
-  update: "resourceUpdate",
-  delete: "resourceDelete",
-} as const satisfies Record<HttpResourceVerb, string>;
-
 /** The wire projection the router itself uses, for the transport decision. */
 type WireModule = {
   toWire: (schema: z.ZodType, io: "input") => z.ZodType;
@@ -121,27 +108,22 @@ const queryHelper = (
 
 /**
  * The HTTP contract is a real ts-rest router whose routes reference contract
- * members and generated entity bindings by name, so the generated file stays
- * statically typed without copying any schema source. Entity operations keep
- * their explicit wire schemas inside the router helpers because their
- * contract members are type-only carriers.
+ * members by name, so the generated file stays statically typed without
+ * copying any schema source. It carries exactly the operations flagged
+ * `native:`: the Apple app is the HTTP API's only client.
  */
-const renderHttpContract = async (
-  resources: HttpResources,
-): Promise<string> => {
+const renderHttpContract = async (): Promise<string> => {
   const declarations = [...(await collectDeclaredOperations())].sort(
     ([a], [b]) => a.localeCompare(b),
   );
   const wire = await loadWire();
   const domains = new Map<string, string[]>();
   for (const [id, declaration] of declarations) {
-    if (declaration.kind === "subscription" || !declaration.http) continue;
+    if (declaration.kind === "subscription" || !declaration.native) continue;
     const domain = id.slice(0, id.length - declaration.member.length - 1);
-    if (domain === "resources")
-      throw new Error(`Reserved HTTP client namespace: ${domain}`);
     const helper =
       declaration.kind === "query"
-        ? declaration.transport === "post"
+        ? declaration.transport === "post" || declaration.httpWire
           ? "rpcQueryPost"
           : queryHelper(wire, declaration.input)
         : "rpcMutation";
@@ -151,21 +133,10 @@ const renderHttpContract = async (
     );
     domains.set(domain, members);
   }
-  const resourceRoutes = Object.entries(resources)
-    .map(
-      ([entity, { basePath, verbs }]) =>
-        `${JSON.stringify(entity)}: {\n${verbs
-          .map(
-            (verb) =>
-              `${verb}: ${RESOURCE_HELPERS[verb]}(${JSON.stringify(entity)}, ${JSON.stringify(basePath)}),`,
-          )
-          .join("\n")}\n},`,
-    )
-    .join("\n");
   return (
     generatedHeader +
     `import * as contracts from "~/contracts/index";\n` +
-    `import { httpContractBuilder, httpRouterOptions, rpcMutation, rpcQuery, rpcQueryPost, resourceCreate, resourceDelete, resourceGet, resourceList, resourceTimeline, resourceUpdate } from "~/lib/http-api/router";\n` +
+    `import { httpContractBuilder, httpRouterOptions, rpcMutation, rpcQuery, rpcQueryPost } from "~/lib/http-api/router";\n` +
     `export const httpContract = httpContractBuilder.router({\n` +
     [...domains]
       .map(
@@ -173,20 +144,16 @@ const renderHttpContract = async (
           `${JSON.stringify(name)}: {\n${members.join("\n")}\n},`,
       )
       .join("\n") +
-    `\nresources: {\n${resourceRoutes}\n},\n}, httpRouterOptions);\n`
+    `\n}, httpRouterOptions);\n`
   );
 };
 
 /**
  * Stage 2 of `pnpm generate`: the Start operation registry, the lazy handler
  * loaders, the browser client catalog, and the ts-rest HTTP contract. Runs after stage 1's files are on
- * disk (the contracts runtime-import `~/entity/generated/*.gen.ts`) and
- * takes stage 1's `HTTP_RESOURCES` in memory rather than re-parsing its
- * artifact.
+ * disk (the contracts runtime-import `~/entity/generated/*.gen.ts`).
  */
-export const renderStartOperationArtifacts = async (
-  resources: HttpResources,
-): Promise<{
+export const renderStartOperationArtifacts = async (): Promise<{
   artifacts: EntityArtifacts[];
   /** RPC ids flagged `native:`, for the OpenAPI stage's client filter. */
   nativeOperations: string[];
@@ -209,7 +176,7 @@ export const renderStartOperationArtifacts = async (
     },
     {
       relativePath: "apps/web/src/lib/generated/http-contract.gen.ts",
-      source: await renderHttpContract(resources),
+      source: await renderHttpContract(),
     },
   ],
   nativeOperations: await collectNativeOperationIds(),

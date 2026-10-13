@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { expenseOut } from "@cubby/schemas/project";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
@@ -21,17 +22,18 @@ const clearedExpense = z.object({ cost: z.number(), date: z.null() });
  */
 export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
   const name = uniqueName(test.info(), "Undated supplies");
-  const response = await page.request.post("/api/v1/expenses", {
-    headers: { Origin: baseURL },
-    data: buildEntity("expense", {
+  const response = await entityApi(page.request).create(
+    "expense",
+    buildEntity("expense", {
       name,
       cost: 0,
       date: "2026-01-02",
       costType: "materials",
       trade: "other",
     }),
-  });
-  expect(response.status(), await response.text()).toBe(201);
+    { headers: { Origin: baseURL } },
+  );
+  expect(response.status(), await response.text()).toBe(200);
   const { item } = createdExpense.parse(await response.json());
   await gotoAuthenticatedPage(page, `/expenses?q=${encodeURIComponent(name)}`);
   await page

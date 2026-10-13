@@ -17,7 +17,6 @@
         // (production mode does not read those): .husky/commit-msg,
         // ci.yaml, and the Nx targets.
         "scripts/check-outward-text.ts!",
-        "scripts/tester-army-ci.ts!",
         "scripts/ci-lanes.ts!",
         "scripts/dev-db.ts!"
       ],
@@ -59,7 +58,6 @@
         "src/lib/sentry-cf-shim.ts!",
         "src/integrations/**/*.{ts,tsx}!",
         "src/contracts/index.ts!",
-        "src/lib/generated/http-resources.gen.ts!",
         // The `<entity>ListItem` exports name the OpenAPI components; the
         // generator reads them, nothing in the web app does.
         "src/entity/generated/entity-lists.gen.ts!",

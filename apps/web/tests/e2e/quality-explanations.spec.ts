@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { entityRecordsOutputSchema } from "~/contracts/entity-records.schema";
 import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
@@ -289,10 +290,12 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
   await expect(acceptedCell).toContainText("100");
   await expect(acceptedCell).toContainText("Complete with exceptions");
   await expect(acceptedCell.locator("svg")).toBeVisible();
-  const updated = await page.request.patch(`/api/v1/products/${product.id}`, {
-    headers: { Origin: baseURL! },
-    data: { manufacturer: "(UNSPECIFIED)" },
-  });
+  const updated = await entityApi(page.request).update(
+    "product",
+    product.id,
+    { manufacturer: "(UNSPECIFIED)" },
+    { headers: { Origin: baseURL! } },
+  );
   expect(updated.ok(), await updated.text()).toBeTruthy();
   const stale = await explain("product", product.id);
   expect(stale.qualityBreakdown?.checks).toContainEqual(
@@ -425,10 +428,12 @@ test("a person accepts a data gap as an exception from the explanation and clear
   await check.getByRole("button", { name: "Accept as…" }).click();
   await check.getByRole("button", { name: "Accept exception" }).click();
   await expect(check).toContainText("Accepted exception");
-  const changed = await page.request.patch(`/api/v1/products/${product.id}`, {
-    headers: { Origin: baseURL! },
-    data: { manufacturer: "Synthetic recorded maker" },
-  });
+  const changed = await entityApi(page.request).update(
+    "product",
+    product.id,
+    { manufacturer: "Synthetic recorded maker" },
+    { headers: { Origin: baseURL! } },
+  );
   expect(changed.ok(), await changed.text()).toBeTruthy();
   await reloadAuthenticatedPage(page, row);
   await expect(async () => {

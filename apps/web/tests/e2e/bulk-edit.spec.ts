@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { EXPENSE_DATE_REQUIRED_MESSAGE } from "@cubby/schemas/expense-fields";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
@@ -58,7 +59,7 @@ test("task board multi-select bulk-edits status without touching other fields", 
   await expect(dialog).not.toBeVisible();
 
   for (const task of [taskOne, taskTwo]) {
-    const updated = await page.request.get(`/api/v1/tasks/${task.id}`);
+    const updated = await entityApi(page.request).get("task", task.id, {});
     expect(await updated.json()).toMatchObject({
       status: "done",
       // Seeded as "other" and never touched in the dialog — proves the
@@ -115,7 +116,11 @@ test("plantings list bulk-edits status finished plus a date in one write", async
   await dialog.getByRole("button", { name: "Update", exact: true }).click();
   await expect(dialog).not.toBeVisible();
 
-  const updated = await page.request.get(`/api/v1/plantings/${planting.id}`);
+  const updated = await entityApi(page.request).get(
+    "planting",
+    planting.id,
+    {},
+  );
   expect(await updated.json()).toMatchObject({
     status: "finished",
     finishedOn: "2026-06-01",
@@ -153,7 +158,11 @@ test("an unchecked checkbox writes false, while leaving it unchanged writes noth
   });
   const path = `/products?q=${encodeURIComponent(name)}`;
   const readStockTracked = async () => {
-    const response = await page.request.get(`/api/v1/products/${product.id}`);
+    const response = await entityApi(page.request).get(
+      "product",
+      product.id,
+      {},
+    );
     return stockTrackedOut.parse(await response.json()).stockTracked;
   };
 
@@ -198,7 +207,11 @@ test("a nullable reference is set through its picker and then cleared", async ({
   const planting = await seedPlantingPrerequisite(page, { plantId: crop.id });
   const path = `/plantings?plantId=${crop.id}`;
   const readLocation = async () => {
-    const response = await page.request.get(`/api/v1/plantings/${planting.id}`);
+    const response = await entityApi(page.request).get(
+      "planting",
+      planting.id,
+      {},
+    );
     return locationOut.parse(await response.json()).locationId;
   };
 

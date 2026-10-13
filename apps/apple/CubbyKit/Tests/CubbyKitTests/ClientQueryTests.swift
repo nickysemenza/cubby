@@ -49,6 +49,24 @@ struct ClientQueryTests {
         return try #require(seen.withLock { $0 })
     }
 
+    /// `capture` for a POST whose JSON body is the contract: the request and its decoded body.
+    private func captureBody(returning payload: Data, _ body: (CubbyClient) async throws -> Void)
+        async throws -> (request: URLRequest, body: JSONValue)
+    {
+        defer { QueryStub.handler.withLock { $0 = nil } }
+        let seen = Mutex<(URLRequest, Data?)?>(nil)
+        QueryStub.handler.withLock { handler in
+            handler = { request in
+                seen.withLock { $0 = (request, try? Self.requestBody(request)) }
+                return (200, payload)
+            }
+        }
+        try await body(try makeClient())
+        let (request, data) = try #require(seen.withLock { $0 })
+        #expect(request.httpMethod == "POST")
+        return (request, try JSONDecoder().decode(JSONValue.self, from: try #require(data)))
+    }
+
     private func queryItems(of request: URLRequest) -> [URLQueryItem] {
         URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
     }
@@ -129,8 +147,8 @@ struct ClientQueryTests {
         #expect(queryItems(of: request).contains(URLQueryItem(name: "limit", value: "7.0")))
     }
 
-    /// An attach patch carries only `pendingImageIds`: an omitted field means "leave as is", so
-    /// attaching a photo must never clear the entry's content.
+    /// An attach patch's `data` carries only `pendingImageIds`: an omitted field means "leave as
+    /// is", so attaching a photo must never clear the entry's content.
     @Test func attachmentPatchesPreserveContent() async throws {
         defer { QueryStub.handler.withLock { $0 = nil } }
         let seen = Mutex<[[String: JSONValue]]>([])
@@ -152,19 +170,28 @@ struct ClientQueryTests {
         }
         let requests = seen.withLock { $0 }
         try #require(requests.count == 1)
-        #expect(requests[0] == ["pendingImageIds": .array([.string("IMG-2345")])])
+        #expect(
+            requests[0] == [
+                "action": "update", "entity": "gardenEntry", "id": "GDE-2345",
+                "data": ["pendingImageIds": .array([.string("IMG-2345")])],
+            ])
     }
 
+    /// A 1-based native page travels as the kernel's 0-based `pageIndex`, and `-name` as a
+    /// typed descending sort rather than a raw string the server would have to parse.
     @Test func listSendsPlainPagingParamsWithTheBearerHeader() async throws {
-        let request = try await capture(returning: try Fixtures.data(named: "products-list.json")) { client in
+        let (request, body) = try await captureBody(
+            returning: try Fixtures.data(named: "products-list.json")
+        ) { client in
             _ = try await client.list(EntityCatalog[.product], page: 1, pageSize: 20, sort: "-name")
         }
-        #expect(request.url?.path == "/api/v1/products")
-        let items = queryItems(of: request)
-        #expect(items.contains(URLQueryItem(name: "page", value: "1")))
-        #expect(items.contains(URLQueryItem(name: "pageSize", value: "20")))
-        // Not `"-name"` (JSON-quoted): the literal string, unadorned.
-        #expect(items.contains(URLQueryItem(name: "sort", value: "-name")))
+        #expect(request.url?.path == "/api/v1/entity/list")
+        #expect(request.url?.query == nil)
+        #expect(
+            body == [
+                "entity": "product", "filters": [:], "pagination": ["pageIndex": 0, "pageSize": 20],
+                "sort": [["orderBy": "name", "direction": "desc"]],
+            ])
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
     }
 
@@ -179,15 +206,16 @@ struct ClientQueryTests {
         #expect(row == nil)
     }
 
+    /// The enum filter travels as its plain string literal, not a JSON-quoted `"has"`.
     @Test func stockedProductsSendsTheEnumFilterAsAPlainLiteral() async throws {
-        let request = try await capture(returning: try Fixtures.data(named: "products-list.json")) { client in
+        let (request, body) = try await captureBody(
+            returning: try Fixtures.data(named: "products-list.json")
+        ) { client in
             _ = try await client.stockedProducts(page: 2, pageSize: 20)
         }
-        let items = queryItems(of: request)
-        #expect(items.contains(URLQueryItem(name: "page", value: "2")))
-        #expect(items.contains(URLQueryItem(name: "pageSize", value: "20")))
-        // Not `"has"` (JSON-quoted).
-        #expect(items.contains(URLQueryItem(name: "relatedInventoryPresenceFilter", value: "has")))
+        #expect(request.url?.path == "/api/v1/entity/list")
+        #expect(body["pagination"] == ["pageIndex": 1, "pageSize": 20])
+        #expect(body["filters"] == ["relatedInventoryPresenceFilter": "has"])
     }
 
     @Test func inventoryMoveReturnsTheSurvivingMergedEntry() async throws {

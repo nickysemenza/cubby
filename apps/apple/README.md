@@ -16,8 +16,8 @@ Native builds require Xcode 27 with Swift 6.4 or newer and target iOS/macOS 27.
 The image-description implementation must compile in every build; runtime
 Apple Intelligence and vision availability remain device-dependent. Settings →
 This device reports the current image-description availability reason.
-GitHub runner and toolchain selection live in the Apple workflows and shared
-`setup-apple-toolchain` action.
+GitHub runner and toolchain selection live in the Apple workflows and the shared
+`setup-apple` action.
 
 ## Build order
 

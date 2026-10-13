@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { createPostgresPool } from "../../tooling/postgres-pool";
 import { z } from "zod";
 import superjson from "superjson";
@@ -18,11 +19,10 @@ test("edits compound emoji, clears it, and browses inherited category membership
     path: string,
     data: z.infer<ReturnType<typeof z.json>>,
   ) => {
-    const response = await page.request.post(`/api/v1/${path}`, {
+    const response = await entityApi(page.request).create(path, data, {
       headers,
-      data,
     });
-    expect(response.status(), await response.text()).toBe(201);
+    expect(response.status(), await response.text()).toBe(200);
     return z
       .object({ item: z.object({ id: z.string() }) })
       .parse(await response.json()).item.id;
@@ -31,32 +31,34 @@ test("edits compound emoji, clears it, and browses inherited category membership
     path: string,
     data: z.infer<ReturnType<typeof z.json>>,
   ) => {
-    const response = await page.request.patch(`/api/v1/${path}`, {
-      headers,
+    const response = await entityApi(page.request).update(
+      path.split("/")[0]!,
+      path.split("/")[1]!,
       data,
-    });
+      { headers },
+    );
     expect(response.ok(), await response.text()).toBeTruthy();
   };
-  const spending = await create("spending-categories", {
+  const spending = await create("spendingCategory", {
     name: "Synthetic emoji groceries",
     emoji: "🥕",
   });
-  const root = await create("product-categories", {
+  const root = await create("productCategory", {
     name: "Synthetic emoji food",
     spendingCategoryMode: "mapped",
     spendingCategoryId: spending,
   });
   for (const name of ["vegetables", "fruit", "bread"])
-    await create("product-categories", {
+    await create("productCategory", {
       name: `Synthetic emoji ${name}`,
       parentId: root,
     });
-  await create("product-categories", {
+  await create("productCategory", {
     name: "Synthetic emoji blocked",
     parentId: root,
     spendingCategoryMode: "blocked",
   });
-  const vendor = await create("vendors", {
+  const vendor = await create("vendor", {
     name: "Synthetic emoji supplier",
     defaultSpendingCategoryId: spending,
   });
@@ -101,8 +103,10 @@ test("edits compound emoji, clears it, and browses inherited category membership
   await expect(
     dialog.getByRole("textbox", { name: "Emoji", exact: true }),
   ).toHaveValue("");
-  const beforeAcceptance = await page.request.get(
-    `/api/v1/product-categories/${root}`,
+  const beforeAcceptance = await entityApi(page.request).get(
+    "productCategory",
+    root,
+    {},
   );
   expect(
     z.object({ emoji: z.null() }).parse(await beforeAcceptance.json()).emoji,
@@ -120,7 +124,7 @@ test("edits compound emoji, clears it, and browses inherited category membership
       .object({ emoji: z.string().nullable() })
       .parse(
         await (
-          await page.request.get(`/api/v1/product-categories/${root}`)
+          await entityApi(page.request).get("productCategory", root, {})
         ).json(),
       );
   await expect.poll(async () => (await read()).emoji).toBe("👩🏽‍🍳");
@@ -131,26 +135,28 @@ test("edits compound emoji, clears it, and browses inherited category membership
   await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(async () => (await read()).emoji).toBeNull();
-  const project = await create("projects", {
+  const project = await create("project", {
     name: "Synthetic emoji project",
     kind: "household",
     year: 2199,
     emoji: "🛠️",
   });
   for (const emoji of [null, "🏠", null, "🛠️"]) {
-    await patch(`projects/${project}`, { emoji });
+    await patch(`project/${project}`, { emoji });
     const body = await (
-      await page.request.get(`/api/v1/projects/${project}`)
+      await entityApi(page.request).get("project", project, {})
     ).json();
     expect(z.object({ emoji: z.string().nullable() }).parse(body).emoji).toBe(
       emoji,
     );
     expect(Object.hasOwn(body, "icon")).toBe(false);
   }
-  const invalid = await page.request.patch(`/api/v1/projects/${project}`, {
-    headers,
-    data: { emoji: "multiple emoji 🥕🥦" },
-  });
+  const invalid = await entityApi(page.request).update(
+    "project",
+    project,
+    { emoji: "multiple emoji 🥕🥦" },
+    { headers },
+  );
   expect(invalid.ok()).toBe(false);
   await gotoAuthenticatedPage(page, `/spending-categories/${spending}`);
   await page.getByRole("button", { name: /more/ }).first().click();
@@ -184,56 +190,55 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
     path: string,
     data: z.infer<ReturnType<typeof z.json>>,
   ) => {
-    const response = await page.request.post(`/api/v1/${path}`, {
+    const response = await entityApi(page.request).create(path, data, {
       headers,
-      data,
     });
-    expect(response.status(), await response.text()).toBe(201);
+    expect(response.status(), await response.text()).toBe(200);
     return z
       .object({ item: z.object({ id: z.string() }) })
       .parse(await response.json()).item.id;
   };
   try {
-    const groceries = await create("spending-categories", {
+    const groceries = await create("spendingCategory", {
       name: "Synthetic evidence groceries",
     });
-    const tools = await create("spending-categories", {
+    const tools = await create("spendingCategory", {
       name: "Synthetic evidence tools",
     });
-    const foodCategory = await create("product-categories", {
+    const foodCategory = await create("productCategory", {
       name: "Synthetic evidence food",
       spendingCategoryMode: "mapped",
       spendingCategoryId: groceries,
     });
-    const toolCategory = await create("product-categories", {
+    const toolCategory = await create("productCategory", {
       name: "Synthetic evidence hardware",
       spendingCategoryMode: "mapped",
       spendingCategoryId: tools,
     });
-    const food = await create("products", {
+    const food = await create("product", {
       name: "Synthetic evidence carrots",
       categoryId: foodCategory,
     });
-    const tool = await create("products", {
+    const tool = await create("product", {
       name: "Synthetic evidence wrench",
       categoryId: toolCategory,
     });
-    const foodVendor = await create("vendors", {
+    const foodVendor = await create("vendor", {
       name: "Synthetic evidence market",
     });
-    const mixed = await create("vendors", {
+    const mixed = await create("vendor", {
       name: "Synthetic evidence mixed shop",
     });
-    const sparse = await create("vendors", {
+    const sparse = await create("vendor", {
       name: "Synthetic evidence sparse shop",
     });
-    const misleading = await create("vendors", {
+    const misleading = await create("vendor", {
       name: "Synthetic evidence unknown shop",
       defaultSpendingCategoryId: groceries,
       spendingProfile: "food_retail",
     });
     const line = async (vendorId: string, productId?: string) => {
-      const purchaseId = await create("purchases", {
+      const purchaseId = await create("purchase", {
         vendorId,
         date: "2026-09-01",
       });
@@ -246,7 +251,7 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
         purchaseId,
       };
       if (productId) data.productId = productId;
-      await create("expenses", data);
+      await create("expense", data);
     };
     await line(foodVendor, food);
     await line(foodVendor, food);
@@ -276,10 +281,12 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
       defaultSpendingCategoryId: groceries,
       spendingProfile: "food_retail",
     };
-    const changed = await page.request.patch(`/api/v1/vendors/${foodVendor}`, {
-      headers,
-      data: { notes: "Synthetic evidence changed after review" },
-    });
+    const changed = await entityApi(page.request).update(
+      "vendor",
+      foodVendor,
+      { notes: "Synthetic evidence changed after review" },
+      { headers },
+    );
     expect(changed.ok(), await changed.text()).toBeTruthy();
     const stale = await page.request.post(
       "/api/v1/ai/applyFinanceCategorySuggestion",
@@ -292,7 +299,7 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
       { headers, data: { ...accepted, fingerprint: fresh.fingerprint } },
     );
     expect(applied.ok(), await applied.text()).toBeTruthy();
-    const saved = await page.request.get(`/api/v1/vendors/${foodVendor}`);
+    const saved = await entityApi(page.request).get("vendor", foodVendor, {});
     expect(
       z
         .object({

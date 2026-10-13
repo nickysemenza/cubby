@@ -69,16 +69,16 @@ extension SavedView {
     }
 }
 
-/// Thrown by the generated `listPage`/`timeline` arms when a filter cannot be sent.
+/// Thrown by `EntityKernel.swift` when a filter cannot be sent.
 public enum EntityFilterError: Error, Sendable, Hashable {
-    /// The wire name is not a query parameter of the entity's route.
+    /// The name is not a kernel filter of the entity.
     case unknownParameter(EntityKey, String)
     case invalidValue(parameter: String, value: String, expected: String)
 }
 
-// The conversions the generated per-parameter arms call (`Generated/EntityOperations.swift`).
-// Each maps the wire string(s) onto the typed query property's shape; a value the schema cannot
-// carry throws before any request is sent.
+// The conversions `EntityKernel.swift` and the USDA adapter apply to filter text. Each maps the
+// wire string(s) onto the JSON kind the body carries; a value that kind cannot hold throws before
+// any request is sent.
 extension EntityFilterValue {
     public var strings: [String] {
         switch self {
@@ -141,16 +141,5 @@ extension EntityFilterValue {
             }
             return value
         }
-    }
-
-    /// An `anyOf` item whose arms were all tried by the caller; `valid` says whether one matched.
-    static func anyOfCase<Item>(
-        _ name: String, _ raw: String, _ item: Item, _ valid: (Item) -> Bool
-    ) throws -> Item {
-        guard valid(item) else {
-            throw EntityFilterError.invalidValue(
-                parameter: name, value: raw, expected: "one of the anyOf arms")
-        }
-        return item
     }
 }

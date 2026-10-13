@@ -42,6 +42,7 @@ import {
   selectIOSSimulator,
 } from "../../../scripts/apple-simulator-selection.ts";
 import { scrubErrorMessage } from "../src/lib/error-diagnostics";
+import { startOperation } from "../tests/e2e/start-operation";
 import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
 import { leaseNamedDatabase } from "./test-database-lease";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
@@ -983,8 +984,9 @@ async function runHeadlessPhotoScenario(
     ];
     const proposalPool = createPostgresPool({ connectionString: databaseURL });
     try {
-      const proposed = await context.post("/api/v1/photoImport/saveGroups", {
-        data: { runId: runID, groups },
+      const proposed = await startOperation(context, "photoImport.saveGroups", {
+        runId: runID,
+        groups,
       });
       if (!proposed.ok())
         throw new Error(`Photo proposal failed: ${await proposed.text()}`);

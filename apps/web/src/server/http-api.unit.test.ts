@@ -18,7 +18,21 @@ const handleHttpOperation = createHttpApiHandler(
 );
 const request = (path: string, init?: RequestInit) =>
   handleHttpOperation(
-    new Request(`https://cubby.example/api/v1/${path}`, init),
+    new Request(
+      `https://cubby.example/api/v1/${path}`,
+      path === "entity/list"
+        ? {
+            method: "POST",
+            body: JSON.stringify({ entity: "recipe", filters: {} }),
+            ...init,
+            headers: {
+              "content-type": "application/json",
+              origin: "https://cubby.example",
+              ...init?.headers,
+            },
+          }
+        : init,
+    ),
   );
 
 beforeEach(() => {
@@ -36,7 +50,7 @@ beforeEach(() => {
 
 describe("HTTP boundary", () => {
   it("answers an outdated native app with a structured update-required error before authenticating", async () => {
-    const response = await request("recipes", {
+    const response = await request("entity/list", {
       headers: { "user-agent": "cubby-apple/1.0 (ios; none)" },
     });
     expect(response.status).toBe(426);
@@ -54,7 +68,7 @@ describe("HTTP boundary", () => {
     ports.context.mockRejectedValueOnce(
       new Error("Context service unavailable"),
     );
-    const contextFailure = await request("recipes");
+    const contextFailure = await request("entity/list");
     expect(await contextFailure.json()).toMatchObject({
       message: "Context service unavailable",
       diagnostics: {
@@ -64,7 +78,7 @@ describe("HTTP boundary", () => {
       },
     });
     ports.getSession.mockRejectedValueOnce(new Error("Private auth backend"));
-    const authFailure = await request("recipes");
+    const authFailure = await request("entity/list");
     const body = await authFailure.text();
     expect(JSON.parse(body)).toMatchObject({
       message: "The operation could not be completed",
@@ -74,7 +88,7 @@ describe("HTTP boundary", () => {
   });
 
   it("verifies the session and lets the server choose the database read policy", async () => {
-    expect((await request("recipes")).status).toBe(200);
+    expect((await request("entity/list")).status).toBe(200);
     expect(ports.getSession).toHaveBeenCalledWith({
       headers: expect.any(Headers),
       returnHeaders: true,
@@ -113,7 +127,7 @@ describe("HTTP boundary", () => {
       headers,
     });
 
-    const response = await request("recipes", {
+    const response = await request("entity/list", {
       headers: { authorization: "Bearer token.signature" },
     });
     expect(response.headers.get("set-cookie")).toContain(
@@ -130,7 +144,7 @@ describe("HTTP boundary", () => {
       },
       headers: new Headers({ "set-auth-token": "token.new-signature" }),
     });
-    const response = await request("recipes", {
+    const response = await request("entity/list", {
       headers: { authorization: "Bearer token.signature" },
     });
     expect(response.headers.get("set-auth-token")).toBe("token.new-signature");
@@ -140,7 +154,8 @@ describe("HTTP boundary", () => {
     async (key) => {
       ports.verifyApiKey.mockResolvedValue({ valid: false });
       expect(
-        (await request("recipes", { headers: { "x-api-key": key } })).status,
+        (await request("entity/list", { headers: { "x-api-key": key } }))
+          .status,
       ).toBe(401);
       expect(ports.getSession).not.toHaveBeenCalled();
       expect(ports.dispatch).not.toHaveBeenCalled();
@@ -153,10 +168,15 @@ describe("HTTP boundary", () => {
       if (origin) headers.set("Origin", origin);
       expect(
         (
-          await request("recipes/RCP-ABCD", {
-            method: "PATCH",
+          await request("entity/mutate", {
+            method: "POST",
             headers,
-            body: '{"name":"Change"}',
+            body: JSON.stringify({
+              action: "update",
+              entity: "recipe",
+              id: "RCP-ABCD",
+              data: { name: "Change" },
+            }),
           })
         ).status,
       ).toBe(403);
@@ -171,10 +191,15 @@ describe("HTTP boundary", () => {
     });
     expect(
       (
-        await request("recipes/RCP-ABCD", {
-          method: "PATCH",
+        await request("entity/mutate", {
+          method: "POST",
           headers: { "x-api-key": "key", "content-type": "application/json" },
-          body: '{"notes":"Changed"}',
+          body: JSON.stringify({
+            action: "update",
+            entity: "recipe",
+            id: "RCP-ABCD",
+            data: { notes: "Changed" },
+          }),
         })
       ).status,
     ).toBe(200);
@@ -195,17 +220,19 @@ describe("HTTP boundary", () => {
   // passes `instanceof Request` but carries no undici internal state, so
   // ts-rest's `new TsRestRequest(request)` threw on every write.
   it("accepts a foreign Request implementation carrying a body", async () => {
-    const native = new Request(
-      "https://cubby.example/api/v1/recipes/RCP-ABCD",
-      {
-        method: "PATCH",
-        headers: {
-          authorization: "Bearer token.signature",
-          "content-type": "application/json",
-        },
-        body: '{"notes":"Changed"}',
+    const native = new Request("https://cubby.example/api/v1/entity/mutate", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token.signature",
+        "content-type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        action: "update",
+        entity: "recipe",
+        id: "RCP-ABCD",
+        data: { notes: "Changed" },
+      }),
+    });
     const foreign: Request = Object.create(Request.prototype, {
       url: { get: () => native.url },
       method: { get: () => native.method },
@@ -227,13 +254,18 @@ describe("HTTP boundary", () => {
     );
   });
   it("lets bearer-authenticated writes through without an Origin", async () => {
-    const response = await request("recipes/RCP-ABCD", {
-      method: "PATCH",
+    const response = await request("entity/mutate", {
+      method: "POST",
       headers: {
         authorization: "Bearer token.signature",
         "content-type": "application/json",
       },
-      body: '{"notes":"Changed"}',
+      body: JSON.stringify({
+        action: "update",
+        entity: "recipe",
+        id: "RCP-ABCD",
+        data: { notes: "Changed" },
+      }),
     });
     expect(response.status).toBe(200);
     // The bearer plugin turns the header into a session before getSession
@@ -259,7 +291,7 @@ describe("HTTP boundary", () => {
     });
     expect(
       (
-        await request("recipes", {
+        await request("entity/list", {
           headers: { authorization: "Bearer invalid" },
         })
       ).status,
@@ -269,45 +301,54 @@ describe("HTTP boundary", () => {
   it("still requires a same-origin write for non-bearer Authorization schemes", async () => {
     expect(
       (
-        await request("recipes/RCP-ABCD", {
-          method: "PATCH",
+        await request("entity/mutate", {
+          method: "POST",
           headers: {
             authorization: "Basic dXNlcjpwYXNz",
             "content-type": "application/json",
           },
-          body: '{"name":"Change"}',
+          body: JSON.stringify({
+            action: "update",
+            entity: "recipe",
+            id: "RCP-ABCD",
+            data: { name: "Change" },
+          }),
         })
       ).status,
     ).toBe(403);
     expect(ports.dispatch).not.toHaveBeenCalled();
   });
-  it.each([
-    ["recipe/getManyByIDs?ids=RCP-ABCD", { ids: ["RCP-ABCD"] }],
-    [
-      "recipe/getManyByIDs?ids=RCP-ABCD&ids=RCP-EFGH",
-      { ids: ["RCP-ABCD", "RCP-EFGH"] },
-    ],
-    // ts-rest's own client spells lists with brackets; the handler folds them.
-    [
-      "recipe/getManyByIDs?ids%5B0%5D=RCP-ABCD&ids%5B1%5D=RCP-EFGH",
-      { ids: ["RCP-ABCD", "RCP-EFGH"] },
-    ],
-    ["recipe/getManyByIDs?ids%5B%5D=RCP-ABCD", { ids: ["RCP-ABCD"] }],
-    ["dashboard/counts", undefined],
-    [
-      "recipes?page=1&pageSize=5",
-      {
-        entity: "recipe",
-        filters: {},
-        pagination: { pageIndex: 0, pageSize: 5 },
-      },
-    ],
-  ])("decodes GET input for %s", async (path, input) => {
-    expect((await request(path)).status).toBe(200);
+  it("decodes native query input", async () => {
+    expect(
+      (await request("inventory/locationSnapshot?locationId=LOC-ABCD")).status,
+    ).toBe(200);
     expect(ports.dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ input }),
+      expect.objectContaining({
+        operation: "inventory.locationSnapshot",
+        input: { locationId: "LOC-ABCD" },
+      }),
     );
   });
+  it.each([
+    ["excludeTriggers=manual", ["manual"]],
+    ["excludeTriggers=manual&excludeTriggers=backfill", ["manual", "backfill"]],
+    [
+      "excludeTriggers%5B0%5D=manual&excludeTriggers%5B1%5D=backfill",
+      ["manual", "backfill"],
+    ],
+    ["excludeTriggers%5B%5D=manual", ["manual"]],
+  ])(
+    "decodes native list query values for %s",
+    async (query, excludeTriggers) => {
+      expect((await request(`activity/list?${query}`)).status).toBe(200);
+      expect(ports.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "activity.list",
+          input: expect.objectContaining({ excludeTriggers }),
+        }),
+      );
+    },
+  );
   // A domain blocker (e.g. PROJECT_HAS_TASKS, covered against PostgreSQL in
   // project.integration.test.ts) must reach an HTTP client as its own status
   // with the blockers intact, not as a generic 500.
@@ -325,9 +366,17 @@ describe("HTTP boundary", () => {
         blockers: [{ id: "TSK-4K7M" }],
       };
       ports.dispatch.mockResolvedValueOnce({ ok: false, error });
-      const response = await request("financial-accounts/FAC-4K7M", {
-        method: "DELETE",
-        headers: { origin: "https://cubby.example" },
+      const response = await request("entity/mutate", {
+        method: "POST",
+        headers: {
+          origin: "https://cubby.example",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "delete",
+          entity: "financialAccount",
+          ids: ["FAC-4K7M"],
+        }),
       });
       expect(response.status).toBe(status);
       expect(await response.json()).toMatchObject(error);
@@ -341,17 +390,17 @@ describe("HTTP boundary", () => {
       );
     },
   );
-  it("resolves registered operation names before resource identifiers", async () => {
+  it("dispatches native operation queries", async () => {
     expect((await request("image/analysis?id=IMG-ABCD")).status).toBe(200);
     expect(ports.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ operation: "image.analysis" }),
     );
   });
-  it("returns 404 for invalid identifiers and 405 with supported methods", async () => {
+  it("returns 404 for removed resources and 405 with supported kernel methods", async () => {
     expect((await request("recipes/%ZZ")).status).toBe(404);
     expect((await request("recipes/VEN-ABCD")).status).toBe(404);
-    const response = await request("recipes/RCP-ABCD", { method: "PUT" });
+    const response = await request("entity/detail", { method: "PUT" });
     expect(response.status).toBe(405);
-    expect(response.headers.get("allow")).toBe("GET, PATCH, DELETE");
+    expect(response.headers.get("allow")).toBe("POST");
   });
 });

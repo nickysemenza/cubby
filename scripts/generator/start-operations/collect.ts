@@ -39,8 +39,8 @@ export type ContractMember = {
     entities?: readonly string[];
     productPhases?: readonly string[];
   };
-  /** `false` keeps the member off the HTTP API (see contracts/define.ts). */
-  http?: false;
+  /** The loose HTTP wire of a type-only carrier (see contracts/define.ts). */
+  httpWire?: { input: z.ZodType; output: z.ZodType; nullable?: true };
   /** Why the Apple app calls this operation (see contracts/define.ts). */
   native?: string;
   /** Why the operation is not an MCP tool action (see contracts/define.ts). */
@@ -62,7 +62,8 @@ export type LoadedContract = { exportName: string; contract: Contract };
 export type DeclaredOperation = {
   kind: Kind;
   observability: OperationObservability;
-  http: boolean;
+  /** HTTP carries the member's `httpWire`, always as a POST body. */
+  httpWire: boolean;
   native: boolean;
   strongRead: boolean;
   transport?: "post";
@@ -306,7 +307,7 @@ export const collectDeclaredOperations = (): Promise<
             entities: [...(definition.observability?.entities ?? [])],
             productPhases: [...(definition.observability?.productPhases ?? [])],
           },
-          http: definition.http !== false,
+          httpWire: definition.httpWire !== undefined,
           transport: definition.transport,
           native: definition.native !== undefined,
           strongRead: definition.readPolicy === "strong",
@@ -533,19 +534,11 @@ export const validateStrongQueryOperations = async (): Promise<void> => {
   }
 };
 
-/**
- * RPC ids flagged `native:` on their contract member. A flag on a member the
- * HTTP API does not carry is an error here, not a silently missing route.
- */
+/** RPC ids flagged `native:` on their contract member. */
 export const collectNativeOperationIds = async (): Promise<string[]> => {
   const ids: string[] = [];
   for (const [operation, declared] of await collectDeclaredOperations()) {
-    if (!declared.native) continue;
-    if (!declared.http)
-      throw new Error(
-        `${operation} is flagged native but declares http: false; the native client only reaches HTTP operations.`,
-      );
-    ids.push(operation);
+    if (declared.native) ids.push(operation);
   }
   return ids;
 };

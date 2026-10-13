@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { z } from "zod";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
@@ -68,8 +69,10 @@ test("linked Expense categories display their readable label and transaction exp
       purchaseId,
     },
   );
-  const saved = await page.request.get(
-    `/api/v1/financial-transactions/${transactionId}`,
+  const saved = await entityApi(page.request).get(
+    "financialTransaction",
+    transactionId,
+    {},
   );
   expect(saved.ok(), await saved.text()).toBeTruthy();
   expect(
@@ -172,8 +175,10 @@ test("linked Expense categories display their readable label and transaction exp
     path: testInfo.outputPath("itemization-explanation.png"),
   });
   await page.keyboard.press("Escape");
-  const unchanged = await page.request.get(
-    `/api/v1/financial-transactions/${transactionId}`,
+  const unchanged = await entityApi(page.request).get(
+    "financialTransaction",
+    transactionId,
+    {},
   );
   expect(
     z
@@ -183,12 +188,11 @@ test("linked Expense categories display their readable label and transaction exp
       })
       .parse(await unchanged.json()),
   ).toEqual({ itemizationExpectation: null, spendingCategoryId: null });
-  const updated = await page.request.patch(
-    `/api/v1/financial-transactions/${transactionId}`,
-    {
-      headers: { Origin: baseURL! },
-      data: { itemizationExpectation: "required" },
-    },
+  const updated = await entityApi(page.request).update(
+    "financialTransaction",
+    transactionId,
+    { itemizationExpectation: "required" },
+    { headers: { Origin: baseURL! } },
   );
   expect(updated.ok(), await updated.text()).toBeTruthy();
   const reloaded = page.waitForResponse(
@@ -203,8 +207,10 @@ test("linked Expense categories display their readable label and transaction exp
   await expect(row.getByRole("cell").nth(expectationIndex)).toContainText(
     "Expected",
   );
-  const explicit = await page.request.get(
-    `/api/v1/financial-transactions/${transactionId}`,
+  const explicit = await entityApi(page.request).get(
+    "financialTransaction",
+    transactionId,
+    {},
   );
   expect(
     z
@@ -227,8 +233,10 @@ test("linked Expense categories display their readable label and transaction exp
     .click();
   await expect
     .poll(async () => {
-      const response = await page.request.get(
-        `/api/v1/financial-transactions/${transactionId}`,
+      const response = await entityApi(page.request).get(
+        "financialTransaction",
+        transactionId,
+        {},
       );
       return z
         .object({
@@ -294,7 +302,11 @@ test("draft category edits hide obsolete policy provenance while the replacement
       }),
     }),
   });
-  const persisted = await page.request.get(`/api/v1/purchases/${purchaseId}`);
+  const persisted = await entityApi(page.request).get(
+    "purchase",
+    purchaseId,
+    {},
+  );
   expect(
     z
       .object({
@@ -346,7 +358,7 @@ test("draft category edits hide obsolete policy provenance while the replacement
   } finally {
     releaseRequest();
   }
-  const saved = await page.request.get(`/api/v1/purchases/${purchaseId}`);
+  const saved = await entityApi(page.request).get("purchase", purchaseId, {});
   expect(
     z
       .object({
@@ -364,8 +376,10 @@ test("draft category edits hide obsolete policy provenance while the replacement
   await expect(dialog).toHaveCount(0);
   await expect
     .poll(async () => {
-      const response = await page.request.get(
-        `/api/v1/purchases/${purchaseId}`,
+      const response = await entityApi(page.request).get(
+        "purchase",
+        purchaseId,
+        {},
       );
       return z
         .object({
@@ -458,7 +472,7 @@ test("expense category pills agree with quality for direct, allocated, and missi
     date: "2026-09-10",
   });
   const read = async (id: string) => {
-    const response = await page.request.get(`/api/v1/expenses/${id}`);
+    const response = await entityApi(page.request).get("expense", id, {});
     expect(response.ok(), await response.text()).toBeTruthy();
     return z
       .object({

@@ -5,18 +5,14 @@ plugin (`OpenAPIGenerator`, declared in `CubbyKit/Package.swift`) generates the
 typed client from `openapi.json` and `openapi-generator-config.yaml` in this
 directory. Both are gitignored and written by `pnpm generate`
 (`scripts/generator/http-api/`), which install, the Xcode scheme pre-action
-and `apps/apple/scripts/prepare-project.sh` run. The Apple document contains
-only automatic resource operations and RPC operations flagged `native:`, with
-their reachable components, discriminator mappings, and security metadata. The
-web document remains the complete HTTP API; edits to unused HTTP contracts do
-not rewrite the Apple document. The same operation selection writes the Swift
-generator config. Redocly bundles the projection and removes unused components,
-so reference and security handling follow the maintained OpenAPI tooling.
-The `entity.listBase`, `entity.listEnrichment`, and `entity.listSummary`
-responses are untyped objects here (`nativeComponents` in
-`native-document.ts`): native lists read them as `JSONValue` through the
-entity manifest, so their per-entity variants were compile cost only. The
-wire format is unchanged.
+and `apps/apple/scripts/prepare-project.sh` run. The document is the whole
+HTTP API, which carries only the contract members flagged `native:`, so the
+generator config has no operation filter. The entity kernel operations and the
+`entity.listBase`, `entity.listEnrichment`, and `entity.listSummary` lists are
+untyped JSON objects here (`JSON_VALUE_COMPONENTS` in `openapi.ts`): native
+reads them as `JSONValue` through the entity manifest, so per-entity variants
+would be compile cost only. A few records hand-written Swift decodes by name
+stay typed through `NATIVE_TYPED_RECORDS` (`type-overrides.ts`).
 
 Positional `_schemaNN` names are assigned at schema registration and can
 renumber when a new schema is added; `apps/apple/AGENTS.md` forbids naming

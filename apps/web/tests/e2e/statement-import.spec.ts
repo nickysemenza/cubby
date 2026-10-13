@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { z } from "zod";
 import { createEntityFixture } from "./fixtures-core";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
@@ -14,9 +15,9 @@ test("a no-ID posted tip requires reviewed attachment to the pending charge", as
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     sourceAliases: [{ source: "copilot", alias: tag, externalAccountId: null }],
   });
-  const pending = await page.request.post("/api/v1/financial-transactions", {
-    headers: { Origin: baseURL! },
-    data: {
+  const pending = await entityApi(page.request).create(
+    "financialTransaction",
+    {
       accountId: account.id,
       kind: "purchase",
       status: "pending",
@@ -25,8 +26,9 @@ test("a no-ID posted tip requires reviewed attachment to the pending charge", as
       merchant: tag,
       rawDescription: tag,
     },
-  });
-  expect(pending.status(), await pending.text()).toBe(201);
+    { headers: { Origin: baseURL! } },
+  );
+  expect(pending.status(), await pending.text()).toBe(200);
   const transactionId = z
     .object({ item: z.object({ id: z.string() }) })
     .parse(await pending.json()).item.id;
@@ -54,8 +56,10 @@ test("a no-ID posted tip requires reviewed attachment to the pending charge", as
   await expect(
     page.getByText(/0 transactions created.*1 observations attached/),
   ).toBeVisible();
-  const canonical = await page.request.get(
-    `/api/v1/financial-transactions/${transactionId}`,
+  const canonical = await entityApi(page.request).get(
+    "financialTransaction",
+    transactionId,
+    {},
   );
   expect(
     z

@@ -174,22 +174,19 @@ export const projectContract = defineContract("project", {
     output: schemas.projectToolUsageSetOut,
     invalidates: ["projectResource"],
   }),
-  // Agent-facing (MCP `project_overview`, `entity`): off the HTTP API.
+  // Agent-facing (MCP `project_overview`, `entity`).
   /** The dashboard summary scoped to live statuses unless a scope is given. */
   houseStatus: query({
-    http: false,
     input: schemas.projectDashboardFiltersSchema,
     output: projectHouseStatusOut,
   }),
   /** Subtree budget vs actual + committed, worst overrun first. */
   budget: query({
-    http: false,
     input: schemas.projectDashboardFiltersSchema,
     output: projectBudgetOut,
   }),
   /** Move a Product's recorded project uses onto another Product. */
   repointUses: mutation({
-    http: false,
     input: schemas.repointProjectUsesInput,
     output: schemas.repointProjectUsesOut,
     invalidates: ["projectResource"],

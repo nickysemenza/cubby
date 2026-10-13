@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import {
   seedLocationPrerequisite,
   seedProductPrerequisite,
@@ -91,10 +92,12 @@ test("search finds a renamed Product through its Inventory, Task, and Wish", asy
     candidateProductIds: [product.id],
   });
 
-  const renamed = await page.request.patch(`/api/v1/products/${product.id}`, {
-    headers: { Origin: baseURL! },
-    data: { name: newName },
-  });
+  const renamed = await entityApi(page.request).update(
+    "product",
+    product.id,
+    { name: newName },
+    { headers: { Origin: baseURL! } },
+  );
   expect(renamed.status(), await renamed.text()).toBe(200);
 
   const expectHits = async (query: string, type: string, titles: string[]) => {

@@ -74,6 +74,7 @@ let package = Package(
             // `pnpm generate` (gitignored) and decoded by the descriptor types in
             // Generated/EntityDescriptors.swift and Catalog/NativeCoverage.swift.
             resources: [
+                .copy("Generated/entity-kernel.json"),
                 .copy("Generated/entity-manifest.json"),
                 .copy("Generated/native-coverage.json"),
             ]

@@ -1,3 +1,5 @@
+import { startOperation } from "./start-operation";
+import { entityApi } from "./entity-api";
 import {
   financialBookingPreview,
   financialBookingResult,
@@ -237,10 +239,13 @@ export async function createConvergenceHarness(
     input: Input,
     output: { parse(value: unknown): Output },
   ): Promise<Output> => {
-    const response = await page.request.post(`/api/v1/${path}`, {
-      data: input,
-      headers: { Origin: baseURL },
-    });
+    const response =
+      path === "photoImport/saveGroups"
+        ? await startOperation(page.request, "photoImport.saveGroups", input)
+        : await page.request.post(`/api/v1/${path}`, {
+            data: input,
+            headers: { Origin: baseURL },
+          });
     expect(response.ok(), await response.text()).toBe(true);
     return output.parse(await response.json());
   };
@@ -256,12 +261,11 @@ export async function createConvergenceHarness(
       )
       .limit(1);
     if (found && found.categoryId === null) {
-      const classified = await page.request.patch(
-        `/api/v1/products/${found.shortcode}`,
-        {
-          headers: { Origin: baseURL },
-          data: { categoryId: productCategory.id },
-        },
+      const classified = await entityApi(page.request).update(
+        "product",
+        found.shortcode,
+        { categoryId: productCategory.id },
+        { headers: { Origin: baseURL } },
       );
       expect(classified.ok(), await classified.text()).toBe(true);
     }

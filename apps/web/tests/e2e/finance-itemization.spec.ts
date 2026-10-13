@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 
@@ -12,11 +13,10 @@ type Payload = NonNullable<
 >;
 
 async function post(page: Page, baseURL: string, path: string, data: Payload) {
-  const response = await page.request.post(`/api/v1/${path}`, {
+  const response = await entityApi(page.request).create(path, data, {
     headers: { Origin: baseURL },
-    data,
   });
-  expect(response.status(), await response.text()).toBe(201);
+  expect(response.status(), await response.text()).toBe(200);
   return created.parse(await response.json()).item.id;
 }
 
@@ -26,23 +26,23 @@ test("filters transactions by how well their purchase is itemized", async ({
 }) => {
   const origin = baseURL!;
   const tag = `Itemization ${Date.now()}`;
-  const accountId = await post(page, origin, "financial-accounts", {
+  const accountId = await post(page, origin, "financialAccount", {
     name: `${tag} card`,
     identity: { kind: "credit_card", issuer: null, network: "visa" },
   });
-  const vendorId = await post(page, origin, "vendors", { name: `${tag} shop` });
-  const productId = await post(page, origin, "products", {
+  const vendorId = await post(page, origin, "vendor", { name: `${tag} shop` });
+  const productId = await post(page, origin, "product", {
     name: `${tag} good`,
     manufacturer: "E2E fixture",
   });
   const purchase = (orderId: string) =>
-    post(page, origin, "purchases", {
+    post(page, origin, "purchase", {
       vendorId,
       orderId: `${tag} ${orderId}`,
       date: "2026-09-10",
     });
   const line = (purchaseId: string, cost: number, itemized: boolean) =>
-    post(page, origin, "expenses", {
+    post(page, origin, "expense", {
       name: `${tag} line ${cost}`,
       cost,
       date: "2026-09-10",
@@ -54,7 +54,7 @@ test("filters transactions by how well their purchase is itemized", async ({
         : { lineBasis: "allocation" }),
     });
   const charge = (merchant: string, purchaseId: string, amount: number) =>
-    post(page, origin, "financial-transactions", {
+    post(page, origin, "financialTransaction", {
       accountId,
       kind: "purchase",
       status: "posted",

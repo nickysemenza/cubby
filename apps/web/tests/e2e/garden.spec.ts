@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { z } from "zod";
 
 import {
@@ -100,8 +101,10 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
     .getByRole("button", { name: "Save changes", exact: true })
     .click();
   await expect(dialog).not.toBeVisible();
-  const updated = await page.request.get(
-    `/api/v1/plantings/${existingPlanting.id}`,
+  const updated = await entityApi(page.request).get(
+    "planting",
+    existingPlanting.id,
+    {},
   );
   expect(await updated.json()).toMatchObject({ status: "finished" });
 
@@ -224,9 +227,9 @@ test("a planting's list row shows a thumbnail once a journal entry with a photo 
     e2eRuntime.objectStorageUrl,
   );
 
-  const created = await page.request.post("/api/v1/garden-entries", {
-    headers: { Origin: baseURL! },
-    data: {
+  const created = await entityApi(page.request).create(
+    "gardenEntry",
+    {
       locationId: bed.id,
       plantingIds: [planting.id],
       kind: "note",
@@ -234,8 +237,9 @@ test("a planting's list row shows a thumbnail once a journal entry with a photo 
       note: `${cropName} first photo`,
       pendingImageIds: [image.id],
     },
-  });
-  expect(created.status(), await created.text()).toBe(201);
+    { headers: { Origin: baseURL! } },
+  );
+  expect(created.status(), await created.text()).toBe(200);
   createdItemSchema.parse(await created.json());
 
   await gotoAuthenticatedPage(page, `/plantings?locationId=${bed.id}`);

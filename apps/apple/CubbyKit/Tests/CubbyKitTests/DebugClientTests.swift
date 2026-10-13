@@ -67,7 +67,7 @@ struct DebugClientTests {
             }
         }
 
-        let route = try #require(OperationRoute.all["resources.product.list"])
+        let route = try #require(OperationRoute.all["entity.list"])
         _ = try await client.call(route)
 
         #expect(

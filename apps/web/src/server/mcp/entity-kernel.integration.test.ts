@@ -166,7 +166,7 @@ describe("MCP entity kernel boundary", () => {
       }),
     );
     // Before this guard the roster check ran `field.parse` inside the run
-    // stage, so `/api/v1/recipes?sort=bogus` answered 500 with a Sentry event.
+    // stage, so an HTTP entity.list request with an unsupported sort answered 500 with a Sentry event.
     await expect(
       executeEntity(context, {
         action: "list",

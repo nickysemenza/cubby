@@ -61,7 +61,7 @@ public struct ImageUploadRequest: Sendable, Hashable {
 extension EntityDescriptor {
     /// Whether `resources.<key>.update` takes `pendingImageIds`; read from the generated route
     /// table, so it tracks the server without a catalog change.
-    public var acceptsImages: Bool { OperationRoute.imageAttachableEntities.contains(key.rawValue) }
+    public var acceptsImages: Bool { key.acceptsImageAttach }
 }
 
 /// The server calls behind adding a photo. `CubbyClient` conforms; tests stub it.

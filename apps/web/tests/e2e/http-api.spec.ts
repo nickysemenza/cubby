@@ -1,3 +1,6 @@
+import { calendarContract } from "~/contracts/calendar.contract";
+import { startOperation } from "./start-operation";
+import { entityApi } from "./entity-api";
 import { createPostgresPool } from "../../tooling/postgres-pool";
 import { createHash, randomBytes } from "node:crypto";
 import { request as apiRequest } from "@playwright/test";
@@ -90,28 +93,37 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
     if (counts.status !== 200) throw new Error("Dashboard failed");
     expect(Object.keys(counts.body).length).toBeGreaterThan(0);
     const inspectFeed = async () => {
-      const calendar = await client.calendar.inspectFeed({ query: {} });
-      return calendar.status === 200 ? calendar.body : null;
+      const calendar = await startOperation(
+        page.request,
+        "calendar.inspectFeed",
+        undefined,
+      );
+      return calendar.ok()
+        ? calendarContract.ops.inspectFeed.output.parse(calendar.body)
+        : null;
     };
     const feedBefore = await settledCalendarFeedRevision(inspectFeed);
-    const created = await page.request.post("/api/v1/vendors", {
-      headers,
-      data: { name: `HTTP fixture ${Date.now()}` },
-    });
-    expect(created.status()).toBe(201);
+    const created = await entityApi(page.request).create(
+      "vendor",
+      { name: `HTTP fixture ${Date.now()}` },
+      { headers },
+    );
+    expect(created.status()).toBe(200);
     const result = entityCreated.parse(await created.json());
     await expectCalendarFeedDirtied(
       inspectFeed,
       "api.entity.mutate",
       feedBefore,
     );
-    const domainError = await page.request.patch("/api/v1/vendors/VEN-ZZZZ", {
-      headers,
-      data: { name: "Missing" },
-    });
+    const domainError = await entityApi(page.request).update(
+      "vendor",
+      "VEN-ZZZZ",
+      { name: "Missing" },
+      { headers },
+    );
     expect(domainError.status()).toBe(404);
     expect(await domainError.json()).toMatchObject({ code: "NOT_FOUND" });
-    const detail = await page.request.get(`/api/v1/vendors/${result.item.id}`, {
+    const detail = await entityApi(page.request).get("vendor", result.item.id, {
       headers,
     });
     expect(detail.status()).toBe(200);
@@ -132,20 +144,21 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
         createdAt: expect.stringMatching(/^\d{4}-/u),
       }),
     ]);
-    const malformed = await page.request.post("/api/v1/vendors", {
+    const malformed = await page.request.post("/api/v1/entity/mutate", {
       headers: { ...headers, "content-type": "application/json" },
       data: "{",
     });
     expect(malformed.status()).toBe(400);
-    const badInput = await page.request.get("/api/v1/vendors", {
-      headers,
-      params: { page: "nope" },
-    });
+    const badInput = await entityApi(page.request).list(
+      "vendor",
+      { pagination: { pageIndex: "nope", pageSize: 1 } },
+      { headers },
+    );
     expect(badInput.status()).toBe(400);
-    const badId = await page.request.get("/api/v1/vendors/invalid", {
+    const badId = await entityApi(page.request).get("vendor", "invalid", {
       headers,
     });
-    expect(badId.status()).toBe(404);
+    expect(badId.status()).toBe(400);
     const spoof = await page.request.get("/api/v1/dashboard/counts", {
       headers,
       params: { actor: '{"source":"ui"}' },
@@ -163,15 +176,16 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
     await expect
       .poll(async () => {
         return (
-          await page.request.post("/api/v1/vendors", { data: mutateBody })
+          await entityApi(page.request).create("vendor", mutateBody, {
+            headers: {},
+          })
         ).status();
       })
       .toBe(403);
     expect(
       (
-        await page.request.post("/api/v1/vendors", {
+        await entityApi(page.request).create("vendor", mutateBody, {
           headers: { "x-api-key": "invalid" },
-          data: mutateBody,
         })
       ).status(),
     ).toBe(401);
@@ -291,35 +305,41 @@ test("bearer tokens authenticate a cookie-less native client", async ({
     await login.dispose();
     const bearer = { Authorization: `Bearer ${token}` };
 
-    expect((await native.get("/api/v1/recipes")).status()).toBe(401);
-    const read = await native.get("/api/v1/recipes", {
-      headers: bearer,
-      params: { page: "1", pageSize: "1" },
-    });
+    expect((await entityApi(native).list("recipe", {}, {})).status()).toBe(401);
+    const read = await entityApi(native).list(
+      "recipe",
+      { pagination: { pageIndex: 0, pageSize: 1 } },
+      { headers: bearer },
+    );
     expect(read.status(), await read.text()).toBe(200);
     expect(await read.json()).toMatchObject({ items: expect.any(Array) });
 
-    const created = await native.post("/api/v1/recipes", {
-      headers: bearer,
-      data: {
+    const created = await entityApi(native).create(
+      "recipe",
+      {
         name: `Bearer acceptance ${Date.now()}`,
         meta: null,
         sections: [],
       },
-    });
-    expect(created.status(), await created.text()).toBe(201);
+      { headers: bearer },
+    );
+    expect(created.status(), await created.text()).toBe(200);
     const id = entityCreated.parse(await created.json()).item.id;
     expect(
       (
-        await native.delete(`/api/v1/recipes/${id}`, { headers: bearer })
+        await entityApi(native).remove("recipe", id, { headers: bearer })
       ).status(),
     ).toBe(200);
 
     expect(
       (
-        await native.get("/api/v1/recipes", {
-          headers: { Authorization: "Bearer invalid.token" },
-        })
+        await entityApi(native).list(
+          "recipe",
+          {},
+          {
+            headers: { Authorization: "Bearer invalid.token" },
+          },
+        )
       ).status(),
     ).toBe(401);
 
@@ -334,7 +354,9 @@ test("bearer tokens authenticate a cookie-less native client", async ({
       ).status(),
     ).toBe(200);
     expect(
-      (await native.get("/api/v1/recipes", { headers: bearer })).status(),
+      (
+        await entityApi(native).list("recipe", {}, { headers: bearer })
+      ).status(),
     ).toBe(401);
   } finally {
     await login.dispose();
@@ -383,19 +405,24 @@ test("native handoff exchanges PKCE once for a signed API session", async ({
 
     // A separate cookie-less context proves the plugin's signed header, not
     // the exchange response's ambient cookies, authenticates the native API.
-    const read = await native.get("/api/v1/recipes", {
-      headers: { Authorization: `Bearer ${signedToken}` },
-      params: { page: "1", pageSize: "1" },
-    });
+    const read = await entityApi(native).list(
+      "recipe",
+      { pagination: { pageIndex: 0, pageSize: 1 } },
+      { headers: { Authorization: `Bearer ${signedToken}` } },
+    );
     expect(read.status(), await read.text()).toBe(200);
     const rawToken = z
       .object({ token: z.string() })
       .parse(await response.json()).token;
     expect(
       (
-        await native.get("/api/v1/recipes", {
-          headers: { Authorization: `Bearer ${rawToken}` },
-        })
+        await entityApi(native).list(
+          "recipe",
+          {},
+          {
+            headers: { Authorization: `Bearer ${rawToken}` },
+          },
+        )
       ).status(),
     ).toBe(401);
     expect(
@@ -427,29 +454,4 @@ test("native handoff exchanges PKCE once for a signed API session", async ({
     await exchange.dispose();
     await native.dispose();
   }
-});
-
-test("the OpenAPI document is served as a static asset", async ({ page }) => {
-  // Cloudflare serves the emitted client file without running the Worker; a
-  // missing client emit 404s here rather than at build time.
-  const response = await page.request.get("/api/v1/openapi.json");
-  expect(response.status()).toBe(200);
-  const document = z
-    .object({
-      openapi: z.string(),
-      paths: z.record(z.string(), z.unknown()),
-      servers: z.array(z.object({ url: z.string() })),
-      components: z.object({
-        securitySchemes: z.object({
-          sessionCookie: z.object({
-            in: z.literal("cookie"),
-            name: z.literal("__Secure-better-auth.session_token"),
-          }),
-        }),
-      }),
-    })
-    .parse(await response.json());
-  expect(response.headers()["content-type"]).toContain("application/json");
-  expect(document.servers).toEqual([{ url: "/" }]);
-  expect(Object.keys(document.paths).length).toBeGreaterThan(0);
 });

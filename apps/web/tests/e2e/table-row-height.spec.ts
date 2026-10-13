@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 
@@ -46,19 +47,18 @@ test("multi-reference list cells stay within the row height", async ({
     path: string,
     data: z.infer<ReturnType<typeof z.json>>,
   ) => {
-    const response = await page.request.post(`/api/v1/${path}`, {
+    const response = await entityApi(page.request).create(path, data, {
       headers: { Origin: baseURL! },
-      data,
     });
-    expect(response.status(), await response.text()).toBe(201);
+    expect(response.status(), await response.text()).toBe(200);
     return z
       .object({ item: z.object({ id: z.string() }) })
       .parse(await response.json()).item.id;
   };
   const name = `Synthetic row height ${Date.now()}`;
-  const spending = await create("spending-categories", { name });
+  const spending = await create("spendingCategory", { name });
   for (const child of ["pantry", "produce", "bakery", "frozen"])
-    await create("product-categories", {
+    await create("productCategory", {
       name: `${name} ${child}`,
       spendingCategoryMode: "mapped",
       spendingCategoryId: spending,

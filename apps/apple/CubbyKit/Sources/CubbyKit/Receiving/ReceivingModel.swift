@@ -265,7 +265,7 @@ extension CubbyClient: ReceivingService {
 
     public func receivingLocations() async throws -> [ReceivingLocation] {
         try await locationOptions(page: 1, pageSize: 200).items.map {
-            ReceivingLocation(id: $0.id, name: $0.name, path: $0.parent?.name)
+            ReceivingLocation(id: $0.id, name: $0.name, path: $0.parentName)
         }
     }
 

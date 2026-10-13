@@ -1,7 +1,10 @@
 import Foundation
 
-extension DevicePlatform {
-    /// `macos` or `ios` — the only two platforms CubbyKit's native targets build for.
+/// The `Device.platform` values a native install reports: the only two platforms CubbyKit's
+/// native targets build for.
+public enum DevicePlatform: String, Sendable {
+    case macos, ios
+
     public static var current: DevicePlatform {
         #if os(macOS)
             .macos
@@ -37,8 +40,8 @@ public enum DeviceRegistration {
 
     /// Finds this install's `Device` row by `installationId`. `name` is only a
     /// creation hint; later syncs preserve the name edited in Cubby.
-    /// `resources.device.create` on the first call (`name`, `platform`, `appVersion`, `osVersion`,
-    /// `automaticWork`); `resources.device.update` on every later one (`lastSeenAt`, `appVersion`,
+    /// A kernel create on the first call (`name`, `platform`, `appVersion`, `osVersion`,
+    /// `automaticWork`); a kernel update on every later one (`lastSeenAt`, `appVersion`,
     /// `osVersion`, `automaticWork`) — callers report a thrown error via `Diagnostics.report` and
     /// otherwise ignore it; this never blocks the UI by itself.
     public static func sync(_ info: Info, client: CubbyClient) async throws {

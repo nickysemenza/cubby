@@ -225,22 +225,19 @@ export const productContract = defineContract("product", {
     ...productWorkflowSchemas.discardPreview,
     cache: { tags: [["product"], ["inventory"]] },
   }),
-  // Agent-facing (MCP `imports_read`, `product_enrichment`): off the HTTP API.
+  // Agent-facing (MCP `imports_read`, `product_enrichment`).
   /** What a barcode names in every source at once, creating nothing. */
   lookupUpc: query({
-    http: false,
     input: z.object({ upc }),
     output: productLookupUpcOut,
     cache: { tags: [] },
   }),
   externalIdCollisions: query({
-    http: false,
     input: productExternalIdCollisionInput,
     output: productExternalIdCollisionsOut,
   }),
   /** Fetch every attached file from R2 and record its integrity state. */
   verifyImages: mutation({
-    http: false,
     input: z.object({ id: productShortcode }),
     output: productWithFoodOut,
     invalidates: ["product"],

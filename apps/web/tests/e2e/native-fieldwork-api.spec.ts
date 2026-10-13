@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -100,12 +101,16 @@ test("a staged photo and reviewed placement commit one Product with one each", a
 
   const product = toWire(productWithFoodOut, "output").parse(
     await json(
-      await page.request.get(`/api/v1/products/${committed.product.id}`),
+      await entityApi(page.request).get("product", committed.product.id, {}),
     ),
   );
   const inventory = toWire(inventoryWithLocationAndProductOut, "output").parse(
     await json(
-      await page.request.get(`/api/v1/inventory/${committed.inventory.id}`),
+      await entityApi(page.request).get(
+        "inventory",
+        committed.inventory.id,
+        {},
+      ),
     ),
   );
   expect(product.inventoryEntry.map((entry) => entry.id)).toEqual([
@@ -153,7 +158,7 @@ test("scanning a product already on the shelf confirms it without changing its a
   }
 
   const after = toWire(inventoryWithLocationAndProductOut, "output").parse(
-    await json(await page.request.get(`/api/v1/inventory/${entry.id}`)),
+    await json(await entityApi(page.request).get("inventory", entry.id, {})),
   );
   expect(after.amount).toEqual({ value: 2, unit: "each" });
 });

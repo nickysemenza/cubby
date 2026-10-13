@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import superjson from "superjson";
 import { z } from "zod";
 
@@ -9,11 +10,12 @@ test("browser dispatch preserves operation dates and rejects foreign origins", a
   page,
   baseURL,
 }) => {
-  const created = await page.request.post("/api/v1/vendors", {
-    data: { name: `Dispatch fixture ${Date.now()}` },
-    headers: { Origin: baseURL! },
-  });
-  expect(created.status(), await created.text()).toBe(201);
+  const created = await entityApi(page.request).create(
+    "vendor",
+    { name: `Dispatch fixture ${Date.now()}` },
+    { headers: { Origin: baseURL! } },
+  );
+  expect(created.status(), await created.text()).toBe(200);
   const id = z
     .object({ item: z.object({ id: z.string() }) })
     .parse(await created.json()).item.id;
@@ -44,7 +46,7 @@ test("browser dispatch preserves operation dates and rejects foreign origins", a
     expect(result.entries.length).toBeGreaterThan(0);
     expect(result.entries[0]?.createdAt).toBeInstanceOf(Date);
   } finally {
-    await page.request.delete(`/api/v1/vendors/${id}`, {
+    await entityApi(page.request).remove("vendor", id, {
       headers: { Origin: baseURL! },
     });
   }

@@ -16,16 +16,21 @@ private final class JSONNullStub: URLProtocol, @unchecked Sendable {
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
-/// The generated client encodes an optional with `encodeIfPresent`, so a typed body can never
-/// say `null`; `CubbyClient.sending(_:_:)` restores the composed body's nulls through
-/// `JSONNullMiddleware`. These pin the exact bytes a real save puts on the wire.
-@Suite("JSONNullMiddleware wire shape", .serialized)
+/// A save is one `entity.mutate` POST whose `data` is the composed body itself: a cleared key is
+/// an explicit `null` and an omitted key means "leave as is". (Typed RPC bodies, which cannot
+/// say `null`, still restore theirs through `JSONNullMiddleware`; kernel bodies carry nulls
+/// natively.) These pin the exact bytes a real save puts on the wire.
+@Suite("Entity mutate wire shape", .serialized)
 struct JSONNullMiddlewareTests {
     private struct Seen: Sendable {
         let method: String?
         let path: String
         let body: [String: JSONValue]
         let contentLength: String?
+        let byteCount: Int
+
+        /// The kernel command's `data`: the entity's own create/update body.
+        var data: JSONValue { body["data"] ?? .null }
     }
 
     private func makeClient() throws -> CubbyClient {
@@ -50,7 +55,8 @@ struct JSONNullMiddlewareTests {
                     $0.append(
                         Seen(
                             method: request.httpMethod, path: request.url?.path ?? "", body: fields,
-                            contentLength: request.value(forHTTPHeaderField: "Content-Length")))
+                            contentLength: request.value(forHTTPHeaderField: "Content-Length"),
+                            byteCount: data.count))
                 }
                 return (400, Data(#"{"code":"VALIDATION","message":"rejected by stub"}"#.utf8))
             }
@@ -75,6 +81,26 @@ struct JSONNullMiddlewareTests {
         return data
     }
 
+    /// The inventory create schema takes a `{value, unit}` amount; a bare count is its 400.
+    @Test func inventoryCreateSendsACountAsAnEachAmount() async throws {
+        let requests = try await capture { client in
+            await #expect(throws: CubbyAPIError.self) {
+                _ = try await client.createInventory(
+                    product: ProductCode("PRD-2345"), at: LocationCode("LOC-2345"), count: 3)
+            }
+        }
+        let request = try #require(requests.first)
+        #expect(request.path == "/api/v1/entity/mutate")
+        #expect(
+            request.body == [
+                "action": "create", "entity": "inventory",
+                "data": [
+                    "productId": "PRD-2345", "locationId": "LOC-2345",
+                    "amount": ["value": 3, "unit": "each"],
+                ],
+            ])
+    }
+
     @Test func clearedKeysBecomeNullBesideTheTypedValues() async throws {
         let requests = try await capture { client in
             await #expect(throws: CubbyAPIError.self) {
@@ -85,11 +111,15 @@ struct JSONNullMiddlewareTests {
         }
         let request = try #require(requests.first)
         #expect(requests.count == 1)
-        #expect(request.method == "PATCH")
-        #expect(request.path == "/api/v1/products/PRD-2345")
-        #expect(request.body == ["manufacturer": "Lodge", "categoryId": .null])
-        // The rewritten body's length, not the generated client's.
-        #expect(request.contentLength == String(try JSONEncoder().encode(request.body).count))
+        #expect(request.method == "POST")
+        #expect(request.path == "/api/v1/entity/mutate")
+        #expect(
+            request.body == [
+                "action": "update", "entity": "product", "id": "PRD-2345",
+                "data": ["manufacturer": "Lodge", "categoryId": .null],
+            ])
+        // The declared length is the sent body's own.
+        #expect(request.contentLength == String(request.byteCount))
     }
 
     /// A required, nullable key inside a structured value (an alias's `externalAccountId`) is
@@ -106,10 +136,11 @@ struct JSONNullMiddlewareTests {
                     patch: EntityPatch(values: ["sourceAliases": aliases]))
             }
         }
-        #expect(requests.map(\.body) == [["sourceAliases": aliases]])
+        #expect(requests.map(\.data) == [["sourceAliases": aliases]])
     }
 
-    /// Restoring nulls buffers the body; a body with none must not inherit that buffer's limit.
+    /// Regression: restoring nulls once buffered the body with a size limit; a large body with no
+    /// nulls must still travel whole.
     @Test func aLargeBodyWithoutNullsIsSentUnchanged() async throws {
         let notes = String(repeating: "a", count: 2 << 20)
         let requests = try await capture { client in
@@ -119,7 +150,7 @@ struct JSONNullMiddlewareTests {
                     patch: EntityPatch(values: ["notes": .string(notes)]))
             }
         }
-        #expect(requests.map(\.body) == [["notes": .string(notes)]])
+        #expect(requests.map(\.data) == [["notes": .string(notes)]])
     }
 
     @Test func aNestedNullInACreateReachesTheWire() async throws {
@@ -134,11 +165,14 @@ struct JSONNullMiddlewareTests {
                 _ = try await client.create(EntityCatalog[.financialAccount], body: body)
             }
         }
-        #expect(requests.map(\.body) == [body])
+        #expect(
+            requests.map(\.body) == [
+                ["action": "create", "entity": "financialAccount", "data": .object(body)]
+            ])
     }
 
-    /// With nothing cleared the middleware must not touch the body: an update that only changes
-    /// values keeps the generated client's omitted-field semantics for everything else.
+    /// With nothing cleared no `null` appears: an update that only changes values keeps the
+    /// omitted-field ("leave as is") semantics for everything else.
     @Test func nothingClearedLeavesTheTypedBodyAlone() async throws {
         let requests = try await capture { client in
             await #expect(throws: CubbyAPIError.self) {
@@ -147,7 +181,7 @@ struct JSONNullMiddlewareTests {
                     patch: EntityPatch(values: ["name": "Garage shelf"]))
             }
         }
-        #expect(requests.map(\.body) == [["name": "Garage shelf"]])
+        #expect(requests.map(\.data) == [["name": "Garage shelf"]])
     }
 
     /// The cleared set is scoped to the one update: a following attachment patch on the same
@@ -164,22 +198,23 @@ struct JSONNullMiddlewareTests {
             }
         }
         #expect(
-            requests.map(\.body) == [
+            requests.map(\.data) == [
                 ["notes": .null],
                 ["pendingImageIds": ["IMG-2345"]],
             ])
     }
 
-    /// A value the update schema rejects fails in the typed decode, before any request exists.
-    @Test func aValueTheSchemaRejectsNeverReachesTheWire() async throws {
+    /// The server, not the client, validates an update body: a value its schema rejects is sent
+    /// as composed and comes back as the server's raw 400, never reshaped or dropped on the way.
+    @Test func aValueTheSchemaRejectsReachesTheServerAsIs() async throws {
         let requests = try await capture { client in
-            await #expect(throws: DecodingError.self) {
+            await #expect(throws: CubbyAPIError.self) {
                 try await client.update(
                     EntityCatalog[.product], id: "PRD-2345",
                     patch: EntityPatch(values: ["categoryId": ["unexpected": "object"]]))
             }
         }
-        #expect(requests.isEmpty)
+        #expect(requests.map(\.data) == [["categoryId": ["unexpected": "object"]]])
     }
 
     @Test func anEmptyPatchSendsNothing() async throws {

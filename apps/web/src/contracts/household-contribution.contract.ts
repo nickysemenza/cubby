@@ -22,7 +22,6 @@ export const householdContributionContract = defineContract(
     }),
     /** Read-only candidate worklist of opposite-signed cross-account pairs (MCP `finance_read`). */
     transferPairs: query({
-      http: false,
       input: suggestFinancialTransferPairsInput,
       output: financialTransferPairSuggestionsOut,
     }),

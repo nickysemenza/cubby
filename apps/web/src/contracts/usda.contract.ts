@@ -66,10 +66,9 @@ export const usdaFoodContract = defineContract("usda-food", {
     output: foodSummaryWithLinkedProducts.nullable(),
     cache: { tags: [["usda-food"]] },
   }),
-  // Agent-facing (MCP `usda_food`): off the HTTP API.
+  // Agent-facing (MCP `usda_food`).
   /** Relevance-ranked FoodData Central search. */
   search: query({
-    http: false,
     input: z.object({
       query: z.string().describe("Food name to search for"),
       dataType: dataTypeEnum
@@ -80,13 +79,11 @@ export const usdaFoodContract = defineContract("usda-food", {
     output: usdaFoodListOut,
   }),
   byFdcId: query({
-    http: false,
     input: z.object({ fdcId }),
     output: usdaFoodResult,
   }),
   /** By barcode (UPC/GTIN, 12-14 digits) or NDB number — exactly one. */
   find: query({
-    http: false,
     input: z
       .object({ upc: upc.optional(), ndbNumber: ndb.optional() })
       .refine(
@@ -98,7 +95,6 @@ export const usdaFoodContract = defineContract("usda-food", {
   }),
   /** Agent-facing: USDA foods that plausibly describe one Product. */
   suggestForProduct: query({
-    http: false,
     input: z.object({ productId: productShortcode }),
     output: usdaProductSuggestionsOut,
   }),

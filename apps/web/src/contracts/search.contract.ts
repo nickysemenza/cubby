@@ -67,16 +67,14 @@ export const searchContract = defineContract("search", {
     output: requestEmbeddingRefreshOutSchema,
     invalidates: [],
   }),
-  // Agent-facing (MCP `search`): off the HTTP API.
+  // Agent-facing (MCP `search`).
   /** Lexical hits plus, on request, semantic related hits kept separate. */
   global: query({
-    http: false,
     input: globalSearchMcpInputSchema,
     output: globalSearchMcpOut,
   }),
   /** Nearest stored embeddings to one seed; ranks, never verifies. */
   similar: query({
-    http: false,
     input: similarEntitiesInputSchema,
     output: similarEntitiesMcpOut,
   }),

@@ -119,7 +119,7 @@ struct PhotoChooserRowDiagnostic: Encodable {
         DevOverlayText("142ms · plant")
         CopyDiagnosticsButton { ["ok": true] }
         RequestTraceStrip(
-            entry: RequestTrace.Entry(operationID: "resources.product.list", ms: 142, status: 200))
+            entry: RequestTrace.Entry(operationID: "entity.list", ms: 142, status: 200))
     }
     .padding()
 }

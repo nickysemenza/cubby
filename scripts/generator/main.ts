@@ -26,7 +26,7 @@ import { renderBrowserRouteArtifacts } from "./entities/render/browser-routes.ts
 import { renderFilterArtifacts } from "./entities/render/filters.ts";
 import {
   entityOutputsFor,
-  httpResourcesFor,
+  kernelHttpActionsFor,
   renderEntityArtifacts,
 } from "./entities/render/index.ts";
 import { renderKernelBindingsArtifacts } from "./entities/render/kernel-bindings.ts";
@@ -149,16 +149,14 @@ const main = async () => {
     await import("../../apps/web/scripts/apple-preview-fixtures.ts");
   const { renderMcpToolArtifacts } =
     await import("./start-operations/mcp-tools.ts");
-  const resources = httpResourcesFor(entities);
-  const startOperations = await renderStartOperationArtifacts(resources);
+  const startOperations = await renderStartOperationArtifacts();
   await settle(startOperations.artifacts);
   await settle(await renderMcpToolArtifacts());
   await settle(
     await renderHttpApiArtifacts(
-      resources,
+      kernelHttpActionsFor(entities),
       startOperations.nativeOperations,
       entityOutputsFor(entities),
-      entities,
     ),
   );
   await settle(renderApplePreviewFixtures());

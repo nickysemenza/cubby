@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { z } from "zod";
 
 import {
@@ -58,7 +59,9 @@ test("placement acceptance follows the surviving stock row after merging", async
     })
     .click();
   expect(
-    (await page.request.get(`/api/v1/inventory/${fixture.source.id}`)).ok(),
+    (
+      await entityApi(page.request).get("inventory", fixture.source.id, {})
+    ).ok(),
   ).toBe(true);
   await page.getByRole("button", { name: "Apply change", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(fixture.destination.id));
@@ -71,8 +74,10 @@ test("placement acceptance follows the surviving stock row after merging", async
       async () =>
         survivor.parse(
           await (
-            await page.request.get(
-              `/api/v1/inventory/${fixture.destination.id}`,
+            await entityApi(page.request).get(
+              "inventory",
+              fixture.destination.id,
+              {},
             )
           ).json(),
         ).amount.value,
@@ -81,12 +86,18 @@ test("placement acceptance follows the surviving stock row after merging", async
   expect(
     survivor.parse(
       await (
-        await page.request.get(`/api/v1/inventory/${fixture.destination.id}`)
+        await entityApi(page.request).get(
+          "inventory",
+          fixture.destination.id,
+          {},
+        )
       ).json(),
     ).location.id,
   ).toBe(fixture.target.id);
   expect(
-    (await page.request.get(`/api/v1/inventory/${fixture.source.id}`)).status(),
+    (
+      await entityApi(page.request).get("inventory", fixture.source.id, {})
+    ).status(),
   ).toBe(404);
   await expect(
     page.getByText(`${name} workshop`, { exact: true }).first(),

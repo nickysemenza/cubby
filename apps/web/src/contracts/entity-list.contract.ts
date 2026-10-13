@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { defineContract, query } from "~/contracts/define";
+import { kernelRecordWire } from "~/contracts/entity-kernel-wire";
 import {
   type EntityListInputByEntity,
   type EntityListResultByEntity,
@@ -56,11 +57,11 @@ export const entityListContract = defineContract("entity", {
     },
     // Type-only carriers: the per-entity runtime schemas live in the generated
     // list bindings and are applied by the browser `parse` policy and the
-    // server handler; the HTTP router substitutes the real wire schema.
+    // server handler; HTTP carries the loose kernel wire.
     input: z.custom<EntityListInputByEntity[ListEntity]>(),
     output: z.custom<EntityListResultByEntity[ListEntity]>(),
-    // HTTP serves these as the per-entity resource routes instead.
-    http: false,
+    httpWire: kernelRecordWire,
+    native: "Full-row entity lists (pickers, Spotlight, sheets)",
     observability: { entities: listEntities },
   }),
 });

@@ -56,7 +56,8 @@ export const wireRegistry = z.registry<{ id: string }>();
 // identity, not a side channel: the wire schema is self-sufficient.
 const memo = new WeakMap<z.ZodType, Partial<Record<WireIo, z.ZodType>>>();
 
-const passThrough = new Set<string>([
+/** Schema kinds whose JSON-body projection is the schema itself. */
+export const passThrough: ReadonlySet<string> = new Set<string>([
   "string",
   "number",
   "int",

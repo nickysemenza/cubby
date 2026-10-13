@@ -34,38 +34,54 @@ struct NativeListAdaptersTests {
 
     /// Regression: native cookbooks sorted a client-side copy through a hand-kept field allow-list
     /// that threw `invalidValue` for the manifest's `createdAt` sort. Cookbook now reads the
-    /// kernel list like every other entity, so a declared sort reaches the server on both the
-    /// resource route and the progressive read the browse model uses.
+    /// kernel list like every other entity, so a declared sort reaches the server.
     @Test func cookbookListSendsDeclaredSortsToTheServer() async throws {
         defer { NativeListStub.handler.withLock { $0 = nil } }
-        let urls = Mutex<[URL]>([])
+        let requests = Mutex<[(String, Data?)]>([])
         NativeListStub.handler.withLock { handler in
             handler = { request in
-                if let url = request.url { urls.withLock { $0.append(url) } }
+                requests.withLock { $0.append((request.url?.path ?? "", try? Self.requestBody(request))) }
                 return (200, Self.pagePayload(Self.cookbooks))
             }
         }
 
         let descriptor = EntityCatalog[.cookbook]
-        let page = try await makeClient().list(descriptor, page: 2, pageSize: 1, sort: "-createdAt")
+        let page = try await makeClient().list(
+            descriptor, page: 2, pageSize: 1, sort: "updatedAt,-createdAt")
 
         #expect(page.items.map(\.id) == ["CKB-1", "CKB-2"])
-        let url = try #require(urls.withLock { $0.first })
-        #expect(url.path == "/api/v1/cookbooks")
-        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-        #expect(query.contains(URLQueryItem(name: "sort", value: "-createdAt")))
-        #expect(query.contains(URLQueryItem(name: "page", value: "2")))
-
-        let input = try JSONValue(
-            encoding: descriptor.progressiveListInput(
-                page: 1, pageSize: 20, sort: "updatedAt,-createdAt", filters: EntityFilterState()))
+        let (path, body) = try #require(requests.withLock { $0.first })
+        #expect(path == "/api/v1/entity/list")
+        let input = try JSONDecoder().decode(JSONValue.self, from: try #require(body))
         #expect(input["entity"] == "cookbook")
+        #expect(input["pagination"] == ["pageIndex": 1, "pageSize": 1])
         #expect(
             input["sort"]
                 == .array([
                     ["orderBy": "updatedAt", "direction": "asc"],
                     ["orderBy": "createdAt", "direction": "desc"],
                 ]))
+    }
+
+    /// A flat filter name is re-nested and typed from the kernel catalog; an unknown one never
+    /// reaches the server.
+    @Test func kernelFiltersAreTypedFromTheCatalog() async throws {
+        let descriptor = EntityCatalog[.product]
+        var filters = EntityFilterState()
+        filters.set(.single("has"), for: "imagePresenceFilter")
+        filters.set(.single("LOC-AAAA"), for: "locationIdFilter")
+        let input = try descriptor.listInput(page: 1, pageSize: 20, sort: nil, filters: filters)
+        #expect(input["filters"] == ["imagePresenceFilter": "has", "locationIdFilter": ["LOC-AAAA"]])
+        #expect(descriptor.filterValues(for: "imagePresenceFilter") == ["has", "none"])
+
+        filters.set(.single("sometimes"), for: "imagePresenceFilter")
+        #expect(throws: EntityFilterError.self) {
+            _ = try descriptor.listInput(page: 1, pageSize: 20, sort: nil, filters: filters)
+        }
+        #expect(throws: EntityFilterError.unknownParameter(.product, "noSuchFilter")) {
+            _ = try descriptor.listInput(
+                page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(["noSuchFilter": .single("x")]))
+        }
     }
 
     @Test func usdaListKeepsNumericIdentityAndTypedFilters() async throws {
@@ -132,7 +148,7 @@ struct NativeListAdaptersTests {
             handler = { request in
                 if let url = request.url { urls.withLock { $0.append(url) } }
                 switch request.url?.path {
-                case "/api/v1/cookbooks/CKB-1": return (200, Self.cookbookDetailPayload)
+                case "/api/v1/entity/detail": return (200, Self.cookbookDetailPayload)
                 case "/api/v1/usda-food/detail": return (200, Self.usdaDetailPayload)
                 default: return (500, Data())
                 }
@@ -190,21 +206,21 @@ struct NativeListAdaptersTests {
         return try! JSONEncoder.cubby().encode(payload)
     }
 
-    nonisolated private static let completeDataQuality = DataQuality(
-        status: .complete, score: 100, facets: [], gaps: [], exceptions: [],
-        relatedGaps: [], relatedExceptions: [])
+    nonisolated private static func cookbook(_ id: String, _ name: String) -> JSONValue {
+        [
+            "id": .string(id), "name": .string(name), "author": ["Author"], "subjects": [],
+            "recipeCount": 1, "sourceRecipeCount": 1, "needsReextract": false,
+            "createdAt": "1970-01-01T00:00:00.000Z", "updatedAt": "1970-01-01T00:00:00.000Z",
+            "dataQuality": [
+                "status": "complete", "score": 100, "facets": [], "gaps": [], "exceptions": [],
+                "relatedGaps": [], "relatedExceptions": [],
+            ],
+            "displayImages": [],
+        ]
+    }
 
     nonisolated private static let cookbooks = [
-        CookbookSummary(
-            id: "CKB-1", name: "Alpha Cookbook", author: ["Author A"], subjects: ["Soup"],
-            recipeCount: 1, sourceRecipeCount: 1, needsReextract: false,
-            createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0),
-            dataQuality: completeDataQuality, displayImages: []),
-        CookbookSummary(
-            id: "CKB-2", name: "Beta Cookbook", author: ["Author B"], subjects: ["Bread"],
-            recipeCount: 2, sourceRecipeCount: 2, needsReextract: false,
-            createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0),
-            dataQuality: completeDataQuality, displayImages: []),
+        cookbook("CKB-1", "Alpha Cookbook"), cookbook("CKB-2", "Beta Cookbook"),
     ]
 
     /// The kernel `get` adds the shared detail media to the cookbook summary.

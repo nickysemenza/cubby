@@ -27,10 +27,10 @@ const cases = (() => {
   const seen = new Map<z.ZodType, WireCase>();
   for (const contract of Object.values(contracts)) {
     for (const [member, operation] of Object.entries(contract.ops)) {
-      if (operation.kind === "subscription" || operation.http === false)
+      if (operation.kind === "subscription" || operation.native === undefined)
         continue;
       const name = `${contract.domain}.${member}`;
-      const { input, output } = operation;
+      const { input, output } = operation.httpWire ?? operation;
       if (!seen.has(input) && !(input instanceof z.ZodUndefined))
         seen.set(input, { name: `${name} input`, io: "input", schema: input });
       if (!seen.has(output))
@@ -255,7 +255,7 @@ const asRouterQuery = (search: URLSearchParams) => {
  */
 const flatQueries = Object.values(contracts).flatMap((contract) =>
   Object.entries(contract.ops).flatMap(([member, operation]) => {
-    if (operation.kind !== "query" || operation.http === false) return [];
+    if (operation.kind !== "query" || operation.native === undefined) return [];
     const { input } = operation;
     if (!(input instanceof z.ZodObject)) return [];
     if (!isFlatQueryInput(toWire(input, "input"))) return [];

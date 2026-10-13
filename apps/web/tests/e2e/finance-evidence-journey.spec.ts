@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { z } from "zod";
 import { expect, test } from "./e2e-test";
 
@@ -9,11 +10,10 @@ test("moves an early reimbursement and converts reviewed booking atomically", as
 }) => {
   const headers = { Origin: baseURL! };
   const create = async (path: string, data: unknown) => {
-    const response = await page.request.post(`/api/v1/${path}`, {
+    const response = await entityApi(page.request).create(path, data, {
       headers,
-      data: z.json().parse(data),
     });
-    expect(response.status(), await response.text()).toBe(201);
+    expect(response.status(), await response.text()).toBe(200);
     return z
       .object({ item: z.object({ id: z.string() }) })
       .parse(await response.json()).item.id;
@@ -26,24 +26,24 @@ test("moves an early reimbursement and converts reviewed booking atomically", as
     expect(response.ok(), await response.text()).toBeTruthy();
     return response.json();
   };
-  const categoryId = await create("spending-categories", {
+  const categoryId = await create("spendingCategory", {
     name: "Synthetic optional paperwork",
     itemizationExpectation: "not_expected",
     productExpectation: "not_expected",
   });
-  const vendorId = await create("vendors", {
+  const vendorId = await create("vendor", {
     name: "Synthetic event vendor",
     itemizationExpectation: "not_expected",
   });
-  const fromPartyId = await create("ledger-parties", {
+  const fromPartyId = await create("ledgerParty", {
     name: "Synthetic payer",
     kind: "member",
   });
-  const toPartyId = await create("ledger-parties", {
+  const toPartyId = await create("ledgerParty", {
     name: "Synthetic recipient",
     kind: "guest",
   });
-  const accountId = await create("financial-accounts", {
+  const accountId = await create("financialAccount", {
     name: "Synthetic owned account",
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     ledgerPartyId: fromPartyId,
@@ -52,7 +52,7 @@ test("moves an early reimbursement and converts reviewed booking atomically", as
     amount: number,
     economicRole: "vendor" | "reimbursement",
   ) => {
-    const transactionId = await create("financial-transactions", {
+    const transactionId = await create("financialTransaction", {
       accountId,
       amount,
       merchant: "Synthetic booked source",
@@ -78,14 +78,16 @@ test("moves an early reimbursement and converts reviewed booking atomically", as
     action: { kind: "attach_reimbursement", purchaseId: original.purchaseId },
   });
   await post("commitBookingCorrection", attachment);
-  const net = await page.request.get(
-    `/api/v1/purchases/${original.purchaseId}`,
+  const net = await entityApi(page.request).get(
+    "purchase",
+    original.purchaseId,
+    {},
   );
   expect(
     z.object({ expenseTotal: z.number() }).parse(await net.json()).expenseTotal,
   ).toBe(80);
   const move = await book(20, "vendor");
-  const transferId = await create("ledger-transfers", {
+  const transferId = await create("ledgerTransfer", {
     fromPartyId,
     toPartyId,
     amount: 20,
@@ -97,8 +99,10 @@ test("moves an early reimbursement and converts reviewed booking atomically", as
     action: { kind: "convert_to_transfer", transferId },
   });
   await post("commitBookingCorrection", conversion);
-  const converted = await page.request.get(
-    `/api/v1/financial-transactions/${move.transactionId}`,
+  const converted = await entityApi(page.request).get(
+    "financialTransaction",
+    move.transactionId,
+    {},
   );
   expect(
     z
@@ -112,10 +116,14 @@ test("moves an early reimbursement and converts reviewed booking atomically", as
     ledgerTransferId: transferId,
     coverage: { booking: "not_applicable" },
   });
-  const retired = await page.request.get(`/api/v1/expenses/${move.expenseId}`);
+  const retired = await entityApi(page.request).get(
+    "expense",
+    move.expenseId,
+    {},
+  );
   expect(retired.status()).toBe(404);
   const edited = await book(25, "vendor");
-  const editedTransferId = await create("ledger-transfers", {
+  const editedTransferId = await create("ledgerTransfer", {
     fromPartyId,
     toPartyId,
     amount: 25,
@@ -126,9 +134,11 @@ test("moves an early reimbursement and converts reviewed booking atomically", as
     transactionId: edited.transactionId,
     action: { kind: "convert_to_transfer", transferId: editedTransferId },
   });
-  const update = await page.request.patch(
-    `/api/v1/expenses/${edited.expenseId}`,
-    { headers, data: { notes: "Synthetic reviewed note change" } },
+  const update = await entityApi(page.request).update(
+    "expense",
+    edited.expenseId,
+    { notes: "Synthetic reviewed note change" },
+    { headers },
   );
   expect(update.ok(), await update.text()).toBeTruthy();
   const rejected = await page.request.post(
@@ -136,8 +146,10 @@ test("moves an early reimbursement and converts reviewed booking atomically", as
     { headers, data: stale },
   );
   expect(rejected.ok()).toBeFalsy();
-  const retained = await page.request.get(
-    `/api/v1/expenses/${edited.expenseId}`,
+  const retained = await entityApi(page.request).get(
+    "expense",
+    edited.expenseId,
+    {},
   );
   expect(retained.ok(), await retained.text()).toBeTruthy();
 });

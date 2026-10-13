@@ -54,7 +54,6 @@
   "devDependencies": {
     "@oxlint/plugins": "1.87.0",
     "@redocly/cli": "^2.57.0",
-    "@redocly/openapi-core": "2.57.0",
     "@tanstack/router-generator": "1.167.40",
     "@ts-rest/open-api": "3.53.0-rc.1",
     "@types/node": "^26.6.3",

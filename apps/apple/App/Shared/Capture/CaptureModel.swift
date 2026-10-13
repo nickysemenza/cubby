@@ -52,7 +52,7 @@ final class CaptureModel {
         defer { loadingLocations = false }
         do {
             let page = try await client.locationOptions(page: 1, pageSize: 200)
-            locations = page.items.map { LocationOption(id: $0.id, name: $0.name, path: $0.parent?.name) }
+            locations = page.items.map { LocationOption(id: $0.id, name: $0.name, path: $0.parentName) }
             tree = try await client.locationTree()
             locationError = nil
         } catch {
