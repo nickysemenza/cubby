@@ -43,7 +43,7 @@ import {
 export type ReconciliationFix = Extract<
   ProposedImportFix,
   { kind: "reconcile_source_order" }
->;
+> & { currentOriginalReview?: boolean };
 
 /** Settlement precedes finding/source/Purchase locks on both write paths. */
 export async function lockFindingSettlement(
@@ -88,6 +88,7 @@ export async function loadSourceReconciliationState(
   ownerId: typeof ledgerParty.$inferSelect.id,
   resolution: SourceOrderReconciliationResolution | undefined = fix.review
     ?.resolution,
+  currentOriginalReview = fix.currentOriginalReview ?? false,
 ) {
   const family = await readImportSourceClaimFamily(
     tx,
@@ -349,6 +350,7 @@ export async function loadSourceReconciliationState(
     association,
     target,
     observation,
+    currentOriginalReview,
     accepted,
     expenses,
     attributions,

@@ -31,15 +31,20 @@ import {
 } from "./reconciliation";
 import {
   promoteHistoricalAcceptedObservation,
+  reconciliationFingerprint,
   sourceObservationIdentityMatches,
 } from "./reconciliation-observations";
+import { recordReviewedOriginal } from "./reconciliation-original-review";
 import {
   loadSourceReconciliationState,
   type ReconciliationFix,
   type ReconciliationState,
 } from "./reconciliation-state";
 import { lockPartySettlement } from "./retained-settlement";
-import { readImportSourceClaimFamily } from "./source-claim-family";
+import {
+  readImportSourceClaimFamily,
+  readSourceFamilyOrder,
+} from "./source-claim-family";
 import { sameLineTitle } from "./writer-policy";
 
 type AcceptedInput = Extract<
@@ -50,11 +55,24 @@ type AcceptedResolution =
   | AcceptedInput["resolution"]
   | CommitAcceptedSourceOrderReconciliationInput["resolution"];
 
+const originalReviewReceipt = z.object({
+  reviewedOriginalPreparation: z.object({
+    to: commitAcceptedSourceOrderReconciliationInput.shape.reviewedPreparation
+      .unwrap()
+      .extend({
+        sourceOrderId:
+          commitAcceptedSourceOrderReconciliationInput.shape.sourceOrderId,
+        acceptedObservationId: z.uuid(),
+      }),
+  }),
+});
+
 async function acceptedFix(
   tx: DrizzleTransaction,
   id: string,
   actor: ActorContext,
   promoteHistorical: boolean,
+  reviewedPreparation?: CommitAcceptedSourceOrderReconciliationInput["reviewedPreparation"],
 ) {
   const selectOwned = () =>
     tx
@@ -92,34 +110,92 @@ async function acceptedFix(
     throw new Error(
       "Accepted source canonical family changed; review its ownership.",
     );
-  if (!current.association.acceptedObservationId && promoteHistorical)
-    current.association.acceptedObservationId =
-      await promoteHistoricalAcceptedObservation(tx, current.association.id);
-  if (!current.association.acceptedObservationId)
+  const association = reviewedPreparation
+    ? (
+        await readSourceFamilyOrder(
+          tx,
+          family,
+          current.association.orderKey,
+          "update",
+        )
+      )?.association
+    : current.association;
+  if (!association || association.purchaseId !== current.association.purchaseId)
+    throw new Error(
+      "Reviewed source family must still name the same Purchase.",
+    );
+  if (
+    !reviewedPreparation &&
+    !association.acceptedObservationId &&
+    promoteHistorical
+  )
+    association.acceptedObservationId =
+      await promoteHistoricalAcceptedObservation(tx, association.id);
+  if (!reviewedPreparation && !association.acceptedObservationId)
     throw new Error(
       "Accepted source has no known immutable observation; review its evidence first.",
     );
-  const [observation] = await tx
-    .select()
-    .from(sourceOrderObservation)
-    .where(
-      eq(sourceOrderObservation.id, current.association.acceptedObservationId),
-    );
+  const [acceptedObservation] = association.acceptedObservationId
+    ? await tx
+        .select()
+        .from(sourceOrderObservation)
+        .where(eq(sourceOrderObservation.id, association.acceptedObservationId))
+    : [];
+  const reviewedObservation = reviewedPreparation
+    ? await recordReviewedOriginal(
+        tx,
+        association,
+        family,
+        reviewedPreparation,
+        actor,
+      )
+    : null;
+  if (acceptedObservation && reviewedObservation && reviewedPreparation) {
+    const receipts = await tx
+      .select({ changes: auditLog.changes })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityKind, "purchase"),
+          eq(auditLog.entityId, association.purchaseId),
+        ),
+      );
+    const sameReview = receipts.some(({ changes }) => {
+      const receipt = originalReviewReceipt.safeParse(changes);
+      if (!receipt.success) return false;
+      const reviewed = receipt.data.reviewedOriginalPreparation.to;
+      return (
+        reviewed.sourceOrderId === id &&
+        reviewed.run === reviewedPreparation.run &&
+        reviewed.stableOrderId === reviewedPreparation.stableOrderId
+      );
+    });
+    if (
+      !sameReview ||
+      (await reconciliationFingerprint(acceptedObservation.extraction)) !==
+        (await reconciliationFingerprint(reviewedObservation.extraction))
+    )
+      throw new Error(
+        "A known accepted original uses its existing immutable observation.",
+      );
+  }
+  const observation = acceptedObservation ?? reviewedObservation;
   if (!observation)
     throw new Error("Accepted source immutable observation changed.");
   const fix: ReconciliationFix = {
     kind: "reconcile_source_order",
-    purchaseId: current.association.purchaseId,
+    purchaseId: association.purchaseId,
     source: importSourceIdentity.parse({
       kind: family.root.kind,
       externalKey: family.root.externalKey,
       checksum: observation.checksum,
     }),
-    orderKey: current.association.orderKey,
-    acceptedChecksum: current.association.checksum,
+    orderKey: association.orderKey,
+    acceptedChecksum: association.checksum,
     proposedExtraction: observation.extraction,
     observationId: observation.id,
     reviewedFingerprint: "0".repeat(64),
+    currentOriginalReview: Boolean(reviewedPreparation),
   };
   return { fix, ownerId: current.claim.ledgerPartyId };
 }
@@ -389,6 +465,7 @@ export async function commitAcceptedSourceOrderReconciliation(
       input.sourceOrderId,
       actor,
       !input.resolution.lines.some((binding) => binding.newProduct),
+      input.reviewedPreparation,
     );
     const state = await loadSourceReconciliationState(
       tx,
@@ -428,6 +505,30 @@ export async function commitAcceptedSourceOrderReconciliation(
       ownerId,
       "product_binding",
     );
+    if (input.reviewedPreparation) {
+      const accepted = await readSourceFamilyOrder(
+        tx,
+        state.family,
+        fix.orderKey,
+      );
+      if (!accepted?.association.acceptedObservationId)
+        throw new Error("The reviewed original was not accepted.");
+      await logAuditEntry(tx, actor, {
+        entityKind: "purchase",
+        entityId: state.target.id,
+        action: "update",
+        changes: {
+          reviewedOriginalPreparation: {
+            from: null,
+            to: {
+              sourceOrderId: input.sourceOrderId,
+              ...input.reviewedPreparation,
+              acceptedObservationId: accepted.association.acceptedObservationId,
+            },
+          },
+        },
+      });
+    }
     for (const binding of input.resolution.lines) {
       if (!binding.newProduct) continue;
       const selected = state.expenses.find(

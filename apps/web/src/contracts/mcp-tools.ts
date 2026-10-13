@@ -800,7 +800,7 @@ export const MCP_TOOLS = defineMcpTools({
       commit_accepted_reconciliation: mcpAction({
         op: purchaseImportContract.ops.commitAcceptedReconciliation,
         description:
-          "Product-only repair of a known accepted original: sourceOrderId plus attach_only lines. Each line updates an existing exact item Expense's Product binding and quantity using productId, or productId null with newProduct {kind:'new'} from the exact retained preparation. Validates current ownership, item, identity and claims in one transaction; unchanged repeats return alreadyApplied. Changes no money, payments or Inventory.",
+          "Product-only repair: sourceOrderId plus attach_only lines bind existing exact item Expenses using productId or newProduct {kind:'new'}. A known original uses an exact owned preparation. For unknown historical extraction, reviewedPreparation {run,stableOrderId} names a fresh preparation of the unchanged retained Email against this Purchase; new review provenance preserves the unknown historical snapshot. Rechecks ownership, original, item, identity and claims; unchanged repeats return alreadyApplied. Changes no money, payments or Inventory.",
       }),
       prepare: mcpAction({
         op: purchaseImportContract.ops.prepare,

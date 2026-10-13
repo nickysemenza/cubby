@@ -196,7 +196,8 @@ async function freezePreparedNewProductLine(
   return preparedFingerprint;
 }
 
-/** Freeze existing prepared identities, never reconstruct missing original choices. */
+/** A fresh owned preparation may review the same immutable original. Never
+ * infer an extraction or binding from today's ledger when history is unknown. */
 export async function reviewPreparedNewProducts(
   tx: DrizzleTransaction,
   state: ReconciliationState,
@@ -207,47 +208,63 @@ export async function reviewPreparedNewProducts(
   if (
     resolution.kind !== "attach_only" ||
     !state.association ||
-    state.association.acceptedObservationId !== state.observation.id ||
-    !state.observation.runId
+    (state.association.acceptedObservationId !== state.observation.id &&
+      !state.currentOriginalReview)
   )
     throw new Error(
       "New Product repair requires a known accepted original and its preparation.",
     );
-  const source = state.family.members.find(
-    (claim) => claim.id === state.observation.sourceClaimId,
-  );
+  const source = state.currentOriginalReview
+    ? state.family.root
+    : state.family.members.find(
+        (claim) => claim.id === state.observation.sourceClaimId,
+      );
   if (!source)
     throw new Error("Accepted original preparation ownership is unknown.");
-  const orders = await tx
-    .select({ order: importPreparedOrder })
-    .from(importPreparedOrder)
-    .innerJoin(
-      run,
-      and(
-        eq(run.id, importPreparedOrder.runId),
-        eq(run.ledgerPartyId, state.family.root.ledgerPartyId),
-        notDeleted(run),
-      ),
-    )
-    .where(
-      and(
-        eq(importPreparedOrder.runId, state.observation.runId),
-        eq(importPreparedOrder.sourceKind, source.kind),
-        eq(importPreparedOrder.sourceExternalKey, source.externalKey),
-        eq(importPreparedOrder.sourceChecksum, state.observation.checksum),
-        eq(importPreparedOrder.evidenceChecksum, state.observation.checksum),
-      ),
-    )
-    .limit(51)
-    .for("share", { of: importPreparedOrder });
-  const matches = [];
-  for (const { order } of orders)
-    if (
-      (await reconciliationFingerprint(
-        importExtractionOutcome.parse(order.extraction),
-      )) === (await reconciliationFingerprint(state.observation.extraction))
-    )
-      matches.push(order);
+  const readOrders = (runId: string | null) =>
+    tx
+      .select({ order: importPreparedOrder })
+      .from(importPreparedOrder)
+      .innerJoin(
+        run,
+        and(
+          runId ? eq(importPreparedOrder.runId, runId) : undefined,
+          eq(run.id, importPreparedOrder.runId),
+          eq(run.ledgerPartyId, state.family.root.ledgerPartyId),
+          notDeleted(run),
+        ),
+      )
+      .where(
+        and(
+          eq(importPreparedOrder.sourceKind, source.kind),
+          eq(importPreparedOrder.sourceExternalKey, source.externalKey),
+          eq(importPreparedOrder.sourceChecksum, state.observation.checksum),
+          eq(importPreparedOrder.evidenceChecksum, state.observation.checksum),
+        ),
+      )
+      .limit(51)
+      .for("share", { of: importPreparedOrder });
+  const matchingOrders = async (
+    orders: Awaited<ReturnType<typeof readOrders>>,
+  ) => {
+    const matches = [];
+    for (const { order } of orders)
+      if (
+        (await reconciliationFingerprint(
+          importExtractionOutcome.parse(order.extraction),
+        )) === (await reconciliationFingerprint(state.observation.extraction))
+      )
+        matches.push(order);
+    return matches;
+  };
+  // Later equivalent reviews must not make a valid original ambiguous or
+  // consume its bounded lookup. Fallback history is inspected only if needed.
+  let orders = await readOrders(state.observation.runId);
+  let matches = await matchingOrders(orders);
+  if (!matches.length && state.observation.runId) {
+    orders = await readOrders(null);
+    matches = await matchingOrders(orders);
+  }
   const [order] = matches;
   if (
     orders.length > 50 ||

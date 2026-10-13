@@ -43,6 +43,16 @@ adding another image; skip redundant catalog views.
 
 ## Research and identity
 
+An unidentified free packet or replacement part can retain a Product for the
+supported item identity while its variety, model or maker remains unknown.
+Use a descriptive name such as "Unidentified free seed packet"; keep the
+retailer in purchase provenance rather than inferring a packet brand. A generic
+free-gift SKU or compatible tool model is not an exact item identifier. After
+exhausting available originals and member knowledge, record the specific missing
+facts with `data_exception` instead of repeatedly researching them. New relevant
+evidence invalidates the exception and reopens the gap. Preserve zero cost,
+source quantity and existing stock; binding a Product never receives it.
+
 For branded seed packets, `manufacturer` is the packet brand established by the
 packet or exact product source. A credited seed grower stays in the Source quote;
 it does not replace the packet brand, and a retailer's name alone does not

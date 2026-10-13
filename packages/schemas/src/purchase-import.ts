@@ -503,6 +503,10 @@ export type PrepareSourceOrderReconciliationOut = z.infer<
 /** A Product-only decision; the host re-reads and validates current state. */
 export const commitAcceptedSourceOrderReconciliationInput = z.object({
   sourceOrderId: z.uuid(),
+  /** A current original review, never a reconstruction of historical extraction. */
+  reviewedPreparation: z
+    .object({ run: runShortcode, stableOrderId: z.string().min(1) })
+    .optional(),
   resolution: z.object({
     kind: z.literal("attach_only"),
     lines: z
