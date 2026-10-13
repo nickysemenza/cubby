@@ -50,7 +50,11 @@ amounts. Only exact zero is displayed as zero.
 Follow [production migrations](production-migrations.md) with one exclusive
 migration owner. Apply through `0051_ai_cost_accounting_expand`, verify all
 retained rows, original charges, and unrelated household data, then deploy the
-matching code. After old in-flight writers settle, apply through
+matching code. While old writers remain deployed, new rows can still have null
+`costEvidence`: verify preserved expanded rows separately and count these late
+arrivals, rather than treating live-table fingerprint changes as data loss.
+Retain per-table aggregate fingerprints and compare unrelated household tables.
+After old in-flight writers settle, apply through
 `0052_ai_cost_accounting_contract`; it locks the legacy source while preserving late rows and removing the old
 column. Read back the catalog and preserved evidence.
 
