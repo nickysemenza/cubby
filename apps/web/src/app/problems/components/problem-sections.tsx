@@ -16,7 +16,7 @@ import type {
   ProjectAttentionItem,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
-import { humanize } from "@cubby/shared";
+import { humanize, parseShortcode } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { DownloadIcon } from "@phosphor-icons/react/dist/csr/Download";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
@@ -816,6 +816,14 @@ type SectionsClaimingEveryCoverageKey<
       >;
     };
 
+/** Detail route for the record a Run finding is about — a Purchase or an Email. */
+const findingTargetRoute = (targetId: string | null) => {
+  const target = targetId ? parseShortcode(targetId) : null;
+  return target && isBrowserRoutedEntity(target.type)
+    ? entityDetailLink(target.type, target.shortcode)
+    : undefined;
+};
+
 /**
  * The Problems page in declaration order — the summary chips and the section
  * list both derive from this, so adding a check is a single entry here.
@@ -835,9 +843,7 @@ const DECLARED_SECTIONS = [
       key: finding.id,
       title: finding.summary,
       subtitle: `${finding.kind.replaceAll("_", " ")} · ${formatTimestamp(finding.createdAt)}`,
-      route: finding.purchaseId
-        ? entityDetailLink("purchase", finding.purchaseId)
-        : undefined,
+      route: findingTargetRoute(finding.targetId),
       customActions: <RunFindingActions finding={finding} />,
     }),
   }),
@@ -1172,6 +1178,8 @@ const DECLARED_SECTIONS = [
       key: v.value,
       title: v.value,
       subtitle: variantSubtitle(v, "product"),
+      // The route opens one product using this spelling, not the spelling itself.
+      shortcode: null,
       route: entityDetailLink("product", v.sampleId),
       editLabel: "Open product",
       customActions: <ManufacturerVariantLink manufacturer={v.value} />,

@@ -61,7 +61,7 @@ it("consolidates retired model exceptions without losing evidence or promoting a
   ]);
   const migration = readFileSync(
     new URL(
-      "../../../../drizzle/0051_product_identifier_sufficiency.sql",
+      "../../../../drizzle/0053_product_identifier_sufficiency.sql",
       import.meta.url,
     ),
     "utf8",

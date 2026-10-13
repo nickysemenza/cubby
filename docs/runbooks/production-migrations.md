@@ -36,7 +36,7 @@ whose journal already contains an undeployed contract.
 
 ## Product identifier consolidation
 
-Migration `0051_product_identifier_sufficiency` must run before deploying the
+Migration `0053_product_identifier_sufficiency` must run before deploying the
 code that removes the model quality check. It preserves retired model exception
 records in the surviving Identifier exception's note; standalone model exceptions
 remain stale until reviewed against the combined requirement. Existing external-ID
@@ -53,8 +53,21 @@ unrelated household data before pushing, applies through this exact tag, then
 checks the constraint and schema afterward. Use the journal-aware runner:
 
 ```sh
-pnpm --filter @cubby/web db:migrate --target=production --through=0051_product_identifier_sufficiency
+pnpm --filter @cubby/web db:migrate --target=production --through=0053_product_identifier_sufficiency
 ```
+
+## Typed Source references
+
+Apply expansion only through `0051_entity_source_targets`, then deploy the
+matching server and refreshed clients. Let old in-flight writes finish before
+applying `0052_normalize_entity_source_targets`: old Source merge deduplication
+ignores the new target identity, and old target merges cannot repoint citations.
+Do not apply both tags before deployment. Before and after normalization,
+verify the Source row count and all quote, field, fingerprint, observation,
+variant and recorder metadata are unchanged; only resolvable trusted internal
+URLs should become typed identities. Read back target foreign keys and confirm
+external and unresolved URLs survive. Normalization includes retained deleted
+identities and redirects from merged codes.
 
 ## Email convergence cutover
 

@@ -204,7 +204,12 @@ export const manifestWire = {
     { conformances: identifiable },
   ),
   ConnectedViewSpec: record(
-    { key: "string", title: "string", target: "EntityKey" },
+    {
+      key: "string",
+      title: "string",
+      target: "EntityKey",
+      evidence: "boolean",
+    },
     { conformances: identifiable },
   ),
   EntityPresentation: record({

@@ -1,5 +1,5 @@
 {
-  "id": "c5f7044b-b18a-4d72-b9e0-114ac88fb617",
+  "id": "d61dfc06-6a3e-4628-85fd-d83383e75476",
   "prevId": "37a7150a-6458-4889-8a26-631fea688e12",
   "version": "7",
   "dialect": "postgresql",
@@ -1149,12 +1149,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "DataException_no_retired_model_check": {
-          "name": "DataException_no_retired_model_check",
-          "value": "\"DataException\".\"check\" <> 'product_model'"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.EntityAttachment": {
@@ -6616,6 +6611,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "sourceEntityId": {
+          "name": "sourceEntityId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceEntityKind": {
+          "name": "sourceEntityKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "quote": {
           "name": "quote",
           "type": "text",
@@ -6699,6 +6706,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "EntitySource_target_idx": {
+          "name": "EntitySource_target_idx",
+          "columns": [
+            {
+              "expression": "sourceEntityId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -6711,6 +6733,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "EntitySource_target_fk": {
+          "name": "EntitySource_target_fk",
+          "tableFrom": "EntitySource",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "sourceEntityId",
+            "sourceEntityKind"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -6735,9 +6772,17 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "EntitySource_url_or_quote_check": {
-          "name": "EntitySource_url_or_quote_check",
-          "value": "\"EntitySource\".\"url\" IS NOT NULL OR \"EntitySource\".\"quote\" IS NOT NULL"
+        "EntitySource_target_pair_check": {
+          "name": "EntitySource_target_pair_check",
+          "value": "(\"EntitySource\".\"sourceEntityId\" IS NULL) = (\"EntitySource\".\"sourceEntityKind\" IS NULL)"
+        },
+        "EntitySource_one_target_check": {
+          "name": "EntitySource_one_target_check",
+          "value": "\"EntitySource\".\"url\" IS NULL OR \"EntitySource\".\"sourceEntityId\" IS NULL"
+        },
+        "EntitySource_target_or_quote_check": {
+          "name": "EntitySource_target_or_quote_check",
+          "value": "\"EntitySource\".\"url\" IS NOT NULL OR \"EntitySource\".\"sourceEntityId\" IS NOT NULL OR \"EntitySource\".\"quote\" IS NOT NULL"
         },
         "EntitySource_field_fingerprint_check": {
           "name": "EntitySource_field_fingerprint_check",

@@ -65,7 +65,9 @@ holding a member token, can call every `member_decision` write.
 Burn-down works the Research queue (`research-queue` saved views) with the
 caller's own browser. Record where each fact was seen with `sources` on
 `entity.update` (field-scoped) and `image.attach_files` (record-level); a
-quote and URL are enough, screenshots are optional. Read and resolve retained
+quote and external URL are enough, screenshots are optional. For evidence in
+Cubby, cite the existing record with `sourceEntity` (its shortcode) rather than
+a Cubby URL; quotes and field scope remain explicit citations. Read and resolve retained
 Email with `imports_read.mail` and `mail.resolve`; recover a missing original
 with `mail.search`. The retained read's `acceptedSourceOrders` provides owned
 source-order handles, exact source identities and deleted-target status for

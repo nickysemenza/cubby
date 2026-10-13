@@ -91,12 +91,6 @@ public final class ConnectedRecordsPreviewModel {
     }
 }
 
-extension ConnectedRecordsPreviewOutput {
-    /// Views with no connected records, folded into one line instead of one empty group each.
-    public var emptyViewTitles: [String] { views.filter { $0.totalCount == 0 }.map(\.title) }
-    public var hasConnections: Bool { views.contains { $0.totalCount > 0 } }
-}
-
 /// How a connected row's path and hop count read on every client.
 public enum ConnectedPathPresentation {
     /// The records strictly between source and target; empty for a direct connection. They read

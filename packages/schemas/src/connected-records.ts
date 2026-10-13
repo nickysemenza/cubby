@@ -51,6 +51,7 @@ export const connectedRecordsPreviewOutputSchema = z.object({
     connectedRecordsOutputSchema.extend({
       viewKey: z.string(),
       title: z.string(),
+      evidence: z.boolean(),
     }),
   ),
 });

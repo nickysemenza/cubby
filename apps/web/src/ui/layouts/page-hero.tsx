@@ -1,9 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
-import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
 import { Link } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { z } from "zod";
 
 /* THESIS: dense household records use one continuous content column and a ToC.
@@ -16,8 +14,8 @@ import { z } from "zod";
  */
 import { EntityCover } from "~/entity/components/entity-cover";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
-import { copyShortcodes } from "~/lib/clipboard";
 import { cn, formatCount } from "~/lib/utils";
+import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
 import { DateDisplay } from "~/ui/common/date-display";
 import {
   domainForEntity,
@@ -143,42 +141,13 @@ function DetailBreadcrumb({
       {heroNo && (
         <span className="inline-flex items-center gap-x-2 max-md:hidden">
           <EyebrowSeparator />
-          <CopyableHeroNo heroNo={heroNo} />
+          <CopyableShortcode
+            code={heroNo}
+            className="min-h-11 text-foreground md:min-h-0"
+          />
         </span>
       )}
     </Eyebrow>
-  );
-}
-
-/**
- * The breadcrumb's reference-code leaf, click-to-copy.
- *
- * The shortcode is the id every other surface speaks — MCP payloads, QR labels,
- * URLs — so the one place it's always on screen should hand it over rather than
- * make it retypeable-only. Not a `Button`: it has to keep the breadcrumb's
- * compact navigation type, and a variant would fight it.
- */
-function CopyableHeroNo({ heroNo }: { heroNo: string }) {
-  const [copied, setCopied] = useState(false);
-
-  return (
-    <button
-      type="button"
-      title="Copy shortcode"
-      className="inline-flex min-h-11 items-center gap-1 font-mono text-foreground transition-colors hover:text-primary md:min-h-0"
-      onClick={async () => {
-        if (!(await copyShortcodes([heroNo]))) return;
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }}
-    >
-      {heroNo}
-      {copied ? (
-        <CheckIcon className="size-3" />
-      ) : (
-        <ClipboardIcon className="size-3 opacity-60" />
-      )}
-    </button>
   );
 }
 
@@ -334,7 +303,10 @@ function DetailPlate({
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {heroNo && (
                 <span className="md:hidden">
-                  <CopyableHeroNo heroNo={heroNo} />
+                  <CopyableShortcode
+                    code={heroNo}
+                    className="min-h-11 text-foreground md:min-h-0"
+                  />
                 </span>
               )}
               {heroStamp && (
