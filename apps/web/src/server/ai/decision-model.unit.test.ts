@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DECISION_MAX_CANDIDATES,
   type DecisionChoiceResponse,
+  type DecisionImage,
   type DecisionPort,
   runDecisionChoice,
 } from "./decision-model";
@@ -59,6 +60,92 @@ afterEach(() => {
 });
 
 describe("runDecisionChoice", () => {
+  it("accepts media beyond the text byte budget and strips dimension metadata", async () => {
+    const port = decisionPortFor("c0", { c0: 0.9, none: 0.1 });
+    const image = {
+      content_type: "image/webp" as const,
+      base64: "AAAA".repeat(20_000),
+      width: 4000,
+      height: 4000,
+    };
+    await runDecisionChoice({
+      ...base,
+      choices: ["one"],
+      images: [image],
+      port,
+    });
+    expect(port).toHaveBeenCalledWith(
+      expect.objectContaining({
+        images: [{ content_type: "image/webp", base64: image.base64 }],
+      }),
+    );
+  });
+
+  it.each<{ images: DecisionImage[]; error: RegExp }>([
+    { images: Array(5).fill("data:image/png;base64,AAAA"), error: /at most 4/ },
+    { images: ["https://example.com/image.png"], error: /embedded/ },
+    { images: ["data:image/gif;base64,AAAA"], error: /embedded/ },
+    { images: ["data:image/png;base64,AA=A"], error: /invalid base64/ },
+    {
+      images: [
+        {
+          content_type: "image/jpeg",
+          base64: "AAAA",
+          width: 4001,
+          height: 4000,
+        },
+      ],
+      error: /16 megapixels/,
+    },
+    {
+      images: [{ content_type: "image/png", base64: "AAAA", width: 1 }],
+      error: /both width and height/,
+    },
+    {
+      images: [{ content_type: "image/png", base64: "AAAA".repeat(1_398_102) }],
+      error: /4 MiB/,
+    },
+    {
+      images: Array.from({ length: 3 }, () => ({
+        content_type: "image/png",
+        base64: "AAAA".repeat(1_000_000),
+      })),
+      error: /8 MiB/,
+    },
+  ])(
+    "rejects invalid media before the model: $error",
+    async ({ images, error }) => {
+      const port: DecisionPort = vi.fn();
+      await expect(
+        runDecisionChoice({ ...base, choices: ["one"], images, port }),
+      ).rejects.toThrow(error);
+      expect(port).not.toHaveBeenCalled();
+    },
+  );
+
+  // Images must override even a pinned Jev and survive the native gateway envelope.
+  it("forces Clef for embedded images instead of a pinned text-only model", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runDecisionChoice: request } = await import("./decision-model");
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) =>
+      Response.json(answerFor("c0", { c0: 0.9, none: 0.1 })),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const images = ["data:image/png;base64,aGVsbG8="];
+    await request({
+      ...base,
+      choices: ["one"],
+      decisionModel: "typesafe/jev",
+      images,
+    });
+    const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+    expect(body).toMatchObject({
+      model: "@cf/cloudflare/clef",
+      input: { model: "clef", images },
+    });
+  });
+
   it.each(["2", "Tue, 01 Sep 2026 00:00:02 GMT"])(
     "recovers after Retry-After %s without changing the choice request",
     async (retryAfter) => {

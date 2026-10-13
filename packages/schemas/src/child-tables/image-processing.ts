@@ -219,7 +219,7 @@ export const imageProcessingChildren = [
     checks: [
       {
         name: "ImageProcessingJob_kind_check",
-        sql: "{kind} IN ('subject_lift', 'describe_image')",
+        sql: "{kind} IN ('subject_lift', 'describe_image', 'identify_image')",
       },
       {
         name: "ImageProcessingJob_state_check",

@@ -556,6 +556,11 @@ Existing AI usage records retain the selected model,
 provider, latency, token counts and failures, including model-specific cache
 hits. Compare upstream latency on rows with `attempt > 0`, excluding
 application-cache hits. The shared `selectDecisionModel` controls the trial.
+Image decisions always route to Clef, bypassing the text-only Jev trial. The
+shared adapter accepts up to four embedded JPEG/PNG/WebP images and checks
+encoded size before calling the existing gateway, retry, cache, and usage path.
+Photo identification uses 1024px JPEG renditions capped at 2 MiB each.
+
 Clef requires `model: "clef"` in its body. Jev's gateway response wraps `answers` and
 `usage` under `result`; Clef can return them at the root. The scoped Workers AI
 run API can additionally wrap the model output in a `Completed` run result.

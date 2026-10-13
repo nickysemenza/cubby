@@ -488,6 +488,14 @@ _Avoid_: image processing job, individual attempt, search job
 One image operation, identified by `IPR-`, with its own kind, state, attempts, and diagnostics. It may belong to a Run or stand alone. Its cost is a component of a parent Run total when both are shown, not an additional household expense.
 _Avoid_: Run, merged work record
 
+**Image observation**:
+A machine-produced claim about what is visible in an image, retained as evidence rather than a confirmed fact about the depicted record. It can inform search and suggestions without establishing identity, ownership, or current stock.
+_Avoid_: confirmed identity, inventory change
+
+**Identification candidate**:
+An existing record proposed as a match for something depicted in a photo. Its rank or score supports review; it does not itself confirm the match.
+_Avoid_: confirmed match, duplicate
+
 **Plant**:
 A cultivar or species the household sows or buys as a transplant. Grouped into a crop by its growing guide key; carries the household's verdict (yes, maybe, no) and cultivar days to maturity from its packet. Its Ingredient link, when set, is informational: one plant's harvest can become several ingredients.
 _Avoid_: Crop ingredient, variety text, seed listing

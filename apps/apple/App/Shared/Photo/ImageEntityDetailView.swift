@@ -291,7 +291,7 @@ private struct ImageJobRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(job.kind == .subjectLift ? "Image cutout" : "Image description")
+            Text(job.kind.title)
             Text(
                 "\(job.state.replacingOccurrences(of: "_", with: " ").capitalized) · \(job.createdAt.formatted(.relative(presentation: .named)))"
             )

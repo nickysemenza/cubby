@@ -72,6 +72,7 @@ interface EmbeddingModelDeclaration extends ModelDeclaration {
 interface DecisionModelDeclaration extends ModelDeclaration {
   role: "decision";
   provider: "typesafe" | "cloudflare";
+  vision: boolean;
   /** Clef requires this selector in addition to its route model id. */
   selector?: string;
 }
@@ -141,12 +142,14 @@ export const AI_MODELS = {
     role: "decision",
     provider: "typesafe",
     catalogProvider: "cloudflare-ai-gateway",
+    vision: false,
   },
   "@cf/cloudflare/clef": {
     role: "decision",
     provider: "cloudflare",
     catalogProvider: "cloudflare-workers-ai",
     selector: "clef",
+    vision: true,
   },
   "gemini-2.5-flash": {
     role: "cookbook",
@@ -233,11 +236,15 @@ export const AUDIT_RECOVERY_MODEL =
  * is not a {@link SupportedChatModel} and takes no chat adapter.
  */
 export const DECISION_MODEL = "typesafe/jev" satisfies SupportedDecisionModel;
-const CLEF_MODEL = "@cf/cloudflare/clef" satisfies SupportedDecisionModel;
+export const CLEF_MODEL =
+  "@cf/cloudflare/clef" satisfies SupportedDecisionModel;
 /** Set to 0 to return all decisions to Jev, or 1 to send all to Clef. */
 const CLEF_TRAFFIC_SHARE = 0.5;
 
-export function selectDecisionModel(): SupportedDecisionModel {
+export function selectDecisionModel(
+  options: { vision?: boolean } = {},
+): SupportedDecisionModel {
+  if (options.vision) return CLEF_MODEL;
   return Math.random() < 1 - CLEF_TRAFFIC_SHARE ? DECISION_MODEL : CLEF_MODEL;
 }
 

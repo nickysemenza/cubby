@@ -1,3 +1,4 @@
+import { IMAGE_IDENTIFICATION_MODEL } from "@cubby/schemas/image-identification";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
@@ -10,6 +11,7 @@ import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import { getImageProcessingNamespace } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { reserveImageAnalysisInput } from "~/server/repo/activity-input";
+import { getVerifiedImageRenditionKey } from "~/server/repo/image-identification";
 import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   claimImageProcessingJob,
@@ -27,6 +29,7 @@ import {
 } from "~/server/utils/s3";
 
 import { completeCloudImageDescription } from "./cloud-description";
+import { completeCloudImageIdentification } from "./cloud-identification";
 import {
   COMPANION_LEASE_MS,
   type ImageProcessingCompanionRpc,
@@ -53,11 +56,44 @@ export async function dispatchImageProcessingWakeup(
   await reclaimExpiredImageProcessingLeases(db);
   const claimed = await claimImageProcessingJob(db, {
     jobId,
-    kinds: ["describe_image", "subject_lift"],
+    kinds: ["identify_image", "describe_image", "subject_lift"],
     leaseMs: COMPANION_LEASE_MS,
   });
   if (!claimed) return "skipped";
   try {
+    if (claimed.kind === "identify_image") {
+      if (
+        claimed.originalContentType === "image/avif" &&
+        !(await getVerifiedImageRenditionKey(db, claimed.imageId))
+      ) {
+        await markImageProcessingWaitingForDevice(db, {
+          jobId: claimed.id,
+          attemptId: claimed.attemptId,
+        });
+        return "waiting";
+      }
+      const assigned = await assignImageProcessingExecutor(db, {
+        jobId: claimed.id,
+        attemptId: claimed.attemptId,
+        executor: {
+          kind: "cloud",
+          deviceId: null,
+          name: providerFor(IMAGE_IDENTIFICATION_MODEL),
+          platform: "cloud",
+          appVersion: null,
+          osVersion: null,
+        },
+      });
+      if (!assigned) return "skipped";
+      return (await completeCloudImageIdentification(db, {
+        jobId: claimed.id,
+        attemptId: claimed.attemptId,
+        imageId: claimed.imageId,
+        runId: claimed.runId,
+      }))
+        ? "completed"
+        : "skipped";
+    }
     if (
       claimed.kind === "describe_image" &&
       claimed.processorRevision !==
@@ -134,6 +170,8 @@ export async function prepareCompanionImageCommand(
   db: Database,
   claimed: NonNullable<Awaited<ReturnType<typeof claimImageProcessingJob>>>,
 ) {
+  if (claimed.kind === "identify_image")
+    throw new Error("Image identification is server-only");
   if (claimed.kind === "describe_image") {
     const command = imageProcessingCommand.parse({
       kind: "describe_image",

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { imageIdentificationResult } from "../image-identification";
 import imageDefinition from "./18-image.entity";
 import { readFieldSchemas } from "./definition";
 
@@ -6,8 +7,9 @@ export const imageOut = z.object(readFieldSchemas(imageDefinition));
 
 /**
  * Condensed on-device/cloud analysis for one Image: top classifications, OCR
- * text, and the cloud description, so an agent can decide whether to view the
- * full image. Declared here (not `image.ts`) because `image.ts` already
+ * text, cloud description, and retained unconfirmed Product identification,
+ * so an agent can decide whether to view the full image. Declared here (not
+ * `image.ts`) because `image.ts` already
  * imports `imageOut` from this module — a reverse import would cycle.
  * `null` means no analysis exists yet for the image; a present object's own
  * fields are independently nullable/empty depending on which analyses ran.
@@ -16,6 +18,8 @@ export const imageAnalysisSummarySchema = z.object({
   description: z.string().nullable(),
   classifications: z.array(z.string()),
   recognizedText: z.string().nullable(),
+  /** Suggestions are observations; identity and inventory still require confirmation. */
+  identification: imageIdentificationResult.optional(),
 });
 export type ImageAnalysisSummary = z.infer<typeof imageAnalysisSummarySchema>;
 

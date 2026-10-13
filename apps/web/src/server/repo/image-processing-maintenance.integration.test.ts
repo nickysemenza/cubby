@@ -69,10 +69,13 @@ describe("backfillImageProcessing", () => {
       kinds: ["describe_image"],
     });
     expect(result).toMatchObject({ scheduled: 1, paused: false });
-    expect(await jobKinds(row.id)).toEqual(["describe_image"]);
+    expect(await jobKinds(row.id)).toEqual([
+      "describe_image",
+      "describe_image",
+    ]);
   });
 
-  it("schedules both kinds when none are given", async () => {
+  it("schedules independent cloud, Apple, and identification baseline jobs when none are given", async () => {
     await updateImageProcessingSettings(ctx.db, {
       enabled: false,
       paused: false,
@@ -82,6 +85,11 @@ describe("backfillImageProcessing", () => {
       batchSize: 10,
       retryFailures: false,
     });
-    expect(await jobKinds(row.id)).toEqual(["describe_image", "subject_lift"]);
+    expect(await jobKinds(row.id)).toEqual([
+      "describe_image",
+      "describe_image",
+      "identify_image",
+      "subject_lift",
+    ]);
   });
 });
