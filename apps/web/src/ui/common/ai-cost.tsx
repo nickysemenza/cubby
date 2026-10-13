@@ -1,8 +1,17 @@
 import type { AiUsageEntry, AiUsageSummaryRow } from "@cubby/schemas/ai";
 
-import { formatAiCost, formatAiCostSubtotal } from "~/lib/number-format";
+import {
+  formatAiCost,
+  formatAiCostSubtotal,
+  formatExactCurrency,
+} from "~/lib/number-format";
 export { formatAiCost, formatAiCostSubtotal } from "~/lib/number-format";
 import { StackedValue } from "~/ui/common/stacked-value";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 export function AiCost({
   cost,
@@ -68,11 +77,54 @@ export function AiCost({
   ]
     .filter(Boolean)
     .join(". ");
+  const primary = `${charged} ${evidence?.charged?.source === "estimate" && evidence.billingReason === "standard" ? "estimated charge" : "charged"}`;
+  const secondary = `${standard} standard${evidence?.standard?.source === "reconstructed" ? " (current-rate estimate)" : evidence?.standard?.source === "estimate" ? " (estimate)" : ""}${reason && evidence?.billingReason !== "standard" ? ` · ${reason}` : ""}`;
+  const fullCharged =
+    cost.chargedCost == null
+      ? charged
+      : charged.replace(
+          formatAiCost(cost.chargedCost),
+          formatExactCurrency(cost.chargedCost),
+        );
+  const fullStandard =
+    cost.standardCost == null
+      ? standard
+      : standard.replace(
+          formatAiCost(cost.standardCost),
+          formatExactCurrency(cost.standardCost),
+        );
   return (
-    <StackedValue
-      primary={`${charged} ${evidence?.charged?.source === "estimate" && evidence.billingReason === "standard" ? "estimated charge" : "charged"}`}
-      secondary={`${standard} standard${evidence?.standard?.source === "reconstructed" ? " (current-rate estimate)" : evidence?.standard?.source === "estimate" ? " (estimate)" : ""}${reason && evidence?.billingReason !== "standard" ? ` · ${reason}` : ""}`}
-      title={provenance || undefined}
-    />
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`${primary}. ${secondary}. Full amounts and pricing evidence`}
+            className="block min-w-0"
+            style={{ textAlign: "inherit" }}
+          />
+        }
+      >
+        <StackedValue
+          primary={primary}
+          secondary={secondary}
+          primarySpillText={
+            cost.chargedCost !== 0 && fullCharged !== charged
+              ? primary.replace(charged, fullCharged)
+              : undefined
+          }
+          secondarySpillText={
+            cost.standardCost !== 0 && fullStandard !== standard
+              ? secondary.replace(standard, fullStandard)
+              : undefined
+          }
+        />
+      </TooltipTrigger>
+      <TooltipContent>
+        <div>Charged: {fullCharged}</div>
+        <div>Standard: {fullStandard}</div>
+        {provenance && <div>{provenance}</div>}
+      </TooltipContent>
+    </Tooltip>
   );
 }

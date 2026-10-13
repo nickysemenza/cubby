@@ -60,6 +60,10 @@ export function formatCurrency(
   );
 }
 
+/** Binary64's shortest decimal needs at most 324 fractional places. */
+export const formatExactCurrency = (value: number): string =>
+  formatCurrency(value, 324);
+
 /** AI amounts retain sub-cent precision and distinguish unknown from zero. */
 export const formatAiCost = (value: number | null | undefined): string =>
   value == null

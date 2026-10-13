@@ -47,6 +47,15 @@ test("recent AI calls filter transport and status before limiting rows", async (
   await expect(recent.getByText("synthetic.older-subscription")).toHaveCount(0);
   await expect(recent.getByText("<$0.000001 charged").first()).toBeVisible();
 
+  const tinyCost = recent.getByText("<$0.000001 charged").first();
+  await tinyCost.hover();
+  await expect(page.getByRole("tooltip")).toContainText("Charged: $0.00000001");
+  await expect(page.locator("[data-cell-spill-overlay]")).toContainText(
+    "$0.00000001 charged",
+  );
+  await page.getByRole("heading", { name: "AI", exact: true }).hover();
+  await expect(page.locator("[data-cell-spill-overlay]")).toHaveCount(0);
+
   // Full-history choices must remain available outside every summary window.
   for (const [label, value] of [
     ["Provider", "synthetic-legacy-provider"],

@@ -43,7 +43,10 @@ repeated reconstruction does not change them.
 Money uses the shared Rust formatter on web and Apple. A nonzero amount below
 display precision uses a signed threshold (`<$0.01`, `-<$0.01`) instead of zero.
 AI presentation uses four to six decimal places with a threshold for smaller
-amounts. Only exact zero is displayed as zero.
+amounts. Only exact zero is displayed as zero. Rounded currency cells and AI
+costs expose the full stored decimal amount on hover or keyboard focus. Table
+hover uses the shared full-value spill, while AI tooltips retain comparison
+coverage and price provenance.
 
 ## Expand/contract rollout
 

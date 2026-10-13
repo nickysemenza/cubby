@@ -40,7 +40,8 @@ import {
 } from "~/features/ai/field-suggestion";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
 import { colorizeSelectOptions } from "~/lib/select-options";
-import { cn, formatCurrency } from "~/lib/utils";
+import { cn } from "~/lib/utils";
+import { CurrencyValue } from "~/ui/common/currency-value";
 import { renderScalarValue } from "~/ui/common/scalar-value";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -970,9 +971,7 @@ export function createCurrencyColumn<
     isEmpty(v) ? (
       <NoneValue />
     ) : (
-      <span className={toneClass(v)} title={formatCurrency(v, decimals)}>
-        {formatCurrency(v, decimals)}
-      </span>
+      <CurrencyValue value={v} decimals={decimals} className={toneClass(v)} />
     );
   return columnHelper.accessor((row: T) => row[accessor] ?? null, {
     id: String(accessor),
@@ -993,7 +992,7 @@ export function createCurrencyColumn<
       // the footer never reads as the wrong sign.
       return (
         <span className={cn("tabular-nums", toneClass(total))}>
-          {formatCurrency(total, decimals)}
+          <CurrencyValue value={total} decimals={decimals} />
         </span>
       );
     },

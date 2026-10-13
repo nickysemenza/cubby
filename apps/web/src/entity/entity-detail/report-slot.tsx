@@ -21,6 +21,7 @@ import { entityReport } from "~/integrations/tanstack-query/generated/catalog.ge
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
 import { cn, formatCurrency } from "~/lib/utils";
+import { CurrencyValue } from "~/ui/common/currency-value";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
@@ -74,11 +75,15 @@ function Stats({ block }: { block: Extract<ReportBlock, { kind: "stats" }> }) {
               figure.tone && TONE_TEXT[figure.tone],
             )}
           >
-            {figure.format === "text"
-              ? (figure.text ?? "—")
-              : figure.value == null
-                ? "—"
-                : formatValue(figure.value, figure.format)}
+            {figure.format === "text" ? (
+              (figure.text ?? "—")
+            ) : figure.value == null ? (
+              "—"
+            ) : figure.format === "money" ? (
+              <CurrencyValue value={figure.value} />
+            ) : (
+              formatValue(figure.value, figure.format)
+            )}
           </dd>
         </div>
       ))}
