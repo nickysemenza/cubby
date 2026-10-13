@@ -1,0 +1,35 @@
+docs/agents/core-journey-e2e.md
+  s_73fe69dd841a24::t_1d80142af0fbcb 118
+docs/ci.md
+  s_73fe69dd841a24::t_130af0acc6e196 16-19,26-76,301,357-360,362,366-367,427,430,435
+docs/tester-army.md
+  s_73fe69dd841a24::t_06627de68bcd06 221-229,236,238-242,244-246,255-257,301
+.github/actions/setup-apple/action.yml
+  s_055199a1dff06a::t_834eaf3ecb8c43 4-6,15-21,23-25,27,29-31,34-36,40-50,55-99,101-127,129-230
+.github/workflows/ci.yaml
+  s_055199a1dff06a::t_9bc6513e4d587f 6-7,16-24,28-32,43-46,55,59-63,67-69,72-75,77-149,151,162,173,195,213,216,580-852,855-857,859,871
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "db7ea3e04a3a2ccfc9c9e1fa97d8cc24ec676f9d",
+  "prompts": {},
+  "sessions": {
+    "s_055199a1dff06a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ade419a5d65886808",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_73fe69dd841a24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96d21c32-0fd2-4535-be08-daa98aa3f469",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
