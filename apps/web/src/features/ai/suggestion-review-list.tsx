@@ -52,11 +52,13 @@ import {
 type Outcome = SuggestionReviewBatchOut[number];
 type ReviewState = {
   key: string;
+  generation: number;
   outcomes: ReadonlyMap<string, Outcome>;
   failedRows: ReadonlyMap<string, SuggestionReviewRow>;
 };
-const emptyReview = (key: string): ReviewState => ({
+const emptyReview = (key: string, generation: number): ReviewState => ({
   key,
+  generation,
   outcomes: new Map(),
   failedRows: new Map(),
 });
@@ -498,21 +500,25 @@ export function SuggestionReviewList({
   });
   const list = useQuery(ai.listSuggestionReviewQueue.queryOptions(input));
   const counts = useQuery(ai.suggestionCounts.queryOptions({}));
-  // Outcomes and failed rows belong to one filtered query: a filter change
-  // (including back/forward) starts empty, and a settlement that finishes
-  // after the filters moved on is not shown against the new rows.
+  // Outcomes and failed rows belong to one visit of a filtered query. Every
+  // filter change (back/forward included, and a return to earlier filters)
+  // starts a new generation with nothing shown, and a settlement commits only
+  // into the generation it started in; refetching the same query keeps it.
   const reviewKey = JSON.stringify(input);
-  const latestKey = useRef(reviewKey);
-  latestKey.current = reviewKey;
   const [review, setReview] = useState<ReviewState>(() =>
-    emptyReview(reviewKey),
+    emptyReview(reviewKey, 0),
   );
+  if (review.key !== reviewKey)
+    setReview(emptyReview(reviewKey, review.generation + 1));
   const { outcomes, failedRows } = useMemo(
-    () => (review.key === reviewKey ? review : emptyReview(reviewKey)),
+    () =>
+      review.key === reviewKey
+        ? review
+        : emptyReview(reviewKey, review.generation + 1),
     [review, reviewKey],
   );
   const settle = async (action: "accept" | "reject", ids: string[]) => {
-    const settledKey = reviewKey;
+    const generation = review.generation;
     const shown = list.data ?? [];
     const results =
       action === "accept"
@@ -521,26 +527,26 @@ export function SuggestionReviewList({
     const failed = new Set(
       results.filter((result) => !result.ok).map((result) => result.id),
     );
-    if (latestKey.current === settledKey)
-      setReview((previous) => {
-        const base =
-          previous.key === settledKey ? previous : emptyReview(settledKey);
-        return {
-          key: settledKey,
-          outcomes: new Map([
-            ...base.outcomes,
-            ...results.map((result) => [result.id, result] as const),
-          ]),
-          // Failed rows as they were when settled: accepting one selected row
-          // can supersede another, which then fails and leaves the refetch.
-          failedRows: new Map([
-            ...[...base.failedRows].filter(([id]) => !ids.includes(id)),
-            ...shown
-              .filter((row) => failed.has(row.id))
-              .map((row) => [row.id, row] as const),
-          ]),
-        };
-      });
+    setReview((previous) =>
+      previous.generation !== generation
+        ? previous
+        : {
+            ...previous,
+            outcomes: new Map([
+              ...previous.outcomes,
+              ...results.map((result) => [result.id, result] as const),
+            ]),
+            // Failed rows as they were when settled: accepting one selected
+            // row can supersede another, which then fails and leaves the
+            // refetch.
+            failedRows: new Map([
+              ...[...previous.failedRows].filter(([id]) => !ids.includes(id)),
+              ...shown
+                .filter((row) => failed.has(row.id))
+                .map((row) => [row.id, row] as const),
+            ]),
+          },
+    );
     const touched = new Set<ShortcodeEntity>(
       shown.filter((row) => ids.includes(row.id)).map((row) => row.entity),
     );

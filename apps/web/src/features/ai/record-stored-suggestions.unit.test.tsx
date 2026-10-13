@@ -2,6 +2,7 @@ import type { SuggestionReviewRow } from "@cubby/schemas/ai";
 import {
   suggestionReviewListInput,
   suggestionReviewListOut,
+  SUGGESTION_LIST_LIMIT_MAX,
 } from "@cubby/schemas/ai";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import {
@@ -30,6 +31,7 @@ import {
 
 import type { EntitySuggestionsOperations } from "./field-suggestion";
 import {
+  everyPendingSuggestion,
   RecordFieldSuggestion,
   RecordSuggestionsBulkAction,
   RecordSuggestionsProvider,
@@ -559,6 +561,34 @@ describe("stored suggestions in generic list cells", () => {
     expect(await screen.findByText("Food")).toBeInTheDocument();
     expect(screen.queryByText("CAT-2222")).not.toBeInTheDocument();
     harness.dispose();
+  });
+
+  // Seven suggestible Expense fields on a 250-row page exceed one read's
+  // limit; a truncated read used to pass for the whole page.
+  it("splits a list page's read by record until no read is truncated", async () => {
+    const recordIds = Array.from({ length: 250 }, (_, index) =>
+      testShortcode("expense", `page-${index}`),
+    );
+    const read = vi.fn(async (input: { recordIds: string[]; limit: number }) =>
+      input.recordIds
+        .flatMap((recordId) =>
+          Array.from({ length: 7 }, (_, field) =>
+            suggestion({ recordId, field: `field${field}` }),
+          ),
+        )
+        .slice(0, input.limit),
+    );
+    const rows = await everyPendingSuggestion(read)({
+      entity: "expense",
+      recordIds,
+      fields: [],
+    });
+    expect(rows).toHaveLength(1_750);
+    expect(
+      read.mock.calls.every(
+        ([input]) => input.limit === SUGGESTION_LIST_LIMIT_MAX,
+      ),
+    ).toBe(true);
   });
 
   // The read orders siblings strongest first; indexing kept the last, so the

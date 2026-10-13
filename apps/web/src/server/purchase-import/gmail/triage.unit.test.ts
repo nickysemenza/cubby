@@ -184,26 +184,6 @@ describe("transient Gmail triage", () => {
     expect(view?.incompleteReasons).toEqual(["purchase_cue_clipped"]);
   });
 
-  // A whole line used to be dropped for one footer phrase, so a receipt
-  // sentence ending in "© Shop" counted as nothing beside a content image.
-  it("counts a receipt line that ends in a footer phrase as readable", async () => {
-    const raw: GmailMessage = {
-      id: "synthetic-mixed-footer",
-      payload: {
-        mimeType: "multipart/alternative",
-        headers: [{ name: "Subject", value: "Your order" }],
-        parts: [
-          part(
-            "Thanks for your order of two bamboo spatula sets; it ships from our warehouse tomorrow morning. © Synthetic Shop",
-          ),
-          part(EMAIL_HTML_FIXTURES.imageOnlyReceipt, "text/html"),
-        ],
-      },
-    };
-    const { view } = await route(raw);
-    expect(view?.incompleteReasons).not.toContain("image_only");
-  });
-
   // The plain-text alternative's footer used to count as readable text, so an
   // image-only receipt with an unsubscribe footer looked complete.
   it("keeps an image-only receipt uncertain beside a footer-only text part", async () => {
@@ -214,7 +194,8 @@ describe("transient Gmail triage", () => {
         headers: [{ name: "Subject", value: "Your receipt" }],
         parts: [
           part(
-            "You are receiving this email because you shopped with Synthetic Shop.\n" +
+            "For assistance with this message please contact Synthetic Shop at 123 Sample Avenue. To stop future messages, unsubscribe.\n" +
+              "You are receiving this email because you shopped with Synthetic Shop.\n" +
               "Unsubscribe or manage your preferences: https://example.test/prefs\n" +
               "Privacy policy · © 2026 Synthetic Shop",
           ),

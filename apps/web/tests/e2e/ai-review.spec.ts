@@ -200,4 +200,15 @@ test("Review keeps a superseded sibling's bulk failure beside its row", async ({
   await expect(
     page.getByRole("button", { name: "Accept", exact: true }),
   ).toHaveCount(0);
+  // Leaving and returning to the same filters starts a fresh visit: the
+  // earlier failure does not reappear without another settlement.
+  const status = page.getByRole("combobox", { name: "Status" });
+  await status.selectOption("rejected");
+  await expect(page.getByText("could not be settled")).toHaveCount(0);
+  await status.selectOption("pending");
+  await expect(
+    page.getByText("No suggestions match these filters."),
+  ).toBeVisible();
+  await expect(rows).toHaveCount(0);
+  await expect(page.getByText("could not be settled")).toHaveCount(0);
 });
