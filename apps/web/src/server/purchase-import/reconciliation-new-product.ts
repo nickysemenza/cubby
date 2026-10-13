@@ -50,6 +50,12 @@ function newProductRepairLine(
           ),
       )
     : [];
+  const ledgerClaimCount = state.ledgerClaims.filter(
+    (claim) => claim.expenseId === selected?.id,
+  ).length;
+  const otherSourceOrderCount = state.sourceOrders.filter(
+    (accepted) => accepted.id !== state.association?.id,
+  ).length;
   if (
     !line ||
     line.lineKind !== "principal" ||
@@ -60,11 +66,11 @@ function newProductRepairLine(
     selected.lineBasis !== "item_line" ||
     sameRows.length !== 1 ||
     sameRows[0]?.id !== selected.id ||
-    state.ledgerClaims.some((claim) => claim.expenseId === selected.id) ||
-    state.sourceOrders.some((accepted) => accepted.id !== state.association?.id)
+    ledgerClaimCount > 0 ||
+    otherSourceOrderCount > 0
   )
     throw new Error(
-      "New Product repair requires one exact unbound item Expense without competing source ownership.",
+      `New Product repair requires one exact unbound item Expense without competing source ownership. Line ${binding.lineIndex}: line kind ${line?.lineKind ?? "missing"}; requested existing Product ${binding.productId ? "yes" : "no"}; selected Expense ${selected ? "found" : "missing"}; selected Product ${selected?.productId ? "bound" : "unbound"}; economic role ${selected?.economicRole ?? "missing"}; line basis ${selected?.lineBasis ?? "missing"}; exact matching item Expenses: ${sameRows.length}; selected exact match ${selected && sameRows[0]?.id === selected.id ? "yes" : "no"}; ledger source claims: ${ledgerClaimCount}; other accepted source orders: ${otherSourceOrderCount}.`,
     );
   return line;
 }
