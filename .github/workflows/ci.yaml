@@ -48,6 +48,7 @@ jobs:
     outputs:
       lanes: ${{ steps.select.outputs.lanes }}
       matrix: ${{ steps.select.outputs.matrix }}
+      optional: ${{ steps.select.outputs.optional }}
       skips: ${{ steps.select.outputs.skips }}
       tree: ${{ steps.tree.outputs.tree }}
     steps:
@@ -148,6 +149,14 @@ jobs:
                   step: $pair[0].name, run: $pair[0].run, then_step: $pair[1].name, then: $pair[1].run
                 }]
               else . end')"
+          # Informative checks outside `CI passed`; the live Email run spends
+          # model credits, so only a manual dispatch starts it.
+          optional="$(jq -nc --argjson lanes "$lanes" --arg event "$GITHUB_EVENT_NAME" '[
+            if $lanes | index("purchase-import") then {name: "E2E tests (purchase import agent, optional)", db: true,
+              browser: "purchase-import", run: "pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream"} else empty end,
+            if $event == "workflow_dispatch" then {name: "Live Email decisions (Jev and Clef, optional)", db: true,
+              run: "MAIL_PROMPT_BASELINE_ONLY=1 pnpm --dir apps/web eval:mail-prompts"} else empty end
+          ]')"
           skips="$(jq -nr --argjson lanes "$lanes" --argjson matrix "$matrix" --arg event "$GITHUB_EVENT_NAME" '[
             ("rust", "apple-lint") as $job | select($lanes | index($job) | not) | $job
           ] + (if ($lanes | index("validation")) or ($lanes | index("docs")) then [] else ["validation"] end)
@@ -158,6 +167,7 @@ jobs:
           {
             echo "lanes=$lanes"
             echo "matrix=$matrix"
+            echo "optional=$optional"
             echo "skips=$skips"
           } >> "$GITHUB_OUTPUT"
           echo "::notice::Lanes: $(jq -r 'join(", ")' <<< "$lanes"); skipped jobs: ${skips:-none}"
@@ -290,20 +300,20 @@ jobs:
           command: ${{ matrix.run }}
           artifact: ${{ matrix.browser }}
 
-  # Informative only: the purchase agent driven through the browser against a
-  # scripted model and gateway. Outside `CI passed` and allowed to fail, so a
-  # failure never blocks a merge or the run's success.
-  purchase-import:
-    # The matrix expression stops GitHub appending matrix values to the name.
-    name: E2E tests (purchase import agent, optional)${{ matrix.db && '' }}
+  # Informative only, outside `CI passed` and allowed to fail: the purchase
+  # agent driven through the browser against a scripted model and gateway,
+  # and on dispatch the live Email decisions.
+  optional:
+    name: ${{ matrix.name }}
     needs: plan
-    if: contains(fromJSON(needs.plan.outputs.lanes), 'purchase-import')
+    if: needs.plan.outputs.optional != '[]'
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
-        include: [{ db: true }]
+        include: ${{ fromJSON(needs.plan.outputs.optional) }}
     services: *test-databases
     env: *web-lane-env
     steps:
@@ -311,33 +321,16 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - uses: ./.github/actions/playwright
+      - if: ${{ matrix.browser }}
+        uses: ./.github/actions/playwright
         with:
-          command: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream
-          artifact: purchase-import
+          command: ${{ matrix.run }}
+          artifact: ${{ matrix.browser }}
           save-browser: "false"
-
-  mail-decisions:
-    name: Live Email decisions (Jev and Clef, optional)${{ matrix.db && '' }}
-    needs: plan
-    if: github.event_name == 'workflow_dispatch'
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      matrix:
-        include: [{ db: true }]
-    services: *test-databases
-    env: *web-lane-env
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: restore
-      - run: pnpm --dir apps/web eval:mail-prompts
+      - if: ${{ !matrix.browser }}
+        run: ${{ matrix.run }}
         env:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
-          MAIL_PROMPT_BASELINE_ONLY: "1"
 
   rust:
     name: Rust - recipebridge and cubby-ffi
@@ -421,14 +414,10 @@ jobs:
         apps/apple/CubbyKit/.build/xcode/CompilationCache.noindex
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-apple-toolchain
-      - uses: ./.github/actions/setup-node-with-deps
-      - uses: ./.github/actions/setup-apple-ffi
-        with:
-          targets: mac
       # Package clones come from the simulator job's shared clone cache.
-      - uses: ./.github/actions/setup-apple-tools
+      - uses: ./.github/actions/setup-apple
         with:
+          ffi-targets: mac
           xcodegen: "false"
       # Build products are disposable; unchanged compiler inputs replay through
       # Xcode's compilation cache without forging checkout timestamps. Keep
@@ -464,34 +453,30 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-apple-toolchain
-      - uses: ./.github/actions/setup-node-with-deps
-      - uses: ./.github/actions/setup-apple-ffi
-        with:
-          targets: sim
-      - uses: ./.github/actions/setup-apple-tools
-        id: apple-tools
       # Xcode's content-addressed compiler cache replays unchanged inputs
       # with ordinary checkout mtimes and filesystem identities.
-      - uses: ./.github/actions/setup-apple-build-cache
-        id: derived-data
+      - uses: ./.github/actions/setup-apple
+        id: apple
+        with:
+          ffi-targets: sim
+          build-cache: "true"
       - name: Run iOS app checks
         run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       # A canceled compile must not permanently populate an exact cache key.
       - name: Save DerivedData cache
         uses: ./.github/actions/save-cache-main-only
         with:
-          path: ${{ steps.derived-data.outputs.cache-paths }}
-          key: ${{ steps.derived-data.outputs.cache-key }}
-          cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
-          matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
+          path: ${{ steps.apple.outputs.cache-paths }}
+          key: ${{ steps.apple.outputs.cache-key }}
+          cache-hit: ${{ steps.apple.outputs.cache-hit }}
+          matched-key: ${{ steps.apple.outputs.save-matched-key }}
       - name: Save SPM clone cache
         uses: ./.github/actions/save-cache-main-only
         with:
           path: apps/apple/SourcePackages
-          key: ${{ steps.apple-tools.outputs.spm-clones-cache-key }}
-          cache-hit: ${{ steps.apple-tools.outputs.spm-clones-cache-hit }}
-          matched-key: ${{ steps.apple-tools.outputs.spm-clones-cache-matched-key }}
+          key: ${{ steps.apple.outputs.spm-clones-cache-key }}
+          cache-hit: ${{ steps.apple.outputs.spm-clones-cache-hit }}
+          matched-key: ${{ steps.apple.outputs.spm-clones-cache-matched-key }}
 
   # The one required check. A job may be skipped only when plan skipped its
   # lane or the probe verified its cached Apple pass; any other skip, failure

@@ -36,7 +36,7 @@ import {
 import { registerDiscriminatedUnionMembersForIo } from "./discriminator-registration.ts";
 import type { EntityOutputs } from "./api-types.ts";
 import { renderNativeArtifacts } from "./native.ts";
-import { projectNativeDocument } from "./native-document.ts";
+import { nativeComponents, projectNativeDocument } from "./native-document.ts";
 import { pascal, registerSchemaNames } from "./schema-names.ts";
 import { TYPE_OVERRIDES } from "./type-overrides.ts";
 
@@ -551,6 +551,7 @@ export async function renderHttpApiArtifacts(
 ): Promise<EntityArtifacts[]> {
   const { document, components, serialized } = await buildOpenApiDocument();
   checkFilterWires(document, resources, entities);
+  const native = nativeComponents(components);
   return [
     {
       relativePath: "apps/web/src/lib/generated/http-openapi.gen.json",
@@ -560,11 +561,11 @@ export async function renderHttpApiArtifacts(
     // its config from the CubbyAPI target's own source directory.
     {
       relativePath: "apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json",
-      source: `${JSON.stringify(await projectNativeDocument(JSON.parse(serialized), nativeOperations), null, 2)}\n`,
+      source: `${JSON.stringify(await projectNativeDocument(JSON.parse(serialized), nativeOperations, native), null, 2)}\n`,
     },
     ...renderNativeArtifacts(
       document,
-      components,
+      native,
       resources,
       nativeOperations,
       entityOutputs,

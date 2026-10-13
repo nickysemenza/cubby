@@ -1,0 +1,47 @@
+name: Setup Apple
+description: >-
+  Prepare a macOS runner for a native build: select Xcode 27, install the
+  workspace, restore or build the CubbyFFI slices, install the Apple tools with
+  the SPM clone cache, and restore the shared simulator DerivedData.
+inputs:
+  ffi-targets: { required: true, description: build-rust.sh target set }
+  ffi-profile: { default: release, description: build-rust.sh Cargo profile }
+  node: { default: "true", description: Install Node and the workspace }
+  wasm: { default: "false", description: setup-node-with-deps wasm mode }
+  xcodegen: { default: "true", description: Install XcodeGen }
+  sentry-cli: { default: "false", description: Install sentry-cli for archives }
+  build-cache: { default: "false", description: Restore simulator DerivedData }
+# The build cache's outputs are empty unless build-cache is true.
+outputs:
+  spm-clones-cache-hit:
+    { value: "${{ steps.tools.outputs.spm-clones-cache-hit }}" }
+  spm-clones-cache-matched-key:
+    { value: "${{ steps.tools.outputs.spm-clones-cache-matched-key }}" }
+  spm-clones-cache-key:
+    { value: "${{ steps.tools.outputs.spm-clones-cache-key }}" }
+  cache-paths: { value: "${{ steps.derived-data.outputs.cache-paths }}" }
+  cache-key: { value: "${{ steps.derived-data.outputs.cache-key }}" }
+  cache-hit: { value: "${{ steps.derived-data.outputs.cache-hit }}" }
+  save-matched-key:
+    { value: "${{ steps.derived-data.outputs.save-matched-key }}" }
+  toolchain-hash: { value: "${{ steps.derived-data.outputs.toolchain-hash }}" }
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-apple-toolchain
+    - if: inputs.node == 'true'
+      uses: ./.github/actions/setup-node-with-deps
+      with:
+        wasm: ${{ inputs.wasm }}
+    - uses: ./.github/actions/setup-apple-ffi
+      with:
+        targets: ${{ inputs.ffi-targets }}
+        profile: ${{ inputs.ffi-profile }}
+    - id: tools
+      uses: ./.github/actions/setup-apple-tools
+      with:
+        xcodegen: ${{ inputs.xcodegen }}
+        sentry-cli: ${{ inputs.sentry-cli }}
+    - id: derived-data
+      if: inputs.build-cache == 'true'
+      uses: ./.github/actions/setup-apple-build-cache
