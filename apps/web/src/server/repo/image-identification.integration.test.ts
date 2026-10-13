@@ -117,14 +117,12 @@ it("retrieves a live category and never compares the source against itself", asy
     .update(image)
     .set({ sha256: hash })
     .where(eq(image.id, source.id));
-  await getDb(ctx.db)
-    .insert(entityAttachment)
-    .values({
-      entityKind: "product",
-      entityId: target.id,
-      imageId: source.id,
-      purpose: "item",
-    });
+  await getDb(ctx.db).insert(entityAttachment).values({
+    entityKind: "product",
+    entityId: target.id,
+    imageId: source.id,
+    purpose: "item",
+  });
   expect(await imageIdentificationCategories(ctx.db)).toContainEqual({
     id: category.id,
     name: category.name,
