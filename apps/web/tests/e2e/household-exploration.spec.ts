@@ -26,7 +26,12 @@ test("connected household supports wardrobe screenshots and garden exploration",
     page.getByRole("heading", { name: shirt.name, exact: true }).first(),
   ).toBeVisible();
   await expect(
-    page.getByText("Cedar Wardrobe", { exact: true }).first(),
+    page
+      .getByRole("link", {
+        name: `${shirt.name} · Cedar Wardrobe`,
+        exact: true,
+      })
+      .first(),
   ).toBeVisible();
   const screenshot = testInfo.outputPath("synthetic-household-wardrobe.png");
   await page.screenshot({ path: screenshot, fullPage: true });
