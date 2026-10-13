@@ -1148,6 +1148,13 @@ related active work can find its deferred follow-ups.
   Review-only; never resolve a counterparty automatically. Context:
   `docs/plans/household-ledger-attribution-followups.md`.
 
+- ✨ **Retain non-Purchase financial Email evidence.** Card repayment and
+  account-transfer alerts need a reviewed association to existing Financial
+  Transactions without requiring a Purchase or creating Expense spend. Keep
+  unmatched alerts actionable with their exact account and posted-leg gaps;
+  avoid a misleading missing-Purchase problem after a financial-only review.
+  Reuse reviewed financial associations and source retention where possible.
+
 - ✨ **Project default beneficiaries.** Promote if shared-cost projects become
   frequent: explicit, then project default, then household, following
   `expense-inheritance.ts`. Needs schema and allocation-SQL changes.
