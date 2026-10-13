@@ -215,14 +215,18 @@ struct EntityCard: View {
                     lineWidth: selected ? 2 : FieldGuideTokens.hairlineWidth)
         }
         .contentShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
-        .accessibilityElement(children: subtitlePieces == nil ? .ignore : .combine)
-        .accessibilityLabel(subtitlePieces == nil ? accessibilityLabel : "\(title), \(identifier)")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var accessibilityLabel: String {
-        [
-            title, subtitle, identifier, loadingDetails ? "Loading details" : nil,
+        let spokenSubtitle =
+            subtitlePieces?.map { piece in
+                piece.label.map { "\($0): \(piece.value)" } ?? piece.value
+            }.joined(separator: ", ") ?? subtitle
+        return [
+            title, spokenSubtitle, identifier, loadingDetails ? "Loading details" : nil,
             failedDetails ? "Some details unavailable" : nil,
         ]
         .compactMap { value in

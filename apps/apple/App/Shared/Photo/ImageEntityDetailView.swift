@@ -534,7 +534,7 @@ private struct ProvenanceRows: View {
     }
 
     private static func captureDateText(_ date: Date, offsetMinutes: Int?) -> String {
-        let base = DatePresentation.timestamp(date).text
+        let base = DatePresentation.timestamp(date).exact
         guard let offsetMinutes else { return base }
         let sign = offsetMinutes < 0 ? "-" : "+"
         let magnitude = abs(offsetMinutes)
