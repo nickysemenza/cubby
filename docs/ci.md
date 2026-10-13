@@ -229,13 +229,14 @@ contracts (`SubjectLift`, `FeaturePrintIndex`) when running on the Simulator,
 for whichever caller — local or hosted — ends up running that scheme there.
 
 Two hosted macOS jobs, `Apple host tests` and `Apple simulator build`, run in
-parallel when the Apple lane is selected and its probe missed. Each installs the workspace (which also
-generates the Swift inputs) and, outside the nightly run, first runs its Nx target with
-`CUBBY_NX_CACHE_PROBE=1`: Nx replays a cached pass for the same input hash,
-and on a miss the script fails before building (Nx never caches that failure).
-Only a miss pays for the FFI, XcodeGen, and Xcode build caches and the real
-run. The nightly run skips the probe and runs both with `--skip-nx-cache` on
-the runner's own Xcode.
+parallel when the Apple lane is selected and its Linux probe did not verify a
+cached pass. The probe runs each Nx target with `CUBBY_NX_CACHE_PROBE=1`: Nx
+replays a cached pass for the same input hash, and on a miss the script fails
+before building (Nx never caches that failure). Only a miss or failed probe
+pays for a macOS runner, which installs the workspace (generating the Swift
+inputs), the FFI, XcodeGen, and Xcode build caches, and runs the target. The
+nightly run skips the probe and runs both with `--skip-nx-cache` on the
+runner's own Xcode.
 The host job runs the automatically generated
 `CubbyKit-Package` scheme with `xcodebuild test` on the ARM macOS host — no
 simulator. The aggregate package scheme includes all CubbyKit tests and the CLI
@@ -356,8 +357,9 @@ fails generation, and `cubby-checks:ci-lanes` fails when the file is stale.
 lane's tasks selects that lane. Any tree compared with a green tree is
 correct, ancestor or not: a lane whose inputs match would replay that tree's
 pass. Nightly and manual runs, and a repository with no green main run, start
-every lane. `Plan` outputs the selected lanes, the matrix of web lanes, and
-the exact jobs it skipped.
+every lane. Lanes with identical groups share one filter entry, named
+`<lane>+<lane>.<n>`. `Plan` outputs the selected lanes, the matrix of web
+lanes, and the exact jobs it skipped.
 
 `CI passed` is the single required check (`re-actors/alls-green` on
 `ubuntu-slim`). It needs every lane and fails on any failure or cancellation,
@@ -367,7 +369,7 @@ lanes to macOS.
 
 `Validation` runs `pnpm check:all` (the cached generate, types, lint, format,
 knip, CI-lane, bindings, script, and Worker-test targets plus the uncached
-security audit), and `pnpm dedupe:check` when a dependency manifest changed.
+security audit) and `pnpm dedupe:check`.
 `Docs and formatting` runs on `ubuntu-slim` with a root-only install: the
 `format` target and the offline relative-link check through the pinned Lychee
 action, a composite action that downloads the Lychee binary (no Docker).

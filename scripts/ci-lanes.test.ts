@@ -15,7 +15,7 @@ process.env.NX_DAEMON = "false";
 const groups = new Map<string, { include: string[]; exclude: string[] }>();
 let current: { include: string[]; exclude: string[] } | undefined;
 for (const line of readFileSync(LANES_FILE, "utf8").split("\n")) {
-  const name = /^([\w.-]+):$/u.exec(line)?.[1];
+  const name = /^([\w.+-]+):$/u.exec(line)?.[1];
   if (name) groups.set(name, (current = { include: [], exclude: [] }));
   else if (line.startsWith("  - ") && current) {
     const pattern = String(JSON.parse(line.slice(4)));
@@ -24,7 +24,7 @@ for (const line of readFileSync(LANES_FILE, "utf8").split("\n")) {
   }
 }
 const matchers = [...groups].map(([name, group]) => ({
-  lane: name.replace(/\.\d+$/u, ""),
+  lanes: name.replace(/\.\d+$/u, "").split("+"),
   include: picomatch(group.include, { dot: true }),
   exclude: group.exclude.length
     ? picomatch(group.exclude, { dot: true })
@@ -37,7 +37,7 @@ const lanesFor = (...files: string[]) =>
         .filter((group) =>
           files.some((file) => group.include(file) && !group.exclude(file)),
         )
-        .map((group) => group.lane),
+        .flatMap((group) => group.lanes),
     ),
   ].sort();
 
@@ -107,7 +107,6 @@ test("changes route to the lanes whose tasks read them", () => {
   // Cargo reads ancestor configuration but never JavaScript dependencies.
   assert.ok(lanesFor(".cargo/config.toml").includes("rust"));
   assert.ok(!lanesFor("pnpm-lock.yaml").includes("rust"));
-  assert.deepEqual(lanesFor("pnpm-lock.yaml").includes("dependencies"), true);
   // A deploy-only workflow edit runs no test lane.
   assert.deepEqual(
     lanesFor(".github/workflows/deploy.yaml").filter((lane) =>

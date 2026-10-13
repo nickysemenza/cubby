@@ -35,7 +35,7 @@ is roughly ten times the allowance.
 - The Apple lane runs locally through the same Nx target. A Linux job probes
   each Apple target after dependency setup. A verified
   cache hit skips that target's macOS job entirely; a miss or failed probe
-  falls back to hosted macOS, which probes again before native setup. The
+  falls back to hosted macOS. The
   required check accepts native success or a skipped native job backed by its
   own verified Linux probe hit.
 - Apple inputs exclude the named root documentation and the explicitly excluded
