@@ -81,4 +81,6 @@ runs:
     - name: Restore or build packages/wasm
       if: inputs.wasm == 'restore'
       shell: bash
-      run: pnpm exec nx run cubby-checks:wasm --outputStyle=stream
+      run: |
+        CUBBY_FINGERPRINT_DEBUG=1 node scripts/ensure-wasm.ts --fingerprint
+        pnpm exec nx run cubby-checks:wasm --outputStyle=stream

@@ -104,8 +104,16 @@ export const rustFingerprint = (
       .map((pkg) => dirname(pkg.manifest_path)),
   );
   const hash = createHash("sha256");
-  const add = (value: string) =>
-    hash.update(value.replaceAll(ROOT, "<workspace>"));
+  const add = (value: string) => {
+    const normal = value.replaceAll(ROOT, "<workspace>");
+    if (process.env.CUBBY_FINGERPRINT_DEBUG)
+      console.error(
+        "fingerprint-part",
+        createHash("sha256").update(normal).digest("hex").slice(0, 12),
+        normal.length > 400 ? normal.slice(0, 200) : normal,
+      );
+    hash.update(normal);
+  };
   add(metadata);
   add(sourceInputs([...roots], ROOT));
   // Cargo reads configuration from the invocation directory's ancestors and
