@@ -10,8 +10,7 @@
 // Locally: GITHUB_TOKEN="$(gh auth token)" GITHUB_REPOSITORY=<owner/repo>
 // node scripts/apple-release.ts plan (inspected as a nightly run).
 import { execFileSync } from "node:child_process";
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync } from "node:fs";
 import path from "node:path";
 
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../packages/shared/src/apple-client-version.ts";
@@ -22,8 +21,7 @@ import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../packages/shared/src/apple
 // retired `<commit count>.<attempt>` scheme) when this numbering began.
 export const BUILD_NUMBER_OFFSET = 10000;
 const WORKFLOW_PATH = ".github/workflows/apple-testflight.yaml";
-const CHECKPOINT_ARTIFACT = "apple-testflight-uploaded";
-const CHECKPOINT_FILE = "checkpoint.json";
+const CHECKPOINT_TAG_PREFIX = "testflight/";
 const REFRESH_DAYS = 30;
 const PAGE = 100;
 
@@ -36,7 +34,6 @@ export type Checkpoint = {
 export type GitHub = {
   // Resolves to the documented GitHub REST response shape for `route`.
   get: <T>(route: string) => Promise<T>;
-  artifactText: (artifactId: number) => Promise<string>;
 };
 type Decision =
   | { action: "publish" | "skip"; reason: string }
@@ -102,9 +99,9 @@ async function* paged<T>(github: GitHub, route: string, key: string) {
   }
 }
 
-const parseCheckpoint = (artifactId: number, text: string): Checkpoint => {
+const parseCheckpoint = (tag: string, text: string): Checkpoint => {
   const malformed = new Error(
-    `Upload checkpoint artifact ${artifactId} is malformed: ${text}`,
+    `Upload checkpoint tag ${tag} is malformed: ${text}`,
   );
   let fields;
   try {
@@ -123,56 +120,44 @@ const parseCheckpoint = (artifactId: number, text: string): Checkpoint => {
     versionPattern.test(checkpoint.version) &&
     Number.isSafeInteger(checkpoint.build) &&
     /^\d{4}-\d{2}-\d{2}T/u.test(checkpoint.uploadedAt) &&
-    !Number.isNaN(Date.parse(checkpoint.uploadedAt))
+    !Number.isNaN(Date.parse(checkpoint.uploadedAt)) &&
+    tag === checkpointTag(checkpoint)
   )
     return checkpoint;
   throw malformed;
 };
 
+export const checkpointTag = (upload: { version: string; build: number }) =>
+  `${CHECKPOINT_TAG_PREFIX}${upload.version}-${upload.build}`;
+
 /**
- * The newest upload checkpoint written by this workflow on main, or null when
- * none survives (never uploaded, or expired). API failures and malformed
- * evidence throw: neither may be mistaken for missing history.
+ * The highest-build upload checkpoint in the checkout, or null when no
+ * `testflight/*` tag exists (never uploaded). The checkpoint job writes one
+ * immutable annotated tag per complete upload, its message the checkpoint
+ * JSON. Malformed evidence throws: it may not be mistaken for missing history.
  */
-export async function findCheckpoint(
-  github: GitHub,
-  workflowId: number,
-): Promise<Checkpoint | null> {
-  type Artifact = {
-    id: number;
-    expired: boolean;
-    created_at: string;
-    workflow_run: { id: number };
-  };
-  const candidates: Artifact[] = [];
-  for await (const artifact of paged<Artifact>(
-    github,
-    `/actions/artifacts?name=${CHECKPOINT_ARTIFACT}&`,
-    "artifacts",
-  ))
-    if (!artifact.expired) candidates.push(artifact);
-  candidates.sort(
-    (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+export function readCheckpoint(cwd: string): Checkpoint | null {
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
+  const tags = git("tag", "--list", `${CHECKPOINT_TAG_PREFIX}*`)
+    .split("\n")
+    .filter(Boolean);
+  const build = (tag: string) =>
+    Number(/-(\d+)$/u.exec(tag)?.[1] ?? Number.NaN);
+  const malformed = tags.find((tag) => Number.isNaN(build(tag)));
+  if (malformed !== undefined)
+    throw new Error(`Upload checkpoint tag ${malformed} names no build`);
+  const tag = tags.sort((a, b) => build(b) - build(a))[0];
+  if (tag === undefined) return null;
+  if (git("cat-file", "-t", `refs/tags/${tag}`) !== "tag")
+    throw new Error(`Upload checkpoint tag ${tag} is not annotated`);
+  const checkpoint = parseCheckpoint(
+    tag,
+    git("tag", "--list", "--format=%(contents)", tag),
   );
-  for (const artifact of candidates) {
-    // Any workflow can upload an artifact with this name; only this
-    // workflow's main-branch runs write upload evidence.
-    const run = await github.get<{
-      workflow_id: number;
-      path: string;
-      head_branch: string;
-    }>(`/actions/runs/${artifact.workflow_run.id}`);
-    if (
-      run.workflow_id === workflowId &&
-      run.path === WORKFLOW_PATH &&
-      run.head_branch === "main"
-    )
-      return parseCheckpoint(
-        artifact.id,
-        await github.artifactText(artifact.id),
-      );
-  }
-  return null;
+  if (git("rev-parse", `refs/tags/${tag}^{commit}`) !== checkpoint.sha)
+    throw new Error(`Upload checkpoint tag ${tag} points away from its SHA`);
+  return checkpoint;
 }
 
 /**
@@ -213,8 +198,8 @@ export const commitExists = (cwd: string, sha: string) => {
   }
 };
 
-const restGitHub = (repository: string, token: string): GitHub => {
-  const request = async (route: string) => {
+const restGitHub = (repository: string, token: string): GitHub => ({
+  get: async (route) => {
     const url = `https://api.github.com/repos/${repository}${route}`;
     const response = await fetch(url, {
       headers: {
@@ -227,25 +212,9 @@ const restGitHub = (repository: string, token: string): GitHub => {
       throw new Error(
         `GET ${url}: ${response.status} ${await response.text()}`,
       );
-    return response;
-  };
-  return {
-    get: async (route) => JSON.parse(await (await request(route)).text()),
-    artifactText: async (artifactId) => {
-      const directory = mkdtempSync(path.join(tmpdir(), "apple-release-"));
-      try {
-        const zip = path.join(directory, "checkpoint.zip");
-        const response = await request(`/actions/artifacts/${artifactId}/zip`);
-        writeFileSync(zip, Buffer.from(await response.arrayBuffer()));
-        return execFileSync("unzip", ["-p", zip, CHECKPOINT_FILE], {
-          encoding: "utf8",
-        });
-      } finally {
-        rmSync(directory, { recursive: true, force: true });
-      }
-    },
-  };
-};
+    return JSON.parse(await response.text());
+  },
+});
 
 const required = (name: string) => {
   const value = process.env[name];
@@ -321,7 +290,7 @@ async function main(command: string | undefined) {
     event === "push" ? versionAtCommit(cwd, required("PUSH_BEFORE")) : null;
   const pushedVersion =
     event === "push" ? versionAtCommit(cwd, required("PUSH_AFTER")) : null;
-  const checkpoint = await findCheckpoint(github, workflow.id);
+  const checkpoint = readCheckpoint(cwd);
   const decision = decide({
     event,
     previousVersion,

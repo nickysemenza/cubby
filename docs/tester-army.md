@@ -243,12 +243,12 @@ The **E2E journeys** workflow (`e2e-journeys.yaml`) runs an informational
 trial after successful required CI completes. `tester-army-pr.yaml` validates
 that all six required jobs passed in that CI run and the same-repository PR is still open at the tested head, then dispatches
 `e2e-journeys.yaml` with its number and exact revision. Routing checks that
-state again before checkout. Optional purchase-import failures do not suppress dispatch; missing, failed, skipped or cancelled required jobs do. Label-triggered dispatch uses the same required-job gate on the latest CI run for that head. Automatic web coverage selects `product-rename`,
+state again before checkout. Dispatch requires the CI run to have succeeded; the optional purchase-import lane may fail without failing it. Label-triggered dispatch requires the latest CI run for that head to have succeeded. Both run as one `gh` step in `tester-army-pr.yaml`. Automatic web coverage selects `product-rename`,
 `receive-purchase`, and `field-product-tags`; their persisted-state checks remain
 unchanged. The GitHub reporter receives the PR number and head in the runner's
 event payload and continues to post its normal comment and job summary. The full iOS catalog runs only when explicitly selected
 with the `tester-army:ios` label, manual dispatch, or the weekly schedule;
-native/shared/backend changes retain their required Apple checks without
+native/shared/backend changes retain their required Apple lanes without
 automatically starting paid native journeys. Import/vendor/run changes
 and shared/backend changes also run the coupled import journeys. Prose-only PRs
 and fork PRs do not automatically call paid models. The complete native catalog runs in two parallel SDK shards (`--shard 1/2` and `2/2`), with separate recording caches, reports and reporter keys. The partition preserves all native cases; it lowers work per job while using more concurrent macOS runners. Changed-file routing lives

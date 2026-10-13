@@ -8,13 +8,7 @@
         "cwd": "{projectRoot}"
       },
       "cache": true,
-      "inputs": [
-        "gate",
-        // rust-toolchain.toml names a floating channel.
-        {
-          "runtime": "rustc -V"
-        }
-      ]
+      "inputs": ["rustGate"]
     }
   }
 }

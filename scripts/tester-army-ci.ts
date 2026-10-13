@@ -1,93 +1,22 @@
 import assert from "node:assert/strict";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync } from "node:fs";
 
 const env = process.env;
-const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH!, "utf8"));
-async function github(route: string, body?: string) {
+async function github(route: string) {
   const response = await fetch(
     `${env.GITHUB_API_URL ?? "https://api.github.com"}/repos/${env.GITHUB_REPOSITORY}/${route}`,
     {
-      method: body === undefined ? "GET" : "POST",
-      body,
       headers: {
         Authorization: `Bearer ${env.GITHUB_TOKEN}`,
-        "Content-Type": "application/json",
         Accept: "application/vnd.github+json",
       },
     },
   );
   if (!response.ok) throw new Error(`GitHub ${route}: ${response.status}`);
-  return response.status === 204
-    ? undefined
-    : JSON.parse(await response.text());
+  return JSON.parse(await response.text());
 }
 
-if (process.argv[2] === "dispatch") {
-  const run = event.workflow_run;
-  if (
-    run &&
-    (run.event !== "pull_request" ||
-      run.status !== "completed" ||
-      run.head_repository?.full_name !== env.GITHUB_REPOSITORY)
-  )
-    process.exit(0);
-  const candidates = run
-    ? await github(
-        `pulls?state=open&head=${encodeURIComponent(`${event.repository.owner.login}:${run.head_branch}`)}&per_page=100`,
-      )
-    : [await github(`pulls/${event.pull_request.number}`)];
-  const pull = candidates.find(
-    (candidate: { head: { sha: string } }) =>
-      !run || candidate.head.sha === run.head_sha,
-  );
-  if (
-    !pull ||
-    pull.state !== "open" ||
-    pull.head.repo.full_name !== env.GITHUB_REPOSITORY
-  )
-    process.exit(0);
-  const completedRun =
-    run ??
-    (
-      await github(
-        `actions/workflows/ci.yaml/runs?event=pull_request&head_sha=${pull.head.sha}&per_page=1`,
-      )
-    ).workflow_runs[0];
-  if (completedRun?.status !== "completed") process.exit(0);
-  // Keep these in sync with the main ruleset; optional jobs cannot suppress coverage.
-  const required = new Set([
-    "Scope",
-    "Validation",
-    "Auxiliary tests and builds",
-    "Rust - recipebridge and cubby-ffi",
-    "Web checks",
-    "Apple checks",
-  ]);
-  for (let page = 1; ; page++) {
-    const batch = await github(
-      `actions/runs/${completedRun.id}/jobs?filter=latest&per_page=100&page=${page}`,
-    );
-    for (const job of batch.jobs) {
-      if (!required.has(job.name)) continue;
-      if (job.status !== "completed" || job.conclusion !== "success")
-        process.exit(0);
-      required.delete(job.name);
-    }
-    if (page * 100 >= batch.total_count) break;
-  }
-  if (required.size > 0) process.exit(0);
-  await github(
-    "actions/workflows/e2e-journeys.yaml/dispatches",
-    JSON.stringify({
-      ref: event.repository.default_branch,
-      inputs: {
-        journey: "tester-army-pr",
-        "pull-request": String(pull.number),
-        revision: pull.head.sha,
-      },
-    }),
-  );
-} else if (process.argv[2] === "route") {
+if (process.argv[2] === "route") {
   const selected = { web: false, ios: false, imports: false, simulator: false };
   const journey = env.TESTER_ARMY_JOURNEY;
   const automatic =
@@ -198,4 +127,4 @@ if (process.argv[2] === "dispatch") {
     env.GITHUB_OUTPUT!,
     `web-matrix=${JSON.stringify({ include })}\n`,
   );
-} else throw new Error("Usage: tester-army-ci.ts route|dispatch");
+} else throw new Error("Usage: tester-army-ci.ts route");

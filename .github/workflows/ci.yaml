@@ -6,8 +6,8 @@ on:
   push:
     branches: [main]
   schedule:
-    # Nightly backstop: every lane uncached, so a pass reused from another
-    # platform or toolchain is rechecked on CI's (docs/adr/0009-content-hash-merge-gate.md).
+    # Nightly backstop: every lane runs uncached, so a pass reused from another
+    # platform, toolchain, or skipped lane is rechecked on CI's.
     - cron: "23 8 * * *"
   workflow_dispatch:
 
@@ -31,29 +31,27 @@ env:
   NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
   NX_CACHE_TOKEN: ${{ secrets.NX_CACHE_TOKEN }}
 
-# Every required lane runs its Nx targets unconditionally. Each target's
-# inputs (nx.json `gate`) decide whether a pass for the same content already
-# exists in the shared cache; a hit replays it in seconds (docs/ci.md).
+# `plan` starts only the lanes whose Nx inputs changed since the last green
+# main run; a started lane still replays unchanged tasks from the Nx cache.
+# `CI passed` is the one required check (docs/adr/0014-path-routed-ci-lanes.md).
 jobs:
-  # A stable required check that also keeps live entity codes out of PR text.
-  scope:
-    name: Scope
-    runs-on: ubuntu-latest
+  plan:
+    name: Plan
+    runs-on: ubuntu-slim
     timeout-minutes: 5
+    outputs:
+      lanes: ${{ steps.select.outputs.lanes }}
+      matrix: ${{ steps.select.outputs.matrix }}
+      skips: ${{ steps.select.outputs.skips }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        if: github.event_name == 'pull_request'
         with:
           sparse-checkout: |
-            .nvmrc
+            .github/ci-lanes.yml
             scripts/check-outward-text.ts
             packages/shared/src/shortcode-alphabet.ts
             packages/schemas/src/entity-definitions
           sparse-checkout-cone-mode: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
-        if: github.event_name == 'pull_request'
-        with:
-          node-version-file: .nvmrc
       # The commit-msg hook gates commit messages; the PR title and body are
       # the other outward text AGENTS.md keeps free of live entity codes.
       - name: PR text names no live entity codes
@@ -64,12 +62,68 @@ jobs:
         run: |
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
             --jq '.title + "\n" + .body' | node scripts/check-outward-text.ts --stdin
+      # Every lane passed on that tree, so a lane whose inputs match it would
+      # replay the same pass. Nightly and manual runs have no baseline.
+      - name: Find the last green main run
+        id: base
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yaml/runs?branch=main&event=push&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty')"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "::notice::Lanes routed by changes since ${sha:-no green main run, so every lane runs}"
+      - name: Match changes to lanes
+        id: filter
+        if: steps.base.outputs.sha != ''
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        with:
+          # An empty token makes a pull request diff against `base` with git.
+          token: ""
+          base: ${{ steps.base.outputs.sha }}
+          filters: .github/ci-lanes.yml
+          predicate-quantifier: some-with-excludes
+      - name: Select lanes
+        id: select
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+          BASE: ${{ steps.base.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$BASE" ]]; then
+            lanes="$(jq -c 'map(sub("\\.[0-9]+$"; "")) | unique' <<< "$CHANGES")"
+          else
+            lanes="$(sed -n 's/^\([a-z-]*\)\.[0-9]*:$/\1/p' .github/ci-lanes.yml | jq -Rsc 'split("\n") - [""] | unique')"
+          fi
+          matrix="$(jq -nc --argjson lanes "$lanes" '[
+            {lane: "aux", name: "Auxiliary tests and builds",
+             run: "pnpm exec nx run-many -t test --exclude=cubby-checks --outputStyle=static-failures-only"},
+            {lane: "build-worker", name: "Build Workers and runtime tests", db: true,
+             run: "pnpm exec nx run-many -p @cubby/web -t db-check workerd-tests --parallel=1 --outputStyle=stream"},
+            (range(1; 3) | {lane: "postgres", name: "PostgreSQL integration tests (\(.)/2)", db: true,
+             run: "CUBBY_POSTGRES_SHARD=\(.)/2 pnpm exec nx run @cubby/web:postgres --outputStyle=stream"}),
+            # Two Playwright workers per standard runner.
+            (range(1; 5) | {lane: "e2e", name: "E2E tests (desktop \(.)/4)", db: true, browser: "desktop-\(.)",
+             run: "CUBBY_E2E_SHARD=\(.)/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream"})
+          ] | map(select(.lane as $lane | $lanes | index($lane)))')"
+          skips="$(jq -nr --argjson lanes "$lanes" --argjson matrix "$matrix" --arg event "$GITHUB_EVENT_NAME" '[
+            ("validation", "docs", "rust") as $job | select($lanes | index($job) | not) | $job
+          ] + (if $matrix == [] then ["lanes"] else [] end)
+            + (if $lanes | index("apple") | not then ["apple-probe", "apple-host", "apple-simulator"]
+               elif $event == "schedule" then ["apple-probe"] else [] end)
+          | join(",")')"
+          {
+            echo "lanes=$lanes"
+            echo "matrix=$matrix"
+            echo "skips=$skips"
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::Lanes: $(jq -r 'join(", ")' <<< "$lanes"); skipped jobs: ${skips:-none}"
 
   validation:
     name: Validation
-    outputs:
-      apple-host: ${{ steps.apple-host.outcome }}
-      apple-simulator: ${{ steps.apple-simulator.outcome }}
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.lanes), 'validation')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -80,25 +134,25 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      # Reuse this Linux workspace before queuing a macOS runner. A probe miss
-      # fails before native work and cannot publish a passing Nx cache entry.
-      - name: Probe Apple host pass
-        id: apple-host
-        if: github.event_name != 'schedule'
-        continue-on-error: true
-        env:
-          CUBBY_NX_CACHE_PROBE: "1"
-        run: pnpm exec nx run apple:host-tests --outputStyle=stream
-      - name: Probe Apple simulator pass
-        id: apple-simulator
-        if: github.event_name != 'schedule'
-        continue-on-error: true
-        env:
-          CUBBY_NX_CACHE_PROBE: "1"
-        run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       - run: pnpm check:all
-      # Both read the live registry or advisory database, so neither caches.
-      - run: pnpm dedupe:check
+      # Reads the live registry, so it never caches.
+      - if: contains(fromJSON(needs.plan.outputs.lanes), 'dependencies')
+        run: pnpm dedupe:check
+
+  docs:
+    name: Docs and formatting
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.lanes), 'docs')
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # The root tools only; fetching them beats restoring the whole store.
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          workspace-filter: cubby
+          pnpm-store-cache: "false"
+      - run: pnpm exec nx run cubby-checks:format --outputStyle=stream
       - name: Check relative Markdown links
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
@@ -110,20 +164,93 @@ jobs:
             './**/*.md'
             './**/*.mdx'
 
-  # Fast web Vitest projects and every auxiliary package's tests.
-  test-aux:
-    name: Auxiliary tests and builds
+  # The web and auxiliary lanes plan selected. Every entry is one standard
+  # runner; only database lanes start the PostgreSQL services.
+  lanes:
+    name: ${{ matrix.name }}
+    needs: plan
+    if: needs.plan.outputs.matrix != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    services: &test-databases # An empty image starts no service container.
+      postgres:
+        image: ${{ matrix.db && 'mirror.gcr.io/pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d' || '' }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: cubby
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_INITDB_ARGS: >-
+            --set=jit=off --set=fsync=off
+            --set=synchronous_commit=off --set=full_page_writes=off
+        ports:
+          - 5432:5432
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
+          --health-interval 2s --health-timeout 5s
+          --health-retries 10 --health-start-period 3s
+      # The pinned distroless image has no /bin/sh for Docker shell health
+      # checks; its server retries PostgreSQL startup before serving requests.
+      integresql:
+        image: ${{ matrix.db && 'ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a' || '' }}
+        env:
+          PGHOST: postgres
+          PGUSER: postgres
+          PGPASSWORD: password
+        ports:
+          - 5000:5000
+    env: &web-lane-env
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
+      CUBBY_SOURCE_COMMIT: ${{ github.sha }}
+      CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - run: pnpm exec nx run-many -t test --exclude=cubby-checks --outputStyle=static-failures-only
+      - if: ${{ !matrix.browser }}
+        run: ${{ matrix.run }}
+      - if: ${{ matrix.browser }}
+        uses: ./.github/actions/playwright
+        with:
+          command: ${{ matrix.run }}
+          artifact: ${{ matrix.browser }}
 
-  test-rust:
+  # Informative only: the purchase agent driven through the browser against a
+  # scripted model and gateway. Outside `CI passed` and allowed to fail, so a
+  # failure never blocks a merge or the run's success.
+  purchase-import:
+    name: E2E tests (purchase import agent, optional)
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.lanes), 'purchase-import')
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        include: [{ db: true }]
+    services: *test-databases
+    env: *web-lane-env
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: restore
+      - uses: ./.github/actions/playwright
+        with:
+          command: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream
+          artifact: purchase-import
+          save-browser: "false"
+
+  rust:
     name: Rust - recipebridge and cubby-ffi
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.lanes), 'rust')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
     steps:
@@ -146,204 +273,39 @@ jobs:
       # One crate at a time: both share the workspace target directory.
       - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream
 
-  # Migration drift and the workerd PostgreSQL files, which build the Worker
-  # themselves; ordinary integration files run in test-postgres.
-  build-worker:
-    name: Build Workers and runtime tests
+  # Linux checks whether each Apple lane's pass is already cached before any
+  # macOS runner queues. A probe miss fails before native work and cannot
+  # publish a passing Nx cache entry.
+  apple-probe:
+    name: Apple cache probe
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.lanes), 'apple') && github.event_name != 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    services: &test-databases
-      postgres:
-        image: mirror.gcr.io/pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_DB: cubby
-          POSTGRES_HOST_AUTH_METHOD: trust
-          POSTGRES_INITDB_ARGS: >-
-            --set=jit=off --set=fsync=off
-            --set=synchronous_commit=off --set=full_page_writes=off
-        ports:
-          - 5432:5432
-          - 55432:5432
-        options: >-
-          --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
-          --health-interval 2s --health-timeout 5s
-          --health-retries 10 --health-start-period 3s
-      # The pinned distroless image has no /bin/sh for Docker shell health
-      # checks; its server retries PostgreSQL startup before serving requests.
-      integresql:
-        image: ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a
-        env:
-          PGHOST: postgres
-          PGUSER: postgres
-          PGPASSWORD: password
-        ports:
-          - 5000:5000
+    timeout-minutes: 10
+    outputs:
+      host: ${{ steps.host.outcome }}
+      simulator: ${{ steps.simulator.outcome }}
     env:
-      CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-      CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
+      CUBBY_NX_CACHE_PROBE: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - run: pnpm exec nx run-many -p @cubby/web -t db-check workerd-tests --parallel=1 --outputStyle=stream
-
-  test-postgres:
-    name: PostgreSQL integration tests (${{ matrix.shard }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ["1/2", "2/2"]
-    services: *test-databases
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: restore
-      - run: pnpm exec nx run @cubby/web:postgres --outputStyle=stream
-        env:
-          CUBBY_POSTGRES_SHARD: ${{ matrix.shard }}
-
-  test-e2e:
-    name: E2E tests (desktop ${{ matrix.shard }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        # Two Playwright workers per standard runner; the stable aggregate
-        # owns the required status.
-        include:
-          - { shard: "1/4", slug: desktop-1 }
-          - { shard: "2/4", slug: desktop-2 }
-          - { shard: "3/4", slug: desktop-3 }
-          - { shard: "4/4", slug: desktop-4 }
-    env:
-      NODE_OPTIONS: "--max-old-space-size=4096"
-      BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
-      CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-      CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
-    services: *test-databases
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: restore
-      - name: Resolve installed Playwright version
-        id: playwright
-        working-directory: apps/web
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - name: Restore exact Playwright browser
-        id: browser-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
-      - name: Install exact Playwright browser
-        if: steps.browser-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
-      - name: Save exact Playwright browser
-        if: steps.browser-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
-      - name: Run Playwright tests
-        run: pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-        env:
-          CUBBY_E2E_SHARD: ${{ matrix.shard }}
-      - name: Upload Playwright HTML report and traces
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: playwright-${{ github.sha }}-${{ matrix.slug }}
-          path: |
-            apps/web/playwright-report/**
-            !apps/web/playwright-report/run-manifest.json
-            !apps/web/playwright-report/run-results.json
-            !apps/web/playwright-report/SHA256SUMS
-            !apps/web/playwright-report/workerd-logs/**
-            apps/web/test-results/**/trace.zip
-          if-no-files-found: warn
-          retention-days: 7
-
-  # Informative only: the purchase agent driven through the browser against a
-  # scripted model and gateway. It is deliberately absent from `web-checks`
-  # and branch protection, so a failure never blocks a merge.
-  test-e2e-purchase-import:
-    name: E2E tests (purchase import agent, optional)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      NODE_OPTIONS: "--max-old-space-size=4096"
-      CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-      CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
-    services: *test-databases
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: restore
-      - name: Resolve installed Playwright version
-        id: playwright
-        working-directory: apps/web
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - name: Restore exact Playwright browser
-        id: browser-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
-      - name: Install exact Playwright browser
-        if: steps.browser-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
-      - name: Run purchase import browser E2E
-        run: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream
-      - name: Upload Playwright HTML report and traces
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: playwright-${{ github.sha }}-purchase-import
-          path: |
-            apps/web/playwright-report/**
-            !apps/web/playwright-report/run-manifest.json
-            !apps/web/playwright-report/run-results.json
-            !apps/web/playwright-report/SHA256SUMS
-            !apps/web/playwright-report/workerd-logs/**
-            apps/web/test-results/**/trace.zip
-          if-no-files-found: warn
-          retention-days: 7
-
-  # The stable required check over the web matrix lanes.
-  web-checks:
-    name: Web checks
-    needs: [build-worker, test-aux, test-postgres, test-e2e]
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 5
-    steps:
-      - name: Require every web lane to pass
-        env:
-          BUILD_RESULT: ${{ needs.build-worker.result }}
-          WEB_RESULT: ${{ needs.test-aux.result }}
-          POSTGRES_RESULT: ${{ needs.test-postgres.result }}
-          E2E_RESULT: ${{ needs.test-e2e.result }}
-        run: |
-          test "$BUILD_RESULT" = success
-          test "$WEB_RESULT" = success
-          test "$POSTGRES_RESULT" = success
-          test "$E2E_RESULT" = success
+      - id: host
+        continue-on-error: true
+        run: pnpm exec nx run apple:host-tests --outputStyle=stream
+      - id: simulator
+        continue-on-error: true
+        run: pnpm exec nx run apple:simulator-build --outputStyle=stream
 
   # Each Apple lane queues macOS only when Linux did not verify its cached
-  # pass. A failed validation setup falls through to macOS, which retains its
-  # own probe. The nightly backstop bypasses both probes and rebuilds.
-  test-apple-host:
+  # pass. A failed probe setup falls through to macOS, which retains its own
+  # probe. The nightly backstop skips the probe and rebuilds.
+  apple-host:
     name: Apple host tests
-    needs: validation
-    if: ${{ !cancelled() && (github.event_name == 'schedule' || needs.validation.outputs.apple-host != 'success') }}
+    needs: [plan, apple-probe]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.lanes), 'apple') && needs.apple-probe.outputs.host != 'success' }}
     runs-on: macos-26
     timeout-minutes: 40
     env:
@@ -375,9 +337,7 @@ jobs:
       - name: Compute host Xcode toolchain hash
         if: steps.cached.outcome != 'success'
         id: host-xcode-version
-        uses: ./.github/actions/toolchain-hash
-        with:
-          command: xcodebuild -version
+        run: echo "hash=$(xcodebuild -version 2>&1 | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - name: Restore cached host compilation
         if: steps.cached.outcome != 'success'
         id: host-build
@@ -401,10 +361,10 @@ jobs:
           cache-hit: ${{ steps.host-build.outputs.cache-hit }}
           matched-key: ${{ steps.host-build.outputs.cache-matched-key }}
 
-  test-apple-simulator:
+  apple-simulator:
     name: Apple simulator build
-    needs: validation
-    if: ${{ !cancelled() && (github.event_name == 'schedule' || needs.validation.outputs.apple-simulator != 'success') }}
+    needs: [plan, apple-probe]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.lanes), 'apple') && needs.apple-probe.outputs.simulator != 'success' }}
     runs-on: macos-26
     timeout-minutes: 40
     steps:
@@ -452,24 +412,30 @@ jobs:
           cache-hit: ${{ steps.apple-tools.outputs.spm-clones-cache-hit }}
           matched-key: ${{ steps.apple-tools.outputs.spm-clones-cache-matched-key }}
 
-  # A skipped macOS lane counts only when Linux verified that lane's cached
-  # pass; missing probe outputs and unexpected skips fail the required check.
-  test-apple:
-    name: Apple checks
-    needs: [validation, test-apple-host, test-apple-simulator]
-    if: ${{ !cancelled() }}
+  # The one required check. A job may be skipped only when plan skipped its
+  # lane or the probe verified its cached Apple pass; any other skip, failure,
+  # or cancellation fails it.
+  ci-passed:
+    name: CI passed
+    needs:
+      [
+        plan,
+        validation,
+        docs,
+        lanes,
+        rust,
+        apple-probe,
+        apple-host,
+        apple-simulator,
+      ]
+    if: always()
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
-      - name: Require both Apple lanes
-        env:
-          HOST_RESULT: ${{ needs.test-apple-host.result }}
-          SIMULATOR_RESULT: ${{ needs.test-apple-simulator.result }}
-          HOST_PROBE: ${{ needs.validation.outputs.apple-host }}
-          SIMULATOR_PROBE: ${{ needs.validation.outputs.apple-simulator }}
-        run: |
-          passed() { [[ "$1" == success || ( "$1" == skipped && "$2" == success ) ]]; }
-          if ! passed "$HOST_RESULT" "$HOST_PROBE" || ! passed "$SIMULATOR_RESULT" "$SIMULATOR_PROBE"; then
-            echo "::error::Apple host tests: $HOST_RESULT (probe $HOST_PROBE); Apple simulator build: $SIMULATOR_RESULT (probe $SIMULATOR_PROBE)"
-            exit 1
-          fi
+      - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
+        with:
+          jobs: ${{ toJSON(needs) }}
+          allowed-skips: >-
+            ${{ needs.plan.outputs.skips }},
+            ${{ needs.apple-probe.outputs.host == 'success' && 'apple-host' || '' }},
+            ${{ needs.apple-probe.outputs.simulator == 'success' && 'apple-simulator' || '' }}

@@ -1,6 +1,7 @@
 # ADR 0009: Gate merges on content-hashed check results
 
-Status: Accepted.
+Status: Accepted. [ADR 0014](0014-path-routed-ci-lanes.md) decides which lanes
+start; the cache still decides whether a started lane reruns.
 
 ## Context
 
@@ -31,12 +32,12 @@ is roughly ten times the allowance.
   credentials and use only their runner's local cache. A
   result produced locally for the same input hash satisfies the merge gate
   exactly as a CI result does.
-- The Apple lane runs locally through the same Nx target. The existing Linux
-  validation job probes each Apple target after dependency setup. A verified
+- The Apple lane runs locally through the same Nx target. A Linux job probes
+  each Apple target after dependency setup. A verified
   cache hit skips that target's macOS job entirely; a miss or failed probe
   falls back to hosted macOS, which probes again before native setup. The
-  required Apple aggregate accepts native success or a skipped native job
-  backed by its own verified Linux probe hit.
+  required check accepts native success or a skipped native job backed by its
+  own verified Linux probe hit.
 - Apple inputs exclude the named root documentation and the explicitly excluded
   CubbyAPI README. Markdown copied as a test fixture or build resource remains
   keyed; add new consumed documentation to the inputs when changing the build.

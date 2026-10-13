@@ -22,11 +22,11 @@ outputs:
 runs:
   using: composite
   steps:
+    # A compiler upgrade must never restore objects built by the old one.
     - name: Compute Xcode version hash
       id: xcode-version
-      uses: ./.github/actions/toolchain-hash
-      with:
-        command: xcodebuild -version
+      shell: bash
+      run: echo "hash=$(xcodebuild -version 2>&1 | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
     # App version/build settings affect products, not dependency module identity.
     - name: Hash the package graph
       id: packages

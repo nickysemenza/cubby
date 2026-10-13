@@ -346,10 +346,8 @@ jobs:
       - uses: ./.github/actions/setup-apple-build-cache
         if: steps.cached-app.outcome != 'success'
         id: derived-data
-      - uses: ./.github/actions/toolchain-hash
-        id: native-xcode
-        with:
-          command: xcodebuild -version
+      - id: native-xcode
+        run: echo "hash=$(xcodebuild -version 2>&1 | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apple-test-runner-cache
         id: test-runner
         with:

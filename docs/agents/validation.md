@@ -106,11 +106,14 @@ base ref. Committing, pushing, or handing off work does not trigger additional
 local checks. Report local results and anything unrun without implying that a
 successful push proves correctness.
 
-Every required check must pass for the final PR head's content before merge. A
-passing result in the shared Nx remote cache for the same input hash satisfies
-a check, whether CI or the developer's Mac produced it; CI replays it in
-seconds ([ADR 0009](../adr/0009-content-hash-merge-gate.md),
-[CI](../ci.md#cache-keys-and-the-remote-cache)). Running `pnpm apple check`
+`CI passed` must pass for the final PR head's content before merge. CI starts
+only the lanes whose inputs differ from the last green `main` run
+([ADR 0014](../adr/0014-path-routed-ci-lanes.md)). A passing result in the
+shared Nx remote cache for the same input hash satisfies a started lane's
+check, whether CI or the developer's Mac produced it; CI replays it in seconds
+([ADR 0009](../adr/0009-content-hash-merge-gate.md),
+[CI](../ci.md#cache-keys-and-the-remote-cache)). A check that reads a new
+file belongs in its Nx target's inputs; `pnpm generate` then routes the lane. Running `pnpm apple check`
 locally before a PR therefore lets CI replay the Apple lanes. A green earlier
 commit with different content is not evidence. `main` runs CI after deployment
 starts, so post-merge CI does not replace this gate. A PR that adds a

@@ -1,0 +1,60 @@
+name: "Run Playwright"
+description: >-
+  Restores (or installs) the exact Chromium the installed @playwright/test
+  expects, runs one browser lane, and uploads its report and traces.
+
+inputs:
+  command:
+    description: "Shell command that runs the lane"
+    required: true
+  artifact:
+    description: "Suffix of the uploaded playwright-<sha>-<suffix> artifact"
+    required: true
+  save-browser:
+    description: "Save a freshly installed browser to the cache"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Resolve installed Playwright version
+      id: playwright
+      shell: bash
+      working-directory: apps/web
+      run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+    - name: Restore exact Playwright browser
+      id: browser-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+    - name: Install exact Playwright browser
+      if: steps.browser-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
+    - name: Save exact Playwright browser
+      if: steps.browser-cache.outputs.cache-hit != 'true' && inputs.save-browser == 'true'
+      # Parallel shards race for the same key; the loser's 409 is harmless.
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+    - name: Run Playwright tests
+      shell: bash
+      run: ${{ inputs.command }}
+    - name: Upload Playwright HTML report and traces
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: playwright-${{ github.sha }}-${{ inputs.artifact }}
+        path: |
+          apps/web/playwright-report/**
+          !apps/web/playwright-report/run-manifest.json
+          !apps/web/playwright-report/run-results.json
+          !apps/web/playwright-report/SHA256SUMS
+          !apps/web/playwright-report/workerd-logs/**
+          apps/web/test-results/**/trace.zip
+        if-no-files-found: warn
+        retention-days: 7

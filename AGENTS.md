@@ -20,7 +20,7 @@
   or records, or private source material in docs, comments, fixtures, examples,
   logs/screenshots, PR titles or bodies, review comments, or commit messages.
   Preserve functional public links; describe regressions using sanitized
-  examples. The `commit-msg` hook and the CI `Scope` job reject a live entity
+  examples. The `commit-msg` hook and the CI `Plan` job reject a live entity
   code in a commit message or PR text (`scripts/check-outward-text.ts`); the
   documented example body `4K7M` is the one code they allow.
 - Comments preserve constraints, regressions, contracts, and active TODOs—not

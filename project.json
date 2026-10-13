@@ -91,6 +91,18 @@
       "cache": true,
       "inputs": ["repo"]
     },
+    // .github/ci-lanes.yml matches the Nx inputs of each CI lane's tasks.
+    "ci-lanes": {
+      "command": "node scripts/ci-lanes.ts --check",
+      "cache": true,
+      "inputs": [
+        "{workspaceRoot}/nx.json",
+        "{workspaceRoot}/**/project.json",
+        "{workspaceRoot}/**/package.json",
+        "{workspaceRoot}/scripts/ci-lanes.ts",
+        "{workspaceRoot}/.github/ci-lanes.yml"
+      ]
+    },
     "bindings": {
       "command": "pnpm --filter @cubby/web types:check",
       "cache": true,
