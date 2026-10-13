@@ -80,6 +80,8 @@ struct HeroActionRunnerTests {
     nonisolated private static let deleted = Data(
         #"{"action":"delete","entity":"task","deletedReferences":[],"affectedEdges":[],"sideEffects":{}}"#
             .utf8)
+    nonisolated private static let wishUpdated = Data(
+        #"{"action":"update","entity":"wish","item":{"id":"WSH-4K7M"},"sideEffects":{}}"#.utf8)
     nonisolated private static let discarded = Data(
         #"{"expenseId":"EXP-4K7M","storedQuantity":-2,"inventory":null,"sideEffects":{}}"#.utf8)
 
@@ -107,13 +109,17 @@ struct HeroActionRunnerTests {
         }
     }
 
+    /// Every entity's delete runs through the one kernel `entity.mutate` POST; there is no
+    /// per-entity delete route left to resolve to.
     @Test func deleteResolvesToTheEntitysGeneratedDeleteRoute() throws {
+        var ids: Set<String> = []
         for key in EntityKey.allCases where key.nativeActions.contains(.delete) {
             let plan = try #require(HeroActionRunner.plan(for: .delete, on: key), "\(key)")
-            let id = try #require(HeroActionRunner.operationID(for: plan, on: key), "\(key)")
-            #expect(OperationRoute.all[id]?.method == .delete)
+            ids.insert(try #require(HeroActionRunner.operationID(for: plan, on: key), "\(key)"))
         }
-        // The detail sheet's old "Preview delete impact" gate is now true for resource entities.
+        #expect(ids == ["entity.mutate"])
+        #expect(OperationRoute.all["entity.mutate"]?.method == .post)
+        // The detail sheet's old "Preview delete impact" gate is now true for kernel entities.
         #expect(EntityKey.task.nativeActions.contains(.delete))
     }
 
@@ -162,8 +168,9 @@ struct HeroActionRunnerTests {
         let plan = try #require(HeroActionRunner.plan(for: .delete, on: .task))
         _ = try await runner.perform(plan, on: .task, row: Self.row("TSK-4K7M"), values: [:], confirmed: true)
         let request = try #require(recorder.requests.first)
-        #expect(request.method == "DELETE")
-        #expect(request.path == "/api/v1/tasks/TSK-4K7M")
+        #expect(request.method == "POST")
+        #expect(request.path == "/api/v1/entity/mutate")
+        #expect(request.body == ["action": "delete", "entity": "task", "ids": ["TSK-4K7M"]])
     }
 
     @Test func unconfirmedDiscardSendsNothing() async throws {
@@ -324,20 +331,23 @@ struct HeroActionRunnerTests {
     }
 
     @Test func markPurchasedFlipsTheAcquiredFlagFromItsState() async throws {
-        let recorder = capture { _ in (200, Data()) }
+        let recorder = capture { _ in (200, Self.wishUpdated) }
         let runner = try makeRunner()
         let plan = try #require(HeroActionRunner.plan(for: .markPurchased, on: .wish))
         _ = try? await runner.perform(
             plan, on: .wish, row: Self.row("WSH-4K7M", raw: ["acquiredAt": .null]), values: [:],
             confirmed: false)
         let unacquired = try #require(recorder.requests.first)
-        #expect(unacquired.method == "PATCH")
-        #expect(unacquired.path == "/api/v1/wishes/WSH-4K7M")
-        #expect(unacquired.body["acquired"] == true)
+        #expect(unacquired.method == "POST")
+        #expect(unacquired.path == "/api/v1/entity/mutate")
+        #expect(unacquired.body["action"] == "update")
+        #expect(unacquired.body["entity"] == "wish")
+        #expect(unacquired.body["id"] == "WSH-4K7M")
+        #expect(unacquired.body["data"]?["acquired"] == true)
         _ = try? await runner.perform(
             plan, on: .wish, row: Self.row("WSH-4K7M", raw: ["acquiredAt": "2026-06-03T00:00:00.000Z"]),
             values: [:], confirmed: false)
-        #expect(recorder.requests.last?.body["acquired"] == false)
+        #expect(recorder.requests.last?.body["data"]?["acquired"] == false)
     }
 
     @Test func recordSaleOpensTheExpenseEditorSeededWithTheProduct() async throws {

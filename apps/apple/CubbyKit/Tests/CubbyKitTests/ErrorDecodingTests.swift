@@ -18,7 +18,7 @@ struct ErrorDecodingTests {
         "status-coded errors decode to the right category and detail",
         arguments: [
             (
-                401, "resources.product.get", "error-unauthorized.json",
+                401, "entity.detail", "error-unauthorized.json",
                 ExpectedError.unauthorized(
                     code: "UNAUTHORIZED", reason: "invalid_session", requestId: "req_sample123")
             ),
@@ -54,7 +54,7 @@ struct ErrorDecodingTests {
     /// the generated decoders never see a shape they cannot read.
     @Test func outdatedClientDecodesToAnUpdateRequiredError() throws {
         let error = CubbyAPIError.decode(
-            status: 426, operationID: "resources.product.list",
+            status: 426, operationID: "entity.list",
             body: try Fixtures.data(named: "error-update-required.json")
         )
         #expect(error.isClientUpdateRequired)
@@ -68,7 +68,7 @@ struct ErrorDecodingTests {
 
     @Test func status400DecodesValidationIssues() throws {
         let error = CubbyAPIError.decode(
-            status: 400, operationID: "resources.product.create",
+            status: 400, operationID: "entity.mutate",
             body: try Fixtures.data(named: "error-validation.json")
         )
         #expect(error.detail?.code == "VALIDATION_ERROR")
@@ -101,7 +101,7 @@ struct ErrorDecodingTests {
 
     @Test func anHTMLBodyDecodesToANilDetail() throws {
         let error = CubbyAPIError.decode(
-            status: 502, operationID: "resources.product.list",
+            status: 502, operationID: "entity.list",
             body: try Fixtures.data(named: "error-html-502.txt")
         )
         #expect(error.status == 502)
@@ -154,7 +154,7 @@ struct ErrorDecodingTests {
     /// that into a bodyless `CubbyAPIError` instead of leaking the raw `ClientError`.
     @Test func unwrappingATransportFailureWithAStatusBecomesABodylessError() throws {
         let wrapped = ClientError(
-            operationID: "resources.product.get", operationInput: (),
+            operationID: "entity.detail", operationInput: (),
             response: HTTPResponse(status: 503),
             causeDescription: "transport failure", underlyingError: URLError(.timedOut)
         )

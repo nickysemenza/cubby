@@ -3,7 +3,8 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, closed]
+    # A journey label starts a journey-only run (docs/ci.md#journeys).
+    types: [opened, synchronize, reopened, closed, labeled]
   push:
     branches: [main]
   schedule:
@@ -12,11 +13,23 @@ on:
     # dispatch runs the same full pass (and seeds main's native caches).
     - cron: "23 8 * * *"
   workflow_dispatch:
+    inputs:
+      journey:
+        description: >-
+          Empty runs full CI. Otherwise runs only this journey on the
+          dispatched ref: simulator-search, simulator-inputs, tester-army-web,
+          tester-army-visual, tester-army-explore, tester-army-ios,
+          tester-army-both, tester-army-import or tester-army-all.
+        type: string
+        default: ""
 
 concurrency:
   # A merged PR's github.ref becomes main; retain its pre-merge group so
-  # closure cancels the PR run without touching main's push run.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.ref }}-${{ github.event_name }}
+  # closure cancels the PR run without touching main's push run. A journey
+  # label's run and a journey dispatch get their own groups, so they neither
+  # cancel nor are cancelled by CI; any other label's run is alone and exits.
+  # The journey labels are repeated in plan's `if` and its journey step.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.ref }}-${{ github.event_name }}${{ github.event.action == 'labeled' && (contains(fromJSON('["tester-army", "tester-army:ios", "tester-army:import", "simulator-e2e"]'), github.event.label.name) && '-journeys' || format('-{0}', github.run_id)) || inputs.journey && format('-{0}', inputs.journey) || '' }}
   # PR updates supersede old results. Main must finish publishing reusable
   # caches. The default single pending slot retains only the newest waiting run.
   cancel-in-progress: ${{ github.event_name != 'push' }}
@@ -27,9 +40,10 @@ permissions:
   pull-requests: read
 
 env:
-  # The nightly backstop bypasses the Nx cache for every command, nested ones
-  # included; other runs replay passes for the same input hash.
-  NX_SKIP_NX_CACHE: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'true' || 'false' }}
+  # The nightly backstop and a full manual run bypass the Nx cache for every
+  # command, nested ones included; other runs, journey dispatches included,
+  # replay passes for the same input hash.
+  NX_SKIP_NX_CACHE: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.journey)) && 'true' || 'false' }}
   # Read by setup-node-with-deps, which connects Nx to the shared remote cache
   # only when both are present (a fork PR receives neither) and it responds.
   NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
@@ -38,21 +52,103 @@ env:
 # `plan` starts only the lanes whose Nx inputs changed since the last green
 # main run; a started lane still replays unchanged tasks from the Nx cache.
 # `CI passed` is the one required check (docs/adr/0014-path-routed-ci-lanes.md).
+# A journey-only run starts only the informational journey jobs.
 jobs:
   plan:
     name: Plan
-    # The closed event only enters concurrency to cancel the previous run.
-    if: github.event.action != 'closed'
+    # The closed event only enters concurrency to cancel the previous run;
+    # another label's event starts nothing.
+    if: >-
+      github.event.action != 'closed' && (github.event.action != 'labeled' ||
+      contains(fromJSON('["tester-army", "tester-army:ios", "tester-army:import", "simulator-e2e"]'), github.event.label.name))
     runs-on: ubuntu-slim
     timeout-minutes: 5
     outputs:
-      lanes: ${{ steps.select.outputs.lanes }}
-      matrix: ${{ steps.select.outputs.matrix }}
-      optional: ${{ steps.select.outputs.optional }}
+      lanes: ${{ steps.select.outputs.lanes || '[]' }}
+      matrix: ${{ steps.select.outputs.matrix || '[]' }}
+      optional: ${{ steps.select.outputs.optional || '[]' }}
       skips: ${{ steps.select.outputs.skips }}
       tree: ${{ steps.tree.outputs.tree }}
+      ref: ${{ steps.journeys.outputs.ref }}
+      web: ${{ steps.journeys.outputs.web }}
+      ios: ${{ steps.journeys.outputs.ios }}
+      simulator: ${{ steps.journeys.outputs.simulator }}
     steps:
+      # Journeys are informational and opt-in: a PR's journey labels, or a
+      # dispatch naming one. A labeled event or a journey dispatch is a
+      # journey-only run that checks out the PR head (or dispatched ref);
+      # otherwise labels present at a push ride along in CI's concurrency
+      # group. `opened` leaves labels to the `labeled` events GitHub sends
+      # after it. Fork PRs never run journeys.
+      - name: Select journeys
+        id: journeys
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTION: ${{ github.event.action }}
+          JOURNEY: ${{ inputs.journey }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+          labels='[]'
+          case "$JOURNEY" in
+            "" | simulator-search | simulator-inputs | tester-army-web | tester-army-visual | tester-army-explore \
+              | tester-army-ios | tester-army-both | tester-army-import | tester-army-all) ;;
+            *) echo "::error::Unknown journey '$JOURNEY'"; exit 1 ;;
+          esac
+          if [[ "$GITHUB_EVENT_NAME" == pull_request && "$ACTION" == labeled ]]; then
+            mode=journeys
+            # A later push supersedes this run; that push's CI run starts the
+            # still-labeled journeys on the new head.
+            pull="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")"
+            if jq -e --arg head "$HEAD" --arg repo "$GITHUB_REPOSITORY" \
+              '.state == "open" and .head.sha == $head and .head.repo.full_name == $repo' <<< "$pull" > /dev/null; then
+              labels="$(jq -c '[.labels[].name]' <<< "$pull")"
+            else
+              echo "::notice::PR $PR moved past $HEAD, closed, or comes from a fork; no journey runs"
+            fi
+          elif [[ -n "$JOURNEY" ]]; then
+            mode=journeys
+          else
+            mode=ci
+            if [[ "$GITHUB_EVENT_NAME" == pull_request && "$ACTION" != opened && "$HEAD_REPO" == "$GITHUB_REPOSITORY" ]]; then
+              labels="$LABELS"
+            fi
+          fi
+          selected="$(jq -nc --argjson labels "$labels" --arg journey "$JOURNEY" '
+            def in_list($names): . as $value | $names | index($value) != null;
+            if $journey != "" then {
+              web: ($journey | in_list(["tester-army-web", "tester-army-both", "tester-army-all", "tester-army-visual", "tester-army-explore"])),
+              ios: ($journey | in_list(["tester-army-ios", "tester-army-both", "tester-army-all"])),
+              import: ($journey | in_list(["tester-army-import", "tester-army-all"])),
+              simulator: (if $journey | startswith("simulator-") then $journey | ltrimstr("simulator-") else "" end)
+            } else {
+              web: ("tester-army" | in_list($labels)),
+              ios: ("tester-army:ios" | in_list($labels)),
+              import: ("tester-army:import" | in_list($labels)),
+              simulator: (if "simulator-e2e" | in_list($labels) then "search" else "" end)
+            } end
+            # The label runs three web smoke journeys; a dispatch, the catalog.
+            | .web = [
+                if .web then {lane: "web", harness: "standard", db: true,
+                  mode: ({"tester-army-visual": "visual", "tester-army-explore": "explore"}[$journey] // "agent"),
+                  timeout: (if $journey == "" then 10 else 25 end),
+                  journeys: (if $journey == "" then "product-rename,receive-purchase,field-product-tags" else "" end)}
+                else empty end,
+                if .import then {lane: "import", harness: "coupled", db: true, mode: "agent", timeout: 30, journeys: ""}
+                else empty end
+              ]
+            | del(.import)')"
+          {
+            echo "mode=$mode"
+            echo "ref=${HEAD:-$GITHUB_SHA}"
+            jq -r 'to_entries[] | "\(.key)=\(.value | if type == "string" then . else tojson end)"' <<< "$selected"
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::Run mode: $mode; journeys: $selected"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.journeys.outputs.mode == 'ci'
         with:
           sparse-checkout: |
             .github/ci-lanes.yml
@@ -63,7 +159,7 @@ jobs:
       # The commit-msg hook gates commit messages; the PR title and body are
       # the other outward text AGENTS.md keeps free of live entity codes.
       - name: PR text names no live entity codes
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.journeys.outputs.mode == 'ci'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
@@ -74,6 +170,7 @@ jobs:
       # pushes the same tree. `CI passed` publishes it only after every job.
       - name: Record the tested tree
         id: tree
+        if: steps.journeys.outputs.mode == 'ci'
         run: echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
       # A main push of a tree that already passed starts no lane. Fork runs
       # don't count, and an API failure falls back to ordinary routing.
@@ -95,7 +192,7 @@ jobs:
       # replay the same pass. Nightly and manual runs have no baseline.
       - name: Find the last green main run
         id: base
-        if: (github.event_name == 'pull_request' || github.event_name == 'push') && steps.tested.outputs.found != 'true'
+        if: (github.event_name == 'pull_request' || github.event_name == 'push') && steps.journeys.outputs.mode == 'ci' && steps.tested.outputs.found != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -113,8 +210,10 @@ jobs:
           base: ${{ steps.base.outputs.sha }}
           filters: .github/ci-lanes.yml
           predicate-quantifier: some-with-excludes
+      # A journey-only run selects no lane.
       - name: Select lanes
         id: select
+        if: steps.journeys.outputs.mode == 'ci'
         env:
           CHANGES: ${{ steps.filter.outputs.changes }}
           BASE: ${{ steps.base.outputs.sha }}
@@ -478,11 +577,286 @@ jobs:
           cache-hit: ${{ steps.apple.outputs.spm-clones-cache-hit }}
           matched-key: ${{ steps.apple.outputs.spm-clones-cache-matched-key }}
 
+  # Informational journeys (docs/tester-army.md), outside `CI passed`. Plan
+  # selects them from PR labels or a journey dispatch; they test the PR head.
+  # The GitHub reporter comments on the PR from the pull_request event.
+  tester-army-web:
+    name: Tester Army ${{ matrix.lane }} (informational)
+    needs: plan
+    if: needs.plan.outputs.web != '[]'
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.web) }}
+    timeout-minutes: ${{ matrix.timeout }}
+    services: *test-databases
+    env:
+      TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN }}
+      TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
+      TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL }}
+      TESTER_ARMY_AGENT_MODEL: ${{ vars.TESTER_ARMY_AGENT_MODEL }}
+      TESTER_ARMY_AGENT_EFFORT: ${{ vars.TESTER_ARMY_AGENT_EFFORT }}
+      TESTER_ARMY_WEB_MODE: ${{ matrix.mode }}
+      TESTER_ARMY_LANE: ${{ matrix.lane }}
+      TESTER_ARMY_JOURNEYS: ${{ matrix.journeys }}
+      E2E_TELEMETRY_DISABLED: "1"
+      TESTER_ARMY_CI_EVIDENCE: "1"
+      GITHUB_TOKEN: ${{ github.token }}
+      # PR runs replay verified actions; a dispatch runs live.
+      TESTER_ARMY_REPLAY: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: restore
+      - name: Restore verified action recordings
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/web/.e2e/cache
+          key: tester-army-replay-v1-${{ matrix.lane }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            tester-army-replay-v1-${{ matrix.lane }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
+      - run: pnpm test:e2e:agent:web -- --harness ${{ matrix.harness }}
+      - name: Save verified action recordings
+        if: always() && !cancelled() && github.event_name == 'pull_request'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/web/.e2e/cache
+          key: tester-army-replay-v1-${{ matrix.lane }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Save synthetic run bundle
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tester-army-${{ matrix.lane }}-run
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            artifacts/tester-army/web/*/run-manifest.json
+            artifacts/tester-army/web/*/run-results.json
+            artifacts/tester-army/web/*/agent-summary.json
+            artifacts/tester-army/web/*/gateway-usage.json
+            artifacts/tester-army/web/*/SHA256SUMS
+      - name: Save screenshots, failure traces and video
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tester-army-${{ matrix.lane }}-evidence-${{ needs.plan.outputs.ref }}
+          retention-days: 7
+          if-no-files-found: warn
+          include-hidden-files: true
+          path: |
+            apps/web/.e2e/runs/web/**/report.json
+            apps/web/.e2e/runs/web/**/junit.xml
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/screenshots/*.png
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/snapshots/**/*.png
+            apps/web/.e2e/runs/web/**/results/*/trace.md
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/screen-at-failure.txt
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/video/*.webm
+            apps/web/.e2e/runs/web/**/results/*/attempt-*/video/*.mp4
+
+  # Native journeys reuse the simulator app the simulator build or an earlier
+  # run cached; that job is skipped on a probe hit or an unselected lane, so
+  # only its failure stops them. setup-apple probes the app before the large
+  # SPM clone and DerivedData restores, and the journey command builds a miss.
+  tester-army-ios:
+    name: Tester Army ios ${{ matrix.shard }}/2 (informational)
+    needs: [plan, apple-simulator]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.apple-simulator.result != 'failure' && needs.plan.outputs.ios == 'true' }}
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    runs-on: xcode-27
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    timeout-minutes: 40
+    env:
+      TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN }}
+      TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
+      TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL }}
+      E2E_TELEMETRY_DISABLED: "1"
+      TESTER_ARMY_CI_EVIDENCE: "1"
+      GITHUB_TOKEN: ${{ github.token }}
+      TESTER_ARMY_REPLAY: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+      CUBBY_SIM_DB_EXTERNAL: "1"
+      TESTER_ARMY_SHARD: ${{ matrix.shard }}/2
+      TESTER_ARMY_LANE: ios-${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+      - uses: ./.github/actions/setup-apple
+        id: apple
+        with:
+          ffi-targets: sim
+          wasm: restore
+          build-cache: "true"
+          probe: apple:simulator-build
+      - name: Restore verified action recordings
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/web/.e2e/cache
+          key: tester-army-replay-v1-ios-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            tester-army-replay-v1-ios-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - run: pnpm test:e2e:agent:preflight
+      - uses: ./.github/actions/setup-apple-test-runner-cache
+        id: test-runner
+        with:
+          toolchain-hash: ${{ steps.apple.outputs.toolchain-hash }}
+      - uses: ./.github/actions/start-native-postgres
+      - run: pnpm test:e2e:agent:ios
+      - name: Save Apple test runner cache
+        uses: ./.github/actions/save-apple-test-runner-cache
+        with:
+          path: ${{ steps.test-runner.outputs.cache-paths }}
+          key: ${{ steps.test-runner.outputs.cache-key }}
+          cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
+          matched-key: ${{ steps.test-runner.outputs.matched-key }}
+      - name: Save DerivedData cache
+        if: steps.apple.outputs.probe-hit != 'true'
+        uses: ./.github/actions/save-cache-main-only
+        with:
+          path: ${{ steps.apple.outputs.cache-paths }}
+          key: ${{ steps.apple.outputs.cache-key }}
+          cache-hit: ${{ steps.apple.outputs.cache-hit }}
+          matched-key: ${{ steps.apple.outputs.save-matched-key }}
+      - name: Save verified action recordings
+        if: always() && !cancelled() && github.event_name == 'pull_request'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/web/.e2e/cache
+          key: tester-army-replay-v1-ios-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Save synthetic iOS run bundle
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tester-army-ios-${{ matrix.shard }}-run
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            artifacts/sim-tester-army-e2e/*/run-manifest.json
+            artifacts/sim-tester-army-e2e/*/run-results.json
+            artifacts/sim-tester-army-e2e/*/agent-summary.json
+            artifacts/sim-tester-army-e2e/*/native-driver-diagnostics.json
+            artifacts/sim-tester-army-e2e/*/SHA256SUMS
+      - name: Save screenshots, failure traces and video
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tester-army-ios-${{ matrix.shard }}-evidence-${{ needs.plan.outputs.ref }}
+          retention-days: 7
+          if-no-files-found: warn
+          include-hidden-files: true
+          path: |
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/report.json
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/junit.xml
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/screenshots/*.png
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/trace.md
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/screen-at-failure.txt
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/video/*.webm
+            apps/web/.e2e/runs/sim-tester-army-e2e/**/results/*/attempt-*/video/*.mp4
+
+  simulator-e2e:
+    name: iPhone simulator E2E (informational)
+    needs: [plan, apple-simulator]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.apple-simulator.result != 'failure' && needs.plan.outputs.simulator != '' }}
+    runs-on: xcode-27
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+      - uses: ./.github/actions/setup-apple
+        id: apple
+        with:
+          ffi-targets: sim
+          wasm: restore
+          build-cache: "true"
+          probe: apple:simulator-build
+      - uses: ./.github/actions/setup-apple-test-runner-cache
+        id: test-runner
+        with:
+          toolchain-hash: ${{ steps.apple.outputs.toolchain-hash }}
+      - uses: ./.github/actions/start-native-postgres
+      - name: Run native read and write against a disposable database
+        env:
+          CUBBY_SIM_DB_EXTERNAL: "1"
+          CI: "1"
+          SIMULATOR_JOURNEY: ${{ needs.plan.outputs.simulator }}
+        run: |
+          if [[ "$SIMULATOR_JOURNEY" == "inputs" ]]; then
+            pnpm test:e2e:sim -- --input-journey
+          else
+            pnpm test:e2e:sim -- --extended-journey
+          fi
+      - name: Save Apple test runner cache
+        uses: ./.github/actions/save-apple-test-runner-cache
+        with:
+          path: ${{ steps.test-runner.outputs.cache-paths }}
+          key: ${{ steps.test-runner.outputs.cache-key }}
+          cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
+          matched-key: ${{ steps.test-runner.outputs.matched-key }}
+      - name: Save DerivedData cache
+        if: steps.apple.outputs.probe-hit != 'true'
+        uses: ./.github/actions/save-cache-main-only
+        with:
+          path: ${{ steps.apple.outputs.cache-paths }}
+          key: ${{ steps.apple.outputs.cache-key }}
+          cache-hit: ${{ steps.apple.outputs.cache-hit }}
+          matched-key: ${{ steps.apple.outputs.save-matched-key }}
+      # Upload only files whose checksums the run sealed.
+      - name: Collect verified simulator E2E evidence
+        if: always()
+        shell: python
+        run: |
+          import hashlib
+          import pathlib
+          import shutil
+
+          for checksums in pathlib.Path("artifacts").glob("sim*-e2e/*/SHA256SUMS"):
+              source = checksums.parent
+              target = pathlib.Path("artifacts/sealed-simulator-e2e") / source.name
+              target.mkdir(parents=True, exist_ok=True)
+              for line in checksums.read_text().splitlines():
+                  digest, name = line.split("  ", 1)
+                  file = source / name
+                  if not file.resolve().is_relative_to(source.resolve()):
+                      raise ValueError("Sealed evidence escapes its run directory")
+                  if hashlib.sha256(file.read_bytes()).hexdigest() != digest:
+                      raise ValueError(f"Sealed evidence checksum mismatch: {name}")
+                  destination = target / name
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(file, destination)
+              shutil.copyfile(checksums, target / checksums.name)
+      - name: Save simulator E2E run bundle
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: simulator-e2e-run
+          if-no-files-found: error
+          retention-days: 7
+          path: artifacts/sealed-simulator-e2e
+
   # The one required check. A job may be skipped only when plan skipped its
   # lane or the probe verified its cached Apple pass; any other skip, failure
-  # (except the probe's), or cancellation fails it.
+  # (except the probe's), or cancellation fails it. A label event or journey
+  # dispatch is no merge evidence: it records no tree, and because a skipped
+  # job still reports success, its skipped job is named apart from the gate.
   ci-passed:
-    name: CI passed
+    name: ${{ (github.event.action == 'labeled' || inputs.journey) && 'Journey run (not the merge gate)' || 'CI passed' }}
     needs:
       [
         plan,
@@ -494,7 +868,7 @@ jobs:
         apple-host,
         apple-simulator,
       ]
-    if: always() && github.event.action != 'closed'
+    if: always() && github.event.action != 'closed' && github.event.action != 'labeled' && !inputs.journey
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:

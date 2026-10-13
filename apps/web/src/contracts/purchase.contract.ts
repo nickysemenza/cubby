@@ -173,16 +173,14 @@ export const purchaseContract = defineContract("purchase", {
     output: relationMutationOut,
     invalidates: ["purchaseProduct"],
   }),
-  // Agent-facing (MCP `expenses`, `purchase_import`): off the HTTP API.
+  // Agent-facing (MCP `expenses`, `purchase_import`).
   /** `split` plus the conservation check an agent confirms before moving on. */
   splitWithDelta: mutation({
-    http: false,
     input: splitExpenseInput,
     output: splitExpenseWithDeltaOut,
     invalidates: ["expense"],
   }),
   reclassifyDocument: mutation({
-    http: false,
     input: reclassifyPurchaseDocumentInput,
     output: purchaseOut,
     invalidates: ["purchase"],

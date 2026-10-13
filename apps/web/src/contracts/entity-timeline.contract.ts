@@ -2,6 +2,7 @@ import type { EntityTimelineOut } from "@cubby/schemas/entity-timeline";
 import { z } from "zod";
 
 import { defineContract, query } from "~/contracts/define";
+import { kernelTimelineWire } from "~/contracts/entity-kernel-wire";
 import {
   type EntityTimelineInputByEntity,
   type TimelineEntity,
@@ -16,11 +17,11 @@ export const entityTimelineContract = defineContract("entity", {
     },
     // Type-only carriers: the per-entity runtime schemas live in the generated
     // timeline bindings and are applied by the browser `parse` policy and the
-    // server handler; the HTTP router substitutes the real wire schema.
+    // server handler; HTTP carries the loose kernel wire.
     input: z.custom<EntityTimelineInputByEntity[TimelineEntity]>(),
     output: z.custom<EntityTimelineOut>(),
-    // HTTP serves these as `GET /<plural>/timeline` instead.
-    http: false,
+    httpWire: kernelTimelineWire,
+    native: "Entity timelines",
     observability: { entities: timelineEntities },
   }),
 });

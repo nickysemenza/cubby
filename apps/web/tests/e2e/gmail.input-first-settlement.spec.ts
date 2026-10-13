@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -172,12 +173,11 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
         },
       },
     });
-    const allowlist = await page.request.patch(
-      `/api/v1/vendors/${prerequisites.vendor.id}`,
-      {
-        headers: { Origin: e2eRuntime.baseURL },
-        data: { browserDomains: [names.host] },
-      },
+    const allowlist = await entityApi(page.request).update(
+      "vendor",
+      prerequisites.vendor.id,
+      { browserDomains: [names.host] },
+      { headers: { Origin: e2eRuntime.baseURL } },
     );
     expect(allowlist.ok(), await allowlist.text()).toBe(true);
     const run = await prepareCapturedRetailerOrder({

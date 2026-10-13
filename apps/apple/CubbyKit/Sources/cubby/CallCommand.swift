@@ -9,7 +9,7 @@ struct Call: AsyncParsableCommand {
 
     @OptionGroup var global: GlobalOptions
 
-    @Argument(help: "Operation id, e.g. resources.product.list, upc.lookup.")
+    @Argument(help: "Operation id, e.g. entity.list, upc.lookup.")
     var operationID: String = ""
 
     @Flag(name: .customLong("list"), help: "Print every operation id and exit.")

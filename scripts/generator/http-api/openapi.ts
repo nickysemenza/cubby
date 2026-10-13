@@ -2,14 +2,13 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { generateOpenApi, type SchemaTransformerSync } from "@ts-rest/open-api";
 import { z } from "zod";
-import type {
-  CompiledEntity,
-  EntityArtifacts,
-} from "../entities/declarations.ts";
-import type { HttpResources } from "../entities/render/index.ts";
+import type { EntityArtifacts } from "../entities/declarations.ts";
+import type { KernelActions } from "../entities/render/index.ts";
 import type { HttpMetadata } from "../../../apps/web/src/lib/http-api/router.ts";
 import {
   discriminatorOf,
+  passThrough,
+  toWire,
   wireProjection,
   wireRegistry,
 } from "../../../apps/web/src/lib/http-api/wire.ts";
@@ -35,10 +34,10 @@ import {
 } from "./document-passes.ts";
 import { registerDiscriminatedUnionMembersForIo } from "./discriminator-registration.ts";
 import type { EntityOutputs } from "./api-types.ts";
+import { renderEntityKernelArtifacts } from "./entity-kernel.ts";
 import { renderNativeArtifacts } from "./native.ts";
-import { nativeComponents, projectNativeDocument } from "./native-document.ts";
 import { pascal, registerSchemaNames } from "./schema-names.ts";
-import { TYPE_OVERRIDES } from "./type-overrides.ts";
+import { NATIVE_TYPED_RECORDS, TYPE_OVERRIDES } from "./type-overrides.ts";
 
 const WEB_SRC = new URL("../../../apps/web/src/", import.meta.url);
 const webModule = (path: string) =>
@@ -46,8 +45,8 @@ const webModule = (path: string) =>
 
 /**
  * Production's session cookie: Secure cookies get better-auth's `__Secure-`
- * prefix. The document is served as a static asset, so nothing rewrites this
- * at request time.
+ * prefix. The document is committed for the Apple client, so nothing
+ * rewrites this at request time.
  */
 const SESSION_COOKIE_NAME = "__Secure-better-auth.session_token";
 
@@ -74,11 +73,42 @@ const buildOpenApiDocument = async (): Promise<{
     output: z.registry<{ id: string }>(),
   };
 
+  // No route reaches the keep-list records, so project them here: a named
+  // export by its name, an entity detail under `<Entity>Detail`.
+  const { getEntityDetailOutputSchema } = await webModule(
+    "entity/generated/entity-details.gen.ts",
+  );
+  for (const name of NATIVE_TYPED_RECORDS) {
+    const exported = named.get(name);
+    if (exported !== undefined) {
+      toWire(exported, "output");
+      continue;
+    }
+    const entity = /^(?<entity>[A-Z][a-z]+)Detail$/u.exec(name)?.groups?.entity;
+    if (entity === undefined)
+      throw new Error(
+        `NATIVE_TYPED_RECORDS: ${name} is neither an export nor <Entity>Detail`,
+      );
+    registries.output.add(
+      toWire(getEntityDetailOutputSchema(entity.toLowerCase()), "output"),
+      { id: name },
+    );
+  }
+
   // A named domain schema's wire projections are components under the export
   // name, so a nested reference resolves to `#/components/schemas/<Name>`
   // directly. A scalar projects to the same instance on both sides and keeps
   // one name; an object that serves both sides gets an `Input` twin.
   for (const [name, domain] of named) {
+    // A schema reached only through a `z.lazy` has no projection until the
+    // document walks it, so a pass-through scalar export is projected here
+    // to keep its name (`SignedProductQuantity` inside `SplitExpenseOut`).
+    if (
+      wireProjection(domain, "output") === undefined &&
+      wireProjection(domain, "input") === undefined &&
+      passThrough.has(domain._zod.def.type)
+    )
+      toWire(domain, "output");
     const output = wireProjection(domain, "output");
     const input = wireProjection(domain, "input");
     // A pass-through projection is the domain instance itself; it can be
@@ -207,30 +237,12 @@ const buildOpenApiDocument = async (): Promise<{
 
   /**
    * The component name of a route-level schema that is not a named export:
-   * resource routes name their bodies and results after the entity, RPC routes
-   * after the operation.
+   * the operation's name.
    */
   const routeComponentId = (
     metadata: HttpMetadata,
     type: "body" | "response",
   ): string => {
-    if (metadata.resource !== undefined) {
-      const entity = pascal(metadata.entity ?? "");
-      switch (metadata.resource) {
-        case "list":
-          return `${entity}ListPage`;
-        case "timeline":
-          return `${entity}Timeline`;
-        case "get":
-          return `${entity}Detail`;
-        case "create":
-          return `${entity}Create${type === "body" ? "Body" : "Result"}`;
-        case "update":
-          return `${entity}Update${type === "body" ? "Body" : "Result"}`;
-        case "delete":
-          return `${entity}DeleteResult`;
-      }
-    }
     const operation = metadata.operation.split(".").map(pascal).join("");
     return `${operation}${type === "response" ? "Output" : "Input"}`;
   };
@@ -257,7 +269,7 @@ const buildOpenApiDocument = async (): Promise<{
       setOperationId: "concatenated-path",
       operationMapper: (operation, route) => {
         const metadata = httpMetadataSchema.parse(route.metadata);
-        operation.tags = [metadata.entity ?? metadata.operation.split(".")[0]!];
+        operation.tags = [metadata.operation.split(".")[0]!];
         // Query parameters are plain form values: repeat a key for a list.
         for (const parameter of operation.parameters ?? [])
           if (!("$ref" in parameter) && parameter.in === "query")
@@ -274,31 +286,20 @@ const buildOpenApiDocument = async (): Promise<{
           for (const [status] of errors) delete operation.responses[status];
           operation.responses.default = { ...first, description: "Error" };
         }
-        if (metadata.resource === "list")
-          operation.description =
-            "Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.";
-        if (metadata.resource === "create") {
-          const response = operation.responses[201];
-          if (response && !("$ref" in response))
-            response.headers = {
-              Location: {
-                schema: { type: "string" },
-                description: "Created resource URL",
-              },
-            };
-        }
         return operation;
       },
       schemaTransformer: ({ schema, appRoute, type }) => {
         if (!(schema instanceof z.ZodType) || type === "header") return null;
+        if (type === "path")
+          throw new Error(
+            `${appRoute.path}: HTTP routes take no path parameters`,
+          );
         // A query schema is the coercing projection: emitted on its output
         // side so a parameter documents the logical type (integer, boolean,
         // array) rather than the text it accepts.
-        if (type === "query" || type === "path")
+        if (type === "query")
           return asSchemaObject(
-            parameterObject(
-              inlineSchema(schema, type === "query" ? "output" : "input"),
-            ),
+            parameterObject(inlineSchema(schema, "output")),
           );
         const io = type === "response" ? "output" : "input";
         const registry = registries[io];
@@ -381,7 +382,9 @@ const buildOpenApiDocument = async (): Promise<{
   ];
   const components = pruneUnreachableComponents(
     document,
-    passes.reduce((current, pass) => pass(current), emitted),
+    untypeJsonValueComponents(
+      passes.reduce((current, pass) => pass(current), emitted),
+    ),
   );
   /**
    * Nullability the passes above could not express in a form a generated
@@ -444,10 +447,6 @@ const buildOpenApiDocument = async (): Promise<{
   return { document, components, serialized };
 };
 
-const queryParameters = z.array(
-  z.looseObject({ name: z.string().optional(), in: z.string().optional() }),
-);
-
 const componentName = (ref: string) =>
   ref.startsWith("#/components/schemas/")
     ? ref.slice("#/components/schemas/".length)
@@ -463,6 +462,31 @@ const refsIn = (value: OpenApiDocument["paths"] | JsonSchema | undefined) =>
   );
 
 /**
+ * Lists render from the entity manifest: the Apple client reads these bodies
+ * as `JSONValue` and the server parses each with the entity's own schema, so
+ * their per-entity variants (~170 generated types) were compile cost only.
+ */
+const JSON_VALUE_COMPONENTS = [
+  "EntityListBaseOutput",
+  "EntityListEnrichmentInput",
+  "EntityListEnrichmentOutput",
+  "EntityListInput",
+  "EntityListSummaryOutput",
+] as const;
+
+const untypeJsonValueComponents = (components: Record<string, JsonSchema>) => {
+  const untyped = { ...components };
+  for (const name of JSON_VALUE_COMPONENTS) {
+    if (untyped[name] === undefined)
+      throw new Error(
+        `JSONValue component #/components/schemas/${name} is not in the document`,
+      );
+    untyped[name] = { type: "object", additionalProperties: true };
+  }
+  return untyped;
+};
+
+/**
  * Only the components some path reaches survive: every named export is
  * registered as a component whether or not a route uses it, and each unused
  * one is another type a generated client carries. The overrides must name
@@ -473,12 +497,19 @@ const pruneUnreachableComponents = (
   components: Record<string, JsonSchema>,
 ): Record<string, JsonSchema> => {
   const reachable = new Set<string>();
-  const queue = [...refsIn(document.paths)];
+  const queue = [...refsIn(document.paths), ...NATIVE_TYPED_RECORDS];
   for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
     if (reachable.has(name)) continue;
     reachable.add(name);
     queue.push(...refsIn(components[name]));
   }
+  const missingRecords = NATIVE_TYPED_RECORDS.filter(
+    (name) => components[name] === undefined,
+  );
+  if (missingRecords.length > 0)
+    throw new Error(
+      `NATIVE_TYPED_RECORDS name missing components: ${missingRecords.join(", ")}`,
+    );
   const missingOverrides = Object.keys(TYPE_OVERRIDES).filter(
     (name) => !reachable.has(name),
   );
@@ -492,83 +523,30 @@ const pruneUnreachableComponents = (
 };
 
 /**
- * Every compiled filter `wire` binding must be a query parameter of the
- * entity's list route: the native filter UI sends exactly those names.
- */
-const checkFilterWires = (
-  document: OpenApiDocument,
-  resources: HttpResources,
-  entities: readonly CompiledEntity[],
-) => {
-  const problems: string[] = [];
-  for (const entity of entities) {
-    const resource = resources[entity.key];
-    if (resource === undefined || !resource.verbs.includes("list")) continue;
-    const route = document.paths[`/api/v1/${resource.basePath}`]?.get;
-    const parameters = new Set(
-      queryParameters
-        .parse(route?.parameters ?? [])
-        .flatMap((parameter) =>
-          parameter.in === "query" && parameter.name !== undefined
-            ? [parameter.name]
-            : [],
-        ),
-    );
-    for (const descriptor of entity.filterDescriptors) {
-      const names =
-        descriptor.wire.kind === "param"
-          ? [descriptor.wire.name]
-          : [
-              descriptor.wire.from,
-              descriptor.wire.to,
-              ...(descriptor.wire.presence === undefined
-                ? []
-                : [descriptor.wire.presence]),
-            ];
-      for (const name of names)
-        if (!parameters.has(name))
-          problems.push(
-            `${entity.key}.filters.${descriptor.columnId} binds to ${name}, which is not a query parameter of GET /${resource.basePath}`,
-          );
-    }
-  }
-  if (problems.length > 0)
-    throw new Error(
-      `Filter wire bindings do not match the list routes:\n${problems.join("\n")}`,
-    );
-};
-
-/**
  * Stage 3 of `pnpm generate`: the OpenAPI document and everything derived
  * from it. Imports stage 2's `http-contract.gen.ts` from disk, so it runs
  * after that file is written.
  */
 export async function renderHttpApiArtifacts(
-  resources: HttpResources,
+  actions: KernelActions,
   nativeOperations: readonly string[],
   entityOutputs: EntityOutputs,
-  entities: readonly CompiledEntity[],
 ): Promise<EntityArtifacts[]> {
   const { document, components, serialized } = await buildOpenApiDocument();
-  checkFilterWires(document, resources, entities);
-  const native = nativeComponents(components);
   return [
-    {
-      relativePath: "apps/web/src/lib/generated/http-openapi.gen.json",
-      source: serialized,
-    },
     // swift-openapi-generator's SwiftPM build plugin reads the document and
     // its config from the CubbyAPI target's own source directory.
     {
       relativePath: "apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json",
-      source: `${JSON.stringify(await projectNativeDocument(JSON.parse(serialized), nativeOperations, native), null, 2)}\n`,
+      source: serialized,
     },
     ...renderNativeArtifacts(
       document,
-      native,
-      resources,
+      components,
+      actions,
       nativeOperations,
       entityOutputs,
     ),
+    ...renderEntityKernelArtifacts(actions, nativeOperations),
   ];
 }

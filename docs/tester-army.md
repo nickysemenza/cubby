@@ -218,33 +218,32 @@ original error without starting XCTest again for a UI snapshot. Failures after
 successful preparation still capture the UI tree.
 A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.
-Tester Army iOS jobs first reuse the existing Nx simulator-build cache probe. A cached
-app skips the large Swift package-clone and DerivedData restores; a miss keeps
-the shared compilation setup. FFI verification, project generation and the
-device runner remain necessary even with a cached app.
+Native journey jobs (Tester Army iOS and the simulator journey) first reuse
+the existing Nx simulator-build cache probe through `setup-apple`'s `probe`
+input. A cached app skips the large Swift package-clone and DerivedData
+restores; a miss keeps the shared compilation setup. FFI verification, project
+generation and the device runner remain necessary even with a cached app.
 
-The **E2E journeys** workflow (`e2e-journeys.yaml`) runs only by manual dispatch
-or explicit PR labels. There is no scheduled matrix or changed-file-based
+Journeys are informational jobs in `ci.yaml`; [CI](ci.md#journeys) owns their
+triggers, run modes, concurrency and runner budget. They run only by a journey
+dispatch or explicit PR labels; there is no scheduled matrix or changed-file
 selection of paid journeys. The labels select independent lanes:
 
 - `tester-army`: three web smoke journeys (`product-rename`, `receive-purchase`,
   and `field-product-tags`).
 - `tester-army:ios`: the native catalog in two SDK shards.
 - `tester-army:import`: coupled import journeys.
-- `simulator-e2e`: deterministic simulator journeys.
+- `simulator-e2e`: the deterministic simulator search journey.
 
-`tester-army-pr.yaml` dispatches only labeled, still-open same-repository PRs
-whose current head passed CI. A label added before CI passes waits for its
-completion; a label added afterward dispatches immediately. Labels remain
-active on subsequent pushes. The router rechecks the open PR, exact head,
-repository and current labels before selecting lanes, so removed labels cannot
-start paid work. Manual dispatch selects the requested catalog directly.
+Only same-repository PRs run journeys, and labels remain active on subsequent
+pushes. Adding a label starts its journeys at once, alongside rather than after
+CI; the run rechecks the open PR, exact head, repository and current labels
+before selecting lanes, so removed labels cannot start paid work. A journey
+dispatch selects the requested catalog directly.
 
-No journey lane is required for merge. PR updates, closure and merge cancel
-unfinished label-requested journeys through their PR-specific concurrency
-group. Closed or superseded revisions launch no journeys. Manual dispatch,
-required CI and deployment use independent groups. The GitHub reporter retains
-the PR number and head, comments, summaries and uploaded artifacts.
+No journey lane is required for merge. The GitHub reporter takes the PR number
+and head from the pull_request event and retains comments, summaries and
+uploaded artifacts; a dispatch has no PR to comment on.
 
 Workflow declarations own lane timeouts; they are limits rather than measured
 run times. Hosted costs, timing and findings must justify expanding coverage.
@@ -253,11 +252,10 @@ PR runs enable verified action replay, with separate lane/OS/lockfile caches.
 Each completed run saves a unique recording snapshot even after a journey
 failure, preserving newly verified actions and invalidations. Replay verifies
 the current end state and hands off to live inference when needed; it does not
-reuse a previous test verdict. Automatic dispatch runs from the default branch
-and shares its recording cache across PRs; every replay still verifies the
-current end state. Scheduled runs disable action replay and do not seed it.
+reuse a previous test verdict. Recordings are scoped to the PR's branch, so a
+PR's first run starts cold. Dispatches disable action replay and do not seed
+it.
 
-Manual dispatch accepts the journey choices declared in `e2e-journeys.yaml`.
 There is no schedule; required deterministic checks remain the merge gate.
 Live acceptance uses fresh state across repeated engine runs.
 
@@ -300,7 +298,7 @@ pnpm test:e2e:agent:web -- --journey field-source-claim,finance-split-expense --
 pnpm test:e2e:agent:web -- --journey field-source-claim,finance-split-expense --replay --strict-cache
 ```
 
-The existing E2E journeys workflow exposes visual and explore as manual choices.
+The `tester-army-visual` and `tester-army-explore` journey dispatches run these modes.
 Its existing synthetic artifact allowlist also retains missing PNG candidates.
 Use the normal SDK reports/summary for durations, calls, tokens and replay;
 no separate benchmark runner, report schema or model-free policy is introduced.

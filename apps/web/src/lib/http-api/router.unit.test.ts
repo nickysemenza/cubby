@@ -1,25 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { entityKernelObject } from "~/contracts/entity-kernel-wire";
 import * as contracts from "~/contracts/index";
 import { httpContract } from "~/lib/generated/http-contract.gen";
-import document from "~/lib/generated/http-openapi.gen.json";
 import { START_OPERATIONS } from "~/lib/generated/start-operation-registry.gen";
 
+import document from "../../../../apple/CubbyKit/Sources/CubbyAPI/openapi.json";
 import { httpMetadataSchema, rpcMutation, rpcQuery } from "./router";
 import { checkHttpRoutes, httpRoutes } from "./routes";
+import { toWire } from "./wire";
 
 const routes = httpRoutes(httpContract);
 const metadataOf = (route: (typeof routes)[number]) =>
   httpMetadataSchema.parse(route.metadata);
-const rpc = routes.filter((route) => metadataOf(route).resource === undefined);
+const rpc = routes;
 
 describe("HTTP contract", () => {
-  it("exposes every ordinary operation exactly once, queries as GET and mutations as POST", () => {
+  it("exposes every native operation exactly once, queries as GET or POST and mutations as POST", () => {
     const expected = Object.values(contracts)
       .flatMap((contract) =>
         Object.entries(contract.ops).flatMap(([member, operation]) =>
-          operation.kind === "subscription" || operation.http === false
+          operation.kind === "subscription" || operation.native === undefined
             ? []
             : [`${contract.domain}.${member}`],
         ),
@@ -28,15 +30,15 @@ describe("HTTP contract", () => {
     expect(rpc.map((route) => metadataOf(route).operation).sort()).toEqual(
       expected,
     );
-    // Opted out of HTTP, still a Start operation.
-    for (const excluded of [
+    // Type-only carriers reach HTTP only through their loose kernel wire.
+    for (const kernel of [
       "entity.list",
       "entity.detail",
       "entity.mutate",
       "entity.timeline",
     ]) {
-      expect(expected).not.toContain(excluded);
-      expect(START_OPERATIONS).toHaveProperty(excluded);
+      const route = rpc.find((entry) => metadataOf(entry).operation === kernel);
+      expect(route?.method).toBe("POST");
     }
     const mismatches: string[] = [];
     for (const route of rpc) {
@@ -74,9 +76,7 @@ describe("HTTP contract", () => {
     expect(flat).toMatchObject({ method: "GET" });
     expect(flat?.query instanceof z.ZodType).toBe(true);
     expect(Object.keys(document.paths).sort()).toEqual(
-      [
-        ...new Set(routes.map((route) => route.path.replace(":id", "{id}"))),
-      ].sort(),
+      [...new Set(routes.map((route) => route.path))].sort(),
     );
     expect(document.security).toEqual([
       { apiKey: [] },
@@ -85,28 +85,12 @@ describe("HTTP contract", () => {
     ]);
   });
 
-  it("rejects route collisions and reserved paths", () => {
+  it("rejects route collisions", () => {
     expect(() => checkHttpRoutes(httpContract)).not.toThrow();
     const clash = rpcQuery("ai", "docs", contracts.aiContract.ops.usageSummary);
     expect(() =>
-      checkHttpRoutes({ a: { ...clash, path: "/api/v1/docs" } }),
-    ).toThrow("Reserved");
-    expect(() =>
       checkHttpRoutes({ a: clash, b: { ...clash, path: clash.path } }),
     ).toThrow("collision");
-  });
-
-  it("registers a collection's static timeline route before its /:id route", () => {
-    // Regression guard: itty-router takes the first match, so a contract
-    // whose `get` precedes `timeline` would answer `/products/timeline` with
-    // a 404 for the shortcode "timeline".
-    const { timeline, get } = httpContract.resources.product;
-    expect(() => checkHttpRoutes({ get, timeline })).toThrow("shadow");
-    expect(() => checkHttpRoutes({ timeline, get })).not.toThrow();
-    const paths = httpRoutes(httpContract).map((route) => route.path);
-    expect(paths.indexOf("/api/v1/products/timeline")).toBeLessThan(
-      paths.indexOf("/api/v1/products/:id"),
-    );
   });
 
   it("carries object inputs as fields and wraps scalar inputs", () => {
@@ -119,32 +103,31 @@ describe("HTTP contract", () => {
     expect(carriers.get("dashboard.counts")).toBe("none");
     expect(carriers.get("auditLog.list")).toBe("object");
     // A `z.null()` input takes no parameters and dispatches null.
-    expect(carriers.get("collection.list")).toBe("null");
-    const nullInput = rpc.find(
-      (route) => metadataOf(route).operation === "collection.list",
+    const nullInput = rpcQuery("demo", "null", {
+      kind: "query",
+      input: z.null(),
+      output: z.number(),
+    });
+    expect(nullInput.metadata.input).toBe("null");
+    expect(nullInput.query.safeParse({}).success).toBe(true);
+    expect(nullInput.query.safeParse({ input: null }).success).toBe(false);
+    // The kernel wire is a free-form object; the handler parses the command.
+    const mutate = rpc.find(
+      (route) => metadataOf(route).operation === "entity.mutate",
     );
-    const nullQuery =
-      nullInput?.query instanceof z.ZodType ? nullInput.query : undefined;
-    expect(nullQuery?.safeParse({}).success).toBe(true);
-    expect(nullQuery?.safeParse({ input: null }).success).toBe(false);
-    // A resource body is the entity's own create input, never a command.
-    const create = routes.find(
-      (route) =>
-        metadataOf(route).entity === "vendor" &&
-        metadataOf(route).resource === "create",
-    );
-    const createBody =
-      create && "body" in create && create.body instanceof z.ZodType
-        ? create.body
+    const mutateBody =
+      mutate && "body" in mutate && mutate.body instanceof z.ZodType
+        ? mutate.body
         : undefined;
-    expect(createBody?.safeParse({ name: "Fixture" }).success).toBe(true);
     expect(
-      createBody?.safeParse({
+      mutateBody?.safeParse({
         action: "create",
         entity: "vendor",
         data: { name: "Fixture" },
       }).success,
-    ).toBe(false);
+    ).toBe(true);
+    expect(mutateBody?.safeParse(["create"]).success).toBe(false);
+    expect(mutateBody).toBe(toWire(entityKernelObject, "input"));
     const wrapped = rpcMutation("demo", "wrapped", {
       kind: "mutation",
       input: z.array(z.string()),
@@ -160,81 +143,6 @@ describe("HTTP contract", () => {
     });
     expect(none.query.safeParse({}).success).toBe(true);
     expect(none.query.safeParse({ input: 1 }).success).toBe(false);
-  });
-
-  it("documents resource lists as flat parameters with validated controls", () => {
-    const list = document.paths["/api/v1/recipes"].get;
-    const names = list.parameters.map((parameter) => parameter.name);
-    expect(names).toEqual(expect.arrayContaining(["page", "pageSize", "sort"]));
-    const page = list.parameters.find((parameter) => parameter.name === "page");
-    expect(page).toMatchObject({ in: "query" });
-    expect(page).not.toHaveProperty("required", true);
-    // Parameters carry a plain `schema`, never JSON `content`, and document
-    // the logical type the query projection coerces to.
-    expect(page).toMatchObject({
-      style: "form",
-      explode: true,
-      schema: { type: "integer", minimum: 1 },
-    });
-    expect(page).not.toHaveProperty("content");
-    expect(document.paths["/api/v1/recipes/{id}"].get.parameters).toEqual([
-      expect.objectContaining({ in: "path", name: "id", required: true }),
-    ]);
-  });
-
-  it("narrows sort and groupBy to the entity's declared roster", () => {
-    // The live route schema is what the document is generated from, so the
-    // same roster shows in both: the contract now, the document after
-    // `pnpm generate`.
-    const listQueryOf = (path: string) => {
-      const route = routes.find(
-        (candidate) => candidate.path === path && candidate.method === "GET",
-      );
-      if (!route || !("query" in route) || !(route.query instanceof z.ZodType))
-        throw new Error(`${path} has no list query schema`);
-      return z
-        .record(
-          z.string(),
-          z.looseObject({
-            type: z.string().optional(),
-            enum: z.array(z.string()).optional(),
-            description: z.string().optional(),
-          }),
-        )
-        .parse(z.toJSONSchema(route.query, { io: "input" }).properties);
-    };
-    const products = listQueryOf("/api/v1/products");
-    expect(products.groupBy).toMatchObject({
-      type: "string",
-      enum: ["categoryId"],
-      description: "Group rows by one field. One of: categoryId",
-    });
-    expect(products.sort).toMatchObject({ type: "string" });
-    expect(products.sort?.description).toContain("Fields: ");
-    expect(products.sort?.description).toContain("related:product.projects");
-    expect(products.sort?.description).toContain("Default: -createdAt");
-    // Empty `groupable` means every sortable field groups, as in the kernel.
-    expect(listQueryOf("/api/v1/vendors").groupBy).toMatchObject({
-      enum: [
-        "spend",
-        "name",
-        "purchaseCount",
-        "latestPurchaseDate",
-        "createdAt",
-        "updatedAt",
-      ],
-    });
-    const documented = (name: string) =>
-      document.paths["/api/v1/products"].get.parameters.find(
-        (parameter) => parameter.name === name,
-      );
-    expect(documented("groupBy")).toMatchObject({
-      schema: { type: "string", enum: ["categoryId"] },
-    });
-    expect(documented("sort")).toMatchObject({
-      schema: { type: "string" },
-      description: expect.stringContaining("Fields: "),
-    });
   });
 
   it("emits ISO timestamps and a shared error body", () => {

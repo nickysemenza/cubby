@@ -12,12 +12,6 @@ import { z } from "zod";
 
 import { httpContract } from "~/lib/generated/http-contract.gen";
 import { type StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import {
-  resourceListInputFrom,
-  resourceQueryNesting,
-  resourceQueryValues,
-  resourceTimelineInputFrom,
-} from "~/lib/http-api/resource-query";
 import { type HttpMetadata, httpMetadataSchema } from "~/lib/http-api/router";
 import { httpRoutes } from "~/lib/http-api/routes";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
@@ -102,7 +96,6 @@ const failure = (
     errorStatus.parse(statuses.get(code)),
     errorBody(code, message, extra),
   );
-const createdSchema = z.object({ item: z.object({ id: z.string() }) });
 /** Tells a route's own error body from the adapter's bare 404. */
 const apiErrorBody = z.object({ code: z.string(), message: z.string() });
 /**
@@ -119,7 +112,6 @@ const validationFailure = z.object({
 const wrappedSchema = z.object({
   input: unparsedStartOperationDataSchema.optional(),
 });
-const idParams = z.object({ id: z.string() });
 
 function isOrdinaryOperation(
   operation: string,
@@ -139,41 +131,6 @@ function requestInput(
   const payload = unparsedStartOperationDataSchema.parse(
     route.method === "GET" ? request.query : request.body,
   );
-  if (metadata.resource !== undefined) {
-    const entity = z.string().parse(metadata.entity);
-    const id = () => idParams.parse(request.params ?? {}).id;
-    switch (metadata.resource) {
-      case "list":
-        return {
-          ...resourceListInputFrom(
-            resourceQueryValues.parse(payload),
-            route.query instanceof z.ZodType
-              ? resourceQueryNesting(route.query)
-              : new Map(),
-          ),
-          entity,
-        };
-      case "timeline": {
-        return {
-          entity,
-          ...resourceTimelineInputFrom(
-            resourceQueryValues.parse(payload),
-            route.query instanceof z.ZodType
-              ? resourceQueryNesting(route.query)
-              : new Map(),
-          ),
-        };
-      }
-      case "get":
-        return { entity, shortcode: id() };
-      case "create":
-        return { action: "create", entity, data: payload };
-      case "update":
-        return { action: "update", entity, id: id(), data: payload };
-      case "delete":
-        return { action: "delete", entity, ids: [id()] };
-    }
-  }
   if (metadata.input === "none") return undefined;
   if (metadata.input === "null") return null;
   if (metadata.input === "wrapped") return wrappedSchema.parse(payload).input;
@@ -399,21 +356,11 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
             body: result.error,
           };
         if (diagnostic) diagnostic.stage = "output";
-        if (
-          (metadata.resource === "get" || metadata.nullableOutput === true) &&
-          result.data === null
-        )
+        if (metadata.nullableOutput === true && result.data === null)
           return {
             status: StatusCodes.NOT_FOUND,
             body: errorBody("NOT_FOUND", "Resource not found"),
           };
-        if (metadata.resource === "create") {
-          responseHeaders.set(
-            "Location",
-            `${url.pathname}/${encodeURIComponent(createdSchema.parse(result.data).item.id)}`,
-          );
-          return { status: StatusCodes.CREATED, body: result.data };
-        }
         return { status: StatusCodes.OK, body: result.data };
       },
     };
@@ -454,13 +401,6 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
         ? validationFailure.safeParse(error)
         : undefined;
     if (validation?.success) {
-      // A malformed resource identifier is "not found", as before the adapter.
-      const { pathParamsError, ...rest } = validation.data;
-      if (pathParamsError && Object.values(rest).every((part) => part === null))
-        return TsRestResponse.fromJson(
-          errorBody("NOT_FOUND", "Invalid resource identifier"),
-          { status: StatusCodes.NOT_FOUND },
-        );
       const issues = Object.values(validation.data).flatMap(
         (part) =>
           part?.issues.map((issue) => ({

@@ -134,7 +134,6 @@ export const problemsContract = defineContract("problems", {
    * reads; a requested type is a paged detail read.
    */
   report: query({
-    http: false,
     input: z.object({
       countsOnly: z
         .boolean()

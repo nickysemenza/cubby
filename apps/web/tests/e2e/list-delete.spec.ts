@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import type { Request } from "@playwright/test";
 import { z } from "zod";
 
@@ -91,7 +92,7 @@ test("task list selection delete shows the impact preview, then removes the rows
       dialog.getByRole("button", { name: "Deleting...", exact: true }),
     ).toBeDisabled();
     for (const task of tasks) {
-      const existing = await page.request.get(`/api/v1/tasks/${task.id}`);
+      const existing = await entityApi(page.request).get("task", task.id, {});
       expect(existing.status()).toBe(200);
       expect(await existing.json()).toMatchObject({ id: task.id });
     }
@@ -108,7 +109,7 @@ test("task list selection delete shows the impact preview, then removes the rows
   }
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   for (const task of tasks) {
-    const gone = await page.request.get(`/api/v1/tasks/${task.id}`);
+    const gone = await entityApi(page.request).get("task", task.id, {});
     expect(gone.status()).toBe(404);
   }
 });

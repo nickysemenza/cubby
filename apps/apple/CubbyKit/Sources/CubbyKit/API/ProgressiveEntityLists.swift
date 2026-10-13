@@ -7,17 +7,16 @@ extension CubbyClient {
         page: Int = 1, pageSize: Int = 50, sort: String? = nil,
         filters: EntityFilterState = EntityFilterState()
     ) async throws -> ListPage<EntityRow> {
-        guard descriptor.key.nativeReadKind == .resource else {
+        guard descriptor.key.nativeReadKind == .kernel else {
             return try await list(descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
         }
-        let input = try descriptor.progressiveListInput(
-            page: page, pageSize: pageSize, sort: sort, filters: filters)
-        let response = try JSONValue(encoding: try await entityListBase(input))
+        let input = try descriptor.listInput(page: page, pageSize: pageSize, sort: sort, filters: filters)
+        let response = try JSONValue(encoding: try await entityListBase(try input.decoded()))
         guard let wireMeta = response["meta"] else {
             throw EntityOperationError.unsupported(descriptor.key, .list)
         }
         var meta: ListPageMeta = try wireMeta.decoded()
-        // Resource native models use 1-based pages; structured operations are 0-based.
+        // Native models use 1-based pages; the kernel's are 0-based.
         meta.pageIndex += 1
         let groups = (response["groups"]?.arrayValue ?? []).compactMap { group -> EntityListDeferred.Group? in
             guard let id = group["id"]?.stringValue else { return nil }
@@ -55,7 +54,7 @@ extension CubbyClient {
             summary: { [self] in
                 guard !descriptor.presentation.listTotals.isEmpty else { return nil }
                 let response = try JSONValue(
-                    encoding: try await entityListSummary(try JSONValue(encoding: input).decoded()))
+                    encoding: try await entityListSummary(try input.decoded()))
                 return response["totalLabels"]?.objectValue?.compactMapValues(\.stringValue)
             })
         return ListPage(

@@ -137,49 +137,41 @@ export const purchaseImportContract = defineContract("purchaseImport", {
   }),
   /** Persist an immutable proposed import; writes no Purchase, Expense, or Product. */
   prepare: mutation({
-    http: false,
     input: preparePurchaseImportInput,
     output: preparePurchaseImportOut,
   }),
   /** Commit one exact prepared import; replay-safe. */
   commit: mutation({
-    http: false,
     input: commitPurchaseImportInput,
     output: commitPurchaseImportOut,
     invalidates: ["purchase"],
   }),
   operationStatus: query({
-    http: false,
     input: importOperationStatusInput,
     output: importOperationStatusOut,
   }),
   confirmMerchantVendor: mutation({
-    http: false,
     input: confirmMerchantVendorRuleInput,
     output: confirmMerchantVendorRuleOut,
   }),
   /** Read one retained Email, optionally one attachment's original bytes. */
   mailRead: query({
-    http: false,
     input: mailReadInput,
     output: mailReadOut,
   }),
   /** Mail triage on one Email's Gmail original; records no observation or Relevance. */
   mailTriagePreview: query({
-    http: false,
     readPolicy: "strong",
     input: mailTriagePreviewInput,
     output: mailTriagePreviewOut,
   }),
   /** Scoped live Gmail search for a missing original. */
   mailSearch: mutation({
-    http: false,
     input: mailSearchInput,
     output: mailSearchOut,
   }),
   /** Record what one retained Email means for the member's Purchases. */
   mailResolve: mutation({
-    http: false,
     input: mailResolveInput,
     output: mailResolveOut,
     invalidates: ["purchase"],

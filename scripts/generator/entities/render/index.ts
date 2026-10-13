@@ -282,40 +282,34 @@ const renderDerivedFilterFields = (
 };
 
 // One render pass preserves deterministic cross-artifact ordering and hashes.
-export type HttpResourceVerb =
+type KernelHttpAction =
   | "list"
   | "timeline"
   | "get"
   | "create"
   | "update"
   | "delete";
-export type HttpResources = Readonly<
-  Record<
-    string,
-    Readonly<{ basePath: string; verbs: readonly HttpResourceVerb[] }>
-  >
+export type KernelActions = Readonly<
+  Record<string, readonly KernelHttpAction[]>
 >;
 
 /**
- * HTTP resource verbs per entity, as data: the ts-rest router (stage 2)
- * builds its resource routes from these at generation time so the contract
- * keeps static types, and `http-resources.gen.ts` publishes the same table
- * to the web inspector.
+ * The entity-kernel actions the HTTP API serves per entity, as data: the
+ * native client's capability table (`entity-kernel.json`) and the web
+ * inspector's native coverage are derived from it in the OpenAPI stage.
  */
-export const httpResourcesFor = (
+export const kernelHttpActionsFor = (
   entities: readonly CompiledEntity[],
-): HttpResources => {
+): KernelActions => {
   const projections = entityProjectionMaps(entities);
   return Object.fromEntries(
     kernelEntitiesFor(entities).flatMap((entity) => {
       if (!entity.route || !entity.contract) return [];
-      const verbs: HttpResourceVerb[] = [];
+      const verbs: KernelHttpAction[] = [];
       const listed = projections.list.some(
         (candidate) => candidate.key === entity.key,
       );
       if (listed) verbs.push("list");
-      // `/<basePath>/timeline` is registered before `/<basePath>/:id`: the
-      // contract keeps key order and itty-router takes the first match.
       if (entity.timeline !== null) {
         if (!listed)
           throw new EntityDeclarationError(
@@ -328,7 +322,7 @@ export const httpResourcesFor = (
       if (entity.contract.create) verbs.push("create");
       if (entity.contract.update) verbs.push("update");
       if (entity.operationOwners.delete === "kernel") verbs.push("delete");
-      return [[entity.key, { basePath: entity.route.basePath, verbs }]];
+      return [[entity.key, verbs]];
     }),
   );
 };
@@ -761,12 +755,6 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
       filterSchema === null
         ? []
         : [`  ${JSON.stringify(key)}: ${filterSchema.export},`],
-    )
-    .join("\n");
-  const httpResources = Object.entries(httpResourcesFor(entities))
-    .map(
-      ([key, { basePath, verbs }]) =>
-        `  ${JSON.stringify(key)}: { basePath: ${JSON.stringify(basePath)}, verbs: ${JSON.stringify(verbs)} },`,
     )
     .join("\n");
   const lifecycleFor = (entity: CompiledEntity) => entity.lifecycle;
@@ -1481,14 +1469,6 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         `${filterFieldImportSource}\n\n` +
         "// Generated filter field assembly stays one entity per line.\n// oxfmt-ignore\n" +
         `export const entityFilterFieldMaps = {\n${filterFieldBindings}\n} satisfies Partial<Record<Entity, Record<string, z.ZodType>>>;\n`,
-    },
-    {
-      relativePath: "apps/web/src/lib/generated/http-resources.gen.ts",
-      source:
-        generatedHeader +
-        "/** HTTP resource verbs per entity; consumed by the start-operation registry generator. */\n" +
-        "// oxfmt-ignore\n" +
-        `export const HTTP_RESOURCES = {\n${httpResources}\n} as const satisfies Record<string, { basePath: string; verbs: readonly ("list" | "timeline" | "get" | "create" | "update" | "delete")[] }>;\n`,
     },
     ...renderSwiftEntityCatalog(entities),
     ...renderStructuredValueSchemas(entities),

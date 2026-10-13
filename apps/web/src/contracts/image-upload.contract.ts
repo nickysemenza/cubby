@@ -97,16 +97,14 @@ export const imageUploadContract = defineContract("image", {
     output: cullPendingImagesResponseSchema,
     invalidates: ["imageCull"],
   }),
-  // Agent-facing (MCP `image`, batched per item): off the HTTP API.
+  // Agent-facing (MCP `image`, batched per item).
   /** Stage one local file and presign its PUT. */
   createFileUpload: mutation({
-    http: false,
     input: createFileUploadInput,
     output: createFileUploadResponse,
   }),
   /** Attach one file by URL or staged upload to the entity its shortcode names. */
   attachFile: mutation({
-    http: false,
     input: attachFileItem,
     output: attachFileResponse,
     invalidates: ["image"],

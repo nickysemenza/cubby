@@ -67,17 +67,22 @@ loops. [Validation](../../docs/agents/validation.md) owns check selection and de
 - Never hand-write a `(method, path)` pair. `OperationRoute.all` is generated from the OpenAPI
   document by `scripts/generator/http-api/native.ts` into `Generated/OperationRoutes.swift`
   (`pnpm generate`). Look routes up
-  by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. Every
-  `resources.<entity>.{list,get,create,update,delete,timeline}` operation the OpenAPI document
-  exposes is generated (not every entity has every verb: read-only `image`, `cookbook` and
-  `run` have no `create`; `usda-food`, the external USDA catalog, has no resource verbs and
-  reads through its flagged `usdaFood.list`/`detail` RPCs, per
-  `Generated/EntityOperations.swift`'s `httpActions`). `delete` is destructive: only `HeroActionRunner` calls it, after an explicit
-  confirmation behind the connection-impact preview. The RPC operation ids CubbyKit calls are flagged
-  `native: "<why>"` on their contract member (`apps/web/src/contracts/*.contract.ts`) — flagging
-  an automatic resource id is rejected.
-  `Sources/CubbyAPI/openapi-generator-config.yaml` and `Generated/EntityOperations.swift` are
-  emitter-owned, derived from those flags — edit the flags, never the two files. Any
+  by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. Entity reads
+  and writes go through the four generic kernel operations (`entity.detail`, `entity.list`,
+  `entity.mutate`, `entity.timeline`), dispatched by the hand-written
+  `Catalog/EntityKernel.swift` over the generated `Generated/entity-kernel.json` (per-entity
+  actions, image attach/reorder, and every list/timeline filter name with its JSON kind). Not
+  every entity has every action: read-only `image`, `cookbook` and `run` have no `create`;
+  `usda-food`, the external USDA catalog, reads through its flagged `usdaFood.list`/`detail`
+  RPCs. Kernel bodies and responses are untyped JSON on the wire; the server parses each with the
+  entity's schema, and hand-written Swift decodes a typed record only through the short
+  `NATIVE_TYPED_RECORDS` keep-list (`scripts/generator/http-api/type-overrides.ts`).
+  `delete` is destructive: only `HeroActionRunner` calls it, after an explicit
+  confirmation behind the connection-impact preview. The HTTP API carries exactly the
+  operations flagged `native: "<why>"` on their contract member
+  (`apps/web/src/contracts/*.contract.ts`).
+  `Sources/CubbyAPI/openapi-generator-config.yaml` and `Generated/entity-kernel.json` are
+  emitter-owned, derived from those flags and the entity declarations — never edit them. Any
   swift-openapi-generator warning (a silently dropped schema) fails
   `apps/apple/scripts/check-openapi-warnings.sh`, which CI's `Apple host tests` job and
   `pnpm apple check` run; the build plugin alone would let it through.
@@ -132,15 +137,16 @@ and captured credential revisions across every await. See [DESIGN.md](DESIGN.md#
 None is committed; edit the generator or its inputs, never the output. A missing one means
 `pnpm generate` (or `build-rust.sh`) has not run in this checkout.
 
-| Output                                                                                                                           | Generator                                                                                              |
-| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `CubbyKit/Sources/CubbyKit/Generated/native-coverage.json`                                                                       | `packages/schemas/src/native-coverage.ts`                                                              |
-| `Generated/{entity-manifest.json,EntityDescriptors,EntityVocabulary}.swift`, `CubbyAPISupport/Generated/EntityKey.swift`         | `scripts/generator/entities/render/swift-catalog.ts`                                                   |
-| `Generated/{OperationRoutes,EntityOperations,ClientOperations,APITypes}.swift`, `Sources/CubbyAPI/openapi-generator-config.yaml` | `scripts/generator/http-api/native.ts`, `swift-operations.ts`                                          |
-| `Generated/SharedConstants.swift`                                                                                                | `packages/shared/src/client-constants.ts`, `apps/web/wrangler.jsonc`, `WAYFINDING_DOMAIN_PRESENTATION` |
-| `CubbyAPI` target                                                                                                                | swift-openapi-generator plugin, from `Sources/CubbyAPI/openapi.json` (written by `pnpm generate`)      |
-| `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`                                                                                      | `uniffi-bindgen` via `scripts/ensure.ts apple-ffi`                                                     |
-| `App/Shared/Previews/Fixtures/*.json`                                                                                            | `apps/web/scripts/apple-preview-fixtures.ts` (edit its overrides)                                      |
+| Output                                                                                                                   | Generator                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `CubbyKit/Sources/CubbyKit/Generated/native-coverage.json`                                                               | `packages/schemas/src/native-coverage.ts`                                                              |
+| `Generated/{entity-manifest.json,EntityDescriptors,EntityVocabulary}.swift`, `CubbyAPISupport/Generated/EntityKey.swift` | `scripts/generator/entities/render/swift-catalog.ts`                                                   |
+| `Generated/{OperationRoutes,ClientOperations,APITypes}.swift`, `Sources/CubbyAPI/openapi-generator-config.yaml`          | `scripts/generator/http-api/native.ts`, `swift-operations.ts`                                          |
+| `Generated/entity-kernel.json`                                                                                           | `scripts/generator/http-api/entity-kernel.ts`                                                          |
+| `Generated/SharedConstants.swift`                                                                                        | `packages/shared/src/client-constants.ts`, `apps/web/wrangler.jsonc`, `WAYFINDING_DOMAIN_PRESENTATION` |
+| `CubbyAPI` target                                                                                                        | swift-openapi-generator plugin, from `Sources/CubbyAPI/openapi.json` (written by `pnpm generate`)      |
+| `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`                                                                              | `uniffi-bindgen` via `scripts/ensure.ts apple-ffi`                                                     |
+| `App/Shared/Previews/Fixtures/*.json`                                                                                    | `apps/web/scripts/apple-preview-fixtures.ts` (edit its overrides)                                      |
 
 - **Native coverage.** `packages/schemas/src/native-coverage.ts` is the single declaration of
   which manifest renderer, slot, and hero-action ids native draws. A new web-only id is

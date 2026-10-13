@@ -144,7 +144,6 @@ export const aiContract = defineContract("ai", {
     readPolicy: "strong",
     input: fieldSuggestionsInput,
     output: fieldSuggestionsOut,
-    http: false,
     cache: { profile: "stable" },
   }),
   suggestFieldsReview: query({
@@ -241,7 +240,6 @@ export const aiContract = defineContract("ai", {
     readPolicy: "strong",
     input: externalIdKindSuggestionInput,
     output: suggestExternalIdKindOut,
-    http: false,
     cache: { profile: "stable" },
   }),
   usageFilterOptions: query({

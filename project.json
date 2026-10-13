@@ -7,7 +7,7 @@
     // or edited output) while these inputs are unchanged. Generated output is
     // ignored by Nx's file map, so it never feeds its own key.
     "generate": {
-      "command": "tsx --tsconfig apps/web/tsconfig.json scripts/generator/main.ts && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
+      "command": "tsx --tsconfig apps/web/tsconfig.json scripts/generator/main.ts && redocly lint apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json --config redocly.yaml",
       "cache": true,
       "inputs": [
         // Every root the generator reads: its own code, the packages the

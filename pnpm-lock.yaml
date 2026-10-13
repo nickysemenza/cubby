@@ -221,9 +221,6 @@ importers:
       '@redocly/cli':
         specifier: ^2.57.0
         version: 2.57.0
-      '@redocly/openapi-core':
-        specifier: 2.57.0
-        version: 2.57.0
       '@tanstack/router-generator':
         specifier: 1.167.40
         version: 1.167.40(supports-color@7.2.0)

@@ -13,23 +13,67 @@ lane at all. Merging to `main`
 independently deploys the web Worker, including after a
 documentation-only change; deployment never waits for post-merge CI.
 
-`ci.yaml` holds the required checks and one `optional` matrix job whose
-entries `Plan` builds: the purchase-import browser lane when its lane is
-selected, and the live Email decisions on a manual dispatch. Validation exposes generation, tokens, TypeScript, lint, Knip, bindings,
+`ci.yaml` holds the required checks, one `optional` matrix job whose
+entries `Plan` builds (the purchase-import browser lane when its lane is
+selected, and the live Email decisions on a full manual dispatch), and the
+informational [journey jobs](#journeys). Validation exposes generation, tokens, TypeScript, lint, Knip, bindings,
 tooling tests, routing drift and Worker tests as named
 steps on one runner. Once setup succeeds, independent steps run despite earlier
 check failures; their failures still fail the job. Cancellation stops further
 work. The web matrix likewise keeps `fail-fast: false`. Formatting and the
 link check run in the same job when the docs lane is selected. This collects distinct failures without paying a fresh install
 for every static check. One status context, `CI passed`, owns the merge gate.
-Tester Army coverage lives in `e2e-journeys.yaml` and runs only by manual
-dispatch or explicit PR labels. `tester-army`, `tester-army:ios`,
-`tester-army:import`, and `simulator-e2e` select only their respective lanes.
-`tester-army-pr.yaml` dispatches a labeled, still-open same-repository PR's
-exact head after CI passes. Labels persist across pushes; unlabeled changes
-never launch journeys. Updates and closure cancel pending PR journeys.
-There is no scheduled AI journey matrix. All journeys remain informational;
-see [Tester Army](tester-army.md) for replay, evidence and timing limits.
+
+## Journeys
+
+Tester Army and simulator journeys are `ci.yaml` jobs that `Plan` selects
+only from explicit PR labels or a journey dispatch; unlabeled changes, `main`
+pushes and the nightly run start none. `tester-army` selects the web smoke
+journeys, `tester-army:ios` the two native shards, `tester-army:import` the
+coupled import journeys, and `simulator-e2e` the deterministic simulator
+journey. Journey jobs are never in `CI passed`'s needs, so they add no
+required check and no wall time to the required path. See
+[Tester Army](tester-army.md) for replay, evidence and timing limits.
+
+`Plan` runs in one of two modes:
+
+- **Normal CI** (opened, synchronize, reopened, push, schedule, and a dispatch
+  with an empty `journey`): the lanes route as described below, and journey
+  labels present at a push or reopen run their journeys alongside, in CI's
+  concurrency group, so the next push cancels them. `opened` leaves labels to
+  the `labeled` events GitHub sends after it, so they start once.
+- **Journey-only** (a `labeled` event for a journey label, or a dispatch with a
+  `journey` input): `Plan` selects no lane, `CI passed` is skipped under a
+  different job name (a skipped job counts as success, so it must not carry
+  the gate's name), and no `tested-tree-*` artifact is recorded. A labeled
+  run reads the PR's current labels and exits cleanly if the PR is closed,
+  comes from a fork, or its head moved past the event's head; that push's
+  own run starts the still-labeled journeys.
+
+Concurrency keeps ordinary PR events in their unchanged group. A journey
+label's run uses the same group suffixed `-journeys` (adding a second journey
+label supersedes the first label's run, which then reads both labels). Any
+other label's run gets a group of its own and its `Plan` job is skipped, so
+nothing starts. A journey dispatch uses a group suffixed with its journey, so
+it never cancels a full manual run on the same ref. A journey-only run is not
+cancelled by a later push or by closure; it stops at its own timeout.
+
+Journeys test the PR head (or the dispatched ref), not the merge commit. A
+dispatch keeps the Nx cache on and skips the live Email entry; for example
+`gh workflow run ci.yaml --ref <branch> -f journey=tester-army-web`. Accepted
+journeys are `simulator-search`, `simulator-inputs`, `tester-army-web`,
+`tester-army-visual`, `tester-army-explore`, `tester-army-ios`,
+`tester-army-both`, `tester-army-import` and `tester-army-all`; `Plan` fails
+on any other value.
+
+The native journey jobs need `apple-simulator` but run unless it failed (it is
+skipped on a probe hit or an unselected lane). `setup-apple`'s `probe` input
+replays the cached `apple:simulator-build` pass before the SPM clone and
+DerivedData restores, which run only on a miss; the journey command then
+builds a missing app. Native journey jobs take macOS slots beyond the two
+that `Apple host tests` and `Apple simulator build` use, but only on PRs
+carrying `tester-army:ios` or `simulator-e2e`. Only the Tester Army jobs get
+`pull-requests: write`, for the GitHub reporter's PR comments.
 
 ## Cache keys and the remote cache
 
@@ -254,7 +298,7 @@ replays a cached pass for the same input hash, and on a miss the script fails
 before building (Nx never caches that failure). Only a miss or failed probe
 pays for a macOS runner, which installs the workspace (generating the Swift
 inputs), the FFI, XcodeGen, and Xcode build caches, and runs the target. The
-nightly run and a manual dispatch skip the probe and run both uncached on the
+nightly run and a full manual dispatch skip the probe and run both uncached on the
 runner's own Xcode; a dispatch on `main` therefore seeds `main`'s native caches
 without waiting for the nightly run.
 The host job runs the automatically generated
@@ -310,17 +354,17 @@ The earlier simulator-test job ran `xcodebuild test` on a concrete simulator:
 first boot cost about 6 minutes plus roughly 10 minutes of CPU starvation
 (a 5s script took 2.6 minutes, and compilation doubled). Host tests and the
 generic-simulator app build keep that simulator work excluded.
-`.github/actions/setup-apple` composes the native setup every macOS job but
-the Tester Army iOS lane uses: Xcode selection, the optional workspace
-install, the FFI slices, the Apple tools, and the optional simulator
-DerivedData restore. `.github/actions/start-native-postgres` starts the macOS
+`.github/actions/setup-apple` is the native setup every macOS job uses: Xcode
+selection, the optional workspace install, an optional Nx cache probe, the
+FFI slices, the Apple tools, and the optional simulator DerivedData restore.
+`.github/actions/start-native-postgres` starts the macOS
 E2E jobs' PostgreSQL, which cannot run service containers.
-`.github/actions/setup-apple-tools` installs XcodeGen and restores
+`setup-apple` installs XcodeGen and restores
 `apps/apple/SourcePackages`, the `xcodebuild`-resolved SPM clones for Sentry,
 GRDB, Nuke and swift-openapi-generator (previously an uncached "Resolve Package
 Graph" on every run), used by both native jobs; `Apple host tests` skips
-XcodeGen. It is separate from the
-target-specific FFI output cache (`.github/actions/setup-apple-ffi`) and the
+XcodeGen. A probe hit skips the clone and DerivedData restores. The clone
+cache is separate from the target-specific FFI output cache and the
 host job's build cache described above. DerivedData keys explicitly exclude
 the host `.build` directory; its compiled products are not simulator source
 inputs. Host and simulator caches have separate Xcode toolchain and package
@@ -380,15 +424,15 @@ selects the docs lane, because it may be a relative link's target. `Plan`
 runs the outward-text check on the slim image's own Node 24, without
 `setup-node`; a missing or older Node fails `Plan` closed. Any tree compared with a green tree is
 correct, ancestor or not: a lane whose inputs match would replay that tree's
-pass. Nightly and manual runs, and a repository with no green main run, start
+pass. Nightly and full manual runs, and a repository with no green main run, start
 every lane. Lanes with identical groups share one filter entry, named
 `<lane>+<lane>.<n>`. `Plan` outputs the selected lanes, the matrix of web
-lanes, and the exact jobs it skipped.
+lanes, the exact jobs it skipped, and the selected [journeys](#journeys).
 
 `CI passed` is the single required check (`re-actors/alls-green` on
 `ubuntu-slim`). It needs every lane and fails on any failure or cancellation,
 and on any skip other than the jobs `Plan` skipped or an Apple job whose probe
-verified a cached pass. Manual CI dispatch also runs the informational live Email
+verified a cached pass. A full manual CI dispatch also runs the informational live Email
 decision entry of the `optional` job outside `CI passed`, calling Jev and Clef on synthetic cases through
 the real gateway with `AI_GATEWAY_API_KEY` (passed only to that entry's step). Failures do not block the deterministic
 merge gate. Real member inputs are refused in CI. A failed probe is allowed: it only sends both Apple
@@ -587,10 +631,3 @@ for a broad local suite.
 After a material workflow change, compare at least ten representative runs for
 PR p50/p95 wall time, merge-to-deploy time, total job-minutes, cancellations,
 and cache behavior.
-
-## Additional Tester Army web coverage
-
-The existing `e2e-journeys.yaml` manual dispatcher includes visual baselines and
-bounded authenticated exploration. These use the existing model setup, reports,
-synthetic harness and evidence uploads. They do not change the required gate.
-See [web coverage additions](tester-army.md#web-coverage-additions).

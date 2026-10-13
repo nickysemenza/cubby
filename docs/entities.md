@@ -410,8 +410,8 @@ independently editable, human-readable dates with their contextual quality
 results. The editor rejects an end before its start; the native catalog's
 `editDateRanges` is generated from the declaration. `capabilities.timeline`
 (`"default"`: audit log plus the declared date fields; `"custom"`: the
-`extensions.ports.timeline` implementation) publishes
-`resources.<entity>.timeline`. The compiler checks every named field,
+`extensions.ports.timeline` implementation) publishes the
+entity on `entity.timeline`. The compiler checks every named field,
 relation, descriptor, view and section id.
 
 Every listable entity receives the shared List (`table`) and Cards (`shelf`)
@@ -854,7 +854,7 @@ keys, table keys and `create`, with `defaults` naming every key for
 command schemas, repository/relation-adapter assembly, and contract cases.
 Two rosters follow from the declaration. The **list roster** is every routed
 entity with a contract: its index — generated, or hand-written like Image's —
-and every client (native browse, HTTP `resources.<entity>.list`, MCP) read the
+and every client (native browse, HTTP `entity.list`, MCP) read the
 kernel's progressive list, whether or not the browser writes the entity
 (Cookbook, Image and Run are read-only). Specialist `listColumns` never change
 where rows come from. Its repository then implements `listRead`. Only a

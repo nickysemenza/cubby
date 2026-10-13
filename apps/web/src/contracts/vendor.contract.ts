@@ -31,7 +31,6 @@ export const vendorContract = defineContract("vendor", {
   }),
   /** Identity, latest purchase date, and order ids in a window (MCP `imports_read`). */
   coverage: query({
-    http: false,
     input: vendorCoverageInput,
     output: vendorCoverageOut,
   }),

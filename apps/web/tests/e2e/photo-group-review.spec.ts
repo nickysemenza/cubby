@@ -1,3 +1,4 @@
+import { startOperation } from "./start-operation";
 import {
   seedProductPrerequisite,
   seedInventoryPrerequisites,
@@ -27,7 +28,6 @@ import { expect, recordingVideo, test } from "./e2e-test";
 test("approves two selected photo groups with one reviewed batch action", async ({
   page,
   e2eRuntime,
-  baseURL,
 }) => {
   const seed = await seedPhotoGroupReviewRun(
     page,
@@ -39,9 +39,9 @@ test("approves two selected photo groups with one reviewed batch action", async 
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
-    data: { runId: seed.runId, groups: seed.groups },
-    headers: { Origin: baseURL! },
+  const proposed = await startOperation(page, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: seed.groups,
   });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
@@ -66,7 +66,6 @@ test("approves two selected photo groups with one reviewed batch action", async 
 test("reviews, approves, and discards proposed photo groups on the photo-inventory run page", async ({
   page,
   e2eRuntime,
-  baseURL,
 }) => {
   const name = `Photo run ${Date.now()}`;
   const seed = await seedPhotoGroupReviewRun(
@@ -92,10 +91,9 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   ).toBeEnabled();
   await page.keyboard.press("Escape");
   if (recordingVideo) await page.waitForTimeout(1_500);
-  const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
-    data: { runId: seed.runId, groups: seed.groups },
-    // API writes require a same-origin request.
-    headers: { Origin: baseURL! },
+  const proposed = await startOperation(page, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: seed.groups,
   });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
@@ -236,7 +234,6 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
 test("suggests an existing variant and previews every merge decision for a created photo product", async ({
   page,
   e2eRuntime,
-  baseURL,
 }) => {
   const name = `Photo match ${Date.now()}`;
   const candidateName = `Gray crew t-shirt M ${name}`;
@@ -256,10 +253,9 @@ test("suggests an existing variant and previews every merge decision for a creat
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
-    data: { runId: seed.runId, groups: seed.groups },
-    // API writes require a same-origin request.
-    headers: { Origin: baseURL! },
+  const proposed = await startOperation(page, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: seed.groups,
   });
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
@@ -323,7 +319,6 @@ test("suggests an existing variant and previews every merge decision for a creat
 test("reviews an occupied location and links a chosen unlinked Expense after photo approval", async ({
   page,
   e2eRuntime,
-  baseURL,
 }) => {
   const name = `Photo decision ${Date.now()}`;
   const existingName = `Gray crew t-shirt M ${name}`;
@@ -415,9 +410,9 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
-    data: { runId: seed.runId, groups },
-    headers: { Origin: baseURL! },
+  const saved = await startOperation(page, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups,
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
   const comparison = page.getByRole("region", { name: "Product comparison" });
@@ -521,7 +516,6 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
 test("distinguishes blocking description failure from optional cutout failure", async ({
   page,
   e2eRuntime,
-  baseURL,
 }) => {
   const name = `Photo processing ${Date.now()}`;
   const seed = await seedPhotoGroupReviewRun(
@@ -544,9 +538,9 @@ test("distinguishes blocking description failure from optional cutout failure", 
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
-    data: { runId: seed.runId, groups: seed.groups },
-    headers: { Origin: baseURL! },
+  const saved = await startOperation(page, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups: seed.groups,
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
   await expect(
@@ -573,7 +567,6 @@ test("distinguishes blocking description failure from optional cutout failure", 
 test("shows an exact label identifier and a conflicting numeric boot size", async ({
   page,
   e2eRuntime,
-  baseURL,
 }) => {
   const name = `Boot label ${Date.now()}`;
   const wrongSize = await seedProductPrerequisite(page, {
@@ -622,9 +615,9 @@ test("shows an exact label identifier and a conflicting numeric boot size", asyn
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const saved = await page.request.post("/api/v1/photoImport/saveGroups", {
-    data: { runId: seed.runId, groups },
-    headers: { Origin: baseURL! },
+  const saved = await startOperation(page, "photoImport.saveGroups", {
+    runId: seed.runId,
+    groups,
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
   await page

@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import {
   financialBookingPreview,
   financialBookingResult,
@@ -34,30 +35,29 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
       | z.input<typeof spendingCategoryCreateInput>
       | z.input<typeof vendorCreateInput>,
   ) => {
-    const response = await page.request.post(`/api/v1/${path}`, {
+    const response = await entityApi(page.request).create(path, data, {
       headers,
-      data: z.json().parse(data),
     });
-    expect(response.status(), await response.text()).toBe(201);
+    expect(response.status(), await response.text()).toBe(200);
     return z
       .object({ item: z.object({ id: z.string() }) })
       .parse(await response.json()).item.id;
   };
-  await create("spending-categories", {
+  await create("spendingCategory", {
     name: "Synthetic reviewed dining",
     itemizationExpectation: "not_expected",
     productExpectation: "not_expected",
   });
   const vendorName = "Synthetic review cafe";
-  await create("vendors", {
+  await create("vendor", {
     name: vendorName,
     itemizationExpectation: "not_expected",
   });
-  const accountId = await create("financial-accounts", {
+  const accountId = await create("financialAccount", {
     name: "Synthetic review card",
     identity: { kind: "credit_card", issuer: null, network: "visa" },
   });
-  const transactionId = await create("financial-transactions", {
+  const transactionId = await create("financialTransaction", {
     accountId,
     amount: 120,
     merchant: vendorName,
@@ -86,9 +86,11 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
   await expect(
     page.getByRole("button", { name: "Record Expense", exact: true }),
   ).toBeVisible();
-  const changed = await page.request.patch(
-    `/api/v1/financial-transactions/${transactionId}`,
-    { headers, data: { amount: 125 } },
+  const changed = await entityApi(page.request).update(
+    "financialTransaction",
+    transactionId,
+    { amount: 125 },
+    { headers },
   );
   expect(changed.ok(), await changed.text()).toBeTruthy();
   const rejectedResponse = waitForOperation("commitBooking");
@@ -100,8 +102,10 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
       .object({ json: z.object({ ok: z.boolean() }) })
       .parse(await (await rejectedResponse).json()).json.ok,
   ).toBe(false);
-  const unbooked = await page.request.get(
-    `/api/v1/financial-transactions/${transactionId}`,
+  const unbooked = await entityApi(page.request).get(
+    "financialTransaction",
+    transactionId,
+    {},
   );
   expect(
     z.object({ allocations: z.array(z.unknown()) }).parse(await unbooked.json())
@@ -146,14 +150,16 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     { headers, data: { ...review, name: "Synthetic altered approval" } },
   );
   expect(altered.ok()).toBeFalsy();
-  const purchaseResponse = await page.request.get(
-    `/api/v1/purchases/${result.purchaseId}`,
+  const purchaseResponse = await entityApi(page.request).get(
+    "purchase",
+    result.purchaseId,
+    {},
   );
   const purchase = z
     .object({ displayName: z.string(), expenseTotal: z.number() })
     .parse(await purchaseResponse.json());
   expect(purchase.expenseTotal).toBe(125);
-  const creditId = await create("financial-transactions", {
+  const creditId = await create("financialTransaction", {
     accountId,
     amount: -40,
     merchant: "Synthetic friend contribution",
@@ -193,8 +199,10 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
       })
       .parse(await credit.json()).json.data.purchaseId,
   ).toBe(result.purchaseId);
-  const netResponse = await page.request.get(
-    `/api/v1/purchases/${result.purchaseId}`,
+  const netResponse = await entityApi(page.request).get(
+    "purchase",
+    result.purchaseId,
+    {},
   );
   const netPurchase = z
     .object({
@@ -207,8 +215,10 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
   expect(netPurchase.dataQuality.gaps.map((gap) => gap.check)).not.toContain(
     "order_id",
   );
-  const reviewed = await page.request.get(
-    `/api/v1/financial-transactions/${creditId}`,
+  const reviewed = await entityApi(page.request).get(
+    "financialTransaction",
+    creditId,
+    {},
   );
   expect(
     z

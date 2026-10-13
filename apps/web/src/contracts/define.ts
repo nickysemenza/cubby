@@ -79,17 +79,22 @@ export const mcpOmission = z.discriminatedUnion("omit", [
 ]);
 type McpOmission = z.input<typeof mcpOmission>;
 
+/** The HTTP wire of a type-only carrier operation; see `QueryContract`. */
+export interface HttpWire {
+  readonly input: z.ZodTypeAny;
+  readonly output: z.ZodTypeAny;
+  readonly nullable?: true;
+}
+
 /**
- * `http: false` keeps an operation off the HTTP API while the Start transport
- * and MCP still expose it. Used for operations whose input and output are
- * type-only carriers over a per-entity union, which HTTP serves better as
- * the per-entity resource routes.
+ * `httpWire` replaces a type-only carrier's input and output on the HTTP
+ * wire (the entity kernel operations): the route documents and accepts the
+ * loose wire schema, always as a POST body, while the server handler still
+ * parses the real per-entity input. `nullable` turns a null result into 404.
  *
- * `native` names the reason the Apple app calls this operation; the generator
- * adds every flagged operation to the swift-openapi-generator filter, so a
- * flagged member is also the only way an RPC id reaches CubbyKit. Resource
- * verbs are flagged on the entity declaration (`native.create/update/delete`)
- * instead.
+ * `native` names the reason the Apple app calls this operation. The HTTP API
+ * carries exactly the flagged members, so the flag is the only way an
+ * operation reaches HTTP and CubbyKit.
  *
  * `mcp` records why an operation is not an MCP tool action (`McpOmission`).
  *
@@ -106,7 +111,7 @@ export interface QueryContract<
   readonly input: Input;
   readonly output: Output;
   readonly observability?: OperationObservability;
-  readonly http?: false;
+  readonly httpWire?: HttpWire;
   readonly native?: string;
   readonly mcp?: McpOmission;
   readonly readPolicy?: "strong";
@@ -122,7 +127,7 @@ export interface MutationContract<
   readonly input: Input;
   readonly output: Output;
   readonly observability?: OperationObservability;
-  readonly http?: false;
+  readonly httpWire?: HttpWire;
   readonly native?: string;
   readonly mcp?: McpOmission;
   /**

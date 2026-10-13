@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { httpContract } from "~/lib/generated/http-contract.gen";
-import document from "~/lib/generated/http-openapi.gen.json";
 
 import {
   nameStructuralComponents,
   type JsonSchema,
 } from "../../../../../scripts/generator/http-api/document-passes";
+import { NATIVE_TYPED_RECORDS } from "../../../../../scripts/generator/http-api/type-overrides";
+import document from "../../../../apple/CubbyKit/Sources/CubbyAPI/openapi.json";
 import { httpMetadataSchema } from "./router";
 import { httpRoutes } from "./routes";
 
@@ -146,7 +147,7 @@ describe("generated HTTP OpenAPI document", () => {
   it("names components after their exports", () => {
     const named = Object.keys(schemas).filter((name) => !isAnonymous(name));
     for (const name of named) expect(name).toMatch(/^[A-Z][A-Za-z0-9]*$/u);
-    expect(named.length).toBeGreaterThan(900);
+    expect(named.length).toBeGreaterThan(800);
     expect(schemas).toHaveProperty("ProductTopLevelOut");
     expect(schemas).toHaveProperty("EntityAttachmentList");
     expect(
@@ -155,15 +156,9 @@ describe("generated HTTP OpenAPI document", () => {
       ),
     ).toBe(false);
     expect(schemas).toHaveProperty("LocationShortcode");
-    expect(schemas).toHaveProperty("VendorCreateInput");
-    expect(schemas).toHaveProperty("RecipeListPage");
-    expect(schemas).toHaveProperty("ProductListItem");
     expect(schemas).toHaveProperty("AiDescribeLocationOutput");
-    expect(schemas).toHaveProperty("ImageProcessingIssueFilter");
     expect(schemas).toHaveProperty("SmartCollectionPagination");
     expect(schemas).toHaveProperty("ImageProcessingSource");
-    expect(schemas).toHaveProperty("ProductUnitPriceMappings");
-    expect(schemas).toHaveProperty("ProductDataGaps");
     expect(schemas).toHaveProperty("OptionalImageRepresentations");
   });
 
@@ -217,7 +212,7 @@ describe("generated HTTP OpenAPI document", () => {
     expect(offenders).toEqual([]);
     // A `z.strictObject` input keeps its closed shape (Zod only closes
     // outputs by default), so a client-side typo is still refused.
-    expect(schemas.CollectionCreateInput?.additionalProperties).toBe(false);
+    expect(schemas.MealFoodAmountInput?.additionalProperties).toBe(false);
   });
 
   it("resolves every reference", () => {
@@ -228,16 +223,19 @@ describe("generated HTTP OpenAPI document", () => {
     for (const ref of references) resolve(ref);
   });
 
-  it("carries no component unreachable from a path", () => {
-    // Every component belongs to an HTTP path; anything else is dead weight
-    // in generated clients.
+  it("carries no component unreachable from a path or the typed-record keep-list", () => {
+    // Every component belongs to an HTTP path or a record hand-written Swift
+    // decodes by name; anything else is dead weight in generated clients.
     const reachable = new Set<string>();
     const refsIn = (serialized: string): string[] =>
       [...serialized.matchAll(/"\$ref":"([^"]+)"/gu)].flatMap((match) => {
         const name = componentName(match[1]);
         return name === undefined ? [] : [name];
       });
-    const queue = refsIn(JSON.stringify(document.paths));
+    const queue = [
+      ...refsIn(JSON.stringify(document.paths)),
+      ...NATIVE_TYPED_RECORDS,
+    ];
     for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
       if (reachable.has(name)) continue;
       reachable.add(name);
@@ -294,41 +292,6 @@ describe("generated HTTP OpenAPI document", () => {
         expect(JSON.stringify(value.schema)).not.toContain('"$ref"');
       }
     }
-    expect(
-      (paths["/api/v1/tasks"]?.get?.parameters ?? [])
-        .map((value) => value.name)
-        .filter((name) => name.startsWith("projectScope")),
-    ).toEqual([
-      "projectScopeStatuses",
-      "projectScopeKinds",
-      "projectScopeLocations",
-      "projectScopeSearch",
-      "projectScopeDateFrom",
-      "projectScopeDateTo",
-      "projectScopeCompletionYear",
-    ]);
-  });
-
-  it("enumerates every groupBy roster with identifier-safe values", () => {
-    // swift-openapi-generator turns the enum into Swift cases, so a future
-    // `:`/`.` groupable field (product sorts on `related:product.projects`)
-    // must stay out of the roster rather than break the native client.
-    const groupBys = operations.flatMap((entry) =>
-      (entry.parameters ?? [])
-        .filter((value) => value.name === "groupBy")
-        .map((value) => [entry.operationId, value.schema] as const),
-    );
-    expect(groupBys.length).toBeGreaterThan(0);
-    const identifier = z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/u);
-    const unsafe = groupBys.flatMap(([operationId, schema]) => {
-      const { enum: values } = schemaNode.parse(schema);
-      return values === undefined || values.length === 0
-        ? [`${operationId}: no enum`]
-        : values
-            .filter((field) => !identifier.safeParse(field).success)
-            .map((field) => `${operationId}: ${JSON.stringify(field)}`);
-    });
-    expect(unsafe).toEqual([]);
   });
 
   it("serves structured queries as POST bodies and everything else as GET", () => {
@@ -396,20 +359,6 @@ describe("generated HTTP OpenAPI document", () => {
     expect(resolve(valuationRef ?? "").schema).toMatchObject({
       type: "number",
     });
-    expect(schemas.ProductListItemOut?.properties?.stockTracked).toMatchObject({
-      type: expect.arrayContaining(["boolean"]),
-    });
-  });
-
-  it("shares one ListPageMeta across every list page", () => {
-    const pages = Object.entries(schemas).filter(([name]) =>
-      name.endsWith("ListPage"),
-    );
-    expect(pages.length).toBeGreaterThan(0);
-    for (const [, page] of pages)
-      expect(schemaNode.parse(page.properties?.meta).$ref).toBe(
-        `${COMPONENT}ListPageMeta`,
-      );
   });
 
   it("keeps anonymous component names stable when unrelated definitions are inserted", () => {

@@ -74,8 +74,8 @@ struct GenericEntityEditModelTests {
         return data
     }
 
-    // Minimal typed mutation results: the generated client decodes the response before the
-    // model sees it, so the stub must answer with every required key of the item schema.
+    // `entity.mutate` results as the server answers them (200, `{action, entity, item}`); the
+    // client reads only the created item's `id`.
     nonisolated private static let productUpdated = Data(
         #"{"action":"update","entity":"product","item":{"id":"PRD-2345","name":"Sample","acquisitionOrigin":"unknown","aliases":[],"tags":[],"manufacturer":"x","model":null,"notes":null,"expectedQuantity":null,"categoryId":null,"images":[],"externalIds":[],"pricing":{"source":"explicit","knownExpenseCount":0,"unknownExpenseCount":0,"knownUnitCount":0,"partial":false},"usdaUnavailable":null,"stockTracked":null,"kind":null,"dataQuality":{"status":"complete","score":100,"facets":[],"gaps":[],"exceptions":[],"relatedGaps":[],"relatedExceptions":[]},"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","category":null,"itemImageCount":0,"labelImageCount":0,"labelImages":[],"classificationEvidence":"","coverImageUrl":null},"sideEffects":{}}"#
             .utf8)
@@ -252,14 +252,18 @@ struct GenericEntityEditModelTests {
         #expect(model.savedID == "PRD-2345")
         let requests = seen.requests
         #expect(requests.count == 1)
-        #expect(requests.first?.method == "PATCH")
-        #expect(requests.first?.path == "/api/v1/products/PRD-2345")
-        #expect(requests.first?.body == ["manufacturer": "Lodge", "categoryId": .null])
+        #expect(requests.first?.method == "POST")
+        #expect(requests.first?.path == "/api/v1/entity/mutate")
+        #expect(
+            requests.first?.body == [
+                "action": "update", "entity": "product", "id": "PRD-2345",
+                "data": ["manufacturer": "Lodge", "categoryId": .null],
+            ])
     }
 
     @Test func createPostsTheDraftAndReturnsTheID() async throws {
         defer { EditStub.handler.withLock { $0 = nil } }
-        let seen = capture { _ in (201, Self.locationCreated) }
+        let seen = capture { _ in (200, Self.locationCreated) }
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.location], mode: .create(prefill: ["type": "area"]),
             client: try makeClient())
@@ -272,8 +276,11 @@ struct GenericEntityEditModelTests {
         #expect(model.savedID == "LOC-9ABC")
         let requests = seen.requests
         #expect(requests.first?.method == "POST")
-        #expect(requests.first?.path == "/api/v1/locations")
-        #expect(requests.first?.body == ["name": "Bin 9", "type": "area"])
+        #expect(requests.first?.path == "/api/v1/entity/mutate")
+        #expect(
+            requests.first?.body == [
+                "action": "create", "entity": "location", "data": ["name": "Bin 9", "type": "area"],
+            ])
     }
 
     /// A failed read leaves no original to save; retrying the read must clear its error so the
@@ -308,7 +315,7 @@ struct GenericEntityEditModelTests {
 
     /// Update editors open with the detail projection as a seed. When the fresh read fails, that
     /// projection is not an edit baseline: the failure is a read error, not a refused save, and an
-    /// edit can't PATCH against the stale projection.
+    /// edit can't update against the stale projection.
     @Test func failedReadOverASeededProjectionBlocksSaving() async throws {
         defer { EditStub.handler.withLock { $0 = nil } }
         EditStub.handler.withLock { handler in
@@ -356,12 +363,12 @@ struct GenericEntityEditModelTests {
         model.imageOrder = [ImageCode("IMG-2345"), ImageCode("IMG-4567")]
         #expect(model.canSave)
         #expect(await model.save())
-        #expect(seen.requests.first?.body == ["removeImageIds": ["IMG-3456"]])
+        #expect(seen.requests.first?.body["data"] == ["removeImageIds": ["IMG-3456"]])
 
         model.imageOrder = [ImageCode("IMG-4567"), ImageCode("IMG-2345")]
         model.pendingUploads = [ImageCode("IMG-5678")]
         #expect(await model.save())
-        let body = seen.requests.last?.body
+        let body = seen.requests.last?.body["data"]
         #expect(body?["imageOrder"] == ["IMG-4567", "IMG-2345"])
         #expect(body?["pendingImageIds"] == ["IMG-5678"])
     }

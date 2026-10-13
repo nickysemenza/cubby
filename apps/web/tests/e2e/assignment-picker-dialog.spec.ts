@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { chooseListView } from "./e2e-helpers";
 import { z } from "zod";
 
@@ -121,8 +122,10 @@ test("an assignment picker keeps its label through search, clear, and create", a
   for (const child of children) {
     await expect
       .poll(async () => {
-        const response = await page.request.get(
-          `/api/v1/locations/${child.id}`,
+        const response = await entityApi(page.request).get(
+          "location",
+          child.id,
+          {},
         );
         return locationParentOut.parse(await response.json()).parent?.name;
       })

@@ -32,7 +32,8 @@ struct StatementMatchSessionTests {
     private final class Recorder: Sendable {
         let seen = Mutex<[Seen]>([])
         var requests: [Seen] { seen.withLock { $0 } }
-        func writes() -> [Seen] { requests.filter { $0.method == "PATCH" } }
+        /// Entity writes: every create/update/delete is one `entity.mutate` POST.
+        func writes() -> [Seen] { requests.filter { $0.path == "/api/v1/entity/mutate" } }
     }
 
     private func makeClient() throws -> CubbyClient {
@@ -233,7 +234,7 @@ struct StatementMatchSessionTests {
                         "[{\"purchaseId\":\"PUR-2345\",\"amount\":42.5},{\"purchaseId\":\"PUR-3456\",\"amount\":48.5}]",
                     total: 91, remaining: 0, reason: nil)
             },
-            "/api/v1/financial-transactions/FTX-4K7M": { _ in
+            "/api/v1/entity/mutate": { _ in
                 """
                 {"action":"update","entity":"financialTransaction","item":\(Self.transaction("FTX-4K7M", amount: 91, merchant: "Example Hardware North")),"sideEffects":{}}
                 """
@@ -247,15 +248,18 @@ struct StatementMatchSessionTests {
         try await session.save()
 
         let write = try #require(recorder.writes().first)
-        #expect(write.path == "/api/v1/financial-transactions/FTX-4K7M")
+        #expect(write.method == "POST")
         // The typed strings are not what is sent: the server's validated numbers are.
         #expect(
             write.body
                 == [
-                    "allocations": [
-                        ["purchaseId": "PUR-2345", "amount": 42.5],
-                        ["purchaseId": "PUR-3456", "amount": 48.5],
-                    ]
+                    "action": "update", "entity": "financialTransaction", "id": "FTX-4K7M",
+                    "data": [
+                        "allocations": [
+                            ["purchaseId": "PUR-2345", "amount": 42.5],
+                            ["purchaseId": "PUR-3456", "amount": 48.5],
+                        ]
+                    ],
                 ])
         #expect(session.didSave)
     }

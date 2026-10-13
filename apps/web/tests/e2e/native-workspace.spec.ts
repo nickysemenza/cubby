@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { eq } from "drizzle-orm";
 
 import { auditLog, product as productTable } from "~/server/db/schema";
@@ -62,8 +63,9 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
     code: "UPGRADE_REQUIRED",
     reason: "CLIENT_UPDATE_REQUIRED",
   });
-  const outdatedApi = await authenticatedPage.request.get(
-    `/api/v1/runs/${run.shortcode}`,
+  const outdatedApi = await entityApi(authenticatedPage.request).get(
+    "run",
+    run.shortcode,
     {
       headers: { "User-Agent": "cubby-apple/1.0 (ios; fixture)" },
     },
@@ -138,12 +140,11 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
       replace: false,
     });
   await expect(page).toHaveURL(pilotURL);
-  const update = await authenticatedPage.request.patch(
-    `/api/v1/products/${product.id}`,
-    {
-      headers: { Origin: baseURL! },
-      data: { name: "Workspace drill refreshed" },
-    },
+  const update = await entityApi(authenticatedPage.request).update(
+    "product",
+    product.id,
+    { name: "Workspace drill refreshed" },
+    { headers: { Origin: baseURL! } },
   );
   expect(update.ok(), await update.text()).toBeTruthy();
   await page.evaluate(() =>

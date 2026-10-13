@@ -542,6 +542,38 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Native app
 
+- 🤔 🛠️ **Untype the largest native RPC outputs.** After the entity kernel
+  went untyped, the generated client's biggest remaining schema closures are
+  typed RPC outputs (bytes of the 200 response's component closure in the
+  Apple `openapi.json`): `product.createWithInventory` ~54 KB,
+  `run.workSnapshot`/`run.control`/`run.work` ~36 KB each,
+  `project.dashboardSummary` ~32 KB, the inventory family
+  (`bulkAdd`, `receiveExpense`, `reconcileSession`, `moveEntries`,
+  `locationSnapshot`, `getByLocationIds`) ~27 KB each, `usda-food.list`
+  ~27 KB; `RunDetail` and `EmailAccuracyReport` ride inside the run outputs.
+  Decide per output whether Swift needs the typed fields or can read
+  `JSONValue` through the manifest, and move the `NATIVE_TYPED_RECORDS`
+  keep-list views (`type-overrides.ts`) onto the entity manifest so that list
+  only shrinks.
+- 🤔 🛠️ **Merge overlapping single-record reads.** `entity.detail`,
+  `entityReport.get` and `collection.referenceDetail` each load one record by
+  shortcode with different envelopes; establish whether native and web can
+  share one read before changing any contract.
+- 🤔 🛠️ **Drop `native:` flags with no Swift caller.** The flag puts an
+  operation on HTTP and in the generated Swift client. These have no Swift
+  call site but some have E2E, skill, or doc callers over HTTP, so move each
+  caller to the Start transport or MCP first: `activity.submission`,
+  `entity.graphPaths`, `imageProcessing.{correctDescription,
+  evaluateAppleDescription,retry,schedule,validateCompanionMessage}`,
+  `inventory.getByLocationIds`, `product.{createWithInventory,
+  findOrCreateByUPC}`, `purchaseImport.{commitAcceptedReconciliation,
+  emailAccuracyBlind,emailAccuracyGrade,emailAccuracyReport,
+  prepareReconciliation}`, `run.{approveExecution,discoverMail,
+  executionMailboxes,work,aiUsage}`.
+- 🟢 🛠️ **Derive `DevicePlatform` from the manifest.** The Device platform
+  enum is hand-written in `DeviceRegistration.swift` since the typed Device
+  resource left the generated client; generate it from the field's declared
+  options instead.
 - 🟢 🧪 **Check the RecordList parity screens in a simulator.** The merged
   Connected records section ("+N more" into the paged per-view list,
   kind-labelled paths, per-row hops) and folded "N updates · M fields" rows
@@ -850,8 +882,8 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   and download URLs through capability-specific input metadata and the
   validated URL-fetch path; downloadable URLs remain the fallback.
 
-- ⏳ ✨ **Generic HTTP `resources.<entity>.batch` route.** Promote if a 5k-asset
-  library makes one-row-per-request writes measurably slow; mirror
+- ⏳ ✨ **Batched HTTP kernel writes.** Promote if a 5k-asset library makes
+  one-row-per-request `entity.mutate` writes measurably slow; mirror
   `entity.commands`'s independent-item semantics.
 
 - ⏳ ✨ **Budget-aware MCP pagination.** Investigate the observed Problems
@@ -1047,6 +1079,13 @@ consume the declarations.
   failure, and pathological LIKE/GLOB reports need sanitized
   name/message/stack/route evidence and an event-shaped regression test before
   changing filters; never hide unrelated transport or query errors.
+
+- 🤔 🧪 **Get iOS journeys to about 5 minutes.** Measure the first labeled
+  journey run in the folded CI lanes (`docs/ci.md`), then cut its critical
+  path (simulator boot, app build reuse, journey sharding) toward 5 minutes.
+- ⏳ 🛠️ **Revisit folding Apple host tests into the simulator job.** Promote
+  once a few post-fold CI runs show whether the separate host-test job still
+  saves wall time against the simulator build it duplicates.
 
 - 🤔 🧪 **Evaluate off-the-shelf OpenAPI generation.** The HTTP/Swift emitters
   under `scripts/generator/http-api/` might be replaceable by
@@ -1312,7 +1351,7 @@ related active work can find its deferred follow-ups.
 - ✨ **House timeline.** Promote when project journals or before/after retrieval
   need a chronological view beyond current timelines. Generalize `GardenEntry`
   into dated Location, Planting, and Project journal entries on
-  `resources.<entity>.timeline`, then project milestones, photo comparisons,
+  `entity.timeline`, then project milestones, photo comparisons,
   and an annual view.
 
 - ✨ **Heirloom outputs.** Promote when preparing an actual handoff or archive:

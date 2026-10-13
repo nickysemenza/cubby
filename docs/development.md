@@ -219,21 +219,26 @@ Better-Auth (`better-auth/tanstack-start`), with config in
   `x-api-key`. A key grants its owner's full access.
 - **Native sign-in.** Native clients sign in with
   `Origin: cubby-mobile://` and send `Authorization: Bearer <token>`.
-- **Resource routes.** Every entity gets `GET/POST /api/v1/<entity>` and
-  `GET/PATCH/DELETE /api/v1/<entity>/{id}`.
-- **Lists.** `page` is 1-based; `pageSize` defaults to 10, max 500; `sort`
-  takes up to 3 comma-separated fields with `-` for descending. Filters are
-  plain query parameters, and unknown ones return 400.
+- **Scope.** HTTP carries exactly the contract members flagged `native:`
+  (`apps/web/src/contracts/*.contract.ts`); the browser reaches every
+  operation through the Start transport and agents through MCP.
+- **Entity kernel.** Entity reads and writes are four POST routes with a
+  free-form JSON body the server parses with the entity's own schema (an
+  invalid body is a 400 with `validationIssues`): `/api/v1/entity/detail`
+  (`{entity, shortcode}`, 404 when absent), `/api/v1/entity/list`
+  (`{entity, filters, pagination: {pageIndex, pageSize}, sort?, groupBy?}`;
+  `pageIndex` is 0-based, `sort` is `[{orderBy, direction}]`),
+  `/api/v1/entity/mutate` (`{action: "create" | "update" | "delete", …}`) and
+  `/api/v1/entity/timeline`. Per-entity filter names, kinds and actions for
+  native clients are generated into CubbyKit's `entity-kernel.json`.
 - **Operations.** Other operations use `GET` (flat input) or `POST` (structured
   input or mutation) on `/api/v1/{domain}/{op}`. Success bodies are the output
-  itself; errors are `ApiError`.
-- **Docs.** `/api/v1/docs` (Scalar) and `/api/v1/openapi.json` (OpenAPI 3.1, the generated document emitted as a static asset by `tooling/worker-static-assets.ts`; no Worker code runs).
-  The Apple app generates its client from the committed document.
-- **Opting out.** `http: false` on a contract member excludes it from HTTP
-  (streams and the generic entity union operations).
-- **Filter encoding.** Lists repeat the key (`tag=a&tag=b`), object-valued
-  filters flatten to prefixed scalars, and nothing is JSON-encoded. Component
-  names come from `@cubby/schemas` exports or an explicit `.meta({ id })`.
+  itself; errors are `ApiError`. Flat GET filters repeat the key
+  (`tag=a&tag=b`) and nothing is JSON-encoded.
+- **Document.** The OpenAPI 3.1 document exists only for the Apple client
+  (`apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json`, gitignored, written by
+  `pnpm generate`). Component names come from `@cubby/schemas` exports or an
+  explicit `.meta({ id })`.
 - **Test client.** `createCubbyClient({ baseUrl, apiKey? })` in
   `apps/web/tests/e2e/http-api-client.ts` wraps the generated ts-rest router
   `apps/web/src/lib/generated/http-contract.gen.ts`.

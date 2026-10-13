@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { prepareCapturedRetailerOrder } from "./prepare-retailer-source";
 import { z } from "zod";
 import { and, eq, inArray, or } from "drizzle-orm";
@@ -99,12 +100,11 @@ for (const statementFirst of [true, false]) {
       names,
     );
     if (existingVendor) {
-      const allowed = await page.request.patch(
-        `/api/v1/vendors/${canonicalVendor.id}`,
-        {
-          headers: { Origin: e2eRuntime.baseURL },
-          data: { browserDomains, orderEmailSenders },
-        },
+      const allowed = await entityApi(page.request).update(
+        "vendor",
+        canonicalVendor.id,
+        { browserDomains, orderEmailSenders },
+        { headers: { Origin: e2eRuntime.baseURL } },
       );
       expect(allowed.ok(), await allowed.text()).toBe(true);
     }

@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { SHORTCODE_BODY_PATTERN } from "@cubby/shared";
 import {
   expect,
@@ -92,10 +93,10 @@ export async function readExpense<Schema extends z.ZodType>(
   id: string,
   schema: Schema,
 ): Promise<z.output<Schema>> {
-  const response = await page.request.get(`/api/v1/expenses/${id}`);
+  const response = await entityApi(page.request).get("expense", id, {});
   expect(
     response.ok(),
-    `GET /api/v1/expenses/${id}: ${response.status()}${response.ok() ? "" : ` ${scrubErrorMessage(await response.text())}`}`,
+    `entity.detail expense ${id}: ${response.status()}${response.ok() ? "" : ` ${scrubErrorMessage(await response.text())}`}`,
   ).toBe(true);
   return schema.parse(await response.json());
 }
@@ -551,7 +552,7 @@ const calendarFeedTrace = z.object({
   snapshot: z.object({ revision: z.number() }).nullable(),
   dirty: z.object({ reason: z.string() }).nullable(),
 });
-/** Reads `/api/v1/calendar/inspectFeed` however the spec is authenticated. */
+/** Reads calendar.inspectFeed through the browser operation transport. */
 type CalendarFeedInspector = () => Promise<object | null>;
 
 /**

@@ -62,22 +62,19 @@ export const statementRowContract = defineContract("statementRow", {
     input: listStatementImportsInput,
     output: statementImportListOut,
   }),
-  // Agent-facing (MCP `finance_read`, `statement_rows`): off the HTTP API.
+  // Agent-facing (MCP `finance_read`, `statement_rows`).
   /** Charges recorded twice under two identities (descriptor drift). */
   drift: query({
-    http: false,
     input: findStatementRowDriftInput,
     output: findStatementRowDriftOut,
   }),
   /** Write judgment fields onto rows selected by id or by filter. */
   update: mutation({
-    http: false,
     input: updateStatementRowsInput,
     output: statementRowWriteOut,
     invalidates: ["statementRow"],
   }),
   delete: mutation({
-    http: false,
     input: deleteStatementRowsInput,
     output: statementRowWriteOut,
     invalidates: ["statementRow"],

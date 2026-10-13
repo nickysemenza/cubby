@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { spendingClassificationReviewPreview } from "@cubby/schemas/spending-classification-review";
 import { z } from "zod";
 import {
@@ -55,14 +56,13 @@ test("reviews historical item classification and preserves explicit purpose", as
     id: string,
     data: z.infer<ReturnType<typeof z.json>>,
   ) => {
-    const response = await page.request.patch(`/api/v1/expenses/${id}`, {
+    const response = await entityApi(page.request).update("expense", id, data, {
       headers,
-      data,
     });
     expect(response.ok(), await response.text()).toBeTruthy();
   };
   const read = async () => {
-    const response = await page.request.get(`/api/v1/expenses/${expense}`);
+    const response = await entityApi(page.request).get("expense", expense, {});
     expect(response.ok(), await response.text()).toBeTruthy();
     return z
       .object({
@@ -193,10 +193,12 @@ test("reviews historical item classification and preserves explicit purpose", as
   };
   const stale = await preview(reassignment);
   expect(stale.changedExpenseCount).toBe(1);
-  const changed = await page.request.patch(`/api/v1/products/${unbooked}`, {
-    headers,
-    data: { categoryId: storage },
-  });
+  const changed = await entityApi(page.request).update(
+    "product",
+    unbooked,
+    { categoryId: storage },
+    { headers },
+  );
   expect(changed.ok(), await changed.text()).toBeTruthy();
   const refused = await apply(stale);
   expect(refused.ok()).toBeFalsy();
@@ -210,7 +212,7 @@ test("reviews historical item classification and preserves explicit purpose", as
   ).toBe(0);
   expect((await apply(reviewed)).ok()).toBeTruthy();
   expect(await read()).toMatchObject({ cost: 61, spendingCategoryId: gifts });
-  const refundRead = await page.request.get(`/api/v1/expenses/${refund}`);
+  const refundRead = await entityApi(page.request).get("expense", refund, {});
   expect(await refundRead.json()).toMatchObject({
     cost: -10,
     productQuantity: 0,
@@ -268,13 +270,10 @@ test("reviews historical item classification and preserves explicit purpose", as
       spendingCategoryId: { mode: "inherit", storedValue: null },
     },
   });
-  const filtered = await page.request.get("/api/v1/expenses", {
-    params: {
-      spendingCategoryId: tools,
-      page: "1",
-      pageSize: "10",
-      sort: "spendingCategoryId",
-    },
+  const filtered = await entityApi(page.request).list("expense", {
+    filters: { spendingCategoryId: tools },
+    pagination: { pageIndex: 0, pageSize: 10 },
+    sort: [{ orderBy: "spendingCategoryId", direction: "asc" }],
   });
   expect(filtered.ok(), await filtered.text()).toBeTruthy();
   expect(

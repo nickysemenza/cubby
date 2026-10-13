@@ -22,3 +22,17 @@ export const TYPE_OVERRIDES = {
 } as const satisfies Record<string, string>;
 /** Modules the generated client imports for the overrides above. */
 export const ADDITIONAL_IMPORTS: readonly string[] = ["CubbyAPISupport"];
+
+/**
+ * Kernel responses are untyped JSON objects, so no route reaches these record
+ * schemas; hand-written Swift still decodes them by name from a kernel
+ * detail or list row. Shrink-only: move each view onto the entity manifest
+ * and drop its name.
+ */
+export const NATIVE_TYPED_RECORDS = [
+  "ImageOut",
+  "InventoryDetail",
+  "InventoryWithLocationAndProductOut",
+  "MealListItem",
+  "ProductDetail",
+] as const;

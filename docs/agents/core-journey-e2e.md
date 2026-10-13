@@ -115,5 +115,5 @@ The interactive CSV/photo journey can also run on the dedicated hosted simulator
 job, which retains the checksum-listed evidence in its downloadable run bundle:
 
 ```sh
-gh workflow run e2e-journeys.yaml --ref "$(git branch --show-current)" -f journey=simulator-inputs
+gh workflow run ci.yaml --ref "$(git branch --show-current)" -f journey=simulator-inputs
 ```

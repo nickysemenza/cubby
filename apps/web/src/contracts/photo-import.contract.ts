@@ -413,10 +413,9 @@ export const photoImportContract = defineContract("photoImport", {
     output: photoImportReconcileOutputSchema,
   }),
   // Agent-facing (MCP `imports_read`, `photo_run`): the photo agent's reads
-  // and bounded writers, off the HTTP API.
+  // and bounded writers.
   /** One bounded page of a run's photos in capture order, with owner and notes. */
   runContext: query({
-    http: false,
     input: z.object({
       runId: runShortcode,
       cursor: z.number().int().nonnegative().optional(),
@@ -433,25 +432,21 @@ export const photoImportContract = defineContract("photoImport", {
     }),
   }),
   productCandidates: query({
-    http: false,
     input: photoProductCandidateSearchInput,
     output: photoProductCandidatesResponse,
   }),
   proposals: query({
-    http: false,
     input: listPhotoGroupProposalsInput,
     output: photoGroupProposalList,
   }),
   /** Upsert proposed groups for human review; writes no Product or Inventory. */
   proposeGroups: mutation({
-    http: false,
     input: proposePhotoGroupsInput,
     output: proposePhotoGroupsOutput,
     invalidates: ["runOnly"],
   }),
   /** The bounded writer approval runs; idempotent per (runId, groupKey). */
   commitGroup: mutation({
-    http: false,
     input: commitPhotoGroupInput,
     output: commitPhotoGroupOutput,
     invalidates: ["runOnly"],

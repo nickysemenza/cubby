@@ -16,9 +16,10 @@ private final class FilterStub: URLProtocol, @unchecked Sendable {
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
-/// The generated `listPage`/`timeline` arms map every query-parameter schema shape in the HTTP
-/// document onto the typed query; these pin the wire form each shape produces, one row per shape
-/// the classifier covers (`scripts/generator/http-api/swift-operations.ts`).
+/// `listPage`/`timeline` re-nest each flat filter name under the kernel body's `filters` and
+/// type its value from `Generated/entity-kernel.json`; these pin the JSON each parameter kind
+/// produces, one row per kind the catalog declares
+/// (`scripts/generator/http-api/entity-kernel.ts`).
 @Suite("Entity filters on the wire", .serialized)
 struct EntityFilterTests {
     private static let emptyPage = Data(
@@ -33,22 +34,44 @@ struct EntityFilterTests {
             session: FilterStub.session())
     }
 
-    /// The query items of the one request `body` sends, as `name=value` pairs in request order.
-    private func queryItems(_ body: (CubbyClient) async throws -> Void) async throws -> [String] {
+    /// The JSON body of the one request `body` sends, answered with `response`.
+    private func requestBody(
+        answering response: Data = emptyPage, path: String = "/api/v1/entity/list",
+        _ body: (CubbyClient) async throws -> Void
+    ) async throws -> JSONValue {
         defer { FilterStub.handler.withLock { $0 = nil } }
-        let seen = Mutex<[URL]>([])
+        let seen = Mutex<[(method: String?, path: String, body: Data?)]>([])
         FilterStub.handler.withLock { handler in
             handler = { request in
-                if let url = request.url { seen.withLock { $0.append(url) } }
-                return (200, Self.emptyPage)
+                seen.withLock {
+                    $0.append((request.httpMethod, request.url?.path ?? "", try? Self.bodyData(request)))
+                }
+                return (200, response)
             }
         }
         try await body(try makeClient())
-        let urls = seen.withLock { $0 }
-        #expect(urls.count == 1)
-        let components = try #require(
-            urls.first.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) })
-        return (components.queryItems ?? []).map { "\($0.name)=\($0.value ?? "")" }
+        let requests = seen.withLock { $0 }
+        #expect(requests.count == 1)
+        let request = try #require(requests.first)
+        #expect(request.method == "POST")
+        #expect(request.path == path)
+        return try JSONDecoder().decode(JSONValue.self, from: try #require(request.body))
+    }
+
+    private static func bodyData(_ request: URLRequest) throws -> Data {
+        if let body = request.httpBody { return body }
+        let stream = try #require(request.httpBodyStream)
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { throw stream.streamError ?? URLError(.cannotDecodeRawData) }
+            if count == 0 { break }
+            data.append(contentsOf: buffer.prefix(count))
+        }
+        return data
     }
 
     struct Row: Sendable {
@@ -56,101 +79,108 @@ struct EntityFilterTests {
         let entity: EntityKey
         let wire: String
         let value: EntityFilterValue
-        let expected: [String]
+        /// The whole `filters` object the list body carries.
+        let expected: JSONValue
     }
 
     static let rows: [Row] = [
         Row(
             shape: "string", entity: .product, wire: "nameFilter", value: .single("pan"),
-            expected: ["nameFilter=pan"]),
+            expected: ["nameFilter": "pan"]),
         Row(
             shape: "number", entity: .product, wire: "expectedQuantityMin", value: .single("1.5"),
-            expected: ["expectedQuantityMin=1.5"]),
+            expected: ["expectedQuantityMin": 1.5]),
         Row(
             shape: "integer", entity: .product, wire: "expenseCountMin", value: .single("2"),
-            expected: ["expenseCountMin=2"]),
+            expected: ["expenseCountMin": 2]),
         Row(
             shape: "boolean", entity: .product, wire: "taskOpenOnly", value: .single("true"),
-            expected: ["taskOpenOnly=true"]),
+            expected: ["taskOpenOnly": true]),
         Row(
             shape: "string enum", entity: .product, wire: "imagePresenceFilter", value: .single("none"),
-            expected: ["imagePresenceFilter=none"]),
+            expected: ["imagePresenceFilter": "none"]),
         Row(
-            shape: "array<string>", entity: .product, wire: "tagFilters", value: .many(["a", "b"]),
-            expected: ["tagFilters=a", "tagFilters=b"]),
+            shape: "strings", entity: .product, wire: "tagFilters", value: .many(["a", "b"]),
+            expected: ["tagFilters": ["a", "b"]]),
         Row(
-            shape: "array<enum>", entity: .product, wire: "categoryFeatureFilter",
-            value: .many(["food", "tools"]),
-            expected: ["categoryFeatureFilter=food", "categoryFeatureFilter=tools"]),
+            shape: "strings enum", entity: .product, wire: "categoryFeatureFilter",
+            value: .many(["food", "tools"]), expected: ["categoryFeatureFilter": ["food", "tools"]]),
         Row(
-            shape: "anyOf[string, const]", entity: .inventory, wire: "productIdFilter",
-            value: .single("PRD-2345"), expected: ["productIdFilter=PRD-2345"]),
+            shape: "string id", entity: .inventory, wire: "productIdFilter",
+            value: .single("PRD-2345"), expected: ["productIdFilter": "PRD-2345"]),
         Row(
-            shape: "array<anyOf[string, const]>", entity: .product, wire: "locationIdFilter",
+            shape: "strings with the unresolvable sentinel", entity: .product, wire: "locationIdFilter",
             value: .many(["LOC-2345", "__unresolvable_entity_filter__"]),
-            expected: ["locationIdFilter=LOC-2345", "locationIdFilter=__unresolvable_entity_filter__"]),
+            expected: ["locationIdFilter": ["LOC-2345", "__unresolvable_entity_filter__"]]),
         Row(
-            shape: "array<anyOf[enum, enum]>", entity: .purchase, wire: "dataGap",
-            value: .many(["order_id", "product_image"]),
-            expected: ["dataGap=order_id", "dataGap=product_image"]),
+            shape: "strings enum (union)", entity: .purchase, wire: "dataGap",
+            value: .many(["order_id", "product_image"]), expected: ["dataGap": ["order_id", "product_image"]]),
         Row(
-            shape: "array<string minLength>", entity: .financialAccount, wire: "source",
-            value: .many(["chase"]), expected: ["source=chase"]),
+            shape: "strings minLength", entity: .financialAccount, wire: "source",
+            value: .many(["synthetic-bank"]), expected: ["source": ["synthetic-bank"]]),
+        Row(
+            shape: "nested", entity: .expense, wire: "projectScopeKinds",
+            value: .many(["garden"]), expected: ["projectScope": ["kinds": ["garden"]]]),
     ]
 
     @Test(arguments: rows)
     func filterLandsOnTheListRoute(row: Row) async throws {
-        let items = try await queryItems { client in
+        let body = try await requestBody { client in
             _ = try await client.list(
                 EntityCatalog[row.entity], page: 1, pageSize: 50,
                 filters: EntityFilterState([row.wire: row.value]))
         }
-        let filterItems = items.filter { !$0.hasPrefix("page=") && !$0.hasPrefix("pageSize=") }
-        #expect(filterItems == row.expected, Comment(rawValue: row.shape))
+        #expect(body["entity"] == .string(row.entity.rawValue))
+        #expect(body["pagination"] == ["pageIndex": 0, "pageSize": 50])
+        #expect(body["filters"] == row.expected, Comment(rawValue: row.shape))
     }
 
-    /// A range descriptor binds two (or three) parameters; each travels under its own wire name.
+    /// A range descriptor binds two (or three) parameters; each travels under its own name.
     @Test func rangeWireNamesTravelSeparately() async throws {
         let filter = try #require(EntityCatalog[.ledgerTransfer].filter("date"))
         guard case .range(let from, let to, _) = filter.wire else {
             Issue.record("ledgerTransfer.date is not a range filter")
             return
         }
-        let items = try await queryItems { client in
+        let body = try await requestBody { client in
             _ = try await client.list(
                 EntityCatalog[.ledgerTransfer],
                 filters: EntityFilterState([from: .single("2026-01-01"), to: .single("2026-01-31")]))
         }
-        #expect(items.contains("\(from)=2026-01-01"))
-        #expect(items.contains("\(to)=2026-01-31"))
+        #expect(body["filters"] == .object([from: "2026-01-01", to: "2026-01-31"]))
     }
 
+    /// The timeline's `ids`, `order`, `from` and `to` land under `window`, beside the list
+    /// filters; a list body never accepts them.
     @Test func timelineTakesIdsAndOrderBesideTheListFilters() async throws {
-        defer { FilterStub.handler.withLock { $0 = nil } }
-        let seen = Mutex<URL?>(nil)
+        let response =
+            #"{"groups":[],"stats":[],"notes":[],"#
+            + #""meta":{"totalCount":0,"pageIndex":0,"pageSize":200}}"#
+        let filters = EntityFilterState([
+            "ids": .many(["PRD-2345"]), "order": .single("desc"), "tagFilters": .single("a"),
+        ])
+        let body = try await requestBody(answering: Data(response.utf8), path: "/api/v1/entity/timeline") {
+            client in
+            let timeline = try await client.timeline(EntityCatalog[.product], filters: filters)
+            #expect(timeline.groups.isEmpty)
+        }
+        #expect(
+            body
+                == [
+                    "entity": "product", "filters": ["tagFilters": ["a"]],
+                    "window": ["ids": ["PRD-2345"], "order": "desc"], "pagination": [:],
+                ])
+
         FilterStub.handler.withLock { handler in
-            handler = { request in
-                seen.withLock { $0 = request.url }
-                let body =
-                    #"{"groups":[],"stats":[],"notes":[],"#
-                    + #""meta":{"totalCount":0,"pageIndex":0,"pageSize":200}}"#
-                return (200, Data(body.utf8))
+            handler = { _ in
+                Issue.record("unexpected network call")
+                return (500, Data())
             }
         }
-        let client = try makeClient()
-        let timeline = try await client.timeline(
-            EntityCatalog[.product],
-            filters: EntityFilterState([
-                "ids": .many(["PRD-2345"]), "order": .single("desc"), "tagFilters": .single("a"),
-            ]))
-        #expect(timeline.groups.isEmpty)
-        let url = try #require(seen.withLock { $0 })
-        #expect(url.path.hasSuffix("/products/timeline"))
-        let items = Set(
-            (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []).map {
-                "\($0.name)=\($0.value ?? "")"
-            })
-        #expect(items == ["ids=PRD-2345", "order=desc", "tagFilters=a"])
+        defer { FilterStub.handler.withLock { $0 = nil } }
+        await #expect(throws: EntityFilterError.unknownParameter(.product, "ids")) {
+            _ = try await makeClient().list(EntityCatalog[.product], filters: filters)
+        }
     }
 
     /// A wire name outside the route, or a value its enum rejects, fails before any request.

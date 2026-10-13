@@ -200,22 +200,19 @@ export const mealContract = defineContract("meal", {
     output: schemas.saveMealRecipePreparationOut,
     invalidates: ["meal"],
   }),
-  // Agent-facing (MCP `nutrition`, `meal_recipe`): off the HTTP API.
+  // Agent-facing (MCP `nutrition`, `meal_recipe`).
   /** One person's daily nutrition, one line per meal plus a daily total. */
   dailyIntake: query({
-    http: false,
     input: dailyIntakeInput,
     output: dailyIntakeOut,
   }),
   /** `getPreparations` with every totals block trimmed to `nutrition`. */
   preparationsDetail: query({
-    http: false,
     input: schemas.getMealPreparationsMcpInput,
     output: schemas.getMealPreparationsMcpOut,
   }),
   /** Plan a recipe into a meal; compact identity + coverage, nutrients on request. */
   planRecipe: mutation({
-    http: false,
     input: schemas.mealAddRecipeInput.extend({
       nutrition: addRecipeNutritionDetail,
     }),

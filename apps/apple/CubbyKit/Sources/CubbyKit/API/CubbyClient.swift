@@ -42,7 +42,7 @@ public actor CubbyClient {
 
     public func product(_ id: ProductCode) async throws -> ProductDetail {
         try await perform {
-            try await api.resources_product_get(path: .init(id: id.rawValue)).ok.body.json
+            try await EntityCatalog[.product].getRow(client: api, id: id.rawValue).decoded()
         }
     }
 
@@ -62,40 +62,36 @@ public actor CubbyClient {
         pageSize: Int = 50,
         at location: LocationCode? = nil
     ) async throws -> ListPage<EntityRow> {
-        var query = Operations.Resources_product_list.Input.Query(
-            page: page, pageSize: pageSize, sort: "-createdAt")
-        // A bare `.none` would read as `Optional.none`; `.some` pins it to the filter's own case.
-        query.imagePresenceFilter = .some(.none)
-        if let location { query.locationIdFilter = [.init(value1: location.rawValue)] }
-        return try await productPage(query)
+        var filters = EntityFilterState(["imagePresenceFilter": .single("none")])
+        if let location { filters.set(.many([location.rawValue]), for: "locationIdFilter") }
+        return try await list(
+            EntityCatalog[.product], page: page, pageSize: pageSize, sort: "-createdAt", filters: filters)
     }
 
     /// Products that are physically stocked somewhere — the only ones worth a Spotlight entry.
     public func stockedProducts(page: Int = 1, pageSize: Int = 200) async throws -> ListPage<EntityRow> {
-        var query = Operations.Resources_product_list.Input.Query(page: page, pageSize: pageSize)
-        query.relatedInventoryPresenceFilter = .has
-        return try await productPage(query)
+        try await list(
+            EntityCatalog[.product], page: page, pageSize: pageSize,
+            filters: EntityFilterState(["relatedInventoryPresenceFilter": .single("has")]))
     }
 
     /// The ids of products that have at least one image, newest first. List rows carry image ids
     /// but no URLs, so the on-device cover index pages ids here and fetches each detail after.
     public func productIDsWithImages(page: Int = 1, pageSize: Int = 100) async throws -> ListPage<ProductCode>
     {
-        var query = Operations.Resources_product_list.Input.Query(
-            page: page, pageSize: pageSize, sort: "-createdAt")
-        query.imagePresenceFilter = .has
-        return try await perform {
-            let result = try await api.resources_product_list(query: query).ok.body.json
-            return ListPage(items: result.items.map(\.id), meta: result.meta)
-        }
+        let rows = try await list(
+            EntityCatalog[.product], page: page, pageSize: pageSize, sort: "-createdAt",
+            filters: EntityFilterState(["imagePresenceFilter": .single("has")]))
+        return ListPage(items: rows.items.map { ProductCode($0.id) }, meta: rows.meta)
     }
 
     /// Existing products carrying `gtin` in any spelling (UPC-A, EAN-13, GTIN-14 — the server
     /// widens the term). A lookup, never a create: the Search tab shows what is already here.
     public func products(matchingBarcode gtin: String) async throws -> [EntityRow] {
-        var query = Operations.Resources_product_list.Input.Query(page: 1, pageSize: 5, sort: "name")
-        query.upcFilter = gtin
-        return try await productPage(query).items
+        try await list(
+            EntityCatalog[.product], page: 1, pageSize: 5, sort: "name",
+            filters: EntityFilterState(["upcFilter": .single(gtin)])
+        ).items
     }
 
     // MARK: - Generic entity access
@@ -174,7 +170,7 @@ public actor CubbyClient {
             case .usdaFood:
                 return try await usdaFoodPage(
                     descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
-            case .resource:
+            case .kernel:
                 let result = try await descriptor.listPage(
                     client: api, page: page, pageSize: pageSize, sort: sort, filters: filters)
                 return ListPage(
@@ -185,7 +181,7 @@ public actor CubbyClient {
         }
     }
 
-    /// `resources.<entity>.timeline` for the same filter state a list takes, plus `ids`, `from`,
+    /// `entity.timeline` for the same filter state a list takes, plus `ids`, `from`,
     /// `to` and `order` under their wire names.
     public func timeline(
         _ descriptor: EntityDescriptor, filters: EntityFilterState = EntityFilterState()
@@ -193,27 +189,19 @@ public actor CubbyClient {
         try await perform { try await descriptor.timeline(client: api, filters: filters) }
     }
 
-    /// `resources.<entity>.create` from an editor's draft; returns the new record's id. The body
-    /// is decoded into the typed create payload first, so an unknown key or malformed value fails
-    /// before any request.
+    /// `entity.mutate` create from an editor's draft; returns the new record's id. The server
+    /// parses the body with the entity's create schema, so an unknown key is its 400.
     public func create(_ descriptor: EntityDescriptor, body: [String: JSONValue]) async throws -> String {
-        try await perform {
-            try await sending(.object(body)) { try await descriptor.create(.object(body), client: api) }
-        }
+        try await perform { try await descriptor.create(.object(body), client: api) }
     }
 
-    /// `resources.<entity>.update` from an editor's patch: changed values and the cleared keys
-    /// as `null` (the generated client can only omit an optional, and an omitted field means
-    /// "leave as is"). An empty patch sends nothing.
+    /// `entity.mutate` update from an editor's patch: changed values and the cleared keys as
+    /// `null` (an omitted field means "leave as is"). An empty patch sends nothing.
     public func update(_ descriptor: EntityDescriptor, id: String, patch: EntityPatch) async throws {
         guard !patch.isEmpty else { return }
         var body = patch.values
         for key in patch.cleared { body[key] = .null }
-        try await perform {
-            try await sending(.object(body)) {
-                try await descriptor.update(.object(patch.values), id: id, client: api)
-            }
-        }
+        try await perform { try await descriptor.update(.object(body), id: id, client: api) }
     }
 
     /// Runs one generated call whose typed body was decoded from `body`, restoring on the wire
@@ -231,7 +219,7 @@ public actor CubbyClient {
         return try await sending(body) { try await call(input) }
     }
 
-    /// `resources.<entity>.delete`. Destructive: only `HeroActionRunner` calls it, and only after
+    /// `entity.mutate` delete. Destructive: only `HeroActionRunner` calls it, and only after
     /// the person confirmed behind the connection-impact preview.
     public func delete(_ descriptor: EntityDescriptor, id: String) async throws {
         try await perform { try await descriptor.delete(id: id, client: api) }
@@ -241,8 +229,7 @@ public actor CubbyClient {
     /// detail read is a superset of the photo views' `ImageWithEntity`, which it projects to.
     public func imageDetail(id: String) async throws -> ImageWithEntity {
         try await perform {
-            try JSONValue(encoding: try await api.resources_image_get(path: .init(id: id)).ok.body.json)
-                .decoded()
+            try await EntityCatalog[.image].getRow(client: api, id: id).decoded()
         }
     }
 
@@ -258,7 +245,7 @@ public actor CubbyClient {
                 }
                 raw = try usdaFoodJSON(
                     try await api.usdaFood_detail(query: .init(id: fdcID)).ok.body.json)
-            case .resource:
+            case .kernel:
                 raw = try await descriptor.getRow(client: api, id: id)
             case .unavailable:
                 throw EntityOperationError.unsupported(descriptor.key, .get)
@@ -358,10 +345,8 @@ public actor CubbyClient {
 
     public func assignExpense(_ expenseID: String, toProject projectID: String) async throws {
         try await perform {
-            _ = try await api.resources_expense_update(
-                path: .init(id: expenseID),
-                body: .json(.init(projectId: projectID))
-            ).ok
+            try await EntityCatalog[.expense].update(
+                ["projectId": .string(projectID)], id: expenseID, client: api)
         }
     }
 
@@ -741,11 +726,11 @@ public actor CubbyClient {
         count: Double
     ) async throws -> InventoryEntryCode {
         try await perform {
-            let output = try await api.resources_inventory_create(
-                body: .json(
-                    .init(productId: product, locationId: location, amount: .init(count)))
-            )
-            return try output.created.body.json.item.id
+            let body: JSONValue = [
+                "productId": .string(product.rawValue), "locationId": .string(location.rawValue),
+                "amount": .number(count),
+            ]
+            return InventoryEntryCode(try await EntityCatalog[.inventory].create(body, client: api))
         }
     }
 
@@ -871,14 +856,16 @@ public actor CubbyClient {
     }
 
     /// Every location, by name, for the sweep's bin picker.
-    public func locationOptions(page: Int = 1, pageSize: Int = 200) async throws -> ListPage<LocationListItem>
+    public func locationOptions(page: Int = 1, pageSize: Int = 200) async throws -> ListPage<LocationChoice>
     {
-        try await perform {
-            let result = try await api.resources_location_list(
-                query: .init(page: page, pageSize: pageSize, sort: "name")
-            ).ok.body.json
-            return ListPage(items: result.items, meta: result.meta)
-        }
+        let rows = try await list(EntityCatalog[.location], page: page, pageSize: pageSize, sort: "name")
+        return ListPage(
+            items: rows.items.map {
+                LocationChoice(
+                    id: LocationCode($0.id), name: $0.raw["name"]?.stringValue ?? $0.title,
+                    parentName: $0.raw["parent"]?["name"]?.stringValue)
+            },
+            meta: rows.meta)
     }
 
     /// The global "Unknown" location, created on first use.
@@ -930,10 +917,10 @@ public actor CubbyClient {
     public func meals(on date: Date) async throws -> [MealListItem] {
         let day = HouseholdDay.string(for: date)
         return try await perform {
-            var query = Operations.Resources_meal_list.Input.Query(page: 1, pageSize: 20, sort: "date")
-            query.from = day
-            query.to = day
-            return try await api.resources_meal_list(query: query).ok.body.json.items
+            try await EntityCatalog[.meal].listPage(
+                client: api, page: 1, pageSize: 20, sort: "date",
+                filters: EntityFilterState(["from": .single(day), "to": .single(day)])
+            ).items.map { try $0.decoded() }
         }
     }
 
@@ -982,23 +969,10 @@ public actor CubbyClient {
 
     // MARK: - Internals
 
-    private func productPage(
-        _ query: Operations.Resources_product_list.Input.Query
-    ) async throws -> ListPage<EntityRow> {
-        let descriptor = EntityCatalog[.product]
-        return try await perform {
-            let result = try await api.resources_product_list(query: query).ok.body.json
-            return ListPage(
-                items: try result.items.compactMap { descriptor.row(from: try JSONValue(encoding: $0)) },
-                meta: result.meta
-            )
-        }
-    }
-
     // MARK: - USDA catalog reads
 
     /// USDA foods are the external catalog, not a kernel entity, so they read through the
-    /// typed USDA RPCs; every other entity lists through its resource route.
+    /// typed USDA RPCs; every other entity lists through the entity kernel.
     private func usdaFoodPage(
         _ descriptor: EntityDescriptor,
         page: Int,
@@ -1089,3 +1063,10 @@ protocol USDAFoodRow: Encodable {
 
 extension FoodSummaryWithLinkedProducts: USDAFoodRow {}
 extension UsdaFoodListRow: USDAFoodRow {}
+
+/// One location as the bin pickers list it.
+public struct LocationChoice: Identifiable, Sendable, Hashable {
+    public let id: LocationCode
+    public let name: String
+    public let parentName: String?
+}

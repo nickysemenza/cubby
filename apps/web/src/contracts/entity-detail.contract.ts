@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { defineContract, query } from "~/contracts/define";
+import { kernelDetailWire } from "~/contracts/entity-kernel-wire";
 import {
   detailEntities,
   type DetailEntity,
@@ -17,11 +18,11 @@ export const entityDetailContract = defineContract("entity", {
     },
     // Type-only carriers: the per-entity runtime schemas live in the generated
     // detail bindings and are applied by the browser `parse` policy and the
-    // server handler; the HTTP router substitutes the real wire schema.
+    // server handler; HTTP carries the loose kernel wire.
     input: z.custom<EntityDetailInputByEntity[DetailEntity]>(),
     output: z.custom<EntityDetailByEntity[DetailEntity] | null>(),
-    // HTTP serves these as the per-entity resource routes instead.
-    http: false,
+    httpWire: kernelDetailWire,
+    native: "Native record detail reads",
     observability: {
       entities: detailEntities,
       productPhases: [

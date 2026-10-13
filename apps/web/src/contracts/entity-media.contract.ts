@@ -10,7 +10,6 @@ import { defineContract, query } from "~/contracts/define";
 export const entityMediaContract = defineContract("entityMedia", {
   displayImages: query({
     mcp: { omit: "client_view" },
-    http: false,
     input: entityDisplayImagesInput,
     output: entityDisplayImagesOutput,
     cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },

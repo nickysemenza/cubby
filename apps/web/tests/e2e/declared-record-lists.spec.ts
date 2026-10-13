@@ -1,3 +1,4 @@
+import { entityApi } from "./entity-api";
 import { chooseListView } from "./e2e-helpers";
 import { formatInstant } from "~/lib/date-format";
 import { formatDateSpan, stackedDateSpan } from "~/lib/date-span";
@@ -322,9 +323,13 @@ test("purchase and expense totals follow the full filtered set in tables and car
     ["expenses", { cost: 8 }],
   ] as const) {
     for (const pageNumber of [1, 2]) {
-      const response = await page.request.get(`/api/v1/${path}`, {
-        params: { search: tag, page: String(pageNumber), pageSize: "1" },
-      });
+      const response = await entityApi(page.request).list(
+        path === "purchases" ? "purchase" : "expense",
+        {
+          filters: { search: tag },
+          pagination: { pageIndex: pageNumber - 1, pageSize: 1 },
+        },
+      );
       expect(response.status(), await response.text()).toBe(200);
       expect(await response.json()).toMatchObject({
         items: [expect.any(Object)],

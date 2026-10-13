@@ -6,18 +6,18 @@
 # builds. Run from the workspace root.
 set -euo pipefail
 
-# The xcframework + shim come from the Nx cache locally. In native CI, setup-apple-ffi has
+# The xcframework + shim come from the Nx cache locally. In native CI, the setup-apple action has
 # already verified the artifact. Its fingerprint is authoritative for the job:
 # a second Cargo metadata resolution can differ after the Rust build.
 if [ -n "${CUBBY_FFI_SETUP_FINGERPRINT:-}" ]; then
   marker="apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework/.fingerprint"
   if [ ! -f "$marker" ] || [ "$(cat "$marker")" != "$CUBBY_FFI_SETUP_FINGERPRINT" ]; then
-    echo "CubbyFFI.xcframework does not match setup-apple-ffi's fingerprint" >&2
+    echo "CubbyFFI.xcframework does not match the setup-apple action's fingerprint" >&2
     exit 1
   fi
 elif ! node scripts/ensure.ts apple-ffi; then
   if [ ! -d node_modules/nx ]; then
-    echo "CubbyFFI.xcframework is stale and node_modules is missing; run \`pnpm install --frozen-lockfile\` (or the setup-apple-ffi action) first" >&2
+    echo "CubbyFFI.xcframework is stale and node_modules is missing; run \`pnpm install --frozen-lockfile\` (or the setup-apple action) first" >&2
   fi
   exit 1
 fi
