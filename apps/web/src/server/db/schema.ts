@@ -422,6 +422,11 @@ export const dataExceptionRecord = pgTable(
       table.entityId,
       table.check,
     ),
+    // The retired wire value has no member in the current check vocabulary.
+    check(
+      "DataException_no_retired_model_check",
+      sql`${table.check} <> ${sql.raw("'product_model'")}`,
+    ),
     entityRefFk("DataException_entity_fk", table),
   ],
 );

@@ -789,16 +789,6 @@ Rules:
             otherwise: "not_allowed",
           },
           {
-            field: "model",
-            byValue: {
-              tools: "required",
-              electronics: "required",
-              storage: "required",
-              household: "required",
-            },
-            otherwise: "unknown",
-          },
-          {
             field: "projectTool",
             relation: true,
             byValue: {

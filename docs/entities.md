@@ -1124,8 +1124,15 @@ completeness requirements. Actual zero or negative costs remain valid.
 
 Product core identity checks apply to every catalog record, including products
 without stock or expenses. Name and known price carry weight 3, manufacturer and
-external identity weight 2, and category weight 3 with an unresolved cap of 69.
-Model evidence applies when the category requires it. A known explicit or derived
+identifier evidence weight 2, and category weight 3 with an unresolved cap of 69.
+One nonblank manufacturer model or live nonblank external identifier satisfies
+identifier evidence for every Product, regardless of category. Missing both
+produces one Identifier gap, rather than research work to collect every possible
+identifier. Any external-ID source and kind can qualify; blank values and deleted
+identifier records cannot. The check retains `product_external_id` as its key so
+existing accepted exceptions keep their evidence basis. Retired model exception
+notes are preserved by migration; model-only exceptions remain stale because
+they do not establish the absence of an external identifier. A known explicit or derived
 price earns credit, including zero; an unknown price is required only for stocked
 products outside miscellaneous buckets. Catalog inactivity remains an unscored
 diagnostic, so recorded identity can earn points without purchase history.
@@ -1288,10 +1295,10 @@ ProductCategory `feature` is the first declared instance, resolved through the
 Product's category and its nearest bound ancestor. An ingredient or USDA link
 is allowed only under Food and an ISBN only under Books; a write carrying one
 files the Product under the admitting feature (`impliedProductFeature`), and
-field order is precedence, so food evidence outranks an ISBN. Tools,
-Electronics, Storage, and Household require a model. Consumers read the
-evaluator, never a feature literal: the `product_model` gap
-(`classificationPolicySql`), category admission on create, update, merge, and
+field order is precedence, so food evidence outranks an ISBN. A model is
+optional across categories; identifier sufficiency is the shared quality rule
+described above. Consumers read the evaluator, never a feature literal:
+category admission on create, update, merge, and
 reviewed reassignment, and decision-model targets — `suggestFields` skips a field the
 record's recorded classification refuses (`classificationRefusesField`; an
 unclassified record is not refused, since the write classifies it), and

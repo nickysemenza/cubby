@@ -157,7 +157,6 @@ export default defineEntity({
               id: "dataGaps",
               value: [
                 "product_manufacturer",
-                "product_model",
                 "product_external_id",
                 "product_category",
                 "product_image",
@@ -3231,13 +3230,12 @@ Rules:
         },
         {
           id: "product_external_id",
-          satisfiedLabel: "External identifier recorded",
+          satisfiedLabel: "Identifier recorded",
           placement: { field: "externalIds" },
           facet: "identity",
           weight: 2,
-          label: "External ID",
-          message:
-            "No barcode, ASIN, or other external identifier is recorded.",
+          label: "Identifier",
+          message: "No model or external identifier is recorded.",
         },
         {
           id: "product_category",
@@ -3248,15 +3246,6 @@ Rules:
           scoreCap: 69,
           label: "Category",
           message: "No live product category is recorded.",
-        },
-        {
-          id: "product_model",
-          satisfiedLabel: "Model recorded",
-          placement: { field: "model" },
-          facet: "identity",
-          weight: 2,
-          label: "Model",
-          message: "Manufacturer model is not recorded.",
         },
         {
           id: "product_price",
