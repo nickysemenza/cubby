@@ -1,9 +1,10 @@
+import { cookbookRunReportSchema } from "@cubby/schemas/cookbook";
 import type { ReportBlock, ReportCommand } from "@cubby/schemas/entity-report";
 import { cookbookShortcode, type CookbookId } from "@cubby/schemas/identifiers";
 import { countLabel } from "@cubby/shared/pluralize";
 import { and, eq, sql } from "drizzle-orm";
 
-import { formatCurrency } from "~/lib/utils";
+import { formatAiCost } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { cookbook } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -38,7 +39,7 @@ export async function cookbookExtractionReport(
         text: RETIRED_FORMAT_TEXT,
       },
     ];
-  const report = row?.report;
+  const report = row?.report ? cookbookRunReportSchema.parse(row.report) : null;
   if (!report)
     return [
       {
@@ -54,10 +55,28 @@ export async function cookbookExtractionReport(
       kind: "stats",
       figures: [
         {
-          label: "Cost",
-          value: report.total_cost_usd,
+          label: "Charged cost",
+          value: report.chargedCost,
           format: "text",
-          text: `${formatCurrency(report.total_cost_usd)}${report.cost_complete ? "" : "+"}`,
+          text:
+            report.chargedCost === 0 &&
+            (report.chargedComplete === false ||
+              (report.count > 0 &&
+                report.chargedUnpricedCount === report.count))
+              ? `Unpriced${report.count > 0 ? ` (${report.count} calls)` : ""}`
+              : `${formatAiCost(report.chargedCost)}${report.chargedComplete === false ? " · coverage unknown" : report.chargedUnpricedCount === 0 ? "" : "+"}`,
+        },
+        {
+          label: "Standard cost",
+          value: report.standardCost,
+          format: "text",
+          text:
+            report.standardCost === 0 &&
+            (report.standardComplete === false ||
+              (report.count > 0 &&
+                report.standardUnpricedCount === report.count))
+              ? `Unpriced${report.count > 0 ? ` (${report.count} calls)` : ""}`
+              : `${formatAiCost(report.standardCost)}${report.standardUnpricedCount ? "+" : ""}`,
         },
         {
           label: "Wall time",
@@ -93,7 +112,7 @@ export async function cookbookExtractionReport(
           },
         ]
       : []),
-    ...(report.cost_complete
+    ...(report.chargedComplete !== false && report.chargedUnpricedCount === 0
       ? []
       : [
           {

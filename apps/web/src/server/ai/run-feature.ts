@@ -13,6 +13,7 @@ import {
   type SupportedEmbeddingModel,
 } from "@cubby/shared/ai/models";
 import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
+import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
 import {
   fetchExternalResponse,
   readResponseWithLimit,
@@ -164,7 +165,9 @@ export interface FeatureUsageOutcome {
   outputTokens?: number | null;
   cacheReadTokens?: number | null;
   cacheWriteTokens?: number | null;
-  estimatedCost?: number | null;
+  standardCost?: number | null;
+  costEvidence?: AiCostEvidence | null;
+  chargedCost?: number | null;
   attempt?: number;
   status?: "succeeded" | "failed";
   gatewayLogId?: string | null;
@@ -201,7 +204,9 @@ export async function recordFeatureUsage(
     outputTokens: outcome.outputTokens ?? null,
     cacheReadTokens: outcome.cacheReadTokens ?? null,
     cacheWriteTokens: outcome.cacheWriteTokens ?? null,
-    estimatedCost: outcome.estimatedCost ?? null,
+    standardCost: outcome.standardCost ?? null,
+    costEvidence: outcome.costEvidence ?? null,
+    chargedCost: outcome.chargedCost ?? null,
     attempt: outcome.attempt,
     status: outcome.status,
     gatewayLogId: outcome.gatewayLogId ?? null,
@@ -215,7 +220,8 @@ export async function recordFeatureUsage(
 
 /**
  * An application response-cache (`withAiResponseCache`) answer: no upstream
- * call, so transport `cache`, no tokens, no cost, zero attempts. A Gateway
+ * call, so transport `cache`, no tokens, zero charged cost and attempts;
+ * its equivalent standard inference stays unknown. A Gateway
  * response-cache hit is different — it still went through the gateway.
  */
 export function recordApplicationCacheHit(

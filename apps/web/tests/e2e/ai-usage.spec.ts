@@ -1,4 +1,8 @@
-import { aiUsageRecentOut } from "@cubby/schemas/ai";
+import {
+  aiUsageRecentOut,
+  aiUsageTransport,
+  aiUsageEntrySchema,
+} from "@cubby/schemas/ai";
 import { sql } from "drizzle-orm";
 
 import { getDb } from "~/server/repo/database-helpers";
@@ -19,15 +23,19 @@ test("recent AI calls filter transport and status before limiting rows", async (
   await getDb(db).execute(sql`
     INSERT INTO "AiUsage" (
       "runId", "feature", "provider", "model", "operation", "transport",
-      "status", "durationMs", "estimatedCost", "createdAt"
+      "status", "durationMs", "standardCost", "chargedCost", "costEvidence", "createdAt"
     ) SELECT ${runId},
       CASE WHEN n = 0 THEN 'synthetic-legacy-feature' ELSE 'synthetic-attribution' END,
       CASE WHEN n = 0 THEN 'synthetic-legacy-provider' ELSE 'openai' END,
       CASE WHEN n = 0 THEN 'synthetic-legacy-model' ELSE 'gpt-6-luna' END,
       CASE WHEN n = 0 THEN 'synthetic.older-subscription' ELSE 'synthetic.newer-gateway' END,
-      CASE WHEN n = 0 THEN 'chatgpt' ELSE 'gateway' END,
-      CASE WHEN n = 0 THEN 'failed' ELSE 'succeeded' END,
-      10, 0, CASE WHEN n = 0 THEN now() - interval '120 days'
+      CASE WHEN n = 0 THEN ${aiUsageTransport.enum.chatgpt} ELSE ${aiUsageTransport.enum.gateway} END,
+      CASE WHEN n = 0 THEN ${aiUsageEntrySchema.shape.status.enum.failed} ELSE ${aiUsageEntrySchema.shape.status.enum.succeeded} END,
+      10, CASE WHEN n = 0 THEN 0.00123 ELSE 0.00000001 END,
+      CASE WHEN n = 0 THEN 0 ELSE 0.00000001 END,
+      CASE WHEN n = 0 THEN ${JSON.stringify({ standard: { source: "historical_recorded" }, charged: { source: "historical_recorded" }, billingReason: "plan" })}::jsonb
+        ELSE ${JSON.stringify({ standard: { source: "historical_recorded" }, charged: { source: "historical_recorded" }, billingReason: "standard" })}::jsonb END,
+      CASE WHEN n = 0 THEN now() - interval '120 days'
         ELSE now() - (60 - n) * interval '1 minute' END
     FROM generate_series(0, 60) n
   `);
@@ -37,6 +45,16 @@ test("recent AI calls filter transport and status before limiting rows", async (
     recent.getByText("synthetic.newer-gateway").first(),
   ).toBeVisible();
   await expect(recent.getByText("synthetic.older-subscription")).toHaveCount(0);
+  await expect(recent.getByText("<$0.000001 charged").first()).toBeVisible();
+
+  const tinyCost = recent.getByText("<$0.000001 charged").first();
+  await tinyCost.hover();
+  await expect(page.getByRole("tooltip")).toContainText("Charged: $0.00000001");
+  await expect(page.locator("[data-cell-spill-overlay]")).toContainText(
+    "$0.00000001 charged",
+  );
+  await page.getByRole("heading", { name: "AI", exact: true }).hover();
+  await expect(page.locator("[data-cell-spill-overlay]")).toHaveCount(0);
 
   // Full-history choices must remain available outside every summary window.
   for (const [label, value] of [
@@ -71,7 +89,18 @@ test("recent AI calls filter transport and status before limiting rows", async (
     aiUsageRecentOut,
   );
   expect(rows).toHaveLength(1);
-  expect(rows[0]).toMatchObject({ transport: "chatgpt", status: "failed" });
+  expect(rows[0]).toMatchObject({
+    transport: "chatgpt",
+    status: "failed",
+    standardCost: 0.00123,
+    chargedCost: 0,
+    costEvidence: { billingReason: "plan" },
+  });
+  const coveredRow = recent
+    .getByRole("row")
+    .filter({ hasText: "synthetic.older-subscription" });
+  await expect(coveredRow.getByText(/0\.00123 standard/)).toBeVisible();
+  await expect(coveredRow.getByText(/Plan covered/)).toBeVisible();
   await expect(recent.getByText("synthetic.older-subscription")).toBeVisible();
   await expect(recent.getByText("synthetic.newer-gateway")).toHaveCount(0);
   await recent
@@ -97,9 +126,9 @@ test("recent AI calls filter transport and status before limiting rows", async (
   await getDb(db).execute(sql`
     INSERT INTO "AiUsage" (
       "runId", "feature", "provider", "model", "operation", "transport",
-      "status", "durationMs", "estimatedCost"
+      "status", "durationMs", "standardCost", "chargedCost", "costEvidence"
     ) VALUES (${runId}, 'synthetic-new-feature', 'synthetic-new-provider',
-      'synthetic-new-model', 'synthetic.after-load', 'gateway', 'succeeded', 10, 0)
+      'synthetic-new-model', 'synthetic.after-load', ${aiUsageTransport.enum.gateway}, ${aiUsageEntrySchema.shape.status.enum.succeeded}, 10, NULL, NULL, NULL)
   `);
   await recent.getByRole("button", { name: "Refresh recent calls" }).click();
   await expect(
@@ -111,6 +140,11 @@ test("recent AI calls filter transport and status before limiting rows", async (
     .getByRole("combobox", { name: "Provider" })
     .selectOption("synthetic-new-provider");
   await expect(recent.getByText("synthetic.after-load")).toBeVisible();
+  const unknownRow = recent
+    .getByRole("row")
+    .filter({ hasText: "synthetic.after-load" });
+  await expect(unknownRow.getByText("unpriced charged")).toBeVisible();
+  await expect(unknownRow.getByText("unpriced standard")).toBeVisible();
   await recent.getByRole("button", { name: "Clear", exact: true }).click();
   await page.screenshot({
     path: testInfo.outputPath("ai-usage.png"),

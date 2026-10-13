@@ -8,6 +8,7 @@
     "./email-accuracy": "./src/email-accuracy.ts",
     "./purchase-import-debug": "./src/purchase-import-debug.ts",
     "./mailbox-research": "./src/mailbox-research.ts",
+    "./ai-cost": "./src/ai-cost.ts",
     "./activity": "./src/activity.ts",
     "./agent-conversation": "./src/agent-conversation.ts",
     "./availability": "./src/availability.ts",

@@ -20,6 +20,7 @@ import { z } from "zod";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
+import { formatAiCost, formatAiCostSubtotal } from "~/lib/number-format";
 import { formatCurrency, formatPercent } from "~/lib/number-format";
 import { runHasCapability } from "~/server/purchase-import/capabilities";
 import { phaseLabel } from "~/server/repo/collection-items";
@@ -1014,10 +1015,9 @@ export function suggestionBlocks(
 }
 
 export function aiUsageBlocks(usage: AiRunUsage): ReportBlock[] {
-  const estimated = usage.unpricedCount > 0;
   return [
     note(
-      `${estimated ? "Estimated subtotal" : "Subtotal"} ${formatCurrency(usage.pricedSubtotal, 6)}${estimated ? ` · ${usage.unpricedCount} unpriced` : ""}`,
+      `Charged ${formatAiCostSubtotal(usage.chargedCost, usage.chargedUnpricedCount, usage.count, usage.chargedComplete)} · Standard ${formatAiCostSubtotal(usage.standardCost, usage.standardUnpricedCount, usage.count, usage.standardComplete)} · Savings ${usage.comparedCalls === 0 ? "unavailable" : formatAiCost(usage.savings)} (${usage.comparedCalls}/${usage.count} calls compared)`,
       undefined,
       true,
     ),
@@ -1048,10 +1048,10 @@ export function aiUsageBlocks(usage: AiRunUsage): ReportBlock[] {
             ),
             line(
               `${call.durationMs == null ? "—" : formatDuration(call.durationMs)} · ${
-                call.estimatedCost == null
+                call.chargedCost == null
                   ? "unpriced"
-                  : formatCurrency(call.estimatedCost, 6)
-              }${call.gatewayLogId ? ` · ${call.gatewayLogId}` : ""}`,
+                  : `Charged ${formatAiCost(call.chargedCost)}`
+              } · Standard ${call.standardCost === null ? "unpriced" : formatAiCost(call.standardCost)} · ${call.costEvidence?.billingReason ?? "unknown"}${call.gatewayLogId ? ` · ${call.gatewayLogId}` : ""}`,
               "muted",
             ),
           ],

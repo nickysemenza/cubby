@@ -1,4 +1,8 @@
 import { runEntityId, userId } from "@cubby/schemas/identifiers";
+import {
+  normalizeLegacyAiUsageTelemetry,
+  type LegacyAiUsageTelemetry,
+} from "@cubby/schemas/telemetry";
 import type {
   AiUsageTelemetry,
   McpToolCallTelemetry,
@@ -7,10 +11,9 @@ import type {
 import { inArray } from "drizzle-orm";
 import { match } from "ts-pattern";
 
-import { estimateAiUsageCostUsd } from "~/server/ai/pricing";
+import { snapshotAiUsagePrice } from "~/server/ai/pricing";
 import type { Database } from "~/server/db";
 import { aiUsage, run as runTable, mcpToolCall } from "~/server/db/schema";
-import { isUnbilledAiTransport } from "~/server/repo/ai-usage";
 import { withTransaction } from "~/server/repo/database-helpers";
 import {
   aiCallRunInput,
@@ -21,6 +24,78 @@ import {
 const unreachableFallback = (): never => {
   throw new Error("An orphaned AI usage row always opens a fallback run");
 };
+
+/** Recover only raw legacy queue accounting; current events never enter this path. */
+export async function prepareLegacyAiUsageTelemetry(
+  legacy: LegacyAiUsageTelemetry,
+  snapshotPrice: typeof snapshotAiUsagePrice = snapshotAiUsagePrice,
+): Promise<AiUsageTelemetry> {
+  const event = normalizeLegacyAiUsageTelemetry(legacy);
+  const route = legacy.transport;
+  // Caller cache metadata cannot establish a free billed route; contradictory replay evidence stays unpriced.
+  const applicationReplay =
+    legacy.applicationCacheStatus === "hit" ||
+    legacy.attempt === 0 ||
+    route === "cache";
+  const supportedRoute =
+    route === "gateway" || route === "direct" || route === "chatgpt";
+  const positiveTokens = [
+    legacy.inputTokens,
+    legacy.outputTokens,
+    legacy.cacheReadTokens,
+    legacy.cacheWriteTokens,
+  ].some((tokens) => tokens != null && tokens > 0);
+  const capturedAt = new Date().toISOString();
+  const quote =
+    supportedRoute && positiveTokens && !applicationReplay
+      ? await snapshotPrice(legacy.provider, legacy.model, legacy, {
+          requireCatalog: true,
+        })
+      : null;
+  const standard =
+    quote?.amount != null && quote.evidence
+      ? { ...quote.evidence, source: "reconstructed" as const }
+      : null;
+  const free = route === "chatgpt" || route === "cache";
+  const missingCharged = legacy.estimatedCost == null;
+  const reconstructedCharge =
+    missingCharged &&
+    !free &&
+    (route === "gateway" || route === "direct") &&
+    standard !== null;
+  const chargedCost =
+    legacy.estimatedCost ??
+    (free ? 0 : reconstructedCharge ? (quote?.amount ?? null) : null);
+  return {
+    ...event,
+    standardCost: standard ? (quote?.amount ?? null) : null,
+    chargedCost,
+    costEvidence: {
+      standard,
+      charged:
+        chargedCost === null
+          ? null
+          : reconstructedCharge
+            ? standard
+            : { source: "historical_recorded" },
+      billingReason:
+        chargedCost === null
+          ? "unknown"
+          : route === "chatgpt"
+            ? "plan"
+            : route === "cache"
+              ? "cache"
+              : reconstructedCharge
+                ? "standard"
+                : "unknown",
+      original: { estimatedCost: legacy.estimatedCost ?? null },
+      reconstruction: {
+        capturedAt: standard?.pricingSnapshot.capturedAt ?? capturedAt,
+        outcome: standard ? "priced" : "unavailable",
+      },
+    },
+  };
+}
 
 /** Persist a validated telemetry batch atomically and idempotently. */
 export async function persistTelemetryMessages(
@@ -37,25 +112,6 @@ export async function persistTelemetryMessages(
       .with({ type: "ai_usage" }, (event) => ai.push(event))
       .exhaustive();
   }
-
-  // Priced before the transaction opens, so a catalog lookup never holds it.
-  // The event's own figure wins (the cookbook extractor and the agent provider
-  // price every model attempt); the registry prices calls whose provider did
-  // not return an exact total. A replay or ChatGPT plan call is never API
-  // spend, whatever tokens it reports.
-  const aiCosts = await Promise.all(
-    ai.map(async (event) =>
-      isUnbilledAiTransport(event.transport ?? "unknown")
-        ? 0
-        : (event.estimatedCost ??
-          (await estimateAiUsageCostUsd(event.provider, event.model, {
-            inputTokens: event.inputTokens,
-            outputTokens: event.outputTokens,
-            cacheReadTokens: event.cacheReadTokens,
-            cacheWriteTokens: event.cacheWriteTokens,
-          }))),
-    ),
-  );
 
   await withTransaction(db, async (tx) => {
     // One AI row naming a missing run must not fail the batch (and retry the
@@ -110,7 +166,7 @@ export async function persistTelemetryMessages(
       await tx
         .insert(aiUsage)
         .values(
-          ai.map((event, index) => ({
+          ai.map((event) => ({
             id: event.eventId,
             feature: event.feature,
             provider: event.provider,
@@ -129,7 +185,9 @@ export async function persistTelemetryMessages(
             attempt: event.attempt ?? 1,
             status: event.status ?? "succeeded",
             gatewayLogId: event.gatewayLogId ?? null,
-            estimatedCost: aiCosts[index] ?? null,
+            standardCost: event.standardCost,
+            chargedCost: event.chargedCost,
+            costEvidence: event.costEvidence,
             durationMs: event.durationMs,
             cacheStatus: event.cacheStatus,
             applicationCacheStatus: event.applicationCacheStatus ?? null,

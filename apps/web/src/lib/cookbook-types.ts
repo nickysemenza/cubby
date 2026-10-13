@@ -1,4 +1,5 @@
 import type { Cookbook, RunReport } from "@cubby/recipebridge/cookbook";
+import { freshCookbookRunReportSchema } from "@cubby/schemas/cookbook";
 import type {
   CookbookExtraction,
   CookbookRunReport,
@@ -15,8 +16,7 @@ type UndefinedKeys<T> = {
 /**
  * A wasm-generated type, restated as it survives `JSON.stringify`.
  *
- * The crate's types and the stored zod schemas describe the same JSON —
- * `packages/schemas/src/cookbook.ts` was written from the crate — but
+ * The crate's book tree and stored zod schema describe the same JSON, but
  * TypeScript will not assign one to the other, for two reasons that are purely
  * about how each side is written down:
  *
@@ -30,10 +30,8 @@ type UndefinedKeys<T> = {
  *    undefined value — but only the optional form satisfies an index signature.
  *
  * Re-mapping each level fixes exactly those two things and nothing else: every
- * field name and every leaf type still has to match. That is why the
- * conversions below need no type assertion — they are ordinary assignments
- * that `tsc` checks in full, and they stop compiling the moment a real field
- * drifts.
+ * field name and every leaf type in the book tree still has to match. The
+ * separate report conversion validates and normalizes its accounting shape.
  */
 type Storable<T> = T extends readonly (infer U)[]
   ? Storable<U>[]
@@ -55,6 +53,5 @@ export const asStoredCookbook = (cookbook: Cookbook): CookbookExtraction => {
 
 /** The crate's run report, in the shape `upsertCookbook` stores beside the tree. */
 export const asStoredRunReport = (report: RunReport): CookbookRunReport => {
-  const stored: Storable<RunReport> = report;
-  return stored;
+  return freshCookbookRunReportSchema.parse(report);
 };

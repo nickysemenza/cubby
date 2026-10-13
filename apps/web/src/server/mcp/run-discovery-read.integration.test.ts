@@ -185,7 +185,7 @@ describe("member discovery readiness through MCP", () => {
           operation: "classify",
           durationMs: 10,
           attempt: 1,
-          estimatedCost: 0.25,
+          chargedCost: 0.25,
         },
         {
           runId: id,
@@ -195,7 +195,7 @@ describe("member discovery readiness through MCP", () => {
           operation: "classify",
           durationMs: 20,
           attempt: 2,
-          estimatedCost: null,
+          chargedCost: null,
         },
       ]);
     // Expiry does not erase retained authorization evidence or block its read.
@@ -242,8 +242,8 @@ describe("member discovery readiness through MCP", () => {
         usage: {
           callCount: 2,
           retryCount: 1,
-          pricedSubtotal: 0.25,
-          unpricedCount: 1,
+          chargedCost: 0.25,
+          chargedUnpricedCount: 1,
         },
       },
     });

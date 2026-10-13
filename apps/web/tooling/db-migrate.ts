@@ -133,7 +133,7 @@ const PRODUCTION_URL_ENV = "PRODUCTION_DIRECT_DATABASE_URL";
  * in PRODUCTION_DIRECT_DATABASE_URL — never the ambient DATABASE_URL, which
  * can still point at production in legacy environments.
  */
-function resolveTargetUrl(target: string | undefined): string {
+export function resolveTargetUrl(target: string | undefined): string {
   if (target === "dev") {
     const url = process.env.DATABASE_URL ?? "";
     assertDevDatabaseUrl(url);

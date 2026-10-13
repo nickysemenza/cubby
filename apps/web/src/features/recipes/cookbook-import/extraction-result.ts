@@ -17,9 +17,8 @@ export type StoredExtraction = {
 /**
  * The crate's extraction result, restated in the server's vocabulary.
  *
- * No data changes: the conversions in `~/lib/cookbook-types` are identity, and
- * exist so `tsc` checks the crate's shapes against the schemas the server
- * validates with. See that module for why the two cannot be assigned directly.
+ * The book tree keeps its shape; the report normalizes upstream billing
+ * evidence into the shared standard/charged accounting contract.
  */
 export const asStoredExtraction = (
   extraction: Extraction,

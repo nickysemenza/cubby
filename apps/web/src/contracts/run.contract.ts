@@ -372,7 +372,7 @@ export const runContract = defineContract("run", {
             .nullable(),
           /** Recorded AI calls only; reservations are separate from priced usage. */
           usage: aiRunUsageOut
-            .pick({ pricedSubtotal: true, unpricedCount: true })
+            .omit({ records: true, nextCursor: true })
             .extend({
               callCount: z.number().int().nonnegative(),
               retryCount: z.number().int().nonnegative(),

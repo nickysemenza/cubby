@@ -36,12 +36,16 @@ export function StackedValue({
   primary,
   secondary,
   title,
+  primarySpillText,
+  secondarySpillText,
   className,
   suppressSecondaryHydrationWarning,
 }: {
   primary: string;
   secondary: string | null;
   title?: string;
+  primarySpillText?: string;
+  secondarySpillText?: string;
   className?: string;
   /** Relative dates can cross a clock boundary between SSR and hydration. */
   suppressSecondaryHydrationWarning?: boolean;
@@ -50,6 +54,7 @@ export function StackedValue({
     <span className={cn("block min-w-0", className)} title={title}>
       <span
         data-stacked-line=""
+        data-cell-spill-text={primarySpillText}
         className="block truncate text-[0.8125rem] leading-[15px]"
       >
         {primary}
@@ -57,6 +62,7 @@ export function StackedValue({
       {secondary && (
         <span
           data-stacked-line=""
+          data-cell-spill-text={secondarySpillText}
           className={STACKED_SECONDARY_CLASS}
           suppressHydrationWarning={suppressSecondaryHydrationWarning}
         >

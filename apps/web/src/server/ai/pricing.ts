@@ -2,6 +2,7 @@ import {
   type AiTokenUsage,
   createAiModelPricing,
   estimateAiUsageCost,
+  priceAiUsage,
   quoteAiDecisionRequest,
   quoteAiChatRequest,
 } from "@cubby/shared/ai/pricing";
@@ -53,4 +54,18 @@ export async function quoteAiChatRequestUsd(
   request: Parameters<typeof quoteAiChatRequest>[1],
 ) {
   return quoteAiChatRequest(await pricing.current(), request);
+}
+
+export async function snapshotAiUsagePrice(
+  provider: string,
+  model: string,
+  usage: AiTokenUsage,
+  options: { requireCatalog?: boolean } = {},
+) {
+  const catalog = await pricing.current();
+  if (options.requireCatalog && catalog === null)
+    throw new Error(
+      "AI pricing catalog unavailable; legacy telemetry recovery must retry",
+    );
+  return priceAiUsage(catalog, provider, model, usage);
 }

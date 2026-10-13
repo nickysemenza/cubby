@@ -1,5 +1,5 @@
 {
-  "_doc": "Field value display formats shared by web and native (en-US). Formatted by one Rust implementation (recipebridge display_format.rs, which reads this file) shared by web (WASM) and native (UniFFI); apps/web/src/lib/display-format.unit.test.ts and apps/apple CubbyKit DisplayFormatTests are binding checks, and plainDate is the one per-platform format. A -0.004 currency drops its sign. `currency`/`signedCurrency` map a number to USD text (signedCurrency adds no '+'; sign colour is a web-only concern). `plainDate` maps a YYYY-MM-DD string to 'MMM d, yyyy' and returns anything that is not a real calendar day unchanged. `number` is a bare numeric field: the shortest round-trip decimal, no grouping, no rounding. `compactEstimate` is the one-line macro/cost cell: `kcal` rounds to a whole number half-up, `macro` to one decimal half-up (dropping a trailing .0), both with thousands grouping; a range joins with an en dash; a partial estimate appends '+'; anything unavailable or pending is an em dash. `estimate` is the long form for detail pages and labels: the measure picks the number rule (`cost` USD, `kcal` whole and grouped, `macro` one decimal and grouped, `share` a fraction as a one-decimal percent), an optional `unit` follows the figure or range once, a partial estimate adds ' known · partial', an inferred-zero contribution adds ' · includes inferred zero', pending is 'Pending', not-applicable is 'N/A', and anything else unavailable is an em dash. `kcal` is a bare calorie figure ('1,234 kcal'). `currencyRange` joins two USD values with an en dash and no spaces; a missing or equal upper prints once.",
+  "_doc": "Field value display formats shared by web and native (en-US). Formatted by one Rust implementation (recipebridge display_format.rs, which reads this file) shared by web (WASM) and native (UniFFI); apps/web/src/lib/display-format.unit.test.ts and apps/apple CubbyKit DisplayFormatTests are binding checks, and plainDate is the one per-platform format. Nonzero currency below display precision uses a signed threshold; exact zero remains $0.00. `currency`/`signedCurrency` map a number to USD text (signedCurrency adds no '+'; sign colour is a web-only concern). `plainDate` maps a YYYY-MM-DD string to 'MMM d, yyyy' and returns anything that is not a real calendar day unchanged. `number` is a bare numeric field: the shortest round-trip decimal, no grouping, no rounding. `compactEstimate` is the one-line macro/cost cell: `kcal` rounds to a whole number half-up, `macro` to one decimal half-up (dropping a trailing .0), both with thousands grouping; a range joins with an en dash; a partial estimate appends '+'; anything unavailable or pending is an em dash. `estimate` is the long form for detail pages and labels: the measure picks the number rule (`cost` USD, `kcal` whole and grouped, `macro` one decimal and grouped, `share` a fraction as a one-decimal percent), an optional `unit` follows the figure or range once, a partial estimate adds ' known · partial', an inferred-zero contribution adds ' · includes inferred zero', pending is 'Pending', not-applicable is 'N/A', and anything else unavailable is an em dash. `kcal` is a bare calorie figure ('1,234 kcal'). `currencyRange` joins two USD values with an en dash and no spaces; a missing or equal upper prints once.",
   "currency": [
     {
       "value": 0,
@@ -31,11 +31,11 @@
     },
     {
       "value": 0.004,
-      "out": "$0.00"
+      "out": "<$0.01"
     },
     {
       "value": -0.004,
-      "out": "$0.00"
+      "out": "-<$0.01"
     },
     {
       "value": 999.995,

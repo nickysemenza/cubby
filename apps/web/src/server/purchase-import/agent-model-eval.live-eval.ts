@@ -17,6 +17,7 @@ import { withTestDb } from "tooling/test-setup";
 import { withWorkerdRuntime } from "tooling/workerd-runtime";
 import { describe, expect, it } from "vitest";
 
+import { formatCurrency } from "~/lib/number-format";
 import {
   aiAnalysis,
   run as runTable,
@@ -341,7 +342,7 @@ describe("photo coordinator model eval", () => {
             "|---|---|---|---|---|---|---|---|---|",
             ...summary.map(
               (row) =>
-                `| ${row.candidate} | ${row.exact}/${row.runs} | ${row.meanPairF1.toFixed(2)} | ${row.meanMatchAccuracy.toFixed(2)} | ${row.reachedApproval}/${row.runs} | ${row.meanWallSeconds.toFixed(0)} | ${Math.round(row.meanInputTokens)} | ${Math.round(row.meanOutputTokens)} | ${row.meanCostUsd === null ? "unknown" : `$${row.meanCostUsd.toFixed(3)}`} |`,
+                `| ${row.candidate} | ${row.exact}/${row.runs} | ${row.meanPairF1.toFixed(2)} | ${row.meanMatchAccuracy.toFixed(2)} | ${row.reachedApproval}/${row.runs} | ${row.meanWallSeconds.toFixed(0)} | ${Math.round(row.meanInputTokens)} | ${Math.round(row.meanOutputTokens)} | ${row.meanCostUsd === null ? "unknown" : formatCurrency(row.meanCostUsd, 3)} |`,
             ),
           ].join("\n");
           writeFileSync(path.join(outDir, "report.md"), `${table}\n`);

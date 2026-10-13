@@ -45,6 +45,9 @@ option for one spec. `workerdProfile` owns intentional peer/queue differences.
 
 ## During implementation
 
+Scripted block edits use bounded, unique markers. Inspect the affected diff
+and parse the edited source before reporting it ready.
+
 For persistent HMR, fixture packs, or runtime discovery, load
 [local development](../local-development.md). Disposable E2E lanes own their
 test databases. Keep the existing CI Playwright HTML reports and traces, and

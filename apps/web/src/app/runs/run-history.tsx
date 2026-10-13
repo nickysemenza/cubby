@@ -26,7 +26,7 @@ import { RunSubject, RunTargetChips } from "~/app/runs/run-work-summary";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCurrency } from "~/lib/utils";
+import { AiCost } from "~/ui/common/ai-cost";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordDetail, RecordList, RecordRow } from "~/ui/common/record-list";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
@@ -477,24 +477,19 @@ export function RunHistory({
           }),
         );
         add(
-          helper.accessor("estimatedCost", {
-            header: "Cost",
-            size: 90,
-            cell: ({ getValue, row }) => (
-              <span
-                title={
+          helper.accessor("chargedCost", {
+            header: "Charged / standard",
+            size: 180,
+            cell: ({ row }) => (
+              <AiCost
+                cost={row.original}
+                note={
                   row.original.recordType === "image_job" &&
                   row.original.parentRunId
                     ? "Job cost may be included in parent Run total"
-                    : "Recorded cost"
+                    : undefined
                 }
-              >
-                {getValue() == null ? "—" : formatCurrency(getValue() ?? 0)}
-                {row.original.recordType === "image_job" &&
-                row.original.parentRunId
-                  ? "*"
-                  : ""}
-              </span>
+              />
             ),
             meta: { mono: true, numeric: true },
           }),

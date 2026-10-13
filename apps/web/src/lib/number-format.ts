@@ -60,6 +60,29 @@ export function formatCurrency(
   );
 }
 
+/** Binary64's shortest decimal needs at most 324 fractional places. */
+export const formatExactCurrency = (value: number): string =>
+  formatCurrency(value, 324);
+
+/** AI amounts retain sub-cent precision and distinguish unknown from zero. */
+export const formatAiCost = (value: number | null | undefined): string =>
+  value == null
+    ? "unpriced"
+    : formatCurrency(value, 6, { minimumFractionDigits: 4 });
+
+export function formatAiCostSubtotal(
+  value: number,
+  unpriced: number,
+  count?: number,
+  complete?: boolean,
+): string {
+  if (value === 0 && unpriced === 0 && complete === false)
+    return "unpriced · coverage unknown";
+  if (value === 0 && unpriced > 0 && (count == null || unpriced >= count))
+    return `${unpriced} unpriced`;
+  return `${formatAiCost(value)}${unpriced > 0 ? ` known · ${unpriced} unpriced` : complete === false ? " known · coverage unknown" : ""}`;
+}
+
 /** `$3.20` or `$3.20–$4.10`; a missing or equal upper prints once. */
 export function formatCurrencyRange(lower: number, upper?: number): string {
   return wasmFormat.format_currency_range(lower, upper);
@@ -67,6 +90,7 @@ export function formatCurrencyRange(lower: number, upper?: number): string {
 
 /** Format currency in compact notation (e.g. "$1.2M"). */
 export function formatCompactCurrency(value: number): string {
+  if (value !== 0 && Math.abs(value) < 0.01) return formatCurrency(value);
   return cachedNumberFormat({
     style: "currency",
     currency: "USD",
@@ -90,9 +114,11 @@ export function formatCompactCount(
   }).format(value);
 }
 
-/** `$1.23`, or `<$0.01` for a positive cost too small to show at cent precision. */
+/** `$1.23`, or `<$0.01` for a nonzero amount too small to show at cent precision. */
 export function formatSmallCurrency(value: number): string {
-  return value > 0 && value < 0.01 ? "<$0.01" : formatCurrency(value);
+  return value !== 0 && Math.abs(value) < 0.01
+    ? `${value < 0 ? "-" : ""}<$0.01`
+    : formatCurrency(value);
 }
 
 /**

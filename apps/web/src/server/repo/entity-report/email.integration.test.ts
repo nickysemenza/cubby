@@ -430,7 +430,8 @@ describe("Email review report", () => {
           operation: "import",
           durationMs: 1,
           transport: "chatgpt",
-          estimatedCost: null,
+          standardCost: 0.00123,
+          chargedCost: 0,
         },
         {
           runId: selectedRun.id,
@@ -440,7 +441,7 @@ describe("Email review report", () => {
           operation: "import",
           durationMs: 1,
           transport: "gateway",
-          estimatedCost: 0.25,
+          chargedCost: 0.25,
           status: "failed",
         },
         {
@@ -451,7 +452,7 @@ describe("Email review report", () => {
           operation: "import",
           durationMs: 1,
           transport: "unknown",
-          estimatedCost: null,
+          chargedCost: null,
         },
       ]);
     for (let index = 0; index < 50; index += 1) {
@@ -515,7 +516,7 @@ describe("Email review report", () => {
         operation: "import",
         durationMs: 1,
         transport: "gateway",
-        estimatedCost: 99,
+        chargedCost: 99,
       });
     }
     const blocks = await emailReviewReport(
@@ -536,9 +537,15 @@ describe("Email review report", () => {
     const usage = importRow?.subtitle?.split("\n") ?? [];
     expect(usage).toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/ · chatgpt · .* · \$0\.00$/u),
-        expect.stringMatching(/ · gateway · .*1 failed · \$0\.25$/u),
-        expect.stringMatching(/ · unknown · .* · Unknown$/u),
+        expect.stringMatching(
+          / · chatgpt · .* · Charged \$0\.0000 · Standard \$0\.00123 · Savings \$0\.00123 \(1\/1 calls compared\)$/u,
+        ),
+        expect.stringMatching(
+          / · gateway · .*1 failed · Charged \$0\.2500 · Standard 1 unpriced · Savings unavailable/u,
+        ),
+        expect.stringMatching(
+          / · unknown · .* · Charged 1 unpriced · Standard 1 unpriced · Savings unavailable/u,
+        ),
       ]),
     );
     expect(usage.join("\n")).not.toContain("synthetic-unrelated");

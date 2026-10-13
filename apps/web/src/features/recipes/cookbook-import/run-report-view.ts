@@ -1,3 +1,4 @@
+import { aiCallCostFields } from "@cubby/schemas/ai-cost";
 import type { CookbookRunReport } from "@cubby/schemas/cookbook";
 import { z } from "zod";
 
@@ -36,7 +37,9 @@ const callRow = z.object({
   latency_ms: z.number().optional(),
   cached: z.boolean().optional(),
   status: z.number().nullish(),
-  cost_usd: z.number().nullish(),
+  standardCost: aiCallCostFields.standardCost.default(null),
+  chargedCost: aiCallCostFields.chargedCost.default(null),
+  costEvidence: aiCallCostFields.costEvidence.default(null),
   truncated: z.boolean().optional(),
   outcome: z.looseObject({ outcome: z.string() }).optional(),
 });

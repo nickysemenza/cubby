@@ -73,9 +73,10 @@ The existing application response cache still serves valid identical results.
 Caller cancellation propagates to the inference owner through request IDs,
 including after streaming starts. Calls have a five-minute maximum deadline;
 a shorter configured gateway deadline wins.
-Subscription usage records have zero separately billed API cost;
-token counts remain visible. Embeddings, Workers AI and Anthropic keep their
-existing transport and billing.
+Subscription usage retains a zero incremental charge and a separate standard
+API comparison when pricing evidence is available. [AI cost accounting](ai-cost-accounting.md)
+owns billing evidence, historical reconstruction, totals, and display precision.
+Embeddings, Workers AI and Anthropic keep their existing transport and billing.
 
 ### Usage attribution
 
@@ -85,8 +86,8 @@ or `unknown`. The transport is selected before the request leaves
 (`GatewayCallOptions.onTransport`, the agent's `onSelected`), so a connected
 plan's failure — even one that throws before any HTTP response — records a
 failed `chatgpt` row and is never retried through the paid gateway. The
-telemetry writer stores every `chatgpt` row at zero cost, whatever tokens it
-reports. `cache` means an application replay with no upstream call (the
+telemetry writer records plan coverage for every `chatgpt` row while retaining
+its token evidence and standard-price comparison. `cache` means an application replay with no upstream call (the
 application response cache or a stored `AiAnalysis`); a Gateway response-cache
 hit still went through the gateway and stays `gateway`. Failed attempts record
 a failed row on their selected transport, keeping a billed response's usage

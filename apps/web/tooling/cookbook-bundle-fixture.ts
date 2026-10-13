@@ -1,3 +1,4 @@
+import { cookbookRunReportSchema } from "@cubby/schemas/cookbook";
 import { z } from "zod";
 
 import { createHash } from "node:crypto";
@@ -103,7 +104,13 @@ export const syntheticBundle = (
     images: [asset],
     ...overrides,
   };
-  return { manifest, cookbook, report, asset, imageBytes };
+  return {
+    manifest,
+    cookbook,
+    report: cookbookRunReportSchema.parse(report),
+    asset,
+    imageBytes,
+  };
 };
 
 /** Tiny authored ZIP writer; also permits malformed archive metadata for guard tests. */

@@ -73,14 +73,14 @@ describe("listAiUsageForRun", () => {
   // usage (the import-run loader only ever served member-scoped runs).
   it("pages an AI run's calls newest first with a full-run subtotal", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
-    const call = (minute: number, estimatedCost: number | null) => ({
+    const call = (minute: number, chargedCost: number | null) => ({
       feature: "field_suggest",
       provider: "test",
       model: "test-model",
       operation: "suggest",
       runId,
       status: "succeeded" as const,
-      estimatedCost,
+      chargedCost,
       durationMs: 1,
       createdAt: new Date(Date.UTC(2026, 8, 20, 16, minute)),
     });
@@ -91,8 +91,8 @@ describe("listAiUsageForRun", () => {
     const first = await listAiUsageForRun(ctx.db, runId, { limit: 2 });
     // The subtotal and unpriced count cover every call, not just the page;
     // the count also has to arrive as a runtime number, not a string.
-    expect(first.pricedSubtotal).toBe(0.75);
-    expect(first.unpricedCount).toBe(1);
+    expect(first.chargedCost).toBe(0.75);
+    expect(first.chargedUnpricedCount).toBe(1);
     expect(first.records.map((row) => row.createdAt.getUTCMinutes())).toEqual([
       3, 2,
     ]);
@@ -121,17 +121,17 @@ describe("listAiUsageForRun", () => {
       attempt: 0,
       inputTokens: 0,
       outputTokens: 0,
-      estimatedCost: 0,
+      chargedCost: 0,
       durationMs: 2,
     });
     const usage = await listAiUsageForRun(ctx.db, runId);
-    expect(usage.pricedSubtotal).toBe(0);
-    expect(usage.unpricedCount).toBe(0);
+    expect(usage.chargedCost).toBe(0);
+    expect(usage.chargedUnpricedCount).toBe(0);
     expect(usage.records[0]).toMatchObject({
       cacheStatus: "none",
       applicationCacheStatus: "hit",
       attempt: 0,
-      estimatedCost: 0,
+      chargedCost: 0,
     });
   });
 });
@@ -270,26 +270,26 @@ describe("AiUsage transport", () => {
 
     const recent = await listRecentAiUsage(ctx.db, { limit: 10 });
     const recentCost = Object.fromEntries(
-      recent.map((row) => [row.transport, row.estimatedCost]),
+      recent.map((row) => [row.transport, row.chargedCost]),
     );
-    expect(recentCost.cache).toBe(0);
-    expect(recentCost.chatgpt).toBe(0);
-    expect(recentCost.gateway).toBeGreaterThan(0);
+    expect(recentCost.cache).toBeNull();
+    expect(recentCost.chatgpt).toBeNull();
+    expect(recentCost.gateway).toBeNull();
 
     const summary = await summarizeAiUsage(ctx.db, 7);
     const summaryCost = Object.fromEntries(
-      summary.map((row) => [row.transport, row.estimatedCost]),
+      summary.map((row) => [row.transport, row.chargedCost]),
     );
     expect(summaryCost).toMatchObject({ cache: 0, chatgpt: 0 });
-    expect(summaryCost.gateway).toBe(recentCost.gateway);
+    expect(summaryCost.gateway).toBe(0);
 
     const run = await listAiUsageForRun(ctx.db, runId);
-    expect(run.unpricedCount).toBe(1);
+    expect(run.chargedUnpricedCount).toBe(3);
     expect(
       Object.fromEntries(
-        run.records.map((row) => [row.transport, row.estimatedCost]),
+        run.records.map((row) => [row.transport, row.chargedCost]),
       ),
-    ).toEqual({ cache: 0, chatgpt: 0, gateway: null });
+    ).toEqual({ cache: null, chatgpt: null, gateway: null });
   });
 
   it("rejects a transport outside the shared vocabulary", async () => {
@@ -335,9 +335,9 @@ describe("AiUsage transport", () => {
         transport: "unknown",
         applicationCacheStatus: "hit",
         attempt: 0,
-        estimatedCost: 0,
+        chargedCost: 0,
       },
-      { minute: 4, transport: "unknown", estimatedCost: 0 },
+      { minute: 4, transport: "unknown", chargedCost: 0 },
       { minute: 5, transport: "unknown", cacheStatus: "hit" },
       { minute: 6, transport: "unknown", status: "failed" },
     ]);
@@ -361,12 +361,12 @@ describe("AiUsage transport", () => {
 
 describe("daily context tier pricing", () => {
   const ctx = withTestDb();
-  it("keeps a mixed priced and tokenless group unknown", async () => {
+  it("reports a mixed group known subtotal and unknown coverage", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     await getDb(ctx.db)
       .insert(aiUsage)
       .values(
-        [0.1, null].map((estimatedCost) => ({
+        [0.1, null].map((chargedCost) => ({
           runId,
           feature: "synthetic-mixed",
           operation: "price",
@@ -374,13 +374,20 @@ describe("daily context tier pricing", () => {
           model: "gpt-6-sol",
           transport: "gateway" as const,
           durationMs: 1,
-          estimatedCost,
+          chargedCost,
         })),
       );
     const rows = await summarizeAiUsage(ctx.db, 7);
-    expect(rows[0]?.estimatedCost).toBeNull();
+    expect(rows[0]).toMatchObject({
+      chargedCost: 0.1,
+      chargedUnpricedCount: 1,
+      standardCost: 0,
+      standardUnpricedCount: 2,
+      comparedCalls: 0,
+      savings: 0,
+    });
   });
-  it("prices each unpriced call before aggregating its day", async () => {
+  it("never reprices stored token evidence when the current catalog changes", async () => {
     stubPricingCatalog({
       openai: {
         models: {
@@ -416,10 +423,77 @@ describe("daily context tier pricing", () => {
           inputTokens: 150_000,
           outputTokens: 0,
           durationMs: 1,
-          estimatedCost: null,
+          chargedCost: null,
         })),
       );
     const summaries = await summarize(ctx.db, 7);
-    expect(summaries[0]?.estimatedCost).toBeCloseTo(0.6);
+    expect(summaries[0]).toMatchObject({
+      chargedCost: 0,
+      chargedUnpricedCount: 2,
+      standardCost: 0,
+      standardUnpricedCount: 2,
+    });
+  });
+});
+
+describe("independent persisted cost totals", () => {
+  const ctx = withTestDb();
+  it("compares only matched calls and retains independent unknown coverage", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    await getDb(ctx.db)
+      .insert(aiUsage)
+      .values(
+        [
+          {
+            standardCost: 0.4,
+            chargedCost: 0,
+            costEvidence: {
+              standard: { source: "estimate" as const },
+              charged: { source: "estimate" as const },
+              billingReason: "plan" as const,
+            },
+          },
+          {
+            standardCost: null,
+            chargedCost: 0.2,
+            costEvidence: {
+              standard: null,
+              charged: { source: "provider_reported" as const },
+              billingReason: "discount" as const,
+            },
+          },
+          {
+            standardCost: 0.3,
+            chargedCost: null,
+            costEvidence: {
+              standard: { source: "estimate" as const },
+              charged: null,
+              billingReason: "unknown" as const,
+            },
+          },
+        ].map((costs) => ({
+          ...costs,
+          runId,
+          feature: "synthetic-costs",
+          operation: "compare",
+          provider: "synthetic",
+          model: "synthetic",
+          transport: "gateway" as const,
+          durationMs: 1,
+        })),
+      );
+    const expected = {
+      standardCost: 0.7,
+      chargedCost: 0.2,
+      standardUnpricedCount: 1,
+      chargedUnpricedCount: 1,
+      savings: 0.4,
+      comparedCalls: 1,
+      count: 3,
+    };
+    const run = await listAiUsageForRun(ctx.db, runId);
+    expect(run).toMatchObject(expected);
+    expect(run.billingReasons?.sort()).toEqual(["discount", "plan", "unknown"]);
+    expect((await summarizeAiUsage(ctx.db, 7))[0]).toMatchObject(expected);
   });
 });

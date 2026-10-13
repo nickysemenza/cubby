@@ -456,6 +456,14 @@ it; `sourceLabel` holds the title only for a book with no Cookbook row.
 
 Each term names one concept; the _Avoid_ line lists names that blur it.
 
+**AI standard cost**:
+The equivalent published API price for AI work before plan coverage or billing discounts, respecting published rates for its token classes, including prompt caching. A comparison may be unavailable when no equivalent price can be established.
+_Avoid_: charged cost, household expense, uncached price
+
+**AI charged cost**:
+The incremental amount attributable to AI work after plan coverage, response caching, or billing discounts; it may be estimated or provider-reported, with that distinction retained. A plan-covered call has zero incremental charge; the plan's subscription fee is separate.
+_Avoid_: standard cost, subscription fee, confirmed bill when only estimated
+
 **Run**:
 A durable record of coordinated work, identified by `RUN-`, with a purpose, trigger, status, and optional targets or operations. It may group image jobs, but its recorded cost can already include their costs. The Runs history presents every purpose together. Retained target outcomes, including Email targets, remain visible after the mutable target roster is retired. A vendor mail search is a Run: what was asked and where its page-by-page walk stands belong to the Run itself.
 _Avoid_: image processing job, individual attempt, search job

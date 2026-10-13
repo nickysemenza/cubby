@@ -38,6 +38,7 @@ import {
   referenceEntitySearch,
 } from "~/ui/combobox/reference-entity-search";
 import { BasicInfo, type BasicInfoField } from "~/ui/common/basic-info";
+import { CurrencyValue } from "~/ui/common/currency-value";
 import { DateDisplay } from "~/ui/common/date-display";
 import {
   renderScalarValue,
@@ -271,7 +272,7 @@ function renderFormattedScalar(
     }
     case "currency":
       return value.kind === "number" ? (
-        <span className="text-positive">{formatCurrency(value.raw)}</span>
+        <CurrencyValue value={value.raw} className="text-positive" />
       ) : (
         renderScalarValue(value, surface)
       );
@@ -280,9 +281,10 @@ function renderFormattedScalar(
     // spend when the value is negative — is generic, not vendor-specific.
     case "signedCurrency":
       return value.kind === "number" ? (
-        <span className={value.raw < 0 ? "text-positive" : "font-medium"}>
-          {formatCurrency(value.raw)}
-        </span>
+        <CurrencyValue
+          value={value.raw}
+          className={value.raw < 0 ? "text-positive" : "font-medium"}
+        />
       ) : (
         renderScalarValue(value, surface)
       );
@@ -1243,7 +1245,13 @@ function renderEditableField<TRecord extends object>(
           clipboard={clipboard}
           onSave={save}
           renderValue={(v) =>
-            displayed(v === null ? <NoneValue /> : formatCurrency(v))
+            displayed(
+              v === null ? (
+                <NoneValue />
+              ) : (
+                <CurrencyValue value={v} interactive={false} />
+              ),
+            )
           }
         />
       ) : (

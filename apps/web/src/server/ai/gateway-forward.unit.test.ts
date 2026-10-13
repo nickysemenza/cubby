@@ -69,6 +69,7 @@ function fakePort(
         : undefined,
     recordUsage: (database, input) =>
       recordAiUsage(database, input, {
+        snapshot: async () => ({ amount: null, evidence: null }),
         emit: (_db, event) => {
           recorded.push(event);
           return Promise.resolve();
@@ -130,7 +131,7 @@ describe("forwardGatewayRequest", () => {
         outputTokens: 5,
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
-        estimatedCost: null,
+        chargedCost: null,
         cacheStatus: "none",
         gatewayLogId: "log-1",
         transport: "gateway",
@@ -159,7 +160,7 @@ describe("forwardGatewayRequest", () => {
         cacheReadTokens: 40,
         cacheWriteTokens: 7,
         cacheStatus: "none",
-        estimatedCost: null,
+        chargedCost: null,
       }),
     ]);
   });
@@ -183,7 +184,7 @@ describe("forwardGatewayRequest", () => {
       expect.objectContaining({
         inputTokens: 10,
         outputTokens: 5,
-        estimatedCost: 0,
+        chargedCost: 0,
         transport: "chatgpt",
       }),
     ]);
@@ -210,7 +211,7 @@ describe("forwardGatewayRequest", () => {
       expect.objectContaining({
         inputTokens: 10,
         outputTokens: 5,
-        estimatedCost: 0,
+        chargedCost: 0,
         // The gateway's verdict never overwrites the caller's cache state.
         cacheStatus: "none",
         gatewayLogId: "log-hit",
@@ -263,7 +264,7 @@ describe("forwardGatewayRequest", () => {
       expect.objectContaining({
         status: "failed",
         transport: "chatgpt",
-        estimatedCost: 0,
+        chargedCost: 0,
       }),
     ]);
   });
@@ -294,7 +295,7 @@ describe("forwardGatewayRequest", () => {
         expect.objectContaining({
           status: "failed",
           transport: "chatgpt",
-          estimatedCost: 0,
+          chargedCost: 0,
         }),
       ]);
     },

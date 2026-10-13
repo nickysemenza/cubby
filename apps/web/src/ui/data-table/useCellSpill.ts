@@ -5,7 +5,7 @@ const SPILL_MAX_PX = 480;
 const EDGE_PX = 4;
 /** What a cell can spill, outermost first in document order. */
 const SOURCES =
-  "[data-cell-spill], [data-cell-value], [data-stacked-line], [data-header-label], .truncate";
+  "[data-cell-spill], [data-cell-spill-text], [data-cell-value], [data-stacked-line], [data-header-label], .truncate";
 const TYPOGRAPHY = [
   "color",
   "font-family",
@@ -28,6 +28,9 @@ const isClipped = (element: Element) =>
   !element.matches(".sr-only") &&
   (element.scrollWidth > element.clientWidth + 1 ||
     element.scrollHeight > element.clientHeight + 1);
+
+const needsSpill = (element: Element) =>
+  element.hasAttribute("data-cell-spill-text") || isClipped(element);
 
 const railsOf = (cell: HTMLElement) => [
   ...cell.querySelectorAll<HTMLElement>("[data-cell-rail]"),
@@ -78,8 +81,8 @@ function clippedSource(cell: HTMLElement): HTMLElement | null {
     return null;
   for (const candidate of cell.querySelectorAll<HTMLElement>(SOURCES)) {
     if (
-      isClipped(candidate) ||
-      [...candidate.querySelectorAll("*")].some(isClipped)
+      needsSpill(candidate) ||
+      [...candidate.querySelectorAll("*")].some(needsSpill)
     )
       // A stacked line spills with its partner line, as the cell shows them.
       return candidate.matches("[data-stacked-line]") && candidate.parentElement
@@ -108,6 +111,11 @@ function unclippedClone(source: HTMLElement) {
   for (const omitted of clone.querySelectorAll("[data-spill-omit]"))
     omitted.remove();
   for (const element of [clone, ...clone.querySelectorAll<HTMLElement>("*")]) {
+    const fullText = element.getAttribute("data-cell-spill-text");
+    if (fullText !== null) {
+      element.textContent = fullText;
+      element.removeAttribute("data-cell-spill-text");
+    }
     element.removeAttribute("id");
     element.removeAttribute("title");
     element.style.overflow = "visible";

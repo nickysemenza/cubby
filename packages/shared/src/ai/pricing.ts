@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import {
   type CostTier,
   Models,
@@ -289,4 +291,191 @@ export function createAiModelPricing(options: AiModelPricingOptions) {
       return (inFlight ??= load());
     },
   };
+}
+
+export const aiPricingRatesSchema = z.object({
+  input: z.number().nonnegative(),
+  output: z.number().nonnegative(),
+  cache_read: z.number().nonnegative().optional(),
+  cache_write: z.number().nonnegative().optional(),
+});
+const costProvenance = z.object({
+  source: z.enum([
+    "estimate",
+    "provider_reported",
+    "historical_recorded",
+    "reconstructed",
+  ]),
+  pricingSource: z.enum(["models.dev", "pi_sdk", "caller"]).optional(),
+  pricingSnapshot: z
+    .object({
+      provider: z.string(),
+      model: z.string(),
+      capturedAt: z.iso.datetime(),
+      rates: aiPricingRatesSchema,
+    })
+    .optional(),
+});
+export const aiCostEvidenceSchema = z.object({
+  standard: costProvenance.nullable(),
+  charged: costProvenance.nullable(),
+  billingReason: z.enum([
+    "standard",
+    "plan",
+    "cache",
+    "discount",
+    "local",
+    "unknown",
+  ]),
+  adjustment: z
+    .object({
+      chargedAmount: z.number().nonnegative().optional(),
+      rates: aiPricingRatesSchema.optional(),
+      description: z.string().optional(),
+    })
+    .optional(),
+  original: z
+    .object({
+      estimatedCost: z.number().nullable(),
+      chargedComplete: z.boolean().optional(),
+    })
+    .optional(),
+  reconstruction: z
+    .object({
+      capturedAt: z.iso.datetime(),
+      outcome: z.enum(["priced", "unavailable"]),
+    })
+    .optional(),
+});
+export type AiCostEvidence = z.infer<typeof aiCostEvidenceSchema>;
+
+/** Capture the actual token-class rates once; persisted reads never consult the catalog. */
+export function priceAiUsage(
+  pricing: AiModelPricing | null,
+  provider: string,
+  model: string,
+  usage: AiTokenUsage,
+) {
+  const amount = estimateAiUsageCost(pricing, provider, model, usage);
+  // SAFETY: pricing is projected over declared model ids; an own key is AiModelId.
+  const price =
+    pricing && Object.hasOwn(pricing, model)
+      ? pricing[model as AiModelId]
+      : undefined;
+  if (amount === null || !price?.cost) return { amount: null, evidence: null };
+  const prompt =
+    tokenCount(usage.inputTokens) +
+    tokenCount(usage.cacheReadTokens) +
+    tokenCount(usage.cacheWriteTokens);
+  const rates =
+    (price.cost.tiers ?? [])
+      .filter(
+        (candidate) =>
+          candidate.tier.type === "context" && prompt > candidate.tier.size,
+      )
+      .reduce<CostTier | undefined>(
+        (widest, candidate) =>
+          widest && widest.tier.size >= candidate.tier.size
+            ? widest
+            : candidate,
+        undefined,
+      ) ?? price.cost;
+  return {
+    amount,
+    evidence: {
+      source: "estimate" as const,
+      pricingSource: "models.dev" as const,
+      pricingSnapshot: {
+        provider,
+        model,
+        capturedAt: new Date().toISOString(),
+        rates: {
+          input: rates.input,
+          output: rates.output,
+          ...(rates.cache_read === undefined
+            ? {}
+            : { cache_read: rates.cache_read }),
+          ...(rates.cache_write === undefined
+            ? {}
+            : { cache_write: rates.cache_write }),
+        },
+      },
+    },
+  };
+}
+
+/** Apply only explicit billing evidence; provider identity never implies a discount. */
+export function accountAiUsage(
+  standard: { amount: number | null; evidence: AiCostEvidence["standard"] },
+  billing: Pick<AiCostEvidence, "billingReason"> &
+    Partial<AiCostEvidence> & { chargedCost?: number | null },
+  usage: AiTokenUsage,
+) {
+  const reason = billing.billingReason;
+  const free = reason === "plan" || reason === "cache" || reason === "local";
+  const rates = billing.adjustment?.rates;
+  const ratesAmount =
+    rates &&
+    (usage.inputTokens != null || usage.outputTokens != null) &&
+    (!usage.cacheReadTokens || rates.cache_read !== undefined) &&
+    (!usage.cacheWriteTokens || rates.cache_write !== undefined)
+      ? (tokenCount(usage.inputTokens) * rates.input +
+          tokenCount(usage.outputTokens) * rates.output +
+          tokenCount(usage.cacheReadTokens) * (rates.cache_read ?? 0) +
+          tokenCount(usage.cacheWriteTokens) * (rates.cache_write ?? 0)) /
+        1_000_000
+      : null;
+  const explicitAmount = billing.adjustment?.chargedAmount;
+  const reportedAmount =
+    billing.charged?.source === "provider_reported"
+      ? billing.chargedCost
+      : undefined;
+  const useDiscountRates =
+    explicitAmount == null && reportedAmount == null && rates !== undefined;
+  const chargedCost = free
+    ? 0
+    : (explicitAmount ??
+      reportedAmount ??
+      (rates ? ratesAmount : (billing.chargedCost ?? standard.amount)));
+  const adjustedEstimate =
+    !free &&
+    (useDiscountRates ||
+      (explicitAmount != null && explicitAmount !== reportedAmount));
+  const charged: AiCostEvidence["charged"] =
+    chargedCost === null
+      ? null
+      : adjustedEstimate
+        ? {
+            source: "estimate",
+            pricingSource: "caller",
+            ...(useDiscountRates && rates && standard.evidence?.pricingSnapshot
+              ? {
+                  pricingSnapshot: {
+                    ...standard.evidence.pricingSnapshot,
+                    rates,
+                  },
+                }
+              : {}),
+          }
+        : (billing.charged ?? {
+            source: "estimate",
+            pricingSource:
+              billing.chargedCost != null
+                ? "caller"
+                : standard.evidence?.pricingSource,
+            ...(!free && standard.evidence?.pricingSnapshot
+              ? { pricingSnapshot: standard.evidence.pricingSnapshot }
+              : {}),
+          });
+  const costEvidence: AiCostEvidence = {
+    standard: standard.evidence,
+    charged,
+    billingReason: chargedCost === null ? "unknown" : reason,
+    ...(billing.adjustment ? { adjustment: billing.adjustment } : {}),
+    ...(billing.original ? { original: billing.original } : {}),
+    ...(billing.reconstruction
+      ? { reconstruction: billing.reconstruction }
+      : {}),
+  };
+  return { standardCost: standard.amount, chargedCost, costEvidence };
 }

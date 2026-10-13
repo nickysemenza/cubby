@@ -26,7 +26,12 @@ import { mailResearchRunInput, runWorkLabel } from "@cubby/schemas/run-fields";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
-import { formatPercent, formatSmallCurrency } from "~/lib/number-format";
+import {
+  formatAiCost,
+  formatAiCostSubtotal,
+  formatPercent,
+  formatSmallCurrency,
+} from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import {
   aiUsage,
@@ -516,19 +521,8 @@ function stageRow(
 }
 
 const knownCost = (calls: (typeof aiUsage.$inferSelect)[]) =>
-  calls.every(
-    (call) =>
-      ["chatgpt", "cache"].includes(call.transport) ||
-      (call.transport !== "unknown" && call.estimatedCost !== null),
-  )
-    ? calls.reduce(
-        (sum, call) =>
-          sum +
-          (["chatgpt", "cache"].includes(call.transport)
-            ? 0
-            : (call.estimatedCost ?? 0)),
-        0,
-      )
+  calls.every((call) => call.chargedCost !== null)
+    ? calls.reduce((sum, call) => sum + (call.chargedCost ?? 0), 0)
     : null;
 
 type EmailRow = typeof emailTable.$inferSelect;
@@ -744,13 +738,23 @@ function importRow(
     const usageLines = Object.values(
       groupBy(usage, (call) => JSON.stringify([call.model, call.transport])),
     ).map((group) => {
-      const cost = knownCost(group);
+      const compared = group.filter(
+        (call) => call.standardCost !== null && call.chargedCost !== null,
+      );
+      const subtotal = (field: "standardCost" | "chargedCost") =>
+        formatAiCostSubtotal(
+          group.reduce((sum, call) => sum + (call[field] ?? 0), 0),
+          group.filter((call) => call[field] === null).length,
+          group.length,
+        );
       const failed = group.filter((call) => call.status === "failed").length;
       return [
         group[0]!.model,
         group[0]!.transport,
         `${group.length} call(s)${failed ? `, ${failed} failed` : ""}`,
-        cost === null ? "Unknown" : formatSmallCurrency(cost),
+        `Charged ${subtotal("chargedCost")}`,
+        `Standard ${subtotal("standardCost")}`,
+        `Savings ${compared.length === 0 ? "unavailable" : formatAiCost(compared.reduce((sum, call) => sum + call.standardCost! - call.chargedCost!, 0))} (${compared.length}/${group.length} calls compared)`,
       ].join(" · ");
     });
     const sources =

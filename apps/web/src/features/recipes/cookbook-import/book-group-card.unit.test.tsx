@@ -122,8 +122,13 @@ const report: CookbookRunReport = {
   run_id: "run-1",
   started_at: "2026-09-10T10:00:00Z",
   finished_at: "2026-09-10T10:01:05Z",
-  total_cost_usd: 0.42,
-  cost_complete: true,
+  standardCost: 0,
+  chargedCost: 0.42,
+  standardUnpricedCount: 4,
+  chargedUnpricedCount: 0,
+  savings: 0,
+  comparedCalls: 0,
+  count: 4,
   wall_ms: 65_000,
   incomplete: true,
   cancelled: false,
@@ -137,7 +142,9 @@ const report: CookbookRunReport = {
       latency_ms: 1200,
       cached: false,
       status: 200,
-      cost_usd: 0.01,
+      standardCost: null,
+      chargedCost: 0.01,
+      costEvidence: null,
       truncated: false,
       outcome: { outcome: "ok" },
     },
@@ -162,7 +169,19 @@ const report: CookbookRunReport = {
     phantom: [],
     recall: 0.67,
   },
-  usage_by_model: [{ model: "claude-haiku", calls: 4, cost_usd: 0.42 }],
+  usage_by_model: [
+    {
+      model: "claude-haiku",
+      calls: 4,
+      standardCost: 0,
+      chargedCost: 0.42,
+      standardUnpricedCount: 4,
+      chargedUnpricedCount: 0,
+      savings: 0,
+      comparedCalls: 0,
+      count: 4,
+    },
+  ],
 };
 
 const BOOK_NAME = "Pies";
@@ -340,6 +359,29 @@ describe("cookbook book card", () => {
       screen.getByRole("button", { name: /Retry extraction/ }),
     ).toBeVisible();
     expect(screen.getByText(/Run report — \$0\.42/)).toBeVisible();
+  });
+
+  it("warns when aggregate charge coverage is unknown without a call roster", () => {
+    render(
+      <BookGroupCard
+        book={baseBook({
+          extraction,
+          report: {
+            ...report,
+            chargedComplete: false,
+            count: 0,
+            calls: [],
+            usage_by_model: [],
+          },
+          hasArchiveBytes: true,
+        })}
+        handlers={handlers()}
+        importing={false}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Run report/ }));
+    expect(screen.getByText(/charge subtotal incomplete/)).toBeVisible();
   });
 
   it("selecting a recipe pulls in the sub-recipes it depends on", () => {

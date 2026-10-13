@@ -27,6 +27,7 @@ import {
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
+import { aiCostSummarySql } from "~/server/repo/ai-usage";
 import {
   getDb,
   notDeleted,
@@ -80,10 +81,7 @@ function runSummaryQuery(
       updated: runTable.updated,
       skipped: runTable.skipped,
       failureCode: runTable.failureCode,
-      estimatedCost: sql<number | null>`case
-        when count(${aiUsage.id}) filter (where ${aiUsage.estimatedCost} is null) > 0 then null
-        else coalesce(sum(${aiUsage.estimatedCost}), 0)
-      end`,
+      ...aiCostSummarySql(),
     })
     .from(runTable)
     .leftJoin(

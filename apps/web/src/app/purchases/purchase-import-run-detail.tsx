@@ -41,7 +41,7 @@ import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { formatCurrency } from "~/lib/utils";
+import { AiCost } from "~/ui/common/ai-cost";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
@@ -348,15 +348,9 @@ function AgentWorkOverview({
         {run.endedAt ? null : " · still running"}
       </p>
       {usage.data ? (
-        <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">
-          AI spend to date{" "}
-          <strong className="font-semibold text-foreground tabular-nums">
-            {formatCurrency(usage.data.pricedSubtotal, 4)}
-          </strong>
-          {usage.data.unpricedCount
-            ? ` · ${usage.data.unpricedCount} calls unpriced`
-            : null}
-        </p>
+        <div className="mt-1" aria-live="polite">
+          <AiCost cost={usage.data} />
+        </div>
       ) : null}
       <AgentContextPerCall messages={messages} />
       {work.length || plannedSteps.length || run.agentModelMs > 0 ? (

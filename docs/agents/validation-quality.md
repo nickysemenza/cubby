@@ -13,6 +13,8 @@ checks across sessions because cold typechecks can consume substantial memory.
 The root `package.json` owns each static-check command composition.
 Dependency advisory audits and deduplication are maintenance, not validation gates.
 
+When removing callers or changing exports, include Knip's unused-export check;
+the files/dependencies-only `knip:production` command cannot establish export readiness.
 The `knip` gate also runs `pnpm knip:production`, which fails on a file or
 dependency the production graph never reaches. A script invoked only by a hook,
 CI, or package script needs a `!` entry in `knip.json`; a test seam (fixture,

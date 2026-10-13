@@ -6,7 +6,7 @@ import { RunWorkFacts } from "~/app/runs/run-work-summary";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
-import { formatCurrency } from "~/lib/utils";
+import { AiCost } from "~/ui/common/ai-cost";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -135,16 +135,16 @@ export function ActivityRunDetail({
           </StatusText>
         ) : null}
         {run ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Cost:{" "}
-            {run.estimatedCost === null
-              ? "—"
-              : formatCurrency(run.estimatedCost)}
-            .{" "}
-            {run.recordType === "image_job" && run.parentRunId
-              ? "This job’s cost may already be included in its parent Run total."
-              : "Cost shown for this record."}
-          </p>
+          <div className="mt-3">
+            <AiCost
+              cost={run}
+              note={
+                run.recordType === "image_job" && run.parentRunId
+                  ? "This job’s cost may already be included in its parent Run total."
+                  : undefined
+              }
+            />
+          </div>
         ) : null}
         <Stack gap="sm">
           {run?.recordType === "image_job" ? (

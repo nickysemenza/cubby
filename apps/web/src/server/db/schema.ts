@@ -34,6 +34,7 @@ import {
   type McpToolCallSurface,
 } from "@cubby/schemas/telemetry";
 import type { ShortcodeType } from "@cubby/shared";
+import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -47,7 +48,6 @@ import {
   jsonb,
   pgTable,
   pgView,
-  real,
   text,
   timestamp,
   uniqueIndex,
@@ -852,10 +852,9 @@ export const aiUsage = pgTable(
       .$type<"succeeded" | "failed">()
       .default("succeeded"),
     gatewayLogId: text("gatewayLogId"),
-    estimatedCost: real("estimatedCost"),
     standardCost: doublePrecision("standardCost"),
     chargedCost: doublePrecision("chargedCost"),
-    costEvidence: jsonb("costEvidence"),
+    costEvidence: jsonb("costEvidence").$type<AiCostEvidence>(),
     durationMs: integer("durationMs").notNull(),
     cacheStatus: text("cacheStatus").$type<"hit" | "miss" | "none">(),
     applicationCacheStatus: text("applicationCacheStatus").$type<

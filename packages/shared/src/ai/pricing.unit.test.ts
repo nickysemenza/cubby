@@ -10,6 +10,7 @@ import {
   createAiModelPricing,
   estimateAiUsageCost,
   projectAiModelPricing,
+  priceAiUsage,
   quoteAiDecisionRequest as quote,
 } from "./pricing";
 
@@ -369,4 +370,19 @@ describe("createAiModelPricing", () => {
     expect(await pricing.current()).toBeNull();
     expect(errors).toHaveLength(1);
   });
+});
+
+it("retains a token-class pricing snapshot independent of subsequent catalog edits", () => {
+  const providers = catalog();
+  const priced = priceAiUsage(
+    projectAiModelPricing(providers),
+    "openai",
+    "gpt-6-sol",
+    { inputTokens: 300_000, outputTokens: 0 },
+  );
+  expect(priced.amount).toBe(1.2);
+  expect(priced.evidence?.pricingSnapshot.rates.input).toBe(4);
+  providers.openai!.models["gpt-6-sol"]!.cost!.tiers![0]!.input = 99;
+  expect(priced.evidence?.pricingSnapshot.rates.input).toBe(4);
+  expect(priced.amount).toBe(1.2);
 });
