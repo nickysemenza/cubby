@@ -72,25 +72,25 @@ const completeDataQuality = {
   relatedExceptions: [],
 };
 
-const productModelGap = {
-  check: "product_model" as const,
+const productIdentifierGap = {
+  check: "product_external_id" as const,
   facet: "identity" as const,
   kind: "missing" as const,
   targetType: "product" as const,
   targetId: testShortcode("product", "PRD-TEST"),
-  message: "Manufacturer model is not recorded.",
+  message: "No model or external identifier is recorded.",
 };
 
 const incompleteProductDataQuality = {
   ...completeDataQuality,
   status: "needs_data" as const,
   score: 80,
-  gaps: [productModelGap],
+  gaps: [productIdentifierGap],
   facets: [
     {
       name: "identity" as const,
       status: "needs_data" as const,
-      gaps: [productModelGap],
+      gaps: [productIdentifierGap],
     },
     { name: "provenance" as const, status: "complete" as const, gaps: [] },
     { name: "integrity" as const, status: "complete" as const, gaps: [] },
@@ -329,7 +329,7 @@ describe("product mappers", () => {
         },
       ],
       externalIds: [{ id: EXTERNAL_ID }],
-      dataGaps: ["product_model"],
+      dataGaps: ["product_external_id"],
       images: [{ id: IMAGE_ID }],
       inventoryEntry: [
         {
@@ -493,12 +493,12 @@ describe("product mappers", () => {
       score: 80,
       gaps: [
         {
-          check: "product_model" as const,
+          check: "product_external_id" as const,
           facet: "identity" as const,
           kind: "missing" as const,
           targetType: "product" as const,
           targetId: testShortcode("product", "PRD-TEST"),
-          message: "Manufacturer model is not recorded.",
+          message: "No model or external identifier is recorded.",
         },
       ],
       facets: [
@@ -507,12 +507,12 @@ describe("product mappers", () => {
           status: "needs_data" as const,
           gaps: [
             {
-              check: "product_model" as const,
+              check: "product_external_id" as const,
               facet: "identity" as const,
               kind: "missing" as const,
               targetType: "product" as const,
               targetId: testShortcode("product", "PRD-TEST"),
-              message: "Manufacturer model is not recorded.",
+              message: "No model or external identifier is recorded.",
             },
           ],
         },

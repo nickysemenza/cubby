@@ -2,7 +2,6 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { sql, type SQL } from "drizzle-orm";
 
 import { product } from "~/server/db/schema";
-import { classificationPolicySql } from "~/server/repo/classification-field-policy";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
 import { labelEvidenceRevisionSql } from "~/server/repo/product-label-review";
@@ -91,13 +90,8 @@ const hasLiveCategory = (t: Product) => sql`EXISTS (
   WHERE dq_cat."id" = ${t.categoryId} AND dq_cat."deletedAt" IS NULL
 )`;
 
-const modelRequired = (t: Product) =>
-  classificationPolicySql(
-    "productCategory.feature",
-    "model",
-    "required",
-    sql`${t.categoryId}`,
-  );
+const hasIdentifier = (t: Product) =>
+  sql`((${t.model} IS NOT NULL AND trim(${t.model}) <> '') OR ${hasExternalId(t)})`;
 
 const derivedPrice = (t: Product) => derivedPriceFilterSql(t.id);
 
@@ -133,22 +127,13 @@ export const productChecks = defineEntityChecks({
       ],
     },
     product_external_id: {
-      missing: (t) => sql`NOT ${hasExternalId(t)}`,
-      fingerprint: (t) => [labelAwareIdentityFingerprint(t, hasExternalId(t))],
+      missing: (t) => sql`NOT ${hasIdentifier(t)}`,
+      fingerprint: (t) => [labelAwareIdentityFingerprint(t, hasIdentifier(t))],
     },
     product_category: {
       missing: (t) => sql`NOT ${hasLiveCategory(t)}`,
       fingerprint: (t) => [
         labelAwareIdentityFingerprint(t, sql`${t.categoryId}`),
-      ],
-    },
-    product_model: {
-      // The category feature's declared field policy requires a model.
-      expected: modelRequired,
-      missing: (t) => sql`(${t.model} IS NULL OR trim(${t.model}) = '')`,
-      fingerprint: (t) => [
-        sql`${t.categoryId}`,
-        labelAwareIdentityFingerprint(t, sql`${t.model}`),
       ],
     },
     product_price: {

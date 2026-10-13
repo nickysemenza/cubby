@@ -369,6 +369,6 @@ test("Record Work queue strip drops a gap as soon as it is accepted", async ({
   await inline.getByRole("button", { name: "Accept exception" }).click();
   await expect(strip).not.toContainText("Manufacturer is not recorded.");
   await expect(strip).toContainText(
-    "No barcode, ASIN, or other external identifier is recorded.",
+    "No model or external identifier is recorded.",
   );
 });

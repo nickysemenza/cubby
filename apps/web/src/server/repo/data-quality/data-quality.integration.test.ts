@@ -1,16 +1,18 @@
 import { scoredEntities } from "@cubby/schemas/data-quality";
-import {
-  parseShortcodeFor,
-  type ProductCategoryShortcode,
-} from "@cubby/schemas/identifiers";
-import { type SQL, sql } from "drizzle-orm";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { eq, type SQL, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { entityExternalId, product, productCategory } from "~/server/db/schema";
+import {
+  dataExceptionRecord,
+  entityExternalId,
+  product,
+  productCategory,
+} from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { createExpense } from "~/server/repo/expense/crud";
@@ -25,6 +27,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { readRecordWorkQueue } from "~/server/repo/work-queue";
 
 import { clearDataException, setDataException } from "./exceptions";
 import { loadDataQualities } from "./hydrate";
@@ -416,39 +419,154 @@ describe("data quality: list filters, sort and hydration agree", () => {
       expect(listed.get(row.id)).toBe(quality(row).score);
   });
 
-  // Failure modes: the model gap stops following the declared feature policy
-  // (a feature inherited from an ancestor no longer expects a model, or a
-  // feature that never carries one starts to).
-  it("product: expects a model where the category feature's policy requires one", async () => {
-    const drills = await createProductCategory(
-      ctx.db,
-      buildEntity("productCategory", {
-        name: "DQ example drills",
-        parentId: taxonomyShortcode("tools"),
-      }),
-      TEST_ACTOR,
-    );
-    const make = (name: string, categoryId: ProductCategoryShortcode) =>
+  // Failure modes: model-only or external-ID-only records stay in Research,
+  // category policy still demands a second identifier, or SQL filtering and
+  // scoring disagree with hydration. Blank/deleted evidence must not qualify.
+  it("product: either model or a live external identifier satisfies identity", async () => {
+    const make = (name: string, model: string | null) =>
       createProductFixture(
         ctx.db,
         makeProductInput({
-          name,
+          name: `DQ identifier ${name}`,
           manufacturer: "Acme",
-          categoryId,
-          model: null,
+          categoryId: taxonomyShortcode("tools"),
+          model,
         }),
         TEST_ACTOR,
       );
-    const drill = await make("DQ model drill", drills.output.id);
-    const novel = await make("DQ model novel", taxonomyShortcode("books"));
-    const hydrated = await loadDataQualities(ctx.db, "product", [
-      drill.entityId,
-      novel.entityId,
+    const modelOnly = await make("model", "EX-100");
+    const externalOnly = await make("external", null);
+    const both = await make("both", "EX-200");
+    const neither = await make("neither", "   ");
+    const deleted = await make("deleted", null);
+    await ensureExternalSources(ctx.db, ["synthetic"]);
+    await unwrapDb(ctx.db)
+      .insert(entityExternalId)
+      .values([
+        {
+          entityId: externalOnly.entityId,
+          entityKind: "product",
+          source: "synthetic",
+          kind: "retailer_sku",
+          externalId: "EX-SKU-100",
+          isPrimary: true,
+        },
+        {
+          entityId: both.entityId,
+          entityKind: "product",
+          source: "synthetic",
+          kind: "retailer_sku",
+          externalId: "EX-SKU-200",
+          isPrimary: true,
+        },
+        {
+          entityId: neither.entityId,
+          entityKind: "product",
+          source: "synthetic",
+          kind: "retailer_sku",
+          externalId: "   ",
+          isPrimary: true,
+        },
+        {
+          entityId: deleted.entityId,
+          entityKind: "product",
+          source: "synthetic",
+          kind: "retailer_sku",
+          externalId: "EX-SKU-DELETED",
+          isPrimary: true,
+          deletedAt: new Date(),
+        },
+      ]);
+    const rows = [modelOnly, externalOnly, both, neither, deleted];
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "product",
+      rows.map((row) => row.entityId),
+    );
+    const gaps = (row: typeof modelOnly) =>
+      hydrated.get(row.entityId)?.gaps.map((gap) => gap.check);
+    expect(gaps(modelOnly)).not.toContain("product_external_id");
+    expect(gaps(externalOnly)).not.toContain("product_external_id");
+    expect(gaps(both)).not.toContain("product_external_id");
+    expect(gaps(neither)).toContain("product_external_id");
+    expect(gaps(deleted)).toContain("product_external_id");
+    expect(hydrated.get(modelOnly.entityId)?.score).toBe(
+      hydrated.get(both.entityId)?.score,
+    );
+    expect(hydrated.get(externalOnly.entityId)?.score).toBe(
+      hydrated.get(both.entityId)?.score,
+    );
+    const filtered = await productList(
+      ctx.db,
+      { nameFilter: "DQ identifier", dataGap: ["product_external_id"] },
+      [],
+      page,
+    );
+    expect(filtered.data.map((row) => row.id).sort()).toEqual(
+      [neither.id, deleted.id].sort(),
+    );
+    const queue = await readRecordWorkQueue(
+      ctx.db,
+      null,
+      externalOnly.id,
+      false,
+    );
+    expect(queue.items.filter((row) => row.kind === "research")).toEqual([]);
+    await unwrapDb(ctx.db)
+      .update(product)
+      .set({ model: null })
+      .where(eq(product.id, modelOnly.entityId));
+    const reopened = await loadDataQualities(ctx.db, "product", [
+      modelOnly.entityId,
     ]);
-    const gaps = (row: typeof drill) =>
-      hydrated.get(row.entityId)!.gaps.map((gap) => gap.check);
-    expect(gaps(drill)).toContain("product_model");
-    expect(gaps(novel)).not.toContain("product_model");
+    expect(
+      reopened.get(modelOnly.entityId)?.gaps.map((gap) => gap.check),
+    ).toContain("product_external_id");
+  });
+
+  // Failure mode: broadening the presence predicate invalidates accepted
+  // external-ID exceptions even though the record still has no identifier.
+  it("product: identifier exceptions survive unrelated edits and reopen on evidence", async () => {
+    const row = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "DQ identifier exception",
+        manufacturer: "Acme",
+        categoryId: taxonomyShortcode("tools"),
+        model: null,
+      }),
+      TEST_ACTOR,
+    );
+    await unwrapDb(ctx.db).insert(dataExceptionRecord).values({
+      entityId: row.entityId,
+      entityKind: "product",
+      check: "product_external_id",
+      reason: "not_issued",
+      note: "Synthetic component has no issued identifier.",
+      fingerprint: "product_external_id:false",
+    });
+    await unwrapDb(ctx.db)
+      .update(product)
+      .set({ notes: "Synthetic unrelated note" })
+      .where(eq(product.id, row.entityId));
+    const accepted = await loadDataQualities(ctx.db, "product", [row.entityId]);
+    expect(accepted.get(row.entityId)?.exceptions).toContainEqual(
+      expect.objectContaining({
+        check: "product_external_id",
+        state: "active",
+      }),
+    );
+    await unwrapDb(ctx.db)
+      .update(product)
+      .set({ model: "EX-300" })
+      .where(eq(product.id, row.entityId));
+    const changed = await loadDataQualities(ctx.db, "product", [row.entityId]);
+    expect(changed.get(row.entityId)?.exceptions).toContainEqual(
+      expect.objectContaining({ check: "product_external_id", state: "stale" }),
+    );
+    expect(
+      changed.get(row.entityId)?.gaps.map((gap) => gap.check),
+    ).not.toContain("product_external_id");
   });
 
   // Failure mode: a planned (future) line, which may be unpriced by policy,

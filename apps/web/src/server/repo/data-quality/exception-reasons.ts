@@ -21,14 +21,11 @@ const EXCEPTION_REASONS = {
   settlement_mismatch: ["expected_mismatch"],
   paperwork_mismatch: ["expected_mismatch"],
   amazon_asin: ["unavailable", "insufficient_detail"],
-  // A check absent from this map admits NO reason at all, so its gap can never
-  // be closed even when the fact provably does not exist. The three identity
-  // checks below sat in that state: a kit component the manufacturer never
-  // catalogued separately (for example, an unbranded carrying bag) has no model
-  // number to record, and no exception could say so.
+  // A check absent from this map admits no reason and cannot be excepted.
+  // Unbranded components and separately uncatalogued kit parts may have no
+  // manufacturer or issued identifier to record.
   product_manufacturer: ["not_applicable", "unavailable"],
   product_category: ["not_applicable", "insufficient_detail"],
-  product_model: ["not_issued", "unavailable"],
   product_external_id: ["not_issued", "unavailable"],
   product_label_review: ["unavailable", "insufficient_detail"],
   // `unavailable` is the common one and the reason this check earns its keep:

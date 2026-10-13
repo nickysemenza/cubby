@@ -26,13 +26,15 @@ decides whether an import line becomes a Product and never receives inventory.
 Enrichment never invents a price or date; a historical acquisition of unknown cost is an Expense with `cost: null` and no `date`.
 The Research queue is the `research-queue` saved view on Products (and on
 Purchases and Expenses for import gaps). For a backlog, `entity_read.list product` with `sort=dataQuality` ascending puts the
-weakest identity first (heavier identity checks — manufacturer, external ID —
+weakest identity first (heavier identity checks — manufacturer, identifier —
 outweigh lighter ones), in pages of 25. Narrow to a specific gap with
 `filters.dataGap` on a check id: `product_manufacturer`, `product_external_id`,
-`product_category`, `product_model`, `product_price`, `product_image`,
+`product_category`, `product_price`, `product_image`,
 `amazon_asin`. Start with summary/count reads, then
 request the relevant page; request full records only for candidates being
-researched.
+researched. The `product_external_id` check is the combined Identifier gap;
+a model or any live nonblank external ID satisfies it, so do not research a
+second identifier solely because the other field is empty.
 
 Read a candidate immediately before every write. `imageCount` is the complete
 attachment count used by upload preconditions; `itemImageCount` and
