@@ -200,10 +200,10 @@ None is committed; edit the generator or its inputs, never the output. A missing
 - `xcodegen generate --spec apps/apple/project.yml` (when `project.yml` changes)
 - Full app build needs the xcframework from `ensure-apple-ffi.ts` first.
 - `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see
-  `scripts/apple-check.sh`, the `apple:simulator-build` Nx target) gates
+  `scripts/apple-check.sh`, the `apple:lint` Nx target) gates
   formatting; run
   `swift format --in-place --configuration apps/apple/.swift-format --recursive` to fix.
-  Keep copied Markdown fixtures/resources in `appleGate`; [CI](../../docs/ci.md) owns the
+  Keep copied Markdown fixtures/resources in the native build inputs; [CI](../../docs/ci.md) owns the
   hosted Apple lanes and cached-pass replay.
 - **Visual and interaction checks:** the Xcode MCP renders `#Preview`s headlessly and drives a
   simulator (tap, swipe, type, capture) — setup, loops, and failure fixes in
@@ -243,9 +243,9 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
   detail only); image `status` is `PENDING|UPLOADED|FAILED`.
 - A generator never emits one giant array literal: Release/WMO stalls single-threaded in the
   SIL `COWArrayOpt` pass. Large catalogs ship as bundled JSON decoded at runtime.
-- `Cubby.xcodeproj` is generated and gitignored; the checkout hook regenerates it, but a rebase
-  runs that hook before replaying your commits, so Swift files they add are missing from the
-  project ("Cannot find … in scope"). Run `pnpm apple gen`.
+- `Cubby.xcodeproj` is generated and gitignored; Git operations do not regenerate it. Run `pnpm apple gen` after
+  switching branches before opening Xcode directly, so newly added Swift files appear in the
+  project ("Cannot find … in scope").
 - Running `knip --cache` before `packages/wasm` exists poisons `node_modules/.cache/knip`
   ("Unresolved imports …recipebridge_bg.js" on every later pre-commit); `rm -rf` that cache.
 - Symptom: a re-presented `.sheet(item:)` shows the previous item's state even though the item's

@@ -28,6 +28,17 @@ jobs, and a hard-coded job list in the Tester Army dispatcher had to agree.
 - One required check, `CI passed` (`re-actors/alls-green`), accepts a skipped
   job only when `Plan` skipped its lane or the Linux probe verified that Apple
   lane's cached pass.
+- Apple has separate formatting and native targets. Broad generator inputs
+  select the native probe, but only declared generated output bytes invalidate
+  a native pass. JavaScript dependencies do not independently key native builds.
+  Host tests and app compilation have separate source scopes; missing Xcode or
+  missing generated inputs fail closed. Native OpenAPI is projected from the
+  same operation selection as the Swift generator, using Redocly's reference
+  handling. This keeps conservative routing without rebuilding for unused HTTP
+  contracts or incidental local files.
+- Validation uses named steps on one runner and collects independent failures
+  after setup succeeds. Local focused evidence permits opening a reviewable PR;
+  required CI on the final content remains the merge boundary.
 - The web lanes run as one dynamic matrix; Rust keys on its own `rustGate`
   instead of the whole tree.
 

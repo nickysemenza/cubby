@@ -180,10 +180,11 @@ See also the image operational passes at the end of this file.
 
 - 🤔 🛠️ **Simplify tests with unnecessary infrastructure dependencies.** Audit
   tests that start PostgreSQL, IntegreSQL, Workers or other services even though
-  the assertion only inspects pure schemas or generated declarations. The MCP
-  catalog portability/size regression currently shares an integration file
-  with real database writer tests. Move suitable behavioral checks to the unit
-  tier, preserve their named regressions before deleting old copies, and keep
+  the assertion only inspects pure schemas or generated declarations. MCP
+  catalog publication, read-only homogeneity and portability/size now run in
+  `catalog-schema.unit.test.ts` without database setup; audit the remaining
+  service-backed suites. Move suitable behavioral checks to the unit tier,
+  preserve their named regressions before deleting old copies, and keep
   real persistence and boundary checks in integration/E2E. Measure setup cost
   and avoid adding mocks merely to relocate a test.
 

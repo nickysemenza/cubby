@@ -109,7 +109,7 @@ jobs:
              run: "CUBBY_E2E_SHARD=\(.)/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream"})
           ] | map(select(.lane as $lane | $lanes | index($lane)))')"
           skips="$(jq -nr --argjson lanes "$lanes" --argjson matrix "$matrix" --arg event "$GITHUB_EVENT_NAME" '[
-            ("validation", "docs", "rust") as $job | select($lanes | index($job) | not) | $job
+            ("validation", "docs", "rust", "apple-lint") as $job | select($lanes | index($job) | not) | $job
           ] + (if $matrix == [] then ["lanes"] else [] end)
             + (if $lanes | index("apple") | not then ["apple-probe", "apple-host", "apple-simulator"]
                elif $event == "schedule" then ["apple-probe"] else [] end)
@@ -132,12 +132,44 @@ jobs:
       NX_PARALLEL: "2"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
+      - id: setup
+        uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - run: pnpm check:all
-      # Reads the live registry, so it never caches.
-      - run: pnpm dedupe:check
+      # Independent failures stay red but do not hide the remaining diagnostics.
+      - name: Generated contracts
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm exec nx run cubby-checks:generate --outputStyle=stream
+      - name: Design tokens
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm exec nx run cubby-checks:design-tokens --outputStyle=stream
+      - name: TypeScript
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm exec nx run cubby-checks:types --outputStyle=stream
+      - name: Lint
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm exec nx run cubby-checks:lint --outputStyle=stream
+      - name: Unused code and dependencies
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm exec nx run cubby-checks:knip --outputStyle=stream
+      - name: Worker bindings
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm exec nx run cubby-checks:bindings --outputStyle=stream
+      - name: Tooling regressions
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm exec nx run cubby-checks:script-tests --outputStyle=stream
+      - name: CI routing drift
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm exec nx run cubby-checks:ci-lanes --outputStyle=stream
+      - name: Worker unit tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm exec nx run @cubby/web:workers-tests --outputStyle=stream
+      - name: Dependency security
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm audit:security
+      - name: Dependency deduplication
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: pnpm dedupe:check
 
   docs:
     name: Docs and formatting
@@ -273,6 +305,19 @@ jobs:
       # One crate at a time: both share the workspace target directory.
       - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream
 
+  apple-lint:
+    name: Swift formatting and state rules
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.lanes), 'apple-lint')
+    runs-on: macos-26
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          workspace-filter: cubby
+      - run: pnpm exec nx run apple:lint --outputStyle=stream
+
   # Linux checks whether each Apple lane's pass is already cached before any
   # macOS runner queues. A probe miss fails before native work and cannot
   # publish a passing Nx cache entry.
@@ -393,6 +438,7 @@ jobs:
         docs,
         lanes,
         rust,
+        apple-lint,
         apple-probe,
         apple-host,
         apple-simulator,

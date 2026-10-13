@@ -120,7 +120,7 @@ test("changes route to the lanes whose tasks read them", () => {
   );
   assert.deepEqual(
     lanesFor("apps/apple/App/Example.swift"),
-    ["apple", ...web, "validation"].sort(),
+    ["apple", "apple-lint", ...web, "validation"].sort(),
   );
   // Rust tests read the shared golden vectors directly.
   assert.deepEqual(

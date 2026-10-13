@@ -36,6 +36,7 @@ import {
 import { registerDiscriminatedUnionMembersForIo } from "./discriminator-registration.ts";
 import type { EntityOutputs } from "./api-types.ts";
 import { renderNativeArtifacts } from "./native.ts";
+import { projectNativeDocument } from "./native-document.ts";
 import { pascal, registerSchemaNames } from "./schema-names.ts";
 import { TYPE_OVERRIDES } from "./type-overrides.ts";
 
@@ -559,7 +560,7 @@ export async function renderHttpApiArtifacts(
     // its config from the CubbyAPI target's own source directory.
     {
       relativePath: "apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json",
-      source: serialized,
+      source: `${JSON.stringify(await projectNativeDocument(JSON.parse(serialized), nativeOperations), null, 2)}\n`,
     },
     ...renderNativeArtifacts(
       document,

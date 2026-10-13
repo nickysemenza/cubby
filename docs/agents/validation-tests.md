@@ -10,6 +10,8 @@ command and relevant output; tests added after implementation do not satisfy
 this requirement. For `.tsx` changes, choose browser E2E when it observes
 the behavior; use the UI or preview tier for distinct rendering or layout
 failures. Keep pure logic imported by node tests in alias-free `.ts` files.
+Temporary subprocess workspaces declare their module type explicitly, matching
+the real consumer; do not rely on the local Node version's module detection.
 
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,
@@ -23,9 +25,8 @@ the app TypeScript check before handoff. Helper-only tests and lint do not
 establish that a list or detail header can render with its actual props.
 
 Do not overlap PostgreSQL and E2E locally: they contend for
-containers, workerd, browsers, and database connections. Other workspace
-packages need `pnpm -r --filter '!@cubby/web' run test` after changing
-`packages/*`.
+containers, workerd, browsers, and database connections. For changed workspace packages, run their affected test rather than every
+package. A cross-package contract change may need its consumers too.
 Verify every named test path exists before invoking a runner: Vitest can ignore
 a nonexistent selector when another supplied file matches. Report only the
 files and cases the run actually exercised.

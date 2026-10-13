@@ -147,9 +147,10 @@ TS2883), and the fresh build took 68 s of CPU and 9.6 GB.
 
 A buildinfo many commits old pays a declaration-signature emit per changed
 file and then re-checks nearly everything, which is why the copied buildinfo
-above costs twice a cold run. The wrapper records content hashes of the
-buildinfo's files after each completed run and deletes the buildinfo when more
-than 100 changed (a rebase or pull) or no record exists; `.worktreeinclude` no
+above costs twice a cold run. The former wrapper recorded content hashes of the
+buildinfo's files after each completed run and deleted the buildinfo when more
+than 100 changed (a rebase or pull) or no record existed; that wrapper is no
+longer part of the direct typecheck entry point. `.worktreeinclude` no
 longer copies it into new worktrees.
 
 The purchase agent's service binding module once typed one parameter with the

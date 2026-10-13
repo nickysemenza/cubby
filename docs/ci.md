@@ -12,7 +12,13 @@ independently deploys every production Worker, including after a
 documentation-only change; deployment never waits for post-merge CI.
 
 `ci.yaml` holds the required checks and an optional purchase-import browser
-lane. One status context, `CI passed`, owns the merge gate.
+lane. Validation exposes generation, tokens, TypeScript, lint, Knip, bindings,
+tooling tests, routing drift, Worker tests, audit and deduplication as named
+steps on one runner. Once setup succeeds, independent steps run despite earlier
+check failures; their failures still fail the job. Cancellation stops further
+work. The web matrix likewise keeps `fail-fast: false`. Formatting runs once in
+the docs job. This collects distinct failures without paying a fresh install
+for every static check. One status context, `CI passed`, owns the merge gate.
 Tester Army background coverage lives in `e2e-journeys.yaml`: three web smoke
 journeys after successful same-repository PR CI, opt-in iOS with the
 `tester-army:ios` label, and coupled
@@ -52,13 +58,23 @@ ignored `.env*` files, the WASM their `dependsOn` builds, the preview-build
 switch, and the variables that select or reorder tests (`webGate` in
 `apps/web/project.json`); the Rust targets add `rustc -V`, because
 `rust-toolchain.toml` names a floating channel. The Apple targets key on what
-the Apple build reads instead of the whole tree (`appleGate` in
-`apps/apple/project.json`): `apps/apple` minus its explicitly listed prose docs
-(copied Markdown fixtures remain included), the Rust FFI crates, the check
-scripts and CI configuration, the shared golden vectors, and the generated
-Swift, but no toolchain version, so a Mac pass on a newer Xcode than the
-runner's counts for CI; `pnpm apple check` regenerates before hashing,
-so a web-only change replays the Apple lanes. When `Plan` selects the Apple
+each native target actually reads (`appleHost` and `appleApp` in
+`apps/apple/project.json`). Host tests read CubbyKit and its fixtures; app
+compilation also reads app sources, resources and project configuration, but
+not the host test fixtures. Both read the Rust FFI sources, build scripts and
+CI configuration. JavaScript dependency hashes are excluded: generation owns
+those dependencies and its output bytes are the native input. The generator's
+artifact manifest selects the generated files to hash; missing files fail,
+while unrelated ignored editor/build files never enter the key. Toolchain
+versions remain outside the native pass key under ADR 0009's nightly backstop.
+The Apple OpenAPI document includes only selected native operations and their
+reachable components, projected by Redocly; the public HTTP document remains
+complete. Unused HTTP contract changes no longer churn the native schema.
+`pnpm apple check [host|app|lint]` prepares generated sources, probes cached
+native passes, then prepares FFI only for misses. Full local checks run misses
+sequentially. Swift formatting/state rules have their own cheap `apple:lint`
+target and CI job with no FFI, SwiftPM resolution or app compilation.
+When `Plan` selects the Apple
 lane, the Linux `Apple cache probe` job probes both Apple passes in parallel
 with the other lanes before scheduling macOS. A miss or unavailable probe runs
 the corresponding native job; a skipped native job satisfies `CI passed` only
@@ -124,6 +140,21 @@ prerequisite targets run and in what order (WASM before its consumers, the MCP
 App bundle before the web fast tests). Nx-inferred affected projects
 (`nx show projects --affected`) remain a local convenience, not CI scoping.
 
+## Deployment reuse
+
+The web deployment job supplies the same Nx cache credentials as CI. Its
+`wasm: restore` setup restores the complete content-keyed worker, browser and
+cookbook packages, with a real build on a miss or unavailable cache. The cache
+Worker's own deployment does not depend on itself. Web compilation stays fresh
+for the merged commit: it embeds source identity and uploads source maps, so a
+PR's `dist` cannot simply be deployed as main. Current-main checks remain both
+before build and before publication.
+
+A deployment measured on 2026-10-12 took 5m07s, of which 3m18s was WASM
+compilation because deployment supplied no remote-cache credentials. About
+55s built/checked the web bundle and 16s deployed it. Cache wiring removes that
+compilation only when the artifact key exists; it is not a deploy-time promise.
+
 ## Local verification
 
 `pnpm verify:local` is an optional local diagnostic; commands and when to use
@@ -148,7 +179,7 @@ it live in the [validation policy](agents/validation.md) and
 Commit hooks, push behavior, and the merge gate are defined in the
 [validation policy](agents/validation.md).
 
-Node 24, pnpm 12.9.1, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
+Node 26 (from `.nvmrc`, shared by local tooling and CI), pnpm 12.9.1, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available; [test tiers](agents/validation-tests.md) cover database setup.
 PostgreSQL remains the authoritative integration tier; Playwright defaults to
 one worker on hosted runners and two on local macOS in `playwright.config.ts`,
@@ -158,28 +189,25 @@ a Vitest `-t` run accepts tests the pattern left out but still fails when the
 pattern matches nothing or a matched test is skipped.
 Browser verification always follows the current web build: the `e2e` target
 runs `build-cf.ts --ensure` first.
+The web build itself ensures current WASM and generated contracts before
+bundling. Native CLI, test, and app commands ensure generated contracts before
+compilation; artifact freshness belongs to these consumers, not Git hooks.
 
 These cache and dependency changes reduce duplicate work and stale generated
 artifacts, but do not promise that two simultaneous full verifications are
 resource-safe on the same machine. Keep heavy local runs coordinated when the
 host is constrained.
 
-`pnpm apple check` runs `nx run apple:check`, which depends on the two
-halves CI runs on separate runners (`apps/apple/project.json`, backed by
-`scripts/apple-check.sh`). `apple:host-tests` runs CubbyKit's package tests on
-the macOS host and the OpenAPI generator-warning gate; `apple:simulator-build`
-runs the `@State`/`@StateObject` grep, `swift format lint`, and a
-generic-simulator `xcodebuild build` of `Cubby-iOS`, and caches the built
-`Cubby.app` as its output. Both use one build profile on every machine (native
-arm64 slice, batch mode, no signing or index store, package clones in
-`apps/apple/SourcePackages`), so a Mac's result means what CI's does.
-`apps/apple/scripts/prepare-project.sh` first runs `node
-scripts/ensure-apple-ffi.ts` (the Nx-cached xcframework and UniFFI shim),
-`scripts/generator/ensure.ts` (the generated Swift and the OpenAPI inputs of
-the `CubbyAPI` build plugin; none is committed), and, except for host tests,
-`xcodegen generate --use-cache`. The script skips itself (with a message, not a
-failure) when `xcode-select -p` fails; that skip is keyed on the missing Xcode
-and never matches a real result. The `rust` target runs fmt/clippy/test per
+`pnpm apple check` runs lint, then uses the same cache-only guard as CI to
+probe host tests and simulator compilation before FFI preparation. A miss
+fails before native setup and is never cached. `apple:host-tests` runs
+CubbyKit's package tests and the OpenAPI warning gate; `apple:simulator-build`
+compiles `Cubby-iOS` for a generic simulator and caches the built app. Neither
+boots a simulator. The independent `apple:lint` target runs Swift formatting
+and the state-initialization rule. Missing Xcode is a failure, never a cached
+successful skip. Build scripts retain the same native arm64 profile, package
+pins and artifact preparation for local and hosted checks.
+The `rust` target runs fmt/clippy/test per
 crate (`recipebridge/project.json`, `cubby-ffi/project.json`). Clippy and tests
 use the root workspace's `ci` profile: no debuginfo, incremental compilation,
 or dependency optimization. These tests run in under a second; the development

@@ -91,8 +91,7 @@ export const removeExtraArtifacts = async (
  * does not list: a replayed cache entry writes its files but never deletes a
  * newer revision's extra ones.
  */
-export const ARTIFACT_MANIFEST =
-  "apps/web/src/lib/generated/artifacts.gen.json";
+export { ARTIFACT_MANIFEST } from "./artifact-manifest.ts";
 
 export const writeArtifacts = async (
   root: string,

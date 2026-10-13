@@ -17,6 +17,7 @@ const run = (command: string, args: string[], env = process.env) => {
 };
 
 function buildCloudflare() {
+  run(process.execPath, ["../../scripts/ensure-wasm.ts"]);
   run(process.execPath, ["../../scripts/generator/ensure.ts"]);
   rmSync(path.join(webRoot, "dist"), { recursive: true, force: true });
   const source = webBuildSourceFingerprint(repoRoot);
