@@ -1,14 +1,11 @@
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 
 import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";
-import { createAppError } from "~/server/errors/app-error";
 import { listFinancialTransactions } from "~/server/repo/financial-transaction";
 import { listAll } from "~/server/repo/list-all";
 import { settlementLabel } from "~/server/repo/list-display-labels";
-import { getPurchaseByShortcode } from "~/server/repo/purchase";
 
 import { optionColor, sectionBlocks, sectionOut } from "./finance-section";
 
@@ -110,12 +107,9 @@ export const composeFinancialSettlementSection = (
 
 export const purchaseFinancialSettlementReport = async (
   db: Database,
-  id: string,
+  purchase: PurchaseOut,
 ) => {
-  const purchaseId = parseShortcodeFor("purchase", id);
-  const purchase = await getPurchaseByShortcode(db, purchaseId);
-  if (!purchase)
-    throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found");
+  const purchaseId = purchase.id;
   const linked = await listAll((pagination) =>
     listFinancialTransactions(
       db,

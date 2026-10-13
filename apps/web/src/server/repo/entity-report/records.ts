@@ -7,6 +7,9 @@ import {
   reportSlotActions,
 } from "@cubby/schemas/entity-report";
 import {
+  type EntityId,
+  type ProductId,
+  type LocationId,
   type ImageId,
   type IngredientId,
   type LedgerPartyId,
@@ -78,9 +81,6 @@ export const amountFormatter = async () => {
   };
 };
 
-const liveProductId = (db: Database, code: string) =>
-  resolveOrThrow(db, "product", code);
-
 /**
  * A label's detected nutrition is worth reviewing when its preferred analysis read some, and the
  * product has not already saved that very reading (same rule web used to hide its button).
@@ -106,8 +106,10 @@ const reviewableLabels = async (
   return reviewable;
 };
 
-export const productLabelsReport = async (db: Database, code: string) => {
-  const productId = await liveProductId(db, code);
+export const productLabelsReport = async (
+  db: Database,
+  productId: ProductId,
+) => {
   const [saved] = await getDb(db)
     .select({ labelNutrition: product.labelNutrition })
     .from(product)
@@ -142,8 +144,10 @@ export const productLabelsReport = async (db: Database, code: string) => {
   );
 };
 
-export const productCookbooksReport = async (db: Database, code: string) => {
-  const productId = await liveProductId(db, code);
+export const productCookbooksReport = async (
+  db: Database,
+  productId: ProductId,
+) => {
   const row = await getDb(db).query.product.findFirst({
     where: and(eq(product.id, productId), notDeleted(product)),
     columns: { id: true },
@@ -242,9 +246,8 @@ const recipeUsagesReport = async (
 
 export const productRecipeAppearancesReport = async (
   db: Database,
-  code: string,
+  productId: ProductId,
 ) => {
-  const productId = await liveProductId(db, code);
   const row = await getDb(db).query.product.findFirst({
     where: and(eq(product.id, productId), notDeleted(product)),
     columns: { id: true },
@@ -284,9 +287,8 @@ export const imageAssociationsReport = async (db: Database, code: string) =>
 
 export const locationAiDescriptionReport = async (
   db: Database,
-  code: string,
+  id: LocationId,
 ) => {
-  const id = await resolveOrThrow(db, "location", code);
   return records(
     aiDescriptionItems(await readLocationAiDescription(db, id)),
     "No photos analyzed yet.",
@@ -296,11 +298,11 @@ export const locationAiDescriptionReport = async (
 
 export const recordRunsReport =
   (kind: "product" | "purchase") =>
-  async (db: Database, code: string, viewer: ReportViewer) => {
-    const party = await viewer();
-    if (!party)
-      throw new Error("This login is not linked to a member ledger party yet.");
-    const entityId = await resolveOrThrow(db, kind, code);
+  async (
+    db: Database,
+    entityId: EntityId<"product" | "purchase">,
+    party: NonNullable<Awaited<ReturnType<ReportViewer>>>,
+  ) => {
     const runs =
       kind === "product"
         ? await listProductRuns(

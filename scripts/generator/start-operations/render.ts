@@ -26,8 +26,9 @@ const renderStartOperationRegistry = async (): Promise<string> => {
   return (
     generatedHeader +
     `export const START_OPERATIONS = {\n${operations
-      .map(([operation, { kind, observability }]) => {
+      .map(([operation, { kind, observability, priority }]) => {
         const metadata = [
+          priority ? `priority: ${JSON.stringify(priority)}` : undefined,
           observability.entities.length > 0
             ? `entities: ${JSON.stringify(observability.entities)}`
             : undefined,

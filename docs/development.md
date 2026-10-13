@@ -222,6 +222,24 @@ native PostgreSQL installation remain owned by their existing runners.
     `src/lib/hyperdrive-cache-policy.ts`.
   - Hyperdrive caching settings are account state; inspect them with
     `wrangler hyperdrive get`.
+- **Database admission.** The household freshness Durable Object admits ten
+  concurrent SQL leases, with at most two background leases. Navigation passes
+  queued advisory work. Promise-based pooled clients hold capacity from connect
+  through release; standalone statements release after execution and transactions
+  retain capacity through commit or rollback. Coordinators release capacity
+  while awaiting models or delegated work. The freshness owner acquires locally.
+  Queued tickets cancel explicitly on request abort and wait at most thirty seconds
+  for either priority; errors retain raw
+  admission diagnostics. RPC lifetime also returns granted capacity when a
+  caller ends. Admission failures fail the operation rather than bypass the bound.
+  `db.admission` spans and the owner's queued count/oldest age support tuning
+  against pool waits and interactive latency. These limits do not change
+  Hyperdrive's account-level origin caps.
+- **Automatic suggestions.** Contract-declared advisory queries share one
+  browser background slot within four total request slots. Explicit suggestion
+  refresh promotes that call to navigation priority. Repeated suggestion reads
+  reuse Run identity within a request and do not update Run timestamps; persisted
+  AI usage advances completed ephemeral Run timestamps monotonically.
 - **Background tasks are self-contained queue messages** on
   `cubby-background`. There is no execution table and no dead-letter queue.
   - Every handler re-checks its row's own freshness marker, so redelivery is a

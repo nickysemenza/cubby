@@ -1,4 +1,6 @@
 import { type StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
+import { operationPriority } from "~/lib/operation-priority";
+import { withDatabaseWorkPriority } from "~/server/database-work";
 import { withErrorReporting } from "~/server/errors/report-error";
 import {
   START_OPERATION_HANDLER_LOADERS,
@@ -25,45 +27,54 @@ export async function dispatchStartOperation(
   options: StartOperationDispatchInput & { request: StartOperationRequest },
   loaders: StartOperationHandlerLoaders = START_OPERATION_HANDLER_LOADERS,
 ): Promise<StartOperationDispatchResult<BrowserStartOperationId>> {
-  return withErrorReporting(async () => {
-    let stage: OperationStage = "context";
-    let actorVerified = Boolean(
-      options.request.apiContext ?? options.request.verifiedContext,
-    );
-    try {
-      const verifiedContext =
-        options.request.apiContext ??
-        options.request.verifiedContext ??
-        (await withTrace("start.dispatch.authenticate", (span) =>
-          authenticateStartOperation(options.request.headers, span),
-        ));
-      actorVerified = true;
-      stage = "dispatch";
-      const loader = loaders[options.operation];
-      if (!loader)
-        throw new Error(
-          `No browser handler is registered for ${options.operation}`,
-        );
-      const handler = await loader();
-      return await handler({
-        data: options.input,
-        request: { ...options.request, verifiedContext },
-      });
-    } catch (error) {
-      if (options.request.signal.aborted) throw error;
-      return {
-        ok: false,
-        error: normalizeStartOperationError(
-          error,
-          stage,
-          getRequestId(options.request.headers),
-          {
-            operation: options.operation,
-            authenticated: actorVerified,
-            headers: options.request.headers,
-          },
-        ).publicError,
-      };
-    }
-  });
+  return withDatabaseWorkPriority(
+    operationPriority(options.operation, options.request.headers),
+    () =>
+      withErrorReporting(
+        async (): Promise<
+          StartOperationDispatchResult<BrowserStartOperationId>
+        > => {
+          let stage: OperationStage = "context";
+          let actorVerified = Boolean(
+            options.request.apiContext ?? options.request.verifiedContext,
+          );
+          try {
+            const verifiedContext =
+              options.request.apiContext ??
+              options.request.verifiedContext ??
+              (await withTrace("start.dispatch.authenticate", (span) =>
+                authenticateStartOperation(options.request.headers, span),
+              ));
+            actorVerified = true;
+            stage = "dispatch";
+            const loader = loaders[options.operation];
+            if (!loader)
+              throw new Error(
+                `No browser handler is registered for ${options.operation}`,
+              );
+            const handler = await loader();
+            return await handler({
+              data: options.input,
+              request: { ...options.request, verifiedContext },
+            });
+          } catch (error) {
+            if (options.request.signal.aborted) throw error;
+            return {
+              ok: false,
+              error: normalizeStartOperationError(
+                error,
+                stage,
+                getRequestId(options.request.headers),
+                {
+                  operation: options.operation,
+                  authenticated: actorVerified,
+                  headers: options.request.headers,
+                },
+              ).publicError,
+            };
+          }
+        },
+      ),
+    options.request.signal,
+  );
 }

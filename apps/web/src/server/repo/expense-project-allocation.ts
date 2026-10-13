@@ -201,19 +201,9 @@ export const expenseJointAllocationSql = (
   ${expenseIds ? sql`WHERE a."expenseId" IN (SELECT "id" FROM selected_expense)` : sql``}
 `;
 
-/** Project summaries group the canonical line allocations only after rounding. */
-export const expenseProjectAllocationSql = (
-  expenseIds?: readonly ExpenseId[],
-): SQL => sql`
-  SELECT a."expenseId", a."purchaseId", a."projectId", a."projectShortcode", a."projectName",
-    max(a."sourceCents"::bigint)::text AS "sourceCents",
-    sum(a."attributedCents"::bigint)::text AS "attributedCents",
-    a.basis, bool_or(a.incomplete) AS incomplete
-  FROM (${expenseJointAllocationSql(expenseIds, undefined, { categories: false })}) a
-  GROUP BY a."expenseId", a."purchaseId", a."projectId", a."projectShortcode", a."projectName", a.basis
-`;
-
 export type ExpenseAllocationProjectScope = {
+  /** Select entire expenses independently of the shares being measured. */
+  membershipProjectIds?: readonly ProjectId[];
   projectIds?: readonly ProjectId[];
   presence?: "has" | "none";
   spendingCategoryIds?: readonly SpendingCategoryId[];
@@ -277,55 +267,14 @@ export const expenseAllocationScopeConditionSql = (
     : sql`(${sql.join(conditions, sql` AND `)})`;
 };
 
-/** Search retains every attributed project while keeping one expense document. */
-export const expenseProjectNamesSql = (
-  expenseId: SQL,
-): SQL<string | null> => sql`(
-  SELECT string_agg(DISTINCT allocation."projectName", ', ' ORDER BY allocation."projectName")
-  FROM (${expenseProjectAllocationSql()}) allocation
-  WHERE allocation."expenseId" = ${expenseId}
-)`;
-
-/** Project-membership predicate backed by the same canonical allocation relation. */
-export const expenseAllocationExistsSql = (
-  expenseId: SQL,
-  scope: ExpenseAllocationProjectScope,
-): SQL => {
-  const scopeCondition = expenseAllocationScopeConditionSql(
-    "allocation",
-    scope,
-  );
-  return sql`EXISTS (
-    SELECT 1 FROM (${expenseJointAllocationSql()}) allocation
-    WHERE allocation."expenseId" = ${expenseId}
-      ${scopeCondition ? sql`AND ${scopeCondition}` : sql``}
-  )`;
-};
-
-/** Attributed dollar amount for one Expense under a project scope. */
-export const expenseAllocatedCostSql = (
-  expenseId: SQL,
-  scope: ExpenseAllocationProjectScope,
-): SQL<number | null> => {
-  const scopeCondition = expenseAllocationScopeConditionSql(
-    "allocation",
-    scope,
-  );
-  return sql<number | null>`(
-    SELECT (sum(allocation."attributedCents"::bigint) / 100.0)::double precision
-    FROM (${expenseJointAllocationSql()}) allocation
-    WHERE allocation."expenseId" = ${expenseId}
-      ${scopeCondition ? sql`AND ${scopeCondition}` : sql``}
-  )`;
-};
-
 export async function loadExpenseProjectAllocations(
   db: Database | DrizzleTransaction,
   expenseIds?: readonly ExpenseId[],
 ): Promise<ExpenseProjectAllocationRow[]> {
+  const { expenseDerivedReadSql } = await import("./expense-derived-read");
   const result = await unwrapDb(db).execute<
     RawAllocationRow<ExpenseProjectAllocationRow>
-  >(expenseProjectAllocationSql(expenseIds));
+  >(expenseDerivedReadSql("projects", { expenseIds }));
   return result.rows.map((row) => ({
     ...row,
     sourceCents: row.sourceCents === null ? null : BigInt(row.sourceCents),
@@ -353,9 +302,10 @@ export async function loadExpenseJointAllocations(
   expenseIds?: readonly ExpenseId[],
   draft?: ExpenseSpendingCategoryResolutionDraft,
 ): Promise<ExpenseJointAllocationRow[]> {
+  const { expenseDerivedReadSql } = await import("./expense-derived-read");
   const result = await unwrapDb(db).execute<
     RawAllocationRow<ExpenseJointAllocationRow>
-  >(expenseJointAllocationSql(expenseIds, draft));
+  >(expenseDerivedReadSql("shares", { expenseIds, draft }));
   return parseExpenseJointAllocationRows(result.rows);
 }
 

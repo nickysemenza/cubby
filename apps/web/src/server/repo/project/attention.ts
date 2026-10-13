@@ -51,14 +51,14 @@ import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
+  expenseDerivedCostRead,
+  expenseDerivedMembershipSql,
+  expenseDerivedReadSql,
+} from "~/server/repo/expense-derived-read";
+import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,
 } from "~/server/repo/expense-inheritance";
-import {
-  expenseAllocatedCostSql,
-  expenseAllocationExistsSql,
-  expenseProjectAllocationSql,
-} from "~/server/repo/expense-project-allocation";
 import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import { effectiveTaskProjectSql } from "~/server/repo/task-project-inheritance";
 import { listActionableTasks } from "~/server/repo/task/actionable";
@@ -157,6 +157,15 @@ export async function computeAttentionItems(
   const projectInScope = (projectId: ProjectId) =>
     scopedProjectIds === undefined || scopedProjectIds.includes(projectId);
 
+  const overdueExpenseRead = expenseDerivedCostRead(
+    db,
+    scopedProjectIds === undefined
+      ? undefined
+      : {
+          projectIds: scopedProjectIds,
+          presence: "none",
+        },
+  );
   const [
     overdueTaskRows,
     inProgressProjectRows,
@@ -203,7 +212,7 @@ export async function computeAttentionItems(
             ),
           ),
     options?.preloaded ?? loadProjectSubtreeRollups(db),
-    getDb(db)
+    overdueExpenseRead
       .select({
         id: expense.id,
         shortcode: expense.shortcode,
@@ -212,27 +221,14 @@ export async function computeAttentionItems(
         date: expense.date,
         // What the line was planned to cost — the card leads with the money,
         // which is the whole reason an un-logged plan matters.
-        cost:
-          scopedProjectIds === undefined
-            ? expense.cost
-            : expenseAllocatedCostSql(sql`${expense.id}`, {
-                projectIds: scopedProjectIds,
-                presence: "none",
-              }),
+        cost: overdueExpenseRead.cost,
       })
-      .from(expense)
       .where(
         and(
           notDeleted(expense),
           eq(expense.future, true),
           isNotNull(expense.date),
           lt(expense.date, today),
-          scopedProjectIds === undefined
-            ? undefined
-            : expenseAllocationExistsSql(sql`${expense.id}`, {
-                projectIds: scopedProjectIds,
-                presence: "none",
-              }),
         ),
       ),
     getDb(db)
@@ -252,7 +248,7 @@ export async function computeAttentionItems(
           isNull(expense.cost),
           scopedProjectIds === undefined
             ? undefined
-            : expenseAllocationExistsSql(sql`${expense.id}`, {
+            : expenseDerivedMembershipSql(sql`${expense.id}`, {
                 projectIds: scopedProjectIds,
                 presence: "none",
               }),
@@ -329,7 +325,7 @@ export async function computeAttentionItems(
       getDb(db)
         .execute<{ projectId: ProjectId; lastActivity: string | null }>(sql`
         SELECT allocation."projectId", max(e."date") AS "lastActivity"
-        FROM (${expenseProjectAllocationSql()}) allocation
+        FROM (${expenseDerivedReadSql("projects")}) allocation
         JOIN "Expense" e ON e."id" = allocation."expenseId"
         WHERE ${inArray(sql`allocation."projectId"`, inProgressIds)}
         GROUP BY allocation."projectId"

@@ -171,6 +171,7 @@ const reader = createEntityReader<
 });
 
 export const getRunByShortcode = reader.getByShortcode;
+export const getRunByID = reader.getByID;
 
 /** Declared `lifecycle: "readOnly"`: the run service and importers own writes. */
 export const runRepository = defineRepository("run", {

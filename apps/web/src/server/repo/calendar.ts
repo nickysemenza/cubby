@@ -31,6 +31,7 @@ import { shiftPlainDate } from "~/lib/household-date";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
 import type { Database } from "~/server/db";
 import { expense, project, purchase, task } from "~/server/db/schema";
+import { expenseDerivedCostRead } from "~/server/repo/expense-derived-read";
 
 import {
   loadCalendarPlantings,
@@ -42,10 +43,6 @@ import { loadDataQualities } from "./data-quality/hydrate";
 import { getDb, notDeleted, relations } from "./database-helpers";
 import { eqAny, presenceCondition } from "./database-helpers/query";
 import { expenseInheritanceReadExtras } from "./expense-inheritance";
-import {
-  expenseAllocationExistsSql,
-  expenseAllocatedCostSql,
-} from "./expense-project-allocation";
 import { dbExpenseToAPI } from "./expense/helpers";
 import { chargeCondition } from "./expense/lookup";
 import { getPlanting } from "./garden";
@@ -187,7 +184,7 @@ const loadCalendarTasks = async (
   return hydrateTaskInheritanceRows(db, rows);
 };
 
-const loadCalendarExpenses = (
+const loadCalendarExpenses = async (
   db: Database,
   input: CalendarRangeInput,
   endInclusive: string,
@@ -202,42 +199,56 @@ const loadCalendarExpenses = (
       ? chargeCondition(db, eqAny(purchase.vendorId, vendorIds))
       : sql`false`
     : undefined;
-  return getDb(db).query.expense.findMany({
-    where: and(
-      notDeleted(expense),
-      isNotNull(expense.date),
-      gte(expense.date, input.startDate),
-      lte(expense.date, endInclusive),
-      input.expenseFuture !== undefined
-        ? eq(expense.future, input.expenseFuture)
-        : undefined,
-      scope.projectRequested || input.projectPresenceFilter
-        ? expenseAllocationExistsSql(sql`"expense"."id"`, {
-            projectIds: scope.projectRequested ? scope.scopeIds : undefined,
-            presence: input.projectPresenceFilter,
-          })
-        : undefined,
-      or(
-        vendorCondition,
-        presenceCondition(
-          expense.purchaseId,
-          input.expenseVendorPresenceFilter,
-        ),
+  const where = and(
+    notDeleted(expense),
+    isNotNull(expense.date),
+    gte(expense.date, input.startDate),
+    lte(expense.date, endInclusive),
+    input.expenseFuture !== undefined
+      ? eq(expense.future, input.expenseFuture)
+      : undefined,
+    or(
+      vendorCondition,
+      presenceCondition(expense.purchaseId, input.expenseVendorPresenceFilter),
+    ),
+  );
+  const allocationScope =
+    scope.projectRequested || input.projectPresenceFilter
+      ? {
+          projectIds: scope.projectRequested ? scope.scopeIds : undefined,
+          presence: input.projectPresenceFilter,
+        }
+      : undefined;
+  const load = (selectedWhere: SQL | undefined) =>
+    getDb(db).query.expense.findMany({
+      where: selectedWhere,
+      orderBy: (row, { asc }) => [asc(row.date), asc(row.name)],
+      ...relations.expense.withProject,
+      extras: {
+        ...expenseInheritanceReadExtras(),
+        scopedCost: sql<number | null>`"expense"."cost"`.as("scopedCost"),
+      },
+    });
+  if (!allocationScope) return load(where);
+  // Selected cost rows supply both membership and displayed cost. Hydration
+  // consumes only those identities and does not resolve allocation again.
+  const selectedIds = sql`ARRAY(SELECT ${expense.id} FROM ${expense} WHERE ${where ?? sql`true`})`;
+  const read = expenseDerivedCostRead(db, allocationScope, selectedIds);
+  const costs = await read
+    .select({ id: expense.id, cost: read.cost })
+    .where(where);
+  if (costs.length === 0) return [];
+  const rows = await load(
+    and(
+      where,
+      inArray(
+        expense.id,
+        costs.map((row) => row.id),
       ),
     ),
-    orderBy: (row, { asc }) => [asc(row.date), asc(row.name)],
-    ...relations.expense.withProject,
-    extras: {
-      ...expenseInheritanceReadExtras(),
-      scopedCost: (scope.projectRequested || input.projectPresenceFilter
-        ? expenseAllocatedCostSql(sql`"expense"."id"`, {
-            projectIds: scope.projectRequested ? scope.scopeIds : undefined,
-            presence: input.projectPresenceFilter,
-          })
-        : sql<number | null>`"expense"."cost"`
-      ).as("scopedCost"),
-    },
-  });
+  );
+  const byId = new Map(costs.map((row) => [row.id, row.cost]));
+  return rows.map((row) => ({ ...row, scopedCost: byId.get(row.id) ?? null }));
 };
 
 const loadCalendarProjects = (

@@ -16,6 +16,7 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { createRequestMemo } from "~/server/db";
 import { run as runTable, ledgerParty, user } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
@@ -32,6 +33,9 @@ import { inheritExecutionAuthorization } from "./execution-context";
  * that member. The reserved user exists in the production database.
  */
 const SYSTEM_USER_ID: UserId = userId.parse("cubby-system");
+const keyedAiRuns = createRequestMemo(
+  () => new WeakMap<Database, Map<string, Promise<RunId>>>(),
+);
 export const systemActor = (): ActorContext =>
   buildActorContext(SYSTEM_USER_ID, "system");
 
@@ -69,20 +73,48 @@ export async function ensureRun(
   generator?: ShortcodeGeneratorPort,
 ): Promise<RunId> {
   if (actor.runId) return actor.runId;
+  if (input.purpose !== "ai_suggest" || !input.clientKey)
+    return createOrFindRun(db, actor, input, generator);
+  const requestRuns = keyedAiRuns();
+  let runs = requestRuns.get(db);
+  if (!runs) {
+    runs = new Map();
+    requestRuns.set(db, runs);
+  }
+  const key = `${actor.userId}:${input.clientKey}`;
+  const existing = runs.get(key);
+  if (existing) return existing;
+  const pending = createOrFindRun(db, actor, input, generator);
+  runs.set(key, pending);
+  void pending.catch(() => runs.delete(key));
+  return pending;
+}
+
+async function createOrFindRun(
+  db: Database,
+  actor: ActorContext,
+  input: EnsureRunInput,
+  generator?: ShortcodeGeneratorPort,
+): Promise<RunId> {
   const database = getDb(db);
   const now = new Date();
-  // A keyed run usually exists already (every row a page suggests for shares
-  // its `decisionPort:` key), so touch-and-return it in one statement. The actor
-  // snapshot and insert below cost three more round trips per call, which a
-  // table's per-row suggestions multiplied into Hyperdrive pool starvation.
+  // Stored-hint reads reuse the Run without writing the shared page row.
+  // Persisted usage advances ephemeral AI completion timestamps in batches.
   if (input.clientKey) {
-    const [existing] = await database
-      .update(runTable)
-      .set({
-        endedAt: sql`CASE WHEN ${runTable.status} = 'completed' THEN ${now}::timestamptz ELSE ${runTable.endedAt} END`,
-      })
-      .where(eq(runTable.clientKey, input.clientKey))
-      .returning({ id: runTable.id });
+    const [existing] =
+      input.purpose === "ai_suggest"
+        ? await database
+            .select({ id: runTable.id })
+            .from(runTable)
+            .where(eq(runTable.clientKey, input.clientKey))
+            .limit(1)
+        : await database
+            .update(runTable)
+            .set({
+              endedAt: sql`CASE WHEN ${runTable.status} = 'completed' THEN ${now}::timestamptz ELSE ${runTable.endedAt} END`,
+            })
+            .where(eq(runTable.clientKey, input.clientKey))
+            .returning({ id: runTable.id });
     if (existing) return existing.id;
   }
   const trigger = input.trigger ?? "ephemeral";
@@ -136,7 +168,7 @@ export async function ensureRun(
     { where: eq(runTable.clientKey, input.clientKey), values: () => values },
     generator,
   );
-  if (!result.created) {
+  if (!result.created && input.purpose !== "ai_suggest") {
     await database
       .update(runTable)
       .set({

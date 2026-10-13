@@ -7,6 +7,7 @@ import type {
 } from "@cubby/schemas/pagination";
 import { taskListItemOut } from "@cubby/schemas/project";
 import type { TaskFilters } from "@cubby/schemas/project";
+import { parseShortcode } from "@cubby/shared";
 import {
   and,
   eq,
@@ -47,6 +48,7 @@ import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shar
 import {
   collectDescendantIds,
   loadProjectTree,
+  type ProjectTree,
 } from "~/server/repo/project/subtree";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 
@@ -97,7 +99,11 @@ function buildTaskProjectCondition(
   );
 }
 
-async function resolveTaskFilterReferences(db: Database, filters: TaskFilters) {
+async function resolveTaskFilterReferences(
+  db: Database,
+  filters: TaskFilters,
+  tree?: ProjectTree,
+) {
   const parentTaskCodes = filters.parentTaskId
     ? [filters.parentTaskId].flat()
     : [];
@@ -107,11 +113,23 @@ async function resolveTaskFilterReferences(db: Database, filters: TaskFilters) {
     scopedProjectIds,
     subjectProductIds,
   ] = await Promise.all([
-    resolveAllPresent(
-      db,
-      "project",
-      filters.projectId ? [filters.projectId].flat() : [],
-    ),
+    tree
+      ? Promise.resolve(
+          (filters.projectId ? [filters.projectId].flat() : []).flatMap(
+            (code) => {
+              const canonical = parseShortcode(code)?.shortcode;
+              const row = canonical
+                ? tree.rowsByShortcode.get(canonical)
+                : undefined;
+              return row ? [row.id] : [];
+            },
+          ),
+        )
+      : resolveAllPresent(
+          db,
+          "project",
+          filters.projectId ? [filters.projectId].flat() : [],
+        ),
     resolveAllPresent(db, "task", parentTaskCodes),
     filters.projectScope
       ? matchingEmbeddedProjectIds(db, filters.projectScope)
@@ -124,7 +142,7 @@ async function resolveTaskFilterReferences(db: Database, filters: TaskFilters) {
   ]);
   let projectIds = selectedProjectIds;
   if (selectedProjectIds.length > 0 && filters.includeSubProjects) {
-    const { childrenByParent } = await loadProjectTree(db);
+    const { childrenByParent } = tree ?? (await loadProjectTree(db));
     projectIds = uniq(
       selectedProjectIds.flatMap((id) => [
         id,
@@ -179,6 +197,7 @@ export const buildTaskWhere = async (
   db: Database,
   filters: TaskFilters,
   actor?: ActorContext,
+  tree?: ProjectTree,
 ) => {
   const assigneeIds = await resolveAllPresent(
     db,
@@ -212,7 +231,7 @@ export const buildTaskWhere = async (
     parentTaskIds,
     scopedProjectIds,
     subjectProductIds,
-  } = await resolveTaskFilterReferences(db, filters);
+  } = await resolveTaskFilterReferences(db, filters, tree);
   const projectCondition = buildTaskProjectCondition(
     filters.projectId,
     projectIds,
@@ -342,8 +361,9 @@ export const taskListRead = async (
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
   actor?: ActorContext,
+  tree?: ProjectTree,
 ) => {
-  const whereClause = await buildTaskWhere(db, filters, actor);
+  const whereClause = await buildTaskWhere(db, filters, actor, tree);
   return taskScaffold.list(
     db,
     { filters, sorts, pagination, readIntent, projection },
@@ -429,6 +449,7 @@ export const taskList = (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
   actor?: ActorContext,
+  tree?: ProjectTree,
 ) =>
   parseCompleteListRead(
     taskListItemOut,
@@ -440,5 +461,6 @@ export const taskList = (
       { kind: "full" },
       readIntent,
       actor,
+      tree,
     ),
   );

@@ -11,8 +11,8 @@ import { kernelActionName } from "~/contracts/mcp-define";
  * query's `cache` (tags, freshness profile) and a mutation's `invalidates`
  * (named fan-out rows). No React, no query client, no server code, and no
  * function of the input — a policy that must read the input at runtime lives in
- * `integrations/tanstack-query/operation-overrides.ts`. The one server-facing
- * hint is a query's `readPolicy: "strong"` (see `QueryContract`), a
+ * `integrations/tanstack-query/operation-overrides.ts`. Server-facing hints include advisory scheduling priority and
+ * a query's `readPolicy: "strong"` (see `QueryContract`), a
  * data-freshness requirement. That is what lets ONE declaration feed the browser
  * catalog (the generated `catalog.gen.ts`, which resolves the cache data and
  * defaults every query's tags to `[domain, member]`), the server implementers
@@ -112,6 +112,8 @@ export interface QueryContract<
   readonly native?: string;
   readonly mcp?: McpOmission;
   readonly readPolicy?: "strong";
+  /** Automatic hints yield database capacity to navigation and explicit actions. */
+  readonly priority?: "advisory";
   /** Browser cache tags and freshness profile; see `QueryCachePolicy`. */
   readonly cache?: QueryCachePolicy;
 }

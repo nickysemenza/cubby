@@ -10,6 +10,14 @@ export { CalendarFeedDurableObject };
  */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    if (new URL(request.url).pathname === "/database/admission") {
+      // Deliberately omit explicit disposal to exercise the RPC context lifetime.
+      const ticket = await env.DB_FRESHNESS.getByName(
+        new URL(request.url).hostname,
+      ).requestDatabaseWork({ priority: "background" });
+      await ticket.ready();
+      return new Response("admitted");
+    }
     if (new URL(request.url).pathname === "/chatgpt/authorize") {
       try {
         const plan = env.CHATGPT_PLAN.getByName(new URL(request.url).hostname);

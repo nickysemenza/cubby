@@ -13,7 +13,7 @@ import {
 import { testShortcode } from "@cubby/schemas/testing";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -121,11 +121,15 @@ describe("expense workflows — analyzer orchestration", () => {
     });
 
     const filters = { dateFrom: "2026-05-01", dateTo: "2026-05-31" };
-    const analysis = await expenseAnalyzeWorkflow(ctx.db, {
-      filters,
-      rowDimension: "trade",
-      comparison: "previousPeriod",
-    });
+    const analysisRead = await countTestDbQueries(() =>
+      expenseAnalyzeWorkflow(ctx.db, {
+        filters,
+        rowDimension: "trade",
+        comparison: "previousPeriod",
+      }),
+    );
+    const analysis = analysisRead.result;
+    expect(analysisRead.queryCount).toBe(2);
     expect(analysis).toMatchObject({
       status: "ready",
       comparison: {
@@ -134,10 +138,14 @@ describe("expense workflows — analyzer orchestration", () => {
       },
     });
 
-    const facets = await expenseFacetCountsWorkflow(ctx.db, {
-      filters,
-      facetIds: ["trade", "project", "orderIdPresence"],
-    });
+    const facetRead = await countTestDbQueries(() =>
+      expenseFacetCountsWorkflow(ctx.db, {
+        filters,
+        facetIds: ["trade", "project", "orderIdPresence"],
+      }),
+    );
+    const facets = facetRead.result;
+    expect(facetRead.queryCount).toBe(1);
     expect(facets.facets.map((facet) => facet.id)).toEqual([
       "trade",
       "project",
@@ -153,6 +161,14 @@ describe("expense workflows — analyzer orchestration", () => {
       label: project.name,
       count: 1,
     });
+
+    // Compatible chart projections must share one database allocation and
+    // scope read, rather than executing one statement per chart.
+    const analytics = await countTestDbQueries(() =>
+      expenseAnalytics(ctx.db, filters),
+    );
+    expect(analytics.result.summary.net).toBe(100);
+    expect(analytics.queryCount).toBe(1);
   });
 });
 

@@ -36,7 +36,7 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
-import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
+import { expenseDerivedReadSql } from "~/server/repo/expense-derived-read";
 import {
   effectiveProjectLocationsSql,
   effectiveTaskProjectSql,
@@ -135,7 +135,7 @@ function datedTaskProjectIds(dateFrom?: string, dateTo?: string) {
  */
 function datedExpenseProjectIds(dateFrom?: string, dateTo?: string) {
   return sql`(SELECT DISTINCT allocation."projectId"
-    FROM (${expenseProjectAllocationSql()}) allocation
+    FROM (${expenseDerivedReadSql("projects")}) allocation
     JOIN "Expense" dated_expense ON dated_expense."id" = allocation."expenseId"
     WHERE allocation."projectId" IS NOT NULL
       AND dated_expense."date" IS NOT NULL

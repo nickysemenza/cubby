@@ -29,7 +29,7 @@ import {
   ilikeContains,
 } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
-import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
+import { expenseDerivedReadSql } from "~/server/repo/expense-derived-read";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
@@ -629,7 +629,7 @@ export async function loadRelatedSummary(
           FROM "Vendor" s
           JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL
           JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL
-          JOIN (${expenseProjectAllocationSql()}) allocation
+          JOIN (${expenseDerivedReadSql("projects")}) allocation
             ON allocation."expenseId" = e."id"
           WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
         )`;
@@ -658,7 +658,7 @@ export async function loadRelatedSummary(
             p."date" AS "purchaseDate", p."vendorId"
           FROM "Purchase" p
           JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL
-          JOIN (${expenseProjectAllocationSql()}) allocation
+          JOIN (${expenseDerivedReadSql("projects")}) allocation
             ON allocation."expenseId" = e."id"
           WHERE p."shortcode" = ${input.sourceId} AND p."deletedAt" IS NULL
         )`;
@@ -705,7 +705,7 @@ export async function loadRelatedSummary(
           e."date" AS "expenseDate", e."purchaseId", allocation."projectId", e."productId",
           p."date" AS "purchaseDate", p."vendorId"
         FROM project_scope scope
-        JOIN (${expenseProjectAllocationSql()}) allocation
+        JOIN (${expenseDerivedReadSql("projects")}) allocation
           ON allocation."projectId" = scope."id"
         JOIN "Expense" e ON e."id" = allocation."expenseId" AND e."deletedAt" IS NULL
         LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
@@ -721,7 +721,7 @@ export async function loadRelatedSummary(
         e."date" AS "expenseDate", e."purchaseId", allocation."projectId", e."productId",
         p."date" AS "purchaseDate", p."vendorId"
       FROM "Project" s
-      JOIN (${expenseProjectAllocationSql()}) allocation
+      JOIN (${expenseDerivedReadSql("projects")}) allocation
         ON allocation."projectId" = s."id"
       JOIN "Expense" e ON e."id" = allocation."expenseId" AND e."deletedAt" IS NULL
       LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL

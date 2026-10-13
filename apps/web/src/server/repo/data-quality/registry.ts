@@ -19,21 +19,28 @@ export const liveQualityRow = (t: ScoredTable): SQL =>
  * `"dq_r"` with the same binding the Product list uses. Method signatures
  * (not arrow properties) keep the registry assignable across table types.
  */
+/** The declared derived relation joined by a bounded hydration read. */
+export interface QualityReadContext {
+  readonly derivedAlias: string;
+}
+
 export interface CheckBinding<T extends ScoredTable> {
   /** Whether the check applies to this row at all; omitted = always. */
   expected?(t: T): SQL;
   /** Evaluated only under `expected`. */
-  missing(t: T): SQL;
+  missing(t: T, context?: QualityReadContext): SQL;
   /**
    * The inputs this check reads, so a stored exception stays active until
    * that evidence changes. Required exactly when the entity has exceptions.
    */
-  fingerprint?(t: T): readonly SQL[];
+  fingerprint?(t: T, context?: QualityReadContext): readonly SQL[];
 }
 
 export interface EntityChecks<E extends ScoredEntity, T extends ScoredTable> {
   entity: E;
   table: T;
+  /** One row per entityId; all checks share it for the selected ID batch. */
+  derivedRead?(ids: SQL): SQL;
   /** Exhaustive against the generated per-entity check union. */
   checks: { readonly [C in DataCheckOf<E>]: CheckBinding<T> };
   /**

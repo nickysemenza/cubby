@@ -27,20 +27,11 @@ import {
 } from "~/server/repo/expense/analytics";
 import {
   buildExpenseAnalysisGrid,
-  includeSelectedExpenseFacetZeroOptions,
-  isExpenseScalarFacet,
   loadExpenseAnalysisCauses,
   loadExpenseAnalysisPeriod,
-  loadExpenseEntityFacetOptions,
-  loadExpenseFacetAllocationScope,
-  loadExpenseFacetWhere,
-  loadExpenseOrderIdFacetOptions,
-  loadExpensePresenceFacetOptions,
-  loadExpenseScalarFacetOptions,
+  loadExpenseFacetCounts,
   previousExpenseFilters,
   readyExpenseAnalysisOutput,
-  selectedExpenseFacetValues,
-  type ExpenseFacetId,
 } from "~/server/repo/expense/analyze";
 import { loadVendorAttributionDefaults } from "~/server/repo/expense/attribution-defaults";
 import { getExpenseByID } from "~/server/repo/expense/crud";
@@ -150,7 +141,9 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
   "expense.analyze",
 )
   .call("currentWhere", ({ context }, { input }) =>
-    buildExpenseWhereClause(context, input.filters),
+    buildExpenseWhereClause(context, input.filters, {
+      projectScope: undefined,
+    }),
   )
   .call("comparison", async (_, { input }) =>
     input.comparison === "previousPeriod"
@@ -159,7 +152,9 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
   )
   .call("previousWhere", ({ context }, { comparison }) =>
     comparison
-      ? buildExpenseWhereClause(context, comparison.filters)
+      ? buildExpenseWhereClause(context, comparison.filters, {
+          projectScope: undefined,
+        })
       : Promise.resolve(undefined),
   )
   .call("projectScope", ({ context }, { input }) =>
@@ -209,6 +204,7 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
               input.input,
               input.currentWhere,
               input.projectScope,
+              input.periods.current.causes,
             ),
           previous: ({ context }, { input }) =>
             input.comparison
@@ -217,6 +213,7 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
                   input.input,
                   input.previousWhere,
                   input.projectScope,
+                  input.periods.previous?.causes,
                 )
               : Promise.resolve(null),
         })
@@ -246,102 +243,14 @@ export const expenseAnalyzeWorkflow = tracedWorkflow({
   attrs: expenseAnalyzeTraceAttributes,
 });
 
-type ExpenseFacetItemInput = {
-  filters: ExpenseFilters;
-  id: ExpenseFacetId;
-};
-
-const requireExpenseEntityFacet = (
-  id: ExpenseFacetId,
-): "project" | "vendor" => {
-  if (id === "project" || id === "vendor") return id;
-  throw new Error(`Expected entity facet, received ${id}`);
-};
-
-const expenseFacetItemDefinition = workflow<Database, ExpenseFacetItemInput>(
-  "expense.facetCounts.facet",
-)
-  .call("where", ({ context }, { input }) =>
-    loadExpenseFacetWhere(context, input.filters, input.id),
-  )
-  .call("allocationScope", ({ context }, { input }) =>
-    loadExpenseFacetAllocationScope(context, input.filters, input.id),
-  )
-  .branch("facetKind", {
-    when: async (_, { input }) => isExpenseScalarFacet(input.id),
-    whenTrue: (branch) =>
-      branch
-        .call("options", ({ context }, { input }) => {
-          if (!isExpenseScalarFacet(input.input.id))
-            throw new Error("Scalar facet branch received a non-scalar facet");
-          return loadExpenseScalarFacetOptions(
-            context,
-            input.where,
-            input.input.id,
-            input.allocationScope,
-          );
-        })
-        .output(({ input, options }) => ({ id: input.input.id, options })),
-    whenFalse: (branch) =>
-      branch
-        .branch("entityFacet", {
-          when: async (_, { input }) =>
-            input.input.id === "project" || input.input.id === "vendor",
-          whenTrue: (entityBranch) =>
-            entityBranch
-              .parallel("options", 2, {
-                rows: ({ context }, { input }) =>
-                  loadExpenseEntityFacetOptions(
-                    context,
-                    input.input.where,
-                    requireExpenseEntityFacet(input.input.input.id),
-                    input.input.allocationScope,
-                  ),
-                presence: ({ context }, { input }) =>
-                  loadExpensePresenceFacetOptions(
-                    context,
-                    input.input.where,
-                    requireExpenseEntityFacet(input.input.input.id),
-                    input.input.allocationScope,
-                  ),
-              })
-              .output(({ input, options }) => ({
-                id: input.input.input.id,
-                options: [...options.presence, ...options.rows],
-              })),
-          whenFalse: (orderBranch) =>
-            orderBranch
-              .call("options", ({ context }, { input }) =>
-                loadExpenseOrderIdFacetOptions(context, input.input.where),
-              )
-              .output(({ input, options }) => ({
-                id: input.input.input.id,
-                options,
-              })),
-        })
-        .output(({ entityFacet }) => entityFacet),
-  })
-  .output(({ facetKind }) => facetKind);
-
 const expenseFacetCountsDefinition = workflow<
   Database,
   ExpenseFacetCountsInput
 >("expense.facetCounts")
-  .mapWorkflow("facets", {
-    items: ({ input }) =>
-      input.facetIds.map((id) => ({ filters: input.filters, id })),
-    concurrency: 9,
-    workflow: expenseFacetItemDefinition,
-  })
-  .output(({ input, facets }) => ({
-    facets: facets.map((facet) => ({
-      ...facet,
-      options: includeSelectedExpenseFacetZeroOptions(
-        facet.options,
-        selectedExpenseFacetValues(input.filters, facet.id),
-      ),
-    })),
-  }));
+  .call("facets", ({ context }, { input }) =>
+    loadExpenseFacetCounts(context, input),
+  )
+  .output(({ facets }) => facets);
 
 export const expenseFacetCountsWorkflow = tracedWorkflow({
   name: TraceNames.service("expense", "facetCounts"),

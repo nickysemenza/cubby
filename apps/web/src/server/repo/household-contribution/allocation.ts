@@ -20,8 +20,8 @@ import {
   unwrapDb,
   uuidArrayParam,
 } from "~/server/repo/database-helpers";
+import { expenseDerivedCostsSql } from "~/server/repo/expense-derived-read";
 import { effectiveExpenseProjectSql } from "~/server/repo/expense-inheritance";
-import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 
 /**
  * Where a row's party came from. One boolean could not carry this once funder
@@ -72,13 +72,6 @@ const scopeCondition = (scope: ExpenseAllocationScope): SQL =>
       : undefined,
     scope.asOf ? lte(expense.date, scope.asOf) : undefined,
     scope.includeFuture ? undefined : sql`${expense.future} = false`,
-    scope.projectIds
-      ? sql`EXISTS (
-          SELECT 1 FROM (${expenseProjectAllocationSql()}) project_allocation
-          WHERE project_allocation."expenseId" = ${expense.id}
-            AND project_allocation."projectId" = ANY(${uuidArrayParam(scope.projectIds)})
-        )`
-      : undefined,
     sql`${expense.cost} IS NOT NULL`,
   ) ?? sql`true`;
 
@@ -117,25 +110,12 @@ export async function loadExpenseAllocations(
       SELECT
         ${expense.id} AS "expenseId",
         ${expense.shortcode} AS "expenseShortcode",
-        ${
-          scope.projectIds
-            ? sql`(SELECT min(project_allocation."projectId"::text)::uuid
-              FROM (${expenseProjectAllocationSql()}) project_allocation
-              WHERE project_allocation."expenseId" = ${expense.id}
-                AND project_allocation."projectId" = ANY(${uuidArrayParam(scope.projectIds)}))`
-            : effectiveExpenseProjectSql()
-        } AS "projectId",
+        ${scope.projectIds ? sql`derived_cost."projectId"` : effectiveExpenseProjectSql()} AS "projectId",
         ${expense.purchaseId} AS "purchaseId",
         ${expense.future} AS future,
-        ${
-          scope.projectIds
-            ? sql`(SELECT sum(project_allocation."attributedCents"::bigint)
-              FROM (${expenseProjectAllocationSql()}) project_allocation
-              WHERE project_allocation."expenseId" = ${expense.id}
-                AND project_allocation."projectId" = ANY(${uuidArrayParam(scope.projectIds)}))`
-            : sql`round((${expense.cost})::numeric * 100)::bigint`
-        } AS cost_cents
+        ${scope.projectIds ? sql`derived_cost."costCents"` : sql`round((${expense.cost})::numeric * 100)::bigint`} AS cost_cents
       FROM ${expense}
+      ${scope.projectIds ? sql`JOIN (${expenseDerivedCostsSql({ projectIds: scope.projectIds }, scope.expenseIds)}) derived_cost ON derived_cost."expenseId" = ${expense.id}` : sql``}
       WHERE ${scopeCondition(scope)}
     ), roles(role) AS (
       VALUES ('beneficiary'::text), ('funder'::text)

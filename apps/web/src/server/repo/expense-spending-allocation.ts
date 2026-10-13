@@ -1,16 +1,14 @@
 import type { CostType } from "@cubby/schemas/expense-fields";
 import type { ExpenseId, SpendingCategoryId } from "@cubby/schemas/identifiers";
 import type { Trade } from "@cubby/schemas/project";
-import { sql, type SQL } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/repo/database-helpers";
 
 import type { ExpenseSpendingCategoryResolutionDraft } from "./expense-category-resolution";
-import {
-  expenseJointAllocationSql,
-  type ExpenseProjectAllocationBasis,
-} from "./expense-project-allocation";
+import { expenseDerivedReadSql } from "./expense-derived-read";
+import type { ExpenseProjectAllocationBasis } from "./expense-project-allocation";
 
 export type ExpenseSpendingAllocationRow = {
   spendingCategoryId: SpendingCategoryId | null;
@@ -32,16 +30,7 @@ type RawSpendingAllocationRow = ExpenseSpendingAllocationRow & {
 export const expenseSpendingAllocationSql = (
   expenseIds?: readonly ExpenseId[] | SQL,
   draft?: ExpenseSpendingCategoryResolutionDraft,
-): SQL => sql`
-  SELECT a."expenseId", a."spendingCategoryId", a."spendingCategoryShortcode", a."spendingCategoryName",
-    (sum(a."attributedCents"::bigint) / 100.0)::double precision AS amount,
-    a.basis, bool_or(a."categoryIncomplete") AS incomplete,
-    array_remove(array_agg(DISTINCT a.trade), NULL) AS trades,
-    array_remove(array_agg(DISTINCT a."costType"), NULL) AS "costTypes"
-  FROM (${expenseJointAllocationSql(expenseIds, draft)}) a
-  GROUP BY a."expenseId", a."spendingCategoryId", a."spendingCategoryShortcode", a."spendingCategoryName", a.basis
-  ORDER BY a."expenseId", a."spendingCategoryId" NULLS LAST
-`;
+): SQL => expenseDerivedReadSql("categories", { expenseIds, draft });
 
 export async function loadExpenseSpendingAllocations(
   db: Database | DrizzleTransaction,

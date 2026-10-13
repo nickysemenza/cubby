@@ -26,6 +26,7 @@ export function completeListReader<
   S extends z.ZodType,
   Filters,
   Page extends ListReadPage<ListReadRow>,
+  Context = never,
 >(
   schema: S,
   read: (
@@ -35,6 +36,7 @@ export function completeListReader<
     pagination: PaginationParams,
     projection: ListProjection,
     readIntent?: ListReadIntent,
+    context?: Context,
   ) => Promise<Page>,
   summary?: (db: Database, filters: Filters) => Promise<Record<string, number>>,
 ) {
@@ -44,11 +46,20 @@ export function completeListReader<
     sorts: SortParams[],
     pagination: PaginationParams,
     readIntent: ListReadIntent = "page",
+    context?: Context,
   ) => {
     const [page, sums] = await Promise.all([
       parseCompleteListRead(
         schema,
-        read(db, filters, sorts, pagination, { kind: "full" }, readIntent),
+        read(
+          db,
+          filters,
+          sorts,
+          pagination,
+          { kind: "full" },
+          readIntent,
+          context,
+        ),
       ),
       summary?.(db, filters),
     ]);

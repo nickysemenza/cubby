@@ -39,10 +39,7 @@ import {
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
-import {
-  expenseAllocatedCostSql,
-  expenseAllocationExistsSql,
-} from "~/server/repo/expense-project-allocation";
+import { expenseDerivedCostRead } from "~/server/repo/expense-derived-read";
 import {
   effectiveTaskProjectSql,
   effectiveProjectLocationsSql,
@@ -235,6 +232,9 @@ export async function projectDashboardSummary(
     ),
   ]);
 
+  const committedRead = expenseDerivedCostRead(db, {
+    projectIds: expandedProjectIds,
+  });
   const [
     deps,
     taskStatusRows,
@@ -306,18 +306,14 @@ export async function projectDashboardSummary(
     Promise.resolve(0),
     computeAttentionItems(db, { preloaded: subtreeLoad, projectIds: ids }),
     expandedProjectIds.length > 0
-      ? getDb(db)
+      ? committedRead
           .select({
-            in30Days: sql<number>`coalesce(sum(${expenseAllocatedCostSql(sql`${expense.id}`, { projectIds: expandedProjectIds })}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[0])}), 0)::float`,
-            in60Days: sql<number>`coalesce(sum(${expenseAllocatedCostSql(sql`${expense.id}`, { projectIds: expandedProjectIds })}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[1])}), 0)::float`,
-            in90Days: sql<number>`coalesce(sum(${expenseAllocatedCostSql(sql`${expense.id}`, { projectIds: expandedProjectIds })}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[2])}), 0)::float`,
+            in30Days: sql<number>`coalesce(sum(${committedRead.cost}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[0])}), 0)::float`,
+            in60Days: sql<number>`coalesce(sum(${committedRead.cost}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[1])}), 0)::float`,
+            in90Days: sql<number>`coalesce(sum(${committedRead.cost}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[2])}), 0)::float`,
           })
-          .from(expense)
           .where(
             and(
-              expenseAllocationExistsSql(sql`${expense.id}`, {
-                projectIds: expandedProjectIds,
-              }),
               notDeleted(expense),
               eq(expense.future, true),
               gt(expense.cost, 0),

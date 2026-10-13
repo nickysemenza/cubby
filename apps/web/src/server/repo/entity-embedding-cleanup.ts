@@ -48,13 +48,13 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
+import { expenseDerivedReadSql } from "~/server/repo/expense-derived-read";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
   getOrphanedSearchDocumentRefs,
   type SearchDocumentCursor,
 } from "~/server/repo/search-document";
 
-import { expenseProjectAllocationSql } from "./expense-project-allocation";
 import {
   effectiveTaskProjectSql,
   effectiveTaskSubjectProductSql,
@@ -366,7 +366,7 @@ export async function findTrackerEmbeddingRefsForProjects(
     UNION ALL
     SELECT 'task', t."id"::text FROM "Task" t WHERE t."deletedAt" IS NULL AND ${effectiveTaskProjectSql("t")} IN (SELECT "id" FROM affected)
     UNION ALL
-    SELECT DISTINCT 'expense', allocation."expenseId"::text FROM (${expenseProjectAllocationSql()}) allocation WHERE allocation."projectId" IN (SELECT "id" FROM affected)
+    SELECT DISTINCT 'expense', allocation."expenseId"::text FROM (${expenseDerivedReadSql("projects")}) allocation WHERE allocation."projectId" IN (SELECT "id" FROM affected)
   `);
   return result.rows;
 }

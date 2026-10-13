@@ -15,9 +15,9 @@ export const SOURCE_ROOT = join(ROOT, "apps/web/src");
 const SERVER_ROOT = join(SOURCE_ROOT, "server");
 const CONTRACTS_ROOT = join(SOURCE_ROOT, "contracts");
 
-export type Kind = "query" | "mutation" | "subscription";
+type Kind = "query" | "mutation" | "subscription";
 const KINDS = new Set<string>(["query", "mutation", "subscription"]);
-export type OperationObservability = {
+type OperationObservability = {
   entities: readonly string[];
   productPhases: readonly string[];
 };
@@ -48,6 +48,7 @@ export type ContractMember = {
   transport?: "post";
   /** Keeps a query on the authoritative adapter (see contracts/define.ts). */
   readPolicy?: "strong";
+  priority?: "advisory";
   /** Browser cache tags / profile of a query (see contracts/cache-policy.ts). */
   cache?: {
     tags?: readonly (readonly string[])[];
@@ -61,6 +62,7 @@ type Contract = { domain: string; ops: Record<string, ContractMember> };
 export type LoadedContract = { exportName: string; contract: Contract };
 export type DeclaredOperation = {
   kind: Kind;
+  priority?: "advisory";
   observability: OperationObservability;
   http: boolean;
   native: boolean;
@@ -302,6 +304,7 @@ export const collectDeclaredOperations = (): Promise<
           );
         byOperation.set(operation, {
           kind: definition.kind,
+          priority: definition.priority,
           observability: {
             entities: [...(definition.observability?.entities ?? [])],
             productPhases: [...(definition.observability?.productPhases ?? [])],
@@ -492,7 +495,7 @@ async function collectHandlerVariable(
  * loader's `satisfies` exhaustiveness failure (which stays as belt-and-braces).
  */
 export const collectStartOperations = async (): Promise<
-  Map<string, { kind: Kind; observability: OperationObservability }>
+  Map<string, Pick<DeclaredOperation, "kind" | "observability" | "priority">>
 > => {
   const declarations = await collectDeclaredOperations();
   const handlers = await collectStartOperationHandlers();
@@ -512,7 +515,11 @@ export const collectStartOperations = async (): Promise<
   return new Map(
     [...declarations].map(([operation, declared]) => [
       operation,
-      { kind: declared.kind, observability: declared.observability },
+      {
+        kind: declared.kind,
+        observability: declared.observability,
+        priority: declared.priority,
+      },
     ]),
   );
 };

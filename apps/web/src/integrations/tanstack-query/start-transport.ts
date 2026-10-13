@@ -1,3 +1,4 @@
+import { OPERATION_PRIORITY_HEADER } from "~/lib/operation-priority";
 import {
   isStartOperationEntity,
   registeredStartOperationKind,
@@ -91,6 +92,7 @@ async function observedStartCall<T>(options: {
 export type StartCallOptions = {
   signal?: AbortSignal;
   speculative?: boolean;
+  priority?: "interactive";
 };
 
 /** Explicit adapter shape used by focused tests and in-process callers. */
@@ -220,8 +222,14 @@ export function startOperation<Input, Output>(
           entity,
           speculative: options?.speculative,
           input,
-          call: async (headers) =>
-            config.parse(
+          call: async (headers) => {
+            const prioritizedHeaders = new Headers(headers);
+            if (options?.priority)
+              prioritizedHeaders.set(
+                OPERATION_PRIORITY_HEADER,
+                options.priority,
+              );
+            return config.parse(
               unwrapStartOperationResult(
                 config.operation,
                 unparsedStartOperationResultSchema.parse(
@@ -235,13 +243,14 @@ export function startOperation<Input, Output>(
                       ))
                   )(input, {
                     signal: options?.signal,
-                    headers,
+                    headers: prioritizedHeaders,
                   }),
                 ),
                 config.createError,
               ),
               input,
-            ),
+            );
+          },
         }),
       forEntity: (next) => {
         if (!isStartOperationEntity(config.operation, next)) {

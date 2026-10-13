@@ -1,11 +1,13 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { unwrapDb } from "~/server/repo/database-helpers";
+import * as allocation from "~/server/repo/expense-project-allocation";
 import { createGardenEntry, createPlanting } from "~/server/repo/garden";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import { createLedgerTransfer } from "~/server/repo/ledger-transfer";
@@ -357,10 +359,23 @@ describe("data quality: finance and project entities", () => {
       future: false,
     });
 
+    // A small quality refresh must not scan the whole ledger twice for the
+    // category gap and its exception fingerprint. Observe the real SQL factory.
+    const allocations = vi.spyOn(allocation, "expenseJointAllocationSql");
     const hydrated = await loadDataQualities(ctx.db, "expense", [
       gap.entityId,
       complete.entityId,
     ]);
+    const selected = allocations.mock.calls.map(([ids]) => ids);
+    allocations.mockRestore();
+    expect(selected).toHaveLength(1);
+    const ids = selected[0];
+    expect(ids).toBeDefined();
+    if (!ids)
+      throw new Error("Quality read did not restrict allocation selection");
+    const params = new PgDialect().sqlToQuery(sql`${ids}`).params;
+    expect(params.join(",")).toContain(gap.entityId);
+    expect(params.join(",")).toContain(complete.entityId);
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("expense_cost");
     expect(

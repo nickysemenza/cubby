@@ -141,6 +141,7 @@ export const aiContract = defineContract("ai", {
     native: "Reviewed saved finance category suggestions",
   }),
   suggestFields: query({
+    priority: "advisory",
     readPolicy: "strong",
     input: fieldSuggestionsInput,
     output: fieldSuggestionsOut,
@@ -230,6 +231,7 @@ export const aiContract = defineContract("ai", {
     invalidates: [],
   }),
   latestSuggestionSweepStatus: query({
+    priority: "advisory",
     mcp: { omit: "operator_maintenance" },
     input: zod.undefined(),
     output: suggestionSweepStatusOut,

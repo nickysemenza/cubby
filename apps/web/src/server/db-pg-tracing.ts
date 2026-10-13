@@ -335,6 +335,7 @@ export const createPoolConnectAdapter =
 
 const transactionState = new WeakMap<pg.ClientBase, boolean>();
 const tracedClients = new WeakSet<pg.ClientBase>();
+const standalonePermits = new WeakMap<pg.ClientBase, Disposable>();
 const poolAcquirers = new WeakMap<
   pg.Pool,
   (inTransaction: boolean) => Promise<pg.PoolClient>
@@ -343,25 +344,64 @@ const poolAcquirers = new WeakMap<
 const traceClient = <T extends pg.ClientBase>(
   client: T,
   role: RequestDbRole,
+  acquireWork?: () => Promise<Disposable>,
 ): T => {
   if (tracedClients.has(client)) return client;
   const rawQuery = queryBridge(client.query.bind(client));
-  // Serialize outside the span so it times execution, not the wait.
-  client.query = serializeQueries(
-    traceQuery(rawQuery, () => transactionState.get(client) ?? false, role),
+  const tracedQuery = traceQuery(
+    rawQuery,
+    () => transactionState.get(client) ?? false,
     role,
   );
+  const admittedQuery: PgQueryImplementation = (...args) => {
+    if (!acquireWork || isCallbackQuery(args) || isStreamQuery(args))
+      return queryImplementationFor(tracedQuery)(...args);
+    return (async () => {
+      const statement = databaseStatementForTrace(args[0]);
+      const begins = /^\s*(?:BEGIN|START\s+TRANSACTION)\b/iu.test(statement);
+      const finishes =
+        /^\s*(?:COMMIT|ROLLBACK)\b/iu.test(statement) &&
+        !/^\s*ROLLBACK\s+TO\b/iu.test(statement);
+      const held = standalonePermits.get(client);
+      const permit = held ?? (await acquireWork());
+      if (begins && !held) {
+        standalonePermits.set(client, permit);
+        transactionState.set(client, true);
+      }
+      let succeeded = false;
+      try {
+        const result = await tracedQuery(...args);
+        succeeded = true;
+        return result;
+      } finally {
+        if (finishes || (!held && (!begins || !succeeded))) {
+          standalonePermits.delete(client);
+          transactionState.set(client, false);
+          permit[Symbol.dispose]();
+        }
+      }
+    })();
+  };
+  // Serialize outside the span so it times execution, not the wait.
+  client.query = serializeQueries(queryBridge(admittedQuery), role);
   tracedClients.add(client);
   return client;
 };
 
-export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
+export const tracePool = (
+  pool: pg.Pool,
+  role: RequestDbRole,
+  acquireWork?: () => Promise<Disposable>,
+): pg.Pool => {
   const rawQuery = queryBridge(pool.query.bind(pool));
   const rawConnect = connectBridge(pool.connect.bind(pool));
 
   let acquireOrdinal = 0;
   const acquire = (inTransaction: boolean): Promise<pg.PoolClient> =>
     withTrace(TraceNames.db("acquire"), async (span) => {
+      // One permit per physical lease covers a whole transaction or a single
+      // pool query. Reacquiring for its BEGIN/body/COMMIT would deadlock.
+      const permit = await acquireWork?.();
       span.setAttributes({
         "db.acquire.transaction": inTransaction,
         "cubby.db.binding_role": role,
@@ -376,6 +416,17 @@ export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
       const finishAcquire = beginDatabaseAcquire(startedAt);
       try {
         const client = await rawConnect();
+        const release = client.release.bind(client);
+        let released = false;
+        client.release = (error) => {
+          if (released) return;
+          released = true;
+          try {
+            release(error);
+          } finally {
+            permit?.[Symbol.dispose]();
+          }
+        };
         span.setAttribute("db.client.ordinal", databaseClientOrdinal(client));
         span.setAttribute(
           "db.acquire.client_reused",
@@ -392,6 +443,9 @@ export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
         }
         transactionState.set(client, inTransaction);
         return traceClient(client, role);
+      } catch (error) {
+        permit?.[Symbol.dispose]();
+        throw error;
       } finally {
         span.setAttribute(
           "db.acquire.duration_ms",
@@ -422,9 +476,16 @@ export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
 export const traceStandaloneClient = (
   client: pg.Client,
   role: RequestDbRole,
+  acquireWork?: () => Promise<Disposable>,
 ): pg.Client => {
   transactionState.set(client, false);
-  return traceClient(client, role);
+  return traceClient(client, role, acquireWork);
+};
+
+/** A disconnected standalone transaction cannot keep runtime capacity. */
+export const releaseStandaloneDatabaseWork = (client: pg.ClientBase): void => {
+  standalonePermits.get(client)?.[Symbol.dispose]();
+  standalonePermits.delete(client);
 };
 
 export const acquireTracedConnection = (

@@ -3,6 +3,8 @@ import superjson from "superjson";
 import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
+import { operationPriority } from "~/lib/operation-priority";
 import { createRequestBatcher } from "~/lib/request-batcher";
 import { fetchWithRequestDiagnostics } from "~/lib/request-id";
 import {
@@ -23,6 +25,8 @@ type DispatchItem = {
 };
 
 type DispatchResult = StartOperationResult<UnparsedStartOperationData>;
+const browserWork = createConcurrencyLimiter(4, { backgroundLimit: 1 });
+const uncancelled = new AbortController().signal;
 
 /**
  * The batch could not answer this item (one queued alone, an HTTP failure, a
@@ -63,7 +67,7 @@ const postInit = (
 };
 
 /** POST one operation (a mutation, or any call outside a batch). */
-async function postDispatch(
+async function postDispatchUnscheduled(
   item: DispatchItem,
   headersInit: HeadersInit,
   signal: AbortSignal | undefined,
@@ -86,8 +90,20 @@ async function postDispatch(
   );
 }
 
+function postDispatch(
+  item: DispatchItem,
+  headers: HeadersInit,
+  signal: AbortSignal | undefined,
+) {
+  return browserWork.run(
+    () => postDispatchUnscheduled(item, headers, signal),
+    signal ?? uncancelled,
+    operationPriority(item.operation, new Headers(headers)),
+  );
+}
+
 /** POST a batch and deliver each NDJSON result line as the server settles it. */
-async function streamDispatch(
+async function streamDispatchUnscheduled(
   batch: DispatchItem[],
   headersInit: HeadersInit,
   signal: AbortSignal,
@@ -125,6 +141,21 @@ async function streamDispatch(
   }
 }
 
+async function streamDispatch(
+  batch: DispatchItem[],
+  headers: HeadersInit,
+  signal: AbortSignal,
+  deliver: (index: number, result: BatchResult<DispatchResult>) => void,
+) {
+  const first = batch[0];
+  if (!first) return;
+  return browserWork.run(
+    () => streamDispatchUnscheduled(batch, headers, signal, deliver),
+    signal,
+    operationPriority(first.operation, new Headers(headers)),
+  );
+}
+
 /**
  * Reads issued in the same task share one Worker request. A page's related
  * tables, previews and image lookups used to open ~35 concurrent requests;
@@ -138,11 +169,14 @@ const queryBatchers = new Map<
   ReturnType<typeof createRequestBatcher<DispatchItem, DispatchResult>>
 >();
 
-function queryBatcherFor(headers: HeadersInit) {
+function queryBatcherFor(
+  headers: HeadersInit,
+  priority: "interactive" | "background",
+) {
   const entries = [...new Headers(headers).entries()]
     .filter(([name]) => !START_OPERATION_TRACE_HEADERS.includes(name))
     .sort();
-  const key = JSON.stringify(entries);
+  const key = JSON.stringify([entries, priority]);
   let batcher = queryBatchers.get(key);
   if (!batcher) {
     batcher = createRequestBatcher(
@@ -174,7 +208,10 @@ export async function dispatchBrowserOperation(
 ): Promise<DispatchResult> {
   if (startOperationDefinitionFor(operation)?.kind === "query") {
     try {
-      return await queryBatcherFor(transport.headers).load(
+      return await queryBatcherFor(
+        transport.headers,
+        operationPriority(operation, new Headers(transport.headers)),
+      ).load(
         { operation, input },
         transport.signal ?? new AbortController().signal,
       );

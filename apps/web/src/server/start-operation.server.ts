@@ -7,6 +7,7 @@ import {
   scrubErrorMessage,
   sentryEventUrl,
 } from "~/lib/error-diagnostics";
+import { operationPriority } from "~/lib/operation-priority";
 import {
   isStartOperationEntity,
   type StartOperationId,
@@ -15,6 +16,7 @@ import {
 } from "~/lib/start-operation-observability";
 import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
+import { withDatabaseWorkPriority } from "~/server/database-work";
 import { noteRequestOperation } from "~/server/db-observability";
 import {
   appErrorFromUnknown,
@@ -448,7 +450,13 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             mutationStarted =
               options.type === "mutation" &&
               mutationChangesHouseholdData(options.operation);
-            const rawOutput = await options.run(context, input);
+            const rawOutput = await withDatabaseWorkPriority(
+              context.actorContext.runId
+                ? "background"
+                : operationPriority(options.operation, options.request.headers),
+              () => options.run(context, input),
+              options.request.signal,
+            );
             throwIfStartOperationAborted(options.request.signal);
 
             stage = "output";

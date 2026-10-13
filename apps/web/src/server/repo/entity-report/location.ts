@@ -15,7 +15,6 @@ import {
   loadInventoryValuations,
 } from "~/server/repo/inventory/valuation";
 import { getLocationById } from "~/server/repo/location/crud";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 const TOP_MANUFACTURERS = 6;
 
@@ -63,9 +62,8 @@ async function directValueByManufacturer(db: Database, locationId: LocationId) {
  */
 export async function locationContentsValuationReport(
   db: Database,
-  code: string,
+  id: LocationId,
 ): Promise<ReportBlock[]> {
-  const id = await resolveOrThrow(db, "location", code);
   const [location, breakdown] = await Promise.all([
     getLocationById(db, id),
     directValueByManufacturer(db, id),

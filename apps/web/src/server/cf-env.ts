@@ -50,6 +50,14 @@ export const setCfEnv = (env?: Env): void => {
 /** True after the request has entered the Cloudflare Worker adapter. */
 export const isCloudflareRuntime = (): boolean => cfEnv !== undefined;
 
+/** One runtime capacity owner for all isolates, agents, alarms and queues. */
+export const getDatabaseWorkOwner = () => {
+  if (!cfEnv) return undefined;
+  if (!cfEnv.DB_FRESHNESS)
+    throw new Error("Database work admission binding is unavailable");
+  return cfEnv.DB_FRESHNESS.getByName("household", { locationHint: "wnam" });
+};
+
 /** Durable search-index repair binding when configured in the Worker environment. */
 export const getSearchIndexRepairWorkflow = ():
   | Env["SEARCH_INDEX_REPAIR"]

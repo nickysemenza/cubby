@@ -1,17 +1,18 @@
 import { runEntityId, userId } from "@cubby/schemas/identifiers";
+import { runStatus, runTrigger } from "@cubby/schemas/run-fields";
 import type {
   AiUsageTelemetry,
   McpToolCallTelemetry,
   TelemetryMessageV1,
 } from "@cubby/schemas/telemetry";
-import { inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
 
 import { estimateAiUsageCostUsd } from "~/server/ai/pricing";
 import type { Database } from "~/server/db";
 import { aiUsage, run as runTable, mcpToolCall } from "~/server/db/schema";
 import { isUnbilledAiTransport } from "~/server/repo/ai-usage";
-import { withTransaction } from "~/server/repo/database-helpers";
+import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import {
   aiCallRunInput,
   ensureRun,
@@ -57,31 +58,32 @@ export async function persistTelemetryMessages(
     ),
   );
 
+  const database = getDb(db);
+  // One AI row naming a missing run must not fail the batch (and retry the
+  // MCP rows beside it into the DLQ), so unknown runs file under the
+  // system's run for the hour.
+  const requestedRuns = [
+    ...new Set(ai.flatMap((event) => event.runId ?? [])),
+  ].map((id) => runEntityId.parse(id));
+  const knownRuns = new Set(
+    requestedRuns.length === 0
+      ? []
+      : (
+          await database
+            .select({ id: runTable.id })
+            .from(runTable)
+            .where(inArray(runTable.id, requestedRuns))
+        ).map((row): string => row.id),
+  );
+  const orphaned = ai.some(
+    (event) => !event.runId || !knownRuns.has(event.runId),
+  );
+  // Opened on the root connection like every ephemeral run, so the batch's
+  // rollback cannot orphan the rows that name it.
+  const fallbackRunId = orphaned
+    ? await ensureRun(db, systemActor(), aiCallRunInput(systemActor()))
+    : null;
   await withTransaction(db, async (tx) => {
-    // One AI row naming a missing run must not fail the batch (and retry the
-    // MCP rows beside it into the DLQ), so unknown runs file under the
-    // system's run for the hour.
-    const requestedRuns = [
-      ...new Set(ai.flatMap((event) => event.runId ?? [])),
-    ].map((id) => runEntityId.parse(id));
-    const knownRuns = new Set(
-      requestedRuns.length === 0
-        ? []
-        : (
-            await tx
-              .select({ id: runTable.id })
-              .from(runTable)
-              .where(inArray(runTable.id, requestedRuns))
-          ).map((row): string => row.id),
-    );
-    const orphaned = ai.some(
-      (event) => !event.runId || !knownRuns.has(event.runId),
-    );
-    // Opened on the root connection like every ephemeral run, so the batch's
-    // rollback cannot orphan the rows that name it.
-    const fallbackRunId = orphaned
-      ? await ensureRun(db, systemActor(), aiCallRunInput(systemActor()))
-      : null;
     if (mcp.length > 0) {
       await tx
         .insert(mcpToolCall)
@@ -140,6 +142,26 @@ export async function persistTelemetryMessages(
           })),
         )
         .onConflictDoNothing();
+      // Advance completion from actual usage, including delayed/out-of-order
+      // delivery. This replaces per-field writes to one shared page Run.
+      await tx.execute(sql`
+        UPDATE "Run" r
+        SET "endedAt" = GREATEST(r."endedAt", used."latest"),
+            "updatedAt" = GREATEST(r."updatedAt", used."latest")
+        FROM (
+          SELECT "runId", MAX("createdAt") AS "latest"
+          FROM "AiUsage"
+          WHERE ${inArray(
+            aiUsage.id,
+            ai.map((event) => event.eventId),
+          )}
+            AND "deletedAt" IS NULL
+          GROUP BY "runId"
+        ) used
+        WHERE r.id = used."runId" AND r.status = ${runStatus.enum.completed}
+          AND r.trigger = ${runTrigger.enum.ephemeral} AND r."deletedAt" IS NULL
+          AND (r."endedAt" IS NULL OR r."endedAt" < used."latest")
+      `);
     }
   });
 }

@@ -1,69 +1,350 @@
+import type { ExpenseId } from "@cubby/schemas/identifiers";
 import type { ExpenseFilters } from "@cubby/schemas/project";
-import { sql, type SQL } from "drizzle-orm";
+import { sql, type SQL, type SQLWrapper, type Subquery } from "drizzle-orm";
 import type { SelectedFields } from "drizzle-orm/pg-core";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { expense } from "~/server/db/schema";
 
-import { getDb, uuidArrayParam } from "./database-helpers";
+import { unwrapDb, uuidArrayParam } from "./database-helpers";
 import { expenseAggregateFields } from "./expense-aggregate-sql";
+import type { ExpenseSpendingCategoryResolutionDraft } from "./expense-category-resolution";
 import {
   expenseAllocationScopeConditionSql,
   expenseJointAllocationSql,
   type ExpenseAllocationProjectScope,
+  type ExpenseJointAllocationRow,
 } from "./expense-project-allocation";
-import {
-  buildExpenseWhereClause,
-  resolveExpenseProjectAllocationScope,
-} from "./expense/lookup";
+import type { ExpenseSpendingAllocationRow } from "./expense-spending-allocation";
 
-/** One row per selected expense; scope filters rounded shares, never the sibling denominator. */
-export function expenseDerivedCostsSql(
-  scope?: ExpenseAllocationProjectScope,
-  expenseIds?: SQL,
+/** Each read declares its allocation dimensions before execution. Scope is
+ * applied to rounded output shares, never to the complete sibling denominator. */
+const derivedReads = {
+  shares: { categories: true },
+  projects: { categories: false },
+  categories: { categories: true },
+  costs: { categories: false },
+  names: { categories: false },
+  categoryNames: { categories: true },
+  presence: { categories: false },
+  categoryEvidence: { categories: true },
+} satisfies Record<string, { categories: boolean }>;
+
+type DerivedRead = keyof typeof derivedReads;
+type DerivedReadOptions = {
+  scope?: ExpenseAllocationProjectScope;
+  draft?: ExpenseSpendingCategoryResolutionDraft;
+  expenseIds?: readonly ExpenseId[] | SQL;
+  source?: SQL;
+};
+
+export function expenseDerivedReadSql(
+  read: DerivedRead,
+  { scope, expenseIds, draft, source: preparedSource }: DerivedReadOptions = {},
 ): SQL {
-  if (!scope)
-    return sql`SELECT source."id" AS "expenseId", source."cost" AS cost FROM "Expense" source WHERE source."deletedAt" IS NULL
-    ${expenseIds ? sql`AND source."id" = ANY(${uuidArrayParam(expenseIds)})` : sql``}`;
-  const condition = expenseAllocationScopeConditionSql("allocation", scope);
+  if (read === "costs" && !scope)
+    return sql`SELECT source."id" AS "expenseId", source."cost" AS cost,
+      round(source."cost"::numeric * 100)::bigint AS "costCents", source."projectId"
+      FROM "Expense" source WHERE source."deletedAt" IS NULL
+      ${expenseIds ? sql`AND source."id" = ANY(${uuidArrayParam(expenseIds)})` : sql``}`;
+  if (read === "categoryEvidence")
+    return sql`SELECT "expenseId",
+        bool_or("spendingCategoryId" IS NULL OR incomplete) AS missing,
+        jsonb_agg(jsonb_build_array("spendingCategoryId", amount, incomplete) ORDER BY "spendingCategoryId") AS evidence
+        FROM (${expenseDerivedReadSql("categories", { scope, expenseIds, draft, source: preparedSource })}) category_share
+        GROUP BY "expenseId"`;
   const categories =
-    scope.spendingCategoryIds !== undefined ||
-    scope.categoryPresence !== undefined ||
-    scope.trades !== undefined ||
-    scope.costTypes !== undefined;
-  return sql`SELECT allocation."expenseId", (sum(allocation."attributedCents"::bigint) / 100.0)::float8 AS cost
-    FROM (${expenseJointAllocationSql(expenseIds, undefined, { categories })}) allocation
-    WHERE ${condition ?? sql`true`}
-    GROUP BY allocation."expenseId"`;
+    derivedReads[read].categories ||
+    scope?.spendingCategoryIds !== undefined ||
+    scope?.categoryPresence !== undefined ||
+    scope?.trades !== undefined ||
+    scope?.costTypes !== undefined;
+  const condition = scope
+    ? expenseAllocationScopeConditionSql("allocation", scope)
+    : undefined;
+  const source =
+    preparedSource ??
+    expenseJointAllocationSql(expenseIds, draft, { categories });
+  const membership = scope?.membershipProjectIds;
+  const allocations =
+    membership === undefined
+      ? sql`SELECT allocation.* FROM (${source}) allocation WHERE ${condition ?? sql`true`}`
+      : sql`WITH derived_allocation AS MATERIALIZED (${source})
+      SELECT allocation.* FROM derived_allocation allocation
+      WHERE ${condition ?? sql`true`} AND allocation."expenseId" IN (
+        SELECT "expenseId" FROM derived_allocation
+        WHERE "projectId" = ANY(${uuidArrayParam(membership)})
+      )`;
+  switch (read) {
+    case "shares":
+      return allocations;
+    case "projects":
+      return sql`SELECT a."expenseId", a."purchaseId", a."projectId", a."projectShortcode", a."projectName",
+        max(a."sourceCents"::bigint)::text AS "sourceCents",
+        sum(a."attributedCents"::bigint)::text AS "attributedCents",
+        a.basis, bool_or(a.incomplete) AS incomplete
+        FROM (${allocations}) a
+        GROUP BY a."expenseId", a."purchaseId", a."projectId", a."projectShortcode", a."projectName", a.basis`;
+    case "categories":
+      return sql`SELECT a."expenseId", a."spendingCategoryId", a."spendingCategoryShortcode", a."spendingCategoryName",
+        (sum(a."attributedCents"::bigint) / 100.0)::float8 AS amount,
+        a.basis, bool_or(a."categoryIncomplete") AS incomplete,
+        array_remove(array_agg(DISTINCT a.trade), NULL) AS trades,
+        array_remove(array_agg(DISTINCT a."costType"), NULL) AS "costTypes"
+        FROM (${allocations}) a
+        GROUP BY a."expenseId", a."spendingCategoryId", a."spendingCategoryShortcode", a."spendingCategoryName", a.basis
+        ORDER BY a."expenseId", a."spendingCategoryId" NULLS LAST`;
+    case "costs":
+      if (!condition)
+        return sql`SELECT DISTINCT source."id" AS "expenseId", source.cost,
+        round(source.cost::numeric * 100)::bigint AS "costCents", source."projectId"
+        FROM (${allocations}) derived_share JOIN "Expense" source ON source.id = derived_share."expenseId"`;
+      return sql`SELECT "expenseId", (sum("attributedCents"::bigint) / 100.0)::float8 AS cost,
+        sum("attributedCents"::bigint) AS "costCents", min("projectId"::text)::uuid AS "projectId"
+        FROM (${allocations}) derived_share GROUP BY "expenseId"`;
+    case "names":
+    case "categoryNames":
+      return sql`SELECT "expenseId",
+        string_agg(DISTINCT "projectName", ', ' ORDER BY "projectName") AS "projectNames",
+        string_agg(DISTINCT "spendingCategoryName", ', ' ORDER BY "spendingCategoryName") AS "spendingCategoryNames"
+        FROM (${allocations}) derived_share GROUP BY "expenseId"`;
+    case "presence":
+      return sql`SELECT "expenseId", bool_or("projectId" IS NOT NULL) AS "anyProject",
+        bool_or("projectId" IS NULL) AS "noProject"
+        FROM (${allocations}) derived_share GROUP BY "expenseId"`;
+  }
+}
+
+/** Plain-root list predicates use uncorrelated set membership. */
+export const expenseDerivedMembershipSql = (
+  expenseId: SQL,
+  scope: ExpenseAllocationProjectScope,
+): SQL =>
+  sql`${expenseId} IN (SELECT "expenseId" FROM (${expenseDerivedReadSql("costs", { scope })}) derived_member)`;
+
+type DerivedValues = Pick<typeof expense.$inferSelect, "cost"> & {
+  projectNames: ExpenseJointAllocationRow["projectName"];
+  spendingCategoryNames: ExpenseJointAllocationRow["spendingCategoryName"];
+  missing: ExpenseJointAllocationRow["categoryIncomplete"] | null;
+  evidence: Array<
+    [
+      ExpenseJointAllocationRow["spendingCategoryId"],
+      ExpenseSpendingAllocationRow["amount"],
+      ExpenseSpendingAllocationRow["incomplete"],
+    ]
+  > | null;
+};
+
+/** A plain-root sort/projection cannot join. PostgreSQL evaluates this grouped
+ * dictionary as one InitPlan, then extracts values without allocating per row. */
+export function expenseDerivedValueSql<K extends keyof DerivedValues>(
+  field: K,
+  expenseId: SQL,
+  scope?: ExpenseAllocationProjectScope,
+  expenseIds?: readonly ExpenseId[] | SQL,
+): SQL<DerivedValues[K]> {
+  const read =
+    field === "cost"
+      ? "costs"
+      : field === "missing" || field === "evidence"
+        ? "categoryEvidence"
+        : field === "spendingCategoryNames"
+          ? "categoryNames"
+          : "names";
+  const values = sql`(SELECT jsonb_object_agg("expenseId", ${sql.identifier(field)})
+    FROM (${expenseDerivedReadSql(read, { scope, expenseIds })}) derived_value)`;
+  if (field === "evidence") return sql`${values} -> ${expenseId}::text`;
+  const value = sql`${values} ->> ${expenseId}::text`;
+  if (field === "cost") return sql`(${value})::float8`;
+  if (field === "missing") return sql`(${value})::boolean`;
+  return sql`${value}`;
+}
+
+/** One row per selected expense, suitable for joined grouped queries. */
+export const expenseDerivedCostsSql = (
+  scope?: ExpenseAllocationProjectScope,
+  expenseIds?: readonly ExpenseId[] | SQL,
+): SQL => expenseDerivedReadSql("costs", { scope, expenseIds });
+
+export function expenseDerivedCostRead(
+  db: Database | DrizzleTransaction,
+  scope?: ExpenseAllocationProjectScope,
+  expenseIds?: readonly ExpenseId[] | SQL,
+  preparedCosts?: SQL,
+) {
+  const relation =
+    preparedCosts ??
+    sql`(${expenseDerivedCostsSql(scope, expenseIds)}) derived_cost`;
+  const cost = scope
+    ? sql<number | null>`derived_cost.cost`
+    : sql<number | null>`${expense.cost}`;
+  const select = <Fields extends SelectedFields>(fields: Fields) => {
+    const query = unwrapDb(db).select(fields).from(expense);
+    return scope
+      ? query.innerJoin(relation, sql`derived_cost."expenseId" = ${expense.id}`)
+      : query;
+  };
+  return { cost, select, aggregate: expenseAggregateFields(cost) };
 }
 
 /** Request-local prepared scope and set-based total relation shared by analytical callers. */
 export async function prepareExpenseDerivedRead(
   db: Database,
   filters: ExpenseFilters,
+  prepared?: { scope: ExpenseAllocationProjectScope | undefined },
 ) {
-  const scope = await resolveExpenseProjectAllocationScope(db, filters);
-  // Scope membership is supplied by the grouped join, rather than a correlated
-  // allocation query per ledger row. All other ledger filters remain canonical.
+  const { buildExpenseWhereClause, resolveExpenseProjectAllocationScope } =
+    await import("./expense/lookup");
+  const scope = prepared
+    ? prepared.scope
+    : await resolveExpenseProjectAllocationScope(db, filters);
   const where = await buildExpenseWhereClause(db, filters, {
     projectScope: undefined,
   });
   const selectedIds = sql`ARRAY(SELECT ${expense.id} FROM ${expense} WHERE ${where ?? sql`true`})`;
-  const relation = sql`(${expenseDerivedCostsSql(scope, selectedIds)}) derived_cost`;
-  const cost = scope
-    ? sql<number | null>`derived_cost.cost`
-    : sql<number | null>`${expense.cost}`;
-  const join = sql`derived_cost."expenseId" = ${expense.id}`;
-  const select = <Fields extends SelectedFields>(fields: Fields) => {
-    const query = getDb(db).select(fields).from(expense);
-    return scope ? query.innerJoin(relation, join) : query;
-  };
   return {
     scope,
     where,
-    cost,
-    select,
-    aggregate: expenseAggregateFields(cost),
-    allocations: sql`(${expenseJointAllocationSql(selectedIds)}) allocation`,
+    expenseIds: selectedIds,
+    ...expenseDerivedCostRead(db, scope, selectedIds),
+    allocations: sql`(${expenseDerivedReadSql("shares", { scope, expenseIds: selectedIds })}) allocation`,
   };
+}
+
+export type PreparedExpenseDerivedRead = Awaited<
+  ReturnType<typeof prepareExpenseDerivedRead>
+>;
+
+export type DerivedProjectionQuery = SQLWrapper & {
+  readonly _: { readonly result: object[] };
+  as(alias: string): Subquery;
+};
+type DerivedProjectionResults<
+  Queries extends Record<string, DerivedProjectionQuery>,
+> = {
+  [K in keyof Queries]: Queries[K]["_"]["result"];
+};
+
+export type ExpenseDerivedReadContext = Pick<
+  PreparedExpenseDerivedRead,
+  "scope" | "where" | "expenseIds"
+>;
+
+const derivedBatchRead = (
+  db: Database,
+  context: ExpenseDerivedReadContext,
+  group = 0,
+) => ({
+  ...context,
+  ...expenseDerivedCostRead(
+    db,
+    context.scope,
+    context.expenseIds,
+    sql`${sql.identifier(`expense_derived_cost_${group}`)} derived_cost`,
+  ),
+  allocations: sql`${sql.identifier(`expense_derived_share_${group}`)} allocation`,
+});
+
+export type ExpenseDerivedBatchRead = ReturnType<typeof derivedBatchRead>;
+
+/** Compatible projections share selected purchases, scope membership, rounded
+ * shares and grouped costs in one statement. Positional column aliases retain
+ * the declaration's result keys when PostgreSQL words each JSON projection. */
+export async function executeExpenseDerivedBatch<
+  Queries extends Record<string, DerivedProjectionQuery>,
+>(
+  db: Database,
+  context: ExpenseDerivedReadContext,
+  projections: (read: ExpenseDerivedBatchRead) => Queries,
+): Promise<DerivedProjectionResults<Queries>> {
+  return executeExpenseDerivedBatches(db, { read: context }, (reads) =>
+    projections(reads.read!),
+  );
+}
+
+/** Different facet masks share the principal weighting. Equivalent share masks
+ * also share their grouped relations, even when their stored row filters differ. */
+export async function executeExpenseDerivedBatches<
+  Queries extends Record<string, DerivedProjectionQuery>,
+>(
+  db: Database,
+  contexts: Readonly<Record<string, ExpenseDerivedReadContext>>,
+  projections: (
+    reads: Readonly<Record<string, ExpenseDerivedBatchRead>>,
+  ) => Queries,
+): Promise<DerivedProjectionResults<Queries>> {
+  const groups: Array<{ scope: ExpenseAllocationProjectScope | undefined }> =
+    [];
+  const groupByScope = new Map<string, number>();
+  const reads = Object.fromEntries(
+    Object.entries(contexts).map(([key, context]) => {
+      const scope = context.scope;
+      const mask = scope
+        ? JSON.stringify({
+            projectIds: scope.projectIds
+              ? [...scope.projectIds].sort()
+              : undefined,
+            presence: scope.presence,
+            membershipProjectIds: scope.membershipProjectIds
+              ? [...scope.membershipProjectIds].sort()
+              : undefined,
+            spendingCategoryIds: scope.spendingCategoryIds
+              ? [...scope.spendingCategoryIds].sort()
+              : undefined,
+            categoryPresence: scope.categoryPresence,
+            trades: scope.trades ? [...scope.trades].sort() : undefined,
+            costTypes: scope.costTypes
+              ? [...scope.costTypes].sort()
+              : undefined,
+          })
+        : "unscoped";
+      let group = groupByScope.get(mask);
+      if (group === undefined) {
+        group = groups.length;
+        groups.push({ scope });
+        groupByScope.set(mask, group);
+      }
+      return [key, derivedBatchRead(db, context, group)];
+    }),
+  );
+  const queries = projections(reads);
+  const columns = Object.entries(queries).map(([key, query]) => {
+    const rows = query.as("derived_rows");
+    const names = Object.keys(rows._.selectedFields).map((name) =>
+      sql.identifier(name),
+    );
+    return sql`(SELECT coalesce(jsonb_agg(to_jsonb(derived_rows)), '[]'::jsonb)
+      FROM ${rows}(${sql.join(names, sql`, `)})) AS ${sql.identifier(key)}`;
+  });
+  const selected = Object.values(contexts).map(
+    (context) =>
+      sql`SELECT unnest(${uuidArrayParam(context.expenseIds)}) AS id`,
+  );
+  const expenseIds = sql`ARRAY(SELECT DISTINCT id FROM (${sql.join(selected, sql` UNION ALL `)}) selected_ids)`;
+  const relations = groups.flatMap(({ scope }, group) => {
+    const shareName = sql.identifier(`expense_derived_share_${group}`);
+    const costName = sql.identifier(`expense_derived_cost_${group}`);
+    const shares = expenseDerivedReadSql("shares", {
+      scope,
+      source: sql`SELECT * FROM expense_derived_allocation`,
+    });
+    const costs = expenseDerivedReadSql("costs", {
+      scope: scope ? { ...scope, membershipProjectIds: undefined } : undefined,
+      source: sql`SELECT * FROM ${shareName}`,
+    });
+    return [
+      sql`${shareName} AS MATERIALIZED (${shares})`,
+      sql`${costName} AS MATERIALIZED (${costs})`,
+    ];
+  });
+  const result = await unwrapDb(db).execute<
+    DerivedProjectionResults<Queries>
+  >(sql`
+    WITH expense_derived_allocation AS MATERIALIZED (${expenseJointAllocationSql(expenseIds)}),
+      ${sql.join(relations, sql`, `)}
+    SELECT ${sql.join(columns, sql`, `)}
+  `);
+  // SAFETY: this SELECT names each JSON array with its projection key, and
+  // positional aliases reproduce that Drizzle query's declared result fields.
+  return result.rows[0] as DerivedProjectionResults<Queries>;
 }

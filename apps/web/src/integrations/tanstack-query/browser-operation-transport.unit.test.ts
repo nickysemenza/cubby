@@ -50,6 +50,20 @@ afterEach(() => {
 });
 
 describe("browser operation transport", () => {
+  // An advisory model request must not carry a navigation read in its batch;
+  // otherwise the hint can occupy the same pool and stall the page's base data.
+  it("dispatches navigation separately from automatic suggestions", async () => {
+    const { sent } = stubDispatch();
+    await Promise.all([
+      dispatchBrowserOperation("ai.suggestFields", {}, transport()),
+      dispatchBrowserOperation("entity.detail", {}, transport()),
+    ]);
+    expect(sent).toHaveLength(2);
+    expect(sent.map((item) => item.operation)).toEqual(
+      expect.arrayContaining(["ai.suggestFields", "entity.detail"]),
+    );
+  });
+
   it("sends queries issued in the same tick as one request", async () => {
     const { sent, fetchMock } = stubDispatch();
     // Each call carries its own operation trace headers, as production does.

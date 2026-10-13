@@ -19,12 +19,8 @@ import {
   ledgerParty,
   ledgerTransfer,
 } from "~/server/db/schema";
-import {
-  notDeleted,
-  unwrapDb,
-  uuidArrayParam,
-} from "~/server/repo/database-helpers";
-import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
+import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { expenseDerivedCostsSql } from "~/server/repo/expense-derived-read";
 import {
   collectDescendantIds,
   loadProjectTree,
@@ -89,28 +85,14 @@ async function loadExpenseFacts(
   const result = await unwrapDb(db).execute<ExpenseFact>(sql`
     SELECT
       ${expense.shortcode} AS shortcode,
-      ${
-        scope.projectIds
-          ? sql`(SELECT sum(project_allocation."attributedCents"::bigint)::text
-            FROM (${expenseProjectAllocationSql()}) project_allocation
-            WHERE project_allocation."expenseId" = ${expense.id}
-              AND project_allocation."projectId" = ANY(${uuidArrayParam(scope.projectIds)}))`
-          : sql`CASE WHEN ${expense.cost} IS NULL THEN NULL
-            ELSE round((${expense.cost})::numeric * 100)::bigint::text END`
-      } AS "costCents",
+      ${scope.projectIds ? sql`derived_cost."costCents"::text` : sql`round((${expense.cost})::numeric * 100)::bigint::text`} AS "costCents",
       ${expense.future} AS future
     FROM ${expense}
+    ${scope.projectIds ? sql`JOIN (${expenseDerivedCostsSql({ projectIds: scope.projectIds })}) derived_cost ON derived_cost."expenseId" = ${expense.id}` : sql``}
     WHERE ${and(
       notDeleted(expense),
       scope.asOf ? lte(expense.date, scope.asOf) : undefined,
       scope.includeFuture ? undefined : sql`${expense.future} = false`,
-      scope.projectIds
-        ? sql`EXISTS (
-            SELECT 1 FROM (${expenseProjectAllocationSql()}) project_allocation
-            WHERE project_allocation."expenseId" = ${expense.id}
-              AND project_allocation."projectId" = ANY(${uuidArrayParam(scope.projectIds)})
-          )`
-        : undefined,
     )}
   `);
   return result.rows;
@@ -386,15 +368,19 @@ export async function householdContributionLedger(
 export async function projectContribution(
   db: Database,
   input: ProjectContributionInput,
+  prepared?: { projectIds: ProjectId[] },
 ): Promise<ProjectContributionOut> {
-  const projectId = await resolveOrThrow(db, "project", input.projectId);
-  let projectIds: ProjectId[] = [projectId];
-  if (input.includeSubprojects) {
-    const tree = await loadProjectTree(db);
-    projectIds = [
-      projectId,
-      ...collectDescendantIds(tree.childrenByParent, projectId),
-    ];
+  let projectIds = prepared?.projectIds;
+  if (!projectIds) {
+    const projectId = await resolveOrThrow(db, "project", input.projectId);
+    projectIds = [projectId];
+    if (input.includeSubprojects) {
+      const tree = await loadProjectTree(db);
+      projectIds = [
+        projectId,
+        ...collectDescendantIds(tree.childrenByParent, projectId),
+      ];
+    }
   }
   const scope = {
     projectIds,
