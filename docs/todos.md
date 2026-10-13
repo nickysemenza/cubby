@@ -290,8 +290,10 @@ historical Runs stay readable through generic reports.
   accepting that specification; page authority alone does not resolve an
   internal contradiction. Preserve already supported identity and assignments.
 
-- ⏳ 🧪 **Accept live Mail import and Burn-down.** Live work stays paused until the
-  member resumes it. The approved Product scope has completed source-backed
+- ⏳ 🧪 **Accept live Mail import and Burn-down.** Historical discovery and
+  unattended bulk admission remain paused until the member resumes each scope.
+  Interactive member-directed repairs can continue independently. The approved
+  Product scope has completed source-backed
   acceptance, including the member's packaging-label confirmations. Remaining
   acceptance: live verification that imports refuse exact-identity Product forks and
   resolve Vendors by Sender proof or Vendor alias, known-vendor and

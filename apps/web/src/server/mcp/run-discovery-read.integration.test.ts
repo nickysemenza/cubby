@@ -2,9 +2,10 @@ import { executionAuthorizationInput } from "@cubby/schemas/execution-authorizat
 import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   mailboxCoverage,
+  mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
 } from "@cubby/schemas/mailbox-research";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -27,9 +28,71 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 // Failure modes: an owned Workflow Run incorrectly needs a coordinator session;
 // frozen scope disappears; approval expiry or reservation is mistaken for spend;
 // foreign members read mailbox evidence; a readiness read wakes or changes work.
+// Missing historical query/policy fields must not prevent status reads or imply
+// a known full-mailbox, classification-only execution scope.
 describe("member discovery readiness through MCP", () => {
   const ctx = withTestDb("mcp");
   afterEach(() => vi.useRealTimers());
+
+  it.each([
+    { mailboxId: "synthetic-legacy-mailbox" },
+    { mailboxId: "synthetic-legacy-mailbox", scopedQueries: [] },
+    { mailboxId: "synthetic-legacy-mailbox", executionPolicy: "import" },
+  ])(
+    "reads legacy discovery status without reconstructing missing frozen scope: %j",
+    async (input) => {
+      const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+        name: "Synthetic legacy discovery owner",
+        kind: "member",
+        userId: ctx.actor.userId,
+      });
+      const discovery = await insertWithShortcode(ctx.db, "run", {
+        purpose: "mail_discovery",
+        trigger: "scheduled",
+        status: "completed",
+        actorUserId: ctx.actor.userId,
+        actorName: "Synthetic legacy discovery owner",
+        actorEmail: "legacy-discovery@example.test",
+        actorLedgerPartyShortcode: party.shortcode,
+        actorLedgerPartyName: party.name,
+        actorLedgerPartyKind: party.kind,
+        ledgerPartyId: party.id,
+        startedAt: new Date(),
+        endedAt: new Date(),
+        input: mailboxDiscoveryInput.parse({
+          mailboxId: input.mailboxId,
+          scopedQueries: [],
+        }),
+      });
+      // Historical JSON predates the current typed launch contract.
+      await getDb(ctx.db).execute(sql`UPDATE "Run"
+      SET input = ${JSON.stringify(input)}::jsonb WHERE id = ${discovery.id}`);
+      const before = await getDb(ctx.db).select().from(run);
+      const operationContext = new McpOperationContext(
+        requireActor(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: ctx.actor.userId },
+          }),
+        ),
+      );
+      const result = await callMcpTool(
+        createMcpServer(),
+        "imports_read",
+        { action: "run_status", runId: discovery.shortcode },
+        {},
+        { operationContext },
+      );
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        runId: discovery.shortcode,
+        status: "completed",
+        mailDiscovery: null,
+      });
+      expect(await getDb(ctx.db).select().from(run)).toEqual(before);
+      expect(await getDb(ctx.db).select().from(runOperation)).toEqual([]);
+      expect(await getDb(ctx.db).select().from(mailboxCursor)).toEqual([]);
+    },
+  );
 
   it("reads frozen scope, checkpoints and expired receipts without execution and refuses foreign members", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {

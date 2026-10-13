@@ -48,7 +48,18 @@ export async function loadMailDiscoveryRead(
   if (!row) return null;
   if (!owner) throw new Error("Discovery Run has no member owner");
   const database = getDb(db);
-  const input = mailboxDiscoveryInput.parse(row.input);
+  const input = mailboxDiscoveryInput
+    .extend({
+      scopedQueries: mailboxDiscoveryInput.shape.scopedQueries.optional(),
+      executionPolicy: mailboxDiscoveryInput.shape.executionPolicy
+        .unwrap()
+        .optional(),
+    })
+    .parse(row.input);
+  // Historical omissions are unknown scope, not an empty query list or the
+  // current launch policy. Status/findings remain readable without readiness.
+  if (input.scopedQueries === undefined || input.executionPolicy === undefined)
+    return null;
   const [mailbox, evidence, totals, [counts]] = await Promise.all([
     loadGmailCursor(db, {
       ledgerPartyId: owner.ledgerPartyId,

@@ -83,7 +83,11 @@ Purchases through `purchaseIds`.
 
 - Owned discovery status reads expose frozen mailbox scope, current checkpoints,
   retained authorization evidence and recorded AI usage without executing the
-  coordinator. Missing historical transport or cumulative coverage evidence
+  coordinator. Historical Runs missing frozen query or execution-policy fields
+  still expose status and findings, with `mailDiscovery: null`: their readiness
+  evidence is unavailable, rather than reconstructed from current defaults.
+  Reads preserve the stored input and cannot authorize or restart discovery.
+  Missing historical transport or cumulative coverage evidence
   stays unknown; the remaining durable evidence work is in `docs/todos.md`.
 - Existing-Purchase imports bind deliberate Product choices to uniquely matching
   unbound manual item Expenses. Accepted originals instead use an exact reviewed
