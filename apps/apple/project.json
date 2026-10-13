@@ -8,7 +8,7 @@
       "{workspaceRoot}/Cargo.{toml,lock}",
       "{workspaceRoot}/rust-toolchain.toml",
       "{workspaceRoot}/.cargo/**/*",
-      "{workspaceRoot}/scripts/{apple-check.sh,apple-inputs.ts,ensure-apple-ffi.ts,rust-fingerprint.ts,lib/tree-digest.ts}",
+      "{workspaceRoot}/scripts/{apple-check.sh,apple-inputs.ts,ensure.ts,rust-fingerprint.ts,lib/tree-digest.ts}",
       "{projectRoot}/scripts/{prepare-project.sh,build-rust.sh,check-openapi-warnings.sh}",
       "{workspaceRoot}/packages/shared/golden-vectors/**/*",
       "{workspaceRoot}/.github/workflows/ci.yaml",

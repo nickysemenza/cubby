@@ -2,7 +2,7 @@
   "$schema": "./node_modules/nx/schemas/project-schema.json",
   "name": "cubby-checks",
   "targets": {
-    // scripts/generator/ensure.ts runs this target, so every entry point that
+    // scripts/ensure.ts generate runs this target, so every entry point that
     // needs generated output gets a cache hit (which also restores a missing
     // or edited output) while these inputs are unchanged. Generated output is
     // ignored by Nx's file map, so it never feeds its own key.
@@ -27,8 +27,6 @@
         // The entity-declaration import-boundary override (import-boundary.ts).
         "{workspaceRoot}/.oxlintrc.json",
         "{workspaceRoot}/redocly.yaml",
-        // Deferred MCP capabilities must be listed here (start-operations/mcp-tools.ts).
-        "{workspaceRoot}/docs/todos.md",
         "{workspaceRoot}/package.json",
         "{workspaceRoot}/pnpm-lock.yaml",
         { "runtime": "node --version" }
@@ -47,7 +45,7 @@
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated",
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json",
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyAPI/openapi-generator-config.yaml",
-        "{workspaceRoot}/docs/**/how-values-are-determined.md"
+        "{workspaceRoot}/docs/guide/how-values-are-determined.md"
       ]
     },
     "types": {
@@ -56,8 +54,6 @@
       "dependsOn": ["wasm", "generate"],
       "inputs": [
         "repo",
-        // `pnpm typecheck` runs generation first; see `generate`.
-        { "runtime": "git hash-object docs/todos.md" },
         {
           "dependentTasksOutputFiles": "packages/wasm/**/*"
         }
@@ -69,7 +65,7 @@
       "cache": true,
       "inputs": [
         "{workspaceRoot}/packages/design-tokens/**/*",
-        "{workspaceRoot}/scripts/design-tokens/**/*",
+        "{workspaceRoot}/scripts/design-tokens.ts",
         "{workspaceRoot}/apps/apple/App/Shared/Theme/FieldGuideMetrics.swift",
         "{workspaceRoot}/apps/apple/App/Assets.xcassets/**/*"
       ]
@@ -113,11 +109,6 @@
       "cache": true,
       "inputs": ["gate"]
     },
-    // The advisory database changes without any repository change.
-    "security": {
-      "command": "pnpm audit:security",
-      "cache": false
-    },
     "fast-tests": {
       // Aux packages (packages/*) run through their own cached `test` target
       // (targetDefaults above) instead of `pnpm -r --workspace-concurrency=2
@@ -138,20 +129,21 @@
         "{workspaceRoot}/Cargo.lock",
         "{workspaceRoot}/packages/wasm/package.json",
         "{workspaceRoot}/packages/wasm/.gitignore",
-        "{workspaceRoot}/scripts/ensure-wasm.ts",
-        "{workspaceRoot}/scripts/build-wasm.sh",
+        "{workspaceRoot}/scripts/ensure.ts",
+        "{workspaceRoot}/scripts/rust-fingerprint.ts",
+        "{workspaceRoot}/scripts/lib/tree-digest.ts",
         "{workspaceRoot}/package.json",
         {
           "externalDependencies": []
         },
         {
-          "runtime": "node scripts/ensure-wasm.ts --fingerprint"
+          "runtime": "node scripts/ensure.ts wasm --fingerprint"
         }
       ],
       "outputs": ["{workspaceRoot}/packages/wasm"]
     },
     "apple-ffi": {
-      "command": "node scripts/ensure-apple-ffi.ts --build",
+      "command": "node scripts/ensure.ts apple-ffi --build",
       "cache": true,
       "inputs": [
         "{workspaceRoot}/cubby-ffi/**/*",
@@ -159,13 +151,13 @@
         "{workspaceRoot}/Cargo.toml",
         "{workspaceRoot}/Cargo.lock",
         "{workspaceRoot}/apps/apple/scripts/build-rust.sh",
-        "{workspaceRoot}/scripts/ensure-apple-ffi.ts",
+        "{workspaceRoot}/scripts/ensure.ts",
         "{workspaceRoot}/scripts/rust-fingerprint.ts",
         {
           "externalDependencies": []
         },
         {
-          "runtime": "node scripts/ensure-apple-ffi.ts --fingerprint"
+          "runtime": "node scripts/ensure.ts apple-ffi --fingerprint"
         }
       ],
       "outputs": [

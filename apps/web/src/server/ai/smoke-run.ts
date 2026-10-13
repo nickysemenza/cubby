@@ -16,7 +16,6 @@ import {
   auditPurchaseImportBatch,
   extractPurchaseEvidence,
 } from "~/server/agents/purchase-import/extract";
-import { purchaseExtractionPrompt } from "~/server/agents/purchase-import/prompts";
 import {
   DECISION_MAX_CANDIDATES,
   runDecisionChoice,
@@ -46,11 +45,7 @@ import { aiUsage, image, run as runTable } from "~/server/db/schema";
 import { loadPurchaseAuditBatch } from "~/server/purchase-import/audit-batch";
 import { normalizeMessage } from "~/server/purchase-import/gmail/normalize";
 import { interpretMailRelevance } from "~/server/purchase-import/gmail/relevance";
-import { mailTriagePrompt } from "~/server/purchase-import/gmail/triage";
-import {
-  chooseLineStage,
-  PRODUCT_IDENTITY_RULES,
-} from "~/server/purchase-import/writer";
+import { chooseLineStage } from "~/server/purchase-import/writer";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { getVerifiedImageRenditionKey } from "~/server/repo/image-identification";
 import { getUploadedImageProcessingSource } from "~/server/repo/image-processing";
@@ -65,10 +60,7 @@ import {
   suggestUsdaFood,
   suggestUsdaFoodBatch,
 } from "~/server/services/ai-enrichment/usda-match";
-import {
-  descriptionRequest,
-  imageAnalysisRenditionUrl,
-} from "~/server/services/image-description.service";
+import { imageAnalysisRenditionUrl } from "~/server/services/image-description.service";
 import {
   imageIdentificationCompositionPrompt,
   readImageIdentificationRendition,
@@ -386,7 +378,7 @@ async function runCase(
       return {
         result: await runStructuredFeature(
           IMAGE_DESCRIPTION_FEATURE,
-          descriptionRequest(url),
+          IMAGE_DESCRIPTION_FEATURE.request(url),
           {
             db,
             runId,
@@ -434,7 +426,7 @@ async function runCase(
       if (scenario === "mailboxTriage") {
         return {
           result: await runDecisionChoice({
-            ...mailTriagePrompt(
+            ...MAILBOX_TRIAGE_FEATURE.prompt(
               JSON.stringify({
                 headers: original.mail.headers,
                 body: original.mail.bodyText,
@@ -519,7 +511,7 @@ async function runCase(
             seller: line.seller ?? null,
             productUrl: line.productUrl ?? null,
           }),
-          rules: PRODUCT_IDENTITY_RULES,
+          rules: PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE.rules,
           choices: labels,
           usage: { db, runId, operation: "smoke.purchaseProductIdentity" },
         }),
@@ -530,7 +522,7 @@ async function runCase(
       return {
         result: await runStructuredFeature(
           PURCHASE_IMPORT_EXTRACTION_FEATURE,
-          purchaseExtractionPrompt(purchaseCapture(fixture)),
+          PURCHASE_IMPORT_EXTRACTION_FEATURE.request(purchaseCapture(fixture)),
           { db, runId, operation: "smoke.purchaseExtraction" },
           structuredPorts,
         ),
@@ -552,7 +544,7 @@ async function runCase(
     case "purchaseMail": {
       const { fixture } = aiSmokeInputs.purchaseMail.parse(raw);
       const { orderMailRequest } =
-        await import("~/server/agents/purchase-import/extract");
+        await import("~/server/ai/prompts/purchase-import");
       return {
         result: await runStructuredFeature(
           PURCHASE_IMPORT_MAIL_FEATURE,
@@ -625,7 +617,7 @@ async function runCase(
     case "purchaseRepair": {
       const { fixture } = aiSmokeInputs.purchaseRepair.parse(raw);
       const { purchaseRepairRequest } =
-        await import("~/server/agents/purchase-import/extract");
+        await import("~/server/ai/prompts/purchase-import");
       return {
         result: await runStructuredFeature(
           PURCHASE_IMPORT_REPAIR_FEATURE,

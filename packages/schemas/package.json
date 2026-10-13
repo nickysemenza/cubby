@@ -180,8 +180,8 @@
     "./email-actions": "./src/email-actions.ts"
   },
   "scripts": {
-    "typecheck": "node ../../scripts/generator/ensure.ts && tsc --noEmit",
-    "test": "node ../../scripts/generator/ensure.ts && vitest run",
+    "typecheck": "node ../../scripts/ensure.ts generate && tsc --noEmit",
+    "test": "node ../../scripts/ensure.ts generate && vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {

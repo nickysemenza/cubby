@@ -1,8 +1,7 @@
 name: Dispatch PR journeys
 
-# Runs the automatic Tester Army journey once a same-repository PR's CI
-# passes, or when a journey label is added to a PR whose current head already
-# passed. The `CI` workflow name below must match ci.yaml's.
+# Runs explicitly labeled journeys after CI passes, including subsequent
+# pushes while the label remains. Unlabeled PRs never dispatch journeys.
 on:
   workflow_run:
     workflows: [CI]
@@ -36,6 +35,8 @@ jobs:
           pr="$(gh pr list --head "$HEAD_BRANCH" --state open --json number,headRefOid,isCrossRepository \
             --jq "map(select(.headRefOid == \"$HEAD_SHA\" and (.isCrossRepository | not)))[0].number // empty")"
           [[ -n "$pr" ]] || exit 0
+          labels="$(gh pr view "$pr" --json labels --jq '[.labels[].name | select(. == "tester-army" or . == "tester-army:ios" or . == "tester-army:import" or . == "simulator-e2e")] | length')"
+          [[ "$labels" -gt 0 ]] || exit 0
           # A label added before CI passes waits for the CI completion event.
           conclusion="$(gh run list --workflow ci.yaml --event pull_request --commit "$HEAD_SHA" \
             --limit 1 --json conclusion --jq '.[0].conclusion // empty')"

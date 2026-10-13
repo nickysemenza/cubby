@@ -273,10 +273,10 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
       run(profile, process.execPath, ["scripts/dev-db.ts", "ready"]),
     );
     await phase("wasm", () =>
-      run(profile, process.execPath, ["scripts/ensure-wasm.ts"]),
+      run(profile, process.execPath, ["scripts/ensure.ts", "wasm"]),
     );
     await phase("generator", () =>
-      run(profile, process.execPath, ["scripts/generator/ensure.ts"]),
+      run(profile, process.execPath, ["scripts/ensure.ts", "generate"]),
     );
     if (preview)
       await phase("build", async () => {

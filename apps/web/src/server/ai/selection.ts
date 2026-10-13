@@ -71,17 +71,11 @@ export interface AiSelectionPort {
   }): Promise<AiSelectionResult>;
 }
 
-const SELECTION_FRAME =
-  "You are given a subject and a numbered shortlist. Choose exactly one entry's id, or null when none fits.";
-
 const productionAiSelectionPort: AiSelectionPort = {
   select: async ({ rules, subject, shortlist, usage }) =>
     runStructuredFeature(
       SELECTION_OVERFLOW_FEATURE,
-      {
-        systemPrompts: [SELECTION_FRAME, rules, `Shortlist:\n${shortlist}`],
-        messages: [{ role: "user", content: subject }],
-      },
+      SELECTION_OVERFLOW_FEATURE.request(rules, subject, shortlist),
       usage,
     ),
 };

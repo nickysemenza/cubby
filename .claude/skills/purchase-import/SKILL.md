@@ -324,29 +324,11 @@ a new purchase-import Product or inventory.
 
 ## Review Email accuracy
 
-Open an Email's Review report and start a 200-Email accuracy sample, or call
-`mail.accuracy_sample` with `sampleSize: 200`. This freezes a member-wide sample
-of the latest owned predictions, including unrelated messages. Keep the returned
-evaluation selector; a new sample is a separate measurement.
-
-Read `imports_read.email_accuracy_blind` before opening prediction metadata.
-Use its Email shortcode, mailbox/message identity and headers to find the
-original through the member's Claude or Codex Gmail connection. Grade via
-`mail.accuracy_grade` as `related`, `unrelated` or `uncertain`, with a reason
-and proof of the frozen checksum. When current content has changed, review
-that exact frozen original; if it cannot be recovered, record `unavailable`.
-A changed owner never authorizes reading the previous member's private mail.
-Reviewed labels are independent evidence and preserve effective import routing.
-
-After grading, read `imports_read.email_accuracy_report` or refresh the Email's
-Review report. The built-in view uses the latest owned evaluation and shows
-member-wide pipeline and exact-known Jev/Clef model-only weighted matrices,
-conditional determinate precision/recall, population/sample denominators,
-stratum probabilities and weights, and exclusions. Report unavailable,
-uncertain, ungraded and unknown attribution alongside the metrics. Current and
-stale checksum-bound labels remain distinguishable in the selected Email's
-review history. Finish with the measured sample coverage and its denominator
-warnings; additional research does not rewrite the frozen evaluation.
+Use [decision grading](../decision-grading/SKILL.md#email-relevance) for blind
+samples, original/checksum verification, member grades, weighted reporting and
+before/after comparisons. A review does not authorize a production
+reclassification or change the frozen sample. Report unavailable originals and
+coverage limits alongside accuracy.
 
 ## Agent authority
 

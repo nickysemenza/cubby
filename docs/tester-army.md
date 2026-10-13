@@ -28,22 +28,9 @@ proves the comparison bites without any model call. Journeys are paced
 (`TESTER_ARMY_PACE_MS`, default 5 s) because the inference gateway rate-limits
 bursts of journeys. Twenty journeys add 100 seconds of pacing, rather than the previous 400 seconds.
 
-Catalog: product rename; receive a purchase into stock; the add-to-inventory,
-record-sale, set-status, mark-purchased and delete-with-impact-preview hero
-actions; label nutrition, external ids, financial-account source aliases,
-transaction source refs, source-claim description (identity preserved), recipe
-line and product tag/collection editing; purchase validation; expense split
-(cents conserved, unknown cost refused); attach expenses (move confirmation) and
-products; task board lanes and moving a card; turning a mail-only vendor
-account into a browser-synced one (its Vendor becomes an online account);
-reading a finished mail import's Restart inputs (Vendor and order id); a
-Run console journey (live progress, resolving a finding); and the Runs list
-showing a live enrichment run's work label, target summary, latest step,
-named targets and changed count, on desktop and at a phone width; and an
-enrichment run's page counting Products (never orders) and naming its
-targets. The Run console debug log is not cursor-paged in
-the app (it caps at 2,000 events), so paging is not asserted. Coupled
-import journeys follow (see below).
+The catalog module owns journey names, supported engines, goals and assertions;
+use the runner's selection flags instead of a second prose inventory. Run-log
+paging is not asserted when the app supplies only a bounded event list.
 
 Split compound edits into observable phases, and do not require dismissing a keyboard that may already be gone. Hybrid steps tap known native control IDs or exact accessible web controls (buttons or comboboxes) when model targeting or completion is ambiguous. Field entry stays agent-driven, and the UI and database assertions still establish the result. Native confirmations use the keyboard Done button, actual editor Save or `heroAction.submit` control for that surface.
 
@@ -107,7 +94,7 @@ Model calls, tokens, reported cost, and timings are evidence, not a promise of
 equal reliability or savings. The existing deterministic simulator product-edit
 journey must also pass after the agent-device upgrade.
 
-The CLI and mobile SDK share patched `agent-device` 0.21.22 through a workspace
+The CLI and mobile SDK share patched `agent-device` through a workspace
 override. Its iOS runner stops inspecting windows after finding a usable one
 and avoids retaining full snapshot responses in its command journal. Hosted
 startup and journey timings determine whether these changes improve this lane.
@@ -154,9 +141,9 @@ Preflight checks a real Jev choice and the text tier's image/function-call
 capability before builds or test services. Missing credentials fail early.
 Bundles name both models; exact database read-backs decide correctness.
 
-The compatible pins are `e2e` 0.19.0, web 0.14.0, mobile 0.11.0 and
-`@e2e-dev/decision` 0.2.0. The CLI and mobile engine share patched agent-device
-0.21.22. Paid hosted engines are not installed.
+Compatible SDK versions and the shared `agent-device` patch are owned by
+`apps/web/package.json`, `pnpm-workspace.yaml`, and the lockfile. Paid hosted
+engines are not installed.
 
 ```sh
 pnpm test:e2e:agent:preflight
@@ -196,10 +183,8 @@ because they were built from a different commit.
 
 The shared Node setup restores the portable WASM package from the exact Rust
 source key used by Linux jobs, avoiding a second macOS compilation.
-The macOS journey jobs disable pnpm store caching: measured installs took
-47–76 seconds without it, while packing a store miss added 4m20s after tests
-completed. A warm restore plus install took 91 seconds. Regular jobs retain
-their existing pnpm cache; the WASM and Apple build caches remain enabled.
+Dependency install/WASM/cache wiring is owned by the setup actions. Store
+restore/save exceeded registry installation cost in the retained measurements.
 Apple FFI uses the same target-specific action as required Apple CI. On a
 GitHub output-cache miss, jobs with installed workspace dependencies use the
 existing Nx artifact cache before compiling. Archive jobs without those
@@ -210,11 +195,10 @@ Keep both together: DerivedData workspace metadata can refer to binary artifacts
 such as Sentry's XCFramework that live in the SPM cache. The harness generates
 the project and invokes the Nx simulator-build target before installation;
 unchanged inputs reuse its app output, while changed inputs compile normally.
-The required Apple gate uses the same cached target. The optional
-GitHub native jobs start simulator boot after dependency installation, overlapping
-startup with Apple tool setup and cache restores. Booting during extraction and
-generation increased observed dependency setup from 42 seconds to 84–386 seconds;
-these runs were not a controlled comparison. The harness still waits for boot
+The required Apple gate uses the same cached target. Hosted native jobs start simulator boot after dependency installation;
+booting during extraction/generation caused contention. Local runs boot after
+compilation.
+The harness still waits for boot
 readiness before installing the app. Local runs start boot after compilation.
 App replacement
 uses `simctl` directly, before preparing the driver, so installation does not
@@ -239,41 +223,31 @@ app skips the large Swift package-clone and DerivedData restores; a miss keeps
 the shared compilation setup. FFI verification, project generation and the
 device runner remain necessary even with a cached app.
 
-The **E2E journeys** workflow (`e2e-journeys.yaml`) runs an informational
-trial after successful required CI completes. `tester-army-pr.yaml` validates
-that all six required jobs passed in that CI run and the same-repository PR is still open at the tested head, then dispatches
-`e2e-journeys.yaml` with its number and exact revision. Routing checks that
-state again before checkout. Dispatch requires the CI run to have succeeded; the optional purchase-import lane may fail without failing it. Label-triggered dispatch requires the latest CI run for that head to have succeeded. Both run as one `gh` step in `tester-army-pr.yaml`. Automatic web coverage selects `product-rename`,
-`receive-purchase`, and `field-product-tags`; their persisted-state checks remain
-unchanged. The GitHub reporter receives the PR number and head in the runner's
-event payload and continues to post its normal comment and job summary. The full iOS catalog runs only when explicitly selected
-with the `tester-army:ios` label, manual dispatch, or the weekly schedule;
-native/shared/backend changes retain their required Apple lanes without
-automatically starting paid native journeys. Import/vendor/run changes
-and shared/backend changes also run the coupled import journeys. Prose-only PRs
-and fork PRs do not automatically call paid models. The complete native catalog runs in two parallel SDK shards (`--shard 1/2` and `2/2`), with separate recording caches, reports and reporter keys. The partition preserves all native cases; it lowers work per job while using more concurrent macOS runners. Changed-file routing lives
-in `scripts/tester-army-ci.ts`; renamed files include their old paths.
-The routing step selects every lane for PR, manual and scheduled events; each
-job only checks its selected output, without repeating event/label logic.
-Standard and coupled web harnesses share one matrix job and setup; only the
-harness, lane key, selected journeys and timeout differ.
-Labels `tester-army`, `tester-army:ios` and `tester-army:import` force their lane
-on the PR source revision and subsequent pushes. A label applied after CI
-passes dispatches immediately; one applied while CI is pending is picked up
-when that revision finishes. Manual and weekly runs keep their full catalogs.
+The **E2E journeys** workflow (`e2e-journeys.yaml`) runs only by manual dispatch
+or explicit PR labels. There is no scheduled matrix or changed-file-based
+selection of paid journeys. The labels select independent lanes:
 
-No Tester Army lane is required for merge. PR updates, closure and merge cancel
-unfinished automatic journeys through their PR-specific concurrency group.
-Closed or superseded revisions do not launch new journeys. Completed reports
-and uploaded artifacts remain available. Manual dispatch, weekly runs, required
-CI and deployment use independent groups. Background coverage starts after CI
-so it does not compete with that revision's merge checks; it can still contend
-with other active PRs. Successful hosted timings, costs and reliability must be measured in
-this trial before promoting any journey to a required check. Current lane
-ceilings are 10 minutes for automatic web smoke, 25 for full web, 30 for imports
-and 40 for iOS, including setup;
-these are limits, not measured completion times. The standard catalog's five-second
-pacing adds 1 minute 40 seconds across 20 native journeys, or 50 seconds per native shard; web adds its Email metadata journey for 21 cases.
+- `tester-army`: three web smoke journeys (`product-rename`, `receive-purchase`,
+  and `field-product-tags`).
+- `tester-army:ios`: the native catalog in two SDK shards.
+- `tester-army:import`: coupled import journeys.
+- `simulator-e2e`: deterministic simulator journeys.
+
+`tester-army-pr.yaml` dispatches only labeled, still-open same-repository PRs
+whose current head passed CI. A label added before CI passes waits for its
+completion; a label added afterward dispatches immediately. Labels remain
+active on subsequent pushes. The router rechecks the open PR, exact head,
+repository and current labels before selecting lanes, so removed labels cannot
+start paid work. Manual dispatch selects the requested catalog directly.
+
+No journey lane is required for merge. PR updates, closure and merge cancel
+unfinished label-requested journeys through their PR-specific concurrency
+group. Closed or superseded revisions launch no journeys. Manual dispatch,
+required CI and deployment use independent groups. The GitHub reporter retains
+the PR number and head, comments, summaries and uploaded artifacts.
+
+Workflow declarations own lane timeouts; they are limits rather than measured
+run times. Hosted costs, timing and findings must justify expanding coverage.
 
 PR runs enable verified action replay, with separate lane/OS/lockfile caches.
 Each completed run saves a unique recording snapshot even after a journey
@@ -283,17 +257,14 @@ reuse a previous test verdict. Automatic dispatch runs from the default branch
 and shares its recording cache across PRs; every replay still verifies the
 current end state. Scheduled runs disable action replay and do not seed it.
 
-Every Monday at 09:17 UTC the full web/iOS/import matrix runs on `main` without
-action replay. Manual dispatch accepts `tester-army-web`, `tester-army-ios`,
-`tester-army-both`, `tester-army-import` or `tester-army-all`. The deterministic
-simulator journeys remain manual or label-triggered. Existing required checks
-remain the merge gate.
-Run each engine three times for the live acceptance sample.
+Manual dispatch accepts the journey choices declared in `e2e-journeys.yaml`.
+There is no schedule; required deterministic checks remain the merge gate.
+Live acceptance uses fresh state across repeated engine runs.
 
 Append `-- --wrong` to either journey command to deliberately expect wrong
 database values; it must fail the exact assertion. For a local replay comparison,
 run the same command twice with `-- --replay`. This enables Tester Army's local
-read-write cache (`apps/web/.e2e/cache/`); local runs without this flag disable it. PR CI enables it automatically. Compare the
+read-write cache (`apps/web/.e2e/cache/`); local runs without this flag disable it. Label-requested PR journeys enable it. Compare the
 resulting summaries for model calls, tokens, timings, replay hits and handoffs.
 Each run seeds fresh records, so every step passes the journey's seeded
 shortcodes as `unique()` params (`replayParams`): the SDK otherwise reads
@@ -402,37 +373,10 @@ price the agent's pinned model. Deterministic coverage of the same
 orchestration stays in `purchase-agent-scenarios.integration.test.ts`; these
 journeys check that real models complete it.
 
-## Upgrade validation (2026-10-09)
-
-The upgrade passed 18 focused configuration, transport, fail-fast and replay
-checks. HTTP 429 and connection-reset regressions, including failures reading the
-response body after headers, failed with two requests before the boundary fix.
-Both tiers now fail after one, while cancellation is preserved.
-Live Gateway preflight passed for Jev decisions and the separate text tier.
-
-Tester Army and its decision/mobile SDKs are unpatched. Exploratory live runs
-with dirty source established these outcomes:
-
-| Journey                                           | Result                                                                                                     | Evidence bundle                                                                                                                       |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Web rename, inventory addition, source references | Passed with exact SQL read-back                                                                            | `artifacts/tester-army/web/bef62b71-ab09-41af-8605-79ce4ba89dc8` (the external-ID case failed before splitting Kind search/selection) |
-| Web external ID                                   | Passed after splitting search and selection                                                                | `artifacts/tester-army/web/a986eced-d766-4d0c-84c4-bb6ef54d3297`                                                                      |
-| Jev iOS external ID                               | Passed Source, Identifier, Save and exact SQL read-back                                                    | `artifacts/sim-tester-army-e2e/cubby_sim_541881df5e92c2a3`                                                                            |
-| Native keyboard entry and reopen                  | Passed all scripted steps on first attempt; saved Source and Identifier read back from the reopened editor | `artifacts/sim-qa-e2e/cubby_sim_b59de09029e84e57`                                                                                     |
-
-The native failure was reproduced without model inference. Structured fields
-now occupy separate Form rows, and the shared Done action dismisses the real
-first responder; a Form-level focus binding did not own its descendant fields.
-Native test setup centers the Add control using measured bounds because the
-upstream SDK's semantic tree can include offscreen rows. Jev still fills and
-saves the values; rename separately covers navigation into the editor.
-
-Dirty-source runs do not meet exact-revision acceptance. The PR records the
-final revision's live sample, negative assertion, replay comparison and required
-extended native editing result. The full journey catalog and Android are outside
-this focused sample. Neither CI speed nor total model cost savings is established;
-Jev decisions still need a paid text/extraction tier. Required GitHub checks must
-pass on the final PR head before merge.
+Transport regressions retain one-request failure for HTTP 429 and
+connection resets, including response-body failure after headers. Cancellation
+stays cancellation. Live preflight and dirty exploratory results do not
+substitute for exact-revision journey acceptance.
 
 ## Evidence
 
@@ -487,14 +431,12 @@ escaping. Setup failures before the SDK starts are visible in the workflow's
 failed job; they do not produce a fresh comment. Read the linked source revision
 when reviewing results: the SDK does not check the current PR head before
 updating its comment, so a cancellation race can publish an older revision.
-Scheduled/manual runs write job summaries without PR
+Manual runs write job summaries without PR
 comments. The existing `agent-summary.json` remains the machine-readable metrics
 artifact. See [the SDK reporter docs](https://e2e.tester.army/docs/github).
 
-Visual baseline comparisons are deferred to a separate change. Start with a few
-stable shared screens using `toHaveScreenshot`, with baselines captured on the
-same CI OS/device and dynamic values masked. Saving diagnostic screenshots does
-not assert that the layout matches a baseline.
+[Web coverage additions](#web-coverage-additions) owns visual baselines;
+diagnostic screenshots alone do not assert a baseline match.
 
 Retain a small set of semantic UI journeys over shared primitives and important
 workflows, backed by persisted-state read-backs. Do not grow copy-only or

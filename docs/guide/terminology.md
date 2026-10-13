@@ -3,12 +3,7 @@
 A glossary disambiguating Cubby's domain concepts and how each one is named in
 the **UI**, in **code/schema**, and in the **database** (Postgres table). The
 canonical entity overview lives in [README.md](../../README.md#entities); this doc
-exists to resolve the naming drift that the audit flagged — the same concept
-sometimes wears three different names across layers.
-
-> **Layering reminder.** Domain compute (costing, availability, conversions)
-> lives in Rust/WASM (`recipebridge`), not TS. See [AGENTS.md](../../AGENTS.md) for
-> where logic belongs. This doc is about _names_, not where logic runs.
+resolves concepts whose names differ across layers.
 
 ## Naming policy
 
@@ -50,29 +45,11 @@ sometimes wears three different names across layers.
 
 ## Core entities
 
-| Concept                   | UI label                       | Code / schema name                              | DB table                                                   | One-liner                                                                                                                                                                                                                                         |
-| ------------------------- | ------------------------------ | ----------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Product                   | "Product"                      | `Product` / `product`                           | `Product`                                                  | A purchasable item (a specific SKU or a `misc:` placeholder).                                                                                                                                                                                     |
-| Ingredient                | "Ingredient"                   | `Ingredient` / `ingredient`                     | `Ingredient`                                               | A canonical recipe-line concept ("flour"), independent of any SKU.                                                                                                                                                                                |
-| Inventory entry           | "Inventory" / "Inventory item" | `InventoryEntry` / `inventoryEntry`             | `InventoryEntry`                                           | A quantity of one Product at one Location.                                                                                                                                                                                                        |
-| USDA food                 | "USDA food" / "Nutrition"      | `USDAFood` / `usda_food`                        | external (USDA service)                                    | A FoodData Central reference food, loosely linked to a Product.                                                                                                                                                                                   |
-| Location                  | "Location"                     | `Location` / `location`                         | `Location`                                                 | A node in the physical storage tree (house → room → shelf → bin).                                                                                                                                                                                 |
-| Recipe                    | "Recipe"                       | `Recipe` / `recipe`                             | `Recipe`                                                   | A cookable thing with sections of ingredients; can itself be an ingredient.                                                                                                                                                                       |
-| Section                   | "Section"                      | `RecipeSection` / `recipeSection`               | `RecipeSection`                                            | An ordered group of ingredient lines within a recipe ("For the sauce").                                                                                                                                                                           |
-| Recipe-section ingredient | (a row in a recipe)            | `RecipeSectionIngredient`                       | `RecipeSectionIngredient`                                  | One ingredient line: ingredient + amounts + raw line + modifier.                                                                                                                                                                                  |
-| Meal                      | "Meal"                         | `Meal` / `meal`                                 | `Meal`                                                     | A planned eating occasion on a calendar day; groups recipes.                                                                                                                                                                                      |
-| Meal recipe               | (a recipe inside a meal)       | `MealRecipe` / `mealRecipe`                     | `MealRecipe`                                               | A recipe planned into a meal at a `scale` multiplier.                                                                                                                                                                                             |
-| Cookbook                  | "Cookbook"                     | `Cookbook` / `cookbook`                         | `Cookbook`                                                 | A first-class recipe _source_ — the book an EPUB-extracted recipe set came from.                                                                                                                                                                  |
-| Project                   | "Project"                      | `Project` / `project`                           | `Project`                                                  | A household undertaking (furniture, renovation, …) grouping Tasks and Expenses; blocked-by edges to other Projects.                                                                                                                               |
-| Task                      | "Task"                         | `Task` / `task`                                 | `Task`                                                     | A unit of work, optionally inside a Project; blocked-by edges to other Tasks.                                                                                                                                                                     |
-| Vendor                    | "Vendor"                       | `Vendor` / `vendor`                             | `Vendor`                                                   | The roster of places money goes (name unique, website, notes). Identity only — no money.                                                                                                                                                          |
-| Purchase                  | "Purchase"                     | `Purchase` / `purchase`                         | `Purchase`                                                 | One vendor order/receipt event: identity (`vendorId` + optional `orderId`), vendor date, literal never-summed `statedTotal`, and documents. ⚠️ Renamed meaning — see below.                                                                       |
-| Expense                   | "Expense"                      | `Expense` / `expense`                           | `Expense`                                                  | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. **All money lives here.**                                                                                                                                     |
-| Financial account         | "Account"                      | `FinancialAccount` / `financialAccount`         | `FinancialAccount`                                         | A statement/receipt account identity, possibly provisional, with source aliases and `cardNumbers` — the dated history of every last-four it has presented (primary card and reissues, wallet device numbers, sibling cards, gift-card instances). |
-| Financial transaction     | "Transaction"                  | `FinancialTransaction` / `financialTransaction` | `FinancialTransaction`                                     | Settlement evidence with a signed amount, allocated across zero or more Purchases. Never spend.                                                                                                                                                   |
-| Merchant                  | "Merchant"                     | `merchant`                                      | provider fields on `FinancialTransaction` / `StatementRow` | A provider-supplied settlement label that may name a processor or marketplace. Evidence text, not canonical Vendor identity.                                                                                                                      |
-| Allocation                | "Allocation"                   | `FinancialTransactionAllocation`                | `FinancialTransactionAllocation`                           | How much of one transaction settled one Purchase. Evidence only; never spend.                                                                                                                                                                     |
-| Image                     | "Image" / "Photo"              | `Image` / `image`                               | `Image`                                                    | An R2-backed image linked to a product, location, recipe, project, or purchase (such as its invoice).                                                                                                                                             |
+The [entity overview](../../README.md#entities) owns entity definitions.
+Declarations own field and storage names. The UI aliases that need explaining
+here are **Inventory** for `InventoryEntry`, **Account** for `FinancialAccount`,
+**Transaction** for `FinancialTransaction`, and **USDA food** for an external
+FoodData Central record. **Merchant** is provider evidence text, never a Vendor.
 
 ---
 
@@ -223,7 +200,7 @@ The household project tracker (migrated from Notion) is a self-contained module:
 - **Task** — `task.projectId` is nullable by design; project-less top-level
   open tasks are the Inbox saved filter on `/tasks?view=list` (plus
   promote-to-project).
-  `task.trade` is the shared 19-slug trade/costType taxonomy (see
+  `task.trade` is the shared trade/costType taxonomy (see
   `TRADE_LABELS`), not free-form text. `taskDependency` mirrors the project
   blocked-by structure.
 - **Expense** — the spend ledger (route `/expenses`). `future = true` marks
@@ -285,14 +262,12 @@ its existing assignment intent. Individual and bulk discard require an explicit 
 
 ## Vendor vs Purchase vs Expense
 
-> ⚠️ **`Purchase` is the transaction, not the ledger line.** The ledger line — a
-> name, a cost, a date, a trade — is **`Expense`**. Any older note, commit
-> message, or agent transcript saying "purchase" about a line of spend means
-> `Expense`; `Purchase` is the _transaction_ the Expense was part of.
+A Purchase is the vendor order/receipt event; an Expense is its spend line.
+Historical notes sometimes use Purchase for what is now Expense.
 
 ```
 Vendor ──< Purchase ──< Expense
-  │            │  └── documents (PurchaseImage → Image)
+  │            │  └── documents (EntityAttachment → Image)
   │            └── orderId?, date, statedTotal?
   └── name (unique), website, notes
 ```
@@ -319,8 +294,8 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
   `vendorId` is NOT NULL; `orderId` is the vendor's own free-text order/receipt
   id, unique per vendor via a **partial-unique `(vendorId, orderId)` index where
   `orderId IS NOT NULL`** — one order is one Purchase, which is why there is no
-  `splitPurchase`. About 40% of Purchases have no order id at all (a contractor's
-  progress payment, a farmers-market run).
+  `splitPurchase`. An order id is optional, for example for a contractor progress payment or
+  farmers-market receipt.
   - `purchase.date` is the **vendor order/receipt** date; `expense.date` stays the **ledger**
     date that drives monthly buckets and project windows. An invoice dated the
     3rd can clear on the 8th, and they may differ.
@@ -471,8 +446,9 @@ it; `sourceLabel` holds the title only for a book with no Cookbook row.
   its assembled `ImportRecipe[]` JSON (so recipes can be re-derived without
   re-running the LLM), OPF metadata, and a cover image. `Book` recipes FK to it.
 - The **physical book on a shelf** would be a `Product` / `InventoryEntry`, and
-  is **deliberately not linked** to the `Cookbook` entity — the digital source
-  and the physical object are kept separate by design.
+  can be linked through `Cookbook.productId` after human confirmation.
+  The digital source and physical possession remain separate records; a title
+  match never links them automatically.
 
 ---
 
@@ -496,17 +472,7 @@ _Avoid_: confirmed identity, inventory change
 An existing record proposed as a match for something depicted in a photo. Its rank or score supports review; it does not itself confirm the match.
 _Avoid_: confirmed match, duplicate
 
-**Plant**:
-A cultivar or species the household sows or buys as a transplant. Grouped into a crop by its growing guide key; carries the household's verdict (yes, maybe, no) and cultivar days to maturity from its packet. Its Ingredient link, when set, is informational: one plant's harvest can become several ingredients.
-_Avoid_: Crop ingredient, variety text, seed listing
-
-**Planting**:
-A crop or group grown together at a Location, linked to its Plant and optionally the Product it came from. An outcome (succeeded if it yielded anything, else failed) records how it went. Planned, growing, and finished describe its lifecycle. A partial transplant creates a child Planting that retains its source and sowing history; a whole transplant keeps the same record. Herbs and trees can stay growing through many harvests.
-_Avoid_: seedling inventory, individual-plant ledger
-
-**Garden Entry**:
-A dated observation, photo batch, harvest, or recorded move at a Location, optionally associated with one Planting. The event's Location remains historical when the Planting moves. Harvest amounts are optional text and never change Inventory.
-_Avoid_: Task, inventory transaction, readiness forecast
+Plant, Planting and Garden Entry are defined under [Garden](#garden).
 
 **Growing guide**:
 Checked-in, source-specific planting windows associated with a Plant through its crop key. A guide preserves each source's microclimate and planting method. Household practice (how a crop is started, how often it is resown, crop-level days to maturity marked cited or estimate) is separate checked-in data under the same keys and never reads as a citation.
@@ -650,7 +616,7 @@ A message Cubby scanned from a member's mailbox, including unrelated messages. E
 _Avoid_: OrderMail, order mail, receipt email, scanned message
 
 **Relevance**:
-Whether an Email evidences an actual household acquisition, payment (including incoming marketplace seller payments), refund, subscription or order lifecycle, with the stage that decided it (rule, decision model, relevance model or a member's resolution). Product-specific feedback requests that confirm a real purchase or return are related even without an order number or price. Promotions and abandoned-cart or unfinished-checkout reminders are unrelated unless they independently confirm an actual purchase, completed payment or order lifecycle; product names, prices and checkout buttons alone are insufficient. Unreadable, incomplete or ambiguous evidence is uncertain. Only a related or uncertain Email keeps its content.
+Whether an Email evidences an actual household acquisition, payment (including incoming marketplace seller payments), refund, subscription or order lifecycle, with the stage that decided it (rule, decision model, relevance model or a member's resolution). Confirmed service reservations and flight bookings, including forwarded confirmations, are related even without a price or order number; accompanying promotional text does not negate confirmation. Product-specific feedback requests that confirm a real purchase or return are related even without an order number or price. Promotions and abandoned-cart or unfinished-checkout reminders are unrelated unless they independently confirm an actual purchase, completed payment or order lifecycle; product names, prices and checkout buttons alone are insufficient. Unreadable, incomplete or ambiguous evidence is uncertain. Only a related or uncertain Email keeps its content.
 _Avoid_: triage result, classification verdict
 
 **Mail discovery**:

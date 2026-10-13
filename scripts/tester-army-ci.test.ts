@@ -12,11 +12,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-test("workflow routing covers PR changes and labels, skips forks/prose, and selects scheduled/manual lanes without dependencies", async () => {
+test("workflow routing requires explicit labels, skips stale or fork heads, and preserves manual lanes", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "tester-army-ci-"));
-  let files: { filename: string; previous_filename?: string }[] = [
-    { filename: "apps/web/src/server/services/product.service.ts" },
-  ];
   const pull = {
     number: 1,
     state: "open",
@@ -25,7 +22,11 @@ test("workflow routing covers PR changes and labels, skips forks/prose, and sele
   };
   const server = createServer((request, response) =>
     response.end(
-      JSON.stringify(request.url?.includes("/files?") ? files : pull),
+      JSON.stringify(
+        request.url?.includes("/files?")
+          ? [{ filename: "apps/web/src/server/services/product.service.ts" }]
+          : pull,
+      ),
     ),
   );
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -60,11 +61,17 @@ test("workflow routing covers PR changes and labels, skips forks/prose, and sele
   try {
     copyFileSync("scripts/tester-army-ci.ts", path.join(root, "ci.ts"));
     writeFileSync(path.join(root, "package.json"), '{"type":"module"}');
-    const all = await run();
-    assert.match(all, /web=true\nios=false\nimports=true\nsimulator=false/);
+    // Code changes alone must never launch paid journeys.
     assert.match(
-      all,
-      /web-matrix=.*product-rename,receive-purchase,field-product-tags.*"lane":"import"/,
+      await run(),
+      /web=false\nios=false\nimports=false\nsimulator=false/,
+    );
+    pull.labels = [{ name: "tester-army" }];
+    const web = await run();
+    assert.match(web, /web=true\nios=false\nimports=false\nsimulator=false/);
+    assert.match(
+      web,
+      /web-matrix=.*product-rename,receive-purchase,field-product-tags/,
     );
     pull.state = "closed";
     assert.match(await run(), /web=false\nios=false\nimports=false/);
@@ -72,27 +79,23 @@ test("workflow routing covers PR changes and labels, skips forks/prose, and sele
     pull.head.sha = "new-head";
     assert.match(await run(), /web=false\nios=false\nimports=false/);
     pull.head.sha = "synthetic-head";
-    files = [
-      { filename: "apps/web/src/routes/_authenticated/runs.jobs.$id.tsx" },
-    ];
-    assert.match(await run(), /imports=true/);
-    files = [
-      {
-        filename: "docs/testing.md",
-        previous_filename: "apps/web/src/contracts/purchase-import.contract.ts",
-      },
-    ];
-    assert.match(await run(), /ios=false\nimports=true/);
-    files = [{ filename: "docs/testing.md" }];
-    assert.match(await run(), /web=false\nios=false\nimports=false/);
+    pull.labels = [{ name: "tester-army:import" }];
+    assert.match(await run(), /web=false\nios=false\nimports=true/);
     pull.labels = [{ name: "tester-army:ios" }];
     assert.match(await run(), /web=false\nios=true\nimports=false/);
+    pull.labels = [{ name: "simulator-e2e" }];
+    assert.match(
+      await run(),
+      /web=false\nios=false\nimports=false\nsimulator=true/,
+    );
+    pull.labels = [{ name: "tester-army" }, { name: "tester-army:ios" }];
+    assert.match(await run(), /web=true\nios=true\nimports=false/);
     pull.head.repo.full_name = "example/fork";
     assert.match(await run(), /ios=false/);
     env.GITHUB_EVENT_NAME = "pull_request";
     assert.match(await run(), /web=false\nios=false\nimports=false/);
     env.GITHUB_EVENT_NAME = "schedule";
-    assert.match(await run(), /web=true\nios=true\nimports=true/);
+    assert.match(await run(), /web=false\nios=false\nimports=false/);
     env.GITHUB_EVENT_NAME = "workflow_dispatch";
     env.TESTER_ARMY_JOURNEY = "tester-army-both";
     assert.match(await run(), /web=true\nios=true\nimports=false/);

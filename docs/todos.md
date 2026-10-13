@@ -54,8 +54,7 @@ history is the archive. Permanent product constraints live in the
   `capturedAt` and location for every strong perceptual-hash match across the
   whole library, including photos never uploaded from that device, but sends
   `camera`, `capturedAtOffsetMinutes`, and `placeName` as nil
-  (`PHAsset+LibraryAssetFacts.swift`, `LibrarySighting.swift`); production has
-  0 of 6,292 Images with `captureDeviceLabel` or `capturePlaceName`. For strong
+  (`PHAsset+LibraryAssetFacts.swift`, `LibrarySighting.swift`); the missing capture-device and place labels remain a data gap. For strong
   matches, load the asset's image data (may download the iCloud original) and:
   fill those gaps; store the raw ImageIO EXIF/TIFF/GPS dictionaries (minus
   MakerNote and binary values) in one jsonb on `ImageSighting`, since edits
@@ -143,6 +142,15 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
+- 🤔 🐛 **Expose actionable child-row integrity diagnostics.** A live outside
+  identifier can still point to a deleted Expense, but the public referential
+  liveness report exposes only the edge description, without affected source
+  or target handles. Expose member-eligible record handles and identifier
+  evidence before designing a reviewed public repair. Distinguish retiring
+  stale metadata from transferring a real source claim; preserve signed money,
+  provenance and historical associations, and never substitute direct SQL
+  cleanup for a supported writer.
+
 - 🤔 🐛 **Generalize accepted-original Product repair preparation lookup.**
   The reviewed mail repair requires one exact retained preparation. Non-mail
   sources can legitimately use different source and evidence checksums, and
@@ -194,17 +202,8 @@ See also the image operational passes at the end of this file.
 
 ## Import pipeline architecture
 
-[ADR 0010](adr/0010-mail-import-unattended-burn-down-interactive.md) settles the
-split: Pi runs unattended Mail import (Email only, Luna/Sol/Jev routing, existing
-paid caps), and every browser, logged-in or adaptive research task is a member's
-Claude/Codex Burn-down over the Research queue (`research-queue` saved views on
-existing data-quality gaps), writing through ordinary MCP writes that carry
-Sources. Both use the same public tools (`imports_read.mail`, `mail.search`,
-`mail.resolve`, `purchase_import.prepare/commit`, generic entity/image writes).
-The Mac browser bridge, account sync, charge and receipt hunts, unattended
-Product enrichment, the research service family and its independent assessor
-were deleted under [ADR 0010](adr/0010-mail-import-unattended-burn-down-interactive.md);
-historical Runs stay readable through generic reports.
+[ADR 0010](adr/0010-mail-import-unattended-burn-down-interactive.md) owns the
+unattended Mail import / interactive Burn-down boundary.
 
 - ⏳ 🛠️ **Reclaim retired research storage.** Migration
   `0034_drop_retired_research.sql` drops `RunFactEvidence`, `RunEvidence`,
@@ -447,9 +446,8 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   matching values.
 
 - ⏳ ✨ **Split compound ingredient lines.** Blocked upstream: `parse_ingredient`
-  is singular and keeps "Salt and pepper" whole. Scope when unblocked: 14
-  ingredients over 212 rows in 204 recipes, all with empty `amounts` (the
-  discriminator). Choose split targets from `rawLine`; route writes through
+  is singular and keeps "Salt and pepper" whole. Scope when unblocked: compound ingredient rows with empty `amounts`
+  (the discriminator). Choose split targets from `rawLine`; route writes through
   `handleSectionUpdates` sending each section's complete array; repoint the
   existing row to the first child. MCP cannot drive it (no line ids).
 
@@ -890,7 +888,7 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   decision-grading skill). Keep one global share unless a per-field gap
   exceeds the sample's noise.
 
-- 🛠️ **Complete generic derived-read execution.** The expense-derived read
+- 🤔 🛠️ **Complete generic derived-read execution.** The expense-derived read
   module owns set-based analytical totals/month/vendor costs and selected share
   relations; the existing entity-report batch shares project analytics and its
   budget summary. Remaining callers: Expense analyzer grids/facets, ledger
@@ -954,27 +952,10 @@ consume the declarations.
   Cubby's pin. Preserve extraction estimates and token-cost accounting,
   including unknown prices as `null`; do not reintroduce a local fallback table.
 
-- 🤔 ✨ **Deferred MCP agent capabilities.** Real agent work no MCP tool exposes
-  yet. Each operation declares `mcp: { omit: "deferred_capability" }` and
-  `pnpm generate` requires it to be named here
-  ([MCP exposure](agents/mcp.md#exposure)). Decide per group whether and how
-  to expose it, then drop the group when it ships:
-  - Inventory receiving: `inventory.receiveExpense`,
-    `inventory.receivingContext`, `problems.resolveArrivedFindings`.
-  - Discarding units: `inventory.bulkDiscard`, `product.discard`.
-  - Finance booking and corrections: `financialTransaction.previewBooking`,
-    `financialTransaction.commitBooking`,
-    `financialTransaction.previewBookingCorrection`,
-    `financialTransaction.commitBookingCorrection`,
-    `purchase.settlementCandidates`.
-  - Statement CSV import: `statementRow.previewCsv`, `statementRow.commitCsv`.
-  - Expense pivots: `expense.analyze`.
-  - Product merge preview: `product.mergePreview`.
-  - Meals: log a food without a recipe (`meal.saveFood`, `meal.removeFood`);
-    copy plans (`meal.duplicate`, `meal.copyRange`).
-  - Collection membership: `collection.set`, `collection.create`.
-  - ISBN create: `product.findOrCreateByCode`.
-  - Derived-field explanations: `fieldExplanation.explain`.
+- 🤔 ✨ **Deferred MCP agent capabilities.** Decide whether and how to expose
+  operations marked `mcp: { omit: "deferred_capability" }` in
+  `apps/web/src/contracts/`. The contracts own the operation inventory and
+  omission reasons; [MCP exposure](agents/mcp.md#exposure) owns the policy.
 
 - 🤔 🧪 **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
   Compare recall against the OpenAI adapter with this eval set:
@@ -1014,12 +995,6 @@ consume the declarations.
   termination around `mail-import-run.integration.test.ts`. Establish the
   pool/database teardown lifecycle before changing error handling; preserve
   failures from unexpected disconnections.
-
-The developer loop now defaults to focused headless + simulator smoke, retains
-extended domain lanes by name, uses deterministic stored-outcome read-back with
-small Tester Army navigation, and reuses verified native builds. Low-signal
-source/copy/declaration tests are removed. The shared T3
-device launcher is supported for finite simulator journeys.
 
 - 🤔 🧪 **Measure post-change routing speed and quality.** The
   2026-10-08 metadata recheck (UTC 2026-09-08 through 2026-10-07, message
@@ -1092,14 +1067,26 @@ device launcher is supported for finite simulator journeys.
   not merge everything into one relational query (its memory cost is
   documented in `repo/product/crud.ts`).
 
+- 🤔 🐛 **Diagnose interactive production pool exhaustion.** Serial MCP
+  `entity_read.get` requests for individual records can fail with SQLSTATE
+  `58000`, "Timed out while waiting for an open slot in the pool." Inspect
+  active connections, request lifetimes and pool limits before choosing a fix;
+  verify that interactive reads recover without masking database diagnostics.
+
 - 🤔 🛠️ **Summary `entity_read.get` without the detail read.** A summary get
   still runs the complete detail read (USDA, quality, ledger, breadcrumbs)
   before projecting to identity. Route it through `listFields` with an `ids`
   filter only after confirming each kind's list visibility matches `get`
   (default filters can hide rows a `get` returns).
 
-- ⏳ 🛠️ **Production query-cost repair.** Promote the specific offender a fresh
-  production trace confirms; remeasure before restructuring counters.
+- ⏳ 🛠️ **Production query-cost repair.** Promote the offender a fresh trace
+  confirms; remeasure before restructuring. Unmeasured source-inspection
+  candidates: project dashboard fanout, expense analytics aggregate scans,
+  location valuation overlap, grouped-search expansion, and graph frontier
+  batching. Whole-board and date-picker populations have deliberate completeness
+  contracts. Capture revision, input population, SQL/pool waits, server CPU,
+  bytes and usable client completion before choosing a change. Preserve signed
+  credits, subtree/scope-root semantics, ranking and deterministic graph paths.
 
 - 🟢 🛠️ **Pre-render the docs Mermaid diagrams.** Three diagrams pull ~108 client
   chunks (~4.9 MB raw, ~1.4 MB gzip, including the only >500 kB chunk, `elk`)
@@ -1108,9 +1095,8 @@ device launcher is supported for finite simulator journeys.
   renderer that runs without a browser first.
 
 - 🤔 🛠️ **Trim duplicate and unused Worker dependencies (~0.4 MB gzip).**
-  `agents` pins `@modelcontextprotocol/server`/`client` at exactly 2.0.0 next
-  to the app's 2.2.0 (~210 kB duplicate; dedupe via override if the agent's API
-  still matches); better-auth's kysely adapter bundles introspectors for every
+  `agents` and the app resolve distinct MCP SDK versions
+  (inspect the lockfile; dedupe only if the agent API still matches); better-auth's kysely adapter bundles introspectors for every
   dialect (~211 kB); `agents`' email feature pulls `mimetext` (~156 kB, stub it
   like `cfZodLocalesStub`); `vendor-identity` ships the full `tldts` suffix list
   (~259 kB). Check each with a `dist/server` size diff.
@@ -1123,7 +1109,7 @@ device launcher is supported for finite simulator journeys.
 compatibility paths still live. Printed `P-`/`L-` QR labels and stored agent
 transcript tool names (`app/purchases/agent-tool-names.ts`) are physical or
 historical records and stay readable. `oauth_client.requirePKCE` and
-`referenceId` are not legacy: Better Auth 1.7 still declares and reads them.
+`referenceId` are not legacy: the installed Better Auth declares and reads them.
 
 - 🤔 🛠️ **Require statement-row positions.** `repo/statement-row.ts` keeps the v1
   content-hash path for callers without file positions, and that path is what
@@ -1303,16 +1289,14 @@ related active work can find its deferred follow-ups.
 ## Dormant schema — revisit
 
 Built but barely used. Each stays until someone decides to use or remove it;
-counts are dated observations from the 2026-09 consolidation, not current
-usage measurements or proof of obsolescence. (The contribution ledger left
-this list: attribution prefill now reads it.)
+Recheck current readers and usage before retiring any storage.
 
 - **Historical Run machinery.** `ImportPreparedOrder` and `ImportPreparedLine`
   are active contracts. Audit legacy approval/control storage only after
   checking current readers.
 - **Review queues.** `SuggestionDismissal`, `ProductMatchCandidate`,
   `ImageDescriptionCorrection`, `OrderMailCandidateDecision`,
-  `MerchantVendorRule` (historical counts: all 0). `MailboxCursor` is active in
+  `MerchantVendorRule`. `MailboxCursor` is active in
   Gmail pagination/replay and must be preserved. Recheck against Product match
   recall, collision review, and [purchase corrections](#review-and-apply-corrections);
   an empty queue alone does not establish that its workflow is unnecessary.
@@ -1328,14 +1312,12 @@ this list: attribution prefill now reads it.)
 
 ## Operational passes
 
-- **Project existing images into search.** Never run: 27 of 6,292 Images have
-  a `SearchDocument`. Runs entirely server-side (projection, then queued
+- **Project existing images into search.** Existing images still need search coverage verification. Runs entirely server-side (projection, then queued
   embeddings through AI Gateway). Best after automatic description is on, so
   documents carry description text; call `maintenance.backfillImageSearch`
   until it reports `stopped: "complete"`.
 
-- **Finish image provenance rollout on existing photos.** 266 of 6,292 Images
-  carry provenance. Run `classifyImageProvenance` in dry-run mode, review,
+- **Finish image provenance rollout on existing photos.** Verify provenance coverage before the sweep. Run `classifyImageProvenance` in dry-run mode, review,
   apply the accepted sweep, then run `backfillImageMetadata`. Confirm each
   native install's Automatic work choice.
 

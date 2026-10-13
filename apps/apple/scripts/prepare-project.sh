@@ -15,7 +15,7 @@ if [ -n "${CUBBY_FFI_SETUP_FINGERPRINT:-}" ]; then
     echo "CubbyFFI.xcframework does not match setup-apple-ffi's fingerprint" >&2
     exit 1
   fi
-elif ! node scripts/ensure-apple-ffi.ts; then
+elif ! node scripts/ensure.ts apple-ffi; then
   if [ ! -d node_modules/nx ]; then
     echo "CubbyFFI.xcframework is stale and node_modules is missing; run \`pnpm install --frozen-lockfile\` (or the setup-apple-ffi action) first" >&2
   fi
@@ -26,7 +26,7 @@ fi
 # gitignored. The TestFlight release legs have no node_modules and download it
 # as an artifact from their Linux `Apple generated inputs` job instead.
 if [ -d node_modules/.bin ]; then
-  node scripts/generator/ensure.ts
+  node scripts/ensure.ts generate
 elif [ ! -f apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json ]; then
   echo "Generated Swift inputs are missing; run \`pnpm install\` (it runs pnpm generate) first" >&2
   exit 1

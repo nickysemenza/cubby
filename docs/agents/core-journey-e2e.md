@@ -89,24 +89,14 @@ exact-head GitHub merge gate.
 ## Available native input checks
 
 These commands exercise authored native file-selection and review scenarios.
-Both Mac `csv,photo,receipt` and `receipt,photo,csv` cases passed at clean
-`f3daf8676`, in 96.0 and 97.5 seconds respectively; both runs reuse the native app
-after source and binary fingerprint checks. Their sealed artifacts have 439 and
-464 verified checksums, matching builds, and passing final graph assertions.
-Receipt-first classification uses the Expense editor and explicit Save because
-settlement links preserve existing receipt classifications.
+The iOS input journey selects a real Files CSV, reviews account/row choices,
+uploads a synthetic photo through PhotosPicker, and approves the proposed
+Product. Stored readback checks transaction/account, original photo digest,
+no Product/Inventory write before approval, and one approved Product. Files
+navigation handles the captured OS starting states; sheet review uses the
+visible button when a phantom Toolbar's accessibility bounds cover the sheet.
 
-The iOS 27 `--input-journey` passed at clean `877c35e22` in 308.0 seconds with a
-matching build and 14 verified checksums. It selects a real Files CSV, reviews
-its explicit account and row decision, uploads the synthetic photo through
-PhotosPicker, and approves the proposed Product. Readback verifies the
-transaction amount/account, original photo digest, no Product or Inventory
-writes before approval, and exactly one approved Product. The phases share one
-prepared SDK session and state directory. The Files navigation flow handles the
-two captured OS starting states; the review tap uses the captured visible
-button because the sheet Toolbar's AX bounds span the whole sheet.
-
-These two Mac cases do not establish all six arrival orders. Live external
+A focused native scenario does not establish every arrival order. Live external
 model/provider quality and physical-device background scheduling remain
 separate. Run on an unlocked host and retain a sealed artifact.
 
@@ -127,18 +117,3 @@ job, which retains the checksum-listed evidence in its downloadable run bundle:
 ```sh
 gh workflow run e2e-journeys.yaml --ref "$(git branch --show-current)" -f journey=simulator-inputs
 ```
-
-## Delivery evidence
-
-[PR #1491](https://github.com/nickysemenza/cubby/pull/1491) was merged at
-`1dfbae716a48b4a22de752d1da3b350c19804405`. The exact PR head
-`51c179035a3258dce0e3621e4ab1472846a5dbcc` passed
-[CI](https://github.com/nickysemenza/cubby/actions/runs/37048868431), and the
-merged revision passed [deployment](https://github.com/nickysemenza/cubby/actions/runs/37048929595).
-
-The production rollout was verified separately: processing enabled and resumed,
-a bounded description-only batch ready with no failures, current cloud prompt and
-schema revision preferred in sampled immutable histories, and durable recipe
-totals refreshed with no stale totals or persisted/live drift. A synthetic older
-Apple 2.2 client was refused with HTTP 426. Physical-device background-window
-acceptance remains separate from these server operations and native package checks.

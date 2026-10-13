@@ -119,6 +119,8 @@ export async function identifyOriginalImage(
     schemaRevision: IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION,
     normalizationRevision: 1,
     request: {
+      // Clef choice requests have no chat messages.
+      messages: [],
       systemPrompts: [
         "Identify visible subject and propose existing Products from independent catalog evidence. Never change identity or inventory.",
       ],

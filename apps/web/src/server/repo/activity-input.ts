@@ -1,5 +1,6 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 
+import type { AiChatRequest } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import {
   imageProcessingAttempt,
@@ -25,17 +26,26 @@ export async function recordImageDescriptionInput(
     promptRevision: number;
     schemaRevision: number;
     normalizationRevision: number;
-    request: { systemPrompts: string[] };
+    request: Pick<AiChatRequest, "systemPrompts" | "messages">;
     cached: boolean;
     renditionKey?: string;
     renditionHash?: string;
   },
 ) {
   const { attemptId, request, ...metadata } = input;
+  const userPrompt = request.messages
+    .flatMap(({ content }) =>
+      typeof content === "string"
+        ? [content]
+        : content.flatMap((part) =>
+            part.type === "text" ? [part.content] : [],
+          ),
+    )
+    .join("\n");
   await getDb(db)
     .update(imageProcessingAttempt)
     .set({
-      diagnostics: sql`coalesce(${imageProcessingAttempt.diagnostics}, '{}'::jsonb) || ${JSON.stringify({ ...metadata, systemPrompts: request.systemPrompts, userPrompt: "Analyze the original image. Do not describe a generated cutout.", inputAvailability: input.renditionKey ? "recorded" : input.cached ? "historical input unavailable" : "input not yet recorded" })}::jsonb`,
+      diagnostics: sql`coalesce(${imageProcessingAttempt.diagnostics}, '{}'::jsonb) || ${JSON.stringify({ ...metadata, systemPrompts: request.systemPrompts, userPrompt, inputAvailability: input.renditionKey ? "recorded" : input.cached ? "historical input unavailable" : "input not yet recorded" })}::jsonb`,
     })
     .where(eq(imageProcessingAttempt.id, attemptId));
 }

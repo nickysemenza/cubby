@@ -316,7 +316,7 @@ schemes:
             rm -f "$marker"
             cd "${PROJECT_DIR}/../.."
             [ -d node_modules/.bin ] || exit 0
-            node scripts/generator/ensure.ts > "$marker" 2>&1 && rm -f "$marker"
+            node scripts/ensure.ts generate > "$marker" 2>&1 && rm -f "$marker"
       targets:
         Cubby-iOS: all
         Cubby-iOS-Tests: [test]

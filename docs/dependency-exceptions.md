@@ -1,40 +1,22 @@
 # Dependency exceptions
 
-`pnpm audit:security` uses pnpm's native production-only audit and rejects high
-and critical advisories. There are no security advisory exemptions. The small
-set of non-security exceptions below exists because upstream peer metadata
-or transitive deprecations currently lags versions that Cubby verifies directly.
-Review these by **2026-10-10** (90 days from the cleanup), and remove an exception
-as soon as the upstream range is corrected.
+Manifests, `pnpm-workspace.yaml`, and the lockfile own pins, peer exceptions and
+resolved transitive versions. Review these exceptions when upgrading their
+owner; remove them when upstream metadata is corrected. Advisory audits and
+deduplication are dependency maintenance, not validation gates.
 
-## Direct pins and peer ranges
+- Better Auth UI's optional API-key family has narrower `better-call` peer
+  metadata than the resolved UI dependency. Cubby uses no UI API-key feature.
+  Its React Email dependencies are transitive, not directly imported.
+- `@triplit/logger` is runtime-only but declares a TypeScript peer range that
+  lags the compiler Cubby verifies.
+- Wrangler and Sentry declare different Workers Types peer majors. Regenerate
+  bindings and typecheck when changing either; the workspace owns the accepted range.
+- The isolated workerd test package pins the Vitest version required by
+  Cloudflare's plugin because it uses Vitest internals. Application/library
+  tests use their own manifest versions.
+- Build-only `@esbuild-kit/*`, OpenTelemetry's `glob`, and transitive `uuid`
+  dependencies remain upstream maintenance concerns. A blanket override can
+  replace an API with an incompatible major inside another package.
 
-- `@daveyplate/better-auth-ui` is pinned to `3.4.0`. Its `@better-auth/api-key`
-  transitive still peers `better-call@1.3.7` while the UI resolves `better-call`
-  2.x; Cubby uses no API-key features, so the peer exception accepts major 2.
-  The pin also brings the deprecated React Email 1.x component family
-  transitively; Cubby does not import those packages directly.
-- `@triplit/logger@0.0.3` declares TypeScript `^5`, although it is runtime-only
-  logging code and Cubby typechecks clean on TypeScript 7.
-  `peerDependencyRules.allowedVersions.typescript` accepts versions 5–7 while
-  this metadata catches up.
-- Wrangler 4.112 requires Workers Types 5 while Sentry 10.66 still declares
-  Workers Types 4. Cubby uses Workers Types 5, regenerates all Worker bindings,
-  and typechecks clean on TypeScript 7. The peer exception accepts only majors 4–5.
-- `@cubby/web-worker-tests` pins Vitest 4.1.10 because the latest Cloudflare
-  Vitest plugin still peers on `vitest ^4.1.0` and depends on its internal APIs.
-  The isolated package runs only the workerd suites; every application and
-  library test suite runs Vitest 5.
-
-## Deprecated transitive packages
-
-- `@esbuild-kit/*` comes from `drizzle-kit` and is build-only.
-- `glob@10` comes through OpenTelemetry's GCP resource detector.
-- `uuid@8` comes from `@hookform/devtools`; `uuid@10` comes from the Vite
-  top-level-await build plugin. Neither is an application dependency.
-- React Email 1.x subpackages come solely from the pinned Better Auth UI package.
-
-These packages have no active production advisory under `pnpm audit --prod`.
-They are documented rather than overridden: an override could substitute an API-
-incompatible major inside another package. Renovate should continue proposing
-upstream updates normally.
+Renovate continues proposing upstream updates; pins do not excuse stale metadata.

@@ -11,7 +11,6 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
  * shortlist for the model to pick from.
  */
 import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/features";
-import type { AiSelectionSpec } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 import { findSemanticEntityCandidates } from "~/server/repo/entity-embedding-search";
 import {
@@ -98,21 +97,7 @@ export async function buildMergeShortlist(
   return [...byId.values()].slice(0, limit);
 }
 
-const MERGE_RULES = `You decide whether a recipe ingredient is the SAME purchasable item as an existing ingredient, so the two can be merged (deduplicated).
-
-Merge ONLY when they are the same thing you would buy — synonyms, alternate names, or spelling/case variants. Examples to merge: scallion = green onion; cilantro = coriander (leaf); garbanzo beans = chickpeas; confectioners' sugar = powdered sugar.
-
-NEVER merge distinct variants a cook treats differently: light vs dark brown sugar; whole vs 2% milk; salted vs unsalted butter; fresh vs dried herbs.
-
-Each candidate is shown as "id [N products]: name". Prefer a target that already has products — the merge inherits them.
-
-Decline when unsure. A wrong merge is destructive, so be conservative.`;
-
-export const ingredientMergeSpec: AiSelectionSpec<MergeShortlistEntry> = {
+export const ingredientMergeSpec = {
+  ...INGREDIENT_MERGE_FEATURE.selection,
   feature: INGREDIENT_MERGE_FEATURE,
-  rules: MERGE_RULES,
-  idOf: (entry) => entry.id,
-  renderLine: (entry) =>
-    `${entry.id} [${entry.productCount} products]: ${entry.name}`,
-  maxCandidates: 20,
 };

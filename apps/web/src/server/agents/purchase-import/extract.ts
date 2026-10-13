@@ -30,22 +30,16 @@ import {
   PURCHASE_IMPORT_REPAIR_FEATURE,
 } from "~/server/ai/features";
 import { gatewayFetch } from "~/server/ai/gateway";
-import { type AiMessage, runStructuredFeature } from "~/server/ai/run-feature";
+import {
+  SUM_MISMATCH_ISSUE,
+  type PurchaseAuditRenderedBatch,
+} from "~/server/ai/prompts/purchase-import";
+import { runStructuredFeature } from "~/server/ai/run-feature";
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
 import { image } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
-
-import { purchaseImportPromptText } from "./prompt-text.gen";
-import {
-  purchaseAuditPrompt,
-  purchaseExtractionPrompt,
-  type PurchaseAuditRenderedBatch,
-} from "./prompts";
-
-const SUM_MISMATCH_ISSUE =
-  "Lines do not equal the printed grand total; retain the candidate and return needs_review with sum_mismatch.";
 
 const validateExtraction = (output: ImportExtractionOutcome) => {
   const candidate = output.candidate;
@@ -79,7 +73,9 @@ export const extractPurchaseCapture = async (
   return extractPurchaseText(
     {
       ...args,
-      request: purchaseExtractionPrompt(browserCapture.parse(args.capture)),
+      request: PURCHASE_IMPORT_EXTRACTION_FEATURE.request(
+        browserCapture.parse(args.capture),
+      ),
     },
     ports,
   );
@@ -148,7 +144,7 @@ const extractPurchaseText = async (
   args: {
     db: Database;
     runId: string;
-    request: ReturnType<typeof purchaseExtractionPrompt>;
+    request: ReturnType<typeof PURCHASE_IMPORT_EXTRACTION_FEATURE.request>;
     screenshotImageId?: string | null;
   },
   ports = { runStructured: runStructuredFeature },
@@ -173,16 +169,15 @@ const extractPurchaseText = async (
         columns: { key: true },
       })
     : null;
-  const repairMessages = purchaseRepairMessages(
-    request.messages,
-    validation.issues,
-    first,
-    screenshot ? getR2PublicUrl(screenshot.key) : null,
-  );
   const repaired = normalizeImportExtractionModelOutput(
     await ports.runStructured(
       PURCHASE_IMPORT_REPAIR_FEATURE,
-      { systemPrompts: request.systemPrompts, messages: repairMessages },
+      PURCHASE_IMPORT_REPAIR_FEATURE.request(
+        request,
+        validation.issues,
+        first,
+        screenshot ? getR2PublicUrl(screenshot.key) : null,
+      ),
       {
         db: args.db,
         operation: "purchaseImport.repair",
@@ -207,71 +202,6 @@ export function settleRepairedExtraction(
     candidate: repaired.candidate,
     reason: "sum_mismatch",
     detail: validation.issues.join(" ").slice(0, 2_000),
-  };
-}
-
-function purchaseRepairMessages(
-  originalMessages: readonly AiMessage[],
-  issues: readonly string[],
-  previous: ImportExtractionOutcome,
-  screenshotUrl: string | null,
-): AiMessage[] {
-  return [
-    ...originalMessages,
-    {
-      role: "user",
-      content: [
-        ...(screenshotUrl
-          ? [
-              {
-                type: "image" as const,
-                source: { type: "url" as const, value: screenshotUrl },
-              },
-            ]
-          : []),
-        {
-          type: "text",
-          content: `The prior extraction failed validation:\n${issues.map((issue) => `- ${issue}`).join("\n")}\nRepair it once using the screenshot when present. If the visible lines still cannot equal the printed grand total, retain the candidate and return needs_review with reason sum_mismatch.\n\nPrior extraction:\n${JSON.stringify(previous)}`,
-        },
-      ],
-    },
-  ];
-}
-
-const exampleInvalidExtraction: ImportExtractionOutcome = {
-  status: "ready",
-  candidate: {
-    orderId: "example-1",
-    orderedAt: null,
-    merchant: "Example Tools",
-    currency: "USD",
-    printedGrandTotal: 80,
-    lines: [
-      { title: "Cordless drill kit", amount: 79.95, lineKind: "principal" },
-    ],
-    payments: [],
-    allShipmentsDelivered: null,
-  },
-};
-
-/**
- * An AI-only probe for the repair prompt, without an extraction write: the
- * smoke run and the routing eval send the exact repair turn production sends
- * after `previous` fails validation.
- */
-export function purchaseRepairRequest(
-  capture: BrowserCapture,
-  previous: ImportExtractionOutcome = exampleInvalidExtraction,
-) {
-  const request = purchaseExtractionPrompt(capture);
-  return {
-    systemPrompts: request.systemPrompts,
-    messages: purchaseRepairMessages(
-      request.messages,
-      [SUM_MISMATCH_ISSUE],
-      previous,
-      null,
-    ),
   };
 }
 
@@ -307,7 +237,7 @@ async function recoverPurchaseAudit(
   ports: PurchaseAuditPorts,
 ) {
   const started = Date.now();
-  const request = purchaseAuditPrompt(args.renderedBatch);
+  const request = PURCHASE_IMPORT_AUDIT_FEATURE.request(args.renderedBatch);
   const schema = z.toJSONSchema(importAuditModelOutput);
   // Anthropic accepts the same portable object as OpenAI once the generated
   // dialect marker is removed. No union or numeric bounds reach the provider.
@@ -376,7 +306,7 @@ async function recoverPurchaseAudit(
 
 async function requestAuditRecovery(
   fetchThroughGateway: typeof fetch,
-  request: ReturnType<typeof purchaseAuditPrompt>,
+  request: ReturnType<typeof PURCHASE_IMPORT_AUDIT_FEATURE.request>,
   outputSchema: Omit<z.core.JSONSchema.BaseSchema, "$schema">,
 ) {
   const response = await fetchThroughGateway(
@@ -419,7 +349,7 @@ export const auditPurchaseImportBatch = async (
     return normalizeImportAuditModelOutput(
       await ports.runStructured(
         PURCHASE_IMPORT_AUDIT_FEATURE,
-        purchaseAuditPrompt(args.renderedBatch),
+        PURCHASE_IMPORT_AUDIT_FEATURE.request(args.renderedBatch),
         {
           db: args.db,
           operation: "purchaseImport.audit",
@@ -449,34 +379,7 @@ export const extractPurchaseEvidence = async (args: {
   normalizeImportExtractionModelOutput(
     await runStructuredFeature(
       PURCHASE_IMPORT_RECEIPT_FEATURE,
-      {
-        systemPrompts: [purchaseImportPromptText.receiptExtraction],
-        messages: [
-          {
-            role: "user",
-            content: [
-              args.mediaType === "application/pdf"
-                ? {
-                    type: "document",
-                    source: {
-                      type: "url",
-                      value: args.evidenceUrl,
-                      mimeType: args.mediaType,
-                    },
-                  }
-                : {
-                    type: "image",
-                    source: {
-                      type: "url",
-                      value: args.evidenceUrl,
-                      mimeType: args.mediaType,
-                    },
-                  },
-              { type: "text", content: "Extract this confirmed receipt." },
-            ],
-          } satisfies AiMessage,
-        ],
-      },
+      PURCHASE_IMPORT_RECEIPT_FEATURE.request(args),
       {
         db: args.db,
         operation: "purchaseImport.extractReceipt",
@@ -486,13 +389,3 @@ export const extractPurchaseEvidence = async (args: {
       },
     ),
   );
-
-export const orderMailRequest = (args: {
-  sender: string;
-  subject: string;
-  receivedAt: string;
-  content: unknown;
-}) => ({
-  systemPrompts: [purchaseImportPromptText.orderMail],
-  messages: [{ role: "user" as const, content: JSON.stringify(args) }],
-});

@@ -106,9 +106,8 @@ test("changes route to the lanes whose tasks read them", () => {
     lanesFor("apps/apple/scripts/example.sh", "deleted").includes("docs"),
   );
   assert.deepEqual(lanesFor("apps/apple/README.md"), ["docs"]);
-  // Generation reads deferred MCP capabilities from the TODO list, and the
-  // generated Swift is an Apple input.
-  assert.deepEqual(lanesFor("docs/todos.md"), ["apple", "docs", "validation"]);
+  // Backlog prose does not participate in generation.
+  assert.deepEqual(lanesFor("docs/todos.md"), ["docs"]);
   // The Worker bundles purchase-import prompts.
   assert.deepEqual(
     lanesFor(".claude/skills/purchase-import/references/vendor.md"),
@@ -191,9 +190,8 @@ test("each lane's ci.yaml commands run only tasks routed to that lane", async ()
     });
     return tasks;
   };
-  // Run alongside Validation's checks: format is routed to the docs lane,
-  // and the advisory audit is uncached.
-  const elsewhere = new Set(["cubby-checks:format", "cubby-checks:security"]);
+  // Run alongside Validation's checks: format is routed to the docs lane.
+  const elsewhere = new Set(["cubby-checks:format"]);
   const commands: [string, string][] = [];
   const workflow = readFileSync(".github/workflows/ci.yaml", "utf8");
   for (const job of workflow.split(/^ {2}(?=[\w-]+:$)/mu)) {

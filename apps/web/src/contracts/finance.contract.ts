@@ -63,7 +63,6 @@ export const financialTransactionContract = defineContract(
     previewBookingCorrection: query({
       mcp: {
         omit: "deferred_capability",
-        todo: "Deferred MCP agent capabilities",
       },
       input: financialBookingCorrectionInput,
       output: financialBookingCorrectionPreview,
@@ -81,7 +80,6 @@ export const financialTransactionContract = defineContract(
     commitBookingCorrection: mutation({
       mcp: {
         omit: "deferred_capability",
-        todo: "Deferred MCP agent capabilities",
       },
       input: financialBookingCorrectionPreview,
       output: financialBookingCorrectionResult,
@@ -96,7 +94,6 @@ export const financialTransactionContract = defineContract(
     previewBooking: query({
       mcp: {
         omit: "deferred_capability",
-        todo: "Deferred MCP agent capabilities",
       },
       input: financialBookingInput,
       output: financialBookingPreview,
@@ -107,7 +104,6 @@ export const financialTransactionContract = defineContract(
     commitBooking: mutation({
       mcp: {
         omit: "deferred_capability",
-        todo: "Deferred MCP agent capabilities",
       },
       input: financialBookingPreview,
       output: financialBookingResult,

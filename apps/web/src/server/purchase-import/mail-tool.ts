@@ -494,7 +494,11 @@ function needsResolutionObservation(
 export async function settleMail(
   db: Database,
   input: {
-    mail: RetainedMail;
+    mail: Pick<
+      RetainedMail,
+      "ledgerPartyId" | "mailboxId" | "messageId" | "rawChecksum"
+    > &
+      Partial<Pick<RetainedMail, "id">>;
     importRunId: RunId | null;
     status: "completed" | "blocked";
     classification?: "unrelated";
@@ -502,6 +506,10 @@ export async function settleMail(
     detail: string;
   },
 ) {
+  if (input.importRunId && !input.mail.id)
+    throw new Error(
+      "A delegated Email settlement requires its retained source.",
+    );
   return withTransaction(db, async (tx) => {
     const identity = and(
       eq(emailTable.ledgerPartyId, input.mail.ledgerPartyId),
@@ -531,6 +539,15 @@ export async function settleMail(
       .for("update");
     if (!originalEmail || originalEmail.runId !== initialEmail.runId)
       throw new Error("Email assignment changed before settlement.");
+    if (
+      !input.mail.id &&
+      (originalEmail.checksum !== input.mail.rawChecksum ||
+        originalEmail.classification !== "unrelated" ||
+        originalEmail.orderMailId !== null)
+    )
+      throw new Error(
+        "This disposed Email changed; read it again before resolving.",
+      );
     const previous = input.classification
       ? await snapshotStoredEmailPrediction(tx, originalEmail)
       : null;
@@ -574,7 +591,7 @@ export async function settleMail(
         ),
       });
     }
-    if (input.importRunId) {
+    if (input.importRunId && input.mail.id) {
       if (settledEmails.length !== 1)
         throw new Error("Email assignment changed before settlement.");
       const emailId = settledEmails[0]!.id;
@@ -634,6 +651,7 @@ async function disposedUnrelatedMail(
       ledgerPartyId: emailTable.ledgerPartyId,
       mailboxId: emailTable.mailboxId,
       messageId: emailTable.messageId,
+      rawChecksum: emailTable.checksum,
     })
     .from(emailTable)
     .where(
@@ -664,12 +682,22 @@ export async function resolveMail(
   const settled = await withTransactionDatabase(db, async (tdb) => {
     if (disposition.kind === "unrelated") {
       const disposed = await disposedUnrelatedMail(tdb, input, actor);
-      if (disposed)
+      if (disposed) {
+        // A model's disposed negative is not yet the member's reviewed decision.
+        if (!actor.runId)
+          await settleMail(tdb, {
+            mail: disposed,
+            importRunId: null,
+            status: "completed",
+            classification: "unrelated",
+            detail: `unrelated: ${disposition.reason}`,
+          });
         return {
           mail: disposed,
           purchaseIds: [],
           status: "completed" as const,
         };
+      }
     }
     const { mail, importRunId } = await ownedMail(tdb, input, actor, "update");
     if (mail.rawChecksum !== input.checksum)

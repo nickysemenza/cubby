@@ -1,7 +1,7 @@
 # Quality and local diagnostics
 
 `pnpm typecheck:web` checks web app code for web-only work; it leaves out
-tests and test tooling, about 20% faster. When tests or test tooling change,
+tests and test tooling. When tests or test tooling change,
 include `pnpm typecheck` as an affected check: passing Vitest does not
 prove those files typecheck. This checks the full program that `pnpm check` and
 CI run. Tests use the configured TypeScript libraries; runtime support for an
@@ -9,14 +9,9 @@ API does not establish that the configured libraries expose it.
 Use these entry points so generation and WASM are ready. They run `tsc`
 directly; there is no machine-wide typecheck queue. Preserve incremental
 build-info within a checkout, reuse unchanged results, and coordinate heavy
-checks across sessions: a cold web program measured about 5.8 GB resident
-([dated measurements](../reports/local-check-performance.md#typechecking)).
-`pnpm check` runs the root
-static checks, type checking, entity freshness, Knip, and script types.
-`pnpm check:all` adds bindings, OpenAPI, orchestration tests, security checks,
-and calendar Worker tests. CI runs `pnpm dedupe:check` when code validation is
-selected; use it
-locally when diagnosing dependency duplication.
+checks across sessions because cold typechecks can consume substantial memory.
+The root `package.json` owns each static-check command composition.
+Dependency advisory audits and deduplication are maintenance, not validation gates.
 
 The `knip` gate also runs `pnpm knip:production`, which fails on a file or
 dependency the production graph never reaches. A script invoked only by a hook,
@@ -69,7 +64,7 @@ Lint policy the exceptions follow:
   ```
 
 Generated output is never committed. `pnpm install`, `build`, `typecheck` and
-every test entry point run `scripts/generator/ensure.ts`, which runs the
+every test entry point run `scripts/ensure.ts generate`, which runs the
 Nx-cached `cubby-checks:generate` target (a hit also restores missing output);
 `pnpm generate` forces a run. The
 Swift OpenAPI client is built by the swift-openapi-generator SwiftPM plugin

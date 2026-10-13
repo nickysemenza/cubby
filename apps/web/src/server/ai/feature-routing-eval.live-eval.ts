@@ -56,8 +56,8 @@ process.env.AI_GATEWAY_API_KEY = apiKey;
 // reaches the gateway loads only after the key is in place; a static import
 // would be hoisted above it and fail every call as a "Connection error".
 const [
-  { purchaseRepairRequest, settleRepairedExtraction },
-  { purchaseAuditPrompt },
+  { settleRepairedExtraction },
+  { purchaseAuditPrompt, purchaseRepairRequest },
   { buildRecipeFlowRequest },
   { piCallTarget },
   { assessRecipeFlowCandidate, flowPromptInput },
@@ -69,8 +69,8 @@ const [
   { runStructuredFeature },
 ] = await Promise.all([
   import("~/server/agents/purchase-import/extract"),
-  import("~/server/agents/purchase-import/prompts"),
-  import("~/server/clients/ai"),
+  import("~/server/ai/prompts/purchase-import"),
+  import("~/server/ai/prompts/recipe-flow"),
   import("~/server/ai/adapters"),
   import("~/server/services/recipe-flow/recipe-flow.service"),
   import("./features"),

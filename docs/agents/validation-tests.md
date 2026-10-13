@@ -1,17 +1,9 @@
 # Test tiers and runtime traps
 
-Prefer E2E for complete behavior through the built browser application or the
-native client. Keep a focused unit, UI, PostgreSQL, or Workers test when it
-catches a concrete failure the available E2E suites do not reasonably observe.
-Before changing isolated behavior, record its failure modes and run a failing
-regression test before editing the implementation, including declarations, SQL
-bindings, and compiler guards. A delegated lane returns the pre-change failing
-command and relevant output; tests added after implementation do not satisfy
-this requirement. For `.tsx` changes, choose browser E2E when it observes
-the behavior; use the UI or preview tier for distinct rendering or layout
-failures. Keep pure logic imported by node tests in alias-free `.ts` files.
-Temporary subprocess workspaces declare their module type explicitly, matching
-the real consumer; do not rely on the local Node version's module detection.
+[Validation policy](validation.md) owns test selection, failure-first evidence,
+retention, delivery, and delegated check results. This page owns runtime traps.
+Keep pure logic imported by Node tests in alias-free `.ts` files. Temporary
+subprocess workspaces declare their module type explicitly, matching the consumer.
 
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,
@@ -166,13 +158,9 @@ queue consumer to one of:
 - `dropped`: `local-offline-peers` acknowledges and discards each message.
 - `unconsumed`: no consumer; messages stay queued.
 
-| Profile          | Used by                                   | `cubby-background` | `cubby-telemetry` | `cubby-purchase-agent` | Extra peers                    | Harness lock |
-| ---------------- | ----------------------------------------- | ------------------ | ----------------- | ---------------------- | ------------------------------ | ------------ |
-| `offline`        | browser default, simulator, Tester Army   | dropped            | dropped           | unconsumed             | none                           | no           |
-| `gmail`          | `gmail.*.spec.ts` browser specs           | real               | dropped           | unconsumed             | local Google provider          | no           |
-| `native-import`  | Mac import lane                           | dropped            | dropped           | real                   | queue producer, model, gateway | yes          |
-| `purchase-agent` | agent scenarios, live evals, browser spec | unconsumed         | real              | real                   | queue producer, model, gateway | yes          |
-| `coupled`        | coupled Tester Army journeys              | real               | real              | real                   | queue producer, model, gateway | yes          |
+`WORKERD_PROFILES` owns profile names, peers, queue modes and harness-lock
+selection. Choose the declared profile that exercises the real boundary rather
+than adding a spec-specific worker option.
 
 Every profile includes `local-offline-peers` as the sink for dropped queues.
 Durable Objects live in the built Worker and are real in every profile; the
@@ -186,10 +174,8 @@ probes each profile's queues in a running harness.
 A browser spec may declare `objectStoragePublicUrl` for an HTTPS source identity
 while its bucket remains local. Its asset transport must forward requests to the
 actual stored bytes; do not substitute an image or loosen capture URL guards.
-The visible purchase-research journey uses that seam for retained catalog-image
-reuse, real queue delivery, automatic child research, and UI provenance. Its
-model decisions and Mac captures are scripted; it does not evaluate live research
-quality, remote retailer image downloads, or Gmail discovery.
+Scripted model/capture seams verify orchestration and source transport, not live
+research quality, remote downloads or Gmail authorization.
 
 The `Purchase import agent` Playwright project
 (`tests/e2e/purchase-import-run.spec.ts`,

@@ -15,7 +15,7 @@ contracts; a small browser or Tester Army journey establishes navigation,
 editing and supported visible outcomes. AI chooses a path through the real UI;
 deterministic read-back establishes whether the action worked. Previews cover
 presentation states, not writes or navigation. Live model journeys always use Jev decisions through Cloudflare AI Gateway;
-informational PR routing, weekly uncached coverage and manual dispatch control
+explicit PR labels and manual dispatch control
 when they run (see [Tester Army](../tester-army.md)). They do not replace the
 deterministic content-hash merge gate.
 
@@ -122,8 +122,7 @@ against production: the repository is public and attached images are too. Save
 `page.screenshot({ path })` files from a throwaway Playwright spec or the
 affected scenario, and delete the throwaway spec before committing. Reference
 each image in the body by its local path and pass the same path to
-`gh pr create --attach` or `gh pr edit --attach` (gh 2.102 has the flag; 2.96
-does not); the CLI uploads it and rewrites the reference. A before image (from
+`gh pr create --attach` or `gh pr edit --attach` (verify support in the installed `gh pr create --help` / `gh pr edit --help`); the CLI uploads it and rewrites the reference. A before image (from
 `main` or a run before the first edit) helps when the change is a comparison.
 Do not open the images to check them: attaching a saved file costs no context.
 

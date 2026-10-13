@@ -34,7 +34,7 @@ export type LaneSpec = {
   deleted?: string[];
 };
 export const LANES = {
-  // Named Validation steps, less the uncached audit and deduplication checks.
+  // Named Validation steps.
   validation: {
     tasks: [
       "cubby-checks:generate",
@@ -78,7 +78,7 @@ const RUNTIME = new Map<string, RuntimeRoute>([
   ["rustc -V", {}],
   // Local Cargo packages (rust-fingerprint.ts) plus the wasm toolchain.
   [
-    "node scripts/ensure-wasm.ts --fingerprint",
+    "node scripts/ensure.ts wasm --fingerprint",
     {
       files: [
         "Cargo.{toml,lock}",
@@ -88,7 +88,6 @@ const RUNTIME = new Map<string, RuntimeRoute>([
       ],
     },
   ],
-  ["git hash-object docs/todos.md", { files: ["docs/todos.md"] }],
   [
     "git ls-files -z -co --exclude-standard -- docs/README.md docs/guide .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256",
     {
