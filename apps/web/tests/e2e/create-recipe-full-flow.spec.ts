@@ -58,13 +58,10 @@ test.describe("Create Recipe - Full Flow", () => {
     const ingredientsSidebar = page
       .locator("aside")
       .filter({ has: page.getByText("Ingredients") });
-    await expect(
-      ingredientsSidebar
-        .getByRole("listitem")
-        .filter({
-          has: page.getByRole("link", { name: ingredientName, exact: true }),
-        }),
-    ).toBeVisible();
+    const ingredientRow = ingredientsSidebar.getByRole("listitem").filter({
+      has: page.getByRole("link", { name: ingredientName, exact: true }),
+    });
+    await expect(ingredientRow).toBeVisible();
 
     // Switch to the Data view (table sub-mode) for cost/weight verification.
     // Exact match avoids colliding with the "Data" nav-group dropdown trigger.
