@@ -467,6 +467,7 @@ describe("commitPhotoGroup", () => {
       ctx.db,
       makeProductInput({
         name: "Synthetic Identity Shirt — Green, Large",
+        model: null,
         externalIds: [],
       }),
       ctx.actor,

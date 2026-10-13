@@ -56,14 +56,23 @@ describe("data quality: list filters, sort and hydration agree", () => {
     // + price all missing, so the weakest score.
     const weak = await createProductFixture(
       ctx.db,
-      makeProductInput({ name: "DQ weak", manufacturer: "(unspecified)" }),
+      makeProductInput({
+        name: "DQ weak",
+        manufacturer: "(unspecified)",
+        model: null,
+      }),
       TEST_ACTOR,
     );
     // Stocked with a maker and a price: still missing external id, category,
     // image — a middling score.
     const middling = await createProductFixture(
       ctx.db,
-      makeProductInput({ name: "DQ middling", manufacturer: "Acme", price: 4 }),
+      makeProductInput({
+        name: "DQ middling",
+        manufacturer: "Acme",
+        price: 4,
+        model: null,
+      }),
       TEST_ACTOR,
     );
     // Neither stocked nor purchased: still scored on catalog identity (only
@@ -72,6 +81,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       ctx.db,
       makeProductInput({
         name: "DQ catalog unbranded",
+        model: null,
         manufacturer: "(unspecified)",
       }),
       TEST_ACTOR,
@@ -230,6 +240,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       ctx.db,
       makeProductInput({
         name: "DQ sold only",
+        model: null,
         manufacturer: "Acme",
         categoryId: category.output.id,
       }),
@@ -324,7 +335,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     ) =>
       createProductFixture(
         ctx.db,
-        makeProductInput({ name, manufacturer: "Acme", ...input }),
+        makeProductInput({ name, manufacturer: "Acme", model: null, ...input }),
         TEST_ACTOR,
       );
     const catalog = await make("DQ catalog only", { categoryId });

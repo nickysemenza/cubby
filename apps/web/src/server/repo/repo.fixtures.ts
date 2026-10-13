@@ -81,7 +81,8 @@ type ProductFixtureInput<
 
 /**
  * A product create input with sensible defaults; override what the test cares
- * about. The ingredient brand is preserved so the same test-only builder can
+ * about. Missing-identifier scenarios must override the default model with null.
+ * The ingredient brand is preserved so the same test-only builder can
  * seed the UUID-only repo boundary or exercise the shortcode-only router.
  */
 export const makeProductInput = <
