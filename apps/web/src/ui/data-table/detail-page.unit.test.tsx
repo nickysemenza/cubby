@@ -144,7 +144,7 @@ describe("continuous detail sections", () => {
     expect(screen.getByText("Story content")).toBeVisible();
   });
 
-  it("preserves supporting hash targets and offers the same compact jump action", async () => {
+  it("preserves section hash targets and offers the same compact jump action", async () => {
     renderDetail({
       detailSections: [
         ...sections,

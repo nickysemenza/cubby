@@ -86,7 +86,7 @@ export interface DetailSection {
   icon: React.ElementType;
   /** Explicit narrative role; there is deliberately no automatic default. */
   placement: DetailPlacement;
-  /** Supporting sections join Evidence unless an explicit workspace owns them. */
+  /** `false` places the section in Evidence unless an explicit workspace owns it. */
   overview?: boolean;
   workspace?: "overview" | "work" | "evidence" | "relations";
   /** Exclude low-value/debug regions from the jump index. */
@@ -466,7 +466,12 @@ function DetailAnchorIndex({
                         selectMenuTarget(section.id);
                       }}
                     >
-                      <span className="min-w-0 flex-1">{section.title}</span>
+                      <span
+                        className="min-w-0 flex-1 truncate"
+                        title={section.title}
+                      >
+                        {section.title}
+                      </span>
                       {sectionStates.get(section.id)?.count !== undefined && (
                         <span
                           aria-hidden
