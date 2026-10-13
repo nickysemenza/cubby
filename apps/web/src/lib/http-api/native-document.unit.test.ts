@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 
 import { test } from "vitest";
 
-import { projectNativeDocument } from "../../../../../scripts/generator/http-api/native-document.ts";
+import {
+  nativeComponents,
+  projectNativeDocument,
+} from "../../../../../scripts/generator/http-api/native-document.ts";
 import type { OpenApiDocument } from "../../../../../scripts/generator/http-api/openapi.ts";
 
 const document = (
@@ -82,21 +85,26 @@ const document = (
     },
   }) satisfies OpenApiDocument;
 
+const project = (
+  source: ReturnType<typeof document>,
+  nativeOperations: readonly string[],
+) => projectNativeDocument(source, nativeOperations, source.components.schemas);
+
 // A full HTTP document churns the Apple build for unused contracts; dropping
 // indirect refs instead silently breaks the generated native wire types.
 test("non-native shape changes leave the native document unchanged", async () => {
   const before = document();
   const changed = document("object", "integer");
   assert.deepEqual(
-    await projectNativeDocument(before, ["widgets.action"]),
-    await projectNativeDocument(changed, ["widgets.action"]),
+    await project(before, ["widgets.action"]),
+    await project(changed, ["widgets.action"]),
   );
   assert.equal(before.paths["/widgets"].post.operationId, "widgets.export");
 });
 
 test("native operations retain metadata, security and transitive reference cycles and mappings", async () => {
   const source = document();
-  const projected = await projectNativeDocument(source, ["widgets.action"]);
+  const projected = await project(source, ["widgets.action"]);
   assert.deepEqual(Object.keys(projected.paths["/widgets"] ?? {}), [
     "summary",
     "parameters",
@@ -125,18 +133,65 @@ test("native operations retain metadata, security and transitive reference cycle
     source.components.responses,
   );
   const changed = document("string");
-  assert.notDeepEqual(
-    await projectNativeDocument(changed, ["widgets.action"]),
-    projected,
-  );
+  assert.notDeepEqual(await project(changed, ["widgets.action"]), projected);
 });
 
 test("missing references and native flags fail before emitting an incomplete client", async () => {
   const source = document();
   Reflect.deleteProperty(source.components.schemas, "Child");
-  await assert.rejects(() => projectNativeDocument(source, []), /resolve.*ref/);
+  await assert.rejects(() => project(source, []), /resolve.*ref/);
   await assert.rejects(
-    () => projectNativeDocument(document(), ["missing.action"]),
+    () => project(document(), ["missing.action"]),
     /no HTTP route/,
+  );
+});
+
+// The typed list variants were compile cost only: Swift reads these outputs as
+// JSONValue. Their names stay so the generated wrappers keep their types.
+test("JSONValue-read list outputs project untyped and drop their variants", async () => {
+  const listed = (name: string) => ({
+    oneOf: [{ $ref: "#/components/schemas/Variant" }],
+    title: name,
+  });
+  const schemas = {
+    EntityListBaseOutput: listed("base"),
+    EntityListEnrichmentOutput: listed("enrichment"),
+    EntityListSummaryOutput: listed("summary"),
+    Variant: { type: "object" as const },
+  };
+  const source = {
+    ...document(),
+    paths: {
+      "/list": {
+        post: {
+          operationId: "entity.listBase",
+          responses: {
+            "200": {
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/EntityListBaseOutput" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    components: {
+      securitySchemes: document().components.securitySchemes,
+      schemas,
+    },
+  } satisfies OpenApiDocument;
+  const projected = await projectNativeDocument(
+    source,
+    ["entity.listBase"],
+    nativeComponents(schemas),
+  );
+  assert.deepEqual(projected.components?.schemas, {
+    EntityListBaseOutput: { type: "object", additionalProperties: true },
+  });
+  assert.throws(
+    () => nativeComponents({ Variant: { type: "object" } }),
+    /EntityListBaseOutput is not in the document/,
   );
 });
