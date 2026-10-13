@@ -40,6 +40,7 @@ import {
 } from "./reconciliation-state";
 import { lockPartySettlement } from "./retained-settlement";
 import { readImportSourceClaimFamily } from "./source-claim-family";
+import { sameLineTitle } from "./writer-policy";
 
 type AcceptedInput = Extract<
   PrepareSourceOrderReconciliationInput,
@@ -130,6 +131,21 @@ async function completeAcceptedAttachmentResolution(
   input: AcceptedResolution,
 ): Promise<AcceptedResolution> {
   const candidate = state.observation.extraction.candidate;
+  if (
+    new Set(input.lines.map((binding) => binding.expenseId)).size !==
+    input.lines.length
+  )
+    throw new Error(
+      "Attach-only bindings require a distinct Expense for each proposed line.",
+    );
+  if (
+    new Set(input.lines.map((binding) => binding.lineIndex)).size !==
+      input.lines.length ||
+    input.lines.some((binding) => !candidate?.lines[binding.lineIndex])
+  )
+    throw new Error(
+      "Accepted attachment bindings require unique known source line indexes.",
+    );
   if (!candidate || input.lines.length === candidate.lines.length) return input;
   const lines = [...input.lines];
   const used = new Set(
@@ -271,9 +287,15 @@ async function appliedAcceptedBinding(
       !line ||
       !selected ||
       selected.purchaseId !== state.target.id ||
+      selected.economicRole !== "vendor" ||
+      selected.lineBasis !== "item_line" ||
+      !sameLineTitle(selected.name, line.title) ||
       selected.cost === null ||
       cents(selected.cost) !== cents(line.amount) ||
-      selected.lineKind !== line.lineKind
+      selected.lineKind !== line.lineKind ||
+      (selected.productQuantity !== null &&
+        selected.productQuantity !== (line.quantity ?? 1)) ||
+      state.ledgerClaims.some((claim) => claim.expenseId === selected.id)
     )
       return false;
     if (!selected.productId) {
@@ -292,8 +314,6 @@ async function appliedAcceptedBinding(
       return false;
     if (binding.productId) {
       if (
-        (selected.productQuantity !== null &&
-          selected.productQuantity !== (line.quantity ?? 1)) ||
         !(await sourceObservationIdentityMatches(
           tx,
           "product",
@@ -357,6 +377,11 @@ export async function commitAcceptedSourceOrderReconciliation(
       input.resolution,
     );
     const purchaseId = parseShortcodeFor("purchase", state.target.shortcode);
+    const resolution = await completeAcceptedAttachmentResolution(
+      tx,
+      state,
+      input.resolution,
+    );
     if (
       await appliedAcceptedBinding(
         tx,
@@ -369,11 +394,6 @@ export async function commitAcceptedSourceOrderReconciliation(
         purchaseId,
         alreadyApplied: true,
       });
-    const resolution = await completeAcceptedAttachmentResolution(
-      tx,
-      state,
-      input.resolution,
-    );
     const review = await reviewResolution(
       tx,
       state,

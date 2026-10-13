@@ -14,6 +14,7 @@ import {
   importPreparedLine,
   importPreparedOrder,
   run,
+  sourceOrderObservation,
 } from "~/server/db/schema";
 import { notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
@@ -47,14 +48,22 @@ async function acceptedSiblingConflicts(
     if (order.id === state.association?.id) continue;
     const candidate = (await acceptedSourceExtraction(tx, order))?.extraction
       .candidate;
+    const [observation] = order.acceptedObservationId
+      ? await tx
+          .select({ productBindings: sourceOrderObservation.productBindings })
+          .from(sourceOrderObservation)
+          .where(eq(sourceOrderObservation.id, order.acceptedObservationId))
+      : [];
+    const bindings = [
+      ...state.productBindings.filter(
+        (binding) => binding.sourceOrderId === order.id,
+      ),
+      ...(observation?.productBindings.filter((binding) => binding.productId) ??
+        []),
+    ];
     if (!candidate || !ours) {
       // A real binding with unknown line history cannot be declared unrelated.
-      if (
-        state.productBindings.some(
-          (binding) => binding.sourceOrderId === order.id,
-        )
-      )
-        competingBindings++;
+      if (bindings.length) competingBindings++;
       continue;
     }
     const items = candidate.lines.flatMap((row, lineIndex) =>
@@ -75,15 +84,14 @@ async function acceptedSiblingConflicts(
       items.some(
         ({ row }) =>
           (row.quantity ?? 1) === quantity &&
-          cents(row.amount) !== 0 &&
           cents(row.amount) !== cents(line.amount),
       )
     )
       contradicting++;
     if (
-      state.productBindings.some(
+      bindings.some(
         (binding) =>
-          binding.sourceOrderId === order.id &&
+          !candidate.lines[binding.lineIndex] ||
           items.some(({ lineIndex }) => lineIndex === binding.lineIndex),
       )
     )
