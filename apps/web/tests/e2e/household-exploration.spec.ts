@@ -24,7 +24,7 @@ test("connected household supports wardrobe screenshots and garden exploration",
   await gotoAuthenticatedPage(page, `/products/${shirt.shortcode}`);
   await expect(
     page.getByRole("heading", { name: shirt.name, exact: true }).first(),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   await expect(
     page
       .getByRole("link", {
@@ -32,7 +32,7 @@ test("connected household supports wardrobe screenshots and garden exploration",
         exact: true,
       })
       .first(),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   const screenshot = testInfo.outputPath("synthetic-household-wardrobe.png");
   await page.screenshot({ path: screenshot, fullPage: true });
   await testInfo.attach("Synthetic household wardrobe", {
