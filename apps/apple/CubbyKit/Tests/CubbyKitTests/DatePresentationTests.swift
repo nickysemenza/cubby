@@ -45,4 +45,22 @@ struct DatePresentationTests {
         #expect(DatePresentation.plainDate("2026-10-13", now: now, compact: true)?.absolute == "Oct 13")
         #expect(DatePresentation.plainDate("2026-02-30", now: now) == nil)
     }
+    // The capture offset must reconstruct the camera's local day and clock, rather than
+    // label a household-zone clock with a different offset. Half-hour zones retain minutes.
+    @Test func captureProvenanceUsesRecordedOffset() {
+        let date = instant("2026-10-13T23:50:24Z")
+        #expect(
+            DatePresentation.captureTimestamp(date, offsetMinutes: 120)
+                == "Oct 14, 2026, 1:50:24 AM (+02:00)")
+        #expect(
+            DatePresentation.captureTimestamp(date, offsetMinutes: -210)
+                == "Oct 13, 2026, 8:20:24 PM (-03:30)")
+        #expect(
+            DatePresentation.captureTimestamp(date, offsetMinutes: 0)
+                == "Oct 13, 2026, 11:50:24 PM (+00:00)")
+        #expect(
+            DatePresentation.captureTimestamp(date, offsetMinutes: nil)
+                == DatePresentation.timestamp(date).exact)
+    }
+
 }
