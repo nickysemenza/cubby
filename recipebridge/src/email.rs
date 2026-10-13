@@ -327,7 +327,24 @@ fn walk(element: ElementRef, footer: bool, state: &mut Walk) {
                         .iter()
                         // A fixed one-pixel picture cannot carry readable pixels;
                         // its label and surrounding links can still carry evidence.
-                        .filter(|name| **name != "src" || !is_fixed_tracking_pixel(&node))
+                        .filter(|name| {
+                            (**name != "src" || !is_fixed_tracking_pixel(&node))
+                                && (**name != "href"
+                                    || node.value().name() != "a"
+                                    || node
+                                        .value()
+                                        .attr("href")
+                                        .and_then(|raw| {
+                                            // URL encoding can erase an amount cue.
+                                            resolve(None, raw).filter(|resolved| {
+                                                let retained = url_purchase_cues(resolved);
+                                                url_purchase_cues(raw)
+                                                    .iter()
+                                                    .all(|cue| retained.contains(cue))
+                                            })
+                                        })
+                                        .is_none())
+                        })
                         .filter_map(|name| node.value().attr(name))
                         .any(|value| cue_hits(value) > 0 || !purchase_cues(value).cues.is_empty())
                 });
@@ -810,7 +827,12 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
 
     let mut links: Vec<(usize, WEmailLink)> = Vec::new();
     for anchor in select(&document, "a[href]") {
-        if has_hidden_ancestor(&anchor) {
+        if anchor.ancestors().filter_map(ElementRef::wrap).any(|node| {
+            matches!(
+                node.value().name(),
+                "script" | "style" | "noscript" | "template" | "svg" | "head"
+            )
+        }) {
             continue;
         }
         let Some(href) = anchor
@@ -820,9 +842,6 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
         else {
             continue;
         };
-        if links.iter().any(|(_, link)| link.href == href) {
-            continue;
-        }
         let mut text = clean(&link_label(anchor));
         if text.is_empty() {
             // An image link reads as its picture's alt text.
@@ -831,6 +850,13 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
                 .filter_map(ElementRef::wrap)
                 .find_map(|child| child.value().attr("alt").map(clean))
                 .unwrap_or_default();
+        }
+        // A responsive copy can give one destination a different evidence label.
+        if links
+            .iter()
+            .any(|(_, link)| link.href == href && link.text == text)
+        {
+            continue;
         }
         let score = cue_hits(&text) * 2 + cue_hits(&href);
         let url_cues = url_purchase_cues(&href);
@@ -922,6 +948,61 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preserves_hidden_link_evidence_without_a_false_text_omission() {
+        let email = compact_email_html(
+            r#"<p>Community newsletter with gardening tips and upcoming neighborhood events.</p><a href="https://example.test/subscription" style="display:none">Manage preferences</a>"#,
+        );
+        assert!(!email.truncated);
+        assert!(email.links.iter().any(|link| {
+            link.href == "https://example.test/subscription" && link.text == "Manage preferences"
+        }));
+
+        let receipt = compact_email_html(
+            r#"<p>Account updates.</p><div style="display:none"><a href="https://example.test/receipt">Receipt for order #SYN-12345 paid $42</a></div>"#,
+        );
+        assert!(receipt.truncated);
+        assert!(
+            receipt
+                .links
+                .iter()
+                .any(|link| link.text.contains("SYN-12345"))
+        );
+
+        let malformed = compact_email_html(
+            r#"<p>Account updates.</p><a style="display:none" href="receipt without a valid URL">Learn more</a>"#,
+        );
+        assert!(malformed.truncated);
+
+        let normalized_away = compact_email_html(
+            r#"<p>Community updates.</p><a style="display:none" href="https://example.test/pay?amount=USD 42">Learn more</a>"#,
+        );
+        assert!(normalized_away.truncated);
+
+        let many = (0..MAX_LINKS + 1).map(|i| {
+            format!(r#"<a style="display:none" href="https://example.test/track/{i}">Account link</a>"#)
+        }).collect::<String>();
+        let bounded = compact_email_html(&many);
+        assert_eq!(bounded.links.len(), MAX_LINKS);
+        assert_eq!(bounded.cue_links_omitted, 1);
+
+        let duplicated = compact_email_html(
+            r#"<a href="https://example.test/subscription">Preferences</a><div style="display:none"><a href="https://example.test/subscription">Account support</a></div>"#,
+        );
+        assert_eq!(duplicated.links.len(), 2);
+        assert!(
+            duplicated
+                .links
+                .iter()
+                .any(|link| link.text == "Account support")
+        );
+
+        let inert = compact_email_html(
+            r#"<p>Community updates.</p><template><a href="https://example.test/receipt">Receipt template</a></template>"#,
+        );
+        assert!(inert.links.is_empty());
+    }
 
     #[test]
     fn hidden_tracking_pixels_do_not_omit_purchase_evidence() {
