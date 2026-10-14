@@ -1,8 +1,7 @@
-import { type Control, Controller } from "react-hook-form";
+import type { UseFormReturn } from "react-hook-form";
 
-import { Picker } from "~/ui/combobox/picker";
+import { PickerField } from "~/ui/form-utils/picker-field";
 
-import { FormFieldGroup } from "../../../ui/forms/form-field-group";
 import { useCookbookOptions } from "../cookbook-select";
 import type { RecipeFormValues } from "./types";
 
@@ -11,28 +10,19 @@ import type { RecipeFormValues } from "./types";
  * recipe whose book was attached wrong; import is what normally sets it.
  */
 export function RecipeCookbookField({
-  control,
+  form,
 }: {
-  control: Control<RecipeFormValues>;
+  form: UseFormReturn<RecipeFormValues>;
 }) {
-  const options = useCookbookOptions("No cookbook");
   return (
-    <Controller
-      control={control}
+    <PickerField
+      store="option"
+      form={form}
       name="cookbookId"
-      render={({ field }) => (
-        <FormFieldGroup htmlFor="recipe-cookbook" label="Cookbook (Optional)">
-          <Picker
-            inputId="recipe-cookbook"
-            inputRef={field.ref}
-            label="Cookbook (Optional)"
-            className="w-full"
-            options={options}
-            value={field.value ?? ""}
-            onValueChange={(next) => field.onChange(next || null)}
-          />
-        </FormFieldGroup>
-      )}
+      label="Cookbook (Optional)"
+      options={useCookbookOptions()}
+      nullable
+      noneLabel="No cookbook"
     />
   );
 }

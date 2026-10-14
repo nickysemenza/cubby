@@ -74,6 +74,8 @@ export type PickerFieldProps<TFieldValues extends FieldValues> =
           store: "option";
           options: readonly PickerOption[];
           nullable?: boolean;
+          /** The empty choice's label on a `nullable` field. */
+          noneLabel?: string;
           /** Defaults to `choose` up to {@link CHOOSE_MODE_MAX} options and
            * `search` beyond. */
           mode?: "search" | "choose";
@@ -162,6 +164,7 @@ function OptionPickerField<TFieldValues extends FieldValues>({
   options,
   placeholder,
   nullable = false,
+  noneLabel = "None",
   disabled = false,
   description,
   suggestField,
@@ -169,6 +172,7 @@ function OptionPickerField<TFieldValues extends FieldValues>({
 }: PickerFieldBase<TFieldValues> & {
   options: readonly PickerOption[];
   nullable?: boolean;
+  noneLabel?: string;
   mode?: "search" | "choose";
 }) {
   const controlId = useId();
@@ -180,8 +184,9 @@ function OptionPickerField<TFieldValues extends FieldValues>({
     disabled: !suggestField,
   });
   const items = useMemo(
-    () => (nullable ? [{ value: NONE, label: "None" }, ...options] : options),
-    [nullable, options],
+    () =>
+      nullable ? [{ value: NONE, label: noneLabel }, ...options] : options,
+    [nullable, noneLabel, options],
   );
   return (
     <Controller

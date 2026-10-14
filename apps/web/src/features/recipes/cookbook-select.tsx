@@ -15,12 +15,11 @@ import { Image } from "~/ui/primitives/image";
  * The Cookbook list as picker options, led by an empty-value option
  * (`value: ""`) named `emptyLabel`. Each row carries the cookbook's cover.
  */
-export function useCookbookOptions(emptyLabel: string): PickerOption[] {
+export function useCookbookOptions(): PickerOption[] {
   const { data: cookbooks } = useQuery(cookbook.list.queryOptions(null));
   return useMemo(
-    () => [
-      { value: "", label: emptyLabel },
-      ...(cookbooks ?? []).map((book): PickerOption => {
+    () =>
+      (cookbooks ?? []).map((book): PickerOption => {
         const cover = book.displayImages[0]?.url;
         return {
           value: book.id,
@@ -37,8 +36,7 @@ export function useCookbookOptions(emptyLabel: string): PickerOption[] {
           }),
         };
       }),
-    ],
-    [cookbooks, emptyLabel],
+    [cookbooks],
   );
 }
 
@@ -54,7 +52,11 @@ interface CookbookSelectProps {
  */
 export function CookbookSelect({ value, onChange }: CookbookSelectProps) {
   const inputId = useId();
-  const options = useCookbookOptions("All cookbooks");
+  const books = useCookbookOptions();
+  const options = useMemo(
+    () => [{ value: "", label: "All cookbooks" }, ...books],
+    [books],
+  );
 
   return (
     <Row align="center" gap="sm" className="w-fit text-sm">

@@ -11,6 +11,7 @@ import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { entityListFor } from "~/entity/entity-list";
 import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatCurrency } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -47,7 +48,12 @@ export function InventoryExpenseActions({
       (expenseItems ?? []).map((item) => ({
         value: item.id,
         label: item.name,
-        detail: `${item.date} · ${item.cost}`,
+        detail: [
+          item.date,
+          item.cost == null ? null : formatCurrency(item.cost),
+        ]
+          .filter(Boolean)
+          .join(" · "),
       })),
     [expenseItems],
   );
