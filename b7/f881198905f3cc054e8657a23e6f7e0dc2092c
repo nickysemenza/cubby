@@ -1,0 +1,67 @@
+apps/apple/App/Shared/Browse/DetailSectionViews.swift
+  s_f376b175015bce::t_ffb5eb233f069c 198,224,227,279-287,290-293,350-351,359,375,378-396,406-409,560-562,564-565,653,655-657,1293-1330
+apps/apple/App/Shared/Browse/DetailSlots.swift
+  s_f376b175015bce::t_0e9bc9f2a08fa2 119
+apps/apple/App/Shared/Browse/EntityFieldResolutionLabel.swift
+  s_f376b175015bce::t_56cf00c7ddf0e0 7-16,23,37,55
+apps/apple/App/Shared/Browse/EntityFieldValue.swift
+  s_f376b175015bce::t_f682d36356aba3 17-46,66-68
+apps/apple/App/Shared/Browse/EntityFilterSheet.swift
+  s_f376b175015bce::t_21d9771ae841cc 18-22,25-27,41-42,45-46,50,213-216,218,221,231,233-235,321-322,324,326-327,330-331
+apps/apple/App/Shared/Browse/EntityListView.swift
+  s_f376b175015bce::t_3eb2433a49a864 876,890-891,1104,1106,1114,1117,1235-1238
+apps/apple/App/Shared/Browse/EntityRowPresentation.swift
+  s_f376b175015bce::t_f36f62980e0665 46-51,57,61-71,75,78-85,96-97,105-106,176-184,186,191,193,200,221-222
+apps/apple/App/Shared/Browse/InheritedMarker.swift
+  s_a7bec1ba59cec5::t_68f3ebf9060fa4 1-40
+apps/apple/App/Shared/Browse/RecordsBlockView.swift
+  s_f376b175015bce::t_62512240cd8567 390-395,397-399,458-475,655-693,699-715
+apps/apple/App/Shared/Editors/EntityEditorSheet.swift
+  s_f376b175015bce::t_0857ae8690a55b 13-19,25-27,51,56,279
+apps/apple/App/Shared/Editors/EntityFieldControls.swift
+  s_f376b175015bce::t_20288eafaed461 38-54,62-63
+apps/apple/App/Tests/Browse/EntityFilterSheetTests.swift
+  s_f376b175015bce::t_099dfb74fa9eaa 45-61
+apps/apple/App/Tests/Browse/EntityRowPresentationTests.swift
+  s_f376b175015bce::t_10f0e9a046e5e2 30-80
+apps/apple/CubbyKit/Sources/CubbyKit/Catalog/FieldResolutionPresentation.swift
+  s_f376b175015bce::t_a6aaa9e2fc7c4c 23,26-29,33-34,36-54,62-88,148-157,159-161,165-167,172,175,179,181,183-184
+apps/apple/CubbyKit/Sources/CubbyKit/Catalog/GenericEntityEditModel.swift
+  s_f376b175015bce::t_f133da18d18964 171-176,178,180
+apps/apple/CubbyKit/Sources/CubbyKit/Report/ReportPresentation.swift
+  s_f376b175015bce::t_94621149541fe3 137-138,261-262,295,421-439,442-487
+apps/apple/CubbyKit/Tests/CubbyKitTests/FieldResolutionPresentationTests.swift
+  s_f376b175015bce::t_edbc4b95bccb2a 84,87-88,92-135
+apps/apple/CubbyKit/Tests/CubbyKitTests/Fixtures/inventory-by-location.json
+  s_f376b175015bce::t_f4f1c1e0c82ea9 16,157
+apps/apple/CubbyKit/Tests/CubbyKitTests/Fixtures/product-get.json
+  s_f376b175015bce::t_83db692806c3f8 7
+apps/apple/CubbyKit/Tests/CubbyKitTests/GenericEntityEditModelTests.swift
+  s_f376b175015bce::t_1b3e6f488b2dda 240-273
+packages/shared/src/apple-client-version.ts
+  s_f376b175015bce::t_1b41110ee92700 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b7f881198905f3cc054e8657a23e6f7e0dc2092c",
+  "prompts": {},
+  "sessions": {
+    "s_a7bec1ba59cec5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10faf483-7285-407e-800f-2dad5a8b10b7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_f376b175015bce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "af1f9a61-c8e1-4a86-9617-b86b8291a625",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
