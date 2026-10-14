@@ -192,6 +192,24 @@ export default defineEntity({
           ],
         },
         {
+          id: "attention",
+          label: "Needs attention",
+          description:
+            "Runs waiting on authorization or approval, needing review, or failed",
+          filters: [
+            {
+              id: "status",
+              value: [
+                "paused_auth",
+                "paused_approval",
+                "needs_review",
+                "failed",
+                "dispatch_failed",
+              ],
+            },
+          ],
+        },
+        {
           id: "ai-work",
           label: "AI work",
           description:
@@ -211,14 +229,15 @@ export default defineEntity({
         { id: "routine", value: "false" },
       ],
       views: [
+        "table",
+        // Image jobs are not entities yet (docs/todos.md), so their attempt
+        // history keeps one slot over the activity projection.
         {
           kind: "slot",
-          id: "history",
-          label: "History",
+          id: "image-jobs",
+          label: "Image jobs",
           searchKeys: [
             "selected",
-            "group",
-            "recordType",
             "kind",
             "state",
             "attentionOnly",
@@ -228,6 +247,7 @@ export default defineEntity({
             "deviceId",
             "from",
             "to",
+            "order",
           ],
         },
       ],

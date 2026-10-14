@@ -1,31 +1,15 @@
-import { activityKind, activityRunId } from "@cubby/schemas/activity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
-import { runTrigger } from "@cubby/schemas/run-fields";
+import { imageProcessingJobKind } from "@cubby/schemas/activity";
 import { z } from "zod";
 
-import type {
-  ListSearch,
-  ListSlotProps,
-} from "~/entity/entity-list/list-slot-types";
-import { getEntityFilters } from "~/entity/filter-manifest";
-import { filterUrlKey } from "~/entity/filters";
+import type { ListSlotProps } from "~/entity/entity-list/list-slot-types";
 
-import { RunHistory } from "./run-history";
+import { ImageJobHistory } from "./image-job-history";
 
 const searchSchema = z.object({
-  selected: activityRunId.optional().catch(undefined),
-  group: z.literal("run").optional().catch(undefined),
-  recordType: z.enum(["run", "image_job"]).optional().catch(undefined),
-  kind: activityKind.optional().catch(undefined),
-  purpose: z.string().optional().catch(undefined),
+  selected: z.string().optional().catch(undefined),
+  kind: imageProcessingJobKind.optional().catch(undefined),
   state: z.string().optional().catch(undefined),
   attentionOnly: z.enum(["true", "false"]).optional().catch(undefined),
-  status: z.string().optional().catch(undefined),
-  trigger: runTrigger.optional().catch(undefined),
-  routine: z.enum(["true", "false"]).optional().catch(undefined),
-  vendorAccountId: z.string().optional().catch(undefined),
-  vendorId: z.string().optional().catch(undefined),
-  ledgerPartyId: z.string().optional().catch(undefined),
   subjectId: z.string().optional().catch(undefined),
   submissionId: z.string().optional().catch(undefined),
   executor: z
@@ -35,71 +19,29 @@ const searchSchema = z.object({
   deviceId: z.uuid().optional().catch(undefined),
   from: z.iso.datetime().optional().catch(undefined),
   to: z.iso.datetime().optional().catch(undefined),
-  sort: z.enum(["newest", "oldest"]).optional().catch(undefined),
-  filters: z.literal("none").optional().catch(undefined),
+  // `sort` belongs to the generic Run table on the same route.
+  order: z.enum(["newest", "oldest"]).optional().catch(undefined),
 });
 
-/**
- * The Run declaration's default filter, as the triggers it hides and whether
- * it hides routine runs: the history opens without them until the URL names
- * a filter of its own or records clearing the default (`filters=none`), like
- * every declared list.
- */
-const declaredFilter = entitySummary.run.list.initialFilter;
-const runFilterUrlKeys = getEntityFilters("run").map(filterUrlKey);
-const declaredTriggers = declaredFilter.flatMap((filter) =>
-  filter.id === "trigger" && Array.isArray(filter.value) ? [filter.value] : [],
-)[0];
-const shownByDefault = new Set<string>(declaredTriggers);
-const hiddenByDefault = declaredTriggers
-  ? runTrigger.options.filter((trigger) => !shownByDefault.has(trigger))
-  : [];
-const routineHiddenByDefault = declaredFilter.some(
-  (filter) => filter.id === "routine" && filter.value === "false",
-);
-
-function RunHistorySlot({ search, navigate }: ListSlotProps) {
-  const parsed = searchSchema.parse(search);
-  // Any filter the URL names (the entity's own, or the history's Work type)
-  // is the person's choice of what to see; the default only opens a bare list.
-  const namesFilter =
-    Boolean(parsed.kind) ||
-    runFilterUrlKeys.some((key) => Boolean(search[key]));
-  const hasDefaultFilter = hiddenByDefault.length > 0 || routineHiddenByDefault;
-  const hideDefault =
-    hasDefaultFilter && !namesFilter && parsed.filters !== "none";
-  const filters = {
-    ...parsed,
-    attentionOnly: parsed.attentionOnly === "true" ? true : undefined,
-    excludeTriggers:
-      hideDefault && hiddenByDefault.length ? hiddenByDefault : undefined,
-    routine:
-      parsed.routine !== undefined
-        ? parsed.routine === "true"
-        : hideDefault && routineHiddenByDefault
-          ? false
-          : undefined,
-    hasDefaultFilter,
-    kind: parsed.kind ?? activityKind.safeParse(parsed.purpose).data,
-    state: parsed.state ?? parsed.status,
-  };
+function ImageJobHistorySlot({ search, navigate }: ListSlotProps) {
+  const { order, ...parsed } = searchSchema.parse(search);
   return (
-    <RunHistory
-      filters={filters}
-      onFilterChange={(patch) => {
-        const next: ListSearch = { ...patch };
-        if (Object.hasOwn(patch, "kind")) next.purpose = undefined;
-        if (Object.hasOwn(patch, "state")) next.status = undefined;
-        // Naming a filter of your own replaces the default outright.
-        if (patch.trigger !== undefined) next.filters = undefined;
-        navigate(next);
+    <ImageJobHistory
+      filters={{
+        ...parsed,
+        sort: order,
+        attentionOnly: parsed.attentionOnly === "true" ? true : undefined,
       }}
-      onSelect={(id) => navigate({ selected: id })}
-      onGroupChange={(grouped) =>
-        navigate({ group: grouped ? "run" : undefined })
+      onFilterChange={({ sort, ...patch }) =>
+        navigate(
+          Object.hasOwn(patch, "sort") || sort !== undefined
+            ? { ...patch, order: sort }
+            : patch,
+        )
       }
+      onSelect={(id) => navigate({ selected: id })}
     />
   );
 }
 
-export const runListSlots = { history: RunHistorySlot };
+export const runListSlots = { "image-jobs": ImageJobHistorySlot };

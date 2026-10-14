@@ -22,8 +22,11 @@ test("image jobs show completed status and an Apple skip reason", async ({
     .update(imageProcessingJob)
     .set({ state: "skipped", lastError: "no_subject", completedAt: new Date() })
     .where(eq(imageProcessingJob.publicId, sample.standaloneJobId));
-  await gotoAuthenticatedPage(page, `/runs?subjectId=${sample.imageId}`);
-  const table = page.getByRole("table", { name: "Runs and image jobs" });
+  await gotoAuthenticatedPage(
+    page,
+    `/runs?view=image-jobs&subjectId=${sample.imageId}`,
+  );
+  const table = page.getByRole("table", { name: "Image jobs" });
   const completed = table
     .getByRole("row")
     .filter({ hasText: "Image description" });

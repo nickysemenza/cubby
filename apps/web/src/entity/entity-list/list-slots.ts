@@ -76,7 +76,7 @@ export const listSlotCoverage = {
     schedule: project("schedule"),
     analytics: project("analytics"),
   },
-  run: { history: run("history") },
+  run: { "image-jobs": run("image-jobs") },
   task: { agenda: task("agenda"), board: task("board") },
 } satisfies {
   [E in Entity as ListSlotId<E> extends never ? never : E]: Record<

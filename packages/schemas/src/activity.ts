@@ -8,7 +8,11 @@ import { imageDescriptionAnalysis } from "./image-processing";
 import { imageUrlSummary } from "./image-summary";
 import { runTrigger } from "./run-fields";
 import { activityKind, type ActivityKind } from "./activity-fields";
-export { ACTIVITY_KIND_LABEL, activityKind } from "./activity-fields";
+export {
+  ACTIVITY_KIND_LABEL,
+  activityKind,
+  imageProcessingJobKind,
+} from "./activity-fields";
 export type { ActivityKind } from "./activity-fields";
 
 export const activityRunId = z.string().regex(/^(?:IPR|RUN)-[A-Z0-9]+$/u);

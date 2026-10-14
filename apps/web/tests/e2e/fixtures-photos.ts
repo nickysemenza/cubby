@@ -291,7 +291,7 @@ export async function seedActivityHistory(page: Page, name: string) {
 
 /**
  * More image jobs, attempts, and events than one cursor page (20) holds, all
- * in one synthetic submission so `/runs?submissionId=` lists only them. Job
+ * in one synthetic submission so `/runs?view=image-jobs&submissionId=` lists only them. Job
  * `NN` is `NN` minutes old: newest-first lists `01` first and leaves the
  * oldest on the second page. The newest job also carries `count` attempts
  * and `count` events for the detail's own cursors.
