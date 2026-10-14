@@ -1,0 +1,63 @@
+README.md
+  s_119022ba161688::t_38fdeccf67ce1a 98,174-182
+apps/web/src/server/repo/problems/detectors-coverage.integration.test.ts
+  s_119022ba161688::t_c0cafe25757ae5 88,104
+apps/web/src/server/repo/vendor-account-coverage.integration.test.ts
+  s_119022ba161688::t_5b8ae24d699564 1-229
+apps/web/src/server/repo/vendor-account.ts
+  s_119022ba161688::t_11865cdffd9158 17,21,142-158,160,171
+apps/web/src/server/repo/work-queue-problems.ts
+  s_119022ba161688::t_a5ac6027236be7 20-24,302-319
+apps/web/src/ui/data-table/related-preview-cell.tsx
+  s_119022ba161688::t_64a13a45306723 1,3,54-55,60-61,72-88
+apps/web/src/ui/hooks/useRelatedPreviewColumns.tsx
+  s_119022ba161688::t_7037398f54948b 1-4,101-108
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_119022ba161688::t_a738abd42e4ac1 130-131,135-139,1740-1749
+packages/schemas/src/entity-definitions/21-vendorAccount.entity.ts
+  s_119022ba161688::t_a81cd56ff7eb37 25,37,40-41,65,180-199,316,355-377,419-431
+apps/web/src/app/problems/components/problem-sections.tsx
+  s_119022ba161688::t_22ad13aa6562ea 1220
+apps/web/src/entity/problem-queries/basic.ts
+  s_119022ba161688::t_6fe2b06c4db1b6 37-39
+apps/web/src/server/repo/data-quality/checks/purchase.ts
+  s_119022ba161688::t_21b9424c27505a 111-114
+apps/web/src/server/repo/data-quality/checks/vendor.ts
+  s_119022ba161688::t_fc010c4c0d7aa8 10-11
+apps/web/src/server/repo/data-quality/finance-checks.integration.test.ts
+  s_119022ba161688::t_f181836d7c6517 116,148,150-151
+apps/web/src/server/repo/work-queue.ts
+  s_119022ba161688::t_ddb048d9f85fb1 28,56,78,168-183
+docs/entities.md
+  s_119022ba161688::t_8609699c5fdd09 1016-1029,1060
+docs/guide/terminology.md
+  s_119022ba161688::t_069db251528813 684-687
+packages/schemas/src/entity-definitions/11-vendor.entity.ts
+  s_119022ba161688::t_4067ddb7baeeaf 80-86,1207
+packages/schemas/src/problems.ts
+  s_119022ba161688::t_470d100a24049a 712
+packages/schemas/src/related-view.ts
+  s_119022ba161688::t_1605ab897483ea 285-291,465
+packages/schemas/src/related-view.unit.test.ts
+  s_119022ba161688::t_a626f8a4043ca5 28,181
+packages/schemas/src/work-queue.ts
+  s_119022ba161688::t_0c9242a23e02ce 56
+packages/shared/src/apple-client-version.ts
+  s_119022ba161688::t_7da31d64d34241 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ae539fe1854694c8d701c3fffedc020579667c1d",
+  "prompts": {},
+  "sessions": {
+    "s_119022ba161688": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13bcb-f64a-7ef0-8d81-1aceaf52856d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
