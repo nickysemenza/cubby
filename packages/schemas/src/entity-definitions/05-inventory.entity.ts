@@ -15,6 +15,8 @@ import {
 } from "@cubby/schemas/inventory-ownership";
 import { ledgerPartyShortcode } from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
+import { FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 export default defineEntity({
   key: "inventory",
@@ -47,6 +49,67 @@ export default defineEntity({
     detail: {},
     list: {
       savedViews: [
+        // `@me` is the viewing member (ADR 0015); the owner filter matches the
+        // effective owner, so inherited stock counts as someone's stuff.
+        {
+          id: "wardrobe",
+          label: "Wardrobe",
+          description: "Your clothes and accessories, grouped by category",
+          filters: [
+            { id: "ownerLedgerPartyId", value: [CURRENT_MEMBER_FILTER] },
+            { id: "categoryFeature", value: ["apparel"] },
+          ],
+          sort: [
+            { id: "category", desc: false },
+            { id: "product", desc: false },
+          ],
+          view: "shelf",
+          pin: { surface: "home", order: 0 },
+        },
+        {
+          id: "my-stuff",
+          label: "My stuff",
+          description: "Everything you own, wherever it lives",
+          filters: [
+            { id: "ownerLedgerPartyId", value: [CURRENT_MEMBER_FILTER] },
+          ],
+          sort: [
+            { id: "category", desc: false },
+            { id: "product", desc: false },
+          ],
+          view: "shelf",
+          pin: { surface: "home", order: 1 },
+        },
+        {
+          id: "unconfirmed-owner",
+          label: "Confirm my stuff",
+          description:
+            "Stock inherited as yours from purchases; confirm or reassign it",
+          filters: [
+            { id: "ownerLedgerPartyId", value: [CURRENT_MEMBER_FILTER] },
+            { id: "ownershipMode", value: ["inherit"] },
+          ],
+          view: "shelf",
+        },
+        {
+          id: "needs-a-home",
+          label: "Needs a home",
+          description: "Stock waiting in Unknown for a real location",
+          filters: [{ id: "locationRole", value: "global_unknown" }],
+          sort: [{ id: "createdAt", desc: true }],
+          view: "shelf",
+          pin: { surface: "home", order: 3 },
+        },
+        {
+          id: "owner-unknown",
+          label: "Owner unknown",
+          description:
+            "Stock whose purchase evidence names no single owner; pick one",
+          filters: [
+            { id: "ownerLedgerPartyId", value: [FILTER_NONE] },
+            { id: "ownershipMode", value: ["inherit"] },
+          ],
+        },
         {
           id: "never-verified",
           label: "Never verified",
@@ -405,8 +468,9 @@ export default defineEntity({
         "amount",
         "valuation",
         "verifiedAt",
+        "category",
       ],
-      computed: ["name", "product", "location", "valuation"],
+      computed: ["name", "product", "location", "valuation", "category"],
     },
     intents: {
       fields: {
@@ -569,6 +633,39 @@ export default defineEntity({
         placeholder: "Filter classification...",
         brandRef: { entity: "productCategory" },
         optionsKey: "productCategories",
+      },
+      {
+        columnId: "categoryFeature",
+        field: "categoryFeatureFilter",
+        kind: "multiselect",
+        label: "Category family",
+        placeholder: "Filter category family...",
+        optionsKey: "productCategoryFamilies",
+      },
+      // Matches the EFFECTIVE owner (explicit, else inherited from acquisition
+      // evidence), not the stored column: inherited stock is someone's stuff.
+      {
+        columnId: "ownerLedgerPartyId",
+        urlKey: "owner",
+        kind: "idMulti",
+        label: "Owner",
+        placeholder: "Filter by owner...",
+        brandRef: { entity: "ledgerParty" },
+        deriveSchema: true,
+        nullable: { field: "ownerPresenceFilter", label: "owner" },
+      },
+      {
+        columnId: "ownershipMode",
+        kind: "multiselect",
+        label: "Ownership",
+        placeholder: "Filter ownership...",
+        deriveSchema: true,
+        stored: true,
+        options: [
+          { value: "inherit", label: "Inherited (unconfirmed)" },
+          { value: "person", label: "Confirmed person" },
+          { value: "unassigned", label: "No individual owner" },
+        ],
       },
       {
         columnId: "verifiedAt",

@@ -29,6 +29,7 @@ import {
   ingredientShortcode,
   plantShortcode,
   inventoryShortcode,
+  ledgerPartyShortcode,
   locationShortcode,
   productShortcode,
 } from "./identifiers";
@@ -46,6 +47,7 @@ import {
   createPaginatedResponseSchema,
   entityFilterList,
   oneOrMany,
+  partyFilterList,
   presenceFilter,
 } from "./pagination";
 import { baseKind } from "./problems";
@@ -262,6 +264,11 @@ export const productFilterFields = {
   externalIdSource: oneOrMany(externalIdSource).optional(),
   externalIdPresenceFilter: presenceFilter,
   inventoryPresenceFilter: presenceFilter,
+  ownerLedgerPartyId: partyFilterList(ledgerPartyShortcode)
+    .optional()
+    .describe(
+      "Products a member owns: a live inventory entry's effective owner, or for a product with no inventory the owner its single acquisition would hand down. Accepts @me.",
+    ),
   inventoryMultiplicity: z
     .enum(["duplicate_within_placement"])
     .optional()

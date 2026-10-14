@@ -219,7 +219,6 @@ export const nativeCoverage = {
    */
   detailSlot: {
     ...implemented([
-      "ledgerParty.wardrobe",
       "meal.nutrition",
       "run.import-controls",
       "run.photo-batch",

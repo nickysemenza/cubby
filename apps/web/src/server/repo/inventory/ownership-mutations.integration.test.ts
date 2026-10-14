@@ -19,8 +19,12 @@ import { moveInventoryEntries } from "~/server/repo/inventory/bulk";
 import {
   createInventoryEntry,
   deleteInventoryEntries,
+  inventoryentryList,
 } from "~/server/repo/inventory/crud";
-import { loadEffectiveInventoryOwnershipById } from "~/server/repo/inventory/ownership";
+import {
+  loadEffectiveInventoryOwnershipById,
+  productIdsByOwner,
+} from "~/server/repo/inventory/ownership";
 import {
   confirmInventoryExpenseBeneficiary,
   confirmInventoryOwnership,
@@ -657,5 +661,68 @@ describe("inventory ownership mutations", () => {
       source: "explicit",
       effectiveOwner: { id: owner.output.id, kind: "guest" },
     });
+  });
+  // Owner filters (My stuff, Wardrobe) match the EFFECTIVE owner, so inherited
+  // stock is someone's stuff; a stored-owner match would drop it.
+  it("filters inventory and products by effective owner, including inherited and unstocked rows", async () => {
+    const buyer = await createLedgerParty(
+      ctx.db,
+      { name: "Filter buyer", kind: "member", notes: null },
+      TEST_ACTOR,
+    );
+    const [inherited, unassigned] = await Promise.all([
+      createSubject("Filter inherited"),
+      createSubject("Filter unassigned"),
+    ]);
+    const unstocked = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Filter unstocked product" }),
+      TEST_ACTOR,
+    );
+    await addPurchase({
+      label: "filter acquisitions",
+      lines: [
+        {
+          name: "inherited line",
+          ownerId: buyer.output.id,
+          productId: inherited.product.id,
+        },
+        {
+          name: "unstocked line",
+          ownerId: buyer.output.id,
+          productId: unstocked.id,
+        },
+      ],
+    });
+    await setInventoryOwnership(
+      ctx.db,
+      unassigned.entryId,
+      { mode: "unassigned" },
+      undefined,
+      TEST_ACTOR,
+    );
+    const page = { pageIndex: 0, pageSize: 50 };
+    const names = async (filters: Parameters<typeof inventoryentryList>[1]) =>
+      (await inventoryentryList(ctx.db, filters, [], page)).data.map(
+        (row) => row.displayName,
+      );
+    expect(await names({ ownerLedgerPartyId: [buyer.output.id] })).toEqual([
+      expect.stringContaining("Filter inherited product"),
+    ]);
+    expect(await names({ ownerPresenceFilter: "none" })).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Filter unassigned product"),
+      ]),
+    );
+    expect(await names({ ownerPresenceFilter: "none" })).not.toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Filter inherited product"),
+      ]),
+    );
+    const owned = await productIdsByOwner(ctx.db, [buyer.output.id]);
+    expect(owned).toEqual(
+      expect.arrayContaining([inherited.product.entityId, unstocked.entityId]),
+    );
+    expect(owned).not.toContain(unassigned.product.entityId);
   });
 });

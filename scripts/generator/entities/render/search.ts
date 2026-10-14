@@ -30,10 +30,17 @@ const searchCodec = (
       return descriptor.brandRef === null
         ? "urlStringParam"
         : `urlShortcodeParam(${JSON.stringify(descriptor.brandRef.entity)})`;
-    case "idMulti":
-      return descriptor.brandRef === null
-        ? "urlStringParam"
-        : `urlShortcodeListParam(${JSON.stringify(descriptor.brandRef.entity)}${descriptor.nullable === null ? "" : ", { sentinels: PRESENCE_SENTINELS }"})`;
+    case "idMulti": {
+      if (descriptor.brandRef === null) return "urlStringParam";
+      // A Ledger Party filter also carries `@me`, resolved server-side.
+      const sentinels = [
+        ...(descriptor.nullable === null ? [] : ["...PRESENCE_SENTINELS"]),
+        ...(descriptor.brandRef.entity === "ledgerParty"
+          ? ["CURRENT_MEMBER_FILTER"]
+          : []),
+      ];
+      return `urlShortcodeListParam(${JSON.stringify(descriptor.brandRef.entity)}${sentinels.length === 0 ? "" : `, { sentinels: [${sentinels.join(", ")}] }`})`;
+    }
     case "select":
     case "multiselect": {
       const values =
@@ -154,6 +161,7 @@ export const renderSearchArtifacts = (
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
+        'import { CURRENT_MEMBER_FILTER } from "@cubby/shared";\n' +
         `${imports}\n` +
         'import { z } from "zod";\n\n' +
         'import { tableSearchFields } from "~/ui/data-table/table-search";\n' +

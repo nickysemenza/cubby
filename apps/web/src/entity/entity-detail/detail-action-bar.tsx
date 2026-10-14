@@ -49,11 +49,6 @@ const headerActions: HeaderActionRegistry = {
       default: m.ProductDetailActions,
     })),
   ),
-  ledgerParty: action<"ledgerParty">(() =>
-    import("~/app/collections/wardrobe-link").then((m) => ({
-      default: m.WardrobeAction,
-    })),
-  ),
   image: action<"image">(() =>
     import("~/app/images/image-processing-panel").then((m) => ({
       default: m.ImageDetailActions,

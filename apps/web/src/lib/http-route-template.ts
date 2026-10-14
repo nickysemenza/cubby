@@ -162,10 +162,6 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
     template: "/collections/smart/:starter",
   },
   {
-    pattern: /^\/collections\/wardrobe\/[^/]+$/u,
-    template: "/collections/wardrobe/:owner",
-  },
-  {
     pattern: new RegExp(`^/(${DETAIL_COLLECTIONS})/[^/]+$`, "u"),
     template: "/$1/:shortcode",
   },

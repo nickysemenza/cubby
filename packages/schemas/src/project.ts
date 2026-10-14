@@ -88,6 +88,7 @@ import {
   createPaginatedResponseSchema,
   entityFilter,
   entityFilterList,
+  partyFilterList,
   oneOrMany,
   presenceFilter,
   relativeDateFilter,
@@ -182,7 +183,7 @@ export type EmbeddedProjectScope = z.infer<typeof embeddedProjectScopeSchema>;
 
 export const projectFilterFields = {
   ...projectBaseFilterFields,
-  assigneeId: entityFilterList(ledgerPartyShortcode).optional(),
+  assigneeId: partyFilterList(ledgerPartyShortcode).optional(),
   assigneePresenceFilter: presenceFilter,
   ...dateRangeFields("date"),
   completionYear,
@@ -312,9 +313,8 @@ export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 
 export const taskFilterFields = {
   ...taskBaseFilterFields,
-  assigneeId: entityFilterList(ledgerPartyShortcode).optional(),
+  assigneeId: partyFilterList(ledgerPartyShortcode).optional(),
   assigneePresenceFilter: presenceFilter,
-  assignedToMe: z.boolean().optional(),
   projectId: entityFilterList(projectShortcode).optional(),
   subjectProductId: entityFilterList(productShortcode).optional(),
   topLevelOnly: z.boolean().optional(),
@@ -484,7 +484,7 @@ export const expenseFilterFields = {
   spendingCategoryPresenceFilter: presenceFilter,
   ...expenseBaseFilterFields,
   /** Expenses attributed to the given ledger part(ies) (`ExpenseAttribution`). */
-  ledgerPartyId: oneOrMany(ledgerPartyShortcode).optional(),
+  ledgerPartyId: partyFilterList(ledgerPartyShortcode).optional(),
   projectId: entityFilterList(projectShortcode).optional(),
   // Only meaningful alongside `projectId`: expands the filter to the project
   // plus every live descendant (sub-project subtree).

@@ -24,6 +24,7 @@ import {
   financialTransactionAllocation,
   inventoryEntry,
   ledgerParty,
+  product,
   purchase,
   vendorAccount,
 } from "~/server/db/schema";
@@ -770,4 +771,79 @@ export async function assertIndividualOwner(
   if (!row || !isIndividual(row)) {
     throw new Error("Inventory owners must be live member or guest parties");
   }
+}
+
+/**
+ * Live entries whose EFFECTIVE owner satisfies an owner filter: one of
+ * `codes` (Ledger Party shortcodes), ORed with a presence check, as nullable
+ * filters compose. Runs the same resolver as hydration over every live entry,
+ * so inherited stock matches and ambiguous evidence stays ownerless; callers
+ * narrow SQL by these ids before paging, counts, and totals.
+ */
+async function entriesByEffectiveOwner(
+  db: Database | DrizzleTransaction,
+  filter: { codes?: readonly string[]; presence?: "has" | "none" },
+) {
+  const entries = await unwrapDb(db)
+    .select({
+      id: inventoryEntry.id,
+      productId: inventoryEntry.productId,
+      ownershipMode: inventoryEntry.ownershipMode,
+      ownerLedgerPartyId: inventoryEntry.ownerLedgerPartyId,
+    })
+    .from(inventoryEntry)
+    .where(notDeleted(inventoryEntry));
+  const ownership = await loadEffectiveInventoryOwnership(db, entries);
+  const codes = new Set(filter.codes ?? []);
+  return entries.filter(({ id }) => {
+    const owner = ownership.get(id)?.effectiveOwner?.id ?? null;
+    return (
+      (owner !== null && codes.has(owner)) ||
+      (filter.presence === "has" && owner !== null) ||
+      (filter.presence === "none" && owner === null)
+    );
+  });
+}
+
+export const inventoryIdsByEffectiveOwner = async (
+  db: Database | DrizzleTransaction,
+  filter: { codes?: readonly string[]; presence?: "has" | "none" },
+): Promise<InventoryId[]> =>
+  (await entriesByEffectiveOwner(db, filter)).map(({ id }) => id);
+
+/**
+ * Products a member owns: any live entry's effective owner is one of `codes`,
+ * or, for a Product with no live entry at all (an Unlocated product), its
+ * single acquisition would hand the owner to an `inherit` row. The second arm
+ * is what lets "bought for me, never stocked" be a list.
+ */
+export async function productIdsByOwner(
+  db: Database | DrizzleTransaction,
+  codes: readonly string[],
+): Promise<ProductId[]> {
+  const wanted = new Set(codes);
+  const [stocked, unstocked] = await Promise.all([
+    entriesByEffectiveOwner(db, { codes }),
+    unwrapDb(db)
+      .select({ id: product.id })
+      .from(product)
+      .where(
+        and(
+          notDeleted(product),
+          sql`NOT EXISTS (SELECT 1 FROM "InventoryEntry" ie WHERE ie."productId" = ${product.id} AND ie."deletedAt" IS NULL)`,
+        ),
+      ),
+  ]);
+  const inherited = await loadInheritedProductOwners(
+    db,
+    unstocked.map(({ id }) => id),
+  );
+  return [
+    ...new Set([
+      ...stocked.map(({ productId }) => productId),
+      ...[...inherited].flatMap(([id, owner]) =>
+        owner !== null && wanted.has(owner.shortcode) ? [id] : [],
+      ),
+    ]),
+  ];
 }

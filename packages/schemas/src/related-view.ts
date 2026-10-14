@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Entity } from "./entity";
 import { localRelationshipByKey } from "./entity-manifest";
 import { money } from "./money";
+import { partyFilter } from "./pagination";
 import { entitySchema } from "./entity";
 import { imageUrlSummary } from "./image-summary";
 import {
@@ -771,7 +772,7 @@ export const productRelatedFilterFields = {
   ...trio("wish", wishShortcode),
   ...trio("task", taskShortcode),
   ...trio("meal", mealShortcode),
-  ...trio("eater", ledgerPartyShortcode),
+  ...trio("eater", partyFilter(ledgerPartyShortcode)),
 };
 export const recipeRelatedFilterFields = {
   ...trio("ingredient", ingredientShortcode),
@@ -781,7 +782,7 @@ export const mealRelatedFilterFields = {
   ...trio("recipe", recipeShortcode),
   ...trio("foodProduct", productShortcode),
   ...trio("foodIngredient", ingredientShortcode),
-  ...trio("eater", ledgerPartyShortcode),
+  ...trio("eater", partyFilter(ledgerPartyShortcode)),
 };
 export const locationRelatedFilterFields = {
   ...trio("ingredient", ingredientShortcode),
@@ -792,7 +793,7 @@ export const inventoryRelatedFilterFields = trio(
 );
 export const ingredientRelatedFilterFields = {
   ...trio("meal", mealShortcode),
-  ...trio("eater", ledgerPartyShortcode),
+  ...trio("eater", partyFilter(ledgerPartyShortcode)),
 };
 export const ledgerPartyRelatedFilterFields = {
   ...trio("meal", mealShortcode),

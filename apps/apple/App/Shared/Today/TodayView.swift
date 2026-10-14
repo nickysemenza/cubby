@@ -435,6 +435,7 @@ struct TodayContent: View {
                             retry: onRetryProblems ?? onRefresh)
                     }
                 }
+                Section("Your views") { PinnedViewLinks() }
                 Section("Quick actions") {
                     Button {
                         model.navigator.section = .capture
@@ -640,6 +641,8 @@ struct TodayContent: View {
                     }
                 }
 
+                dashboardPanel("Your views", systemImage: "pin") { PinnedViewLinks() }
+
                 dashboardPanel("Quick actions", systemImage: "arrow.up.right.square") {
                     macShortcuts
                 }
@@ -675,6 +678,22 @@ struct TodayContent: View {
             }
         }
     #endif
+
+    /// Home-pinned saved views from the manifest (`pin.surface == "home"`), one link per view into
+    /// its entity's generic list with the view's filters, sort and list view applied.
+    private struct PinnedViewLinks: View {
+        private let pinned = EntityCatalog.pinnedSavedViews(surface: "home")
+
+        var body: some View {
+            ForEach(pinned) { item in
+                NavigationLink(value: Route.entityList(item.entity, savedView: item.savedView.id)) {
+                    Label(item.savedView.label, systemImage: EntityCatalog[item.entity].sfSymbol)
+                }
+                .accessibilityLabel("\(item.savedView.label), \(EntityCatalog[item.entity].plural)")
+                .accessibilityIdentifier("today.pinned.\(item.id)")
+            }
+        }
+    }
 
     /// Matches the shared record row's `touchTarget` minHeight so a section's
     /// loading placeholder doesn't collapse to a single text line and then jump taller once its

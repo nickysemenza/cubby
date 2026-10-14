@@ -16,12 +16,16 @@ import {
   inventoryDisplayName,
   inventoryListItemOut,
 } from "@cubby/schemas/inventory";
-import type { InventoryPlacement } from "@cubby/schemas/inventory";
+import type {
+  InventoryPlacement,
+  inventoryFiltersSchema,
+} from "@cubby/schemas/inventory";
 import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
 import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
+import type { z } from "zod";
 
 import { projectListRows } from "~/entity/list-read-schema";
 import type { Database } from "~/server/db";
@@ -61,7 +65,10 @@ import {
   type ListProjection,
 } from "~/server/repo/list-projection";
 import { locationDescendantsSql } from "~/server/repo/location/descendants-sql";
-import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
+import {
+  categoryDescendantsSql,
+  categoryFeatureInSql,
+} from "~/server/repo/product-category-sql";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
@@ -93,6 +100,7 @@ import { assertLiveTargets, inventoryAuditRow } from "./helpers";
 import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
 import {
   assertIndividualOwner,
+  inventoryIdsByEffectiveOwner,
   loadEffectiveInventoryOwnership,
 } from "./ownership";
 import {
@@ -196,7 +204,15 @@ const inventoryReader = createEntityReader({
 export const getInventoryEntryByShortcode = (db: Database, shortcode: string) =>
   inventoryReader.getByShortcode(db, shortcode);
 
-interface InventoryFilters {
+// Effective-owner, ownership, and category-family filters keep their
+// published schema types (`@me` resolves in the kernel before this runs).
+type InventoryFilters = Pick<
+  z.output<typeof inventoryFiltersSchema>,
+  | "ownerLedgerPartyId"
+  | "ownerPresenceFilter"
+  | "ownershipMode"
+  | "categoryFeatureFilter"
+> & {
   searchQuery?: string;
   createdFrom?: string;
   createdTo?: string;
@@ -225,7 +241,7 @@ interface InventoryFilters {
   locationRole?: "global_unknown";
   dataStatus?: DataQualityStatus | DataQualityStatus[];
   dataGap?: string | string[];
-}
+};
 
 // Joined-column sorts the generic table-column path can't produce. Clauses
 // only DEFINE the field's order — the createdAt tie-break moved to the single
@@ -238,6 +254,13 @@ const resolveInventorySort =
     }
     if (sort.orderBy === "location") {
       return [direction(location.name)];
+    }
+    // The Product's category name, so a gallery keeps Shirts beside Shirts;
+    // uncategorized stock trails in either direction.
+    if (sort.orderBy === "category") {
+      return [
+        sql`(SELECT c."name" FROM "ProductCategory" c WHERE c."id" = ${product.categoryId} AND c."deletedAt" IS NULL) ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} nulls last`,
+      ];
     }
     // Amount is stored as a unit + value pair: group by unit, then by size.
     if (sort.orderBy === "amount") {
@@ -307,13 +330,27 @@ export const buildInventoryWhere = async (
     filters.valuationStatus === undefined
       ? undefined
       : (loadedValuations ?? (await loadLiveInventoryValuations(db)));
-  const [locationIds, subtreeLocationIds, productIds, categoryIds] =
+  const ownerCodes =
+    filters.ownerLedgerPartyId === undefined
+      ? undefined
+      : [filters.ownerLedgerPartyId].flat();
+  const [locationIds, subtreeLocationIds, productIds, categoryIds, ownedIds] =
     await Promise.all([
       resolveFilterIds(db, "location", filters.locationIdFilter),
       resolveFilterIds(db, "location", filters.locationSubtreeFilter),
       resolveFilterIds(db, "product", filters.productIdFilter),
       resolveFilterIds(db, "productCategory", filters.categoryFilter),
+      ownerCodes === undefined && filters.ownerPresenceFilter === undefined
+        ? undefined
+        : inventoryIdsByEffectiveOwner(db, {
+            codes: ownerCodes,
+            presence: filters.ownerPresenceFilter,
+          }),
     ]);
+  const categoryFeatures =
+    filters.categoryFeatureFilter === undefined
+      ? undefined
+      : [filters.categoryFeatureFilter].flat();
 
   return buildSearchConditions(
     inventoryEntry,
@@ -325,7 +362,7 @@ export const buildInventoryWhere = async (
     [
       ...auditDateWhereConditions(inventoryEntry, filters),
       ...relatedWhereConditions("inventory", filters, inventoryEntry.id),
-      // Stored id filters (`ownerLedgerPartyId`) come from the manifest; this
+      // Stored filters (`ownershipMode`) come from the manifest; this
       // hand-built where must apply them since it bypasses `inventoryScaffold.where`.
       ...declaredFilterPredicates("inventory", inventoryEntry, filters),
       listIdsCondition(inventoryEntry.shortcode, filters),
@@ -340,6 +377,14 @@ export const buildInventoryWhere = async (
       categoryIds === undefined
         ? undefined
         : sql`${product.categoryId} IN ${categoryDescendantsSql(categoryIds)}`,
+      categoryFeatures === undefined
+        ? undefined
+        : categoryFeatureInSql(sql`${product.categoryId}`, categoryFeatures),
+      ownedIds === undefined
+        ? undefined
+        : ownedIds.length === 0
+          ? sql`false`
+          : inArray(inventoryEntry.id, ownedIds),
       filters.locationRole === "global_unknown"
         ? gapCondition("inventory", "inventory_unknown_location")
         : undefined,

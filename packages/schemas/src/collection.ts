@@ -3,7 +3,6 @@ import { z } from "zod";
 import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import {
   locationShortcode,
-  ledgerPartyShortcode,
   inventoryShortcode,
   productShortcode,
   purchaseShortcode,
@@ -11,7 +10,6 @@ import {
 import { amount } from "./codec";
 import { MAX_PAGE_SIZE } from "./pagination";
 import { productCategoryShortcode } from "./identifier-fields";
-import { productCategoryFeature } from "./product-category-fields";
 import { tradeSchema } from "./project";
 
 export const collectionSlug = z
@@ -65,14 +63,6 @@ export type CollectionProductPurchaseOut = z.infer<
 const ruleText = z.string().trim().min(1).max(200);
 export const smartCollectionRule = z.discriminatedUnion("kind", [
   z.strictObject({
-    kind: z.literal("categoryFeatureEquals"),
-    value: productCategoryFeature,
-  }),
-  z.strictObject({
-    kind: z.literal("effectiveOwnerEquals"),
-    value: ledgerPartyShortcode,
-  }),
-  z.strictObject({
     kind: z.literal("categoryEquals"),
     value: productCategoryShortcode,
   }),
@@ -86,13 +76,9 @@ export const smartCollectionRule = z.discriminatedUnion("kind", [
 ]);
 export type SmartCollectionRule = z.infer<typeof smartCollectionRule>;
 export const smartCollectionKey = z.enum(["painting", "measuring", "festool"]);
-const smartCollectionDefinitionKey = z.enum([
-  ...smartCollectionKey.options,
-  "wardrobe",
-]);
 export type SmartCollectionKey = z.infer<typeof smartCollectionKey>;
 export const smartCollectionDefinition = z.strictObject({
-  key: smartCollectionDefinitionKey,
+  key: smartCollectionKey,
   name: z.string().trim().min(1).max(100),
   rules: z.array(smartCollectionRule).max(20),
   match: z.enum(["all", "any"]).optional(),
@@ -127,9 +113,7 @@ export const SMART_COLLECTION_STARTERS: readonly SmartCollectionDefinition[] = [
 export const smartCollectionMatch = z.object({
   ruleIndex: z.number().int().nonnegative(),
   kind: z.enum([
-    "effectiveOwnerEquals",
     "categoryEquals",
-    "categoryFeatureEquals",
     "productTagEquals",
     "manufacturerEquals",
     "locationNameContains",
@@ -262,13 +246,11 @@ export const collectionCreateInput = collectionSubject.and(
 );
 
 export const smartCollectionSummary = z.object({
-  key: smartCollectionDefinitionKey,
+  key: smartCollectionKey,
   name: z.string(),
   totalCount: z.number().int().nonnegative(),
   sourceCounts: z.object({
-    effectiveOwnerEquals: z.number().int().nonnegative(),
     categoryEquals: z.number().int().nonnegative(),
-    categoryFeatureEquals: z.number().int().nonnegative(),
     productTagEquals: z.number().int().nonnegative(),
     manufacturerEquals: z.number().int().nonnegative(),
     locationNameContains: z.number().int().nonnegative(),
@@ -308,7 +290,6 @@ export const smartCollectionReference = z.discriminatedUnion("kind", [
     kind: z.literal("starter"),
     key: z.enum(["painting", "measuring", "festool"]),
   }),
-  z.object({ kind: z.literal("wardrobe"), ownerId: ledgerPartyShortcode }),
 ]);
 export const smartCollectionReferenceInput = smartCollectionDetailInput
   .omit({ definition: true })
@@ -316,16 +297,6 @@ export const smartCollectionReferenceInput = smartCollectionDetailInput
 export function collectionDefinitionForReference(
   reference: z.infer<typeof smartCollectionReference>,
 ): SmartCollectionDefinition {
-  if (reference.kind === "wardrobe")
-    return {
-      key: "wardrobe",
-      name: "Wardrobe",
-      match: "all",
-      rules: [
-        { kind: "effectiveOwnerEquals", value: reference.ownerId },
-        { kind: "categoryFeatureEquals", value: "apparel" },
-      ],
-    };
   const starter = SMART_COLLECTION_STARTERS.find(
     (definition) => definition.key === reference.key,
   );

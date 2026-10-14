@@ -72,9 +72,8 @@ struct RouteDestinationView: View {
             EntityDetailView(key: key, id: id).id("\(key.rawValue)/\(id)")
         case .connectedRecords(let source, let viewKey):
             ConnectedRecordsListView(source: source, viewKey: viewKey)
-        case .wardrobe(let ownerID, let ownerName):
-            WardrobeView(ownerID: ownerID, ownerName: ownerName)
-        case .entityList(let key, let filters): EntityListView(key: key, filters: filters)
+        case .entityList(let key, let filters, let savedView):
+            EntityListView(key: key, filters: filters, savedViewID: savedView)
         case .audit(let id): AuditRootView(locationID: id)
         case .needsPhoto(let id): NeedsPhotoView(locationID: id)
         case .locationPhotoPass(let scope): LocationPhotoPassView(scope: scope)

@@ -21,7 +21,13 @@ import { DeferredListValue } from "./deferred-list-value";
 const shelfRowSchema = z.looseObject({
   id: z.string(),
   displayImages: z
-    .array(z.object({ id: z.string(), url: z.string() }))
+    .array(
+      z.object({
+        id: z.string(),
+        url: z.string(),
+        representations: z.object({ preferred: z.string() }).optional(),
+      }),
+    )
     .optional(),
 });
 type ShelfRow = z.infer<typeof shelfRowSchema>;
@@ -40,8 +46,14 @@ const imageBrowserMedia = z.object({
   url: z.string(),
   status: z.literal("UPLOADED"),
 });
+// A card shows the server-preferred representation: the background-removed
+// cutout when one is ready and the image is not pinned to its original.
 function shelfImages(entity: BrowserRoutedEntity, row: ShelfRow) {
-  if (entity !== "image") return row.displayImages ?? [];
+  if (entity !== "image")
+    return (row.displayImages ?? []).map((image) => ({
+      id: image.id,
+      url: image.representations?.preferred ?? image.url,
+    }));
   const image = imageBrowserMedia.safeParse(row);
   return image.success ? [image.data] : [];
 }

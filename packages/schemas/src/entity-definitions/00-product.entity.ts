@@ -1,6 +1,7 @@
 import { productChildren } from "../child-tables/product.js";
 import { defineEntity } from "./definition.js";
 import { PRODUCT_UNCLASSIFIED_GROUP_KEY } from "../group-keys";
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { valueCollectionPatch } from "@cubby/schemas/entity-collection";
@@ -144,6 +145,31 @@ export default defineEntity({
     },
     list: {
       savedViews: [
+        // `@me` is the viewing member (ADR 0015).
+        {
+          id: "bought-for-me",
+          label: "Bought for me, not stocked",
+          description:
+            "Products your purchases hand to you that no inventory entry places yet",
+          filters: [
+            { id: "ownerLedgerPartyId", value: [CURRENT_MEMBER_FILTER] },
+            { id: "location", value: [FILTER_NONE] },
+          ],
+          sort: [{ id: "createdAt", desc: true }],
+          layout: { columnVisibility: { location: true } },
+          view: "shelf",
+        },
+        {
+          id: "wardrobe-photos",
+          label: "Wardrobe without photos",
+          description: "Your clothes and accessories that still need a photo",
+          filters: [
+            { id: "ownerLedgerPartyId", value: [CURRENT_MEMBER_FILTER] },
+            { id: "categoryFeature", value: ["apparel"] },
+            { id: "image", value: "none" },
+          ],
+          layout: { columnVisibility: { categoryFeature: true, image: true } },
+        },
         {
           id: "research-queue",
           label: "Research queue",
@@ -2182,6 +2208,16 @@ Rules:
           { value: "has", label: "Has UPC", meta: true },
           { value: "none", label: "(none)", meta: true },
         ],
+      },
+      // Effective ownership, never stored on a Product: stocked entries'
+      // effective owners, or an Unlocated product's inherited owner.
+      {
+        columnId: "ownerLedgerPartyId",
+        urlKey: "owner",
+        kind: "idMulti",
+        label: "Owner",
+        placeholder: "Filter by owner...",
+        brandRef: { entity: "ledgerParty" },
       },
       {
         columnId: "categoryFeature",

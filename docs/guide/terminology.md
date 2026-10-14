@@ -81,7 +81,9 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
   off it.
 
 - **InventoryEntry** (`InventoryEntry`) — a physical fact: `amount` of one
-  Product at one Location. Unique per `(productId, locationId)`. Its
+  Product at one Location. Unique per Product, Location, placement, and
+  ownership (mode and owner), so a member's copy and another's are separate
+  entries. Its
   `amount` is stored as `amountValue/amountUnit`; its `valuation` is computed on
   every read (the amount routed through the Product's unit mappings to its
   current price). **Not** the same as
@@ -517,6 +519,14 @@ _Avoid_: stash, reserve, pantry inventory
 **Ledger Party**:
 An economic participant in household contribution accounting, and the identity behind Device ownership and Image Sighting reports. Its kind is exactly member, guest, or household. A null attribution is unknown; unknown is not a party.
 _Avoid_: payer, account owner, beneficiary
+
+**Owner**:
+The member or guest who owns an Inventory entry. An entry's own confirmed owner wins; otherwise it inherits one from acquisition evidence (the Expense beneficiary, then the account's default), and that inherited owner stays unconfirmed until a member confirms it. Only Inventory entries have an owner; a Product never does, so a thing nobody has recorded as Inventory belongs to no one yet. Household-owned stock has no owner.
+_Avoid_: belongs to, assigned to, buyer
+
+**My stuff**:
+The Inventory entries whose Owner is the viewing member. Wardrobe is My stuff narrowed to apparel, and other narrowed views (tools, books) work the same way; another member's stuff is the same view with that member as Owner.
+_Avoid_: my products, my collection, belongings
 
 **Device**:
 One registered native app instance on a phone or Mac, identified independently of a session or push token; a reinstall can retain the same identity. Optionally owned by a Ledger Party member and linked to the physical phone or Mac as a Product. An automatic-work switch, set on the device itself, and a remote-pause override, set from the web, together decide whether the job dispatcher sends it companion work; either one is enough to make it a plain viewer.

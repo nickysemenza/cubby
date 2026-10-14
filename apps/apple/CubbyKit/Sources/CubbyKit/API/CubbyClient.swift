@@ -96,23 +96,6 @@ public actor CubbyClient {
 
     // MARK: - Generic entity access
 
-    public func wardrobe(
-        ownerID: LedgerPartyShortcode, search: String? = nil, pageIndex: Int = 0,
-        pageSize: Int = 50
-    ) async throws -> SmartCollectionDetailOut {
-        try await perform {
-            try await api.collection_referenceDetail(
-                body: .json(
-                    SmartCollectionReferenceInput(
-                        search: search?.isEmpty == false ? search : nil,
-                        pagination: .init(pageIndex: max(0, pageIndex), pageSize: min(100, max(1, pageSize))),
-                        reference: .wardrobe(.init(kind: .wardrobe, ownerId: ownerID))
-                    )
-                )
-            ).ok.body.json
-        }
-    }
-
     public func fieldExplanation(
         subject: EntityRef, field: String, surface: String = "detail"
     ) async throws -> FieldExplanationOutput {

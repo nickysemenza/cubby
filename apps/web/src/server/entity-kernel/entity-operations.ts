@@ -69,6 +69,7 @@ import {
   entityBrowserMutationResultSchema,
   entityQueryResultSchema,
 } from "./contracts";
+import { resolveCurrentMemberFilters } from "./current-member-filter";
 import { parseSchema, parseSorts, parseGroupBy } from "./list-input";
 
 type EntityListInput<TFilters = unknown> = {
@@ -321,7 +322,7 @@ export const defineEntityOperations = <
   ),
   list: bindWorkflow(
     workflow<EntityKernelContext, EntityListInput>(`${binding.entity}.list`)
-      .call("validated", async (_, { input }) => {
+      .call("validated", async ({ context }, { input }) => {
         const { ids, ...repositoryFilters } = z
           .object({
             ids: z.array(z.string()).max(500).optional(),
@@ -329,9 +330,13 @@ export const defineEntityOperations = <
           .passthrough()
           .parse(input.filters);
         for (const id of ids ?? []) binding.schemas.id.parse(id);
-        const filters = parseSchema<S["filters"], unknown>(
+        const filters = await resolveCurrentMemberFilters(
+          context,
           binding.schemas.filters,
-          repositoryFilters,
+          parseSchema<S["filters"], unknown>(
+            binding.schemas.filters,
+            repositoryFilters,
+          ),
         );
         const searchQuery = entityListSearchSchema.parse(filters).searchQuery;
         return {

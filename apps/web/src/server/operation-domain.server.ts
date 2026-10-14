@@ -8,6 +8,7 @@ import {
   type StartOperationId,
   startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
+import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-member-filter";
 import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
 import { type ReadPolicy, readPolicyFor } from "~/server/read-policy";
 import type { StartOperationResult } from "~/server/start-operation.contract";
@@ -158,6 +159,24 @@ function declaredOutputSchema(descriptor: OperationDomainDescriptor) {
   return descriptor.definition.output;
 }
 
+/**
+ * A query's run with `@me` resolved in every Ledger Party filter its input
+ * schema declares (ADR 0015), so no read handler forwards the token to a
+ * repository unresolved.
+ */
+function resolvingCurrentMember<Descriptor extends OperationDomainDescriptor>(
+  kind: Descriptor["definition"]["kind"],
+  inputSchema: z.ZodType,
+  run: OperationRun<Descriptor>,
+): OperationRun<Descriptor> {
+  if (kind !== "query") return run;
+  return async (context, input) =>
+    run(
+      context,
+      await resolveCurrentMemberFilters(context, inputSchema, input),
+    );
+}
+
 function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
   descriptor: Descriptor,
   entry: OperationHandlerEntry<Descriptor>,
@@ -166,6 +185,11 @@ function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
   const configured = configuredOperationHandler(entry);
   const inputSchema = configured.input ?? declaredInputSchema(descriptor);
   const outputSchema = configured.output ?? declaredOutputSchema(descriptor);
+  const run = resolvingCurrentMember(
+    descriptor.definition.kind,
+    inputSchema,
+    configured.run,
+  );
 
   return (options) => {
     const execution: OperationExecutionOptions<
@@ -180,7 +204,7 @@ function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
       request: options.request,
       readPolicy: readPolicyFor(descriptor.id, descriptor.definition.kind),
       run: (context, parsed) =>
-        configured.run({ ...context, signal: options.request.signal }, parsed),
+        run({ ...context, signal: options.request.signal }, parsed),
     };
     return adapter.execute(execution);
   };
@@ -228,14 +252,15 @@ export function implementOperationDomain(
       adapter,
     );
     const configured = configuredOperationHandler(entry);
+    const input = configured.input ?? definition.input;
     runs[member] = {
       id: operation.id,
-      input: configured.input ?? definition.input,
+      input,
       output:
         configured.output instanceof z.ZodType
           ? configured.output
           : definition.output,
-      run: configured.run,
+      run: resolvingCurrentMember(definition.kind, input, configured.run),
     };
   }
   return { contract, runs, operations };

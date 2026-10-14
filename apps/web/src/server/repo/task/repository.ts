@@ -15,17 +15,9 @@ export const taskRepository = defineRepository("task", {
   lifecycle: { delete: TASK_DELETE_EDGE_POLICY },
   get: onDb(getTaskByShortcode),
   list: (ctx, filters, sorts, pagination) =>
-    taskList(ctx.db, filters, sorts, pagination, "page", ctx.actorContext),
+    taskList(ctx.db, filters, sorts, pagination, "page"),
   listRead: (ctx, filters, sorts, pagination, projection) =>
-    taskListRead(
-      ctx.db,
-      filters,
-      sorts,
-      pagination,
-      projection,
-      "page",
-      ctx.actorContext,
-    ),
+    taskListRead(ctx.db, filters, sorts, pagination, projection, "page"),
   create: asActor(createTask),
   update: (ctx, id, data) =>
     updateTask(ctx.db, id, data, ctx.actorContext, ctx.caldavHooks?.task),

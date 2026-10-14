@@ -1,6 +1,11 @@
 import type { FILTER_KINDS } from "@cubby/schemas/entity-definitions/definition";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { FILTER_ANY, FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
-import { humanize, UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import {
+  CURRENT_MEMBER_FILTER,
+  humanize,
+  UNRESOLVABLE_ENTITY_FILTER,
+} from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { partition } from "es-toolkit";
 import { match } from "ts-pattern";
@@ -48,6 +53,8 @@ export interface FilterSpecCore {
   urlKey?: string;
   kind: FilterKind;
   brand?: (value: string) => string;
+  /** Declared target for the shortcode-native reference, when applicable. */
+  referenceEntity?: ShortcodeEntity;
   expand?: (value: string) => FilterPatch;
   /**
    * No table column renders this spec — it's URL state only: a deep link's
@@ -147,6 +154,12 @@ export function buildFiltersFromManifest(
 ) {
   const filters: FilterPatch = {};
   const brand = (spec: FilterSpecCore, value: string): string => {
+    // `@me` stays a token on the wire; the entity kernel resolves it.
+    if (
+      value === CURRENT_MEMBER_FILTER &&
+      spec.referenceEntity === "ledgerParty"
+    )
+      return value;
     try {
       return spec.brand?.(value) ?? value;
     } catch {

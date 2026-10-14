@@ -25,7 +25,6 @@ export default defineEntity({
         "recipes-eaten":
           "Reachable through the Meals table on this page; the recipe rollup is three joins deep.",
       },
-      additionalSections: [{ kind: "slot", id: "wardrobe", title: "Wardrobe" }],
     },
     // Merge is a kernel capability with no browser operation yet.
   },

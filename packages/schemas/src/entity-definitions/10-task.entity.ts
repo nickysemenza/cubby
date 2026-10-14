@@ -16,6 +16,7 @@ import {
 } from "@cubby/schemas/task-fields";
 import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { imageOut } from "./field-primitives.js";
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
@@ -89,8 +90,9 @@ export default defineEntity({
               id: "status",
               value: taskStatusValues.filter((status) => status !== "done"),
             },
-            { id: "assignedToMe", value: "true" },
+            { id: "assigneeId", value: [CURRENT_MEMBER_FILTER] },
           ],
+          pin: { surface: "home", order: 2 },
         },
         {
           id: "unassigned",
@@ -877,16 +879,6 @@ export default defineEntity({
     audit: true,
     schema: { module: "@cubby/schemas/project", export: "taskFilterFields" },
     descriptors: [
-      {
-        columnId: "assignedToMe",
-        field: "assignedToMe",
-        kind: "boolean",
-        placeholder: "My tasks",
-        options: [
-          { value: "true", label: "My tasks" },
-          { value: "false", label: "All assignees" },
-        ],
-      },
       {
         columnId: "assigneeId",
         urlKey: "assignee",

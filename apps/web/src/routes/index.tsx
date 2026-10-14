@@ -6,6 +6,7 @@ import { getHomeAsOfWindow } from "~/features/home/home-as-of-window";
 import { TodayAttention } from "~/features/home/HouseCard";
 import { TodayMeals } from "~/features/home/MealsCard";
 import { PantryValueCard } from "~/features/home/PantryValueCard";
+import { PinnedViews } from "~/features/home/PinnedViews";
 import { ProblemsBanner } from "~/features/home/problems-banner";
 import { DailyPasses } from "~/features/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/features/home/RecentActivityFeed";
@@ -114,6 +115,9 @@ function Home() {
           It carries the destructive tone for real defects and a quiet one for
           a coverage-only backlog, which is why it can render either way. */}
       <ProblemsBanner />
+
+      {/* Declared saved views pinned to home (Wardrobe, My stuff, …). */}
+      <PinnedViews />
 
       {/* The briefing reads tasks, meals, recurring actions, then nutrition on
           a phone. Desktop keeps tasks and meals side by side. */}

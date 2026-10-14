@@ -24,7 +24,6 @@ export interface SmartCollectionGraph {
   inventory: readonly {
     productId: string;
     locationId: string;
-    effectiveOwnerId?: string | null;
   }[];
   expenses: readonly {
     productId: string | null;
@@ -39,17 +38,6 @@ type ExpenseByProduct = ReadonlyMap<
   string,
   SmartCollectionGraph["expenses"][number][]
 >;
-
-const ownerEvidence = (
-  graph: SmartCollectionGraph,
-  productId: string,
-  ownerId: string,
-): string[] =>
-  graph.inventory.some(
-    (row) => row.productId === productId && row.effectiveOwnerId === ownerId,
-  )
-    ? [`Owner: ${ownerId}`]
-    : [];
 
 const locationEvidence = (
   productId: string,
@@ -87,21 +75,14 @@ const expenseTradeEvidence = (
 function evidenceForRule(
   rule: SmartRule,
   product: SmartProduct,
-  graph: SmartCollectionGraph,
   placements: ReadonlyMap<string, string[]>,
   ancestry: ReadonlyMap<string, SmartLocation[]>,
   expenses: ExpenseByProduct,
 ): string[] {
   switch (rule.kind) {
-    case "effectiveOwnerEquals":
-      return ownerEvidence(graph, product.id, rule.value);
     case "categoryEquals":
       return product.category?.path.some((node) => node.id === rule.value)
         ? [`Category: ${rule.value}`]
-        : [];
-    case "categoryFeatureEquals":
-      return product.category?.feature === rule.value
-        ? [`Category feature: ${rule.value}`]
         : [];
     case "productTagEquals":
       return product.tags.includes(rule.value) ? [`Tag: ${rule.value}`] : [];
@@ -161,9 +142,7 @@ export function evaluateSmartCollections(
       name: definition.name,
       totalCount: 0,
       sourceCounts: {
-        effectiveOwnerEquals: 0,
         categoryEquals: 0,
-        categoryFeatureEquals: 0,
         productTagEquals: 0,
         manufacturerEquals: 0,
         locationNameContains: 0,
@@ -176,7 +155,6 @@ export function evaluateSmartCollections(
         const evidence = evidenceForRule(
           rule,
           product,
-          graph,
           placements,
           ancestry,
           expenses,

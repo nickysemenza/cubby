@@ -2,31 +2,28 @@ import { seedWardrobePrerequisites } from "./fixtures-catalog";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-test("wardrobe uses the selected owner's quantity and responds to explicit ownership edits", async ({
+// Wardrobe is the generic Inventory list narrowed to an owner and the apparel
+// category family; the same list answers for any member.
+const wardrobeUrl = (owner: string) =>
+  `/inventory?owner=${owner}&categoryFeature=apparel&view=shelf`;
+
+test("wardrobe lists only the owner's entries and follows explicit ownership edits", async ({
   page,
 }) => {
   const name = `Wardrobe ${Date.now()}`;
   const { owner, entry } = await seedWardrobePrerequisites(page, name);
-  await gotoAuthenticatedPage(
-    page,
-    `/collections/wardrobe/${owner.id}`,
-    page.getByRole("heading", { name: "Wardrobe", exact: true }),
-  );
+  const ownCard = page.getByRole("link", {
+    name: `${name} shirt · ${name} drawer`,
+    exact: true,
+  });
+  await gotoAuthenticatedPage(page, wardrobeUrl(owner.id), ownCard);
   await expect(
-    page.getByRole("link", { name: `${name} shirt`, exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Show 1 current location", exact: true })
-    .click();
-  await expect(
-    page.getByRole("link", { name: `${name} drawer`, exact: false }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: `${name} other drawer`, exact: false }),
+    page.getByRole("link", {
+      name: `${name} shirt · ${name} other drawer`,
+      exact: true,
+    }),
   ).toHaveCount(0);
-  await page.keyboard.press("Escape");
-  await expect(page.getByText("3 each", { exact: true })).toBeVisible();
-  await expect(page.getByText("7 each", { exact: true })).toHaveCount(0);
+
   await gotoAuthenticatedPage(
     page,
     `/inventory/${entry.id}`,
@@ -61,12 +58,27 @@ test("wardrobe uses the selected owner's quantity and responds to explicit owner
     page.getByText("Ownership saved", { exact: true }),
   ).toBeVisible();
   await expect(current).toHaveText("No individual owner");
+
   await gotoAuthenticatedPage(
     page,
-    `/collections/wardrobe/${owner.id}`,
-    page.getByRole("heading", { name: "Wardrobe", exact: true }),
+    wardrobeUrl(owner.id),
+    page.getByRole("heading", { name: "Inventory", exact: true }),
   );
-  await expect(
-    page.getByRole("link", { name: `${name} shirt`, exact: true }),
-  ).toHaveCount(0);
+  await expect(ownCard).toHaveCount(0);
+});
+
+test("home pins open the viewer's wardrobe as a generic saved view", async ({
+  page,
+}) => {
+  const wardrobe = page.getByRole("link", { name: /^Wardrobe(, \d+)?$/ });
+  await gotoAuthenticatedPage(page, "/", wardrobe);
+  const href = new URL(
+    (await wardrobe.getAttribute("href")) ?? "",
+    "http://localhost",
+  );
+  expect(href.pathname).toBe("/inventory");
+  // `@me` travels as a token; the server resolves it per member.
+  expect(href.searchParams.get("owner")).toBe("@me");
+  expect(href.searchParams.get("categoryFeature")).toBe("apparel");
+  expect(href.searchParams.get("view")).toBe("shelf");
 });

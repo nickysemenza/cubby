@@ -126,6 +126,7 @@ import {
 } from "~/server/repo/expense-aggregate-sql";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
+import { productIdsByOwner } from "~/server/repo/inventory/ownership";
 import {
   enrichProductRowsWithInventoryValuations,
   loadInventoryValuations,
@@ -698,12 +699,19 @@ export const buildProductWhere = async (
   const requestedGrowsPlantCodes = filters.growsPlantIdFilter
     ? [filters.growsPlantIdFilter].flat()
     : [];
-  const [selectedLocationIds, selectedIngredientIds, selectedGrowsPlantIds] =
-    await Promise.all([
-      resolveAllPresent(db, "location", requestedLocationCodes),
-      resolveAllPresent(db, "ingredient", requestedIngredientCodes),
-      resolveAllPresent(db, "plant", requestedGrowsPlantCodes),
-    ]);
+  const [
+    selectedLocationIds,
+    selectedIngredientIds,
+    selectedGrowsPlantIds,
+    ownedProductIds,
+  ] = await Promise.all([
+    resolveAllPresent(db, "location", requestedLocationCodes),
+    resolveAllPresent(db, "ingredient", requestedIngredientCodes),
+    resolveAllPresent(db, "plant", requestedGrowsPlantCodes),
+    filters.ownerLedgerPartyId === undefined
+      ? undefined
+      : productIdsByOwner(db, [filters.ownerLedgerPartyId].flat()),
+  ]);
 
   // Cross-entity filters must stay uncorrelated id-set subqueries shared by all product list query paths.
   const productIdsWithLiveInventory = dbClient
@@ -1014,6 +1022,11 @@ export const buildProductWhere = async (
   ];
 
   const associationConditions = () => [
+    ownedProductIds === undefined
+      ? undefined
+      : ownedProductIds.length === 0
+        ? sql`false`
+        : inArray(product.id, ownedProductIds),
     // The shared displayable-image definition: what the thumbnail cell renders.
     filters.imagePresenceFilter === "has"
       ? productHasDisplayableImageSql(product.id)

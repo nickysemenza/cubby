@@ -47,7 +47,6 @@ enum DetailSlotRegistry {
         .purchaseProjectAllocation: { reportSlot(.purchase_projectAllocation, $0) },
         .purchaseFinancialSettlement: { reportSlot(.purchase_financialSettlement, $0) },
         .expenseSettlement: { reportSlot(.expense_settlement, $0) },
-        .ledgerPartyWardrobe: { AnyView(WardrobeDetailSlot(ownerID: $0.id, ownerName: $0.title)) },
         .vendorSpendingClassification: { AnyView(SpendingClassificationView(key: .vendor, row: $0)) },
         .productCategorySpendingClassification: {
             AnyView(SpendingClassificationView(key: .productCategory, row: $0))
@@ -189,18 +188,6 @@ private struct RunPausedHandoff: View {
                 .font(.subheadline.weight(.medium))
             Link("Open run controls", destination: appModel.webURL(for: .run, id: runID))
         }
-    }
-}
-
-private struct WardrobeDetailSlot: View {
-    let ownerID: String
-    let ownerName: String
-
-    var body: some View {
-        NavigationLink(value: Route.wardrobe(ownerID: ownerID, ownerName: ownerName)) {
-            Label("Browse wardrobe", systemImage: "tshirt")
-        }
-        .accessibilityIdentifier("detail.ledgerParty.wardrobe")
     }
 }
 

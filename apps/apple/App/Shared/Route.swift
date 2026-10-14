@@ -15,13 +15,12 @@ enum Route: Hashable {
     /// currently reporting activities (see `BackgroundActivityCenter`). "Finished" once the id is
     /// gone rather than a distinct terminal state.
     case localActivity(String)
-    /// A generic list, optionally opened with filters already applied (keyed by wire name).
-    case entityList(EntityKey, filters: EntityFilterState = EntityFilterState())
+    /// A generic list, optionally opened with filters already applied (keyed by wire name), or
+    /// with one of the entity's declared saved views (filters, sort and list view) applied.
+    case entityList(EntityKey, filters: EntityFilterState = EntityFilterState(), savedView: String? = nil)
     case entityDetail(EntityKey, id: String)
     /// One curated connected view's complete list for a record (the detail page shows three rows).
     case connectedRecords(EntityRef, viewKey: String)
-    /// Apparel owned by one household member or guest.
-    case wardrobe(ownerID: String, ownerName: String)
     /// A walk-the-shelf recount, optionally pre-scoped to a location.
     case audit(locationID: LocationCode?)
     /// The products-without-a-photo queue, optionally narrowed to a location.

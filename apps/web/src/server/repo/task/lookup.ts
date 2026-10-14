@@ -1,4 +1,3 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import type { EntityId } from "@cubby/schemas/identifiers";
 import type {
   PaginationParams,
@@ -52,7 +51,6 @@ import {
 } from "~/server/repo/project/subtree";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 
-import { currentMemberLedgerParty } from "../current-member-party";
 import { parseCompleteListRead } from "../list-read-adapters";
 import {
   effectiveTaskAssigneeSql,
@@ -196,7 +194,6 @@ const taskScaffold = listScaffold("task", task);
 export const buildTaskWhere = async (
   db: Database,
   filters: TaskFilters,
-  actor?: ActorContext,
   tree?: ProjectTree,
 ) => {
   const assigneeIds = await resolveAllPresent(
@@ -204,10 +201,6 @@ export const buildTaskWhere = async (
     "ledgerParty",
     filters.assigneeId ? [filters.assigneeId].flat() : [],
   );
-  const member =
-    filters.assignedToMe && actor
-      ? await currentMemberLedgerParty(db, actor)
-      : null;
   const effectiveAssignee = effectiveTaskAssigneeSql();
   const assigneePresence =
     filters.assigneePresenceFilter === "has"
@@ -320,11 +313,6 @@ export const buildTaskWhere = async (
     // it can't be a sibling condition here (that AND is what made
     // "project A or unassigned" inexpressible).
     assigneeCondition,
-    filters.assignedToMe
-      ? member
-        ? sql`${effectiveAssignee} = ${member.id}`
-        : sql`false`
-      : undefined,
     projectCondition,
     subjectProductCondition(),
     filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
@@ -360,10 +348,9 @@ export const taskListRead = async (
   pagination: PaginationParams,
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
-  actor?: ActorContext,
   tree?: ProjectTree,
 ) => {
-  const whereClause = await buildTaskWhere(db, filters, actor, tree);
+  const whereClause = await buildTaskWhere(db, filters, tree);
   return taskScaffold.list(
     db,
     { filters, sorts, pagination, readIntent, projection },
@@ -448,7 +435,6 @@ export const taskList = (
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
-  actor?: ActorContext,
   tree?: ProjectTree,
 ) =>
   parseCompleteListRead(
@@ -460,7 +446,6 @@ export const taskList = (
       pagination,
       { kind: "full" },
       readIntent,
-      actor,
       tree,
     ),
   );
