@@ -1495,9 +1495,10 @@ describe("member actionable Work queue", () => {
         row.name === "Synthetic receipt policy order" &&
         row.source === "research",
     );
-    // No document is expected, so the row names only the missing item lines.
+    // No document is expected; missing account attribution and item lines
+    // both remain actionable on this Purchase.
     expect(receipt?.reason).toBe(
-      "The order is not yet broken into item lines with their Products.",
+      "Purchase is not assigned to a member's vendor account. The order is not yet broken into item lines with their Products.",
     );
   });
 });

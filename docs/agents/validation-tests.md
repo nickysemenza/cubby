@@ -18,6 +18,8 @@ journeys inspect rows across scrolling instead of treating unmounted rows as mis
 Scope ingredient-link assertions to the recipe's ingredient list items. Entity
 previews can repeat the same ingredient name elsewhere in a sidebar; a broad
 text assertion can become ambiguous when the preview opens.
+Relation-table assertions target the visible record link by its href within
+the section; shortcode metadata can be mounted but hidden.
 When removing shared UI bindings, render every affected header branch or run
 the app TypeScript check before handoff. Helper-only tests and lint do not
 establish that a list or detail header can render with its actual props.
