@@ -7,6 +7,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 
+import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { user } from "~/server/db/auth.schema";
 import { runFinding, suggestion } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -24,7 +25,8 @@ import { ensureRun } from "~/server/runs/ensure-run";
 // a check-filtered page; gap rows lose their check ids to joined prose; typed
 // sorts order nulls or negatives inconsistently across directions; a record
 // strip shows another record's work, a field-wide suggestion group, or work a
-// member-only read would fence.
+// member-only read would fence; future purchases leak through reconciliation
+// or findings, inflate counts, or hide incurred work in a mixed purchase.
 describe("Work queue gaps, typed columns, and record rows", () => {
   const ctx = withTestDb();
 
@@ -72,6 +74,110 @@ describe("Work queue gaps, typed columns, and record rows", () => {
       false,
     );
   const names = (rows: WorkQueueRow[]) => rows.map((row) => row.name);
+
+  it("excludes future purchases across sources before counts and paging", async () => {
+    const prefix = "Synthetic future queue";
+    const today = householdLocalDate(new Date());
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: prefix,
+    });
+    const member = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: `${prefix} member`,
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const runId = await ensureRun(
+      ctx.db,
+      { ...ctx.actor, runId: null },
+      { purpose: "ai_suggest" },
+    );
+    type PurchaseCode = Awaited<
+      ReturnType<typeof merchandiseOrder>
+    >["purchase"]["shortcode"];
+    const hidden: PurchaseCode[] = [];
+    const visible: PurchaseCode[] = [];
+    for (const scenario of [
+      {
+        name: "Tomorrow",
+        date: shiftPlainDate(today, 1),
+        lines: [false],
+        hidden: true,
+      },
+      { name: "Planned", date: today, lines: [true], hidden: true },
+      { name: "Deleted incurred", date: null, lines: [true], hidden: true },
+      { name: "Today", date: today, lines: [false], hidden: false },
+      { name: "Mixed", date: today, lines: [true, false], hidden: false },
+      { name: "Unknown", date: null, lines: [], hidden: false },
+    ]) {
+      const order = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        displayLabel: `${prefix} ${scenario.name}`,
+        date: scenario.date,
+      });
+      for (const future of scenario.lines)
+        await insertWithShortcode(ctx.db, "expense", {
+          name: `${prefix} line`,
+          purchaseId: order.id,
+          cost: 20,
+          date: today,
+          future,
+          costType: "materials",
+          lineKind: "principal",
+          lineBasis: "item_line",
+          economicRole: "vendor",
+        });
+      if (scenario.name === "Deleted incurred")
+        await insertWithShortcode(ctx.db, "expense", {
+          name: `${prefix} deleted line`,
+          purchaseId: order.id,
+          cost: 20,
+          date: today,
+          future: false,
+          deletedAt: new Date(),
+          costType: "materials",
+          lineKind: "principal",
+          lineBasis: "item_line",
+          economicRole: "vendor",
+        });
+      await getDb(ctx.db)
+        .insert(runFinding)
+        .values({
+          runId,
+          ledgerPartyId: member.id,
+          entityId: order.id,
+          entityKind: "purchase",
+          kind: "other",
+          summary: `${prefix} ${scenario.name}`,
+          evidenceFingerprint: `synthetic-future-${scenario.name}`,
+        });
+      (scenario.hidden ? hidden : visible).push(order.shortcode);
+    }
+    const findings = await read({
+      query: prefix,
+      source: "finding",
+      pageSize: 1,
+    });
+    expect(findings.meta.totalCount).toBe(visible.length);
+    expect(findings.items).toHaveLength(1);
+    expect(visible).toContain(findings.items[0]?.id);
+    const all = await read({ query: prefix });
+    expect(
+      all.items.filter(
+        (row) =>
+          row.entity === "purchase" && hidden.some((code) => code === row.id),
+      ),
+    ).toEqual([]);
+    expect(
+      (await read({ query: prefix, source: "finding" })).items
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual(visible.sort());
+    for (const code of hidden) {
+      const strip = await readRecordWorkQueue(ctx.db, null, code, false);
+      expect(strip.items).toEqual([]);
+      expect(strip.meta.totalCount).toBe(0);
+    }
+  });
 
   it("filters by check before counting and paging, and carries check ids", async () => {
     const prefix = "Synthetic check filter";

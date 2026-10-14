@@ -43,6 +43,7 @@ import { z } from "zod";
 
 import { compileProblemFilters } from "~/entity/problem-filter-semantics";
 import { problemQueryDeclarations } from "~/entity/problem-registry";
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   email,
@@ -538,7 +539,17 @@ async function queryWorkQueue(
     check: input.check === undefined ? undefined : [input.check].flat(),
     record,
   });
-  const conditions: SQL[] = [sql`true`];
+  // All sources, including findings, defer planned purchases before counts
+  // and paging. An empty purchase is unknown, not implicitly planned.
+  const conditions: SQL[] = [
+    sql`(routed.entity IS DISTINCT FROM ${entitySchema.enum.purchase} OR NOT EXISTS (
+    SELECT 1 FROM "Purchase" planned WHERE planned.shortcode = routed.id AND planned."deletedAt" IS NULL
+      AND (planned.date > ${householdLocalDate(new Date())}::date OR (
+        EXISTS (SELECT 1 FROM "Expense" line WHERE line."purchaseId" = planned.id AND line."deletedAt" IS NULL)
+        AND NOT EXISTS (SELECT 1 FROM "Expense" line WHERE line."purchaseId" = planned.id AND line."deletedAt" IS NULL AND line.future = false)
+      ))
+  ))`,
+  ];
   if (memberOnly)
     conditions.push(
       sql`(waiting_kind = ${either} OR (waiting_kind = ${members} AND ${currentPartyId}::uuid = ANY(owners) AND NOT EXISTS (SELECT 1 FROM unnest(owners) owner WHERE owner <> ${currentPartyId}::uuid)))`,

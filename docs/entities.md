@@ -1054,6 +1054,11 @@ shared research and unresolved for missing private ownership. This is a read
 projection, not a new entity or assignment ledger. MCP `activity.work_queue`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
+Every source excludes Purchases dated after the current household day, and
+Purchases with live Expense lines all marked `future`. Purchase has no stored
+`future` flag; Expense does. Deleted lines do not count, mixed planned/incurred
+lines remain eligible, and an undated Purchase without lines is unknown rather
+than planned. The same exclusion applies to the record-detail queue.
 
 Research and Email rows carry structured `gaps` (`{check, message}`): the
 record's live gaps among the checks its saved view's `dataGaps` declares
