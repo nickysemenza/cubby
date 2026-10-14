@@ -209,6 +209,7 @@ const shortcodeParser =
  */
 const PARSE_CANONICAL_SHORTCODE = {
   email: shortcodeParser("email"),
+  imageJob: shortcodeParser("imageJob"),
   spendingCategory: shortcodeParser("spendingCategory"),
   cookbook: shortcodeParser("cookbook"),
   expense: shortcodeParser("expense"),

@@ -51,6 +51,8 @@ export const reportSlots = [
   "cookbook.extraction-report",
   "cookbook.import-progress",
   "image.associations",
+  // An Image job's attempts with their diagnostics, then its events.
+  "imageJob.attempts",
   "purchase.runs",
   "location.ai-description",
   "purchase.reconciliation",

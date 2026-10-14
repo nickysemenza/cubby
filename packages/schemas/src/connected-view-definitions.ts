@@ -35,6 +35,7 @@ export interface ConnectedView {
  */
 export const connectedViews = {
   email: [],
+  imageJob: [],
   product: [
     {
       key: "source-emails",

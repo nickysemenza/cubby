@@ -41,6 +41,16 @@ export const imageProcessingJobKind = z.enum([
 ]);
 export type ImageProcessingJobKind = z.infer<typeof imageProcessingJobKind>;
 
+export const imageProcessingJobState = z.enum([
+  "pending",
+  "waiting_for_device",
+  "leased",
+  "ready",
+  "skipped",
+  "failed",
+]);
+export type ImageProcessingJobState = z.infer<typeof imageProcessingJobState>;
+
 export const activityKind = z.enum([
   ...runPurpose.options,
   ...imageProcessingJobKind.options,

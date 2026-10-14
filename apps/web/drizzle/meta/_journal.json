@@ -428,6 +428,27 @@
       "when": 1791952573146,
       "tag": "0060_photo-import-lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1791998282362,
+      "tag": "0061_image_job_entity",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1791998308218,
+      "tag": "0062_image_job_drop_public_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1791998310438,
+      "tag": "0063_derived_ddl",
+      "breakpoints": true
     }
   ]
 }

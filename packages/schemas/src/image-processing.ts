@@ -1,7 +1,10 @@
 import { imageRepresentations } from "./image-summary";
 import { imageShortcode } from "./identifier-fields";
 import { z } from "zod";
-import { imageProcessingJobKind } from "./activity-fields";
+import {
+  imageProcessingJobKind,
+  imageProcessingJobState,
+} from "./activity-fields";
 export { imageProcessingJobKind } from "./activity-fields";
 export type { ImageProcessingJobKind } from "./activity-fields";
 import { productLabelNutrition } from "./nutrition";
@@ -22,15 +25,10 @@ export const imageDerivativeStatus = z.enum([
 ]);
 export type ImageDerivativeStatus = z.infer<typeof imageDerivativeStatus>;
 
-export const imageProcessingJobState = z.enum([
-  "pending",
-  "waiting_for_device",
-  "leased",
-  "ready",
-  "skipped",
-  "failed",
-]);
-export type ImageProcessingJobState = z.infer<typeof imageProcessingJobState>;
+export {
+  imageProcessingJobState,
+  type ImageProcessingJobState,
+} from "./activity-fields";
 
 export const imageCutoutEligibility = z.enum([
   "eligible",
