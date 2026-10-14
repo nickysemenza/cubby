@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { type ComponentProps, useState } from "react";
 
 import { GapChipCluster } from "~/features/work-queue/work-queue-display";
 import { DateDisplay } from "~/ui/common/date-display";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import type { Filter, FilterBarField } from "~/ui/data-table/filter-bar-core";
 import { FilterBar } from "~/ui/data-table/FilterBar";
 import { ScopeChip } from "~/ui/data-table/ScopeChip";
@@ -32,22 +33,19 @@ const FILTER_FIELDS: FilterBarField[] = [
   { key: "location", label: "Location", type: "text" },
 ];
 
+type DateDisplayProps = ComponentProps<typeof DateDisplay>;
+
 const INSTANT = "2026-10-13T16:42:00Z";
 
-function DateRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 border-t border-border/60 py-1 text-xs first:border-t-0">
-      <code className="font-mono text-2xs text-muted-foreground">{label}</code>
-      <span className="text-right">{children}</span>
-    </div>
-  );
-}
+const DATE_VARIANTS: [label: string, props: DateDisplayProps][] = [
+  ["timestamp", { timestamp: INSTANT }],
+  ["timestamp stacked", { timestamp: INSTANT, stacked: true }],
+  ['clock="time"', { timestamp: INSTANT, clock: "time" }],
+  ['clock="day"', { timestamp: INSTANT, clock: "day" }],
+  ["start", { start: "2026-10-02" }],
+  ["start · end", { start: "2026-09-28", end: "2026-10-04" }],
+  ["another year", { start: "2025-03-14", stacked: true }],
+];
 
 export function ValuesSection() {
   const [filters, setFilters] = useState<Filter[]>([
@@ -69,29 +67,20 @@ export function ValuesSection() {
           name="<DateDisplay />"
           note="One presentation for every record date: full outside tables, stacked and compact inside them."
         >
-          <div>
-            <DateRow label="timestamp">
-              <DateDisplay timestamp={INSTANT} />
-            </DateRow>
-            <DateRow label="timestamp stacked">
-              <DateDisplay timestamp={INSTANT} stacked />
-            </DateRow>
-            <DateRow label='clock="time"'>
-              <DateDisplay timestamp={INSTANT} clock="time" />
-            </DateRow>
-            <DateRow label='clock="day"'>
-              <DateDisplay timestamp={INSTANT} clock="day" />
-            </DateRow>
-            <DateRow label="start">
-              <DateDisplay start="2026-10-02" />
-            </DateRow>
-            <DateRow label="start · end">
-              <DateDisplay start="2026-09-28" end="2026-10-04" />
-            </DateRow>
-            <DateRow label="another year">
-              <DateDisplay start="2025-03-14" stacked />
-            </DateRow>
-          </div>
+          <Ledger as="dl" variant="facts">
+            {DATE_VARIANTS.map(([label, props]) => (
+              <LedgerRow as="div" key={label}>
+                <LedgerCell as="dt" slot="primary">
+                  <code className="font-mono text-2xs text-muted-foreground">
+                    {label}
+                  </code>
+                </LedgerCell>
+                <LedgerCell as="dd" slot="secondary">
+                  <DateDisplay {...props} />
+                </LedgerCell>
+              </LedgerRow>
+            ))}
+          </Ledger>
         </Demo>
         <Demo
           name="<EnumPill color icon />"

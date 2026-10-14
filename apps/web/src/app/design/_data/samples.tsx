@@ -3,7 +3,7 @@ import { locationShortcode } from "@cubby/schemas/identifiers";
 import type { infLocation, LocationType } from "@cubby/schemas/location";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import type { WorkQueueGap } from "@cubby/schemas/work-queue";
-import { SHORTCODE_CHARS } from "@cubby/shared";
+import { capitalize, SHORTCODE_CHARS } from "@cubby/shared";
 import { z } from "zod";
 
 import { formatCurrency } from "~/lib/number-format";
@@ -352,7 +352,7 @@ export const demoProductItems = (): ComboboxItem[] =>
     presentation: {
       group: {
         id: item.domain,
-        label: item.domain[0]!.toUpperCase() + item.domain.slice(1),
+        label: capitalize(item.domain),
         order: Object.keys(DOMAIN_HEX).indexOf(item.domain),
       },
       trailing: [

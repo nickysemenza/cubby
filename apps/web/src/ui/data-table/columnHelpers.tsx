@@ -901,6 +901,63 @@ export function createTextColumn<
   return definition;
 }
 
+/** A string value drawn from a fixed option roster; read-only without `editable`. */
+export function createSelectColumn<
+  K extends PropertyKey,
+  T extends Record<K, string | null | undefined>,
+>(
+  columnHelper: ColumnHelper<T>,
+  accessor: K,
+  options: {
+    options: PickerOption[];
+    header?: string;
+    className?: string;
+    size?: number;
+    mobile?: MobileColumnMeta;
+    filterConfig?: FilterConfig;
+    editable?: {
+      onSave: (newValue: string | null, row: T) => Promise<void>;
+    };
+  },
+) {
+  const roster = options.options;
+  const editable = options.editable;
+  const selectValue = (row: T): string | null => row[accessor] ?? null;
+  const cellData = selectCellData<T>(
+    selectValue,
+    roster,
+    editable ? (row, v) => editable.onSave(v, row) : undefined,
+  );
+  const definition = createEditableAccessorColumn(columnHelper, selectValue, {
+    id: String(accessor),
+    header: options.header,
+    className: options.className,
+    mobile: options.mobile,
+    filterConfig: options.filterConfig,
+    cellData,
+    renderValue: (value) => renderOptionCell(value, roster),
+    renderEditable: editable
+      ? (value, row, clipboard) => (
+          <EditableCell
+            value={value}
+            onSave={(newValue) => editable.onSave(newValue, row)}
+            clipboard={clipboard}
+            config={{ type: "select", options: roster }}
+            renderValue={(value) => renderOptionCell(value, roster)}
+          />
+        )
+      : undefined,
+  });
+  if (options.size !== undefined)
+    Object.assign(definition, { size: options.size });
+  // A client-side table resolves its filterFn from the ROW value's type, so a
+  // string column handed an array of chosen options would match nothing.
+  if (options.filterConfig?.filterType === "multiselect") {
+    Object.assign(definition, { filterFn: multiSelectFilterFn });
+  }
+  return definition;
+}
+
 export function createCurrencyColumn<
   K extends PropertyKey,
   T extends Record<K, number | null | undefined>,

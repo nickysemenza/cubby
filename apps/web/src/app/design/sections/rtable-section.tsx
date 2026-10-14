@@ -1,22 +1,19 @@
+import { capitalize } from "@cubby/shared";
 import type { RowSelectionState } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
 
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/BulkActionBar";
-import {
-  specFromCellData,
-  numberCellData,
-  selectCellData,
-} from "~/ui/data-table/cell-data";
+import { numberCellData, specFromCellData } from "~/ui/data-table/cell-data";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import {
   createCurrencyColumn,
   createImageColumn,
   createNameColumn,
   createPlainDateColumn,
+  createSelectColumn,
   createTextColumn,
   createTimestampColumn,
-  renderOptionCell,
   rowImages,
 } from "~/ui/data-table/columnHelpers";
 import { EditableCell } from "~/ui/data-table/editable-cell";
@@ -39,7 +36,7 @@ import {
 
 const GROUP_CONFIG: GroupConfig<DemoProduct> = {
   field: "domain",
-  keyFn: (row) => row.domain[0]!.toUpperCase() + row.domain.slice(1),
+  keyFn: (row) => capitalize(row.domain),
   colorFn: (label) => `var(--domain-${label.toLowerCase()})`,
 };
 
@@ -88,32 +85,15 @@ export function RTableSection() {
             },
           }),
         );
-        const categoryData = selectCellData<DemoProduct>(
-          (row) => row.category,
-          demoCategoryOptions,
-          (row, category) => update(row.id, { category }),
-        );
         add(
-          helper.accessor((row) => row.category, {
-            id: "category",
+          createSelectColumn(helper, "category", {
             header: "Category",
-            meta: attachCubbyColumnMeta<DemoProduct>({
-              className: "w-36",
-              cellData: categoryData,
-            }),
-            cell: ({ row, getValue }) => (
-              <EditableCell
-                value={getValue()}
-                onSave={(category) =>
-                  update(row.original.id, { category: category ?? "" })
-                }
-                clipboard={specFromCellData(categoryData, row.original)}
-                config={{ type: "select", options: demoCategoryOptions }}
-                renderValue={(value) =>
-                  renderOptionCell(value, demoCategoryOptions)
-                }
-              />
-            ),
+            className: "w-36",
+            options: demoCategoryOptions,
+            editable: {
+              onSave: (category, row) =>
+                update(row.id, { category: category ?? "" }),
+            },
           }),
         );
         const onHandData = numberCellData<DemoProduct>(
