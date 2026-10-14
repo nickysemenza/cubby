@@ -163,6 +163,9 @@ function triageView(
       src: boundedField(src, 256),
       alt: boundedField(alt, 128),
     }));
+  const trackingImageLabels = (html?.tracking_image_labels ?? [])
+    .slice(0, IMAGES_SHOWN)
+    .map((label) => boundedField(label, 128));
   const structuredData = (html?.structured_data ?? [])
     .slice(0, STRUCTURED_DATA_SHOWN)
     .map((block) => boundedField(block, 2_048));
@@ -194,6 +197,10 @@ function triageView(
     )
       reasons.add("links_clipped");
     if (
+      html.tracking_image_labels.length !== trackingImageLabels.length ||
+      html.tracking_image_labels.some(
+        (label, index) => label !== trackingImageLabels[index],
+      ) ||
       html.cue_images_omitted ||
       clippedCue(html.images, images, (image, index) => {
         const shown = images[index];
@@ -237,7 +244,9 @@ function triageView(
       bodyComplete: full && !html?.truncated,
       attachments,
       attachmentsComplete: attachments.length === normalized.attachments.length,
-      htmlEvidence: html ? { links, images, structuredData } : null,
+      htmlEvidence: html
+        ? { links, images, trackingImageLabels, structuredData }
+        : null,
       htmlEvidenceComplete,
     };
     // A cue never contains a character JSON escapes, so it matches the serialized view.

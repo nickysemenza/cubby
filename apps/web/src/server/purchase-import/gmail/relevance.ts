@@ -44,6 +44,7 @@ function readableMailView({
       links:
         html?.links.map(({ href, text }) => ({ url: href, label: text })) ?? [],
       images: html?.images.map(({ src, alt }) => ({ url: src, alt })) ?? [],
+      trackingImageLabels: html?.tracking_image_labels ?? [],
       unresolvedImages: html?.unresolved_image_sources ?? [],
       preheader: html?.preheader ?? null,
       structuredData: html?.structured_data ?? [],

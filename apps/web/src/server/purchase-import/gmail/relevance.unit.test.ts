@@ -163,6 +163,38 @@ describe("transient original attachment relevance", () => {
       })),
     ).resolves.toEqual({ classification: "unrelated" });
   });
+  it("supplies fixed-pixel labels before accepting a verdict and keeps clipped labels uncertain", async () => {
+    const make = (label: string) => ({
+      ...original,
+      attachments: [],
+      mail: {
+        ...original.mail,
+        bodyText:
+          "Community newsletter with gardening tips and upcoming events.",
+        bodyHtml: `<p>Community newsletter with gardening tips and upcoming events.</p><div style="display:none"><img width="1" height="1" src="https://example.test/open.gif" alt="${label}"></div>`,
+      },
+    });
+    for (const [label, classification] of [
+      ["Free shipping on orders over $50", "unrelated"],
+      ["Your purchase is confirmed. Order #SYN-7788 paid $24", "related"],
+    ] as const) {
+      const interpret = vi.fn<MailRelevance>(async () => ({ classification }));
+      await expect(
+        interpretMailRelevance(gmail(500), make(label), interpret),
+      ).resolves.toEqual({ classification });
+      expect(JSON.stringify(interpret.mock.calls[0]?.[0].messages)).toContain(
+        label,
+      );
+    }
+    await expect(
+      interpretMailRelevance(
+        gmail(500),
+        make("x".repeat(800) + " Receipt"),
+        async () => ({ classification: "unrelated" }),
+      ),
+    ).resolves.toEqual({ classification: "uncertain" });
+  });
+
   it("keeps unresolved inline image pixels and truncated preheaders uncertain", async () => {
     for (const bodyHtml of [
       '<p>Community newsletter with gardening tips and upcoming events.</p><div style="display:none"><img src="https://shop.example.test/receipt.png" alt="Receipt total $24"></div>',

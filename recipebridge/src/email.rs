@@ -71,6 +71,8 @@ pub struct WCompactEmail {
     pub cue_links_omitted: u32,
     /// Content images in document order; declared 1×1 or zero-size pixels are dropped.
     pub images: Vec<WEmailImage>,
+    /// Readable labels on fixed tracking pixels, retained without content pictures.
+    pub tracking_image_labels: Vec<String>,
     pub cue_images_omitted: u32,
     /// Non-tracking images whose source could not be represented.
     pub unresolved_images: u32,
@@ -285,6 +287,7 @@ struct Walk {
     main: String,
     footer: String,
     preheader: Option<String>,
+    tracking_image_labels: Vec<String>,
     visible_seen: bool,
     truncated: bool,
 }
@@ -331,6 +334,11 @@ fn walk(element: ElementRef, footer: bool, state: &mut Walk) {
                         // its label and surrounding links can still carry evidence.
                         .filter(|name| {
                             (**name != "src" || !is_fixed_tracking_pixel(&node))
+                                && (**name != "alt"
+                                    || !is_fixed_tracking_pixel(&node)
+                                    || !state
+                                        .tracking_image_labels
+                                        .contains(&clean(node.value().attr("alt").unwrap_or(""))))
                                 && (**name != "href"
                                     || node.value().name() != "a"
                                     || node
@@ -804,6 +812,25 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
     let document = Html::parse_document(html);
 
     let mut state = Walk::default();
+    for image in select(&document, "img").into_iter().filter(|image| {
+        is_fixed_tracking_pixel(image)
+            && !image.ancestors().filter_map(ElementRef::wrap).any(|node| {
+                matches!(
+                    node.value().name(),
+                    "script" | "style" | "noscript" | "template" | "svg" | "head"
+                )
+            })
+    }) {
+        let label = clean(image.value().attr("alt").unwrap_or(""));
+        if label.is_empty() || state.tracking_image_labels.contains(&label) {
+            continue;
+        }
+        if label.len() > 512 || state.tracking_image_labels.len() >= MAX_IMAGES {
+            state.truncated = true;
+        } else {
+            state.tracking_image_labels.push(label);
+        }
+    }
     if let Some(body) = select(&document, "body").into_iter().next() {
         walk(body, false, &mut state);
     }
@@ -958,6 +985,7 @@ pub fn compact_email_html(html: &str) -> WCompactEmail {
         links,
         cue_links_omitted: u32::try_from(cue_links_omitted).unwrap_or(u32::MAX),
         images,
+        tracking_image_labels: state.tracking_image_labels,
         cue_images_omitted: u32::try_from(cue_images_omitted).unwrap_or(u32::MAX),
         unresolved_images,
         unresolved_image_sources,
@@ -1074,6 +1102,19 @@ mod tests {
     }
 
     #[test]
+    fn retains_fixed_pixel_labels_without_false_omissions() {
+        let email = compact_email_html(
+            r#"<p>Community updates.</p><div style="display:none"><img width="1" height="1" src="https://example.test/open.gif" alt="Free shipping on orders over $50"></div>"#,
+        );
+        assert!(!email.truncated);
+        assert!(email.images.is_empty());
+        assert_eq!(
+            serde_json::to_value(&email).unwrap()["tracking_image_labels"],
+            serde_json::json!(["Free shipping on orders over $50"])
+        );
+    }
+
+    #[test]
     fn hidden_tracking_pixels_do_not_omit_purchase_evidence() {
         let email = compact_email_html(
             r#"<p>Community updates and gardening tips.</p><div style="display:none"><img width="1" height="1" src="https://example.test/track/return/open.gif"></div>"#,
@@ -1099,7 +1140,8 @@ mod tests {
         let labeled_pixel = compact_email_html(
             r#"<p>Community updates.</p><div style="display:none"><img width="1" height="1" src="https://example.test/open.gif" alt="Receipt total $24"></div>"#,
         );
-        assert!(labeled_pixel.truncated);
+        assert!(!labeled_pixel.truncated);
+        assert_eq!(labeled_pixel.tracking_image_labels, ["Receipt total $24"]);
     }
 
     const ORDER_TABLE: &str = include_str!("../fixtures/email/order-table.html");
