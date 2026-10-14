@@ -23,10 +23,10 @@ import { run as runTable, runPushRegistration } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
 /** A build's standard alerts use its bundle id as the APNs topic. */
-export const apnsAlertTopic = (identity: PhotoRunPushAppIdentity) =>
+const apnsAlertTopic = (identity: PhotoRunPushAppIdentity) =>
   APPLE_APP_IDENTITIES[identity].bundleIdentifier;
 /** Live Activities exist only in the production app (iOS). */
-export const APNS_LIVE_ACTIVITY_TOPIC = `${APPLE_APP_IDENTITIES.production.bundleIdentifier}.push-type.liveactivity`;
+const APNS_LIVE_ACTIVITY_TOPIC = `${APPLE_APP_IDENTITIES.production.bundleIdentifier}.push-type.liveactivity`;
 
 type ApnsEnvironment = z.infer<typeof apnsEnvironment>;
 type ApnsCredentials = NonNullable<ReturnType<typeof getApnsCredentials>>;
@@ -193,7 +193,7 @@ export const endPhotoRunNotification = (
 ) => endRunPush(db, actor, { ...input, kind: "alert" });
 
 /** What the Activity shows for a lifecycle; keys match the Swift ContentState. */
-export function photoRunActivityContent(
+function photoRunActivityContent(
   lifecycle: PhotoRunLifecycle,
 ): PhotoRunLiveActivityContentState {
   const planned = lifecycle.plannedImageCount ?? lifecycle.finalizedImageCount;
@@ -505,7 +505,7 @@ async function deliverPhotoRunPushes(
  * propagates or is logged. SQL text and other diagnostics are kept verbatim;
  * the shared credential scrub does not recognise a bare hex token.
  */
-export async function withTokensScrubbed<T>(
+async function withTokensScrubbed<T>(
   tokens: readonly string[],
   work: () => Promise<T>,
 ): Promise<T> {
@@ -536,7 +536,7 @@ function scrubTokens(
 }
 
 /** A push token is a credential; it never appears in a stored or returned error. */
-export const redactPushToken = (message: string, pushToken: string) =>
+const redactPushToken = (message: string, pushToken: string) =>
   scrubErrorMessage(message.replaceAll(pushToken, "[push-token]"));
 
 const fetchApns: ApnsTransport = async (request) => {

@@ -41,7 +41,7 @@ import { getDb, withTransaction } from "~/server/repo/database-helpers";
  * A description waiting for a capable device is not settled either; matches
  * the Apple app's `PhotoReviewPolicy.groupingReadiness`.
  */
-export const DESCRIPTION_IN_FLIGHT = new Set([
+const DESCRIPTION_IN_FLIGHT = new Set([
   "pending",
   "leased",
   "waiting_for_device",
@@ -71,7 +71,7 @@ type LifecycleRun = {
  * Derive where a photo Run stands from durable rows. Pure, so every reader
  * (review, Live Activity push, the automatic advance) agrees.
  */
-export function derivePhotoRunLifecycle(
+function derivePhotoRunLifecycle(
   run: LifecycleRun,
   images: readonly Pick<PhotoRunImage, "id" | "targetState" | "describe">[],
   proposals: Pick<PhotoGroupProposalList, "proposals">["proposals"],

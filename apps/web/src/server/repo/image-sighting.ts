@@ -142,7 +142,7 @@ export async function setImageOwnDeviceSource(
     );
 }
 
-export interface UpsertImageSightingInput {
+interface UpsertImageSightingInput {
   imageId: ImageId;
   ledgerPartyId: LedgerPartyId;
   deviceId: DeviceId;
@@ -176,7 +176,7 @@ export interface UpsertImageSightingInput {
  * Writes one audit row onto the Image and re-derives the image's capture in
  * the same transaction.
  */
-export async function upsertImageSightingInTransaction(
+async function upsertImageSightingInTransaction(
   tx: Database | DrizzleTransaction,
   data: UpsertImageSightingInput,
   actor: ActorContext,

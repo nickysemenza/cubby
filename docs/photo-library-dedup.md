@@ -227,7 +227,9 @@ original digests, capture dates, import Sightings, sheet-close continuation, and
 explicit group approval without automatic financial or inventory writes. The
 Review item groups action targets the proposed-items section directly through
 the Run's shared contents navigation, ahead of the per-photo processing rows. The
-separate system-picker scripts retain the denied-library entry path. Fixture
+review uses one confirmation presenter for individual, selected, all, and discard
+actions; approval keeps the reviewed document and group keys frozen until confirmation.
+The separate system-picker scripts retain the denied-library entry path. Fixture
 setup grants library access to the simulator app without resetting its library;
 each fixture batch has distinct original bytes so older batches cannot satisfy
 the digest readback.
