@@ -1,70 +1,19 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 import { describe, expect, it } from "vitest";
 
 import { forgeWearEvidence } from "../../../tests/fixtures/product-identity-evidence";
 import { rankPhotoProductCandidates } from "./photo-product-candidates";
-import {
-  compareProductTitles,
-  extractVariantFacts,
-} from "./product-variant-comparison";
 
-describe("explicit variant evidence", () => {
-  it("distinguishes numeric US boot sizes and reads wheat as an explicit color", () => {
-    expect(
-      compareProductTitles(
-        "ForgeWear work boots — tan, size 7",
-        "ForgeWear safety boots, wheat, 9.5 US",
-      ),
-    ).toEqual({
-      color: { first: "Tan", second: "Wheat", relation: "different" },
-      size: { first: "US 7", second: "US 9.5", relation: "different" },
-    });
-  });
-
-  it("does not turn an unrelated model number into a clothing size", () => {
-    expect(
-      compareProductTitles("ForgeWear jacket model 7", "ForgeWear jacket 9"),
-    ).toEqual({
-      color: { first: null, second: null, relation: "unknown" },
-      size: { first: null, second: null, relation: "unknown" },
-    });
-  });
-
-  it("parses garment waist context without treating inseam or model numbers as size", () => {
-    expect(extractVariantFacts("Denim jeans W30 L32").size).toEqual({
-      value: "W 30",
-      raw: "W30",
-    });
-    expect(extractVariantFacts("Denim jeans model 30").size).toBeNull();
-  });
-
-  it("keeps the source phrase beside a normalized variant fact", () => {
-    expect(extractVariantFacts("Work boots — wheat, 9.5 US")).toMatchObject({
-      color: { value: "Wheat", raw: "wheat" },
-      size: { value: "US 9.5", raw: "9.5 US" },
-    });
-  });
-
-  it("flags a different color and preserves an unknown size instead of guessing from loose fit", () => {
-    expect(
-      compareProductTitles(
-        "ForgeWear loose fit pocket shirt, navy, size unconfirmed",
-        "ForgeWear loose fit pocket shirt, black, Small",
-      ),
-    ).toEqual({
-      color: { first: "Navy", second: "Black", relation: "different" },
-      size: { first: null, second: "Small", relation: "unknown" },
-    });
-  });
-
-  it("treats two possible photo colors as unknown evidence", () => {
-    expect(
-      compareProductTitles("Pocket tee, navy/charcoal", "Pocket tee, navy"),
-    ).toEqual({
-      color: { first: null, second: "Navy", relation: "unknown" },
-      size: { first: null, second: null, relation: "unknown" },
-    });
-  });
+const comparison = (
+  color: "same" | "different" | "unknown",
+  size: "same" | "different" | "unknown",
+  firstTitle: string,
+  secondTitle: string,
+): ProductVariantComparison => ({
+  color: { relation: color },
+  size: { relation: size },
+  evidence: { firstTitle, secondTitle },
 });
 
 describe("photo product candidate ranking", () => {
@@ -79,14 +28,33 @@ describe("photo product candidate ranking", () => {
       hasPurchase: false,
       hasInventory: false,
     });
+    const size9 = candidate("ForgeWear tan work boots size 9");
+    const size7 = candidate("ForgeWear tan work boots size 7");
     const ranked = rankPhotoProductCandidates(
       "ForgeWear tan work boots",
       "ForgeWear",
-      [
-        candidate("ForgeWear tan work boots size 9"),
-        candidate("ForgeWear tan work boots size 7"),
-      ],
+      [size9, size7],
       ["US 7"],
+      new Map([
+        [
+          size9.id,
+          comparison(
+            "same",
+            "different",
+            "ForgeWear tan work boots\nUS 7",
+            size9.name,
+          ),
+        ],
+        [
+          size7.id,
+          comparison(
+            "same",
+            "same",
+            "ForgeWear tan work boots\nUS 7",
+            size7.name,
+          ),
+        ],
+      ]),
     );
     expect(ranked.map((item) => item.shortcode)).toEqual([
       "PRD-4K7M",
@@ -94,18 +62,74 @@ describe("photo product candidate ranking", () => {
     ]);
     expect(ranked[1]?.variant.size.relation).toBe("different");
   });
-  it("keeps the observed color and size ahead of another variant's photo gap", () => {
+  it("uses returned variant relations to rank the observed color and size", () => {
+    const products = forgeWearEvidence.products.map((product) => ({
+      id: parseEntityId("product", crypto.randomUUID()),
+      ...product,
+      manufacturer: forgeWearEvidence.brand,
+    }));
+    const comparisons = new Map(
+      products.map((product) => [
+        product.id,
+        comparison(
+          product.shortcode === forgeWearEvidence.expected.matchedProduct
+            ? "same"
+            : "different",
+          product.shortcode === forgeWearEvidence.expected.matchedProduct
+            ? "same"
+            : "different",
+          forgeWearEvidence.observedName,
+          product.name,
+        ),
+      ]),
+    );
     const ranked = rankPhotoProductCandidates(
       forgeWearEvidence.observedName,
       forgeWearEvidence.brand,
-      forgeWearEvidence.products.map((product) => ({
-        id: parseEntityId("product", crypto.randomUUID()),
-        ...product,
-        manufacturer: forgeWearEvidence.brand,
-      })),
+      products,
+      [],
+      comparisons,
     );
     expect(ranked[0]?.shortcode).toBe(
       forgeWearEvidence.expected.matchedProduct,
+    );
+  });
+
+  it("does not penalize unknown relations and penalizes only explicit difference", () => {
+    const candidate = (shortcode: string, name: string) => ({
+      id: parseEntityId("product", crypto.randomUUID()),
+      shortcode,
+      name,
+      manufacturer: "ForgeWear",
+      hasOwnPhoto: true,
+      hasPhotoImport: true,
+      hasPurchase: false,
+      hasInventory: false,
+    });
+    const unknown = candidate("PRD-4K7M", "ForgeWear tan work boots size 9");
+    const different = candidate("PRD-8B2Q", "ForgeWear tan work boots size 7");
+    const ranked = rankPhotoProductCandidates(
+      "ForgeWear tan work boots size 7",
+      "ForgeWear",
+      [unknown, different],
+      [],
+      new Map([
+        [
+          unknown.id,
+          comparison("unknown", "unknown", "proposal", unknown.name),
+        ],
+        [
+          different.id,
+          comparison("same", "different", "proposal", different.name),
+        ],
+      ]),
+    );
+    expect(ranked.map((item) => item.shortcode)).toEqual([
+      "PRD-4K7M",
+      "PRD-8B2Q",
+    ]);
+    expect(ranked[0]?.factors).not.toContainEqual(
+      expect.objectContaining({ label: "Explicit variant conflict" }),
     );
   });
 

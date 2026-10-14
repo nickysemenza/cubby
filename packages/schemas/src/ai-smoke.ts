@@ -27,6 +27,15 @@ export const aiSmokeInputs = {
   recipeFlow: z.object({ recipeId: sourceId }),
   mailboxTriage: z.object({ fixture }),
   mailboxRelevance: z.object({ fixture }),
+  upcOfferComparability: z.object({
+    itemTitle: z.string().min(1).max(1000),
+    offerTitle: z.string().min(1).max(1000),
+  }),
+  imageProvenance: z.object({ fixture }),
+  productVariantRelation: z.object({
+    firstTitle: z.string().min(1).max(1000),
+    secondTitle: z.string().min(1).max(1000),
+  }),
   mailAttachmentPurpose: z.object({
     fixture: z.enum(["shipping_label", "receipt", "ambiguous"]),
   }),

@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type LedgerPartyId,
   type RunId,
@@ -19,6 +20,7 @@ import {
   importOperationStatusInput,
   importOperationStatusOut,
   type CommitPurchaseImportInput,
+  type ExtractedPurchaseLine,
   type PreparePurchaseImportInput,
   type PurchaseImportRunExecution,
   type RunPurpose,
@@ -49,6 +51,7 @@ import {
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { readEmailPurchaseAssociations } from "~/server/repo/email-purchase-associations";
+import { decideExpenseLineRole } from "~/server/repo/expense-line-role";
 import { resolveProductIdentifierSource } from "~/server/repo/product-identifier-source";
 import {
   externalIdKey,
@@ -665,6 +668,7 @@ export async function preparePurchaseImport(
   db: Database,
   rawInput: PreparePurchaseImportInput,
   actor: ActorContext,
+  decisionPort?: DecisionPort,
 ) {
   const input = preparePurchaseImportInput.parse(rawInput);
   const scope = await importRunScope(db, actor, input._runExecution, true);
@@ -728,6 +732,25 @@ export async function preparePurchaseImport(
             throw new Error(
               "Unreadable imports cannot be prepared without a candidate",
             );
+          // Resolve parser-abstained roles before publishing a prepared order.
+          // The source extraction remains immutable/checksum evidence; the
+          // prepared line is the authoritative role used by roster and commit.
+          const preparedCandidateLines: ExtractedPurchaseLine[] = [];
+          for (const [position, line] of candidate.lines.entries()) {
+            const lineKind: ExpenseLineKind =
+              line.lineKind === "unclassified"
+                ? await decideExpenseLineRole(
+                    { name: line.title, cost: line.amount, notes: null },
+                    {
+                      db: transactionDb,
+                      runId: scope.runId,
+                      operation: `purchase-import.expense-line-role:${order.stableOrderId}:${order.lineIds[position] ?? position}`,
+                    },
+                    decisionPort,
+                  )
+                : line.lineKind;
+            preparedCandidateLines.push({ ...line, lineKind });
+          }
           const linkedTarget =
             order.targetPurchaseId || candidate.orderId !== null
               ? null
@@ -787,7 +810,7 @@ export async function preparePurchaseImport(
 
           const outputLines = [];
           const exactRequests: ExternalIdPair[][] = [];
-          for (const line of candidate.lines) {
+          for (const line of preparedCandidateLines) {
             const source =
               line.sku || amazonAsin(line.productUrl)
                 ? await resolveProductIdentifierSource(transactionDb, {
@@ -801,7 +824,7 @@ export async function preparePurchaseImport(
             transactionDb,
             exactRequests.flat(),
           );
-          for (const [position, line] of candidate.lines.entries()) {
+          for (const [position, line] of preparedCandidateLines.entries()) {
             const stableLineId = order.lineIds[position];
             if (!stableLineId) throw new Error("Prepared line id is missing");
             const candidates = await productCandidates(
@@ -1010,6 +1033,8 @@ export async function commitPurchaseImport(
         await ledger.start(database);
         for (const { order } of prepared) {
           const extraction = importExtractionOutcome.parse(order.extraction);
+          if (!extraction.candidate)
+            throw new Error("Prepared purchase import order has no candidate");
           const targetFingerprint = await computeTargetFingerprint(
             transactionDb,
             {
@@ -1062,6 +1087,8 @@ export async function commitPurchaseImport(
         const consumedResolutionIds = new Set<string>();
         for (const { order, lines } of prepared) {
           const extraction = importExtractionOutcome.parse(order.extraction);
+          if (!extraction.candidate)
+            throw new Error("Prepared purchase import order has no candidate");
           const productResolutions = [];
           for (const line of lines) {
             const parsedLine = extractedPurchaseLine.parse(line.line);
@@ -1144,7 +1171,26 @@ export async function commitPurchaseImport(
                 externalKey: order.sourceExternalKey,
                 checksum: order.sourceChecksum,
               },
-              extraction,
+              extraction: {
+                ...extraction,
+                candidate: {
+                  ...extraction.candidate,
+                  lines: extraction.candidate.lines.map(
+                    (originalLine, index) => {
+                      const preparedLine = lines.find(
+                        (entry) => entry.position === index,
+                      );
+                      if (!preparedLine)
+                        throw new Error(`Prepared line ${index} is missing`);
+                      return {
+                        ...originalLine,
+                        lineKind: extractedPurchaseLine.parse(preparedLine.line)
+                          .lineKind,
+                      };
+                    },
+                  ),
+                },
+              },
               primaryDocumentImageId: order.primaryDocumentImageId,
               screenshotImageId: order.screenshotImageId,
               productResolutions,

@@ -132,6 +132,7 @@ const labeled = <Value extends string>(
   });
 
 const expenseLineKindDescriptions = {
+  unclassified: "Receipt role is unresolved and needs review",
   principal: "The main item or service purchased",
   tax: "Sales tax or other tax charges",
   shipping: "Shipping, delivery, or freight charges",
@@ -222,6 +223,7 @@ export const selectControlOptions = {
     expenseLineKindValues,
     EXPENSE_LINE_KIND_LABELS,
     {
+      unclassified: "var(--warning)",
       principal: "var(--slate)",
       tax: "var(--slate)",
       shipping: "var(--slate)",

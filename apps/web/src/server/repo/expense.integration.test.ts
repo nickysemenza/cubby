@@ -11,13 +11,16 @@ import {
   expenseUpdateData,
 } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
+import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
+import { expense, purchase, vendor } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import {
@@ -27,6 +30,8 @@ import {
   expenseFacetCountsWorkflow,
 } from "~/server/operations/expense.server";
 import { getAuditLog } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
+import { getDb } from "~/server/repo/database-helpers";
 import {
   expenseAnalytics,
   expenseMonthlySummary,
@@ -185,6 +190,123 @@ const purchaseUuid = async (
 describe("expense repository — CRUD", () => {
   const ctx = withTestDb();
 
+  const decisionPort =
+    (choice: string): DecisionPort =>
+    async (input) => {
+      const keys = Object.keys(input.questions.selection.criteria);
+      const residual = 0.01 / (keys.length - 1);
+      return {
+        answers: {
+          selection: {
+            type: "choice",
+            choice,
+            confidence: 0.99,
+            probabilities: Object.fromEntries(
+              keys.map((key) => [key, key === choice ? 0.99 : residual]),
+            ),
+          },
+        },
+      };
+    };
+
+  it("publishes an uncertain receipt role as unclassified and exposes its quality gap", async () => {
+    const input = makeExpenseInput({ name: "Synthetic unclear receipt row" });
+    delete input.lineKind;
+    const { output, entityId } = await createExpense(
+      ctx.db,
+      input,
+      ctx.actor,
+      decisionPort("none"),
+    );
+    expect(output.lineKind).toBe("unclassified");
+    const quality = await loadDataQualities(ctx.db, "expense", [entityId]);
+    expect(quality.get(entityId)?.gaps.map((gap) => gap.check)).toContain(
+      "expense_receipt_role",
+    );
+  });
+
+  it("does not publish the Expense, Vendor, or Purchase when role inference fails", async () => {
+    const input = makeExpenseInput({
+      name: "Synthetic provider failure row",
+      vendor: "Synthetic provider failure vendor",
+      orderId: "synthetic-provider-failure-order",
+    });
+    delete input.lineKind;
+    const failing = vi.fn<DecisionPort>(async () => {
+      throw new Error("Synthetic Decision outage");
+    });
+    await expect(
+      createExpense(ctx.db, input, ctx.actor, failing),
+    ).rejects.toThrow("Synthetic Decision outage");
+    expect(failing).toHaveBeenCalledOnce();
+    expect(
+      await getDb(ctx.db)
+        .select({ id: expense.id })
+        .from(expense)
+        .where(eq(expense.name, input.name)),
+    ).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select({ id: vendor.id })
+        .from(vendor)
+        .where(eq(vendor.name, input.vendor!)),
+    ).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select({ id: purchase.id })
+        .from(purchase)
+        .where(eq(purchase.orderId, input.orderId!)),
+    ).toEqual([]);
+  });
+
+  it("keeps explicit user roles authoritative and lets live Product assignment imply principal", async () => {
+    const explicitDecision = vi.fn<DecisionPort>();
+    const explicit = await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Synthetic explicit principal",
+        lineKind: "principal",
+      }),
+      ctx.actor,
+      explicitDecision,
+    );
+    expect(explicit.output.lineKind).toBe("principal");
+    expect(explicitDecision).not.toHaveBeenCalled();
+
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic role-bound item" }),
+      ctx.actor,
+    );
+    const productDecision = vi.fn<DecisionPort>();
+    const productExpense = await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Synthetic Product-linked receipt row",
+        productId: product.id,
+        productQuantity: 1,
+      }),
+      ctx.actor,
+      productDecision,
+    );
+    expect(productExpense.output.lineKind).toBe("principal");
+    expect(productDecision).not.toHaveBeenCalled();
+
+    await expect(
+      createExpense(
+        ctx.db,
+        makeExpenseInput({
+          name: "Synthetic contradictory role",
+          lineKind: "tax",
+          productId: product.id,
+        }),
+        ctx.actor,
+        productDecision,
+      ),
+    ).rejects.toThrow("Only principal Expenses may link a Product");
+    expect(productDecision).not.toHaveBeenCalled();
+  });
+
   it("returns charge siblings through the workflow and returns null for an unlinked expense", async () => {
     const { output: unlinked } = await createExpense(
       ctx.db,
@@ -274,17 +396,15 @@ describe("expense repository — CRUD", () => {
   });
 
   it("infers line roles once, honors explicit roles, audits changes, and protects product links", async () => {
+    const taxInput = makeExpenseInput({
+      name: "Sales tax",
+      cost: 26.81,
+      vendor: "Line role fixture vendor",
+      orderId: "LINE-ROLE-1",
+    });
+    delete taxInput.lineKind;
     const { output: inferredTax, entityId: inferredTaxId } =
-      await createRepoEntity(
-        ctx,
-        "expense",
-        makeExpenseInput({
-          name: "Sales tax",
-          cost: 26.81,
-          vendor: "Line role fixture vendor",
-          orderId: "LINE-ROLE-1",
-        }),
-      );
+      await createExpense(ctx.db, taxInput, ctx.actor, decisionPort("c1"));
     expect(inferredTax.lineKind).toBe("tax");
 
     const explicitPrincipal = await unwrap(
@@ -369,6 +489,7 @@ describe("expense repository — CRUD", () => {
         "expense",
         makeExpenseInput({
           name: "Order discount",
+          lineKind: "discount",
           cost: -60,
           vendor: "Line role fixture vendor",
           orderId: "LINE-ROLE-1",

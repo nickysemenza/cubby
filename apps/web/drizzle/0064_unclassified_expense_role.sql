@@ -1,0 +1,3 @@
+ALTER TABLE "Expense" DROP CONSTRAINT "Expense_live_charge_assignment_check";--> statement-breakpoint
+ALTER TABLE "Expense" ALTER COLUMN "lineKind" SET DEFAULT 'unclassified';--> statement-breakpoint
+ALTER TABLE "Expense" ADD CONSTRAINT "Expense_live_charge_assignment_check" CHECK ("Expense"."deletedAt" IS NOT NULL OR "Expense"."lineKind" IN ('principal', 'unclassified') OR ("Expense"."projectId" IS NULL AND "Expense"."purchaseId" IS NOT NULL));

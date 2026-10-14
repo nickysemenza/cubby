@@ -62,10 +62,11 @@ const ENTITY_SELECT_OPTIONS = {
   "project.defaultTrade": tradeOptions,
   "expense.trade": tradeOptions,
   "purchase.defaultTrade": tradeOptions,
-  // The capture form's `"auto"` sentinel: `lineKind` is left undecided on
-  // create and derived server-side from the name — `buildData` strips it
-  // before validation (`entities/editing/definitions.ts`).
-  "expense.lineKind": [{ value: "auto", label: "Auto-detect from name" }],
+  // The capture form's `"auto"` sentinel asks the server's role Decision
+  // before create; `buildData` strips it before validation.
+  "expense.lineKind": [
+    { value: "auto", label: "Decide from receipt evidence" },
+  ],
   "location.type": locationTypeOptionsWithTheme,
   "productCategory.feature": productCategoryFeatureOptions,
 } satisfies Readonly<Record<string, readonly EntitySelectOption[]>>;

@@ -12,6 +12,7 @@ import {
   type VendorShortcode,
   type SpendingCategoryShortcode,
 } from "@cubby/schemas/identifiers";
+import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { vendorSpendingProfile } from "@cubby/schemas/spending-classification";
 import type {
@@ -363,6 +364,7 @@ const vendorColumns = {
     capturedByPartyId: image.capturedByPartyId,
     captureAttribution: image.captureAttribution,
     provenanceEvidence: image.provenanceEvidence,
+    sourceEvidence: image.sourceEvidence,
     createdAt: image.createdAt,
     updatedAt: image.updatedAt,
   },
@@ -438,6 +440,7 @@ type VendorRow = {
       ruleId?: string;
       detail?: string;
     } | null;
+    sourceEvidence: unknown;
     createdAt: Date;
     updatedAt: Date;
   } | null;
@@ -454,6 +457,7 @@ const vendorLogoToAPI = (logo: VendorRow["logo"]) =>
     capturedByPartyId: null,
     capturedByName: null,
     captureAttribution: logo.captureAttribution ?? "none",
+    sourceEvidence: imageSourceEvidence.nullable().parse(logo.sourceEvidence),
   };
 
 const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {

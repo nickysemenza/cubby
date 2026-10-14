@@ -151,7 +151,8 @@ export const recommendationsHandlers = implementOperationDomain(
       dismissTagPropagationWorkflow(context.db, input),
     dismissProduct: (context, input) =>
       dismissProductRecommendationWorkflow(context.db, input),
-    productMatches: (context, input) => getProductMatchQueue(context.db, input),
+    productMatches: (context, input) =>
+      getProductMatchQueue(context.db, input, undefined, context.actorContext),
     proposeProductMatch: (context, input) =>
       proposeProductMatch(context.db, input),
     dismissProductMatch: (context, input) =>

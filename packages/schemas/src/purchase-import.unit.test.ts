@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import {
   importExtractionModelOutput,
+  extractedPurchaseLine,
   importAuditModelOutput,
   importExtractionOutcome,
   importSourceIdentity,
@@ -85,7 +86,7 @@ describe("purchase import contracts", () => {
     ).toThrow("Audit cannot propose create_refund");
   });
 
-  it("normalizes OpenAI null placeholders into optional domain fields", () => {
+  it("keeps absent model roles undecided while preserving historical parse defaults", () => {
     const wire = importExtractionModelOutput.parse({
       status: "ready",
       reason: null,
@@ -134,13 +135,20 @@ describe("purchase import contracts", () => {
           {
             title: "Replacement filter",
             amount: 24,
-            lineKind: "principal",
+            lineKind: "unclassified",
           },
         ],
         payments: [{ amount: 24 }],
         allShipmentsDelivered: null,
       },
     });
+
+    // Historical extraction rows used the required domain default. Replays
+    // continue to decode that stored shape with its original meaning.
+    expect(
+      extractedPurchaseLine.parse({ title: "Replacement filter", amount: 24 })
+        .lineKind,
+    ).toBe("principal");
   });
 
   it("requires stable source identity for orderless receipts", () => {

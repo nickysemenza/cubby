@@ -10,6 +10,8 @@ import {
   signedProductQuantity,
 } from "@cubby/schemas/expense-fields";
 import {
+  EXPENSE_LINE_ROLE_EVIDENCE_FIELDS,
+  EXPENSE_LINE_ROLE_RULES,
   expenseLineBasisSchema,
   expenseLineKindSchema,
 } from "@cubby/schemas/expense-line-kind";
@@ -116,6 +118,13 @@ export default defineEntity({
             { id: "trade", value: ["other"] },
             { id: "cost", value: "none" },
           ],
+        },
+        {
+          id: "receipt-role-missing",
+          label: "Receipt roles to review",
+          description: "Expenses whose receipt role is still unresolved",
+          filters: [{ id: "lineKind", value: ["unclassified"] }],
+          sort: [{ id: "cost", desc: true }],
         },
         {
           id: "unattached",
@@ -475,19 +484,9 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.expenseLineKind,
           suggest: {
-            basis: ["name", "cost", "notes"],
-            rules: [
-              `You are a receipt-line classifier. Given an expense's name, cost, and notes, determine the receipt role.
-
-Rules:
-1. Names containing "tax", "sales tax", "estimated tax" → tax
-2. Names containing "shipping", "delivery", "freight", or "shipping & handling" → shipping
-3. Names containing "discount", "coupon", "credit", "promo", or a negative cost with that wording → discount
-4. Names containing "fee", "processing", or a standalone "handling" charge without shipping → fee
-5. Names containing "tip", "gratuity" → tip
-6. An explicit receipt adjustment none of the above covers (rounding, price adjustment) → other_adjustment
-7. Otherwise → principal (the main purchased item/service)`,
-            ],
+            basis: [...EXPENSE_LINE_ROLE_EVIDENCE_FIELDS],
+            allowNone: true,
+            rules: [EXPENSE_LINE_ROLE_RULES],
           },
         },
         display: {
@@ -498,7 +497,7 @@ Rules:
         },
         validation: {
           read: expenseLineKindSchema.describe(
-            "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
+            "Receipt role. Principal lines are purchased items or services; unclassified means the evidence has not established a role.",
           ),
           create: expenseLineKindSchema.optional(),
           update: expenseLineKindSchema.optional(),
@@ -1050,7 +1049,7 @@ Rules:
       "date",
       {
         key: "lineKind",
-        defaultValue: "'principal'",
+        defaultValue: "'unclassified'",
         specialized: "enum:lineKind",
       },
       {
@@ -1290,7 +1289,7 @@ Rules:
       },
       {
         name: "Expense_live_charge_assignment_check",
-        sql: "{deletedAt} IS NOT NULL OR {lineKind} = 'principal' OR ({projectId} IS NULL AND {purchaseId} IS NOT NULL)",
+        sql: "{deletedAt} IS NOT NULL OR {lineKind} IN ('principal', 'unclassified') OR ({projectId} IS NULL AND {purchaseId} IS NOT NULL)",
       },
       {
         name: "Expense_cost_whole_cent_check",
@@ -1400,6 +1399,11 @@ Rules:
           export: "expenseLineKindSchema",
         },
         options: [
+          {
+            value: "unclassified",
+            label: "Unclassified receipt role",
+            color: "var(--warning)",
+          },
           {
             value: "principal",
             label: "Item or service",
@@ -1901,6 +1905,18 @@ Rules:
     dataQuality: {
       exceptions: true,
       checks: [
+        {
+          id: "expense_receipt_role",
+          satisfiedLabel: "Receipt role classified",
+          placement: { field: "lineKind" },
+          facet: "identity",
+          exceptions: "forbidden",
+          weight: 2,
+          scoreCap: 69,
+          label: "Receipt role",
+          message:
+            "Receipt evidence does not establish whether this Expense is an item or service, or an adjustment.",
+        },
         {
           id: "expense_cost",
           satisfiedLabel: "Cost recorded",

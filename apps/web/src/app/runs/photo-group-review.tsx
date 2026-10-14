@@ -939,13 +939,11 @@ function PhotoProductSuggestions({
                     {candidate.variantEvidence?.length ? (
                       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-2xs text-muted-foreground">
                         {candidate.variantEvidence.map((fact) => (
-                          <span
-                            key={`${fact.source}-${fact.dimension}-${fact.value}-${fact.raw}`}
-                          >
+                          <span key={`${fact.source}-${fact.text}`}>
                             <b className="text-foreground">
-                              {fact.dimension} {fact.value}
+                              {fact.source.replaceAll("_", " ")}
                             </b>{" "}
-                            · “{fact.raw}” · {fact.source.replaceAll("_", " ")}
+                            · “{fact.text}”
                           </span>
                         ))}
                       </div>

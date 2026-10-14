@@ -85,7 +85,7 @@ describe("deriveImageCapture", () => {
       image: baseCurrent({ source: "own", captureAttribution: "derived" }),
       sightings: [
         baseSighting({
-          mediaSubtypes: ["photoScreenshot"],
+          mediaSubtypes: ["screenshot"],
           matchKind: "import",
         }),
       ],
@@ -102,6 +102,25 @@ describe("deriveImageCapture", () => {
       capturedByPartyId: null,
       provenanceEvidence: null,
     });
+  });
+
+  it("does not treat arbitrary subtype text containing screenshot as authoritative", () => {
+    const current = baseCurrent({
+      source: "own",
+      captureAttribution: "derived",
+    });
+    expect(
+      deriveImageCapture({
+        image: current,
+        sightings: [
+          baseSighting({
+            sourceType: "cloudShared",
+            mediaSubtypes: ["not-screenshot"],
+          }),
+        ],
+        exif: null,
+      }),
+    ).toEqual(current);
   });
 
   it("Ana's phone and Mac both report her photo → one sighting, capturedBy=Ana", () => {

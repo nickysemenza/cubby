@@ -5,7 +5,7 @@ import {
   EXPENSE_DATE_REQUIRED_MESSAGE,
   hasValidExpenseDate,
 } from "@cubby/schemas/expense-fields";
-import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
+import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type {
   ExpenseId,
   ExpenseShortcode,
@@ -28,6 +28,7 @@ import type {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { expense, product, purchase } from "~/server/db/schema";
@@ -77,6 +78,7 @@ import {
   expenseInheritanceReadExtras,
   validateExpenseInheritance,
 } from "../expense-inheritance";
+import { classifyExpenseLineRole } from "../expense-line-role";
 import { loadExpenseProjectAllocations } from "../expense-project-allocation";
 import { loadExpenseSpendingAllocations } from "../expense-spending-allocation";
 import { validateProductPolicy } from "../inheritance-validation";
@@ -912,11 +914,22 @@ export const createExpense = async (
   db: Database,
   data: ExpenseCreateInput,
   actor: ActorContext,
+  decisionPort?: DecisionPort,
 ): Promise<{
   output: ExpenseOut;
   entityId: ExpenseId;
   priceAffectedProductIds: ProductId[];
 }> => {
+  const preflightProductId = data.productId
+    ? await resolveOrThrow(db, "product", data.productId)
+    : null;
+  const lineKind =
+    data.lineKind !== undefined || preflightProductId
+      ? resolveExpenseLineKind({
+          lineKind: data.lineKind,
+          productId: preflightProductId,
+        })
+      : await classifyExpenseLineRole(db, actor, data, decisionPort);
   const result = await withTransaction(db, async (tx) => {
     // Same transaction as the insert: a vendor or charge created here must not
     // outlive a failed expense write.
@@ -938,8 +951,12 @@ export const createExpense = async (
       ? await resolveLiveProductId(tx, data.productId)
       : null;
     const projectId = explicitProjectId;
-    const lineKind =
-      data.lineKind ?? inferExpenseLineKind({ name: data.name, productId });
+    if (productId !== preflightProductId) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Expense Product changed while its receipt role was being resolved.",
+      );
+    }
     assertClassificationPolicies("expense", {
       lineKind,
       lineBasis: data.lineBasis ?? "item_line",

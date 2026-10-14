@@ -1,4 +1,5 @@
-import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
+import type { ActorContext } from "@cubby/schemas/context";
+import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type ExpenseShortcode,
   parseShortcodeFor,
@@ -16,6 +17,7 @@ import type {
 import { and, count, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
 import {
   expense,
@@ -27,6 +29,7 @@ import { AppError, createAppError } from "~/server/errors/app-error";
 import { assertClassificationPolicies } from "~/server/repo/classification-field-policy";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
+import { classifyExpenseLineRole } from "~/server/repo/expense-line-role";
 import { getExpenseByShortcode } from "~/server/repo/expense/crud";
 import { expenseList } from "~/server/repo/expense/lookup";
 import { getPurchaseByShortcode } from "~/server/repo/purchase";
@@ -190,36 +193,56 @@ type SplitCheckInput = z.output<typeof purchaseSplitCheckInput>;
 type SplitCheckOut = z.output<typeof purchaseSplitCheckOut>;
 
 /**
- * The split form's check: the pure rules of `checkSplitDraft`, then the same per-part checks the
- * write makes — the project exists, only a principal line carries a product, and the part's
- * trade and project resolve (`validateExpenseInheritance`). A split this accepts is one the write
- * accepts; the write still validates on its own.
+ * The split form's check: pure draft rules, one role decision for each missing
+ * role, then per-part authority checks. Returned roles are the same facts the
+ * write validates, so model uncertainty cannot change between check and save.
  */
 export async function checkSplitFor(
   db: Database,
   input: SplitCheckInput,
+  actor: ActorContext,
+  decisionPort?: DecisionPort,
 ): Promise<SplitCheckOut> {
   const original = await loadSplitOriginal(db, input.expenseId);
   const result = checkSplitDraft(original, input);
   const body = result.split;
-  if (!body || !original.purchaseId) return result;
+  if (!body) return result;
+  if (!original.purchaseId)
+    return {
+      ...result,
+      split: null,
+      reason: "Cannot split an expense without an attached Purchase.",
+    };
   try {
     const purchaseId = await resolveOrThrow(
       db,
       "purchase",
       original.purchaseId,
     );
+    const preparedParts = [];
     for (const [index, part] of body.parts.entries()) {
       const where = `Part ${index + 1}`;
       try {
         const productId = part.productId
           ? await resolveOrThrow(db, "product", part.productId)
           : null;
-        const lineKind = inferExpenseLineKind({ name: part.name, productId });
+        const lineKind =
+          part.lineKind !== undefined || productId !== null
+            ? resolveExpenseLineKind({
+                lineKind: part.lineKind,
+                productId,
+              })
+            : await classifyExpenseLineRole(
+                db,
+                actor,
+                { name: part.name, cost: part.cost, notes: part.notes ?? null },
+                decisionPort,
+              );
+        const preparedPart = { ...part, lineKind };
         const classification = resolveSplitPartClassification({
           originalSpendingCategoryId: original.spendingCategoryId,
           lineKind,
-          partSpendingCategoryId: part.spendingCategoryId,
+          partSpendingCategoryId: preparedPart.spendingCategoryId,
         });
         assertClassificationPolicies("expense", {
           ...classification,
@@ -227,13 +250,14 @@ export async function checkSplitFor(
         });
         await validateExpenseInheritance(db, {
           lineKind,
-          projectId: part.projectId
-            ? await resolveOrThrow(db, "project", part.projectId)
+          projectId: preparedPart.projectId
+            ? await resolveOrThrow(db, "project", preparedPart.projectId)
             : null,
           productId,
           purchaseId,
-          trade: part.trade,
+          trade: preparedPart.trade,
         });
+        preparedParts.push(preparedPart);
       } catch (error) {
         if (error instanceof AppError)
           return {
@@ -244,10 +268,10 @@ export async function checkSplitFor(
         throw error;
       }
     }
+    return { ...result, split: { ...body, parts: preparedParts } };
   } catch (error) {
     if (error instanceof AppError)
       return { ...result, split: null, reason: error.message };
     throw error;
   }
-  return result;
 }

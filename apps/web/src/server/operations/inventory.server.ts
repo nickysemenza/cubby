@@ -631,7 +631,8 @@ export async function receiveExpenseInventoryWorkflow(
 export const inventoryHandlers = implementOperationDomain(inventoryContract, {
   receiveExpense: (context, input) =>
     receiveExpenseInventoryWorkflow(context.db, context.actorContext, input),
-  receivingContext: (context, input) => getReceivingContext(context.db, input),
+  receivingContext: (context, input) =>
+    getReceivingContext(context.db, input, context.actorContext),
   bulkAdd: (context, input) =>
     bulkAddInventoryWorkflow(context.db, context.actorContext, input),
   bulkDiscard: (context, input) => bulkDiscardInventoryWorkflow(context, input),

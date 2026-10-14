@@ -40,7 +40,7 @@ describe("presentEntitySelectOptions", () => {
       { value: "item_line", label: "Broken", color: "var(--custom)" },
       {
         value: "auto",
-        label: "Auto-detect from name",
+        label: "Decide from receipt evidence",
         color: "var(--brand-domain-house)",
       },
     ]);

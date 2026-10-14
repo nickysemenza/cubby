@@ -23,7 +23,7 @@ export const spendingCategoryAllocationSchema = z.object({
   spendingCategoryId: spendingCategoryShortcode.nullable(),
   spendingCategoryName: z.string().nullable(),
   amount: z.number().nullable(),
-  basis: z.enum(["principal", "positive", "refund", "default"]),
+  basis: z.enum(["principal", "positive", "refund", "default", "unclassified"]),
   incomplete: z.boolean(),
 });
 export const spendingCategoryAllocationsSchema = z.array(

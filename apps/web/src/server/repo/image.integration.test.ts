@@ -6,10 +6,11 @@ import {
   userId,
 } from "@cubby/schemas/identifiers";
 import { getImageByIdSchema } from "@cubby/schemas/image";
+import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
 import { photoRunImageState } from "@cubby/schemas/photo-import-run";
 import { generateShortcode } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -44,6 +45,10 @@ import {
   createOrReuseAttachedImage,
   createPendingImageRecord,
   createUploadedImageRecord,
+  publishImageSourceClassifications,
+  getImageCaptureState,
+  setImageCaptureState,
+  selectImagesForProvenanceClassification,
   countCullablePendingImages,
   cullPendingImages,
   deleteImages,
@@ -143,6 +148,136 @@ const mkRunTargetRow = (
 
 describe("image repository", () => {
   const ctx = withTestDb();
+
+  it("publishes source decisions only against the selected snapshot and preserves stronger evidence", async () => {
+    const eligible = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "upload-2026-10-14.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const changed = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "stale-snapshot.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const protectedImage = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "manual-source.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+      source: "own",
+    });
+    const dbc = getDb(ctx.db);
+    const protectedImageId = parseEntityId("image", protectedImage.id);
+    const staleId = parseEntityId("image", changed.id);
+    const protectedUpdatedAt = new Date(Date.now() + 2_000);
+    await dbc
+      .update(image)
+      .set({
+        provenanceEvidence: { basis: "manual" },
+        updatedAt: protectedUpdatedAt,
+      })
+      .where(eq(image.id, protectedImageId));
+    const [protectedSnapshot] = await dbc
+      .select({ updatedAtToken: sql<string>`${image.updatedAt}::text` })
+      .from(image)
+      .where(eq(image.id, protectedImageId));
+    if (!protectedSnapshot)
+      throw new Error("Expected the protected image snapshot to exist.");
+
+    const eligibleId = parseEntityId("image", eligible.id);
+    const initial = await selectImagesForProvenanceClassification(ctx.db, 100);
+    expect(initial.map(({ id }) => id)).toContain(eligibleId);
+    expect(initial.map(({ id }) => id)).not.toContain(protectedImageId);
+    const eligibleSnapshot = initial.find(({ id }) => id === eligibleId)!;
+    const staleSnapshot = initial.find(({ id }) => id === staleId)!;
+    await dbc
+      .update(image)
+      .set({
+        filename: "updated-before-publish.jpg",
+        updatedAt: new Date(staleSnapshot.updatedAt.getTime() + 1_000),
+      })
+      .where(eq(image.id, staleId));
+
+    const evidence = imageSourceEvidence.parse({
+      basis: "decision",
+      feature: "image-provenance-classification",
+      promptVersion: "2026-10-14.1",
+      model: "synthetic-test-model",
+      runId: crypto.randomUUID(),
+      confidence: "high",
+      probability: 0.98,
+      evidenceFingerprint: "a".repeat(64),
+      value: "catalog",
+    });
+    const result = await publishImageSourceClassifications(ctx.db, [
+      {
+        id: eligibleId,
+        expectedUpdatedAt: eligibleSnapshot.updatedAtToken,
+        source: "catalog",
+        sourceEvidence: evidence,
+      },
+      {
+        id: staleId,
+        expectedUpdatedAt: staleSnapshot.updatedAtToken,
+        source: "own",
+        sourceEvidence: { ...evidence, value: "own" },
+      },
+      {
+        id: protectedImageId,
+        expectedUpdatedAt: protectedSnapshot.updatedAtToken,
+        source: "screenshot",
+        sourceEvidence: { ...evidence, value: "screenshot" },
+      },
+    ]);
+
+    expect(result).toEqual({ classified: 1, capturedAtSeeded: 0 });
+    const persisted = await dbc
+      .select({ source: image.source, sourceEvidence: image.sourceEvidence })
+      .from(image)
+      .where(inArray(image.id, [eligibleId, staleId, protectedImageId]));
+    expect(persisted).toEqual(
+      expect.arrayContaining([
+        { source: "catalog", sourceEvidence: evidence },
+        { source: "unknown", sourceEvidence: null },
+        { source: "own", sourceEvidence: null },
+      ]),
+    );
+    expect(await getImageById(ctx.db, eligible.id)).toMatchObject({
+      source: "catalog",
+      sourceEvidence: evidence,
+    });
+    const captureState = await getImageCaptureState(ctx.db, eligibleId);
+    if (!captureState) throw new Error("Expected capture state");
+    await setImageCaptureState(ctx.db, eligibleId, captureState);
+    expect(await getImageById(ctx.db, eligible.id)).toMatchObject({
+      sourceEvidence: evidence,
+    });
+    await setImageCaptureState(ctx.db, eligibleId, {
+      ...captureState,
+      source: "own",
+      provenanceEvidence: { basis: "sighting" },
+    });
+    expect(await getImageById(ctx.db, eligible.id)).toMatchObject({
+      source: "own",
+      sourceEvidence: null,
+    });
+    await updateImage(ctx.db, eligible.id, {
+      filename: "manual-source-correction.jpg",
+      source: "own",
+    });
+    const manuallyChanged = await dbc
+      .select({ source: image.source, sourceEvidence: image.sourceEvidence })
+      .from(image)
+      .where(eq(image.id, eligibleId));
+    expect(manuallyChanged).toEqual([{ source: "own", sourceEvidence: null }]);
+    expect(await getImageById(ctx.db, eligible.id)).toMatchObject({
+      source: "own",
+      sourceEvidence: null,
+    });
+  });
 
   it("persists reviewed catalog provenance without replacing stored image bytes", async () => {
     const original = await createUploadedImageRecord(ctx.db, {

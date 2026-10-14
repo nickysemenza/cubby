@@ -1,4 +1,5 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
+import { isPurchaseAdjustmentExpense } from "@cubby/schemas/expense-line-kind";
 import type {
   ExpenseId,
   ProductId,
@@ -234,7 +235,10 @@ const expenseSpendingCategoryFieldResolution = (
   row: ExpenseRow,
   purchaseRow: ExpenseRow["purchase"],
 ): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
-  if (row.lineKind !== "principal" && row.spendingCategoryAllocations?.length) {
+  if (
+    isPurchaseAdjustmentExpense({ lineKind: row.lineKind }) &&
+    row.spendingCategoryAllocations?.length
+  ) {
     const categories = [
       ...new Set(
         row.spendingCategoryAllocations
@@ -288,7 +292,7 @@ const expenseSpendingCategoryFieldResolution = (
 
 const expenseProjectResolutionSource = (
   row: ExpenseRow,
-  mode: "allocated" | "explicit" | "inherit",
+  mode: "allocated" | "explicit" | "inherit" | "none",
   storedProjectShortcode: string | null,
   effectiveProjectShortcode: string | null,
 ): string => {
@@ -296,7 +300,7 @@ const expenseProjectResolutionSource = (
     return "Follows items";
   return (
     row.projectResolutionSource ??
-    (row.lineKind !== "principal"
+    (isPurchaseAdjustmentExpense({ lineKind: row.lineKind })
       ? "purchase allocation"
       : storedProjectShortcode
         ? "expense override"
@@ -312,8 +316,10 @@ const expenseProjectFieldResolution = (
   storedProjectShortcode: string | null,
   effectiveProjectShortcode: string | null,
 ): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
-  let mode: "allocated" | "explicit" | "inherit" = "inherit";
-  if (row.lineKind !== "principal") mode = "allocated";
+  let mode: "allocated" | "explicit" | "inherit" | "none" = "inherit";
+  if (row.lineKind === "unclassified") mode = "none";
+  else if (isPurchaseAdjustmentExpense({ lineKind: row.lineKind }))
+    mode = "allocated";
   else if (storedProjectShortcode) mode = "explicit";
 
   const source = expenseProjectResolutionSource(
@@ -360,7 +366,11 @@ const allocatedShareResolution = <K extends "trades" | "costTypes">(
   row: ExpenseRow,
   key: K,
 ): NonNullable<ExpenseOut["fieldResolutions"]>[string] | null => {
-  if (row.lineKind === "principal" || row.trade !== null) return null;
+  if (
+    !isPurchaseAdjustmentExpense({ lineKind: row.lineKind }) ||
+    row.trade !== null
+  )
+    return null;
   const allocations = row.spendingCategoryAllocations;
   if (!allocations?.length) return null;
   const values = [...new Set(allocations.flatMap((a) => a[key]))];
@@ -445,7 +455,7 @@ const expenseProjectAllocations = (
       (
         allocation,
       ): allocation is typeof allocation & {
-        basis: "positive" | "refund" | "default";
+        basis: "positive" | "refund" | "default" | "unclassified";
       } => allocation.basis !== "principal",
     )
     .map((allocation) => ({

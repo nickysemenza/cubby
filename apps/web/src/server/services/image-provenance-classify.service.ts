@@ -1,274 +1,189 @@
+import { createHash } from "node:crypto";
+
+import type { ActorContext } from "@cubby/schemas/context";
+import type { RunId } from "@cubby/schemas/identifiers";
+import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
 import type {
   ClassifyImageProvenanceInput,
   ClassifyImageProvenanceOut,
 } from "@cubby/schemas/maintenance";
 
+import type { AiRunContext } from "~/server/ai/run-feature";
+import { decideImageProvenanceWithEvidence } from "~/server/ai/semantic-decisions";
 import type { Database } from "~/server/db";
 import {
   countImagesForProvenanceClassification,
-  getImageCaptureState,
   loadAnalysisCapturedAtForImages,
+  publishImageSourceClassifications,
   selectImagesForProvenanceClassification,
-  setImageCaptureState,
   type ImageProvenanceCandidateRow,
+  type ImageSourceClassificationPublication,
 } from "~/server/repo/image";
-import type { DeriveImageCaptureCurrent } from "~/server/services/image-capture-derivation";
-import {
-  classifyImageProvenanceFromFilename,
-  filenameProvenanceRuleIds,
-  seedCapturedAtFromAnalysis,
-  type FilenameProvenanceResult,
-} from "~/server/services/image-provenance-heuristics";
+import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 
-type ClassifyPorts = {
+type ImageDecision = Awaited<
+  ReturnType<typeof decideImageProvenanceWithEvidence>
+>;
+
+export interface ImageProvenanceClassifierPorts {
   select: typeof selectImagesForProvenanceClassification;
   count: typeof countImagesForProvenanceClassification;
   loadAnalysisCapturedAt: typeof loadAnalysisCapturedAtForImages;
-  getCaptureState: typeof getImageCaptureState;
-  setCaptureState: typeof setImageCaptureState;
-};
+  publish: typeof publishImageSourceClassifications;
+  decide: (
+    row: ImageProvenanceCandidateRow,
+    usage: AiRunContext,
+  ) => Promise<ImageDecision>;
+  ensureRun: (db: Database, actorContext: ActorContext) => Promise<RunId>;
+}
 
-const productionPorts: ClassifyPorts = {
+const productionPorts: ImageProvenanceClassifierPorts = {
   select: selectImagesForProvenanceClassification,
   count: countImagesForProvenanceClassification,
   loadAnalysisCapturedAt: loadAnalysisCapturedAtForImages,
-  getCaptureState: getImageCaptureState,
-  setCaptureState: setImageCaptureState,
+  publish: publishImageSourceClassifications,
+  decide: (row, usage) =>
+    decideImageProvenanceWithEvidence({
+      input: {
+        filename: row.filename,
+        width: row.width,
+        height: row.height,
+        sourceAssetUrl: row.sourceAssetUrl,
+        sourcePageUrl: row.sourcePageUrl,
+        sourceName: row.sourceName,
+        sightingSourceTypes: [],
+        hasExifCamera: Boolean(row.embeddedMetadata?.camera),
+        hasExifCaptureTime: Boolean(row.embeddedMetadata?.capturedAt),
+        analysisSummary: null,
+      },
+      usage,
+    }),
+  ensureRun: (db, actorContext) =>
+    ensureRun(db, actorContext, aiCallRunInput(actorContext)),
 };
 
-const emptyRuleCounts = (): Record<string, number> =>
-  Object.fromEntries(filenameProvenanceRuleIds.map((ruleId) => [ruleId, 0]));
+const MAX_CLASSIFICATION_CANDIDATES = 100;
 
-type SeedResult = ReturnType<typeof seedCapturedAtFromAnalysis>;
+const evidenceFingerprint = (row: ImageProvenanceCandidateRow): string =>
+  createHash("sha256")
+    .update(
+      JSON.stringify({
+        filename: row.filename,
+        width: row.width,
+        height: row.height,
+        sourceAssetUrl: row.sourceAssetUrl,
+        sourcePageUrl: row.sourcePageUrl,
+        sourceName: row.sourceName,
+      }),
+    )
+    .digest("hex");
 
-interface RowClassification {
-  filenameResult: FilenameProvenanceResult | null;
-  analysisResult: SeedResult;
-}
-
-/** Runs both heuristics against one candidate row's current capture state. */
-const classifyCandidateRow = (
-  row: ImageProvenanceCandidateRow,
-  current: DeriveImageCaptureCurrent,
-  analysisCapturedAt: Date | null,
-): RowClassification => ({
-  filenameResult: classifyImageProvenanceFromFilename(row),
-  analysisResult: seedCapturedAtFromAnalysis(
-    current.capturedAt,
-    analysisCapturedAt,
-  ),
-});
-
-interface TallyResult {
-  classified: boolean;
-  capturedAtSeeded: boolean;
-}
-
-/** Tallies one row's classification into the running counters; mutates `byRule`. */
-const tallyClassification = (
-  byRule: Record<string, number>,
-  { filenameResult, analysisResult }: RowClassification,
-): TallyResult => {
-  if (filenameResult) {
-    byRule[filenameResult.provenanceEvidence.ruleId] =
-      (byRule[filenameResult.provenanceEvidence.ruleId] ?? 0) + 1;
-  }
-  return {
-    classified: filenameResult !== null,
-    capturedAtSeeded: analysisResult !== null,
-  };
-};
+const isConcrete = (
+  value: ImageDecision["value"],
+): value is "own" | "catalog" | "screenshot" =>
+  value === "own" || value === "catalog" || value === "screenshot";
 
 /**
- * The capture state to write for a row with at least one heuristic match.
- * Analysis outranks filename in `image-capture-derivation.ts`'s precedence
- * (`manual > sighting > import-url > exif > analysis > filename`); when both
- * fire in the same pass the written basis is "analysis" even though `source`
- * still comes from the filename rule.
- */
-const mergedCaptureState = (
-  current: DeriveImageCaptureCurrent,
-  { filenameResult, analysisResult }: RowClassification,
-): DeriveImageCaptureCurrent => ({
-  ...current,
-  source: filenameResult?.source ?? current.source,
-  capturedAt: analysisResult?.capturedAt ?? current.capturedAt,
-  provenanceEvidence:
-    analysisResult?.provenanceEvidence ??
-    filenameResult?.provenanceEvidence ??
-    current.provenanceEvidence,
-});
-
-/**
- * `dryRun` classifies exactly one page (`batchSize` rows) and writes
- * nothing. Looping across pages the way `applyClassification` does would be
- * meaningless here — a dry run never shrinks the candidate set, so a second
- * page read would return the identical rows. `stopped: "limit"` means the
- * candidate set is larger than the one previewed page; increase `batchSize`
- * (or apply for real) to see further.
- */
-async function previewClassification(
-  db: Database,
-  input: ClassifyImageProvenanceInput,
-  ports: ClassifyPorts,
-): Promise<ClassifyImageProvenanceOut> {
-  const rows = await ports.select(db, input.batchSize);
-  const analysisCapturedAt = await ports.loadAnalysisCapturedAt(
-    db,
-    rows.map((row) => row.id),
-  );
-  const byRule = emptyRuleCounts();
-  let classified = 0;
-  let capturedAtSeeded = 0;
-  for (const row of rows) {
-    const current = await ports.getCaptureState(db, row.id);
-    if (!current) continue;
-    const result = tallyClassification(
-      byRule,
-      classifyCandidateRow(
-        row,
-        current,
-        analysisCapturedAt.get(row.id) ?? null,
-      ),
-    );
-    if (result.classified) classified += 1;
-    if (result.capturedAtSeeded) capturedAtSeeded += 1;
-  }
-  const remaining = await ports.count(db);
-  return {
-    dryRun: true,
-    batches: rows.length > 0 ? 1 : 0,
-    scanned: rows.length,
-    classified,
-    capturedAtSeeded,
-    byRule,
-    remaining,
-    stopped: rows.length < input.batchSize ? "complete" : "limit",
-  };
-}
-
-interface ApplyBatchResult {
-  classified: number;
-  capturedAtSeeded: number;
-  progressed: boolean;
-}
-
-/** One batch: classifies and writes every row with a heuristic match. Returns whether any row changed. */
-async function applyBatch(
-  db: Database,
-  ports: ClassifyPorts,
-  rows: readonly ImageProvenanceCandidateRow[],
-  byRule: Record<string, number>,
-): Promise<ApplyBatchResult> {
-  const analysisCapturedAt = await ports.loadAnalysisCapturedAt(
-    db,
-    rows.map((row) => row.id),
-  );
-  let classified = 0;
-  let capturedAtSeeded = 0;
-  let progressed = false;
-  for (const row of rows) {
-    const current = await ports.getCaptureState(db, row.id);
-    if (!current) continue; // deleted mid-run
-
-    const classification = classifyCandidateRow(
-      row,
-      current,
-      analysisCapturedAt.get(row.id) ?? null,
-    );
-    if (!classification.filenameResult && !classification.analysisResult)
-      continue;
-    progressed = true;
-
-    const result = tallyClassification(byRule, classification);
-    if (result.classified) classified += 1;
-    if (result.capturedAtSeeded) capturedAtSeeded += 1;
-
-    await ports.setCaptureState(
-      db,
-      row.id,
-      mergedCaptureState(current, classification),
-    );
-  }
-  return { classified, capturedAtSeeded, progressed };
-}
-
-/**
- * The bounded-loop write path, mirroring `repairImageDimensions`: each pass
- * selects a batch of candidate rows, classifies and writes them, and stops
- * on an empty page (`complete`), the batch limit (`limit`), or a repeated
- * page / a page with no matches (`no_progress`).
- */
-async function applyClassification(
-  db: Database,
-  input: ClassifyImageProvenanceInput,
-  ports: ClassifyPorts,
-): Promise<ClassifyImageProvenanceOut> {
-  let batches = 0;
-  let scanned = 0;
-  let classified = 0;
-  let capturedAtSeeded = 0;
-  let stopped: ClassifyImageProvenanceOut["stopped"] = "limit";
-  const byRule = emptyRuleCounts();
-  const seenPages = new Set<string>();
-
-  while (batches < input.maxBatches) {
-    const rows = await ports.select(db, input.batchSize);
-    if (rows.length === 0) {
-      stopped = "complete";
-      break;
-    }
-    const pageKey = rows
-      .map((row) => row.id)
-      .sort()
-      .join(",");
-    if (seenPages.has(pageKey)) {
-      stopped = "no_progress";
-      break;
-    }
-    seenPages.add(pageKey);
-    batches += 1;
-    scanned += rows.length;
-
-    const batch = await applyBatch(db, ports, rows, byRule);
-    classified += batch.classified;
-    capturedAtSeeded += batch.capturedAtSeeded;
-    if (!batch.progressed) {
-      stopped = "no_progress";
-      break;
-    }
-  }
-
-  const remaining = await ports.count(db);
-  if (remaining === 0) stopped = "complete";
-  return {
-    dryRun: false,
-    batches,
-    scanned,
-    classified,
-    capturedAtSeeded,
-    byRule,
-    remaining,
-    stopped,
-  };
-}
-
-/**
- * Filename/dimension heuristics + on-device analysis `capturedAt` seeding for
- * images still `source = unknown` or last classified by a filename rule
- * (`image-provenance-heuristics.ts`). Writes back through the same
- * `getImageCaptureState`/`setImageCaptureState` repo functions
- * `image-capture-derivation.ts` uses — this never re-derives or duplicates
- * that module's precedence rule, it only ever touches the two lowest tiers
- * (`analysis`, `filename`), and the candidate SELECT itself is what keeps it
- * from ever touching a `manual`/`sighting`/`import-url`/`exif` row.
+ * Freeze one bounded candidate roster, prepare every Decision before writes,
+ * then publish all concrete outcomes in one transaction. An error from any
+ * model call therefore leaves this invocation's image rows untouched.
  */
 export async function classifyImageProvenance(
   db: Database,
   input: ClassifyImageProvenanceInput,
-  ports: ClassifyPorts = productionPorts,
+  actorContext: ActorContext,
+  ports: ImageProvenanceClassifierPorts = productionPorts,
 ): Promise<ClassifyImageProvenanceOut> {
-  return input.dryRun
-    ? previewClassification(db, input, ports)
-    : applyClassification(db, input, ports);
+  const limit = Math.min(
+    input.batchSize * input.maxBatches,
+    MAX_CLASSIFICATION_CANDIDATES,
+  );
+  const selected = await ports.select(db, limit + 1, input.afterId);
+  const hasMore = selected.length > limit;
+  const rows = selected.slice(0, limit);
+  const remainingBefore = await ports.count(db);
+  if (rows.length === 0) {
+    return {
+      dryRun: input.dryRun,
+      batches: 0,
+      scanned: 0,
+      classified: 0,
+      capturedAtSeeded: 0,
+      unresolved: 0,
+      remaining: remainingBefore,
+      nextCursor: null,
+      stopped: "complete",
+    };
+  }
+
+  const runId = await ports.ensureRun(db, actorContext);
+  const usage: AiRunContext = {
+    db,
+    runId,
+    operation: "maintenance.image-provenance-classification",
+  };
+  const analysisCapturedAt = await ports.loadAnalysisCapturedAt(
+    db,
+    rows.map((row) => row.id),
+  );
+  const prepared: ImageSourceClassificationPublication[] = [];
+  let unresolved = 0;
+  let preparedClassifications = 0;
+  let preparedCaptureDates = 0;
+  for (const row of rows) {
+    const analysisTime =
+      row.capturedAt === null ? analysisCapturedAt.get(row.id) : undefined;
+    const updates: ImageSourceClassificationPublication = {
+      id: row.id,
+      expectedUpdatedAt: row.updatedAtToken,
+      ...(analysisTime !== undefined
+        ? { analysisCapturedAt: analysisTime }
+        : {}),
+    };
+    const decision = await ports.decide(row, usage);
+    if (isConcrete(decision.value) && decision.confidence === "high") {
+      updates.source = decision.value;
+      updates.sourceEvidence = imageSourceEvidence.parse({
+        basis: "decision",
+        feature: decision.feature,
+        promptVersion: decision.promptVersion,
+        model: decision.model,
+        runId,
+        confidence: "high",
+        probability: decision.probability,
+        evidenceFingerprint: evidenceFingerprint(row),
+        value: decision.value,
+      });
+      preparedClassifications += 1;
+    } else {
+      unresolved += 1;
+    }
+    if (updates.source || updates.analysisCapturedAt) {
+      if (updates.analysisCapturedAt) preparedCaptureDates += 1;
+      prepared.push(updates);
+    }
+  }
+
+  const publication = input.dryRun
+    ? {
+        classified: preparedClassifications,
+        capturedAtSeeded: preparedCaptureDates,
+      }
+    : prepared.length === 0
+      ? { classified: 0, capturedAtSeeded: 0 }
+      : await ports.publish(db, prepared);
+  const remaining = await ports.count(db);
+  return {
+    dryRun: input.dryRun,
+    batches: Math.ceil(rows.length / input.batchSize),
+    scanned: rows.length,
+    classified: publication.classified,
+    capturedAtSeeded: publication.capturedAtSeeded,
+    unresolved:
+      unresolved +
+      (input.dryRun ? 0 : preparedClassifications - publication.classified),
+    remaining,
+    nextCursor: hasMore ? (rows.at(-1)?.id ?? null) : null,
+    stopped: hasMore ? "limit" : "complete",
+  };
 }

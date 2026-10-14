@@ -136,7 +136,11 @@ export async function setImageOwnDeviceSource(
 ): Promise<void> {
   await unwrapDb(db)
     .update(image)
-    .set({ source: "own", provenanceEvidence: { basis: "sighting" } })
+    .set({
+      source: "own",
+      sourceEvidence: null,
+      provenanceEvidence: { basis: "sighting" },
+    })
     .where(
       and(eq(image.id, imageId), ne(image.captureAttribution, "confirmed")),
     );

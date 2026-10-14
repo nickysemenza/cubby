@@ -3,6 +3,7 @@ import {
   imageCaptureAttribution,
   imageCaptureLocation,
   imageProvenanceEvidence,
+  imageSourceEvidence,
 } from "../image-capture-fields.js";
 import { imageSightingOut } from "../image-sighting-fields.js";
 import { optionalImageRepresentations } from "../image-summary.js";
@@ -476,6 +477,17 @@ export default defineEntity({
         },
       },
       {
+        key: "sourceEvidence",
+        kind: "json",
+        nullable: true,
+        display: { detail: true },
+        validation: {
+          read: imageSourceEvidence.nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
         // Detail-only: the live rows of the `ImageSighting` child table
         // (not an entity), each naming its owner and reporting device.
         key: "sightings",
@@ -595,6 +607,7 @@ export default defineEntity({
         key: "provenanceEvidence",
         specialized: "json:provenanceEvidence",
       },
+      { key: "sourceEvidence", specialized: "json:sourceEvidence" },
       "metadataRevision",
       { key: "embeddedMetadata", specialized: "json:embeddedMetadata" },
       { key: "createdAt" },
@@ -647,6 +660,7 @@ export default defineEntity({
       "capturedByName",
       "captureAttribution",
       "provenanceEvidence",
+      "sourceEvidence",
       "provenanceEvidenceLabel",
       "sightings",
       "createdAt",

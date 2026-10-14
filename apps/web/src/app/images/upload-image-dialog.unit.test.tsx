@@ -58,6 +58,7 @@ function uploadedImageRow(imageId: ImageShortcode, file: File) {
     capturedByName: null,
     captureAttribution: "none" as const,
     provenanceEvidence: null,
+    sourceEvidence: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     entityKind: null,

@@ -294,7 +294,7 @@ export function normalizeImportExtractionModelOutput(
           const normalized: ExtractedPurchaseLine = {
             title: line.title,
             amount: line.amount,
-            lineKind: line.lineKind ?? "principal",
+            lineKind: line.lineKind ?? "unclassified",
           };
           if (line.costType !== null) normalized.costType = line.costType;
           if (line.quantity !== null) normalized.quantity = line.quantity;

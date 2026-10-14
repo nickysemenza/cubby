@@ -13,6 +13,7 @@ const TIMEOUT_MS = 5000;
 export interface UPCitemdbRuntime {
   fetch: typeof fetch;
   timeoutSignal: (milliseconds: number) => AbortSignal;
+  decideOfferComparability?: Parameters<typeof extractBestPrice>[2];
 }
 
 const productionUPCitemdbRuntime: UPCitemdbRuntime = {
@@ -71,15 +72,13 @@ export async function lookupUPCitemdb(
     // Extract best price from offers (API returns dollars)
     let priceDollars: number | null = null;
     if (item.offers && item.offers.length > 0) {
-      priceDollars = extractBestPrice(item.offers);
-    }
-    // Fallback to lowest_recorded_price if no valid offers
-    if (
-      priceDollars === null &&
-      item.lowest_recorded_price &&
-      item.lowest_recorded_price > 0
-    ) {
-      priceDollars = item.lowest_recorded_price;
+      if (!runtime.decideOfferComparability)
+        throw new Error("UPC offer comparison decision is unavailable");
+      priceDollars = await extractBestPrice(
+        item.offers,
+        item.title,
+        runtime.decideOfferComparability,
+      );
     }
 
     return {

@@ -1,8 +1,10 @@
+import { tradeSchema } from "@cubby/schemas/project";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "./database-helpers";
+import { effectiveExpenseTradeSql } from "./expense-inheritance";
 import { expenseSpendingAllocationSql } from "./expense-spending-allocation";
 import { effectiveExpenseSpendingCategorySql } from "./purchase-evidence-policy";
 import { insertWithShortcode } from "./shortcode-utils";
@@ -47,6 +49,7 @@ describe("Expense category resolution", () => {
       date: "2026-09-01",
       cost: 60,
       costType: "materials",
+      lineKind: "principal",
       productId: product.id,
       purchaseId: purchase.id,
     });
@@ -74,6 +77,28 @@ describe("Expense category resolution", () => {
     );
     return rows.rows[0]?.category;
   }
+  it("does not inherit Purchase category or trade for an unresolved receipt role", async () => {
+    const f = await fixture();
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Purchase" SET "defaultTrade"=${tradeSchema.enum.other} WHERE id=${f.purchase.id}`,
+    );
+    const unresolved = await insertWithShortcode(ctx.db, "expense", {
+      name: "Unresolved adjustment evidence",
+      date: "2026-09-01",
+      cost: 1.25,
+      costType: "services",
+      lineKind: "unclassified",
+      trade: null,
+      future: false,
+      purchaseId: f.purchase.id,
+    });
+    const rows = await unwrapDb(ctx.db).execute(sql`
+      SELECT ${effectiveExpenseSpendingCategorySql("e")} AS category,
+        ${effectiveExpenseTradeSql("e")} AS trade
+      FROM "Expense" e WHERE e.id=${unresolved.id}
+    `);
+    expect(rows.rows[0]).toEqual({ category: null, trade: null });
+  });
   it("uses live nearest Product mapping before Purchase fallback and preserves explicit purpose", async () => {
     const f = await fixture();
     expect(await effective(f.expense.id)).toBe(f.clothing.id);

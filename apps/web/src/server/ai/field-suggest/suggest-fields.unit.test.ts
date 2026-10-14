@@ -612,7 +612,11 @@ describe("suggestFields", () => {
       {
         entity: "expense",
         targets: ["projectId", "trade"],
-        basis: { name: "panel upgrade", projectId: null },
+        basis: {
+          name: "panel upgrade",
+          lineKind: "principal",
+          projectId: null,
+        },
         basisMode: "provided",
       },
       {
@@ -929,22 +933,28 @@ describe("suggestFields", () => {
     expect(decisionPort).toHaveBeenCalled();
   });
 
-  it("resolves automatic principal line kinds before asking for projects", async () => {
-    const result = await suggestFields(
-      fakeDb,
-      fixtureRunId,
-      {
-        basisMode: "suggested",
-        entity: "expense",
-        targets: ["projectId"],
-        basis: { name: "Kitchen shelf", lineKind: "auto" },
-      },
-      {
-        decisionPort: decisionPortPicking("Kitchen Remodel"),
-        registry: { "expense.projectId": fakeProjectSpec() },
-      },
-    );
-    expect(result.suggestions.projectId?.value).toBe("PRJ-AAAA");
+  it("does not infer a principal role from a draft name before project suggestions", async () => {
+    const decisionPort = decisionPortPicking("Kitchen Remodel");
+    await expect(
+      suggestFields(
+        fakeDb,
+        fixtureRunId,
+        {
+          basisMode: "suggested",
+          entity: "expense",
+          targets: ["projectId"],
+          basis: { name: "Kitchen shelf", lineKind: "auto" },
+        },
+        {
+          decisionPort,
+          registry: { "expense.projectId": fakeProjectSpec() },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      reason: "SUGGEST_FIELD_FORBIDDEN",
+    });
+    expect(decisionPort).not.toHaveBeenCalled();
   });
 
   it("excludes an inherited target using the authoritative draft snapshot", async () => {
@@ -1198,7 +1208,11 @@ describe("suggestFields", () => {
         basisMode: "suggested",
         entity: "expense",
         targets: ["projectId", "trade"],
-        basis: { name: "panel upgrade", projectId: null },
+        basis: {
+          name: "panel upgrade",
+          lineKind: "principal",
+          projectId: null,
+        },
       },
       {
         decisionPort,
@@ -1226,7 +1240,11 @@ describe("suggestFields", () => {
         basisMode: "suggested",
         entity: "expense",
         targets: ["projectId", "trade"],
-        basis: { name: "panel upgrade", projectId: "PRJ-EXPLICIT" },
+        basis: {
+          name: "panel upgrade",
+          lineKind: "principal",
+          projectId: "PRJ-EXPLICIT",
+        },
       },
       {
         decisionPort: explicitDecisionPort,

@@ -38,7 +38,7 @@ export const projectAllocationSchema = z.object({
   projectId: projectShortcode.nullable(),
   projectName: z.string().nullable(),
   amount: z.number().nullable(),
-  basis: z.enum(["positive", "refund", "default"]),
+  basis: z.enum(["positive", "refund", "default", "unclassified"]),
   incomplete: z.boolean(),
 });
 

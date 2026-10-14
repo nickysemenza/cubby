@@ -33,6 +33,18 @@ basket remain unknown unless explicitly classified. A basket whose principals
 are all priced at $0 (an award ticket) splits adjustments evenly across them;
 one unpriced principal leaves the shares unknown.
 
+An Expense with an unresolved receipt role uses `lineKind = unclassified`.
+Its signed amount appears once in unresolved allocations and remains in ledger,
+Purchase, and vendor totals. It is not distributed using principal weights and
+cannot inherit Product, Project, or spending-category assignments. A Purchase
+with unresolved roles has incomplete allocation classification until those
+roles are resolved. Explicit receipt roles remain authoritative; automatic
+classification accepts only a confident Decision result. Uncertainty remains
+unclassified, while a model failure fails the operation. Settlement booking waits
+until existing vendor receipt roles are resolved, preventing an unresolved
+amount from being booked again. Detaching a Purchase preserves unresolved
+Expenses and their signed amounts without inventing inherited attribution.
+
 Category completeness is independent of pricing and Project completeness. A
 known category on an unpriced Expense is still classified. An automatic
 adjustment with unknown principal weights can remain partially classified.

@@ -1,4 +1,7 @@
-import { expenseLineKindValues } from "@cubby/schemas/expense-line-kind";
+import {
+  expenseLineKindValues,
+  EXPENSE_LINE_ROLE_RULES,
+} from "@cubby/schemas/expense-line-kind";
 import type { ExtractedPurchaseLine } from "@cubby/schemas/purchase-import";
 
 import type { DecisionChoicePrompt } from "~/server/ai/decision-model";
@@ -17,11 +20,12 @@ const lineDecisionSubject = (line: ExtractedPurchaseLine) =>
     productUrl: line.productUrl ?? null,
   });
 
+export const expenseLineRoleRules = EXPENSE_LINE_ROLE_RULES;
+
 export const purchaseLinePrompts = {
   role: {
-    choices: expenseLineKindValues,
-    rules:
-      "Classify the receipt row's financial role. Principal is a purchased or returned item; taxes, shipping, discounts, fees, tips, and other adjustments are not products.",
+    choices: expenseLineKindValues.filter((value) => value !== "unclassified"),
+    rules: expenseLineRoleRules,
   },
   kit: {
     choices: ["kit_with_components", "single", "n_pack"] as const,
@@ -49,6 +53,6 @@ export function purchaseLinePrompt(
     subject: lineDecisionSubject(line),
     rules: spec.rules,
     choices: spec.choices,
-    allowNone: false,
+    allowNone: stage === "role",
   };
 }

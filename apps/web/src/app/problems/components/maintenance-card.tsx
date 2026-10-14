@@ -4,9 +4,10 @@ import type {
   SearchIndexRepairCounters,
 } from "@cubby/schemas/maintenance";
 import type { MaintenanceCounts } from "@cubby/schemas/problems";
+import { getErrorMessage } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { openRecipeRecomputeAllStream } from "~/app/recipes/recipe-streams";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
@@ -292,18 +293,49 @@ function ImageMetadataAction() {
   );
 }
 
-// Filename/dimension heuristics for images still `source = unknown` (see
-// `image-provenance-heuristics.ts`); Preview is a dry run of the next batch.
-function ImageProvenanceAction() {
-  const classify = useMutation(
-    maintenance.classifyImageProvenance.mutationOptions(),
-  );
+// Decision classification for weak image-source evidence; Preview runs the
+// same frozen candidate roster without publishing results.
+export function ImageProvenanceAction({
+  operations = {
+    classifyImageProvenance:
+      maintenance.classifyImageProvenance.mutationOptions,
+  },
+}: {
+  operations?: {
+    classifyImageProvenance: typeof maintenance.classifyImageProvenance.mutationOptions;
+  };
+}) {
+  const [previewCursor, setPreviewCursor] = useState<string | undefined>();
+  const [applyCursor, setApplyCursor] = useState<string | undefined>();
+  const classify = useMutation(operations.classifyImageProvenance());
   const result = classify.data;
   return (
     <MaintenanceDryRunRow
-      summary={result && <ProvenanceSummary result={result} />}
+      summary={
+        <>
+          {result && <ProvenanceSummary result={result} />}
+          {classify.error && (
+            <span
+              role="alert"
+              className="block whitespace-normal text-destructive"
+            >
+              {getErrorMessage(classify.error)}
+            </span>
+          )}
+        </>
+      }
       onDryRun={() =>
-        classify.mutate({ dryRun: true, batchSize: 25, maxBatches: 1 })
+        classify.mutate(
+          {
+            dryRun: true,
+            batchSize: 25,
+            maxBatches: 1,
+            afterId: previewCursor,
+          },
+          {
+            onSuccess: (page) => setPreviewCursor(page.nextCursor ?? undefined),
+          },
+        )
       }
       dryRunPending={classify.isPending}
       backfill={
@@ -311,10 +343,21 @@ function ImageProvenanceAction() {
           size="sm"
           disabled={classify.isPending}
           onClick={() =>
-            classify.mutate({ dryRun: false, batchSize: 25, maxBatches: 20 })
+            classify.mutate(
+              {
+                dryRun: false,
+                batchSize: 25,
+                maxBatches: 20,
+                afterId: applyCursor,
+              },
+              {
+                onSuccess: (page) =>
+                  setApplyCursor(page.nextCursor ?? undefined),
+              },
+            )
           }
         >
-          Apply
+          {applyCursor ? "Continue" : "Apply"}
         </Button>
       }
     />
@@ -331,14 +374,11 @@ const BATCH_STOPPED_LABEL = {
 >;
 
 function ProvenanceSummary({ result }: { result: ClassifyImageProvenanceOut }) {
-  const rules = Object.entries(result.byRule)
-    .filter(([, count]) => count > 0)
-    .map(([ruleId, count]) => `${ruleId}: ${count}`);
   const detail = [
     BATCH_STOPPED_LABEL[result.stopped],
     result.capturedAtSeeded > 0 &&
       `seeded capture date on ${countLabel(result.capturedAtSeeded, "image")}`,
-    ...rules,
+    result.unresolved > 0 && `${result.unresolved} remain unresolved`,
   ].filter(Boolean);
   return (
     <span title={detail.join(" · ")}>
@@ -405,7 +445,7 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
       {
         label: "Classify provenance",
         description:
-          "Guess a still-unknown image's source from its filename and dimensions (legacy uploader, camera-roll naming, catalog markers, screenshot resolutions), and seed a missing capture date from on-device photo analysis. Preview first — Apply writes the guesses.",
+          "Review still-unknown image sources using bounded evidence and seed a missing capture date from on-device photo analysis. Preview first — Apply writes only high-confidence classifications.",
         action: <ImageProvenanceAction />,
       },
       {

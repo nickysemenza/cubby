@@ -1,4 +1,5 @@
 import type { CostType } from "@cubby/schemas/expense-fields";
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import type {
   ExpenseId,
   ProjectId,
@@ -23,6 +24,7 @@ import {
 
 export type ExpenseProjectAllocationBasis =
   | "principal"
+  | "unclassified"
   | "positive"
   | "refund"
   | "default";
@@ -88,7 +90,11 @@ export const expenseJointAllocationSql = (
       ${categories ? effectiveExpenseTradeSql("e") : sql`NULL::text`} AS trade,
       e."costType"::text AS "costType",
       round(e."cost"::numeric * 100)::bigint AS cost_cents,
-      live_purchase."id" IS NOT NULL AS live_purchase
+      live_purchase."id" IS NOT NULL AS live_purchase,
+      EXISTS (SELECT 1 FROM "Expense" unknown_role
+        WHERE unknown_role."purchaseId" = e."purchaseId"
+          AND unknown_role."deletedAt" IS NULL
+          AND unknown_role."lineKind" = ${expenseLineKindSchema.enum.unclassified}) AS has_unclassified
     FROM ${
       expenseIds
         ? sql`(
@@ -108,7 +114,8 @@ export const expenseJointAllocationSql = (
   ), purchase_direction AS (
     SELECT "purchaseId", coalesce(bool_or(cost_cents > 0), false) AS has_positive,
       coalesce(bool_or(cost_cents < 0), false) AS has_negative,
-      bool_or(cost_cents IS NULL) AS has_unpriced_principal
+      bool_or(cost_cents IS NULL) AS has_unpriced_principal,
+      coalesce(bool_or(has_unclassified), false) AS has_unclassified
     FROM principal_fact WHERE live_purchase GROUP BY "purchaseId"
   ), principal_weight AS (
     SELECT f."purchaseId", f."expenseId" AS "principalExpenseId",
@@ -152,14 +159,15 @@ export const expenseJointAllocationSql = (
       coalesce(w.basis, 'default') AS basis, coalesce(w.weight, 1::bigint) AS weight,
       round(e."cost"::numeric * 100)::bigint AS source_cents,
       sum(coalesce(w.weight, 1::bigint)) OVER (PARTITION BY e."id") AS total_weight,
-      coalesce(d.has_unpriced_principal, false) AS has_unpriced_principal
+      coalesce(d.has_unpriced_principal, false) AS has_unpriced_principal,
+      coalesce(d.has_unclassified, false) AS has_unclassified
     FROM "Expense" e LEFT JOIN "Purchase" p
       ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
     LEFT JOIN weights w ON w."purchaseId" = p."id"
     LEFT JOIN purchase_direction d ON d."purchaseId" = p."id"
     LEFT JOIN "Project" standalone_project
       ON standalone_project."id" = e."projectId" AND standalone_project."deletedAt" IS NULL
-    WHERE e."deletedAt" IS NULL AND e."lineKind" <> 'principal'
+    WHERE e."deletedAt" IS NULL AND e."lineKind" NOT IN ('principal', ${expenseLineKindSchema.enum.unclassified})
       ${expenseIds ? sql`AND e."id" IN (SELECT "id" FROM selected_expense)` : sql``}
   ), adjustment_floor AS (
     SELECT *, CASE WHEN source_cents IS NULL THEN NULL ELSE
@@ -176,17 +184,27 @@ export const expenseJointAllocationSql = (
     SELECT f."expenseId", f."purchaseId", f."expenseId" AS "principalExpenseId",
       f."projectId", f."spendingCategoryId", f.trade, f."costType", f.cost_cents AS source_cents,
       f.cost_cents AS attributed_cents, 'principal'::text AS basis,
-      f.cost_cents IS NULL AS incomplete,
-      f."spendingCategoryId" IS NULL AS category_incomplete
-    FROM principal_fact f
+      f.cost_cents IS NULL OR coalesce(d.has_unclassified, false) AS incomplete,
+      f."spendingCategoryId" IS NULL OR coalesce(d.has_unclassified, false) AS category_incomplete
+    FROM principal_fact f LEFT JOIN purchase_direction d USING ("purchaseId")
+    UNION ALL
+    SELECT e."id" AS "expenseId", e."purchaseId", NULL::uuid AS "principalExpenseId",
+      NULL::uuid AS "projectId", NULL::uuid AS "spendingCategoryId",
+      NULL::text AS trade, e."costType"::text AS "costType",
+      round(e."cost"::numeric * 100)::bigint AS source_cents,
+      round(e."cost"::numeric * 100)::bigint AS attributed_cents,
+      ${expenseLineKindSchema.enum.unclassified}::text AS basis, true AS incomplete, true AS category_incomplete
+    FROM "Expense" e
+    WHERE e."deletedAt" IS NULL AND e."lineKind" = ${expenseLineKindSchema.enum.unclassified}
+      ${expenseIds ? sql`AND e."id" IN (SELECT "id" FROM selected_expense)` : sql``}
     UNION ALL
     SELECT r."expenseId", r."purchaseId", r."principalExpenseId", r."projectId", r."spendingCategoryId",
       r.trade, r."costType", r.source_cents, CASE WHEN r.source_cents IS NULL THEN NULL ELSE
         sign(r.source_cents) * (r.base_cents + CASE
           WHEN r.remainder_rank <= abs(r.source_cents) - r.assigned_cents THEN 1 ELSE 0 END)
       END::bigint AS attributed_cents, r.basis,
-      r.source_cents IS NULL OR r.basis = 'default' OR r.has_unpriced_principal AS incomplete,
-      r."spendingCategoryId" IS NULL OR r.basis = 'default' OR r.has_unpriced_principal AS category_incomplete
+      r.source_cents IS NULL OR r.basis = 'default' OR r.has_unpriced_principal OR r.has_unclassified AS incomplete,
+      r."spendingCategoryId" IS NULL OR r.basis = 'default' OR r.has_unpriced_principal OR r.has_unclassified AS category_incomplete
     FROM adjustment_ranked r
   )
   SELECT a."expenseId", a."purchaseId", a."principalExpenseId", a."projectId",

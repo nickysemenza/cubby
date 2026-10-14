@@ -63,7 +63,7 @@ describe("reviewed booking category and refund capacity", () => {
     };
     const line = async (
       cost: number,
-      lineKind: "principal" | "discount" = "principal",
+      lineKind: "principal" | "discount" | "unclassified" = "principal",
     ) =>
       insertWithShortcode(ctx.db, "expense", {
         purchaseId: purchase.id,
@@ -90,6 +90,27 @@ describe("reviewed booking category and refund capacity", () => {
     };
     return { category, purchase, vendor, transaction, line, book };
   }
+  it("refuses settlement while unresolved signed receipt lines could duplicate money", async () => {
+    const { purchase, transaction, line } = await fixture();
+    await line(-25, "unclassified");
+    for (const amount of [-25, 25]) {
+      const source = await transaction(amount);
+      await expect(
+        previewFinancialBooking(
+          ctx.db,
+          financialBookingInput.parse({
+            transactionId: source.output.id,
+            purchaseId: purchase.shortcode,
+          }),
+        ),
+      ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
+    }
+    const stored = await getDb(ctx.db).query.expense.findMany({
+      where: eq(expense.purchaseId, purchase.id),
+    });
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.cost).toBe(-25);
+  });
   it("books displayed category defaults without materializing Purchase or Expense overrides", async () => {
     const { purchase, category, book } = await fixture();
     const { preview, result } = await book(25);

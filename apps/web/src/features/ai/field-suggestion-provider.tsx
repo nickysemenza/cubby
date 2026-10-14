@@ -4,7 +4,10 @@ import type {
 } from "@cubby/schemas/ai";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
+import {
+  isPurchaseAdjustmentExpense,
+  resolveExpenseLineKind,
+} from "@cubby/schemas/expense-line-kind";
 import {
   fieldResolutionsSchema,
   type FieldResolution,
@@ -101,7 +104,10 @@ function isAllocatedExpenseShare(
   field: string,
   basis: FieldSuggestionSource["basis"],
 ) {
-  if (entity !== "expense" || resolveExpenseLineKind(basis) === "principal")
+  if (
+    entity !== "expense" ||
+    !isPurchaseAdjustmentExpense({ lineKind: resolveExpenseLineKind(basis) })
+  )
     return false;
   if (field === "projectId") return true;
   return (

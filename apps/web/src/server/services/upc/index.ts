@@ -1,3 +1,5 @@
+import type { ActorContext } from "@cubby/schemas/context";
+import type { RunId } from "@cubby/schemas/identifiers";
 /**
  * UPC identity lookups served from Postgres `UpcLookupCache`, with upcitemdb
  * as the upstream fallback. Replaces the retired `upc-lookup` Worker.
@@ -16,6 +18,7 @@ import type {
   UPCLookupResponse,
 } from "~/contracts/upc.schemas";
 import { env } from "~/env";
+import { decideUpcOfferComparability } from "~/server/ai/semantic-decisions";
 import type { Database } from "~/server/db";
 import {
   getCachedUpcRows,
@@ -25,8 +28,11 @@ import {
   searchCachedUpcs,
   toUpcLookup,
 } from "~/server/repo/upc-lookup-cache";
+import { systemActor } from "~/server/runs/ensure-run";
+import { ensureRun, aiCallRunInput } from "~/server/runs/ensure-run";
 import { TraceNames, withTrace } from "~/server/tracing";
 
+import type { DecideOfferComparability } from "./price";
 import type { ExternalLookupResult } from "./types";
 import { lookupUPCitemdb } from "./upcitemdb";
 
@@ -41,7 +47,10 @@ const MISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
  */
 const BATCH_UPSTREAM_LIMIT = 25;
 
-export type UpcUpstream = (upc: string) => Promise<ExternalLookupResult>;
+export type UpcUpstream = (
+  upc: string,
+  decideComparability: DecideOfferComparability,
+) => Promise<ExternalLookupResult>;
 
 const toResponse = (
   upc: string,
@@ -60,11 +69,41 @@ const toResponse = (
 });
 
 export class UpcLookupService {
+  private actorContext: ActorContext = systemActor();
+  private runId: Promise<RunId> | null = null;
+
   constructor(
     private readonly db: Database,
     /** Null disables upstream calls (offline dev and E2E): cache reads only. */
     private readonly upstream: UpcUpstream | null,
   ) {}
+
+  /** Bind the authenticated request actor before exposing this request-scoped service. */
+  bindActorContext(actor: ActorContext): this {
+    this.actorContext = actor;
+    this.runId = actor.runId ? Promise.resolve(actor.runId) : null;
+    return this;
+  }
+
+  private async decideOffer(input: {
+    itemTitle: string;
+    offerTitle: string;
+  }): Promise<"comparable" | "incomparable" | "unknown"> {
+    this.runId ??= ensureRun(
+      this.db,
+      this.actorContext,
+      aiCallRunInput(this.actorContext),
+    );
+    const runId = await this.runId;
+    return decideUpcOfferComparability({
+      ...input,
+      usage: {
+        db: this.db,
+        runId,
+        operation: "upc.lookup.offer-comparability",
+      },
+    });
+  }
 
   async lookup(upc: string): Promise<UPCLookupResponse | null> {
     return withTrace(TraceNames.api("upc-lookup", "lookup"), async () => {
@@ -75,8 +114,10 @@ export class UpcLookupService {
         Date.now() - row.fetchedAt.getTime() < MISS_TTL_MS;
       if (freshMiss || !this.upstream) return null;
 
-      const result = await this.upstream(upc);
-      if (result.status === "error") return null; // transient: never cached
+      const result = await this.upstream(upc, (input) =>
+        this.decideOffer(input),
+      );
+      if (result.status === "error") throw result.error;
       const checkedAt = new Date();
       if (result.status === "not_found") {
         await recordUpcLookups(this.db, [upc], new Map(), checkedAt);
@@ -106,25 +147,25 @@ export class UpcLookupService {
 
       const pending = unique.filter((upc) => !result.has(upc));
       const failedUpcs: string[] = [];
-      let failure: Error | null = null;
       for (const [index, upc] of pending.entries()) {
-        if (failure || index >= BATCH_UPSTREAM_LIMIT) {
+        if (index >= BATCH_UPSTREAM_LIMIT) {
           failedUpcs.push(upc);
           continue;
         }
-        const outcome = await upstream(upc);
+        const outcome = await upstream(upc, (input) => this.decideOffer(input));
         if (outcome.status === "found") {
           result.set(upc, toResponse(upc, outcome));
         } else if (outcome.status === "error") {
-          failure = outcome.error;
-          failedUpcs.push(upc);
+          throw new PartialUpcBatchLookupError(outcome.error, [
+            upc,
+            ...pending.slice(index + 1),
+          ]);
         }
       }
       if (failedUpcs.length > 0) {
         log.warn(`Batch left ${failedUpcs.length} UPCs unresolved`);
         throw new PartialUpcBatchLookupError(
-          failure ?? new Error("UPC provider batch limit reached"),
-          result,
+          new Error("UPC provider batch limit reached"),
           failedUpcs,
         );
       }
@@ -149,5 +190,12 @@ export type UpcLookupPort = Pick<UpcLookupService, "lookup" | "lookupBatch">;
 export const createUpcLookupService = (db: Database): UpcLookupService =>
   new UpcLookupService(
     db,
-    env.UPC_UPSTREAM_DISABLED === "true" ? null : lookupUPCitemdb,
+    env.UPC_UPSTREAM_DISABLED === "true"
+      ? null
+      : (upc, decideComparability) =>
+          lookupUPCitemdb(upc, {
+            fetch,
+            timeoutSignal: AbortSignal.timeout,
+            decideOfferComparability: decideComparability,
+          }),
   );

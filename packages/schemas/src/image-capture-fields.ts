@@ -39,3 +39,17 @@ export const imageProvenanceEvidence = z.object({
   detail: z.string().optional(),
 });
 export type ImageProvenanceEvidence = z.infer<typeof imageProvenanceEvidence>;
+
+/** Semantic source classification evidence is separate from capture provenance. */
+export const imageSourceEvidence = z.object({
+  basis: z.literal("decision"),
+  feature: z.literal("image-provenance-classification"),
+  promptVersion: z.string().min(1),
+  model: z.string().min(1),
+  runId: z.string().uuid(),
+  confidence: z.literal("high"),
+  probability: z.number().finite().min(0).max(1),
+  evidenceFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  value: z.enum(["own", "catalog", "screenshot"]),
+});
+export type ImageSourceEvidence = z.infer<typeof imageSourceEvidence>;

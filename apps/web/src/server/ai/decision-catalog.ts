@@ -29,6 +29,9 @@ import {
   INGREDIENT_MERGE_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
   MAIL_ATTACHMENT_PURPOSE_FEATURE,
+  UPC_OFFER_COMPARABILITY_FEATURE,
+  IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
+  PRODUCT_VARIANT_RELATION_FEATURE,
   SETTLEMENT_CANDIDATE_RANK_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
 } from "~/server/ai/features";
@@ -225,6 +228,49 @@ function featureRows(): CatalogRow[] {
       ),
   );
   return [
+    featureRow(
+      UPC_OFFER_COMPARABILITY_FEATURE.feature,
+      "UPC offer comparability",
+      "Compare one offer with the identified sellable package",
+      UPC_OFFER_COMPARABILITY_FEATURE,
+      UPC_OFFER_COMPARABILITY_FEATURE.prompt({
+        itemTitle: "Example flour, 5 lb, pack of 4",
+        offerTitle: "Example flour, 5 lb, single bag",
+      }),
+      { options: plainOptions(UPC_OFFER_COMPARABILITY_FEATURE.choices) },
+    ),
+    featureRow(
+      IMAGE_PROVENANCE_CLASSIFICATION_FEATURE.feature,
+      "Image provenance",
+      "Classify weak image-origin metadata",
+      IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
+      IMAGE_PROVENANCE_CLASSIFICATION_FEATURE.prompt({
+        filename: "image.jpg",
+        width: 1200,
+        height: 1200,
+        sourceAssetUrl: "https://catalog.example/image.jpg",
+        sourcePageUrl: "https://catalog.example/item",
+        sourceName: "Example catalog",
+        sightingSourceTypes: [],
+        hasExifCamera: false,
+        hasExifCaptureTime: false,
+        analysisSummary: null,
+      }),
+      {
+        options: plainOptions(IMAGE_PROVENANCE_CLASSIFICATION_FEATURE.choices),
+      },
+    ),
+    featureRow(
+      PRODUCT_VARIANT_RELATION_FEATURE.feature,
+      "Product variants",
+      "Compare color and size from original title evidence",
+      PRODUCT_VARIANT_RELATION_FEATURE,
+      PRODUCT_VARIANT_RELATION_FEATURE.prompt({
+        firstTitle: "Example trail shirt, navy, medium",
+        secondTitle: "Example trail shirt, navy, large",
+      }),
+      { options: plainOptions(PRODUCT_VARIANT_RELATION_FEATURE.choices) },
+    ),
     featureRow(
       MAILBOX_TRIAGE_FEATURE.feature,
       "Mail triage",

@@ -83,6 +83,14 @@ import {
 import { buildRecipeFlowRequest } from "./prompts/recipe-flow";
 import { selectionOverflowRequest } from "./prompts/selection";
 import {
+  UPC_OFFER_COMPARABILITY_CHOICES,
+  upcOfferComparabilityPrompt,
+  IMAGE_PROVENANCE_CHOICES,
+  imageProvenancePrompt,
+  PRODUCT_VARIANT_RELATION_CHOICES,
+  productVariantRelationPrompt,
+} from "./prompts/semantic-decisions";
+import {
   buildProductIdentificationRequest,
   buildInventoryDetectionRequest,
   buildLocationDescriptionRequest,
@@ -276,6 +284,36 @@ export const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
   promptVersion: "2026-09-19.1",
 }) satisfies AiDecisionFeature;
 
+export const UPC_OFFER_COMPARABILITY_FEATURE = defineFeature({
+  prompt: upcOfferComparabilityPrompt,
+  choices: UPC_OFFER_COMPARABILITY_CHOICES,
+  feature: "upc-offer-comparability",
+  promptVersion: "2026-10-14.1",
+  tier: "decision",
+  cache: true,
+  collectPayload: false,
+});
+
+export const IMAGE_PROVENANCE_CLASSIFICATION_FEATURE = defineFeature({
+  prompt: imageProvenancePrompt,
+  choices: IMAGE_PROVENANCE_CHOICES,
+  feature: "image-provenance-classification",
+  promptVersion: "2026-10-14.1",
+  tier: "decision",
+  cache: true,
+  collectPayload: false,
+});
+
+export const PRODUCT_VARIANT_RELATION_FEATURE = defineFeature({
+  prompt: productVariantRelationPrompt,
+  choices: PRODUCT_VARIANT_RELATION_CHOICES,
+  feature: "product-variant-relation",
+  promptVersion: "2026-10-14.1",
+  tier: "decision",
+  cache: true,
+  collectPayload: false,
+});
+
 export const PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE = defineFeature({
   ...purchaseLinePrompts.role,
   prompt: (line: Parameters<typeof purchaseLinePrompt>[1]) =>
@@ -283,7 +321,7 @@ export const PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE = defineFeature({
   feature: "expense-line-role",
   tier: "decision",
   cache: true,
-  promptVersion: "2026-09-19.1",
+  promptVersion: "2026-10-14.1",
 }) satisfies AiDecisionFeature;
 
 export const PURCHASE_IMPORT_KIT_DETECTION_FEATURE = defineFeature({
@@ -532,6 +570,9 @@ export const AI_FEATURES = [
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   MAIL_ATTACHMENT_PURPOSE_FEATURE,
+  UPC_OFFER_COMPARABILITY_FEATURE,
+  IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
+  PRODUCT_VARIANT_RELATION_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
   INGREDIENT_MERGE_FEATURE,
   FIELD_SUGGESTION_FEATURE,

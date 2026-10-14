@@ -1,3 +1,4 @@
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import { sql, type SQL } from "drizzle-orm";
 
 import { expense } from "~/server/db/schema";
@@ -36,6 +37,11 @@ export const expenseChecks = defineEntityChecks({
   derivedRead: (ids) => sql`SELECT "expenseId" AS "entityId", missing, evidence
     FROM (${expenseDerivedReadSql("categoryEvidence", { expenseIds: ids })}) evidence`,
   checks: {
+    expense_receipt_role: {
+      missing: (t: Expense) =>
+        sql`${t.lineKind} = ${expenseLineKindSchema.enum.unclassified}`,
+      fingerprint: (t: Expense) => [sql`${t.lineKind}`],
+    },
     expense_cost: {
       // A future (planned, not yet spent) line may be unpriced; once it is
       // no longer future a cost is expected.

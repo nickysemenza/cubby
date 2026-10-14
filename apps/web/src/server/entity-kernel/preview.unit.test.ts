@@ -34,7 +34,7 @@ describe("previewEntity field suggestions", () => {
     mocks.ensureRun.mockResolvedValue(fixtureRunId);
   });
 
-  it("detects adjustment drafts before requesting project suggestions", async () => {
+  it("keeps an unresolved receipt role pending before project suggestions", async () => {
     mocks.resolveExpense.mockResolvedValue({});
     mocks.suggestFields.mockResolvedValue({ suggestions: {} });
     await previewEntity(
@@ -48,7 +48,7 @@ describe("previewEntity field suggestions", () => {
     );
     expect(mocks.resolveExpense).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ lineKind: "tax" }),
+      expect.objectContaining({ lineKind: "unclassified" }),
     );
     expect(mocks.suggestFields).not.toHaveBeenCalled();
   });

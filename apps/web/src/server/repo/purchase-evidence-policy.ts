@@ -1,3 +1,4 @@
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { primaryPurchaseDocumentKinds } from "@cubby/schemas/purchase";
@@ -147,6 +148,10 @@ export const purchaseListsItemsSql = (alias: string): SQL => sql`(
  * only. */
 export const purchaseHasItemizationSql = (alias: string): SQL => sql`(
   ${purchaseListsItemsSql(alias)}
+  AND NOT EXISTS (SELECT 1 FROM "Expense" ep_unclassified
+    WHERE ep_unclassified."purchaseId" = ${column(alias, "id")}
+      AND ep_unclassified."deletedAt" IS NULL
+      AND ep_unclassified."lineKind" = ${expenseLineKindSchema.enum.unclassified})
   AND NOT EXISTS (SELECT 1 FROM "Expense" ep_unlinked
     WHERE ep_unlinked."purchaseId" = ${column(alias, "id")} AND ep_unlinked."deletedAt" IS NULL
       AND ep_unlinked.future = false AND ep_unlinked."productId" IS NULL

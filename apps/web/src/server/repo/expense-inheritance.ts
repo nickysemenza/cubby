@@ -1,8 +1,11 @@
 import type { CostType } from "@cubby/schemas/expense-fields";
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import {
+  isPurchaseAdjustmentExpense,
   type ExpenseLineKind,
   resolveExpenseLineKind,
 } from "@cubby/schemas/expense-line-kind";
+import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import type {
   FieldResolution,
   FieldResolutions,
@@ -90,6 +93,7 @@ export const effectiveExpenseTradeSql = (
   );
 
   return sql<Trade | null>`CASE
+    WHEN ${lineKind} = ${expenseLineKindSchema.enum.unclassified} THEN NULL
     WHEN ${lineKind} <> 'principal' THEN ${storedTrade}
     ELSE COALESCE(
       ${storedTrade},
@@ -137,6 +141,7 @@ export const expenseInheritanceReadExtras = (alias = "expense") => {
       ${effectiveProjectTradeSql(projectId)}
     ) END`;
   const projectSource = sql<string>`CASE
+    WHEN ${lineKind} = ${expenseLineKindSchema.enum.unclassified} THEN ${fieldResolutionSchema.shape.mode.enum.none}
     WHEN ${lineKind} <> 'principal' THEN 'purchase allocation'
     WHEN ${column(alias, "projectId")} IS NOT NULL THEN 'expense override'
     WHEN EXISTS (
@@ -266,7 +271,9 @@ const draftProjectResolution = (
     : null;
   let mode: FieldResolution["mode"] = "inherit";
   let source = "none";
-  if (lineKind !== "principal") {
+  if (lineKind === "unclassified") {
+    mode = "none";
+  } else if (isPurchaseAdjustmentExpense({ lineKind })) {
     mode = "allocated";
     source = "purchase allocation";
   } else if (hasExplicitProject) {
@@ -298,6 +305,18 @@ const draftTradeResolution = (
   trade: Trade | null,
   lineKind: ExpenseLineKind,
 ): FieldResolution => {
+  if (lineKind === "unclassified") {
+    return {
+      mode: "none",
+      storedValue: null,
+      value: null,
+      fallbackValue: null,
+      source: "none",
+      sourceEntity: null,
+      matchesFallback: true,
+      canReset: false,
+    };
+  }
   const purchaseRef = draft.purchaseId
     ? {
         entityKind: "purchase" as const,
@@ -433,7 +452,7 @@ export async function resolveDraftExpenseFields(
     lineKind,
     projectExplicit,
   );
-  if (lineKind !== "principal" && trade === null) {
+  if (isPurchaseAdjustmentExpense({ lineKind }) && trade === null) {
     return {
       projectId: projectResolution,
       trade: draftAllocatedShare(null),
@@ -462,7 +481,7 @@ export async function validateExpenseInheritance(
   tuple: ExpenseInheritanceTuple,
 ): Promise<ResolvedExpenseInheritance> {
   assertClassificationPolicies("expense", tuple);
-  if (tuple.lineKind !== "principal") {
+  if (isPurchaseAdjustmentExpense({ lineKind: tuple.lineKind })) {
     if (tuple.purchaseId === null) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",

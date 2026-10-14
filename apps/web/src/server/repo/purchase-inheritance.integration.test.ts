@@ -483,6 +483,36 @@ describe("purchase inheritance lifecycle", () => {
     ).toMatchObject({ projectId: null, purchaseId: source.shortcode });
   });
 
+  it("detaches an unresolved signed Expense without inventing inherited attribution", async () => {
+    const { source } = await fixture();
+    const unresolved = await insertWithShortcode(ctx.db, "expense", {
+      name: "Unresolved receipt adjustment",
+      date: fixtureDate,
+      cost: -2.13,
+      costType: "materials",
+      lineKind: "unclassified",
+      trade: null,
+      purchaseId: source.id,
+    });
+    await deletePurchases(
+      ctx.db,
+      [parseShortcodeFor("purchase", source.shortcode)],
+      ctx.actor,
+    );
+    expect(
+      await getExpenseByShortcode(
+        ctx.db,
+        parseShortcodeFor("expense", unresolved.shortcode),
+      ),
+    ).toMatchObject({
+      cost: -2.13,
+      lineKind: "unclassified",
+      purchaseId: null,
+      projectId: null,
+      trade: null,
+    });
+  });
+
   it("materializes inherited attribution on detach and never orphans a charge", async () => {
     const { first, source, keeper, item } = await fixture();
     await deletePurchases(

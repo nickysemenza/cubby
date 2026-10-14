@@ -188,6 +188,7 @@ export const createRequestContext = async (opts: {
       deviceId,
       runId,
     });
+    crudServices.upcLookupClient.bindActorContext(actorContext);
     annotateActiveSpan(actorSpanAttributes(sessionId, actorContext));
     return {
       ...crudServices,
@@ -212,6 +213,7 @@ export const createRequestContext = async (opts: {
   const actorContext = authenticatedUserId
     ? buildActorContext(authenticatedUserId, "web", { deviceId })
     : null;
+  if (actorContext) crudServices.upcLookupClient.bindActorContext(actorContext);
   if (actorContext)
     annotateActiveSpan(actorSpanAttributes(sessionId, actorContext));
   return {

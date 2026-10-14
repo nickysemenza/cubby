@@ -48,6 +48,7 @@ const uploadedImage: ImageWithEntity = {
   capturedByName: null,
   captureAttribution: "none",
   provenanceEvidence: null,
+  sourceEvidence: null,
 };
 
 describe("reconcilePhotoImport", () => {

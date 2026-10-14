@@ -500,9 +500,7 @@ export const photoProductCandidate = z.object({
   variantEvidence: z
     .array(
       z.object({
-        dimension: z.enum(["color", "size"]),
-        value: z.string(),
-        raw: z.string(),
+        text: z.string(),
         source: z.enum([
           "proposal_name",
           "photo_description",

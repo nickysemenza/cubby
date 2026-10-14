@@ -8,7 +8,6 @@
  * authoritative and are never overwritten or aged out by a provider refresh.
  */
 import type { UpcEnrichmentFreshness } from "@cubby/schemas/problems";
-import { createLogger } from "@cubby/worker-tracing";
 import { count, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 
 import {
@@ -19,13 +18,10 @@ import type { Database } from "~/server/db";
 import { upcLookupCache } from "~/server/db/schema";
 import { getDb, ilikeContains } from "~/server/repo/database-helpers";
 
-const log = createLogger("UPC cache");
-
-/** A multi-UPC provider refresh failed partially; completed UPCs remain usable. */
+/** A multi-UPC provider refresh failed; callers receive no partial result. */
 export class PartialUpcBatchLookupError extends Error {
   constructor(
     cause: Error,
-    readonly results: ReadonlyMap<string, UPCLookupResponse>,
     readonly failedUpcs: readonly string[],
   ) {
     super(cause.message, { cause });
@@ -137,19 +133,6 @@ export const recordUpcLookups = async (
     });
 };
 
-/** Record a failed first lookup without erasing a last-known ready answer. */
-const writeUnavailable = async (
-  db: Database,
-  upcs: readonly string[],
-  fetchedAt: Date,
-) => {
-  if (upcs.length === 0) return;
-  await getDb(db)
-    .insert(upcLookupCache)
-    .values(upcs.map((upc) => ({ upc, status: "unavailable", fetchedAt })))
-    .onConflictDoNothing({ target: upcLookupCache.upc });
-};
-
 /** Case-insensitive substring search over cached product identity. */
 export const searchCachedUpcs = async (
   db: Database,
@@ -199,39 +182,16 @@ const refreshUpcCache = async (
   cached: Map<string, CachedUpcLookup>,
   checkedAt: Date,
   lookupBatch: (upcs: string[]) => Promise<Map<string, UPCLookupResponse>>,
-): Promise<boolean> => {
-  if (refresh.length === 0) return false;
-  try {
-    const hits = await lookupBatch(refresh);
-    await recordUpcLookups(db, refresh, hits, checkedAt);
-    applyReadyCacheRows(cached, refresh, hits, checkedAt);
-    return false;
-  } catch (error) {
-    log.error("UPC provider refresh failed", { error });
-    const partial = error instanceof PartialUpcBatchLookupError ? error : null;
-    const failed = new Set(partial?.failedUpcs ?? refresh);
-    const completed = refresh.filter((upc) => !failed.has(upc));
-    if (partial) {
-      await recordUpcLookups(db, completed, partial.results, checkedAt);
-      applyReadyCacheRows(cached, completed, partial.results, checkedAt);
-    }
-    const firstFailures = [...failed].filter((upc) => !cached.has(upc));
-    await writeUnavailable(db, firstFailures, checkedAt);
-    for (const upc of firstFailures) {
-      cached.set(upc, {
-        upc,
-        ...providerFields(undefined),
-        status: "unavailable",
-        fetchedAt: checkedAt,
-      });
-    }
-    return true;
-  }
+): Promise<void> => {
+  if (refresh.length === 0) return;
+  const hits = await lookupBatch(refresh);
+  await recordUpcLookups(db, refresh, hits, checkedAt);
+  applyReadyCacheRows(cached, refresh, hits, checkedAt);
 };
 
 /**
- * Load cached UPC answers, refreshing only absent/stale rows. If refresh
- * fails, preserve stale cached answers and explicitly report unavailable UPCs.
+ * Load cached UPC answers, refreshing only absent/stale rows. Provider errors
+ * reject the read and publish no partial refreshed cache state.
  */
 export const readCachedUpcLookups = async (
   db: Database,
@@ -262,13 +222,7 @@ export const readCachedUpcLookups = async (
     return !row || !isFresh(row, checkedAt);
   });
 
-  const providerFailed = await refreshUpcCache(
-    db,
-    refresh,
-    cached,
-    checkedAt,
-    lookupBatch,
-  );
+  await refreshUpcCache(db, refresh, cached, checkedAt, lookupBatch);
 
   const lookups = new Map<string, UPCLookupResponse>();
   const usedRows = requested
@@ -288,11 +242,7 @@ export const readCachedUpcLookups = async (
       oldest == null || row.fetchedAt < oldest ? row.fetchedAt : oldest,
     null,
   );
-  const status = providerFailed
-    ? usedRows.length > 0
-      ? "stale"
-      : "unavailable"
-    : "fresh";
+  const status = "fresh" as const;
 
   return {
     lookups,

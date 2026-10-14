@@ -1,46 +1,21 @@
 import { describe, it, expect } from "vitest";
 
-import { isMultiPack, extractBestPrice } from "./price";
+import { extractBestPrice } from "./price";
 import type { UPCitemdbOffer } from "./types";
 
-describe("isMultiPack", () => {
-  it("detects multi-pack title variants", () => {
-    expect(
-      [
-        "Sample flour, 5 LB, (Pack of 4)",
-        "Sample flour (Pack of4)",
-        "Sample flour - 5 lb - Case of 4",
-        "Sample flour (4x5lb)",
-        "Sample flour Pack Of 4",
-        "Sample product (4-pack)",
-        "Sample kitchen set of 6",
-      ].filter((title) => !isMultiPack(title)),
-    ).toEqual([]);
-  });
-
-  it("does not flag single-item title variants", () => {
-    expect(
-      ["Sample flour, 5 lb", "Sample flour 5", "19505 Sample flour"].filter(
-        isMultiPack,
-      ),
-    ).toEqual([]);
-  });
-});
-
 describe("extractBestPrice", () => {
-  // Real-world test data from the Bob's Red Mill flour example
   const flourOffers: UPCitemdbOffer[] = [
     {
-      merchant: "Newegg.com",
+      merchant: "Synthetic merchant 1",
       domain: "newegg.com",
-      title: "BOBS RED MILL, FLOUR WHT UNBLCH, 5 LB, (Pack of 4)",
+      title: "Synthetic Mill, FLOUR WHT UNBLCH, 5 LB, (Pack of 4)",
       currency: "",
       price: 44.26,
       link: "",
       updated_t: 1541698267,
     },
     {
-      merchant: "UnbeatableSale.com",
+      merchant: "Synthetic merchant 2",
       domain: "unbeatablesale.com",
       title: "19505 Unbleached White Flour",
       currency: "",
@@ -50,54 +25,54 @@ describe("extractBestPrice", () => {
       updated_t: 1765790253,
     },
     {
-      merchant: "Sears",
+      merchant: "Synthetic merchant 3",
       domain: "sears.com",
-      title: "Bob's Red Mill Unbleached White Flour (4x5lb)",
+      title: "Synthetic Mill Unbleached White Flour (4x5lb)",
       currency: "",
       price: 40.98,
       link: "",
       updated_t: 1481112348,
     },
     {
-      merchant: "Rakuten(Buy.com)",
+      merchant: "Synthetic merchant 4",
       domain: "rakuten.com",
-      title: "BOB'S RED MILL Unbleached White Flour 5",
+      title: "Synthetic Mill Unbleached White Flour 5",
       currency: "",
       price: 29.69,
       link: "",
       updated_t: 1558537267,
     },
     {
-      merchant: "Wal-Mart.com",
+      merchant: "Synthetic merchant 5",
       domain: "walmart.com",
       title:
-        "Bob s Red Mill Unbleached White All-Purpose Baking Flour - 5 lb - Case of 4",
+        "Synthetic Mill Unbleached White All-Purpose Baking Flour - 5 lb - Case of 4",
       currency: "",
       price: 43.77,
       link: "",
       updated_t: 1763964903,
     },
     {
-      merchant: "Newegg Business",
+      merchant: "Synthetic merchant 6",
       domain: "neweggbusiness.com",
       title:
-        "Bob's Red Mill Flour Unbleached White Pastry, 5-pounds (Pack of4)",
+        "Synthetic Mill Flour Unbleached White Pastry, 5-pounds (Pack of4)",
       currency: "",
       price: 44.71,
       link: "",
       updated_t: 1526486869,
     },
     {
-      merchant: "Albertsons",
+      merchant: "Synthetic merchant 7",
       domain: "albertsons.com",
-      title: "Bob's Red Mill - White Flour 5.00 lb",
+      title: "Synthetic Mill - White Flour 5.00 lb",
       currency: "",
       price: 0, // Invalid price
       link: "",
       updated_t: 1484640880,
     },
     {
-      merchant: "Pricefalls.com",
+      merchant: "Synthetic merchant 8",
       domain: "pricefalls.com",
       title: "Flour Wht Unblch 5 Lb Pack Of 4",
       currency: "",
@@ -106,9 +81,9 @@ describe("extractBestPrice", () => {
       updated_t: 1484937931,
     },
     {
-      merchant: "HerbsPro",
-      domain: "HerbsPro",
-      title: "Bobs Red Mill, Unbleached White All-Purpose Flour, 5 Lb",
+      merchant: "Synthetic merchant 9",
+      domain: "Synthetic merchant 9",
+      title: "Synthetic Mill, Unbleached White All-Purpose Flour, 5 Lb",
       currency: "",
       list_price: "11.09",
       price: 6.65,
@@ -117,19 +92,28 @@ describe("extractBestPrice", () => {
     },
   ];
 
-  it("filters out multi-pack offers and returns median of valid prices", () => {
-    const price = extractBestPrice(flourOffers);
+  it("keeps only offers the model judges comparable to the queried item", async () => {
+    const price = await extractBestPrice(
+      flourOffers,
+      "Synthetic Mill Unbleached White Flour 5 lb",
+      async ({ offerTitle }) =>
+        /pack of\s*4|case of\s*4|4x5lb/i.test(offerTitle)
+          ? "incomparable"
+          : "comparable",
+    );
     // Valid single-item prices: $10.08, $29.69, $6.65
     // Sorted: $6.65, $10.08, $29.69
     // Median (middle of 3): $10.08
     expect(price).toBe(10.08);
   });
 
-  it("returns null for empty offers", () => {
-    expect(extractBestPrice([])).toBe(null);
+  it("returns null for empty offers", async () => {
+    expect(
+      await extractBestPrice([], "Sample item", async () => "comparable"),
+    ).toBe(null);
   });
 
-  it("returns null when all prices are zero", () => {
+  it("returns null when all prices are zero", async () => {
     const offers: UPCitemdbOffer[] = [
       {
         merchant: "A",
@@ -150,10 +134,12 @@ describe("extractBestPrice", () => {
         updated_t: 0,
       },
     ];
-    expect(extractBestPrice(offers)).toBe(null);
+    expect(
+      await extractBestPrice(offers, "Sample item", async () => "comparable"),
+    ).toBe(null);
   });
 
-  it("falls back to multi-pack price when no single-item prices exist", () => {
+  it("returns null when every positive offer is judged incomparable", async () => {
     const offers: UPCitemdbOffer[] = [
       {
         merchant: "A",
@@ -174,11 +160,63 @@ describe("extractBestPrice", () => {
         updated_t: 0,
       },
     ];
-    // Falls back to first non-zero price since no single-item offers
-    expect(extractBestPrice(offers)).toBe(40.0);
+    expect(
+      await extractBestPrice(
+        offers,
+        "Sample item, one bottle",
+        async () => "incomparable",
+      ),
+    ).toBe(null);
   });
 
-  it("handles single valid offer", () => {
+  it("accepts a multipack offer when it matches the queried sellable pack", async () => {
+    const offer = {
+      merchant: "A",
+      domain: "a.com",
+      title: "Sample item 4-pack",
+      currency: "USD",
+      price: 20,
+    } satisfies UPCitemdbOffer;
+    expect(
+      await extractBestPrice(
+        [offer],
+        "Sample item pack of 4",
+        async () => "comparable",
+      ),
+    ).toBe(20);
+  });
+
+  it("rejects invalid prices even when the offer title matches", async () => {
+    const offers = [
+      {
+        merchant: "A",
+        domain: "a.com",
+        title: "Sample item",
+        currency: "USD",
+        price: Number.NaN,
+      },
+      {
+        merchant: "B",
+        domain: "b.com",
+        title: "Sample item",
+        currency: "USD",
+        price: -2,
+      },
+    ] satisfies UPCitemdbOffer[];
+    expect(
+      await extractBestPrice(offers, "Sample item", async () => "comparable"),
+    ).toBe(null);
+  });
+
+  it("propagates model failures instead of publishing a partial price", async () => {
+    await expect(
+      extractBestPrice([flourOffers[1]!], "Sample item", async () => {
+        throw new Error("decision unavailable");
+      }),
+    ).rejects.toThrow("decision unavailable");
+  });
+
+  it("handles single valid offer", async () => {
     const offers: UPCitemdbOffer[] = [
       {
         merchant: "A",
@@ -190,10 +228,16 @@ describe("extractBestPrice", () => {
         updated_t: 0,
       },
     ];
-    expect(extractBestPrice(offers)).toBe(12.99);
+    expect(
+      await extractBestPrice(
+        offers,
+        "Single Product 5lb",
+        async () => "comparable",
+      ),
+    ).toBe(12.99);
   });
 
-  it("calculates average for even number of prices", () => {
+  it("calculates median for even number of prices", async () => {
     const offers: UPCitemdbOffer[] = [
       {
         merchant: "A",
@@ -215,10 +259,12 @@ describe("extractBestPrice", () => {
       },
     ];
     // Median of [10, 20] = (10 + 20) / 2 = 15
-    expect(extractBestPrice(offers)).toBe(15.0);
+    expect(
+      await extractBestPrice(offers, "Product", async () => "comparable"),
+    ).toBe(15.0);
   });
 
-  it("ignores outlier high prices via median", () => {
+  it("ignores outlier high prices via median", async () => {
     const offers: UPCitemdbOffer[] = [
       {
         merchant: "A",
@@ -249,6 +295,8 @@ describe("extractBestPrice", () => {
       }, // outlier
     ];
     // Sorted: [5, 6, 100], median = 6
-    expect(extractBestPrice(offers)).toBe(6.0);
+    expect(
+      await extractBestPrice(offers, "Product", async () => "comparable"),
+    ).toBe(6.0);
   });
 });

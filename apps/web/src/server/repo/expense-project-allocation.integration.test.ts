@@ -29,6 +29,67 @@ const allocationPlan = z.array(z.object({ Plan: allocationPlanNode }));
 describe("expense project allocation", () => {
   const ctx = withTestDb("mcp");
 
+  it("keeps unclassified money once and marks sibling allocation denominators incomplete", async () => {
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Unclassified allocation fixture vendor",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-09-20",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Known receipt item",
+      cost: 10,
+      date: "2026-09-20",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: false,
+      purchaseId: purchase.id,
+    });
+    const unresolved = await insertWithShortcode(ctx.db, "expense", {
+      name: "Unresolved receipt row",
+      cost: -1.25,
+      date: "2026-09-20",
+      lineKind: "unclassified",
+      costType: "services",
+      trade: null,
+      future: false,
+      purchaseId: purchase.id,
+    });
+    const tax = await insertWithShortcode(ctx.db, "expense", {
+      name: "Known receipt tax",
+      cost: 0.25,
+      date: "2026-09-20",
+      lineKind: "tax",
+      costType: "services",
+      trade: null,
+      future: false,
+      purchaseId: purchase.id,
+    });
+
+    expect(
+      await loadExpenseProjectAllocations(ctx.db, [unresolved.id]),
+    ).toEqual([
+      expect.objectContaining({
+        purchaseId: purchase.id,
+        projectId: null,
+        sourceCents: -125n,
+        attributedCents: -125n,
+        basis: "unclassified",
+        incomplete: true,
+      }),
+    ]);
+    const siblingRows = await loadExpenseProjectAllocations(ctx.db, [tax.id]);
+    expect(siblingRows).toEqual([
+      expect.objectContaining({
+        sourceCents: 25n,
+        attributedCents: 25n,
+        incomplete: true,
+      }),
+    ]);
+  });
+
   it("uses the full purchase principal weights and assigns signed cents exactly", async () => {
     const [smallProject, largeProject] = await Promise.all([
       insertWithShortcode(ctx.db, "project", {

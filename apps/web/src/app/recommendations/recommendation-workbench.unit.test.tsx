@@ -181,8 +181,12 @@ describe("RecommendationWorkbench product matches", () => {
         signals: [],
         warnings: ["Both products have stock. Merging sums their quantities."],
         variant: {
-          color: { first: "Gray", second: "Gray", relation: "same" as const },
-          size: { first: null, second: null, relation: "unknown" as const },
+          color: { relation: "same" as const },
+          size: { relation: "unknown" as const },
+          evidence: {
+            firstTitle: "Crew tee, grey",
+            secondTitle: "Gray crew t-shirt — M",
+          },
         },
       },
     ],

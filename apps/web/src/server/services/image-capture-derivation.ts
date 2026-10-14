@@ -91,7 +91,7 @@ export interface DeriveImageCaptureResult {
 }
 
 const HEIC_RAW_FILENAME = /\.(heic|heif|raw|cr2|cr3|nef|arw|dng)$/i;
-const SCREENSHOT_SUBTYPE = /screenshot/i;
+const SCREENSHOT_SUBTYPE = "screenshot";
 
 const unchanged = (
   current: DeriveImageCaptureCurrent,
@@ -229,7 +229,7 @@ export function deriveImageCapture(
   // 2. A screenshot subtype on any sighting overrides `source` and clears
   // capture attribution: a screenshot has no photographer, camera, or GPS.
   const isScreenshot = sightings.some((sighting) =>
-    sighting.mediaSubtypes.some((subtype) => SCREENSHOT_SUBTYPE.test(subtype)),
+    sighting.mediaSubtypes.some((subtype) => subtype === SCREENSHOT_SUBTYPE),
   );
   if (isScreenshot) {
     return {
