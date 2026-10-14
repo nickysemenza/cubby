@@ -63,7 +63,12 @@ describe("EntityEditDialog generic create", () => {
       { wrapper: harness.wrapper },
     );
     expect(await screen.findByText("New Garden Entry")).toBeInTheDocument();
-    expect(screen.getByText("PLT-4K7M")).toBeInTheDocument();
+    // The seeded planting shows as a chip that resolves to its record, never
+    // its code.
+    expect(
+      screen.getByRole("button", { name: /^Remove / }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("PLT-4K7M")).not.toBeInTheDocument();
     const harvest = screen.getByLabelText("Harvest amount", { exact: true });
     const observed = screen.getByLabelText("Observed on", { exact: true });
     fireEvent.change(observed, { target: { value: "2026-08-20" } });
@@ -122,12 +127,13 @@ describe("EntityEditDialog generic create", () => {
       { wrapper: harness.wrapper },
     );
 
-    expect(await screen.findByText(currentPlantingId)).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: `Remove ${currentPlantingId}` }),
-    );
+    const remove = await screen.findByRole("button", { name: /^Remove / });
+    expect(screen.queryByText(currentPlantingId)).not.toBeInTheDocument();
+    fireEvent.click(remove);
     await waitFor(() =>
-      expect(screen.queryByText(currentPlantingId)).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole("button", { name: /^Remove / }),
+      ).not.toBeInTheDocument(),
     );
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 

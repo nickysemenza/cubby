@@ -5,7 +5,13 @@ import {
 } from "./fixtures-catalog";
 import { createEntityFixture, seedConcurrently } from "./fixtures-core";
 import { seedStaplePlanningPrerequisite } from "./fixtures-recipes";
-import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
+import {
+  chooseOption,
+  escapeRegExp,
+  gotoAuthenticatedPage,
+  selectComboboxItem,
+  uniqueName,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("recommendations workbench direct entry shows guidance", async ({
@@ -191,10 +197,16 @@ test("expense quick-add submits from the desktop dialog", async ({ page }) => {
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Name").fill(name);
   await dialog.getByRole("spinbutton", { name: "Cost" }).fill("12.34");
-  await dialog.getByPlaceholder("Select cost type").click();
-  await page.getByRole("option", { name: "Materials", exact: true }).click();
-  await dialog.getByPlaceholder("Select trade").click();
-  await page.getByRole("option", { name: "Other", exact: true }).click();
+  await chooseOption(
+    page,
+    dialog.getByRole("combobox", { name: /^Cost type/ }),
+    "Materials",
+  );
+  await selectComboboxItem(
+    page,
+    dialog.getByRole("combobox", { name: /^Trade/ }),
+    "Other",
+  );
   await dialog.getByRole("button", { name: /^Create$/ }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByText(name, { exact: true })).toBeVisible();

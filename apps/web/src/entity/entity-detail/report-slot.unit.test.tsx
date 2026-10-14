@@ -69,6 +69,18 @@ const row = (id: string, title: string, commands: ReportCommand[] = []) => ({
   commands,
 });
 
+/** Pick a choose-mode option: Base UI Select commits a mouse click only
+ * after a pointerdown on the row. */
+async function choose(name: string, option: string) {
+  fireEvent.click(screen.getByRole("combobox", { name }));
+  const row = await screen.findByRole("option", { name: option });
+  fireEvent.pointerDown(row);
+  fireEvent.click(row);
+  await waitFor(() =>
+    expect(screen.getByRole("combobox", { name })).toHaveTextContent(option),
+  );
+}
+
 describe("EntityReportSlot records", () => {
   // A diagnostic link must stay navigable without sending a report command.
   it("renders an external diagnostic link in a new tab", async () => {
@@ -568,9 +580,7 @@ describe("EntityReportSlot records", () => {
       expect(
         screen.getByText(/1 Product decision remaining\./),
       ).toBeInTheDocument();
-      fireEvent.change(screen.getByLabelText("Trade for imported expenses"), {
-        target: { value: "plumbing" },
-      });
+      await choose("Trade for imported expenses", "Plumbing");
       expect(approve).toBeDisabled();
       // A suggestion answers only on a tap; the exact match was not preselected.
       fireEvent.click(screen.getByRole("button", { name: "Use Exact thing" }));
@@ -608,12 +618,8 @@ describe("EntityReportSlot records", () => {
         { wrapper: harness.wrapper },
       );
       await screen.findByRole("button", { name: "Approve and import" });
-      fireEvent.change(screen.getByLabelText("Trade for imported expenses"), {
-        target: { value: "other" },
-      });
-      fireEvent.change(screen.getByLabelText("Product decision for Item l1"), {
-        target: { value: "unresolved" },
-      });
+      await choose("Trade for imported expenses", "Other");
+      await choose("Product decision for Item l1", "Leave Product unresolved");
       expect(
         screen.getByRole("button", { name: "Approve and import" }),
       ).toBeDisabled();
@@ -633,12 +639,8 @@ describe("EntityReportSlot records", () => {
         { wrapper: harness.wrapper },
       );
       await screen.findByRole("button", { name: "Approve and import" });
-      fireEvent.change(screen.getByLabelText("Trade for imported expenses"), {
-        target: { value: "other" },
-      });
-      fireEvent.change(screen.getByLabelText("Product decision for Item l1"), {
-        target: { value: "unresolved" },
-      });
+      await choose("Trade for imported expenses", "Other");
+      await choose("Product decision for Item l1", "Leave Product unresolved");
       fireEvent.change(
         screen.getByLabelText("Reason for leaving Item l1 unresolved"),
         { target: { value: "x".repeat(1_001) } },
@@ -646,7 +648,6 @@ describe("EntityReportSlot records", () => {
       expect(
         screen.getByRole("button", { name: "Approve and import" }),
       ).toBeDisabled();
-      // SAFETY: the decision is a native select.
       expect(screen.getByText(/An answer cannot be sent/)).toBeInTheDocument();
     });
 
@@ -677,14 +678,12 @@ describe("EntityReportSlot records", () => {
         { wrapper: harness.wrapper },
       );
       await screen.findByRole("button", { name: "Approve and import" });
-      fireEvent.change(screen.getByLabelText("Product decision for Item l1"), {
-        target: { value: "new" },
-      });
+      await choose("Product decision for Item l1", "Create a new Product");
       batches = 2;
       await screen.findByText("Item second", {}, { timeout: 8_000 });
-      expect(screen.getByLabelText("Product decision for Item l1")).toHaveValue(
-        "new",
-      );
+      expect(
+        screen.getByRole("combobox", { name: "Product decision for Item l1" }),
+      ).toHaveTextContent("Create a new Product");
     }, 15_000);
 
     it("shows the server's reason instead of controls when approval is unavailable", async () => {

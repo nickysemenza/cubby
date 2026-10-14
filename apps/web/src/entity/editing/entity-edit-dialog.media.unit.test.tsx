@@ -150,16 +150,22 @@ describe("image block attachment roles", () => {
   // The attachment-role contract `useImageState` documented: a role correction
   // on an existing image rides `pendingImageIds` alongside its purpose, so
   // the repository applies the role without detaching the image.
-  it("writes a role correction into pendingImagePurposes and pendingImageIds", () => {
+  it("writes a role correction into pendingImagePurposes and pendingImageIds", async () => {
     render(<Harness />, { wrapper: harness.wrapper });
-    fireEvent.change(screen.getByLabelText("Attachment role for record.jpg"), {
-      target: { value: "label" },
-    });
-    expect(screen.getByTestId("image-fields")).toHaveTextContent(
-      JSON.stringify({
-        pendingImageIds: ["IMG-RECORD"],
-        pendingImagePurposes: { "IMG-RECORD": "label" },
-      }),
+    fireEvent.click(
+      screen.getByRole("combobox", { name: "Attachment role for record.jpg" }),
+    );
+    const row = await screen.findByRole("option", { name: "Label photo" });
+    // Base UI Select commits a mouse click only after a pointerdown on the row.
+    fireEvent.pointerDown(row);
+    fireEvent.click(row);
+    await waitFor(() =>
+      expect(screen.getByTestId("image-fields")).toHaveTextContent(
+        JSON.stringify({
+          pendingImageIds: ["IMG-RECORD"],
+          pendingImagePurposes: { "IMG-RECORD": "label" },
+        }),
+      ),
     );
   });
 });

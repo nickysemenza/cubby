@@ -222,7 +222,10 @@ function OptionPickerField<TFieldValues extends FieldValues>({
               field.onBlur();
               field.onChange(value === NONE ? null : value);
             }}
-            placeholder={placeholder}
+            placeholder={
+              placeholder ??
+              (label ? `Choose ${label.toLowerCase()}…` : undefined)
+            }
             label={label}
             aria-describedby={description ? descriptionId : undefined}
             disabled={disabled}

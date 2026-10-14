@@ -97,7 +97,10 @@ test("combined records retain server sorting, pagination, and filters after relo
   await page.getByRole("combobox", { name: "Filter Image" }).fill("Has image");
   await page.getByRole("option", { name: "Has image", exact: true }).click();
   await expect(alpha).toHaveCount(0);
-  await page.getByRole("button", { name: "Clear filter", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Clear Filter Image", exact: true })
+    .first()
+    .click();
   await page.keyboard.press("Escape");
   await editOverflow("Updated through", "2000-01-01");
   await expect(alpha).toHaveCount(0);

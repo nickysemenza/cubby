@@ -1,5 +1,9 @@
 import { seedTaskPrerequisite } from "./fixtures-catalog";
-import { openCommandPalette, gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  openCommandPalette,
+  selectComboboxItem,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("command palette search deep-links a task straight to its detail page", async ({
@@ -30,11 +34,11 @@ test("task quick-add requires a deliberate trade and saves assignment modes", as
   await page.getByRole("button", { name: "New", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Name", { exact: true }).fill(name);
-  await expect(dialog.getByPlaceholder("Select trade")).toBeVisible();
-  await dialog.getByPlaceholder("Select trade").click();
-  await page
-    .getByRole("option", { name: "Electrical & Lighting", exact: true })
-    .click();
+  await selectComboboxItem(
+    page,
+    dialog.getByRole("combobox", { name: /^Trade/ }),
+    "Electrical & Lighting",
+  );
   await dialog.getByRole("button", { name: /^Create$/ }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByText(name, { exact: true })).toBeVisible();
