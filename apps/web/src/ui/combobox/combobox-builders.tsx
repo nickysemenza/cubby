@@ -1,3 +1,4 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   type LocationShortcode,
@@ -438,6 +439,9 @@ export function buildRecordComboboxItem<E extends ShortcodeType>(
   const shortcode = parseShortcodeFor(entity, record.id);
   const title = record[entitySummary[entity].titleField];
   const aliases = pickerAliases.safeParse(record.aliases).data;
+  // `displayImages[0]` is the server-resolved cover for every entity that
+  // declares images; the glyph stands in when there is none.
+  const cover = displayImagesField.safeParse(record.displayImages).data?.[0];
   const icon = (
     <RecordEmoji
       entity={entity}
@@ -454,7 +458,7 @@ export function buildRecordComboboxItem<E extends ShortcodeType>(
       `Untitled ${entityLabel(entity).toLowerCase()}`,
     ...(aliases && { aliases }),
     icon,
-    thumb: { imageUrl: null, fallback: icon },
+    thumb: { imageUrl: cover?.url ?? null, fallback: icon },
   };
 }
 

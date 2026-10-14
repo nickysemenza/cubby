@@ -76,6 +76,8 @@ export type PickerFieldProps<TFieldValues extends FieldValues> =
           nullable?: boolean;
           /** The empty choice's label on a `nullable` field. */
           noneLabel?: string;
+          /** The roster is still loading (options read from a query). */
+          isLoading?: boolean;
           /** Defaults to `choose` up to {@link CHOOSE_MODE_MAX} options and
            * `search` beyond. */
           mode?: "search" | "choose";
@@ -165,6 +167,7 @@ function OptionPickerField<TFieldValues extends FieldValues>({
   placeholder,
   nullable = false,
   noneLabel = "None",
+  isLoading,
   disabled = false,
   description,
   suggestField,
@@ -173,6 +176,7 @@ function OptionPickerField<TFieldValues extends FieldValues>({
   options: readonly PickerOption[];
   nullable?: boolean;
   noneLabel?: string;
+  isLoading?: boolean;
   mode?: "search" | "choose";
 }) {
   const controlId = useId();
@@ -209,6 +213,7 @@ function OptionPickerField<TFieldValues extends FieldValues>({
             inputId={controlId}
             inputRef={field.ref}
             options={items}
+            isLoading={isLoading}
             value={field.value ?? (nullable ? NONE : null)}
             onOpenChange={(open) => {
               if (!open) field.onBlur();

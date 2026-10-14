@@ -14,13 +14,15 @@ export function RecipeCookbookField({
 }: {
   form: UseFormReturn<RecipeFormValues>;
 }) {
+  const { options, isLoading } = useCookbookOptions();
   return (
     <PickerField
       store="option"
       form={form}
       name="cookbookId"
       label="Cookbook (Optional)"
-      options={useCookbookOptions()}
+      options={options}
+      isLoading={isLoading}
       nullable
       noneLabel="No cookbook"
     />

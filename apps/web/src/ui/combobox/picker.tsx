@@ -203,10 +203,17 @@ function useResolvedPickerProps<TId extends string>(
   // SAFETY: option rows are keyed by `PickerOption.value` strings, and a
   // string-valued picker is never instantiated with a branded id.
   const rows = (optionItems ?? []) as ComboboxItem<TId>[];
-  // A stored value the roster no longer offers still reads as itself (an enum
-  // value, never a record code).
+  // A stored value the roster doesn't offer reads as itself when it is an enum
+  // value; a record code waits for a loading roster and is never displayed.
+  const code = value != null && parseShortcode(value) != null;
   // SAFETY: same string-keyed rows as above.
-  const missing = { id: value, name: value } as ComboboxItem<TId>;
+  const missing = (
+    !code
+      ? { id: value, name: value }
+      : common.isLoading
+        ? { id: value, name: "", pending: true }
+        : { id: value, name: "Unavailable record" }
+  ) as ComboboxItem<TId>;
   const selected =
     value == null ? null : (rows.find((item) => item.id === value) ?? missing);
   return {
@@ -313,6 +320,8 @@ function PickerRowVisual({
         >
           {item.icon}
         </span>
+      ) : item.thumb ? (
+        <PickerVisual item={item} size={24} />
       ) : null}
     </>
   );

@@ -100,6 +100,26 @@ describe("entity picker value adapters", () => {
   });
 });
 
+// Regression: generic record rows always used the glyph, even for a record
+// with a cover image.
+describe("generic record picture", () => {
+  it("uses the record's cover and keeps the glyph as its fallback", () => {
+    const recipe = testShortcode("recipe", "RCP-2ABC");
+    const cover = "https://images.example.test/stew.jpg";
+    const item = buildRecordComboboxItem("recipe", {
+      id: recipe,
+      name: "Winter stew",
+      displayImages: [{ id: testShortcode("image", "IMG-2ABC"), url: cover }],
+    });
+    expect(item.thumb?.imageUrl).toBe(cover);
+    expect(item.thumb?.fallback).toBeTruthy();
+    expect(
+      buildRecordComboboxItem("recipe", { id: recipe, name: "Plain soup" })
+        .thumb?.imageUrl,
+    ).toBeNull();
+  });
+});
+
 describe("buildLocationComboboxItem tree presentation", () => {
   it("keeps the structured ancestry of a typed location search hit", () => {
     const item = buildSearchHitComboboxItem(

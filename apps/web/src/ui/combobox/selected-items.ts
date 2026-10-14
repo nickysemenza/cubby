@@ -102,6 +102,15 @@ export function useSelectedPickerItems(
     const index = unresolved.indexOf(id);
     if (!entity || index < 0) return held ?? { id, name: id };
     const result = results[index];
+    // A detail read answers `null` for a record that no longer exists (a
+    // stale suggestion, a deleted reference): name the gap, keep the id.
+    if (result?.data === null) {
+      return {
+        id,
+        name: `Missing ${entityLabel(entity).toLowerCase()}`,
+        presentation: held?.presentation,
+      };
+    }
     if (result?.data !== undefined) {
       const built = itemFromDetail(entity, id, result.data);
       return held?.presentation

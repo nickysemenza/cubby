@@ -542,6 +542,81 @@ describe("Picker stored codes", () => {
     expect(container).not.toHaveTextContent(CODE);
   });
 
+  // Regression: a detail read answers null for a deleted record, and the
+  // builder threw during render.
+  it("names a missing record instead of throwing", () => {
+    const client = new QueryClient();
+    client.setQueryData(
+      entityDetailFor("product").queryOptions(CODE).queryKey,
+      null,
+    );
+    const { container } = render(
+      <Picker
+        entity="product"
+        label="product"
+        items={[]}
+        value={{ id: CODE, name: CODE }}
+        setValue={vi.fn()}
+      />,
+      client,
+    );
+    expect(screen.getByRole("combobox", { name: "product" })).toHaveValue(
+      "Missing product",
+    );
+    expect(container).not.toHaveTextContent(CODE);
+  });
+
+  // Regression: a string option list built from records (cookbooks) showed
+  // the stored code until its roster loaded.
+  it("waits for a loading option roster instead of showing a stored code", () => {
+    const { rerender, container } = render(
+      <Picker
+        mode="choose"
+        label="cookbook"
+        options={[]}
+        isLoading
+        value="CKB-4K7M"
+        onValueChange={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByRole("combobox", { name: "cookbook" });
+    expect(trigger).toHaveTextContent("Loading…");
+    rerender(
+      <Picker
+        mode="choose"
+        label="cookbook"
+        options={[]}
+        value="CKB-4K7M"
+        onValueChange={vi.fn()}
+      />,
+    );
+    expect(trigger).toHaveTextContent("Unavailable record");
+    expect(container).not.toHaveTextContent("CKB-4K7M");
+  });
+
+  it("shows a record's picture in its popup row", () => {
+    render(
+      <Picker
+        label="first product"
+        items={[
+          {
+            id: "PRD-2ABC",
+            name: "Rolled Oats",
+            thumb: {
+              imageUrl: "https://images.example.test/oats.jpg",
+              fallback: null,
+            },
+          },
+        ]}
+        value={null}
+        setValue={vi.fn()}
+      />,
+    );
+    openPicker(screen.getByRole("combobox", { name: "first product" }));
+    const row = screen.getByRole("option", { name: "Rolled Oats" });
+    expect(row.querySelector("[data-picker-visual] img")).not.toBeNull();
+  });
+
   it("shows a loading state rather than the code while the record loads", () => {
     const { container } = render(
       <Picker
