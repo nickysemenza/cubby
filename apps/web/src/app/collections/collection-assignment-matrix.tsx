@@ -14,8 +14,8 @@ import {
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
-import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { TreeViewIcon } from "@phosphor-icons/react/dist/csr/TreeView";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -68,8 +68,8 @@ const SUBJECT_OPTIONS: readonly PickerOption[] = [
 const MEMBERSHIP_OPTIONS: readonly PickerOption[] = [
   { value: "", label: "Any membership" },
   { value: "member", label: "Member" },
-  { value: "direct", label: "Direct assignment" },
-  { value: "inherited", label: "Inherited membership" },
+  { value: "direct", label: "Set here" },
+  { value: "inherited", label: "Inherited" },
   { value: "unassigned", label: "Not a member" },
 ];
 const PAGE_SIZE_PICKER_OPTIONS: readonly PickerOption[] = PAGE_SIZE_OPTIONS.map(
@@ -583,10 +583,10 @@ export function CollectionAssignmentMatrix({
           <div className="ml-auto flex items-center gap-4 font-mono text-2xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <span className="inline-block size-3 border border-primary bg-primary" />
-              direct
+              set here
             </span>
             <span className="flex items-center gap-1">
-              <MapPinIcon className="size-3" />
+              <TreeViewIcon className="size-3" />
               inherited
             </span>
           </div>
@@ -778,7 +778,7 @@ export function CollectionAssignmentMatrix({
                       : false;
                     const inherited = state === "inherited" || state === "both";
                     const assignmentLabel = assigned
-                      ? "Direct"
+                      ? "Set here"
                       : inherited
                         ? "Inherited"
                         : "Assign";
@@ -838,7 +838,7 @@ export function CollectionAssignmentMatrix({
                           }}
                         >
                           {assigned && <CheckIcon />}
-                          {inherited && !assigned && <MapPinIcon />}
+                          {inherited && !assigned && <TreeViewIcon />}
                           {assignmentLabel}
                         </Button>
                       </li>
@@ -973,13 +973,9 @@ export function CollectionAssignmentMatrix({
                   >
                     {assigned && <CheckIcon className="size-3" />}
                   </span>
-                  {inherited && (
-                    <MapPinIcon
-                      className={cn(
-                        "absolute right-1 bottom-1 size-3",
-                        assigned ? "text-primary/70" : "text-muted-foreground",
-                      )}
-                    />
+                  {/* Only an inherited membership not also set here is marked. */}
+                  {inherited && !assigned && (
+                    <TreeViewIcon className="absolute right-1 bottom-1 size-3 text-muted-foreground" />
                   )}
                 </button>
               );

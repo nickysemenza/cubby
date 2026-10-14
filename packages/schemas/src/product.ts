@@ -1,3 +1,4 @@
+import { resolvedListSchema } from "./field-resolution";
 import { listLabel } from "./entity-definitions/label-field";
 import { tradeSchema } from "./task-fields";
 import { impliedClassification } from "./classification-field-policy";
@@ -29,7 +30,6 @@ import {
   ingredientShortcode,
   plantShortcode,
   inventoryShortcode,
-  ledgerPartyShortcode,
   locationShortcode,
   productShortcode,
 } from "./identifiers";
@@ -47,7 +47,6 @@ import {
   createPaginatedResponseSchema,
   entityFilterList,
   oneOrMany,
-  partyFilterList,
   presenceFilter,
 } from "./pagination";
 import { baseKind } from "./problems";
@@ -264,11 +263,7 @@ export const productFilterFields = {
   externalIdSource: oneOrMany(externalIdSource).optional(),
   externalIdPresenceFilter: presenceFilter,
   inventoryPresenceFilter: presenceFilter,
-  ownerLedgerPartyId: partyFilterList(ledgerPartyShortcode)
-    .optional()
-    .describe(
-      "Products a member owns: a live inventory entry's effective owner, or for a product with no inventory the owner its single acquisition would hand down. Accepts @me.",
-    ),
+  ownerPresenceFilter: presenceFilter,
   inventoryMultiplicity: z
     .enum(["duplicate_within_placement"])
     .optional()
@@ -891,6 +886,8 @@ export const productListItemOut = z.object({
   // expenses, never null.
   expenseTotal: money,
   purchaseDate: plainDate.nullable(),
+  /** Owner rollup over live inventory (`loadProductOwners`). */
+  owners: resolvedListSchema,
   ...productQuantityFields,
   // Server-composed text for the Expected, Variance and Unit price columns.
   ledgerExpectedQuantityLabel: listLabel,
@@ -948,6 +945,8 @@ export type ProductNutritionDisplay = z.infer<typeof productNutritionDisplay>;
 
 export const productWithFoodOut = z.object({
   ownershipEvidence: productOwnershipEvidenceOut,
+  /** Owner rollup over live inventory (`loadProductOwners`). */
+  owners: resolvedListSchema,
   nutritionDisplay: productNutritionDisplay,
   ...productTopLevelFields,
   // Same derived cover rule as `productTopLevelOut`/the picker (see

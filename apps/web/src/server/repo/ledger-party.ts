@@ -755,7 +755,7 @@ export async function mergeLedgerParties(
             await applyInventoryOwnershipInTransaction(
               tx,
               row.id,
-              { ownershipMode: "person", ownerLedgerPartyId: keepId },
+              { ownershipMode: "explicit", ownerLedgerPartyId: keepId },
               undefined,
               actor,
             );

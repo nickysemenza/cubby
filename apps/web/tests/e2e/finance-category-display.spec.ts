@@ -228,7 +228,7 @@ test("linked Expense categories display their readable label and transaction exp
     page.getByText("Set here", { exact: true }).first(),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Use inherited value", exact: true })
+    .getByRole("button", { name: "Use inherited", exact: true })
     .first()
     .click();
   await expect

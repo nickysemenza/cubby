@@ -11,7 +11,6 @@ import {
   type FieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
-import { inventoryShortcode } from "@cubby/schemas/identifiers";
 import { humanize, parseShortcode } from "@cubby/shared";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { useQuery } from "@tanstack/react-query";
@@ -20,10 +19,8 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { isBrowserRoutedEntity } from "~/entity/entities";
-import {
-  inventory,
-  fieldExplanation,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { RecordsBlockView } from "~/entity/entity-detail/records-block";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -31,7 +28,6 @@ import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { CELL_RAIL_BUTTON_CLASS } from "~/ui/data-table/cell-frame";
 import { ExternalLinkText } from "~/ui/ExternalLink";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import JsonRenderer from "~/ui/json-renderer";
 import { Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
@@ -540,7 +536,7 @@ export function FieldExplanation({
           <InfoIcon className={surface === "list" ? "size-3" : "size-3.5"} />
         )}
       </PopoverTrigger>
-      <PopoverContent className="max-h-[min(42rem,85dvh,var(--available-height))] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain p-0">
+      <PopoverContent className="max-h-[min(42rem,85dvh,var(--available-height))] w-[min(25rem,calc(100vw-1rem))] overflow-y-auto overscroll-contain p-0">
         {open &&
         field === "dataQuality" &&
         !z.enum(scoredEntities).safeParse(entity).success ? (
@@ -644,12 +640,15 @@ export function FieldExplanationContents({
             {result.data.resolution ? (
               <ResolutionExplanation
                 entity={entity}
-                id={id}
                 field={field}
                 resolution={result.data.resolution}
                 evidence={result.data.resolutionEvidence}
                 showHeadline={!result.data.interpretation}
               />
+            ) : result.data.resolutionEvidence ? (
+              // A rollup (a Product's owners) has one chain row per record
+              // rather than a single resolution.
+              <RecordsBlockView block={result.data.resolutionEvidence.chain} />
             ) : !result.data.interpretation &&
               (result.data.value !== null ||
                 !result.data.sources.some(
@@ -854,62 +853,8 @@ function ExplanationFooter({
   data: FieldExplanationOutput;
   isSubject: (target: { entityKind: Entity; entityId: string }) => boolean;
 }) {
-  const inheritOwner = useActionMutation({
-    mutationFn: inventory.setOwnership.mutationOptions,
-    success: "Using inherited owner",
-  });
-  const confirmOwner = useActionMutation({
-    mutationFn: inventory.confirmOwnership.mutationOptions,
-    success: "Owner confirmed",
-  });
   const resolution = data.resolution;
   const actions = data.actions.flatMap((action) => {
-    const inventoryAction = action.target.entityKind === "inventory";
-    if (action.kind === "inheritOwner" && inventoryAction) {
-      return [
-        <Button
-          key={action.kind}
-          size="xs"
-          variant="outline"
-          disabled={inheritOwner.isPending}
-          onClick={() =>
-            inheritOwner.mutate({
-              inventoryEntryId: inventoryShortcode.parse(
-                action.target.entityId,
-              ),
-              ownership: { mode: "inherit" },
-            })
-          }
-        >
-          {action.label}
-        </Button>,
-      ];
-    }
-    if (
-      action.kind === "confirmOwner" &&
-      inventoryAction &&
-      data.evidenceFingerprint
-    ) {
-      const evidenceFingerprint = data.evidenceFingerprint;
-      return [
-        <Button
-          key={action.kind}
-          size="xs"
-          variant="outline"
-          disabled={confirmOwner.isPending}
-          onClick={() =>
-            confirmOwner.mutate({
-              inventoryEntryId: inventoryShortcode.parse(
-                action.target.entityId,
-              ),
-              evidenceFingerprint,
-            })
-          }
-        >
-          {action.label}
-        </Button>,
-      ];
-    }
     // On its own detail page a link back to the subject goes nowhere.
     const self = isSubject(action.target);
     if (self && surface === "detail") return [];

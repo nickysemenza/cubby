@@ -46,9 +46,7 @@ type EntityDetailRendererCoverage<E extends DetailRendererEntity> = Readonly<
  */
 export const detailRendererCoverage = {
   inventory: {
-    ownershipMode: implemented(inventoryDetailFields.ownershipMode),
     ownerLedgerPartyId: implemented(inventoryDetailFields.ownerLedgerPartyId),
-    effectiveOwnership: implemented(inventoryDetailFields.effectiveOwnership),
   },
   expense: {
     "expense-spending-category": implemented(

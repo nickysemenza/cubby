@@ -126,7 +126,10 @@ import {
 } from "~/server/repo/expense-aggregate-sql";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
-import { productIdsByOwner } from "~/server/repo/inventory/ownership";
+import {
+  loadProductOwners,
+  productIdsByOwner,
+} from "~/server/repo/inventory/ownership";
 import {
   enrichProductRowsWithInventoryValuations,
   loadInventoryValuations,
@@ -708,9 +711,16 @@ export const buildProductWhere = async (
     resolveAllPresent(db, "location", requestedLocationCodes),
     resolveAllPresent(db, "ingredient", requestedIngredientCodes),
     resolveAllPresent(db, "plant", requestedGrowsPlantCodes),
-    filters.ownerLedgerPartyId === undefined
+    filters.ownerLedgerPartyId === undefined &&
+    filters.ownerPresenceFilter === undefined
       ? undefined
-      : productIdsByOwner(db, [filters.ownerLedgerPartyId].flat()),
+      : productIdsByOwner(
+          db,
+          filters.ownerLedgerPartyId === undefined
+            ? []
+            : [filters.ownerLedgerPartyId].flat(),
+          filters.ownerPresenceFilter,
+        ),
   ]);
 
   // Cross-entity filters must stay uncorrelated id-set subqueries shared by all product list query paths.
@@ -1269,7 +1279,7 @@ export const productList = async (
     readIntent === "page" ? loadProductListSums(db, whereClause) : undefined,
   ]);
   const ids = results.map((row) => row.id);
-  const [listRelations, qualities, priced, ledgered, displayImages] =
+  const [listRelations, qualities, priced, ledgered, displayImages, owners] =
     await Promise.all([
       loadProductListRelations(
         db,
@@ -1284,6 +1294,7 @@ export const productList = async (
         db,
         ids.map((id) => ({ entityKind: "product", entityId: id })),
       ),
+      loadProductOwners(db, ids),
     ]);
   const pricingById = new Map(priced.map((row) => [row.id, row.pricing]));
   const ledgerById = new Map(
@@ -1302,6 +1313,7 @@ export const productList = async (
           pricing: pricingById.get(row.id)!,
           quantityLedger: ledgerById.get(row.id)!,
           dataQuality: qualities.get(row.id)!,
+          owners: owners.get(row.id) ?? [],
         } as ProductListDB,
         displayImages.get(entityRefKey("product", row.id)) ?? [],
       ),
@@ -1409,7 +1421,7 @@ export const listProductsRead = async (
   if (projection.kind === "base" || results.length === 0)
     return { ...metadata, data: projectListRows("product", rows, projection) };
   const ids = results.map((row) => row.id);
-  const [listRelations, qualities, priced, ledgered, displayImages] =
+  const [listRelations, qualities, priced, ledgered, displayImages, owners] =
     await Promise.all([
       loadProductListRelations(
         db,
@@ -1434,6 +1446,7 @@ export const listProductsRead = async (
           ids.map((entityId) => ({ entityKind: "product", entityId })),
         ),
       ),
+      loadListGroup(projection, "derived", () => loadProductOwners(db, ids)),
     ]);
   const pricingById = new Map(priced?.map((row) => [row.id, row.pricing]));
   const ledgerById = new Map(
@@ -1498,6 +1511,7 @@ export const listProductsRead = async (
             },
             pricingById.get(row.id) ?? resolveProductPricing(row.price),
           ),
+          owners: owners?.get(row.id) ?? [],
           expenseCount: Number(row.expenseCount),
           expenseTotal: Number(row.expenseTotal),
           componentCount: Number(row.componentCount),

@@ -857,7 +857,6 @@ Rules:
           sourceDependencies: [
             { path: "beneficiaries", label: "Beneficiary attributions" },
           ],
-          actions: ["editSource"],
         },
         validation: {
           read: ledgerAttributions,
@@ -882,7 +881,6 @@ Rules:
           sourceDependencies: [
             { path: "funders", label: "Funder attributions" },
           ],
-          actions: ["editSource"],
         },
         validation: {
           read: ledgerAttributions,
@@ -906,7 +904,6 @@ Rules:
           sourceDependencies: [
             { path: "sourceClaims", label: "Recorded source claims" },
           ],
-          actions: ["editSource"],
         },
         validation: {
           read: ledgerSourceClaimsOut,

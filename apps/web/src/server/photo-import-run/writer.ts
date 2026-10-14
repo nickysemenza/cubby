@@ -308,9 +308,10 @@ async function resolveProduct(
 
 /**
  * Create the group's optional shared Inventory entry. A fully omitted
- * ownership selection defaults to `person` ownership under the run's own
- * member, but an explicit `person` mode without `ownerPartyId` is refused
- * rather than silently guessing who owns it (see `commitPhotoGroupInventory`).
+ * ownership selection defaults to `explicit` ownership under the run's own
+ * member, but `explicit` without the `ownerPartyId` key is refused rather than
+ * silently guessing who owns it; a null owner is household stock (see
+ * `commitPhotoGroupInventory`).
  */
 async function receiveInventory(
   txDb: Database,
@@ -330,20 +331,19 @@ async function receiveInventory(
   let ownershipMode: InventoryOwnershipMode;
   let ownerLedgerPartyId: LedgerPartyId | null;
   if (requestedMode === undefined && requestedOwner === undefined) {
-    ownershipMode = "person";
+    ownershipMode = "explicit";
     ownerLedgerPartyId = scope.ledgerPartyId;
-  } else if (requestedMode === undefined || requestedMode === "person") {
-    if (!requestedOwner) {
+  } else if (requestedMode === undefined || requestedMode === "explicit") {
+    if (requestedOwner === undefined) {
       throw new Error(
-        "Person ownership requires an explicit ownerPartyId; omit ownershipMode and ownerPartyId together to default to the run's own member",
+        "Explicit ownership requires ownerPartyId (null for household stock); omit ownershipMode and ownerPartyId together to default to the run's own member",
       );
     }
-    ownershipMode = "person";
-    ownerLedgerPartyId = await resolveOrThrow(
-      txDb,
-      "ledgerParty",
-      requestedOwner,
-    );
+    ownershipMode = "explicit";
+    ownerLedgerPartyId =
+      requestedOwner === null
+        ? null
+        : await resolveOrThrow(txDb, "ledgerParty", requestedOwner);
   } else {
     ownershipMode = requestedMode;
     ownerLedgerPartyId = null;

@@ -490,6 +490,7 @@ export const dbProductToListAPI = (
     // null) — mirrors `purchaseExpenseTotal`'s dbPurchaseToAPI coercion.
     expenseTotal: Number(productData.expenseTotal),
     purchaseDate: productData.purchaseDate,
+    owners: productData.owners ?? [],
     ...deriveProductQuantitySummary(inventoryEntry, productData.quantityLedger),
   };
 

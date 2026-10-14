@@ -35,13 +35,24 @@ struct EntityFieldControl: View {
     @ViewBuilder
     private var footer: some View {
         if let resolved = model.resolutionForEditor(field) {
-            Text("Effective: \(EntityFieldValue.text(resolved.effectiveValue, field: field) ?? "None")")
-                .font(.caption).foregroundStyle(.secondary)
-            EntityFieldResolutionLabel(resolved: resolved)
-            if resolved.resetPayload(field: field) != nil {
-                Button(resolved.resetLabel) { model.stageResolutionReset(key) }
-                    .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).reset")
-                Text("Save commits the reset.").font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: FieldGuideTokens.Space.xs) {
+                Text(
+                    "Effective: \(EntityFieldValue.text(resolved.effectiveValue, field: field) ?? resolved.emptyLabel(field: field))"
+                )
+                if resolved.isInherited { InheritedMarker() }
+            }
+            .font(.caption).foregroundStyle(.secondary)
+            EntityFieldResolutionLabel(resolved: resolved, field: field)
+            // Set to <none> stays available below whatever the saved mode, so it is not repeated.
+            let actions = resolved.actions(field: field).filter { $0.kind != .setNone }
+            ForEach(actions) { action in
+                Button(action.label) { model.stageResolution(action.kind, for: key) }
+                    .accessibilityIdentifier(
+                        "editor.\(model.descriptor.key.rawValue).\(key).\(action.kind == .useInherited ? "reset" : action.kind.rawValue)"
+                    )
+            }
+            if !actions.isEmpty {
+                Text("Save commits the change.").font(.caption).foregroundStyle(.secondary)
             }
         } else if let original = model.original,
             FieldResolutionPresentation(raw: original, field: field) != nil
@@ -49,9 +60,11 @@ struct EntityFieldControl: View {
             Text("Saved resolution is out of date for this draft. Save to refresh.")
                 .font(.caption).foregroundStyle(.secondary)
         }
-        if field.resolution?.none != nil {
-            Button("Use no value") { model.stageResolutionNone(key) }
-                .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).none")
+        if let policy = field.resolution, policy.none != nil {
+            Button(policy.labels?.none.map { "Set to \($0)" } ?? "Use no value") {
+                model.stageResolutionNone(key)
+            }
+            .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).none")
         }
         if let error = model.fieldErrors[key] {
             Text(error)

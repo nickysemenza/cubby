@@ -1,5 +1,5 @@
 import { seedWardrobePrerequisites } from "./fixtures-catalog";
-import { chooseOption, gotoAuthenticatedPage } from "./e2e-helpers";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 // Wardrobe is the generic Inventory list narrowed to an owner and the apparel
@@ -18,7 +18,7 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
   await gotoAuthenticatedPage(
     page,
     `/locations/${location.id}`,
-    page.getByRole("columnheader", { name: /effectiveOwnership column Owner/ }),
+    page.getByRole("columnheader", { name: /ownerLedgerPartyId column Owner/ }),
   );
   await expect(
     page
@@ -41,46 +41,22 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
   await gotoAuthenticatedPage(
     page,
     `/inventory/${entry.id}`,
-    page.getByLabel("Current ownership", { exact: true }),
+    page.getByRole("button", { name: "Use inherited", exact: true }),
   );
-  const current = page.getByLabel("Current ownership", { exact: true });
-  await expect(current).toHaveText(`Confirmed: ${name} owner`);
-  // Ownership is a readable fact until the member chooses to edit it.
-  await expect(
-    page.getByRole("button", { name: "Save ownership", exact: true }),
-  ).not.toBeVisible();
+  // The owner is the generic resolved field: set here, then inherited (no
+  // purchase evidence names anyone, so Unknown), then Household.
   await page
-    .getByRole("button", { name: "Change ownership", exact: true })
-    .click();
-  await chooseOption(
-    page,
-    page.getByRole("combobox", { name: "Ownership", exact: true }),
-    "No individual owner",
-  );
-  // The server owns the quantity bound; the client shows its refusal.
-  await page
-    .getByRole("spinbutton", {
-      name: "Quantity to assign; leave blank for entire entry",
-    })
-    .fill("4");
-  await page
-    .getByRole("button", { name: "Save ownership", exact: true })
+    .getByRole("button", { name: "Use inherited", exact: true })
     .click();
   await expect(
-    page.getByText(/Cannot reassign 4; only 3 is available/).first(),
+    page.getByText("Unknown", { exact: true }).first(),
   ).toBeVisible();
   await page
-    .getByRole("spinbutton", {
-      name: "Quantity to assign; leave blank for entire entry",
-    })
-    .fill("");
-  await page
-    .getByRole("button", { name: "Save ownership", exact: true })
+    .getByRole("button", { name: "Set to Household", exact: true })
     .click();
   await expect(
-    page.getByText("Ownership saved", { exact: true }),
+    page.getByText("Household", { exact: true }).first(),
   ).toBeVisible();
-  await expect(current).toHaveText("No individual owner");
 
   await gotoAuthenticatedPage(
     page,

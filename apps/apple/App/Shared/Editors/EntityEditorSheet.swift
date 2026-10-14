@@ -10,13 +10,21 @@ import SwiftUI
 /// identity, and financial-transaction source refs). Typed generic controls, entity references,
 /// amounts, tags, vendor names, and expense attributions render through `EntityFieldControl`;
 /// image keys render through `EntityImageBlock`.
+/// One field's resolution link a detail screen asks the editor to stage.
+struct ResolutionActionRequest: Hashable, Identifiable {
+    let field: String
+    let kind: FieldResolutionAction.Kind
+    var id: String { "\(field):\(kind.rawValue)" }
+}
+
 struct EntityEditorSheet: View {
     let key: EntityKey
     let mode: GenericEntityEditModel.Mode
     /// The loaded record for an update editor opened from a detail screen (skips the fetch).
     var original: JSONValue? = nil
-    /// A detail action stages a reset for review; Save remains the only write.
-    var resolutionResetField: String? = nil
+    /// A detail resolution link (Use inherited, Confirm, Set to …) staged for review; Save
+    /// remains the only write.
+    var resolutionAction: ResolutionActionRequest? = nil
     /// Values a detail action derived (a detected nutrition panel) staged for review as the
     /// person's own edits; Save remains the only write.
     var stagedValues: [String: JSONValue] = [:]
@@ -40,12 +48,12 @@ struct EntityEditorSheet: View {
     private struct EditorIdentity: Hashable {
         let key: EntityKey
         let mode: GenericEntityEditModel.Mode
-        let resolutionResetField: String?
+        let resolutionAction: ResolutionActionRequest?
     }
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
     private var editorIdentity: EditorIdentity {
-        EditorIdentity(key: key, mode: mode, resolutionResetField: resolutionResetField)
+        EditorIdentity(key: key, mode: mode, resolutionAction: resolutionAction)
     }
 
     private var isCreate: Bool {
@@ -268,7 +276,7 @@ struct EntityEditorSheet: View {
     private func finishLoad(_ loaded: GenericEntityEditModel, identity: EditorIdentity) {
         guard !Task.isCancelled, initializedIdentity == identity, model === loaded else { return }
         initialDraft = loaded.draft
-        if let resolutionResetField { loaded.stageResolutionReset(resolutionResetField) }
+        if let resolutionAction { loaded.stageResolution(resolutionAction.kind, for: resolutionAction.field) }
         loaded.stage(stagedValues)
         seedPickedTitles(loaded)
         suggestions?.invalidate()

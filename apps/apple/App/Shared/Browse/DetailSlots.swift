@@ -116,14 +116,10 @@ enum DetailSlotRegistry {
         return builders[slot]?(row)
     }
 
-    /// Ownership is a dedicated, evidence-aware inventory affordance. It is not a manifest hero
-    /// action and must remain available when the manifest declares no native hero verb.
+    /// Record-specific affordances beside the generic sections; none is a manifest hero action.
     @MainActor
     static func supplement(for key: EntityKey, row: EntityRow, onChanged: @escaping () -> Void) -> AnyView? {
         switch key {
-        case .inventory:
-            guard let detail = try? row.decode(InventoryDetail.self) else { return nil }
-            return AnyView(InventoryOwnershipControl(detail: detail, onChanged: onChanged))
         case .expense:
             guard let productID = row.raw["productId"]?.stringValue else { return nil }
             return AnyView(ReceiveExpenseButton(expenseID: row.id, productID: productID))

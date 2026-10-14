@@ -423,7 +423,7 @@ describe("current purchase-agent system boundaries", () => {
     expect(entries[0]).toMatchObject({
       amountValue: 1,
       amountUnit: "each",
-      ownershipMode: "person",
+      ownershipMode: "explicit",
       ownerLedgerPartyId: party.id,
       locationId: closet.entityId,
     });

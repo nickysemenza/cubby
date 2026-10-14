@@ -22,7 +22,10 @@ import {
 } from "~/server/repo/product/mappers";
 import type { ProductPricing } from "~/server/repo/product/pricing";
 
-import { inventoryOwnershipBasis } from "./ownership";
+import {
+  type InventoryOwnershipStep,
+  inventoryOwnerResolution,
+} from "./ownership";
 import type { InventoryEntryDeepDB, InventoryEntryListDB } from "./types";
 
 type InventoryEntryBaseDB = Pick<
@@ -38,38 +41,46 @@ type InventoryEntryBaseDB = Pick<
   | "updatedAt"
 >;
 
+export type InventoryOwnershipTrace = {
+  ownership: EffectiveInventoryOwnership;
+  steps: InventoryOwnershipStep[];
+};
+
+/** Fallback when a caller hydrates an entry without loading its evidence. */
 const unresolvedOwnership = (
   entry: InventoryEntryBaseDB,
-): EffectiveInventoryOwnership => {
-  const ownership: Omit<EffectiveInventoryOwnership, "basis" | "evidence"> = {
+): InventoryOwnershipTrace => ({
+  ownership: {
     mode: entry.ownershipMode,
     explicitOwner: null,
     effectiveOwner: null,
-    source: entry.ownershipMode === "unassigned" ? "unassigned" : "unresolved",
+    inheritedOwner: null,
+    source: entry.ownershipMode === "explicit" ? "household" : "unresolved",
+    evidence: null,
     evidenceFingerprint: "unresolved",
     matchesInheritedOwner: false,
-  };
-  return {
-    ...ownership,
-    basis: inventoryOwnershipBasis(ownership),
-    evidence: null,
-  };
-};
+  },
+  steps: [],
+});
 
 export const inventoryEntryBaseFields = <Q extends DataQuality | undefined>(
   entry: InventoryEntryBaseDB,
   valuation: number | null,
   dataQuality: Q,
-  ownership: EffectiveInventoryOwnership = unresolvedOwnership(entry),
+  { ownership, steps }: InventoryOwnershipTrace = unresolvedOwnership(entry),
 ) => ({
   id: parseShortcodeFor("inventory", entry.shortcode),
   amount: parseInventoryAmount(entry),
   valuation,
   verifiedAt: entry.verifiedAt,
   placement: entry.placement,
-  ownershipMode: entry.ownershipMode,
-  ownerLedgerPartyId: ownership.explicitOwner?.id ?? null,
+  // The effective owner, like Project/Task assignees; `fieldResolutions`
+  // carries the stored intent and the inherited fallback.
+  ownerLedgerPartyId: ownership.effectiveOwner?.id ?? null,
   effectiveOwnership: ownership,
+  fieldResolutions: {
+    ownerLedgerPartyId: inventoryOwnerResolution(ownership, steps),
+  },
   createdAt: entry.createdAt,
   updatedAt: entry.updatedAt,
   dataQuality,
@@ -94,7 +105,7 @@ export const dbInventoryEntryToAPI: (
   pricing: ProductPricing,
   dataQuality: DataQuality,
   locationDataQuality: DataQuality,
-  ownership?: EffectiveInventoryOwnership,
+  ownership?: InventoryOwnershipTrace,
 ) => z.infer<typeof inventoryWithLocationAndProductOut> = (
   inventoryentry,
   valuation,
@@ -159,7 +170,7 @@ export const dbInventoryEntryListValues = <Q extends DataQuality | undefined>(
   valuation: number | null,
   pricing: ProductPricing,
   dataQuality: Q,
-  ownership?: EffectiveInventoryOwnership,
+  ownership?: InventoryOwnershipTrace,
 ) => {
   const { product, location } = inventoryentry;
 

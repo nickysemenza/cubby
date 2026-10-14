@@ -184,7 +184,7 @@ function stockOwner(
   }>,
   partyById: ReadonlyMap<LedgerPartyId, MatchParty>,
 ): MatchParty | null {
-  if (entries.some((entry) => entry.ownershipMode !== "person")) return null;
+  if (entries.some((entry) => entry.ownerLedgerPartyId === null)) return null;
   const owners = uniq(entries.map((entry) => entry.ownerLedgerPartyId));
   const [only] = owners;
   return owners.length === 1 && only ? (partyById.get(only) ?? null) : null;
@@ -363,7 +363,7 @@ export async function loadProductMatchSides(
   ]);
   const explicitOwnerIds = uniq(
     stock.flatMap((row) =>
-      row.ownershipMode === "person" && row.ownerLedgerPartyId
+      row.ownershipMode === "explicit" && row.ownerLedgerPartyId
         ? [row.ownerLedgerPartyId]
         : [],
     ),

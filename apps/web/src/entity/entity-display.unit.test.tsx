@@ -987,7 +987,7 @@ it("edits the effective inherited checkbox and restores the nullable override", 
     save,
   );
   view.rerender(<>{explicitOverrides.stockTracked!().value}</>);
-  fireEvent.click(screen.getByRole("button", { name: "Use inherited value" }));
+  fireEvent.click(screen.getByRole("button", { name: "Use inherited" }));
   await waitFor(() =>
     expect(save).toHaveBeenCalledWith({
       id: record.id,

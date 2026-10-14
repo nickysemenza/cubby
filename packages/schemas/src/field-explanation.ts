@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { dataExceptionReason, dataQualityStatus } from "./data-quality-shape";
 import { entityRefSchema } from "./entity";
+import { reportRecordsBlock } from "./entity-report";
 import { entitySourceRead } from "./entity-source";
 import {
   fieldResolutionSchema,
@@ -108,16 +109,21 @@ export const fieldExplanationOutput = z.object({
   resolution: fieldResolutionSchema.nullable(),
   resolutionEvidence: z
     .object({
-      hierarchy: z.array(fieldExplanationSource).max(50),
+      /**
+       * Every place the value could come from, nearest first, as a timeline
+       * records block: the step that supplies it is `done` ("Used"), steps
+       * with nothing are `skipped`, assigned steps an earlier one beat are
+       * `not_reached`. Clients render it with their records timeline.
+       */
+      chain: reportRecordsBlock,
       fallbackSource: fieldResolutionSourceSchema.nullable(),
     })
     .nullable()
     .optional(),
   truncated: z.boolean(),
-  evidenceFingerprint: z.string().nullable(),
   actions: z.array(
     z.object({
-      kind: z.enum(["confirmOwner", "inheritOwner", "editSource"]),
+      kind: z.enum(["editSource"]),
       label: z.string(),
       target: entityRefSchema,
     }),

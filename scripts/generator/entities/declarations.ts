@@ -101,6 +101,7 @@ export type FilterDescriptor = Readonly<{
   }> | null;
   urlOnly: boolean;
   nullable: Readonly<{ field: string; label: string }> | null;
+  sentinels: readonly Readonly<{ value: string; label: string }>[] | null;
   wire: FilterWire;
 }>;
 export type EntityPorts = Readonly<{
@@ -192,7 +193,6 @@ export type EntityField = Readonly<{
     readPath?: string;
     resolver:
       | "field"
-      | "inventoryOwnership"
       | "productValuation"
       | "imageRepresentation"
       | "imageCapture"
@@ -207,12 +207,13 @@ export type EntityField = Readonly<{
       summary?: string;
     }>;
     sourceDependencies?: readonly Readonly<{ path: string; label: string }>[];
-    actions?: readonly ("confirmOwner" | "inheritOwner" | "editSource")[];
   }> | null;
   resolution: Readonly<{
     reset: Readonly<Record<string, EntityFieldResolutionValue>>;
     none: Readonly<Record<string, EntityFieldResolutionValue>> | null;
     redundancy: "eligible" | "intentional";
+    confirm: Readonly<Record<string, EntityFieldResolutionValue>> | null;
+    labels: Readonly<{ none?: string; unresolved?: string }> | null;
   }> | null;
   control: EntityFieldControl | null;
   display: Readonly<{

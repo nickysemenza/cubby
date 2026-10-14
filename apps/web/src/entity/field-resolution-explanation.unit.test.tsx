@@ -94,7 +94,7 @@ describe("ResolutionExplanation", () => {
         }}
       />,
     );
-    expect(screen.getByText("Overrides inherited")).toBeInTheDocument();
+    expect(screen.getByText("Set here")).toBeInTheDocument();
     expect(screen.getByText("Building & Framing")).toBeInTheDocument();
   });
 
@@ -155,21 +155,14 @@ describe("ResolutionExplanation", () => {
     expect(screen.queryByText(/override/i)).not.toBeInTheDocument();
   });
 
-  it("ladders the hierarchy: the subject wins and an assigned ancestor is shadowed", () => {
-    const self = testShortcode("productCategory", "fixture-paper");
+  it("renders the chain nearest source first: the subject wins and an assigned ancestor is overridden", () => {
     const parent = testShortcode("productCategory", "fixture-household");
     const root = testShortcode("productCategory", "fixture-home");
-    const node = (id: string, name: string, value: string | null) => ({
-      label: "Product category ancestry",
-      entity: { entityKind: "productCategory" as const, entityId: id },
-      value: { name, value, assigned: value !== null },
-    });
     const harness = createBrowserTestHarness();
     try {
       render(
         <ResolutionExplanation
           entity="productCategory"
-          id={self}
           field="feature"
           resolution={{
             mode: "explicit",
@@ -182,11 +175,34 @@ describe("ResolutionExplanation", () => {
             canReset: false,
           }}
           evidence={{
-            hierarchy: [
-              node(self, "Paper goods", "supplies"),
-              node(parent, "Household", null),
-              node(root, "Home", "food"),
-            ],
+            chain: {
+              kind: "records",
+              presentation: "timeline",
+              empty: "Nothing to inherit from",
+              rows: [
+                {
+                  entity: null,
+                  id: null,
+                  title: "This product category",
+                  trailing: "Supplies",
+                  state: { kind: "done", label: "Used" },
+                },
+                {
+                  entity: "productCategory",
+                  id: parent,
+                  title: "Household",
+                  trailing: null,
+                  state: { kind: "skipped", label: "Not set" },
+                },
+                {
+                  entity: "productCategory",
+                  id: root,
+                  title: "Home",
+                  trailing: "Food",
+                  state: { kind: "not_reached", label: "Overridden above" },
+                },
+              ],
+            },
             fallbackSource: {
               entityKind: "productCategory",
               entityId: root,
@@ -196,14 +212,9 @@ describe("ResolutionExplanation", () => {
         />,
         { wrapper: harness.wrapper },
       );
-      const rows = screen.getAllByRole("listitem");
-      expect(rows.map((row) => row.dataset.role)).toEqual([
-        "wins",
-        "unset",
-        "shadowed",
-      ]);
-      expect(rows[0]).toHaveTextContent("Paper goods");
-      expect(rows[2]).toHaveTextContent("Home");
+      expect(screen.getByText("This product category")).toBeInTheDocument();
+      expect(screen.getByText("Overridden above")).toBeInTheDocument();
+      expect(screen.getAllByText("Home").length).toBeGreaterThan(0);
     } finally {
       harness.dispose();
     }

@@ -7,7 +7,6 @@ type Explanation = NonNullable<
 
 const resolverLabels = {
   field: "Declared field projection",
-  inventoryOwnership: "Inventory ownership",
   productValuation: "Product valuation",
   imageRepresentation: "Image representation",
   imageCapture: "Image capture provenance",
@@ -17,15 +16,6 @@ const resolverLabels = {
   merchantVendorInference: "Merchant and vendor inference",
   expenseAttribution: "Expense attribution",
 } as const satisfies Record<Explanation["resolver"], string>;
-
-const actionLabels = {
-  confirmOwner: "Confirm owner",
-  inheritOwner: "Inherit owner",
-  editSource: "Edit source",
-} as const satisfies Record<
-  NonNullable<Explanation["actions"]>[number],
-  string
->;
 
 const surfaceLabels = {
   list: "List",
@@ -48,9 +38,13 @@ const renderExplanation = (
   const sources = (explanation.sourceDependencies ?? []).map(
     ({ label, path }) => `${label} (\`${path}\`)`,
   );
-  const actions = (explanation.actions ?? []).map(
-    (action) => actionLabels[action],
-  );
+  const actions = [
+    ...(field.resolution?.confirm ? ["Confirm"] : []),
+    ...(field.resolution ? ["Use inherited"] : []),
+    ...(field.resolution?.none
+      ? [`Set to ${field.resolution.labels?.none ?? "none"}`]
+      : []),
+  ];
 
   return [
     `### ${field.label} (\`${field.key}\`)`,

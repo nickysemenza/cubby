@@ -63,6 +63,10 @@ const resolveSpecOptions = (
   return [
     ...(spec.nullable ? nullableSentinelOptions(spec.nullable.label) : []),
     ...me,
+    ...(spec.sentinels ?? []).map((sentinel) => ({
+      ...sentinel,
+      meta: true as const,
+    })),
     ...resolved,
   ];
 };

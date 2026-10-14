@@ -28,6 +28,7 @@ const productAt = (shortcode: string, componentCount = 0) =>
     upcPresence: false,
     notesPresence: false,
     dataGaps: [],
+    owners: [],
     notes: null,
     labelNutrition: null,
     expectedQuantity: null,

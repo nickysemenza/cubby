@@ -168,11 +168,16 @@ public final class GenericEntityEditModel {
     /// Stage the declaration's ordinary update patch; Save owns persistence.
     @discardableResult
     public func stageResolutionReset(_ key: String) -> Bool {
+        stageResolution(.useInherited, for: key)
+    }
+
+    /// Stage one of the saved resolution's offered links (Use inherited, Confirm, Set to …).
+    @discardableResult
+    public func stageResolution(_ kind: FieldResolutionAction.Kind, for key: String) -> Bool {
         guard let field = descriptor.field(key),
-            let resolved = resolutionForEditor(field),
-            let payload = resolved.resetPayload(field: field)
+            let action = resolutionForEditor(field)?.actions(field: field).first(where: { $0.kind == kind })
         else { return false }
-        return stageResolutionPayload(payload)
+        return stageResolutionPayload(action.payload)
     }
 
     @discardableResult

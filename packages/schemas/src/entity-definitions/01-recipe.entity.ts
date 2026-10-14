@@ -211,7 +211,6 @@ export default defineEntity({
             },
             { path: "yield", label: "Recipe yield" },
           ],
-          actions: ["editSource"],
         },
         validation: {
           read: recipeTopLevelFields.servings,

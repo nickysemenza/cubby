@@ -973,7 +973,7 @@ async function seedCookbookExpenseAttributionInventory(
       amountValue: 1,
       amountUnit: "each",
       locationId,
-      ownershipMode: "person",
+      ownershipMode: "explicit",
       ownerLedgerPartyId: ledgerPartyId,
     }).catch(() => undefined);
 }

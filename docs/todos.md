@@ -940,6 +940,12 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 ## Entity platform & data model
 
+- ⏳ ✨ **Filter any inherited field by Inherited vs Set here.** Inventory
+  owner has its own `ownershipMode` filter; every field on the shared field
+  resolution (`resolution:` in the declaration) should get the same filter
+  generically from its `fieldResolutions` mode, on web and Apple, instead of a
+  per-field enum filter.
+
 - 🟢 ✨ **Group lists by a related record's field, on web and Apple
   (high priority).** Wardrobe wants Shirts / Pants / Outerwear sections, which
   means grouping Inventory by `product.category`. Web sections today group only

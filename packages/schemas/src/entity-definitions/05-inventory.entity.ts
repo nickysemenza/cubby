@@ -12,11 +12,16 @@ import {
 import {
   effectiveInventoryOwnership,
   inventoryOwnershipMode,
+  inventoryOwnershipModeValues,
 } from "@cubby/schemas/inventory-ownership";
 import { ledgerPartyShortcode } from "../identifier-fields.js";
+import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { imageOut } from "./field-primitives.js";
-import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
-import { FILTER_NONE } from "../filter-sentinel-fields.js";
+import {
+  CURRENT_MEMBER_FILTER,
+  OWNER_FILTER_HOUSEHOLD,
+  OWNER_FILTER_UNKNOWN,
+} from "@cubby/shared";
 import { z } from "zod";
 export default defineEntity({
   key: "inventory",
@@ -106,8 +111,7 @@ export default defineEntity({
           description:
             "Stock whose purchase evidence names no single owner; pick one",
           filters: [
-            { id: "ownerLedgerPartyId", value: [FILTER_NONE] },
-            { id: "ownershipMode", value: ["inherit"] },
+            { id: "ownerLedgerPartyId", value: [OWNER_FILTER_UNKNOWN] },
           ],
         },
         {
@@ -135,7 +139,7 @@ export default defineEntity({
       ],
       read: {
         relations: ["product", "location", "ownerLedgerPartyId"],
-        derived: ["valuation", "effectiveOwnership"],
+        derived: ["valuation", "effectiveOwnership", "fieldResolutions"],
         media: ["displayImages"],
         quality: ["dataQuality"],
       },
@@ -227,23 +231,9 @@ export default defineEntity({
       {
         key: "ownershipMode",
         kind: "enum",
-        control: {
-          kind: "select",
-          options: [
-            { value: "inherit", label: "Use inherited owner" },
-            { value: "person", label: "Person" },
-            { value: "unassigned", label: "No individual owner" },
-          ],
-        },
-        display: {
-          columnLabel: "Ownership",
-          list: true,
-          detail: true,
-          renderer: { detail: "ownershipMode" },
-        },
         validation: {
-          read: inventoryOwnershipMode,
-          create: inventoryOwnershipMode.default("inherit"),
+          read: null,
+          create: inventoryOwnershipMode.optional(),
           update: inventoryOwnershipMode.optional(),
         },
       },
@@ -251,14 +241,52 @@ export default defineEntity({
         key: "ownerLedgerPartyId",
         kind: "identifier",
         nullable: true,
+        labelOverride: "Owner",
         reference: {
           entity: "ledgerParty",
           filters: [{ field: "kind", values: ["member", "guest"] }],
         },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
+          columnLabel: "Owner",
+          list: true,
           detail: true,
+          width: "md",
+          labelPath: "effectiveOwnership.effectiveOwner.name",
           renderer: { detail: "ownerLedgerPartyId" },
+        },
+        resolution: {
+          reset: { ownershipMode: "inherit", ownerLedgerPartyId: null },
+          none: { ownershipMode: "explicit", ownerLedgerPartyId: null },
+          confirm: { ownershipMode: "explicit" },
+          // Confirming the inherited owner is the point, not a redundancy.
+          redundancy: "intentional",
+          labels: { none: "Household", unresolved: "Unknown" },
+        },
+        explanation: {
+          ruleId: "inventory.effective-owner",
+          version: 2,
+          description:
+            "An owner set on the entry (or Household) wins; otherwise one recorded acquisition supplies its beneficiary, then an enabled vendor account default, then an enabled payment account default.",
+          projections: {
+            list: "fieldResolutions.ownerLedgerPartyId.value",
+            detail: "fieldResolutions.ownerLedgerPartyId.value",
+            summary: "fieldResolutions.ownerLedgerPartyId.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.ownerLedgerPartyId.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.ownerLedgerPartyId.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.ownerLedgerPartyId.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
         },
         validation: {
           read: ledgerPartyShortcode.nullable(),
@@ -267,33 +295,19 @@ export default defineEntity({
         },
       },
       {
+        key: "fieldResolutions",
+        kind: "json",
+        validation: {
+          read: optionalFieldResolutionsSchema,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        // Full ownership trace for the expense-beneficiary confirmation flow;
+        // the Owner field above is what every client displays.
         key: "effectiveOwnership",
         kind: "json",
-        explanation: {
-          ruleId: "inventory.effective-owner",
-          version: 1,
-          description:
-            "Explicit ownership wins; otherwise one recorded acquisition may supply an unambiguous beneficiary or enabled account default.",
-          readPath: "effectiveOwnership",
-          resolver: "inventoryOwnership",
-          actions: ["confirmOwner", "inheritOwner", "editSource"],
-        },
-        display: {
-          columnLabel: "Owner",
-          list: true,
-          readPath: "effectiveOwnership.effectiveOwner.name",
-          width: "md",
-          detail: true,
-          renderer: { detail: "effectiveOwnership" },
-        },
-        provenance: {
-          kind: "derived",
-          sources: [
-            { label: "Stored ownership choice" },
-            { label: "Recorded acquisition and beneficiary evidence" },
-            { label: "Enabled vendor or payment account default" },
-          ],
-        },
         validation: {
           read: effectiveInventoryOwnership,
           create: null,
@@ -516,8 +530,8 @@ export default defineEntity({
       "valuation",
       "verifiedAt",
       "placement",
-      "ownershipMode",
       "ownerLedgerPartyId",
+      "fieldResolutions",
       "effectiveOwnership",
       "createdAt",
       "updatedAt",
@@ -570,9 +584,10 @@ export default defineEntity({
     ],
     checks: [
       { column: "placement" },
+      { column: "ownershipMode", values: [...inventoryOwnershipModeValues] },
       {
         name: "InventoryEntry_ownership_valid",
-        sql: "({ownershipMode} = 'person' AND {ownerLedgerPartyId} IS NOT NULL) OR ({ownershipMode} IN ('inherit', 'unassigned') AND {ownerLedgerPartyId} IS NULL)",
+        sql: "{ownershipMode} = 'explicit' OR {ownerLedgerPartyId} IS NULL",
       },
     ],
     relations: {
@@ -656,7 +671,12 @@ export default defineEntity({
         placeholder: "Filter by owner...",
         brandRef: { entity: "ledgerParty" },
         deriveSchema: true,
-        nullable: { field: "ownerPresenceFilter", label: "owner" },
+        sentinels: [
+          { value: OWNER_FILTER_HOUSEHOLD, label: "Household" },
+          { value: OWNER_FILTER_UNKNOWN, label: "Unknown" },
+        ],
+        schemaDescription:
+          "Effective owner: Ledger Party codes, @me, @household (no individual owner) or @unknown (inherits from evidence that names nobody). Values OR together.",
       },
       {
         columnId: "ownershipMode",
@@ -666,9 +686,8 @@ export default defineEntity({
         deriveSchema: true,
         stored: true,
         options: [
-          { value: "inherit", label: "Inherited (unconfirmed)" },
-          { value: "person", label: "Confirmed person" },
-          { value: "unassigned", label: "No individual owner" },
+          { value: "inherit", label: "Inherited" },
+          { value: "explicit", label: "Set here" },
         ],
       },
       {

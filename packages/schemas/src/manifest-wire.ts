@@ -64,7 +64,6 @@ export const manifestWire = {
       resolver: "string",
       projections: "[string:string]",
       sourceDependencies: "[FieldExplanationDependency]",
-      actions: "[string]",
     },
     { conformances: codable },
   ),
@@ -80,9 +79,16 @@ export const manifestWire = {
     { conformances: codable },
   ),
   FieldResolutionDescriptor: record(
-    { reset: "[string:Json]", none: "[string:Json]~", redundancy: "string" },
+    {
+      reset: "[string:Json]",
+      none: "[string:Json]~",
+      redundancy: "string",
+      confirm: "[string:Json]~",
+      labels: "FieldResolutionLabels~",
+    },
     { conformances: codable },
   ),
+  FieldResolutionLabels: record({ none: "string~", unresolved: "string~" }),
   FieldDescriptor: record(
     {
       key: "string",
@@ -140,6 +146,7 @@ export const manifestWire = {
       placeholder: "string",
       label: "string~",
       options: "[LabeledOption]~",
+      sentinels: "[LabeledOption]~",
       wire: "FilterWire",
       targetEntity: "EntityKey~",
     },

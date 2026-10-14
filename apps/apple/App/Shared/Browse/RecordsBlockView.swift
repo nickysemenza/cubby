@@ -387,20 +387,16 @@ struct RecordsBlockView: View {
             }
             if records.filmstrip { captureFilmstrip }
             ForEach(records.filmstrip ? [] : records.rows) { row in
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    RecordRowView(row: row, large: records.largeThumbnails, model: model)
-                    if let choice = row.choice {
-                        ReportChoiceView(
-                            choice: choice, answers: $answers, disabled: model?.busyActionID != nil)
+                if records.timeline {
+                    HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
+                        TimelineRail(
+                            state: row.stateKind, isFirst: row.id == records.rows.first?.id,
+                            isLast: row.id == records.rows.last?.id)
+                        recordRow(row)
                     }
-                    if let link = row.listLink, let trailing = row.trailing {
-                        NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
-                            Label(trailing, systemImage: "list.bullet").font(.fieldGuideLabel)
-                        }
-                    }
-                    ForEach(plans(row.actions, scope: .row), id: \.0) { id, plan in
-                        if let itemID = row.recordID { actionButton(id, plan, itemID: itemID) }
-                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    recordRow(row)
                 }
             }
             if let footer = records.footer {
@@ -457,6 +453,24 @@ struct RecordsBlockView: View {
                 .nativeSheet(.preview)
         }
         .alert(notice ?? "", isPresented: noticeBinding) { Button("OK") {} }
+    }
+
+    private func recordRow(_ row: ReportPresentation.RecordRow) -> some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            RecordRowView(row: row, large: records.largeThumbnails, model: model)
+            if let choice = row.choice {
+                ReportChoiceView(
+                    choice: choice, answers: $answers, disabled: model?.busyActionID != nil)
+            }
+            if let link = row.listLink, let trailing = row.trailing {
+                NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
+                    Label(trailing, systemImage: "list.bullet").font(.fieldGuideLabel)
+                }
+            }
+            ForEach(plans(row.actions, scope: .row), id: \.0) { id, plan in
+                if let itemID = row.recordID { actionButton(id, plan, itemID: itemID) }
+            }
+        }
     }
 
     @ViewBuilder private func actionButton(
@@ -638,8 +652,64 @@ struct RecordsBlockView: View {
     }
 }
 
+/// One stage's mark on a `timeline` block's rail: a state dot on the line joining the stages,
+/// filled where the stage supplied the result (`done`), hollow where it had nothing or was beaten.
+struct TimelineRail: View {
+    let state: String?
+    let isFirst: Bool
+    let isLast: Bool
+
+    private var color: Color {
+        switch state {
+        case "done": FieldGuideTokens.positive
+        case "warning": FieldGuideTokens.warning
+        case "failed": FieldGuideTokens.destructive
+        case "running": FieldGuideTokens.interaction
+        default: FieldGuideTokens.graphiteSecondary
+        }
+    }
+
+    private var filled: Bool { state != "skipped" && state != "not_reached" }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(isFirst ? Color.clear : FieldGuideTokens.hairline)
+                .frame(width: 1.5, height: 14)
+            ZStack {
+                Circle().fill(filled ? color : FieldGuideTokens.surface)
+                Circle().strokeBorder(color, lineWidth: 1.5)
+            }
+            .frame(width: 10, height: 10)
+            // Runs through the block's row spacing so the rail reads as one line.
+            Rectangle().fill(isLast ? Color.clear : FieldGuideTokens.hairline)
+                .frame(width: 1.5)
+                .frame(maxHeight: .infinity)
+                .padding(.bottom, isLast ? 0 : -FieldGuideTokens.Space.sm)
+        }
+        .frame(width: 12)
+        .accessibilityHidden(true)
+    }
+}
+
 /// A review waiting to be read; each analysis is its own presentation.
 private struct AIReviewRequest: Identifiable {
     let id = UUID()
     let review: HeroActionReview
+}
+
+#Preview("Timeline") {
+    // A field explanation's resolution chain: nearest source first, the one that supplies the
+    // value `done`, the rest skipped or beaten.
+    let json = #"""
+        {"kind":"records","presentation":"timeline","empty":"No sources","rows":[
+          {"title":"This entry","entity":null,"id":null,"trailing":"Not set","state":{"kind":"skipped","label":"Not set"}},
+          {"title":"Order from Sample Vendor","entity":"purchase","id":"PUR-4K7M","trailing":"Alex","state":{"kind":"done","label":"Used"}},
+          {"title":"Sample Vendor account","entity":"vendorAccount","id":null,"trailing":"Household","state":{"kind":"not_reached","label":"Not used"}}
+        ]}
+        """#
+    let block = try! JSONDecoder.cubby().decode(ReportRecordsBlock.self, from: Data(json.utf8))
+    List {
+        RecordsBlockView(records: ReportPresentation.records(block), host: nil)
+    }
+    .environment(PreviewFixtures.signedInModel())
 }

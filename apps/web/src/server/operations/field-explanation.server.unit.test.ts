@@ -127,7 +127,6 @@ describe("field explanation projection", () => {
           { path: "pricing.source", label: "Selected price source" },
           { path: "pricing.partial", label: "Incomplete expense coverage" },
         ],
-        actions: ["editSource"],
       },
       12.5,
     );

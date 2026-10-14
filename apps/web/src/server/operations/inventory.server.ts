@@ -120,7 +120,7 @@ const resolveOwnership = async (
   return {
     ownershipMode: ownership.mode,
     ownerLedgerPartyId:
-      ownership.mode === "person"
+      ownership.mode === "explicit" && ownership.ownerId
         ? await ledgerPartyShortcodes.one(db, ownership.ownerId)
         : null,
   };

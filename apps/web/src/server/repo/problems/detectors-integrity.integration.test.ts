@@ -908,7 +908,7 @@ const SOURCE_FACTORIES = {
       locationId: location.id,
       amountValue: 1,
       amountUnit: "each",
-      ownershipMode: "person",
+      ownershipMode: "explicit",
       ownerLedgerPartyId: parseEntityId("ledgerParty", targetId),
     });
   },

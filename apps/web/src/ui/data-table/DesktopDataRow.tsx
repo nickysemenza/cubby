@@ -16,7 +16,9 @@ import { isInspectableFieldProvenance } from "~/entity/field-provenance";
 import {
   FieldResolutionBadge,
   fieldResolutionFor,
+  InheritedMarker,
   resolutionIsDerived,
+  resolutionIsInherited,
 } from "~/entity/field-resolution";
 import { RecordFieldSuggestion } from "~/features/ai/record-suggestions";
 import { cn } from "~/lib/utils";
@@ -113,11 +115,14 @@ function explainedCellContent<TItem extends RowData>(
     explanation?.field ?? cell.column.id,
   );
   const rowIdentity = dataRowIdentitySchema.safeParse(cell.row.original);
-  // Every rail overlays the active row; a derived value reads muted instead
-  // of reserving width for its ↳ in every row.
+  // Every rail overlays the active row; a derived value reads muted, and an
+  // inherited one keeps its marker visible without hovering.
   const value =
     resolution && resolutionIsDerived(resolution) ? (
-      <span className="text-muted-foreground">{content}</span>
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1 text-muted-foreground">
+        <span className="min-w-0 truncate">{content}</span>
+        {resolutionIsInherited(resolution) ? <InheritedMarker /> : null}
+      </span>
     ) : (
       content
     );

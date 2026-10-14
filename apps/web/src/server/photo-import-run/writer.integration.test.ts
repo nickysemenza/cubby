@@ -203,7 +203,7 @@ describe("commitPhotoGroup", () => {
       })
       .from(inventoryEntry)
       .where(eq(inventoryEntry.locationId, closet.entityId));
-    expect(entry?.ownershipMode).toBe("person");
+    expect(entry?.ownershipMode).toBe("explicit");
     expect(entry?.ownerLedgerPartyId).toBe(party.id);
 
     const targets = await readTargetStates(run.id);
@@ -607,7 +607,7 @@ describe("commitPhotoGroup", () => {
     expect(updatedRun?.endedAt).not.toBeNull();
   });
 
-  it("refuses 'person' ownership with no owner instead of guessing one", async () => {
+  it("refuses explicit ownership with no owner instead of guessing one", async () => {
     const party = await seedMember();
     const run = await seedRun(party);
     const images = await seedImages(1);
@@ -623,13 +623,13 @@ describe("commitPhotoGroup", () => {
           product: { kind: "create", create: { name: "Ownerless Scarf" } },
           inventory: {
             locationId: TEST_HOME_SHORTCODE,
-            ownershipMode: "person",
+            ownershipMode: "explicit",
             quantity: 1,
           },
         },
         ctx.actor,
       ),
-    ).rejects.toThrow(/explicit ownerPartyId/);
+    ).rejects.toThrow(/Explicit ownership requires ownerPartyId/);
 
     const targets = await readTargetStates(run.id);
     expect(targets.every((target) => target.state === "pending")).toBe(true);
@@ -658,7 +658,7 @@ describe("commitPhotoGroup", () => {
         shortcode: generateShortcode("inventory"),
         amountValue: 2,
         amountUnit: "each",
-        ownershipMode: "person",
+        ownershipMode: "explicit",
         ownerLedgerPartyId: party.id,
       })
       .returning();

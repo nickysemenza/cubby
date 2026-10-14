@@ -44,12 +44,10 @@ export const assertValidRawInventoryOwnership = (
   ownership: InventoryRawOwnership,
 ): void => {
   if (
-    (ownership.ownershipMode === "person") !==
-    (ownership.ownerLedgerPartyId !== null)
+    ownership.ownershipMode === "inherit" &&
+    ownership.ownerLedgerPartyId !== null
   ) {
-    throw new Error(
-      "Person ownership requires an owner; inherit and unassigned ownership clear it",
-    );
+    throw new Error("Inherited ownership cannot retain an owner");
   }
 };
 

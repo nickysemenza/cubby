@@ -1,4 +1,8 @@
 import type {
+  FieldResolution,
+  ResolvedListItem,
+} from "@cubby/schemas/field-resolution";
+import type {
   InventoryId,
   LedgerPartyId,
   ProductId,
@@ -6,10 +10,8 @@ import type {
   VendorAccountId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type {
-  EffectiveInventoryOwnership,
-  InventoryOwnershipSource,
-} from "@cubby/schemas/inventory-ownership";
+import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
+import { OWNER_FILTER_HOUSEHOLD, OWNER_FILTER_UNKNOWN } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 
@@ -57,15 +59,30 @@ type Acquisition = {
   vendorAccountId: VendorAccountId | null;
 };
 
+type InheritedSource =
+  | "inherited_beneficiary"
+  | "inherited_vendor_account"
+  | "inherited_payment_account";
+
+/** One rung of the inheritance ladder, kept even when an earlier rung wins so
+ * an explanation can show what it overrode. */
+export type InventoryOwnershipStep = {
+  source: InheritedSource;
+  owner: IndividualParty | null;
+  /** This rung's evidence settles the inherited owner, even as ambiguous. */
+  decides: boolean;
+  ref: {
+    entityKind: "purchase" | "expense" | "vendorAccount" | "financialAccount";
+    entityId: string;
+  } | null;
+};
+
 type InheritedCandidate = {
   owner: IndividualParty | null;
-  source:
-    | "inherited_beneficiary"
-    | "inherited_vendor_account"
-    | "inherited_payment_account"
-    | "unresolved";
+  source: InheritedSource | "unresolved";
   acquisition: Acquisition | null;
   fingerprintEvidence: unknown;
+  steps: InventoryOwnershipStep[];
 };
 
 const isIndividual = <Party extends { kind: string }>(
@@ -80,6 +97,7 @@ const unresolvedCandidate = (): InheritedCandidate => ({
   source: "unresolved",
   acquisition: null,
   fingerprintEvidence: null,
+  steps: [],
 });
 
 const loadAcquisitionExpenseRows = async (
@@ -327,6 +345,7 @@ const loadVendorDefaults = async (
   return await client
     .select({
       id: vendorAccount.id,
+      shortcode: vendorAccount.shortcode,
       ledgerPartyId: vendorAccount.ledgerPartyId,
       enabled: vendorAccount.inventoryOwnerDefaultEnabled,
     })
@@ -347,6 +366,7 @@ const loadPaymentDefaults = async (
       ledgerPartyId: financialAccount.ledgerPartyId,
       enabled: financialAccount.inventoryOwnerDefaultEnabled,
       accountId: financialAccount.id,
+      accountShortcode: financialAccount.shortcode,
       transactionId: financialTransaction.id,
       allocationAmount: financialTransactionAllocation.amount,
     })
@@ -423,79 +443,105 @@ const resolveInheritedCandidate = (args: {
   vendorDefaultById: Map<VendorAccountId, VendorDefault>;
   paymentByPurchase: Map<PurchaseId, PaymentDefault[]>;
 }): InheritedCandidate => {
-  const beneficiary = args.acquisition.expenseIds.flatMap(
+  const { acquisition } = args;
+  const beneficiary = acquisition.expenseIds.flatMap(
     (id) => args.beneficiariesByExpense.get(id) ?? [],
   );
   const beneficiaryResolution = resolveBeneficiaryEvidence({
-    applicableExpenseIds: args.acquisition.expenseIds,
+    applicableExpenseIds: acquisition.expenseIds,
     rows: beneficiary,
     isIndividual: (id) => args.parties.has(id),
   });
-  if (beneficiaryResolution.status !== "none") {
-    const ownerId =
-      beneficiaryResolution.status === "owner"
-        ? beneficiaryResolution.ownerId
-        : null;
-    const owner = ownerId ? (args.parties.get(ownerId) ?? null) : null;
-    return {
-      owner,
-      source: owner ? "inherited_beneficiary" : "unresolved",
-      acquisition: args.acquisition,
-      fingerprintEvidence: {
-        beneficiary: beneficiary
-          .map((row) => ({
-            expenseShortcode: row.expenseShortcode,
-            ledgerPartyId: row.ledgerPartyId,
-            weight: row.weight,
-          }))
-          .sort((a, b) =>
-            `${a.expenseShortcode}:${a.ledgerPartyId ?? ""}`.localeCompare(
-              `${b.expenseShortcode}:${b.ledgerPartyId ?? ""}`,
-            ),
-          ),
-      },
-    };
-  }
+  const beneficiaryOwnerId =
+    beneficiaryResolution.status === "owner"
+      ? beneficiaryResolution.ownerId
+      : null;
+  const firstExpense = acquisition.expenseIds[0];
+  const beneficiaryStep: InventoryOwnershipStep = {
+    source: "inherited_beneficiary",
+    owner: beneficiaryOwnerId
+      ? (args.parties.get(beneficiaryOwnerId) ?? null)
+      : null,
+    decides: beneficiaryResolution.status !== "none",
+    ref: acquisition.purchaseShortcode
+      ? { entityKind: "purchase", entityId: acquisition.purchaseShortcode }
+      : firstExpense
+        ? { entityKind: "expense", entityId: firstExpense }
+        : null,
+  };
 
-  const vendorDefault = args.acquisition.vendorAccountId
-    ? args.vendorDefaultById.get(args.acquisition.vendorAccountId)
+  const vendorDefault = acquisition.vendorAccountId
+    ? args.vendorDefaultById.get(acquisition.vendorAccountId)
     : undefined;
-  if (vendorDefault?.enabled) {
-    const owner = args.parties.get(vendorDefault.ledgerPartyId) ?? null;
-    return {
-      owner,
-      source: owner ? "inherited_vendor_account" : "unresolved",
-      acquisition: args.acquisition,
-      fingerprintEvidence: { vendorDefault },
-    };
-  }
+  const vendorStep: InventoryOwnershipStep = {
+    source: "inherited_vendor_account",
+    owner: vendorDefault?.enabled
+      ? (args.parties.get(vendorDefault.ledgerPartyId) ?? null)
+      : null,
+    decides: vendorDefault?.enabled ?? false,
+    ref: vendorDefault
+      ? { entityKind: "vendorAccount", entityId: vendorDefault.shortcode }
+      : null,
+  };
 
-  const payments = args.acquisition.purchaseId
-    ? (args.paymentByPurchase.get(args.acquisition.purchaseId) ?? [])
+  const payments = acquisition.purchaseId
+    ? (args.paymentByPurchase.get(acquisition.purchaseId) ?? [])
     : [];
   const paymentOwnerId = resolvePaymentEvidence({
     rows: payments,
     isIndividual: (id) => args.parties.has(id),
   });
-  const owner = paymentOwnerId
-    ? (args.parties.get(paymentOwnerId) ?? null)
-    : null;
+  const paymentAccounts = [
+    ...new Set(payments.map((row) => row.accountShortcode)),
+  ];
+  const paymentStep: InventoryOwnershipStep = {
+    source: "inherited_payment_account",
+    owner: paymentOwnerId ? (args.parties.get(paymentOwnerId) ?? null) : null,
+    // The last rung always settles: no payment evidence is itself unresolved.
+    decides: true,
+    ref:
+      paymentAccounts.length === 1 && paymentAccounts[0]
+        ? { entityKind: "financialAccount", entityId: paymentAccounts[0] }
+        : null,
+  };
+
+  const steps = [beneficiaryStep, vendorStep, paymentStep];
+  const winner = steps.find((step) => step.decides) ?? paymentStep;
+  const fingerprintEvidence =
+    winner === beneficiaryStep
+      ? {
+          beneficiary: beneficiary
+            .map((row) => ({
+              expenseShortcode: row.expenseShortcode,
+              ledgerPartyId: row.ledgerPartyId,
+              weight: row.weight,
+            }))
+            .sort((a, b) =>
+              `${a.expenseShortcode}:${a.ledgerPartyId ?? ""}`.localeCompare(
+                `${b.expenseShortcode}:${b.ledgerPartyId ?? ""}`,
+              ),
+            ),
+        }
+      : winner === vendorStep
+        ? { vendorDefault }
+        : {
+            payments: payments
+              .map((row) => ({
+                transactionId: row.transactionId,
+                accountId: row.accountId,
+                allocationAmount: row.allocationAmount,
+                enabled: row.enabled,
+                ledgerPartyId: row.ledgerPartyId,
+              }))
+              .sort((a, b) => a.transactionId.localeCompare(b.transactionId)),
+            vendorDefault: vendorDefault ?? null,
+          };
   return {
-    owner,
-    source: owner ? "inherited_payment_account" : "unresolved",
-    acquisition: args.acquisition,
-    fingerprintEvidence: {
-      payments: payments
-        .map((row) => ({
-          transactionId: row.transactionId,
-          accountId: row.accountId,
-          allocationAmount: row.allocationAmount,
-          enabled: row.enabled,
-          ledgerPartyId: row.ledgerPartyId,
-        }))
-        .sort((a, b) => a.transactionId.localeCompare(b.transactionId)),
-      vendorDefault: vendorDefault ?? null,
-    },
+    owner: winner.owner,
+    source: winner.owner ? winner.source : "unresolved",
+    acquisition,
+    fingerprintEvidence,
+    steps,
   };
 };
 
@@ -587,6 +633,17 @@ async function loadInheritedCandidates(
   return unresolved;
 }
 
+/** Each product's inheritance ladder, for explaining an unstocked product. */
+export async function loadInheritedProductSteps(
+  db: Database | DrizzleTransaction,
+  productIds: ProductId[],
+): Promise<Map<ProductId, InventoryOwnershipStep[]>> {
+  const candidates = await loadInheritedCandidates(db, productIds);
+  return new Map(
+    [...candidates].map(([id, candidate]) => [id, candidate.steps] as const),
+  );
+}
+
 /**
  * The owner each product's single recorded acquisition would hand an
  * `inherit`-mode stock row (beneficiary, then vendor-account, then payment
@@ -625,43 +682,13 @@ const publicAcquisitionEvidence = (acquisition: Acquisition | null) =>
       }
     : null;
 
-const INHERITED_SOURCE_PHRASES = {
-  explicit: null,
-  unassigned: null,
-  inherited_beneficiary: "purchase beneficiary",
-  inherited_vendor_account: "vendor account default",
-  inherited_payment_account: "payment account default",
-  unresolved: null,
-} satisfies Record<InventoryOwnershipSource, string | null>;
-
-/** The server owns ownership wording; web and native render `basis` verbatim. */
-export const inventoryOwnershipBasis = (
-  ownership: Omit<EffectiveInventoryOwnership, "basis" | "evidence">,
-): string => {
-  if (ownership.mode === "unassigned") return "No individual owner";
-  const owner = ownership.effectiveOwner?.name;
-  if (ownership.mode === "person") {
-    if (!owner) return "Owner unresolved";
-    return ownership.matchesInheritedOwner
-      ? `Confirmed: ${owner} · matches inherited owner`
-      : `Confirmed: ${owner}`;
-  }
-  if (!owner) return "Inherited owner unresolved";
-  const phrase = INHERITED_SOURCE_PHRASES[ownership.source];
-  return phrase ? `Inherited: ${owner} · ${phrase}` : `Inherited: ${owner}`;
-};
-
 const resolveEntryOwnership = async (
   entry: OwnershipEntry,
   inherited: InheritedCandidate,
   explicit: IndividualParty | null,
 ): Promise<EffectiveInventoryOwnership> => {
   const effective =
-    entry.ownershipMode === "person"
-      ? explicit
-      : entry.ownershipMode === "inherit"
-        ? inherited.owner
-        : null;
+    entry.ownershipMode === "explicit" ? explicit : inherited.owner;
   const evidenceFingerprint = await sha256Hex(
     JSON.stringify({
       ownershipMode: entry.ownershipMode,
@@ -673,34 +700,97 @@ const resolveEntryOwnership = async (
       evidence: inherited.fingerprintEvidence,
     }),
   );
-  const source =
-    entry.ownershipMode === "person"
-      ? "explicit"
-      : entry.ownershipMode === "unassigned"
-        ? "unassigned"
-        : inherited.source;
-  const resolved: Omit<EffectiveInventoryOwnership, "basis" | "evidence"> = {
+  return {
     mode: entry.ownershipMode,
     explicitOwner: publicOwner(explicit),
     effectiveOwner: publicOwner(effective),
-    source,
+    inheritedOwner: publicOwner(inherited.owner),
+    source:
+      entry.ownershipMode === "inherit"
+        ? inherited.source
+        : explicit
+          ? "explicit"
+          : "household",
+    evidence: publicAcquisitionEvidence(inherited.acquisition),
     evidenceFingerprint,
     matchesInheritedOwner:
-      entry.ownershipMode === "person" &&
+      entry.ownershipMode === "explicit" &&
       explicit !== null &&
       inherited.owner?.id === explicit.id,
   };
+};
+
+const INHERITED_SOURCE_PHRASES = {
+  inherited_beneficiary: "Purchase beneficiary",
+  inherited_vendor_account: "Vendor account default",
+  inherited_payment_account: "Payment account default",
+} satisfies Record<InheritedSource, string>;
+
+const OWNERSHIP_SOURCE_ENTITY = {
+  purchase: "purchase",
+  expense: "expense",
+  vendorAccount: "vendorAccount",
+  financialAccount: "financialAccount",
+} as const;
+
+/**
+ * The shared field resolution for an entry's Owner (`ownerLedgerPartyId`),
+ * the same contract Project/Task assignees carry: explicit owner wins, an
+ * explicit null is household stock (`none`), otherwise the acquisition
+ * evidence supplies the inherited owner.
+ */
+export const inventoryOwnerResolution = (
+  ownership: EffectiveInventoryOwnership,
+  steps: readonly InventoryOwnershipStep[],
+): FieldResolution => {
+  // The first deciding rung settles it, even when it settles on nobody (two
+  // beneficiaries); a lower rung naming someone does not win past it.
+  const decider = steps.find((step) => step.decides);
+  const winner = decider?.owner ? decider : undefined;
+  const mode =
+    ownership.mode === "inherit"
+      ? "inherit"
+      : ownership.explicitOwner
+        ? "explicit"
+        : "none";
   return {
-    ...resolved,
-    basis: inventoryOwnershipBasis(resolved),
-    evidence: publicAcquisitionEvidence(inherited.acquisition),
+    mode,
+    storedValue: ownership.explicitOwner?.id ?? null,
+    value: ownership.effectiveOwner?.id ?? null,
+    fallbackValue: ownership.inheritedOwner?.id ?? null,
+    source:
+      mode === "inherit"
+        ? winner
+          ? INHERITED_SOURCE_PHRASES[winner.source]
+          : "No unambiguous acquisition evidence"
+        : mode === "none"
+          ? "Household stock"
+          : "Set on this entry",
+    sourceEntity:
+      mode === "inherit" && winner?.ref
+        ? {
+            entityKind: OWNERSHIP_SOURCE_ENTITY[winner.ref.entityKind],
+            entityId: winner.ref.entityId,
+            name: null,
+          }
+        : null,
+    matchesFallback:
+      ownership.inheritedOwner !== null &&
+      ownership.explicitOwner?.id === ownership.inheritedOwner.id,
+    canReset: mode !== "inherit",
   };
 };
 
-export async function loadEffectiveInventoryOwnership(
+/** Each entry's effective ownership plus the inheritance ladder behind it. */
+export async function loadInventoryOwnershipTraces(
   db: Database | DrizzleTransaction,
   entries: OwnershipEntry[],
-): Promise<Map<InventoryId, EffectiveInventoryOwnership>> {
+): Promise<
+  Map<
+    InventoryId,
+    { ownership: EffectiveInventoryOwnership; steps: InventoryOwnershipStep[] }
+  >
+> {
   const productIds = [...new Set(entries.map((entry) => entry.productId))];
   const inheritedByProduct = await loadInheritedCandidates(db, productIds);
   const explicitIds = [
@@ -728,19 +818,32 @@ export async function loadEffectiveInventoryOwnership(
     explicitRows.filter(isIndividual).map((row) => [row.id, row]),
   );
 
-  const resolved = new Map<InventoryId, EffectiveInventoryOwnership>();
+  const resolved = new Map<
+    InventoryId,
+    { ownership: EffectiveInventoryOwnership; steps: InventoryOwnershipStep[] }
+  >();
   for (const entry of entries) {
     const inherited =
       inheritedByProduct.get(entry.productId) ?? unresolvedCandidate();
     const explicit = entry.ownerLedgerPartyId
       ? (explicitById.get(entry.ownerLedgerPartyId) ?? null)
       : null;
-    resolved.set(
-      entry.id,
-      await resolveEntryOwnership(entry, inherited, explicit),
-    );
+    resolved.set(entry.id, {
+      ownership: await resolveEntryOwnership(entry, inherited, explicit),
+      steps: inherited.steps,
+    });
   }
   return resolved;
+}
+
+export async function loadEffectiveInventoryOwnership(
+  db: Database | DrizzleTransaction,
+  entries: OwnershipEntry[],
+): Promise<Map<InventoryId, EffectiveInventoryOwnership>> {
+  const traces = await loadInventoryOwnershipTraces(db, entries);
+  return new Map(
+    [...traces].map(([id, trace]) => [id, trace.ownership] as const),
+  );
 }
 
 export async function loadEffectiveInventoryOwnershipById(
@@ -773,17 +876,34 @@ export async function assertIndividualOwner(
   }
 }
 
-/**
- * Live entries whose EFFECTIVE owner satisfies an owner filter: one of
- * `codes` (Ledger Party shortcodes), ORed with a presence check, as nullable
- * filters compose. Runs the same resolver as hydration over every live entry,
- * so inherited stock matches and ambiguous evidence stays ownerless; callers
- * narrow SQL by these ids before paging, counts, and totals.
- */
-async function entriesByEffectiveOwner(
+/** An entry's Owner as the shared filter and rollup see it. */
+type OwnerState =
+  | {
+      kind: "person";
+      owner: NonNullable<EffectiveInventoryOwnership["effectiveOwner"]>;
+    }
+  | { kind: "household" }
+  | { kind: "unknown" };
+
+const ownerState = (ownership: EffectiveInventoryOwnership): OwnerState =>
+  ownership.effectiveOwner
+    ? { kind: "person", owner: ownership.effectiveOwner }
+    : ownership.mode === "explicit"
+      ? { kind: "household" }
+      : { kind: "unknown" };
+
+const ownerFilterValue = (state: OwnerState) =>
+  state.kind === "person"
+    ? state.owner.id
+    : state.kind === "household"
+      ? OWNER_FILTER_HOUSEHOLD
+      : OWNER_FILTER_UNKNOWN;
+
+async function liveEntryOwnerStates(
   db: Database | DrizzleTransaction,
-  filter: { codes?: readonly string[]; presence?: "has" | "none" },
+  productIds?: readonly ProductId[],
 ) {
+  if (productIds?.length === 0) return [];
   const entries = await unwrapDb(db)
     .select({
       id: inventoryEntry.id,
@@ -792,38 +912,114 @@ async function entriesByEffectiveOwner(
       ownerLedgerPartyId: inventoryEntry.ownerLedgerPartyId,
     })
     .from(inventoryEntry)
-    .where(notDeleted(inventoryEntry));
-  const ownership = await loadEffectiveInventoryOwnership(db, entries);
-  const codes = new Set(filter.codes ?? []);
-  return entries.filter(({ id }) => {
-    const owner = ownership.get(id)?.effectiveOwner?.id ?? null;
-    return (
-      (owner !== null && codes.has(owner)) ||
-      (filter.presence === "has" && owner !== null) ||
-      (filter.presence === "none" && owner === null)
+    .where(
+      and(
+        notDeleted(inventoryEntry),
+        productIds
+          ? inArray(inventoryEntry.productId, [...productIds])
+          : undefined,
+      ),
     );
+  const ownership = await loadEffectiveInventoryOwnership(db, entries);
+  return entries.flatMap((entry) => {
+    const resolved = ownership.get(entry.id);
+    return resolved
+      ? [{ ...entry, ownership: resolved, state: ownerState(resolved) }]
+      : [];
   });
 }
 
+/**
+ * Live entries whose effective Owner matches any filter value: a Ledger Party
+ * shortcode, `@household` or `@unknown`. Runs the same resolver as hydration
+ * over every live entry, so inherited stock matches; callers narrow SQL by
+ * these ids before paging, counts, and totals.
+ */
 export const inventoryIdsByEffectiveOwner = async (
   db: Database | DrizzleTransaction,
-  filter: { codes?: readonly string[]; presence?: "has" | "none" },
-): Promise<InventoryId[]> =>
-  (await entriesByEffectiveOwner(db, filter)).map(({ id }) => id);
+  values: readonly string[],
+): Promise<InventoryId[]> => {
+  const wanted = new Set(values);
+  return (await liveEntryOwnerStates(db))
+    .filter(({ state }) => wanted.has(ownerFilterValue(state)))
+    .map(({ id }) => id);
+};
 
 /**
- * Products a member owns: any live entry's effective owner is one of `codes`,
- * or, for a Product with no live entry at all (an Unlocated product), its
- * single acquisition would hand the owner to an `inherit` row. The second arm
- * is what lets "bought for me, never stocked" be a list.
+ * Each Product's Owner rollup: the distinct effective owners of its live
+ * entries (a person marked inherited when any of their entries only inherits
+ * them), Household, Unknown; a Product with no live entry shows the owner its
+ * single acquisition would hand an `inherit` row, or nothing.
+ */
+export async function loadProductOwners(
+  db: Database | DrizzleTransaction,
+  productIds: readonly ProductId[],
+): Promise<Map<ProductId, ResolvedListItem[]>> {
+  const states = await liveEntryOwnerStates(db, productIds);
+  const stocked = new Set(states.map((entry) => entry.productId));
+  const inherited = await loadInheritedProductOwners(
+    db,
+    productIds.filter((id) => !stocked.has(id)),
+  );
+  const result = new Map<ProductId, ResolvedListItem[]>();
+  for (const id of productIds) {
+    const entries = states.filter((entry) => entry.productId === id);
+    if (entries.length === 0) {
+      const owner = inherited.get(id);
+      result.set(
+        id,
+        owner
+          ? [
+              {
+                label: owner.name,
+                ref: { entityKind: "ledgerParty", entityId: owner.shortcode },
+                inherited: true,
+              },
+            ]
+          : [],
+      );
+      continue;
+    }
+    const people = new Map<string, ResolvedListItem>();
+    let household = false;
+    let unknown = false;
+    for (const { state, ownership } of entries) {
+      if (state.kind === "household") household = true;
+      else if (state.kind === "unknown") unknown = true;
+      else {
+        const isInherited = ownership.mode === "inherit";
+        const existing = people.get(state.owner.id);
+        people.set(state.owner.id, {
+          label: state.owner.name,
+          ref: { entityKind: "ledgerParty", entityId: state.owner.id },
+          inherited: (existing?.inherited ?? false) || isInherited,
+        });
+      }
+    }
+    result.set(id, [
+      ...[...people.values()].sort((a, b) => a.label.localeCompare(b.label)),
+      ...(household
+        ? [{ label: "Household", ref: null, inherited: false }]
+        : []),
+      ...(unknown ? [{ label: "Unknown", ref: null, inherited: true }] : []),
+    ]);
+  }
+  return result;
+}
+
+/**
+ * Products whose Owner rollup includes any filter value (see
+ * `loadProductOwners`), or, with `presence`, whose rollup is (non-)empty.
+ * Values and presence OR together, as nullable filters compose.
  */
 export async function productIdsByOwner(
   db: Database | DrizzleTransaction,
-  codes: readonly string[],
+  values: readonly string[],
+  presence?: "has" | "none",
 ): Promise<ProductId[]> {
-  const wanted = new Set(codes);
-  const [stocked, unstocked] = await Promise.all([
-    entriesByEffectiveOwner(db, { codes }),
+  const wanted = new Set(values);
+  const [states, unstocked] = await Promise.all([
+    liveEntryOwnerStates(db),
     unwrapDb(db)
       .select({ id: product.id })
       .from(product)
@@ -838,12 +1034,16 @@ export async function productIdsByOwner(
     db,
     unstocked.map(({ id }) => id),
   );
-  return [
-    ...new Set([
-      ...stocked.map(({ productId }) => productId),
-      ...[...inherited].flatMap(([id, owner]) =>
-        owner !== null && wanted.has(owner.shortcode) ? [id] : [],
-      ),
-    ]),
-  ];
+  const matches = new Set<ProductId>();
+  for (const { productId, state } of states)
+    if (wanted.has(ownerFilterValue(state)) || presence === "has")
+      matches.add(productId);
+  for (const [id, owner] of inherited)
+    if (
+      (owner !== null && wanted.has(owner.shortcode)) ||
+      (presence === "has" && owner !== null) ||
+      (presence === "none" && owner === null)
+    )
+      matches.add(id);
+  return [...matches];
 }

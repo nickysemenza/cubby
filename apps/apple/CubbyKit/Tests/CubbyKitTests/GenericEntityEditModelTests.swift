@@ -237,6 +237,40 @@ struct GenericEntityEditModelTests {
         }
     }
 
+    /// Confirm pins the inherited owner explicitly; Set to Household is explicit with no owner.
+    @Test func ownershipResolutionActionsStageTheDeclaredPatch() throws {
+        let prefix = try #require(EntityCatalog[.ledgerParty].shortcodePrefix)
+        let owner = prefix + "4K7M"
+        let original: JSONValue = [
+            "ownerLedgerPartyId": .string(owner),
+            "fieldResolutions": [
+                "ownerLedgerPartyId": [
+                    "mode": "inherit", "storedValue": .null, "value": .string(owner),
+                    "fallbackValue": .string(owner), "source": "purchase", "sourceEntity": .null,
+                    "matchesFallback": false, "canReset": false,
+                ]
+            ],
+        ]
+        func model() throws -> GenericEntityEditModel {
+            GenericEntityEditModel(
+                descriptor: EntityCatalog[.inventory], mode: .update(id: "synthetic-entry"),
+                client: try makeClient(), original: original)
+        }
+        let confirming = try model()
+        #expect(!confirming.stageResolution(.useInherited, for: "ownerLedgerPartyId"))
+        #expect(confirming.stageResolution(.confirm, for: "ownerLedgerPartyId"))
+        let confirmed = try confirming.patch()
+        #expect(confirmed.values["ownershipMode"] == .string("explicit"))
+        #expect(confirmed.values["ownerLedgerPartyId"] == .string(owner))
+
+        let household = try model()
+        #expect(household.stageResolution(.setNone, for: "ownerLedgerPartyId"))
+        let cleared = try household.patch()
+        #expect(cleared.values["ownershipMode"] == .string("explicit"))
+        // The stored owner is already null under inherit, so the mode alone carries Household.
+        #expect(cleared.values["ownerLedgerPartyId"] == nil)
+    }
+
     @Test func updateSendsExactlyTheChangedAndClearedKeys() async throws {
         defer { EditStub.handler.withLock { $0 = nil } }
         let seen = capture { _ in (200, Self.productUpdated) }

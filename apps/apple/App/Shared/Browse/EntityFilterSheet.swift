@@ -15,14 +15,16 @@ struct EntityFilterDraft: Hashable {
     /// the signed-in member (docs/adr/0015-current-member-filter-token.md).
     static let currentMemberToken = "@me"
 
-    /// The picked ids as shown to a person: the token reads "Me", never `@me`.
-    static func displayName(forFilterValue value: String) -> String {
-        value == currentMemberToken ? "Me" : value
+    /// The named states an id filter accepts beside record codes, sent unbranded: "Me" on any
+    /// Ledger Party filter, then the declaration's own `sentinels` (an Owner filter's Household).
+    static func tokens(_ filter: FilterDescriptor) -> [LabeledOption] {
+        (filter.targetEntity == .ledgerParty ? [LabeledOption(value: currentMemberToken, label: "Me")] : [])
+            + (filter.sentinels ?? [])
     }
 
-    /// Whether the "Me" option applies: any id filter whose target is a Ledger Party.
-    static func offersCurrentMember(_ filter: FilterDescriptor) -> Bool {
-        filter.targetEntity == .ledgerParty
+    /// The picked ids as shown to a person: a token reads as its label ("Me"), never `@me`.
+    static func displayName(forFilterValue value: String, in filter: FilterDescriptor) -> String {
+        tokens(filter).first { $0.value == value }?.label ?? value
     }
 
     /// `text`, `select`, `id`: the one string under the parameter, empty when unset.
@@ -36,17 +38,16 @@ struct EntityFilterDraft: Hashable {
         state.set(.single(value), for: name)
     }
 
-    func selectsCurrentMember(_ filter: FilterDescriptor) -> Bool {
-        (filter.kind == .idMulti ? many(filter) : [single(filter)]).contains(Self.currentMemberToken)
+    func selects(_ token: String, in filter: FilterDescriptor) -> Bool {
+        (filter.kind == .idMulti ? many(filter) : [single(filter)]).contains(token)
     }
 
-    /// Adds or removes the token; other picked ids stay (a single-valued filter holds one value).
-    mutating func setCurrentMember(_ on: Bool, for filter: FilterDescriptor) {
-        let token = Self.currentMemberToken
+    /// Adds or removes a token; other picked ids stay (a single-valued filter holds one value).
+    mutating func set(_ token: String, _ on: Bool, for filter: FilterDescriptor) {
         if filter.kind == .idMulti {
             let rest = many(filter).filter { $0 != token }
             setMany(on ? [token] + rest : rest, for: filter)
-        } else {
+        } else if on || single(filter) == token {
             setSingle(on ? token : "", for: filter)
         }
     }
@@ -209,15 +210,15 @@ struct EntityFilterSheet: View {
                         multiple: filter.kind == .idMulti,
                         selected: pickedIDs(filter)
                     ) { picks in
-                        // The picker never sees the "Me" token, so keep it across a pick.
-                        let keepsMe = draft.selectsCurrentMember(filter)
+                        // The picker never sees a token ("Me", Household), so keep them across a pick.
+                        let kept = EntityFilterDraft.tokens(filter).map(\.value).filter {
+                            draft.selects($0, in: filter)
+                        }
                         if filter.kind == .idMulti {
-                            draft.setMany(
-                                (keepsMe ? [EntityFilterDraft.currentMemberToken] : []) + picks.map(\.id),
-                                for: filter)
+                            draft.setMany(kept + picks.map(\.id), for: filter)
                         } else if let first = picks.first {
                             draft.setSingle(first.id, for: filter)
-                        } else if !keepsMe {
+                        } else if kept.isEmpty {
                             draft.setSingle("", for: filter)
                         }
                     }
@@ -227,10 +228,11 @@ struct EntityFilterSheet: View {
         .nativeSheet(.editor)
     }
 
-    /// The ids the picker preselects: real records only, never the "Me" token.
+    /// The ids the picker preselects: real records only, never a token.
     private func pickedIDs(_ filter: FilterDescriptor) -> [String] {
-        (filter.kind == .idMulti ? draft.many(filter) : [draft.single(filter)])
-            .filter { !$0.isEmpty && $0 != EntityFilterDraft.currentMemberToken }
+        let tokens = Set(EntityFilterDraft.tokens(filter).map(\.value))
+        return (filter.kind == .idMulti ? draft.many(filter) : [draft.single(filter)])
+            .filter { !$0.isEmpty && !tokens.contains($0) }
     }
 
     @ViewBuilder
@@ -316,16 +318,17 @@ struct EntityFilterSheet: View {
         case .id, .idMulti:
             let ids = (filter.kind == .idMulti ? draft.many(filter) : [draft.single(filter)])
                 .filter { !$0.isEmpty }
-                .map(EntityFilterDraft.displayName(forFilterValue:))
-            if EntityFilterDraft.offersCurrentMember(filter) {
+                .map { EntityFilterDraft.displayName(forFilterValue: $0, in: filter) }
+            ForEach(EntityFilterDraft.tokens(filter), id: \.value) { token in
                 Toggle(
-                    "Me",
+                    token.label,
                     isOn: Binding(
-                        get: { draft.selectsCurrentMember(filter) },
-                        set: { draft.setCurrentMember($0, for: filter) })
+                        get: { draft.selects(token.value, in: filter) },
+                        set: { draft.set(token.value, $0, for: filter) })
                 )
                 .frame(minHeight: FieldGuideTokens.touchTarget)
-                .accessibilityIdentifier("filter.\(filter.columnId).me")
+                // `@me` → `filter.<column>.me`, `@household` → `filter.<column>.household`.
+                .accessibilityIdentifier("filter.\(filter.columnId).\(token.value.trimmingPrefix("@"))")
             }
             Button {
                 picking = filter

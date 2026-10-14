@@ -1,4 +1,5 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
+import { entitySchema } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
@@ -6,14 +7,15 @@ import {
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
 import { capitalize, parseShortcode, getErrorMessage } from "@cubby/shared";
-import { ArrowBendDownRightIcon } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { ChartPieIcon } from "@phosphor-icons/react/dist/csr/ChartPie";
 import { DotOutlineIcon } from "@phosphor-icons/react/dist/csr/DotOutline";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
+import { TreeViewIcon } from "@phosphor-icons/react/dist/csr/TreeView";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import type { Icon } from "@phosphor-icons/react/lib";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { z } from "zod";
@@ -21,6 +23,7 @@ import { z } from "zod";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { parseEntityEditUpdateInput } from "~/entity/editing/mutation-data";
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
+import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { cn } from "~/lib/utils";
@@ -144,8 +147,37 @@ export function resolutionIsInformative(resolution: FieldResolution): boolean {
 /** A value this record takes from elsewhere rather than stores itself. Table
  * cells read it muted, so derived and stored values differ without a rail. */
 export const resolutionIsDerived = (resolution: FieldResolution) =>
-  (resolution.mode === "inherit" && resolution.value !== null) ||
-  resolution.mode === "allocated";
+  resolutionIsInherited(resolution) || resolution.mode === "allocated";
+
+/** Inherited and not confirmed or set here: the values the marker flags. */
+export const resolutionIsInherited = (resolution: FieldResolution) =>
+  resolution.mode === "inherit" && resolution.value !== null;
+
+/** The manifest's resolution policy for a field, when it declares one. */
+export function resolutionPolicyFor(entity: string, field: string) {
+  const parsed = entitySchema.safeParse(entity);
+  if (!parsed.success) return null;
+  return (
+    entityFieldModels[parsed.data].fields.find(
+      (candidate) => candidate.key === field,
+    )?.resolution ?? null
+  );
+}
+
+/** The shared marker for a value that is inherited, not set here: always
+ * visible after the muted value in list cells, beside it on detail pages. */
+export function InheritedMarker({ title }: { title?: string }) {
+  return (
+    <span
+      className="inline-flex shrink-0 text-muted-foreground"
+      title={title ?? "Inherited"}
+      data-slot="inherited-marker"
+    >
+      <TreeViewIcon className="size-3.5" aria-hidden="true" />
+      <span className="sr-only">Inherited</span>
+    </span>
+  );
+}
 
 export type ResolutionTone =
   | "set"
@@ -164,14 +196,13 @@ export type ResolutionState = {
   Icon: Icon;
 };
 
-export function resolutionState(resolution: FieldResolution): ResolutionState {
+export function resolutionState(
+  resolution: FieldResolution,
+  { intentional = false }: { intentional?: boolean } = {},
+): ResolutionState {
   switch (resolution.mode) {
     case "inherit":
-      return {
-        tone: "inherit",
-        label: "Inherited",
-        Icon: ArrowBendDownRightIcon,
-      };
+      return { tone: "inherit", label: "Inherited", Icon: TreeViewIcon };
     case "allocated":
       return {
         tone: "allocated",
@@ -179,17 +210,16 @@ export function resolutionState(resolution: FieldResolution): ResolutionState {
         Icon: ChartPieIcon,
       };
     case "none":
-      return resolution.fallbackValue === null
-        ? { tone: "none", label: "None", Icon: ProhibitIcon }
-        : { tone: "none", label: "Blocks inherited", Icon: ProhibitIcon };
+      return { tone: "none", label: "None", Icon: ProhibitIcon };
     case "explicit":
-      if (resolution.matchesFallback)
+      // A field that offers Confirm pins a matching value on purpose.
+      if (resolution.matchesFallback && !intentional)
         return { tone: "redundant", label: "Redundant", Icon: WarningIcon };
-      return resolution.fallbackValue === null
+      return resolution.fallbackValue === null || resolution.matchesFallback
         ? { tone: "set", label: "Set here", Icon: DotOutlineIcon }
         : {
             tone: "override",
-            label: "Overrides inherited",
+            label: "Set here",
             Icon: ArrowCounterClockwiseIcon,
           };
   }
@@ -197,7 +227,10 @@ export function resolutionState(resolution: FieldResolution): ResolutionState {
 
 /** The caption's lead-in: where the value comes from, read left to right into
  * the source link ("From project [Garden]"). */
-function resolutionPhrase(resolution: FieldResolution): string {
+function resolutionPhrase(
+  resolution: FieldResolution,
+  intentional: boolean,
+): string {
   switch (resolution.mode) {
     case "inherit":
       return resolution.sourceEntity
@@ -208,9 +241,9 @@ function resolutionPhrase(resolution: FieldResolution): string {
         ? "Allocated from"
         : capitalize(resolution.source);
     case "none":
-      return "Set to none here";
+      return "None";
     case "explicit":
-      return resolution.matchesFallback
+      return resolution.matchesFallback && !intentional
         ? "Same as inherited value"
         : "Set here";
   }
@@ -219,6 +252,11 @@ function resolutionPhrase(resolution: FieldResolution): string {
 /** Caption actions read as inline text links, not 24px buttons. */
 export const resolutionActionClassName =
   "h-auto min-w-0 p-0 text-xs underline decoration-border underline-offset-4 hover:decoration-current";
+
+function recordRef(record: unknown) {
+  const parsed = resolutionRecordSchema.safeParse(record);
+  return parsed.success ? parseShortcode(parsed.data.id ?? "") : null;
+}
 
 /** Compact provenance for values whose stored assignment differs from the
  * effective value shown in forms and tables. */
@@ -237,58 +275,33 @@ export function FieldResolutionBadge({
 }) {
   const entry = fieldResolutionEntryFor(record, field);
   if (!entry) return null;
-  if (!resolutionIsInformative(entry.resolution))
-    return interactive && entry.resolution.canReset ? (
-      <FieldResolutionActions
-        record={record}
+  const ref = recordRef(record);
+  const intentional =
+    ref !== null &&
+    resolutionPolicyFor(ref.type, entry.field)?.redundancy === "intentional";
+  const actions =
+    interactive && ref ? (
+      <FieldResolutionEntityActions
+        entity={ref.type}
+        id={ref.shortcode}
         field={entry.field}
         resolution={entry.resolution}
       />
     ) : null;
+  // Nothing to explain, but an action may still apply (Unknown → Household).
+  if (!resolutionIsInformative(entry.resolution)) return actions;
   return (
     <FieldResolutionStatus
       compact={compact}
+      intentional={intentional}
       resolution={entry.resolution}
-      action={
-        action ??
-        (interactive ? (
-          <FieldResolutionActions
-            record={record}
-            field={entry.field}
-            resolution={entry.resolution}
-          />
-        ) : null)
-      }
+      action={action ?? actions}
     />
   );
 }
 
-function FieldResolutionActions({
-  record,
-  field,
-  resolution,
-}: {
-  record: unknown;
-  field: string;
-  resolution: FieldResolution;
-}) {
-  const recordResult = resolutionRecordSchema.safeParse(record);
-  const parsedRecord = recordResult.success
-    ? parseShortcode(recordResult.data.id ?? "")
-    : null;
-  if (!parsedRecord) return null;
-  return (
-    <FieldResolutionEntityActions
-      entity={parsedRecord.type}
-      id={parsedRecord.shortcode}
-      field={field}
-      resolution={resolution}
-    />
-  );
-}
-
-/** Reset / set-to-none links for a record addressed by entity and shortcode
- * (the explanation popover has no row record). */
+/** Use inherited / set to none / confirm links for a record addressed by
+ * entity and shortcode (the explanation popover has no row record). */
 export function FieldResolutionEntityActions({
   entity: candidateEntity,
   id,
@@ -304,49 +317,78 @@ export function FieldResolutionEntityActions({
     (candidate) => candidate === candidateEntity,
   );
   if (!entity) return null;
-  const policy = entityFieldModels[entity].fields.find(
-    (candidate) => candidate.key === field,
-  )?.resolution;
+  const policy = resolutionPolicyFor(entity, field);
   if (!policy) return null;
+  const actions: Array<{ label: string; patch: ResolutionPatch }> = [];
+  if (resolution.canReset)
+    actions.push({
+      label:
+        resolution.fallbackValue === null && !policy.labels?.unresolved
+          ? "Clear value"
+          : "Use inherited",
+      patch: resolutionPatchSchema.parse(policy.reset),
+    });
+  if (
+    policy.confirm &&
+    resolution.mode === "inherit" &&
+    resolution.value !== null
+  )
+    actions.push({
+      label: "Confirm",
+      patch: {
+        ...resolutionPatchSchema.parse(policy.confirm),
+        [field]: resolution.value,
+      },
+    });
+  if (
+    policy.none &&
+    resolution.mode === "inherit" &&
+    (resolution.value !== null || policy.labels?.none)
+  )
+    actions.push({
+      label: `Set to ${policy.labels?.none ?? "none"}`,
+      patch: resolutionPatchSchema.parse(policy.none),
+    });
+  if (actions.length === 0) return null;
   return (
-    <BoundFieldResolutionActions
-      entity={entity}
-      id={id}
-      resolution={resolution}
-      reset={resolutionPatchSchema.parse(policy.reset)}
-      none={
-        policy.none === null ? null : resolutionPatchSchema.parse(policy.none)
-      }
-    />
+    <BoundFieldResolutionActions entity={entity} id={id} actions={actions} />
   );
 }
 
 function BoundFieldResolutionActions({
   entity,
   id,
-  resolution,
-  reset,
-  none,
+  actions,
 }: {
   entity: StandardEntity;
   id: string;
-  resolution: FieldResolution;
-  reset: ResolutionPatch;
-  none: ResolutionPatch | null;
+  actions: ReadonlyArray<{ label: string; patch: ResolutionPatch }>;
 }) {
   const commands = useEntityCommands(entity);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submit = async (patch: ResolutionPatch) => {
     setPending(true);
     setError(null);
     try {
-      await commands.submit({
+      const execution = await commands.submit({
         operation: "update",
         intent: "full",
         id,
         data: parseEntityEditUpdateInput(entity, patch),
       });
+      // An ownership change can fold the record into the one already in its
+      // slot; a detail page then follows the survivor.
+      const survivor = "id" in execution ? execution.id : undefined;
+      if (
+        survivor &&
+        survivor !== id &&
+        isBrowserRoutedEntity(entity) &&
+        location.pathname.endsWith(`/${id}`)
+      )
+        await navigate(entityDetailLink(entity, survivor));
     } catch (cause) {
       setError(getErrorMessage(cause));
     } finally {
@@ -355,8 +397,9 @@ function BoundFieldResolutionActions({
   };
   return (
     <>
-      {resolution.canReset ? (
+      {actions.map((action) => (
         <Button
+          key={action.label}
           type="button"
           variant="link"
           size="xs"
@@ -364,29 +407,12 @@ function BoundFieldResolutionActions({
           disabled={pending}
           onClick={(event) => {
             event.stopPropagation();
-            void submit({ ...reset });
+            void submit({ ...action.patch });
           }}
         >
-          {resolution.fallbackValue === null
-            ? "Clear value"
-            : "Use inherited value"}
+          {action.label}
         </Button>
-      ) : null}
-      {resolution.mode === "inherit" && resolution.value !== null && none ? (
-        <Button
-          type="button"
-          variant="link"
-          size="xs"
-          className={resolutionActionClassName}
-          disabled={pending}
-          onClick={(event) => {
-            event.stopPropagation();
-            void submit({ ...none });
-          }}
-        >
-          Set to none
-        </Button>
-      ) : null}
+      ))}
       {error ? (
         <span role="alert" className="text-xs text-destructive">
           {error}
@@ -400,13 +426,17 @@ export function FieldResolutionStatus({
   resolution,
   action,
   compact = false,
+  intentional = false,
 }: {
   resolution: FieldResolution;
   action?: ReactNode;
   compact?: boolean;
+  intentional?: boolean;
 }) {
   const redundant =
-    resolution.mode === "explicit" && resolution.matchesFallback;
+    resolution.mode === "explicit" &&
+    resolution.matchesFallback &&
+    !intentional;
   const sourceEntity = resolution.sourceEntity
     ? auditEntitySchema.safeParse(resolution.sourceEntity.entityKind)
     : null;
@@ -414,7 +444,7 @@ export function FieldResolutionStatus({
     // A bare value (set here, or inheriting nothing) gets the neutral info
     // glyph; a provenance glyph would claim a relationship that isn't there.
     const state = resolutionIsInformative(resolution)
-      ? resolutionState(resolution)
+      ? resolutionState(resolution, { intentional })
       : { label: "Details", Icon: InfoIcon };
     const { Icon } = state;
     // An inherited value announces where it comes from, not just "Inherited".
@@ -431,7 +461,7 @@ export function FieldResolutionStatus({
     );
   }
   if (!resolutionIsInformative(resolution)) return action ?? null;
-  const { Icon } = resolutionState(resolution);
+  const { Icon } = resolutionState(resolution, { intentional });
   return (
     <span
       data-slot="field-resolution"
@@ -443,7 +473,7 @@ export function FieldResolutionStatus({
     >
       <span className="inline-flex shrink-0 items-center gap-1">
         <Icon aria-hidden="true" className="size-3 shrink-0" />
-        {resolutionPhrase(resolution)}
+        {resolutionPhrase(resolution, intentional)}
       </span>
       {(resolution.mode === "inherit" || resolution.mode === "allocated") &&
       resolution.sourceEntity &&

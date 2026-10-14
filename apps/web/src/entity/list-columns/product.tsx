@@ -455,6 +455,7 @@ export const productListOverride = defineListOverride<
               },
             ),
           );
+          place("owners");
           place("tags");
           place("expenseCount");
           rest();

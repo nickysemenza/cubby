@@ -6,6 +6,7 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { OWNER_FILTER_HOUSEHOLD } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
@@ -181,7 +182,7 @@ describe("inventory ownership mutations", () => {
     const changed = await setInventoryOwnership(
       ctx.db,
       entryId,
-      { mode: "person", ownerId: owner.output.id },
+      { mode: "explicit", ownerId: owner.output.id },
       1,
       TEST_ACTOR,
     );
@@ -191,7 +192,7 @@ describe("inventory ownership mutations", () => {
       where: eq(inventoryEntry.productId, productId),
     });
     const inherited = rows.find((row) => row.ownershipMode === "inherit");
-    const explicit = rows.find((row) => row.ownershipMode === "person");
+    const explicit = rows.find((row) => row.ownershipMode === "explicit");
     if (!inherited || !explicit) {
       throw new Error("Expected inherited and explicit ownership rows");
     }
@@ -204,7 +205,6 @@ describe("inventory ownership mutations", () => {
     );
     expect(effective?.effectiveOwner?.id).toBe(owner.output.id);
     expect(effective?.source).toBe("explicit");
-    expect(effective?.basis).toBe("Confirmed: Wardrobe owner");
 
     await moveInventoryEntries(
       ctx.db,
@@ -218,7 +218,7 @@ describe("inventory ownership mutations", () => {
     });
     expect(moved).toMatchObject({
       locationId: drawerId,
-      ownershipMode: "person",
+      ownershipMode: "explicit",
       ownerLedgerPartyId: owner.entityId,
     });
   });
@@ -234,7 +234,7 @@ describe("inventory ownership mutations", () => {
       setInventoryOwnership(
         ctx.db,
         subject.entryId,
-        { mode: "person", ownerId: owner.output.id },
+        { mode: "explicit", ownerId: owner.output.id },
         4,
         TEST_ACTOR,
       ),
@@ -275,7 +275,7 @@ describe("inventory ownership mutations", () => {
             tx,
             subject.entryId,
             {
-              ownershipMode: "person",
+              ownershipMode: "explicit",
               ownerLedgerPartyId: firstOwner.entityId,
             },
             6,
@@ -290,7 +290,7 @@ describe("inventory ownership mutations", () => {
           await setInventoryOwnership(
             ctx.db,
             subject.entryId,
-            { mode: "person", ownerId: secondOwner.output.id },
+            { mode: "explicit", ownerId: secondOwner.output.id },
             6,
             TEST_ACTOR,
           );
@@ -329,7 +329,7 @@ describe("inventory ownership mutations", () => {
         },
         {
           value: 6,
-          ownershipMode: "person",
+          ownershipMode: "explicit",
           ownerLedgerPartyId: firstOwner.entityId,
         },
       ]),
@@ -437,9 +437,7 @@ describe("inventory ownership mutations", () => {
       subject.entryId,
     );
     expect(inferred?.effectiveOwner?.id).toBe(firstOwner.output.id);
-    expect(inferred?.basis).toBe(
-      "Inherited: First buyer · purchase beneficiary",
-    );
+    expect(inferred?.source).toBe("inherited_beneficiary");
     await confirmInventoryOwnership(
       ctx.db,
       subject.entryId,
@@ -488,13 +486,11 @@ describe("inventory ownership mutations", () => {
     expect(pinned).toMatchObject({
       source: "explicit",
       effectiveOwner: { id: firstOwner.output.id },
-      basis: "Confirmed: First buyer",
     });
     expect(ambiguous).toMatchObject({
       source: "unresolved",
       effectiveOwner: null,
       evidence: null,
-      basis: "Inherited owner unresolved",
     });
   });
 
@@ -585,7 +581,7 @@ describe("inventory ownership mutations", () => {
     await setInventoryOwnership(
       ctx.db,
       subject.entryId,
-      { mode: "person", ownerId: owner.output.id },
+      { mode: "explicit", ownerId: owner.output.id },
       undefined,
       TEST_ACTOR,
     );
@@ -629,7 +625,7 @@ describe("inventory ownership mutations", () => {
     await setInventoryOwnership(
       ctx.db,
       subject.entryId,
-      { mode: "person", ownerId: owner.output.id },
+      { mode: "explicit", ownerId: owner.output.id },
       undefined,
       TEST_ACTOR,
     );
@@ -697,7 +693,7 @@ describe("inventory ownership mutations", () => {
     await setInventoryOwnership(
       ctx.db,
       unassigned.entryId,
-      { mode: "unassigned" },
+      { mode: "explicit", ownerId: null },
       undefined,
       TEST_ACTOR,
     );
@@ -709,12 +705,16 @@ describe("inventory ownership mutations", () => {
     expect(await names({ ownerLedgerPartyId: [buyer.output.id] })).toEqual([
       expect.stringContaining("Filter inherited product"),
     ]);
-    expect(await names({ ownerPresenceFilter: "none" })).toEqual(
+    expect(
+      await names({ ownerLedgerPartyId: [OWNER_FILTER_HOUSEHOLD] }),
+    ).toEqual(
       expect.arrayContaining([
         expect.stringContaining("Filter unassigned product"),
       ]),
     );
-    expect(await names({ ownerPresenceFilter: "none" })).not.toEqual(
+    expect(
+      await names({ ownerLedgerPartyId: [OWNER_FILTER_HOUSEHOLD] }),
+    ).not.toEqual(
       expect.arrayContaining([
         expect.stringContaining("Filter inherited product"),
       ]),

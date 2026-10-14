@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { buildActorContext } from "@cubby/schemas/context";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PhotoGroupProposalGroup } from "@cubby/schemas/photo-import-run";
@@ -779,10 +781,10 @@ describe("photo group proposals", () => {
       groups: [
         {
           ...createGroup("boots", codes, "Synthetic Hiking Boots"),
-          // Person ownership with no owner is refused by the writer.
+          // Explicit ownership with no owner key is refused by the writer.
           inventory: {
             locationId: parseShortcodeFor("location", closet.id),
-            ownershipMode: "person",
+            ownershipMode: "explicit",
             quantity: 1,
           },
         },
@@ -929,7 +931,7 @@ describe("photo group proposals", () => {
           },
           inventory: {
             locationId: parseShortcodeFor("location", TEST_HOME_SHORTCODE),
-            ownershipMode: "person",
+            ownershipMode: "explicit",
             ownerPartyId: parseShortcodeFor(
               "ledgerParty",
               loserMember.shortcode,
@@ -1111,5 +1113,67 @@ describe("photo group proposals", () => {
     expect(row?.images).toHaveLength(1);
     expect(row?.productCreate).toMatchObject({ name: "Synthetic Sun Hat" });
     expect(approved.unassignedImageIds).toEqual([codes[1]]);
+  });
+  // Household data must survive 0067: a stored person proposal keeps its owner
+  // column, and a stored unassigned one stays household stock.
+  it("reads proposals stored in the old ownership vocabulary after the migration", async () => {
+    const { run, codes } = await seedRun(2);
+    const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic proposal owner",
+      kind: "member",
+    });
+    const inventory = (ownerPartyId: string | null) => ({
+      locationId: parseShortcodeFor("location", TEST_HOME_SHORTCODE),
+      ownershipMode: "explicit" as const,
+      ownerPartyId:
+        ownerPartyId === null
+          ? null
+          : parseShortcodeFor("ledgerParty", ownerPartyId),
+      quantity: 1,
+    });
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        {
+          ...createGroup("person", [codes[0]!]),
+          inventory: inventory(owner.shortcode),
+        },
+        {
+          ...createGroup("household", [codes[1]!]),
+          inventory: inventory(null),
+        },
+      ],
+    });
+    const db = getDb(ctx.db);
+    // Rewind both rows to the shape stored before 0067.
+    for (const [groupKey, legacyMode] of [
+      ["person", "person"],
+      ["household", "unassigned"],
+    ])
+      await db.execute(sql`
+        UPDATE "PhotoGroupProposal"
+        SET "inventory" = ("inventory" - ${"household"}) || jsonb_build_object(${"ownershipMode"}::text, ${legacyMode}::text)
+        WHERE "groupKey" = ${groupKey}`);
+    const migration = readFileSync(
+      new URL(
+        "../../../drizzle/0067_inventory_ownership_explicit.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    for (const statement of migration.split("--> statement-breakpoint"))
+      if (statement.includes('"PhotoGroupProposal"'))
+        await db.execute(sql.raw(statement));
+
+    const { proposals } = await listPhotoGroupProposals(ctx.db, run.shortcode);
+    const byKey = new Map(proposals.map((row) => [row.groupKey, row]));
+    expect(byKey.get("person")?.inventory).toMatchObject({
+      ownershipMode: "explicit",
+      ownerPartyId: owner.shortcode,
+    });
+    expect(byKey.get("household")?.inventory).toMatchObject({
+      ownershipMode: "explicit",
+      ownerPartyId: null,
+    });
   });
 });

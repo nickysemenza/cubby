@@ -760,11 +760,18 @@ without one; [ADR 0015](adr/0015-current-member-filter-token.md)). Unassigned us
 A saved view may also declare `view` (the list view it opens in, such as
 `shelf`) and `pin: { surface: "home", order }`, which lists it in the home
 "Your views" row on web and Apple; neither takes part in active-view matching.
-Inventory's `ownerLedgerPartyId` filter matches the effective owner (explicit,
-else inherited from acquisition evidence) by running the ownership resolver
-and narrowing by id before paging; its presence filter is
-`ownerPresenceFilter`. Product's owner filter adds Unlocated products whose
-single acquisition would hand the owner down. My stuff, Wardrobe (plus the
+Inventory's `ownerLedgerPartyId` reads the effective owner and carries
+`fieldResolutions.ownerLedgerPartyId`, so its Use inherited, Confirm, and Set
+to Household actions are the generic resolution actions (`resolution.confirm`
+pins the inherited value; `resolution.labels` names a null value Household or
+Unknown). Its filter matches the effective owner by running the ownership
+resolver and narrowing by id before paging; the declaration's filter
+`sentinels` (`@household`, `@unknown`) are tokens every client offers beside
+the roster and sends unbranded. Values are ORed and match any entry. Product's
+derived `owners` (display format `resolvedList`: a label, an optional record,
+and whether it is only inherited) rolls up its live entries, resolved only for
+the rows on the page, and its owner filter adds `ownerPresenceFilter` plus
+Unlocated products whose single acquisition would hand the owner down. My stuff, Wardrobe (plus the
 `apparel` category family), Bought for me, and the ownership work queues are
 saved views over these filters.
 

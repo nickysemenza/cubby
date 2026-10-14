@@ -31,7 +31,7 @@ export async function findInvalidFinancialJson(
     sourceAliases?: unknown;
     cardNumbers?: unknown;
   }>(sql`
-    SELECT 'financialAccount' AS entity, fa.shortcode AS id, fa.identity, fa."sourceAliases", fa."cardNumbers"
+    SELECT ${"financialAccount"}::text AS entity, fa.shortcode AS id, fa.identity, fa."sourceAliases", fa."cardNumbers"
     FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL
   `);
   // Settlement references are EntityExternalId rows now; only the account's

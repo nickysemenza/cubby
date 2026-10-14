@@ -43,23 +43,46 @@ enum RecipeSourcePresentation: Sendable, Hashable {
 /// cannot drift into per-row fetches or hand-maintained entity switch statements.
 struct EntityRowPresentation: Sendable, Hashable {
     struct Fact: Sendable, Hashable, Identifiable {
+        /// One run of a fact's text; an inherited run carries the shared marker after it.
+        struct Segment: Sendable, Hashable {
+            let text: String
+            let inherited: Bool
+        }
+
         let id: String
         let label: String?
         let value: String
         let isDate: Bool
         let dateValue: String?
-        let source: String?
+        let segments: [Segment]
 
         init(
             id: String, label: String? = nil, value: String, isDate: Bool = false, dateValue: String? = nil,
-            source: String? = nil
+            inherited: Bool = false
+        ) {
+            self.init(
+                id: id, label: label, segments: [Segment(text: value, inherited: inherited)], isDate: isDate,
+                dateValue: dateValue)
+        }
+
+        /// A comma-joined `resolvedList` (a Product's owners), marking each inherited item.
+        init(
+            id: String, label: String? = nil, segments: [Segment], isDate: Bool = false,
+            dateValue: String? = nil
         ) {
             self.id = id
             self.label = label
-            self.value = value
+            self.value = segments.map(\.text).joined(separator: ", ")
             self.isDate = isDate
             self.dateValue = dateValue
-            self.source = source
+            self.segments = segments
+        }
+
+        var inherited: Bool { segments.contains(where: \.inherited) }
+
+        /// The value read aloud: each inherited run says so, since the marker is an image.
+        var spokenValue: String {
+            segments.map { $0.inherited ? "\($0.text), inherited" : $0.text }.joined(separator: ", ")
         }
     }
 
@@ -70,9 +93,8 @@ struct EntityRowPresentation: Sendable, Hashable {
 
     var factLine: String? {
         let values = facts.map { fact in
-            let value = fact.source.map { "\(fact.value) (\($0))" } ?? fact.value
-            guard let label = fact.label, !label.isEmpty else { return value }
-            return "\(label): \(value)"
+            guard let label = fact.label, !label.isEmpty else { return fact.value }
+            return "\(label): \(fact.value)"
         }
         return values.isEmpty ? nil : values.joined(separator: " · ")
     }
@@ -80,9 +102,8 @@ struct EntityRowPresentation: Sendable, Hashable {
     var accessibilityText: String {
         ([title]
             + facts.map { fact in
-                let value = fact.source.map { "\(fact.value), \($0)" } ?? fact.value
-                if let label = fact.label, !label.isEmpty { return "\(label), \(value)" }
-                return value
+                if let label = fact.label, !label.isEmpty { return "\(label), \(fact.spokenValue)" }
+                return fact.spokenValue
             }).joined(separator: ", ")
     }
 
@@ -152,21 +173,31 @@ struct EntityRowPresentation: Sendable, Hashable {
                 facts.append(Fact(id: key, label: label ?? field.label, value: source.label))
                 return
             }
+            if let items = EntityFieldValue.resolvedItems(in: row.raw, field: field, surface: "list") {
+                if !items.isEmpty {
+                    facts.append(
+                        Fact(
+                            id: key, label: label ?? field.label,
+                            segments: items.map { Fact.Segment(text: $0.label, inherited: $0.inherited) }))
+                }
+                return
+            }
             let resolution = FieldResolutionPresentation(raw: row.raw, field: field)
+            let inherited = resolution?.isInherited ?? false
             if let reference = EntityFieldValue.reference(in: row.raw, field: field, surface: "list") {
                 facts.append(
                     Fact(
                         id: key, label: label ?? field.label,
-                        value: reference.name ?? reference.id, source: resolution?.sourceText))
+                        value: reference.name ?? reference.id, inherited: inherited))
             } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "list")
-                ?? (resolution == nil ? nil : "None")
+                ?? resolution?.emptyLabel(field: field)
             {
                 facts.append(
                     Fact(
                         id: key, label: label ?? field.label, value: value,
                         isDate: field.kind == .date || field.kind == .timestamp,
                         dateValue: EntityFieldValue.dateValue(in: row.raw, field: field, surface: "list"),
-                        source: resolution?.sourceText))
+                        inherited: inherited))
             }
         }
 
@@ -187,7 +218,8 @@ struct EntityRowPresentation: Sendable, Hashable {
         descriptor.fields
             .filter {
                 $0.showInList && !$0.listHidden && $0.key != descriptor.titleField && $0.key != "id"
-                    && ($0.kind != .json || $0.listRenderer != nil || $0.labelPath != nil)
+                    && ($0.kind != .json || $0.listRenderer != nil || $0.labelPath != nil
+                        || $0.format == "resolvedList")
             }
             .sorted {
                 let left = ($0.listOrder ?? .max, $0.key)

@@ -873,6 +873,7 @@ struct EntityListView: View {
                         .buttonStyle(.borderless)
                         .accessibilityIdentifier(
                             "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
+                    if fact.inherited { InheritedMarker() }
                 } else if let color = FieldGuideMetrics.optionColor(
                     EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list"))
                 {
@@ -886,17 +887,13 @@ struct EntityListView: View {
                                 DateDisplay(date, compact: true, stacked: true)
                             #endif
                         } else {
-                            Text(fact.value)
+                            InheritedMarker.text(fact.segments)
+                                .accessibilityLabel(fact.spokenValue)
                         }
                     }
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                }
-                if let source = fact.source {
-                    Text(source).font(.caption2).foregroundStyle(.secondary)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if field.explanation != nil {
                     FieldExplanationLabel(
@@ -1104,9 +1101,9 @@ struct EntityRowView: View {
                 }
                 .accessibilityElement(children: .combine)
             } else if isRail {
-                Text(fact.value)
+                InheritedMarker.text(fact.segments)
                     .monospacedDigit()
-                    .accessibilityLabel("\(fact.label ?? field?.label ?? fact.id): \(fact.value)")
+                    .accessibilityLabel("\(fact.label ?? field?.label ?? fact.id): \(fact.spokenValue)")
             } else if let field,
                 let color = FieldGuideMetrics.optionColor(
                     EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list"))
@@ -1114,14 +1111,10 @@ struct EntityRowView: View {
                 StatusChip(
                     text: "\(fact.label ?? field.label): \(fact.value)", color: color)
             } else {
-                Text("\(fact.label ?? field?.label ?? fact.id): \(fact.value)")
+                Text("\(fact.label ?? field?.label ?? fact.id): \(InheritedMarker.text(fact.segments))")
                     .font(.caption)
                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-            }
-            if let source = fact.source {
-                Text("(\(source))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("\(fact.label ?? field?.label ?? fact.id): \(fact.spokenValue)")
             }
             if let field, field.explanation != nil, fact.id != "dataQuality" {
                 FieldExplanationLabel(
@@ -1239,6 +1232,13 @@ private struct EntityTablePreviewHost: View {
                     "id": "PRD-9999", "name": "Carbon Steel Wok",
                     "manufacturer": "Sample Maker", "categoryId": "CAT-4444",
                     "category": ["id": "CAT-4444", "name": "Cookware"],
+                    "owners": [
+                        [
+                            "label": "Alex", "ref": ["entityKind": "ledgerParty", "entityId": "LPY-4K7M"],
+                            "inherited": true,
+                        ],
+                        ["label": "Household", "ref": .null, "inherited": false],
+                    ],
                 ]),
         ]
         let source = EntityListPageSource(id: "synthetic-table-preview") { page in

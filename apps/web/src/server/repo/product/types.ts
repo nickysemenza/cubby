@@ -1,4 +1,5 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
+import type { ResolvedListItem } from "@cubby/schemas/field-resolution";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationAncestorOut } from "@cubby/schemas/location";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
@@ -80,6 +81,8 @@ export type ProductDeepDB = ProductSelect & {
 
 export type ProductListDB = ProductSelect & {
   pricing?: ProductPricing;
+  /** Effective owners across live entries (`loadProductOwners`). */
+  owners?: ResolvedListItem[];
   dataQuality: DataQuality;
   ingredient: typeof ingredient.$inferSelect | null;
   growsPlant?: { shortcode: string } | null;

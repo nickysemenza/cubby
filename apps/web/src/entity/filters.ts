@@ -80,6 +80,9 @@ export interface FilterSpecCore {
    * `label` is the noun in "Has {label}".
    */
   nullable?: { field: string; label: string };
+  /** Token values (Household, Unknown) offered beside the roster and sent
+   * unbranded; the server resolves them. */
+  sentinels?: ReadonlyArray<{ value: string; label: string }>;
 }
 
 /**
@@ -156,8 +159,9 @@ export function buildFiltersFromManifest(
   const brand = (spec: FilterSpecCore, value: string): string => {
     // `@me` stays a token on the wire; the entity kernel resolves it.
     if (
-      value === CURRENT_MEMBER_FILTER &&
-      spec.referenceEntity === "ledgerParty"
+      (value === CURRENT_MEMBER_FILTER &&
+        spec.referenceEntity === "ledgerParty") ||
+      spec.sentinels?.some((sentinel) => sentinel.value === value)
     )
       return value;
     try {
