@@ -1246,6 +1246,14 @@ Direct files are `EntityAttachment` rows: gallery photos and purchase documents
 attachments are detached and reaped, and an upload's idempotency key belongs to
 the attachment rather than the file.
 
+Attachment inputs labeled `application/octet-stream` are unknown formats, not
+an additional accepted file format. The shared attachment service inspects their
+bytes using the same supported image/PDF signature checks (and image dimensions)
+as specifically typed inputs, then stores the resolved MIME type and matching
+filename extension. Base64, URL, and staged-upload inputs share this validation;
+unknown bytes and unreadable images fail before final storage. A filename never
+establishes the format, and a specific MIME label must still agree with the bytes.
+
 The physical graph is composed at read time from `ENTITY_EDGES` and
 `ENTITY_EDGE_OWNERS` (`repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
 sourceId, targetKind, targetId)` with both ends live. It backs the Relations

@@ -83,7 +83,7 @@ export const inspectImageFile = async (
   bytes: Uint8Array,
   declaredContentType: string,
 ): Promise<InspectedImageFile> => {
-  const contentType = declaredContentType
+  const declaredType = declaredContentType
     .toLowerCase()
     .split(";", 1)[0]!
     .trim();
@@ -93,6 +93,10 @@ export const inspectImageFile = async (
       "IMAGE_ATTACH_FAILED",
       "File bytes do not match a supported image or PDF format",
     );
+  // A generic transport label supplies no format claim; only supported bytes
+  // can resolve it. Specific labels still have to agree with those bytes.
+  const contentType =
+    declaredType === "application/octet-stream" ? signature : declaredType;
   const compatible =
     signature === contentType ||
     ((signature === "image/heic" || signature === "image/heif") &&

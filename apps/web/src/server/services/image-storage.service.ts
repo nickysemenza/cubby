@@ -498,6 +498,7 @@ const createFileUploadWithPorts = async <TDatabase>(
   const isDocument = contentType === PDF_CONTENT_TYPE;
   if (
     !isDocument &&
+    contentType !== "application/octet-stream" &&
     !ALLOWED_IMAGE_TYPES.some((allowedType) => allowedType === contentType)
   ) {
     throw createAppError(
@@ -652,7 +653,7 @@ const readUrlAttachmentSource = async <TDatabase>(
     }
     return {
       bytes,
-      contentType: responseContentType ?? input.contentType,
+      contentType: responseContentType ?? input.contentType ?? header,
       sourceFilename: new URL(url).pathname.split("/").pop() || undefined,
     };
   } catch (error) {
@@ -694,6 +695,7 @@ const validateAttachmentSource = async (source: AttachmentSource) => {
   const isDocument = contentType === PDF_CONTENT_TYPE;
   if (
     !isDocument &&
+    contentType !== "application/octet-stream" &&
     !ALLOWED_IMAGE_TYPES.some((allowedType) => allowedType === contentType)
   ) {
     throw createAppError(
@@ -710,10 +712,11 @@ const validateAttachmentSource = async (source: AttachmentSource) => {
       `File exceeds ${MAX_IMAGE_UPLOAD_BYTES} bytes`,
     );
   }
+  const inspected = await inspectImageFile(source.bytes, contentType);
   return {
-    contentType,
-    isDocument,
-    inspected: await inspectImageFile(source.bytes, contentType),
+    contentType: inspected.contentType,
+    isDocument: inspected.contentType === PDF_CONTENT_TYPE,
+    inspected,
   };
 };
 

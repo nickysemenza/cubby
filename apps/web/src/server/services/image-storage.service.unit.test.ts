@@ -480,6 +480,95 @@ describe("attachFileToEntity", () => {
     expect(storage.deletedImageIds).toEqual([]);
   });
 
+  it("detects generic binary email PDFs and stores their canonical type and filename", async () => {
+    const result = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
+      data: Buffer.from("%PDF-1.4 synthetic receipt").toString("base64"),
+      contentType: "application/octet-stream",
+      filename: "receipt.bin",
+    });
+    expect(result).toMatchObject({
+      kind: "document",
+      contentType: "application/pdf",
+      filename: "receipt.pdf",
+    });
+    expect(storage.uploaded).toEqual([
+      expect.objectContaining({
+        contentType: "application/pdf",
+        key: expect.stringMatching(/^cubby\/documents\//),
+      }),
+    ]);
+    expect(storage.attachments).toEqual([
+      expect.objectContaining({
+        contentType: "application/pdf",
+        detectedContentType: "application/pdf",
+      }),
+    ]);
+  });
+
+  it("detects generic binary URL images without trusting the filename", async () => {
+    storage.fetchedResponse = new Response(Buffer.from(PNG_BASE64, "base64"), {
+      headers: { "content-type": "application/octet-stream" },
+    });
+    const result = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
+      url: "https://example.com/receipt.pdf",
+    });
+    expect(result).toMatchObject({
+      kind: "image",
+      contentType: "image/png",
+      filename: "receipt.png",
+    });
+    expect(storage.uploaded).toEqual([
+      expect.objectContaining({ contentType: "image/png" }),
+    ]);
+  });
+
+  it("stages generic binary files but validates their bytes before final attachment", async () => {
+    await service.createFileUpload(database, {
+      entityId: "PRD-TEST",
+      filename: "receipt.bin",
+      contentType: "application/octet-stream",
+      size: 100,
+    });
+    storage.stagedRow = {
+      key: "cubby/images/staged.bin",
+      filename: "staged.bin",
+      contentType: "application/octet-stream",
+      status: "PENDING",
+      associations: [],
+    };
+    const result = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
+      uploadId: stagedUploadCode,
+    });
+    expect(result).toMatchObject({
+      contentType: "image/png",
+      filename: "staged.png",
+    });
+    expect(storage.deletedImageIds).toEqual([stagedImageId]);
+  });
+
+  it("rejects unknown binary and unreadable images before writing objects", async () => {
+    for (const bytes of [
+      Buffer.from("not a PDF"),
+      Buffer.from(AVIF_BASE64, "base64").subarray(0, 28),
+    ]) {
+      await expect(
+        service.attachFileToEntity(database, {
+          ...attachmentTarget,
+          data: bytes.toString("base64"),
+          contentType: "application/octet-stream",
+          filename: "receipt.pdf",
+        }),
+      ).rejects.toThrow(
+        /supported image or PDF format|dimensions could not be read/,
+      );
+    }
+    expect(storage.createdPending).toEqual([]);
+    expect(storage.uploaded).toEqual([]);
+  });
+
   it("parses data URI content types and classifies PDFs as documents", async () => {
     const image = await service.attachFileToEntity(database, {
       ...attachmentTarget,
