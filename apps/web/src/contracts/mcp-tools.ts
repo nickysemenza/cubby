@@ -690,7 +690,7 @@ export const MCP_TOOLS = defineMcpTools({
       product_matches: mcpAction({
         op: recommendationsContract.ops.productMatches,
         description:
-          "The product match review queue: proposed and detected same-item Product pairs, optionally for one productId or candidateId. Settle with product_enrichment.merge_match or dismiss_match.",
+          "Stored same-item Product pair Assessments, optionally for one productId or candidateId. Apply a reviewed pair with product_enrichment.merge_match; record wrong, uncertain or scoped presentation dismissal with entity.review_assessment.",
       }),
     },
   },

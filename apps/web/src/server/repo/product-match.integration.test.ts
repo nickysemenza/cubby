@@ -8,7 +8,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityAttachment } from "~/server/db/schema";
+import { entityAttachment, feedback, inventoryEntry } from "~/server/db/schema";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import { reviewAssessment } from "~/server/repo/assessment-review";
@@ -244,16 +244,61 @@ describe("product match queue", () => {
       evidence: "Synthetic reviewed identity",
       sourceUrls: [],
     });
-    await mergeProductMatch(
-      { ...base, actorContext: base.actorContext },
-      {
+    const command = {
+      assessmentId: pair.id,
+      operationId: "synthetic-merge-command",
+      verdict: "correct" as const,
+      intent: "apply" as const,
+      expectedFingerprint: pair.fingerprint!,
+      application: {
+        kind: "product_merge" as const,
         keepId: bought.id,
         mergeId: photo.id,
-        assessmentId: pair.id,
-        expectedFingerprint: pair.fingerprint!,
       },
+    };
+    const applied = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
+    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+      applied,
     );
-
+    await expect(
+      reviewAssessment(ctx.db, kernelCtx(ctx), {
+        ...command,
+        application: {
+          ...command.application,
+          keepId: photo.id,
+          mergeId: bought.id,
+        },
+      }),
+    ).rejects.toThrow(/Immutable Feedback retry/);
+    expect(
+      await mergeProductMatch(
+        { ...base, actorContext: base.actorContext },
+        {
+          keepId: bought.id,
+          mergeId: photo.id,
+          assessmentId: pair.id,
+          expectedFingerprint: pair.fingerprint!,
+        },
+      ),
+    ).toEqual({ ok: true });
+    const receipts = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(eq(feedback.assessmentId, pair.id));
+    expect(receipts.filter((row) => row.receipt !== null)).toHaveLength(1);
+    expect(receipts.find((row) => row.receipt !== null)?.receipt).toEqual(
+      expect.objectContaining({
+        kind: "product_merge",
+        auditIds: expect.any(Array),
+      }),
+    );
+    const stock = await getDb(ctx.db)
+      .select({ quantity: inventoryEntry.amountValue })
+      .from(inventoryEntry)
+      .where(eq(inventoryEntry.productId, bought.entityId));
+    expect(stock.reduce((total, row) => total + (row.quantity ?? 0), 0)).toBe(
+      1,
+    );
     const order = await getDb(ctx.db)
       .select({ imageId: entityAttachment.imageId })
       .from(entityAttachment)

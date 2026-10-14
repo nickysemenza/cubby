@@ -770,6 +770,7 @@ export async function executeAiRefreshTarget(
           ...ports.productIdentityPorts,
           model: claimed.provenance.model,
           evaluationId: id,
+          provenance: claimed.provenance,
         },
       );
       await publishAiEvaluation(db, id, token, async (transactionDb) => {
@@ -814,7 +815,7 @@ export async function executeAiRefreshTarget(
               transactionDb,
               pair,
               claimed.runId,
-              { evaluationId: id },
+              { evaluationId: id, provenance: claimed.provenance },
             );
             await publishProductIdentity(transactionDb, { pairs: [result] });
             rulePairs++;

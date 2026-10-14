@@ -62,7 +62,7 @@ test("list pills accept immediately without unloading another row's suggestion",
     );
   const acceptance = Promise.withResolvers<void>();
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
-    if (!dispatchesOperation(route.request(), "ai.acceptSuggestion")) {
+    if (!dispatchesOperation(route.request(), "assessment.review")) {
       await route.continue();
       return;
     }
@@ -171,7 +171,7 @@ test("Review bulk-accepts and bulk-rejects a Run's Suggestions with read-back", 
   // before completion/refetch can clear it. No timer-dependent race setup.
   const acceptance = Promise.withResolvers<void>();
   const holdAcceptance = async (route: Route) => {
-    if (!dispatchesOperation(route.request(), "ai.acceptSuggestions")) {
+    if (!dispatchesOperation(route.request(), "assessment.reviewBatch")) {
       await route.continue();
       return;
     }

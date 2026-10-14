@@ -17,6 +17,7 @@ import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { runFinding } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { repointAssessmentTargetsTx } from "~/server/repo/assessment-state";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted } from "~/server/repo/database-helpers";
@@ -26,7 +27,6 @@ import { repointEntitySources } from "~/server/repo/entity-source";
 import type { RemovableEntity } from "~/server/repo/removal/core";
 import { cascadeRemoval } from "~/server/repo/removal/core";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
-import { repointAssessmentTargetsTx } from "~/server/repo/suggestion-dismissal";
 
 type MergeableTable = PgTable & { id: PgColumn; deletedAt: PgColumn };
 

@@ -341,7 +341,8 @@ struct EntityEditorSheet: View {
             try await suggestions?.recordSavedApplications(recordId: id)
             suggestionFeedbackError = nil
         } catch {
-            suggestionFeedbackError = "Saved, but suggestion feedback could not be recorded: \(error.localizedDescription)"
+            suggestionFeedbackError =
+                "Saved, but suggestion feedback could not be recorded: \(error.localizedDescription)"
             Diagnostics.report(error, context: "editor.suggestion-feedback")
             return
         }

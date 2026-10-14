@@ -9,7 +9,7 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { assessmentState } from "~/server/db/schema";
+import { assessment, assessmentState } from "~/server/db/schema";
 import { publishAssessment } from "~/server/repo/assessment";
 import {
   databaseForTransaction,
@@ -70,17 +70,30 @@ export async function publishProductPair(
       pair.productBId,
       data,
       input.fingerprint ?? null,
-      input.producer ?? null,
+      input.producer
+        ? [input.producer.kind, input.producer.model, input.producer.revision]
+        : null,
     ]),
   );
   return withTransactionDatabase(db, async (transactionDb) => {
     const client = getDb(transactionDb);
+    // Requesting Runs share one immutable publication for unchanged evidence.
+    // Preserve the first actual producer when opposite scans race or retry.
+    const publicationKey = `product-pair:${digest}`;
+    await client.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${publicationKey}, 0))`,
+    );
+    const [published] = await client
+      .select()
+      .from(assessment)
+      .where(eq(assessment.publicationKey, publicationKey))
+      .limit(1);
     const previous = await listProductMatchRows(transactionDb, pair.productAId);
     const old = previous.find((row) => row.productBId === pair.productBId);
     const prediction = await publishAssessment(
       transactionDb,
       {
-        publicationKey: `product-pair:${digest}`,
+        publicationKey,
         family: "product_pair",
         subject: {
           kind: "product_pair",
@@ -90,6 +103,7 @@ export async function publishProductPair(
         },
         judgment: { actionable: data.actionable, conflict: data.conflict },
         producer:
+          published?.producer ??
           input.producer ??
           (input.source === "agent"
             ? {

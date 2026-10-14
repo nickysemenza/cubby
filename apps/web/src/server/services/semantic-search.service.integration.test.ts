@@ -16,6 +16,7 @@ import { getDuplicateProductRecommendationWorkflow } from "~/server/operations/r
 import { requestEmbeddingRefreshWorkflow } from "~/server/operations/search.server";
 import { findSimilarEntitiesWorkflow } from "~/server/operations/semantic-similarity.server";
 import { reviewAssessment } from "~/server/repo/assessment-review";
+import { getActiveAssessmentSuppressionKeys } from "~/server/repo/assessment-state";
 import { getStoredEmbeddingHashes } from "~/server/repo/entity-embedding-refresh";
 import { publishProductPair } from "~/server/repo/product-match-candidate";
 import {
@@ -31,7 +32,6 @@ import {
   refreshSearchDocument,
   selectUnembeddedSearchDocumentRefs,
 } from "~/server/repo/search-document";
-import { getActiveSuggestionDismissalKeys } from "~/server/repo/suggestion-dismissal";
 import { kernelCtx } from "~/server/runs/suggestion-sweep.fixtures";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import {
@@ -223,7 +223,7 @@ describe("semantic search background tasks", () => {
         sourceId: source.id,
       }),
     ).toBeNull();
-    const keys = await getActiveSuggestionDismissalKeys(ctx.db, {
+    const keys = await getActiveAssessmentSuppressionKeys(ctx.db, {
       entityKind: "product",
       entityId: source.entityId,
       suggestionKind: "product.duplicate",
@@ -265,7 +265,7 @@ describe("semantic search background tasks", () => {
       "product.tag-propagation",
       "product.related",
     ]) {
-      const keys = await getActiveSuggestionDismissalKeys(ctx.db, {
+      const keys = await getActiveAssessmentSuppressionKeys(ctx.db, {
         entityKind: "product",
         entityId: source.entityId,
         suggestionKind,

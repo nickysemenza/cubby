@@ -8,12 +8,12 @@ import {
 import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { assessRecommendation } from "~/server/repo/assessment-recommendation";
+import {
+  getActiveAssessmentSuppressionKeys,
+  assessmentCandidateKey,
+} from "~/server/repo/assessment-state";
 import { findDuplicateProductIdentities } from "~/server/repo/problems/detectors-product";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import {
-  getActiveSuggestionDismissalKeys,
-  suggestionCandidateKey,
-} from "~/server/repo/suggestion-dismissal";
 import { getEntityRecommendations } from "~/server/services/entity-recommendations.service";
 import { getPlacementRecommendation } from "~/server/services/placement-recommendation.service";
 import {
@@ -35,12 +35,12 @@ export async function getDuplicateProductRecommendationWorkflow(
   );
   if (!candidate) return null;
   const sourceEntityId = await resolveOrThrow(db, "product", input.sourceId);
-  const dismissals = await getActiveSuggestionDismissalKeys(db, {
+  const dismissals = await getActiveAssessmentSuppressionKeys(db, {
     entityKind: "product",
     entityId: sourceEntityId,
     suggestionKind: "product.duplicate",
   });
-  const candidateKey = await suggestionCandidateKey(
+  const candidateKey = await assessmentCandidateKey(
     "product.duplicate",
     candidate.products.map((product) => product.id).sort(),
   );

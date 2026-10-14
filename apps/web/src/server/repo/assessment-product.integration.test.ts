@@ -24,8 +24,10 @@ import {
   product,
 } from "~/server/db/schema";
 import { mergeReviewedProductPair } from "~/server/repo/assessment-product";
+import { reviewAssessment } from "~/server/repo/assessment-review";
 import { getDb } from "~/server/repo/database-helpers";
 import { canonicalJson } from "~/server/repo/entity-source";
+import { listProductMatchRows } from "~/server/repo/product-match-candidate";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 import {
@@ -36,7 +38,8 @@ import {
 
 // Failure modes: an unavailable model hides exact rule evidence; discovery
 // direction duplicates the same immutable pair; stale identity permits merge;
-// merging rewrites the original subject instead of retiring current actions.
+// merging rewrites the original subject instead of retiring current actions;
+// a new scan resurfaces an unchanged pair after a member's wrong verdict.
 describe("stored Product identity pairs", () => {
   const ctx = withTestDb();
   it("keeps exact rule evidence available during model failure and fences a later identity edit", async () => {
@@ -63,34 +66,28 @@ describe("stored Product identity pairs", () => {
       vendorId: vendor.id,
       date: "2026-01-01",
     });
-    await getDb(ctx.db)
-      .insert(externalSource)
-      .values({
-        slug: "synthetic",
-        label: "Synthetic exact issuer",
-        vendorId: vendor.id,
-      });
-    await getDb(ctx.db)
-      .insert(entityExternalId)
-      .values({
+    await getDb(ctx.db).insert(externalSource).values({
+      slug: "synthetic",
+      label: "Synthetic exact issuer",
+      vendorId: vendor.id,
+    });
+    await getDb(ctx.db).insert(entityExternalId).values({
+      entityKind: "product",
+      entityId: aId,
+      source: "synthetic",
+      kind: "retailer_sku",
+      externalId: "synthetic-identity-1",
+      isPrimary: true,
+    });
+    await expect(
+      getDb(ctx.db).insert(entityExternalId).values({
         entityKind: "product",
-        entityId: aId,
+        entityId: bId,
         source: "synthetic",
         kind: "retailer_sku",
         externalId: "synthetic-identity-1",
         isPrimary: true,
-      });
-    await expect(
-      getDb(ctx.db)
-        .insert(entityExternalId)
-        .values({
-          entityKind: "product",
-          entityId: bId,
-          source: "synthetic",
-          kind: "retailer_sku",
-          externalId: "synthetic-identity-1",
-          isPrimary: true,
-        }),
+      }),
     ).rejects.toMatchObject({ cause: { code: "23505" } });
     const unavailable = {
       decisionPort: async () => {
@@ -163,17 +160,64 @@ describe("stored Product identity pairs", () => {
     expect(pair?.data).toEqual(
       expect.objectContaining({ actionable: true, conflict: false }),
     );
-    const opposite = await evaluateProductIdentity(ctx.db, bId, runId, {
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: pair!.id,
+      operationId: "synthetic-distinct-review",
+      verdict: "wrong",
+      intent: "history",
+      correction: { present: false },
+    });
+    const secondRunId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "running",
+      clientKey: "synthetic-opposite-review-scan",
+    });
+    const opposite = await evaluateProductIdentity(ctx.db, bId, secondRunId, {
       decisionPort: async () => {
         throw new Error("Synthetic unavailable model");
       },
     });
     await publishProductIdentity(ctx.db, opposite);
     expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
+    const [reviewed] = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(eq(assessmentState.id, pair!.id));
+    expect(reviewed).toMatchObject({ status: "rejected", suppression: null });
+    expect(await listProductMatchRows(ctx.db)).toEqual([]);
+    const originalProducer = (await getDb(ctx.db).select().from(assessment))[0]!
+      .producer;
+    expect(originalProducer?.runId).toBe(runId);
+    const revised = opposite.pairs[0]!;
+    await publishProductIdentity(ctx.db, {
+      pairs: [
+        {
+          ...revised,
+          producer: {
+            ...revised.producer,
+            revision: "synthetic-rule-revision",
+          },
+        },
+      ],
+    });
+    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(2);
+    expect(
+      (await getDb(ctx.db).select().from(assessmentState)).filter(
+        (row) => row.active,
+      ),
+    ).toEqual([
+      expect.objectContaining({ status: "pending", suppression: null }),
+    ]);
     await getDb(ctx.db)
       .update(product)
       .set({ model: "New source identity" })
       .where(eq(product.id, bId));
+    await publishProductIdentity(
+      ctx.db,
+      await evaluateProductIdentity(ctx.db, bId, secondRunId, unavailable),
+    );
+    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(3);
     await expect(
       mergeReviewedProductPair(kernelCtx(ctx), {
         keepId: a.id,

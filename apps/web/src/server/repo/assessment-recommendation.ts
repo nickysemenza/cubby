@@ -4,9 +4,9 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { publishAssessment } from "~/server/repo/assessment";
+import { assessmentCandidateKey } from "~/server/repo/assessment-state";
 import { canonicalJson } from "~/server/repo/entity-source";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { suggestionCandidateKey } from "~/server/repo/suggestion-dismissal";
 
 /** Preferences preserve the exact declared candidate key, independently of grades. */
 export async function assessRecommendation(
@@ -17,7 +17,7 @@ export async function assessRecommendation(
   evidence: unknown,
 ) {
   const recordId = await resolveOrThrow(db, "product", sourceId);
-  const candidateKey = await suggestionCandidateKey(scope, keys);
+  const candidateKey = await assessmentCandidateKey(scope, keys);
   const snapshot = z.json().parse(evidence);
   const fingerprint = await sha256Hex(canonicalJson(snapshot));
   const prediction = await publishAssessment(db, {

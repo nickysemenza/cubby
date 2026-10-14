@@ -614,7 +614,7 @@ Assessments store immutable typed subjects, judgments, evidence and nullable ori
 
 All five review families use this storage: fields, Email relevance and event/Purchase links, image descriptions, Product pairs, and generic recommendations. `assessment.review` and `assessment.reviewBatch` (MCP `entity.review_assessment` and `entity.review_assessments`) settle immutable review independently of apply intent. Each batch item has its own outcome. Draft acceptance records history; saved application has a separate transaction-bound receipt. Current-evidence and domain-authority checks fence field writes, Email corrections and pair merges. Unserved model trials stay outside member review.
 
-A new bare wrong verdict is a Miss, without suppressing future evidence. Legacy ambiguous reject/dismiss outcomes remain ungraded, retaining their original field-value, pair, recommendation-group, relatedness or tag-preference suppression. Existing corrected values and explicit labels retain their recorded semantics. Field applications keep existing AuditLog receipts and distinguish automatic acceptance from explicit member acceptance. New evaluation-only Email grades never change routing; frozen sample rosters retain original predictions, strata and inclusion probabilities.
+A new bare wrong verdict is a Miss, without suppressing future evidence. It resolves the current Problem, and canonical publication of the same pair evidence and decision policy preserves that review. Relevant evidence or policy revisions may publish a fresh Assessment. Publication identity excludes requesting Run and execution IDs; the first actual producer and evidence snapshot remain immutable. Exact command retries replay the same receipt; conflicting operation-ID reuse is refused. Legacy ambiguous reject/dismiss outcomes remain ungraded, retaining their original field-value, pair, recommendation-group, relatedness or tag-preference suppression. Existing corrected values and explicit labels retain their recorded semantics. Field applications keep existing AuditLog receipts and distinguish automatic acceptance from explicit member acceptance. New evaluation-only Email grades never change routing; frozen sample rosters retain original predictions, strata and inclusion probabilities.
 
 Confirmed image descriptions remain authoritative in display, classification and search even without generated analysis. Live description authority disappears with the Image; history and inactive confirmation times survive. Current field targets and declared inputs supersede pending Assessments through both generated Postgres triggers and kernel invalidation. Historical byte hashes, model versions, provenance and actor intent are never reconstructed.
 
@@ -1470,8 +1470,7 @@ return no prose, so those facts are the suggestion's reasoning; a branch
 roll-up's note is shown inline, never in a `title`. Weaker live proposals stay
 behind the cell's mark. Percentages describe model or branch confidence, not a
 guarantee of correctness. Accept shows local saving feedback; completed row
-enrichment stays visible throughout same-query refreshes. A changed target or declared
-backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
+enrichment stays visible throughout same-query refreshes. A changed target, declared basis or backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
 for the same record and field. Suggestions remain available to evaluation after
 review. The `/ai` page's Review tab lists stored Suggestions on the shared
 table, filtered by entity, field, status, kind, minimum confidence and Run,
@@ -1502,6 +1501,14 @@ Pause and resume use Run status; transient failures retry within a bound and
 terminal failures remain visible. Paired trials and finance acceptance rules
 remain part of the workload. Identical pending targets can share execution while
 each requesting Run can inspect the published Suggestions and keeps its own receipt.
+Product identity scans enumerate the full live catalog under AI-refresh activation.
+Canonical pair work shares frozen evidence and the actual served producer through
+existing durable evaluations; a completed catalog enumeration does not claim that
+queued model comparisons have completed. Exact retained source claims publish rule
+Problems independently of model availability. Registered identifiers retain their
+single owner: only accepted originals with actual Product bindings establish
+additional claims. Shared model/style names, URLs and partial variant text remain
+retrieval or recommendation evidence.
 
 Product Category describes identity and can supply a Spending category mapping
 through its ancestry. Cost type describes the Expense's accounting role; Trade

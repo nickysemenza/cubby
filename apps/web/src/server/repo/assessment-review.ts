@@ -317,6 +317,11 @@ export async function reviewAssessment(
     assessmentId: prediction.id,
     authority: "member",
     actorUserId: context.actorContext.userId,
+    metadata: {
+      kind: "assessment_review",
+      application: input.application ?? null,
+      expectedFingerprint: input.expectedFingerprint ?? null,
+    },
   });
   if (input.intent === "draft") {
     if (prediction.family !== "field")
@@ -349,7 +354,11 @@ export async function reviewAssessment(
       .from(assessmentState)
       .where(eq(assessmentState.id, prediction.id))
       .limit(1);
-    if (!state?.active || state.status === "superseded")
+    if (
+      !state ||
+      (prediction.family !== "product_pair" &&
+        (!state.active || state.status === "superseded"))
+    )
       throw new Error(
         "Assessment evidence is stale; request a fresh assessment",
       );

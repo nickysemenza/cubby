@@ -56,6 +56,11 @@ flowchart LR
     P --> I[Optional explicit inventory receive]
 ```
 
+A registered identifier has one Product owner. Accepted order lines retain
+their actual Product bindings, so an exact variant claim can expose a conflict
+without assigning the identifier twice. Shared URLs and partial variant words
+remain clues for review.
+
 The statement does not identify an item, and a photo does not prove where it
 was bought. A delivered email and a card charge do not receive inventory.
 

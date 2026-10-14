@@ -113,6 +113,15 @@ describe("shared Assessment history", () => {
     await expect(
       reviewAssessment(ctx.db, context, {
         assessmentId: prediction.id,
+        operationId: "saved",
+        verdict: "correct",
+        intent: "apply",
+        application: { kind: "saved_field", recordId: changed.id },
+      }),
+    ).rejects.toThrow(/Immutable Feedback retry/);
+    await expect(
+      reviewAssessment(ctx.db, context, {
+        assessmentId: prediction.id,
         operationId: "changed",
         verdict: "correct",
         intent: "apply",

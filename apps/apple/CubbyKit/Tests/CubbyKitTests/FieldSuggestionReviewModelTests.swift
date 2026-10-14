@@ -8,8 +8,11 @@ import Testing
 @MainActor
 struct FieldSuggestionReviewModelTests {
     private func reviewOut() throws -> AssessmentReviewOut {
-        try JSONDecoder().decode(AssessmentReviewOut.self, from: Data(
-            #"{"assessmentId":"00000000-0000-4000-8000-000000000001","feedbackId":"00000000-0000-4000-8000-000000000002","status":"applied","applied":true}"#.utf8))
+        try JSONDecoder().decode(
+            AssessmentReviewOut.self,
+            from: Data(
+                #"{"assessmentId":"00000000-0000-4000-8000-000000000001","feedbackId":"00000000-0000-4000-8000-000000000002","status":"applied","applied":true}"#
+                    .utf8))
     }
     private static let applied = FinanceCategoryApplyOut(
         entity: .expense, entityId: "EXP-4K7M", spendingCategoryId: "SPC-4K7M", sideEffects: .init())
@@ -46,7 +49,10 @@ struct FieldSuggestionReviewModelTests {
             saveCategory: { _ in
                 Issue.record("Policy acceptance must use ordinary editor Save")
                 throw CancellationError()
-            }, reviewAssessment: { input in reviews.append(input); return try self.reviewOut() })
+            },
+            reviewAssessment: { input in
+                reviews.append(input); return try self.reviewOut()
+            })
         try await review.request()
         #expect(editor.draft == initial)
         #expect(review.proposal("productExpectation") == nil)
@@ -67,7 +73,10 @@ struct FieldSuggestionReviewModelTests {
             saveCategory: { _ in
                 await gate.hold()
                 return Self.applied
-            }, reviewAssessment: { input in reviews.append(input); return try self.reviewOut() })
+            },
+            reviewAssessment: { input in
+                reviews.append(input); return try self.reviewOut()
+            })
         try await review.request()
         let apply = Task { try await review.apply("spendingCategoryId") }
         await gate.arrivals(1)
@@ -102,7 +111,8 @@ struct FieldSuggestionReviewModelTests {
         #expect(editor.original?["spendingCategoryId"] == .null)
 
         let stale = FieldSuggestionReviewModel(
-            editor: editor, fetch: { _ in response }, saveCategory: { _ in throw CancellationError() })
+            editor: editor, fetch: { _ in response }, saveCategory: { _ in throw CancellationError() },
+            reviewAssessment: { _ in try self.reviewOut() })
         try await stale.request()
         await #expect(throws: CancellationError.self) { try await stale.apply("spendingCategoryId") }
         #expect(stale.proposal("spendingCategoryId") == nil)

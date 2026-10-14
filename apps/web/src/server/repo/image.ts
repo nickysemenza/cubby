@@ -106,6 +106,7 @@ import {
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { retireAssessmentTargetsTx } from "~/server/repo/assessment-state";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { correlated } from "~/server/repo/database-helpers";
@@ -148,7 +149,6 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-tables";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { softDeleteSuggestionDismissalsTx } from "~/server/repo/suggestion-dismissal";
 import type {
   DeriveImageCaptureCurrent as ImageCaptureStateRow,
   DeriveImageCaptureSighting as SightingCaptureRow,
@@ -2106,7 +2106,7 @@ const deleteImagesTx = async (
   }
 
   await softDeleteEntitySearchArtifactsTx(tx, "image", ids);
-  await softDeleteSuggestionDismissalsTx(tx, "image", ids);
+  await retireAssessmentTargetsTx(tx, "image", ids);
   await tx.delete(image).where(inArray(image.id, ids));
 
   await touchUpdatedAt(

@@ -5,7 +5,6 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { assessmentState } from "~/server/db/schema";
-import { publishAssessment, recordFeedback } from "~/server/repo/assessment";
 import { getDb } from "~/server/repo/database-helpers";
 
 /**
@@ -13,7 +12,7 @@ import { getDb } from "~/server/repo/database-helpers";
  * A schema change bumps the kind/version rather than silently missing a prior
  * dismissal.
  */
-export async function suggestionCandidateKey(
+export async function assessmentCandidateKey(
   kind: string,
   values: readonly (string | number | boolean | null)[],
 ): Promise<string> {
@@ -23,50 +22,7 @@ export async function suggestionCandidateKey(
   return `v1:${await sha256Hex(tuple)}`;
 }
 
-export async function dismissSuggestion(
-  db: Database,
-  input: {
-    entityKind: SearchableEntity;
-    entityId: string;
-    suggestionKind: string;
-    candidateKey: string;
-  },
-): Promise<void> {
-  const prediction = await publishAssessment(db, {
-    publicationKey: `recommendation:${input.entityKind}:${input.entityId}:${input.suggestionKind}:${input.candidateKey}`,
-    family: "recommendation",
-    subject: {
-      kind: "recommendation",
-      entity: input.entityKind,
-      recordId: input.entityId,
-      scope: input.suggestionKind,
-      candidateKey: input.candidateKey,
-    },
-    judgment: { candidateKey: input.candidateKey },
-    producer: null,
-    fingerprint: null,
-    evidence: null,
-  });
-  const suppression = {
-    scope: input.suggestionKind,
-    candidateKey: input.candidateKey,
-    fingerprint: null,
-  };
-  await recordFeedback(db, {
-    assessmentId: prediction.id,
-    operationId: `dismiss:${crypto.randomUUID()}`,
-    verdict: "dismissed",
-    authority: "member",
-    actorUserId: null,
-    suppression,
-  });
-  await getDb(db)
-    .update(assessmentState)
-    .set({ suppression, status: "resolved" })
-    .where(eq(assessmentState.id, prediction.id));
-}
-
-export async function getActiveSuggestionDismissalKeys(
+export async function getActiveAssessmentSuppressionKeys(
   db: Database,
   input: {
     entityKind: SearchableEntity;
@@ -95,7 +51,7 @@ export async function getActiveSuggestionDismissalKeys(
 }
 
 /** Retire current targets across families; immutable subjects and Feedback remain original. */
-export async function softDeleteSuggestionDismissalsTx(
+export async function retireAssessmentTargetsTx(
   tx: DrizzleTransaction,
   entityKind: string,
   entityIds: readonly string[],

@@ -300,6 +300,7 @@ export async function evaluatePreparedProductIdentityPair(
     decisionPort?: DecisionPort;
     model?: string | null;
     evaluationId?: string;
+    provenance?: AiProvenance;
   } = {},
 ) {
   const pair = preparedProductIdentityPair.parse(raw);
@@ -325,14 +326,18 @@ export async function evaluatePreparedProductIdentityPair(
       : "Candidate similarity requires member investigation",
     sourceUrls: [],
     fingerprint: pair.fingerprint,
-    signals: z
-      .json()
-      .parse({
-        exact: pair.exact,
-        decision,
-        servedModel: pair.exact ? null : model,
-        snapshots: [pair.first, pair.second],
-      }),
+    signals: z.json().parse({
+      exact: pair.exact,
+      decision,
+      servedModel: pair.exact ? null : model,
+      policy: options.provenance
+        ? {
+            dependencies: options.provenance.dependencies,
+            optionFingerprint: options.provenance.optionFingerprint,
+          }
+        : null,
+      snapshots: [pair.first, pair.second],
+    }),
     actionable: pair.exact,
     conflict: pair.conflict,
     producer: pair.exact

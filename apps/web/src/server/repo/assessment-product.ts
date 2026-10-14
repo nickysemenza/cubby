@@ -1,17 +1,23 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { mergeProductMatchInput } from "@cubby/schemas/recommendations";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { productIdentitySnapshot } from "~/server/ai/product-identity";
-import { assessment, assessmentState, product } from "~/server/db/schema";
+import {
+  assessment,
+  assessmentState,
+  feedback,
+  product,
+} from "~/server/db/schema";
 import {
   type EntityKernelContext,
   executeEntity,
   executeEntityAs,
 } from "~/server/entity-kernel";
 import { recordFeedback } from "~/server/repo/assessment";
+import { withAuditReceipts } from "~/server/repo/audit-receipts";
 import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { canonicalJson } from "~/server/repo/entity-source";
 import { loadProductImageOrderFacts } from "~/server/repo/product-match";
@@ -22,6 +28,19 @@ export async function mergeReviewedProductPair(
   context: EntityKernelContext,
   input: z.output<typeof mergeProductMatchInput>,
 ) {
+  const operationId = `merge:${input.keepId}:${input.mergeId}:${input.expectedFingerprint}`;
+  const previousReceipt = async (db: EntityKernelContext["db"]) =>
+    getDb(db)
+      .select({ id: feedback.id })
+      .from(feedback)
+      .where(
+        and(
+          eq(feedback.assessmentId, input.assessmentId),
+          eq(feedback.operationId, `application:${operationId}`),
+        ),
+      )
+      .limit(1);
+  if ((await previousReceipt(context.db)).length) return { ok: true as const };
   const [keepId, mergeId] = await Promise.all([
     resolveOrThrow(context.db, "product", input.keepId),
     resolveOrThrow(context.db, "product", input.mergeId),
@@ -35,7 +54,7 @@ export async function mergeReviewedProductPair(
     throw new Error("Product pair Assessment not found");
   await recordFeedback(context.db, {
     assessmentId: prediction.id,
-    operationId: `merge:${input.keepId}:${input.mergeId}:${input.expectedFingerprint}`,
+    operationId,
     verdict: "correct",
     intent: "apply",
     authority: "member",
@@ -54,6 +73,8 @@ export async function mergeReviewedProductPair(
       .where(eq(assessmentState.id, prediction.id))
       .for("update")
       .limit(1);
+    if ((await previousReceipt(transactionDb)).length)
+      return { ok: true as const };
     const pair = z
       .object({ otherId: z.uuid(), conflict: z.boolean().optional() })
       .parse(state?.data);
@@ -82,24 +103,41 @@ export async function mergeReviewedProductPair(
         "Product pair evidence changed; request a fresh comparison",
       );
     const txContext = { ...context, db: transactionDb };
-    await executeEntityAs(txContext, "merge", {
-      entity: "product",
-      data: { keepId: input.keepId, mergeIds: [input.mergeId] },
-    });
-    const images = await loadProductImageOrderFacts(transactionDb, keepId);
-    const ordered = matchSurvivorImageOrder(images);
-    if (ordered.some((item, index) => item !== images[index])) {
-      await executeEntity(txContext, {
-        action: "update",
+    const applied = await withAuditReceipts(async () => {
+      await executeEntityAs(txContext, "merge", {
         entity: "product",
-        id: input.keepId,
-        data: {
-          imageOrder: ordered.map((item) =>
-            parseShortcodeFor("image", item.shortcode),
-          ),
-        },
+        data: { keepId: input.keepId, mergeIds: [input.mergeId] },
       });
-    }
+      const images = await loadProductImageOrderFacts(transactionDb, keepId);
+      const ordered = matchSurvivorImageOrder(images);
+      if (ordered.some((item, index) => item !== images[index])) {
+        await executeEntity(txContext, {
+          action: "update",
+          entity: "product",
+          id: input.keepId,
+          data: {
+            imageOrder: ordered.map((item) =>
+              parseShortcodeFor("image", item.shortcode),
+            ),
+          },
+        });
+      }
+    });
+    await recordFeedback(transactionDb, {
+      assessmentId: prediction.id,
+      operationId: `application:${operationId}`,
+      verdict: "correct",
+      intent: "apply",
+      authority: "member",
+      actorUserId: context.actorContext.userId,
+      receipt: {
+        kind: "product_merge",
+        auditIds: applied.auditIds,
+        appliedAt: new Date().toISOString(),
+        keepId,
+        mergeId,
+      },
+    });
     return { ok: true as const };
   });
 }

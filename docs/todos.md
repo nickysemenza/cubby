@@ -687,8 +687,8 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   operation on HTTP and in the generated Swift client. These have no Swift
   call site but some have E2E, skill, or doc callers over HTTP, so move each
   caller to the Start transport or MCP first: `activity.submission`,
-  `entity.graphPaths`, `imageProcessing.{correctDescription,
-  evaluateAppleDescription,retry,schedule,validateCompanionMessage}`,
+  `entity.graphPaths`, `imageProcessing.{evaluateAppleDescription,
+  retry,schedule,validateCompanionMessage}`,
   `inventory.getByLocationIds`, `product.{createWithInventory,
   findOrCreateByUPC}`, `purchaseImport.{commitAcceptedReconciliation,
   emailAccuracyBlind,emailAccuracyGrade,emailAccuracyReport,
@@ -1080,17 +1080,17 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
 
 - ⏳ 🛠️ **Generic child-table review lists.** Several Run/import child tables
   carry a review lifecycle but no manifest identity, so each has a
-  hand-written list: `Suggestion` (pending → applied/rejected/superseded; the
+  hand-written list: field `AssessmentState` (pending → applied/rejected/superseded; the
   `/ai` Review tab), `RunFinding` (open → applied/dismissed; Problems),
   `RunApproval` (pending operations), `PhotoGroupProposal` and
-  `PhotoRunImage` (photo review), `OrderMailCandidateDecision`, and
+  `PhotoRunImage` (photo review), and
   `StatementRow` (open disposition; overlaps the item above). Extend the
   entity compiler with a child-backed read adapter, an identity/navigation
   contract for uuid-keyed rows, and workflow actions that delegate to the
   existing handlers (not field updates; the compiler rejects update
   capabilities on read-only entities), so these render through
   `GenericEntityList`. Promote when a second review list is about to be
-  rewritten; move `Suggestion` first.
+  rewritten; move the field Assessment review list first.
 
 ---
 
@@ -1549,9 +1549,8 @@ Recheck current readers and usage before retiring any storage.
 - **Historical Run machinery.** `ImportPreparedOrder` and `ImportPreparedLine`
   are active contracts. Audit legacy approval/control storage only after
   checking current readers.
-- **Review queues.** `SuggestionDismissal`, `ProductMatchCandidate`,
-  `ImageDescriptionCorrection`, `OrderMailCandidateDecision`,
-  `MerchantVendorRule`. `MailboxCursor` is active in
+- **Review queues.** `MerchantVendorRule`. Shared Assessment/Feedback history
+  and current projections have active review readers. `MailboxCursor` is active in
   Gmail pagination/replay and must be preserved. Recheck against Product match
   recall, collision review, and [purchase corrections](#review-and-apply-corrections);
   an empty queue alone does not establish that its workflow is unnecessary.
