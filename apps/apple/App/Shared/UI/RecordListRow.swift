@@ -40,7 +40,6 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .layoutPriority(1)
                     VStack(alignment: .trailing, spacing: 2) { rail() }
                         .font(.caption2).foregroundStyle(.secondary)
                         .multilineTextAlignment(.trailing)
