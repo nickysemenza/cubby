@@ -34,6 +34,16 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Label-review retirement
+
+Deploy the code that removes Product label-review fields and filters retired
+exception records before applying `0055_remove_label_review` and
+`0056_retire_label_review_metadata`. This contraction removes only the review
+marker and retired-check exceptions; identity exceptions lose their label-photo
+revision while retaining their observed values and notes. Verify Product notes,
+Image and EntityAttachment rows, EntitySource evidence, and InventoryEntry amounts
+are preserved, then confirm the retired column and exception records are gone.
+
 ## Typed Source references
 
 Apply expansion only through `0051_entity_source_targets`, then deploy the

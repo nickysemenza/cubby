@@ -535,6 +535,44 @@ describe("data quality: list filters, sort and hydration agree", () => {
     ).toContain("product_external_id");
   });
 
+  // Retired checks can remain stored until the post-deploy contract migration.
+  it("product: ignores retired exceptions during reads and supported exception writes", async () => {
+    const row = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic retired-check product",
+        model: null,
+      }),
+      TEST_ACTOR,
+    );
+    await unwrapDb(ctx.db).insert(dataExceptionRecord).values({
+      entityId: row.entityId,
+      entityKind: "product",
+      check: "retired_synthetic_check",
+      reason: "unavailable",
+      note: "Synthetic retired metadata awaiting contraction.",
+      fingerprint: "retired_synthetic_check:false",
+    });
+    const quality = await loadDataQualities(ctx.db, "product", [row.entityId]);
+    expect(quality.get(row.entityId)?.exceptions).toEqual([]);
+    const excepted = await setDataException(
+      ctx.db,
+      {
+        entityId: row.id,
+        check: "product_external_id",
+        reason: "unavailable",
+        note: "No identifier on the synthetic item.",
+      },
+      TEST_ACTOR,
+    );
+    expect(excepted.exceptions).toEqual([
+      expect.objectContaining({
+        check: "product_external_id",
+        state: "active",
+      }),
+    ]);
+  });
+
   // Failure mode: broadening the presence predicate invalidates accepted
   // external-ID exceptions even though the record still has no identifier.
   it("product: identifier exceptions survive unrelated edits and reopen on evidence", async () => {

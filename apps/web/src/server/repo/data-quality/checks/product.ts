@@ -1,10 +1,9 @@
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { sql, type SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { product } from "~/server/db/schema";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
-import { labelEvidenceRevisionSql } from "~/server/repo/product-label-review";
 import { orphanedProductCondition } from "~/server/repo/product/orphan-condition";
 import { derivedPriceFilterSql } from "~/server/repo/product/pricing";
 
@@ -13,14 +12,6 @@ import { defineEntityChecks } from "../registry";
 type Product = typeof product;
 
 const AMAZON_SOURCE = "amazon";
-
-// Preserve existing exception fingerprints until label evidence changes their basis.
-const labelAwareIdentityFingerprint = (t: Product, value: SQL) => sql`
-  CASE WHEN ${labelEvidenceRevisionSql(t.id)} IS NULL
-    THEN to_jsonb(${value})
-    ELSE jsonb_build_array(${value}, ${labelEvidenceRevisionSql(t.id)})
-  END
-`;
 
 // includes-installed: a fixture is in scope for the image and purchase checks
 // the same as any other stocked product.
@@ -99,19 +90,6 @@ export const productChecks = defineEntityChecks({
   entity: "product",
   table: product,
   checks: {
-    product_label_review: {
-      expected: (t) => sql`${labelEvidenceRevisionSql(t.id)} IS NOT NULL`,
-      missing: (t) =>
-        sql`${t.labelReviewedRevision} IS DISTINCT FROM ${labelEvidenceRevisionSql(t.id)}`,
-      fingerprint: (t) => [
-        labelEvidenceRevisionSql(t.id),
-        sql`${t.labelReviewedRevision}`,
-        sql`${t.name}`,
-        sql`${t.manufacturer}`,
-        sql`${t.model}`,
-        sql`${t.notes}`,
-      ],
-    },
     product_orphaned: { missing: orphanedProductCondition },
     // Identity applies to every Product, spend or stock or neither: a
     // catalog-only entry still earns its name, maker, and category.
@@ -122,19 +100,15 @@ export const productChecks = defineEntityChecks({
     product_manufacturer: {
       missing: (t) =>
         sql`(trim(${t.manufacturer}) = '' OR lower(trim(${t.manufacturer})) = lower(${UNSPECIFIED_MANUFACTURER}))`,
-      fingerprint: (t) => [
-        labelAwareIdentityFingerprint(t, sql`${t.manufacturer}`),
-      ],
+      fingerprint: (t) => [sql`${t.manufacturer}`],
     },
     product_external_id: {
       missing: (t) => sql`NOT ${hasIdentifier(t)}`,
-      fingerprint: (t) => [labelAwareIdentityFingerprint(t, hasIdentifier(t))],
+      fingerprint: (t) => [hasIdentifier(t)],
     },
     product_category: {
       missing: (t) => sql`NOT ${hasLiveCategory(t)}`,
-      fingerprint: (t) => [
-        labelAwareIdentityFingerprint(t, sql`${t.categoryId}`),
-      ],
+      fingerprint: (t) => [sql`${t.categoryId}`],
     },
     product_price: {
       // A `misc:` bucket is a heterogeneous pile and is *expected* to be
