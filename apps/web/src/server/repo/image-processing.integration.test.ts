@@ -75,6 +75,31 @@ describe("durable image representations", () => {
     return { ...row, ...scheduled };
   }
 
+  // Concurrent schedulers must converge on the one job per natural key; its
+  // shortcode is minted once, never swallowed as a duplicate of the key.
+  it("schedules the same image job concurrently as one row with one shortcode", async () => {
+    const row = await source();
+    const identity = {
+      imageId: parseEntityId("image", row.id),
+      kind: "describe_image" as const,
+      sourceContentHash: hash,
+      processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+    };
+    const ids = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        createImageProcessingJob(ctx.db, identity),
+      ),
+    );
+    expect(new Set(ids).size).toBe(1);
+    const rows = await getDb(ctx.db)
+      .select({ shortcode: imageProcessingJob.shortcode })
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.imageId, identity.imageId));
+    const descriptions = rows.filter((job) => job.shortcode.startsWith("IPR-"));
+    expect(descriptions.length).toBe(2); // the subject lift from source() and this description
+    expect(new Set(descriptions.map((job) => job.shortcode)).size).toBe(2);
+  });
+
   it("does not keep a completed cutout in eligibility review because an earlier device description requested review", async () => {
     const row = await source();
     const jobId = await createImageProcessingJob(ctx.db, {

@@ -1567,7 +1567,8 @@ export const ENTITY_EDGES = {
       column: imageProcessingJob.runId,
       role: "history",
       label: "image processing jobs",
-      description: "An Image job requested by this run.",
+      description:
+        "An Image job requested by this run. The FK is NO ACTION; the one Run hard delete (routine-run pruning) skips runs with jobs.",
       liveness: {
         kind: "allow-target-deleted",
         reason:
