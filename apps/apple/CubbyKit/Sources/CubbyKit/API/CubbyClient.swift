@@ -121,6 +121,7 @@ public actor CubbyClient {
             case .wish: .wish
             case .expense: .expense
             case .email: .email
+            case .imageJob: .imageJob
             case .usdaFood: .usdaFood
             case .image: .image
             case .planting: .planting

@@ -155,7 +155,7 @@ const hydrateRead = (
           rows.map((row) => row.id),
         ),
       ]),
-    mapRow: (row, { loaded: [images, runs, facts] }) => {
+    mapRow: (row, { loaded: [images, runs, facts], displayImages }) => {
       const image = images.get(row.imageId);
       if (!image) throw new Error("Image job's Image reference is missing");
       const fact = facts.get(row.id);
@@ -177,6 +177,7 @@ const hydrateRead = (
         standardCost: fact?.standardCost ?? 0,
         lastExecutor: fact?.lastExecutor ?? null,
         lastError: issueText(row, fact?.deviceRan ?? false),
+        displayImages,
       };
     },
   });

@@ -1520,6 +1520,12 @@ export async function getImageProcessingReadProjection(
             job.kind === "describe_image" &&
             job.processorRevision === IMAGE_DESCRIPTION_PROCESSOR_REVISION,
         )?.state ?? null,
+      identification:
+        jobs.find(
+          (job) =>
+            job.kind === "identify_image" &&
+            job.processorRevision === IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
+        )?.state ?? null,
     },
     analyses,
     correction: correction

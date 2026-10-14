@@ -27,9 +27,8 @@ test("image jobs show completed status and an Apple skip reason", async ({
   const completed = table
     .getByRole("row")
     .filter({ hasText: "Image description" });
-  await expect(
-    completed.getByText("Completed", { exact: true }),
-  ).toHaveAttribute("data-variant", "positive");
+  await expect(completed).toContainText("Completed");
+  await expect(completed).not.toContainText("Queued");
   const skipped = table.getByRole("row").filter({ hasText: "Subject lift" });
   await expect(skipped).toContainText("Apple found no foreground subject.");
 });

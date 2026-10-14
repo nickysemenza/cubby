@@ -307,6 +307,8 @@ export {
 export const imageProcessingStatus = z.object({
   cutout: imageDerivativeStatus.nullable(),
   description: imageProcessingJobState.nullable(),
+  /** The current identification job's state; the Image page polls while it is active. */
+  identification: imageProcessingJobState.nullable(),
 });
 export type ImageProcessingStatus = z.infer<typeof imageProcessingStatus>;
 

@@ -161,7 +161,7 @@ export default defineEntity({
         key: "lastError",
         kind: "text",
         nullable: true,
-        display: { columnLabel: "Last error", detail: true },
+        display: { columnLabel: "Last error", list: true, detail: true },
         validation: readOnly(z.string().nullable()),
       },
       {
