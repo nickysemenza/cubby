@@ -39,7 +39,7 @@ export function formatFoodAmount(amount: {
     : formatted;
 }
 
-export function formatFoodAmountEstimate(
+function formatFoodAmountEstimate(
   estimate: Pick<FoodAmountEstimate, "grams" | "weight" | "batchShare">,
 ): string {
   const parts: string[] = [];

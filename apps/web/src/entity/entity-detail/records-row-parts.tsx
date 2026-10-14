@@ -47,6 +47,16 @@ export const STATUS_VARIANT = {
   muted: "outline",
 } as const;
 
+/** A row's state as a chip, where the row has no mark of its own. */
+export const STATE_VARIANT = {
+  done: "positive",
+  running: "secondary",
+  warning: "warning",
+  failed: "destructive",
+  skipped: "outline",
+  not_reached: "outline",
+} as const;
+
 /** Stable keys for rows that may repeat (a recipe appears once per section it uses). */
 export const rowKeys = (rows: readonly ReportRecordRow[]) => {
   const seen = new Map<string, number>();

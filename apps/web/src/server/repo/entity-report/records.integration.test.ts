@@ -85,9 +85,10 @@ describe("records reports", () => {
       id: attempt.shortcode,
       at: completedAt.toISOString(),
     });
+    expect(block.presentation).toBe("ledger");
+    expect(block.rows[0]?.state).toEqual({ kind: "done", label: "Completed" });
     expect(block.rows[0]?.statuses).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: "Completed" }),
         expect.objectContaining({ label: "Partially verified" }),
       ]),
     );

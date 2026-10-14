@@ -21,7 +21,12 @@ import {
 } from "react";
 
 import { ActivityRunDetail } from "~/app/activity/activity-run-detail";
-import { WorkState, workIssueText } from "~/app/activity/work-state";
+import {
+  WorkState,
+  WorkStateDot,
+  workIssueText,
+  workStateLabel,
+} from "~/app/activity/work-state";
 import { RunSubject, RunTargetChips } from "~/app/runs/run-work-summary";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
@@ -608,19 +613,24 @@ export function RunHistory({
           {attention.data?.items.map((run) => (
             <RecordRow
               key={run.id}
+              leading={<WorkStateDot state={run.state} />}
               primary={<RunSubject run={run} />}
               clip={false}
               secondary={
-                <span className="flex flex-wrap items-center gap-2">
-                  <WorkState state={run.state} />
-                  <span>{run.workLabel}</span>
-                </span>
+                <>
+                  <span className="text-foreground">
+                    {workStateLabel(run.state)}
+                  </span>
+                  {" · "}
+                  {run.workLabel}
+                </>
               }
               actions={
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
+                  className="h-6"
                   onClick={() => select(run)}
                 >
                   Open Run

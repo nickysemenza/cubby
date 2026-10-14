@@ -443,12 +443,10 @@ describe("Email Purchase links", () => {
       linksBlock?.kind === "records"
         ? linksBlock.rows.find((row) => row.id === f.purchase.shortcode)
         : undefined;
-    expect(linked?.statuses).toEqual(
-      expect.arrayContaining([
-        { label: "Linked" },
-        { label: "Imported from this Email", tone: "muted" },
-      ]),
-    );
+    expect(linked?.state).toEqual({ kind: "done", label: "Linked" });
+    expect(linked?.statuses).toEqual([
+      { label: "Imported from this Email", tone: "muted" },
+    ]);
     // An import-accepted source offers no Dismiss.
     expect(linked?.commands ?? []).toEqual([]);
     expect(JSON.stringify(report)).not.toContain("Verified");
@@ -456,6 +454,7 @@ describe("Email Purchase links", () => {
       {
         label: "Open in Gmail",
         url: "https://mail.google.com/mail/u/0/#all/synthetic-retention-thread",
+        hint: expect.stringMatching(/^Mailbox /u),
       },
     );
   });

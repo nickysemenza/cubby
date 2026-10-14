@@ -6,19 +6,25 @@ import {
   entitySourceRead,
   type EntitySourceRead,
 } from "@cubby/schemas/entity-source";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatTimestamp } from "~/lib/date-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import type { RecordListState } from "~/ui/common/record-list";
-import { RecordList, RecordRow, RecordMore } from "~/ui/common/record-list";
+import {
+  RecordDetail,
+  RecordList,
+  RecordMore,
+  RecordRow,
+} from "~/ui/common/record-list";
 import {
   useSectionCount,
   useSectionEmpty,
 } from "~/ui/data-table/detail-section-state";
-import { Badge } from "~/ui/primitives/badge";
 
 import { SourceTargetLink } from "../source-target-link";
 import { RecordPaths } from "./connected-records-table";
@@ -42,39 +48,85 @@ export const recordSources = (record: unknown): Source[] =>
         .parse(record).sources ?? [],
     );
 
+/** When the group's document was last seen; citations without an observation use their record time. */
+const latestSeen = (citations: readonly Source[]) =>
+  citations
+    .map((source) => source.observedAt ?? source.createdAt)
+    .reduce<Date | null>(
+      (latest, at) => (latest === null || at > latest ? at : latest),
+      null,
+    );
+
 const recorderLabel = (recorder: Source["recorder"]) =>
   [recorder.runId, recorder.oauthClientId, recorder.channel]
     .filter(Boolean)
     .join(" · ");
 
-function Citation({ source, entity }: { source: Source; entity: Entity }) {
-  const field = entityFieldModels[entity].fields.find(
-    (field) => field.key === source.fieldPath,
-  );
+const fieldLabel = (entity: Entity, source: Source) =>
+  source.fieldPath
+    ? (entityFieldModels[entity].fields.find(
+        (field) => field.key === source.fieldPath,
+      )?.label ?? source.fieldPath)
+    : "Record";
+
+/** What a document supports, in one line: its cited fields, earlier values named as such. */
+function Supports({
+  entity,
+  citations,
+  related,
+}: {
+  entity: Entity;
+  citations: readonly Source[];
+  related: ReactNode;
+}) {
+  const current = new Set<string>();
+  const earlier = new Set<string>();
+  for (const source of citations)
+    (source.fieldPath && !source.supportsCurrentValue ? earlier : current).add(
+      fieldLabel(entity, source),
+    );
+  for (const label of current) earlier.delete(label);
+  const parts = [
+    ...(current.size ? [[...current].join(", ")] : []),
+    ...(earlier.size ? [`earlier ${[...earlier].join(", ")}`] : []),
+  ];
   return (
-    <div className="grid gap-1 py-1">
-      <div className="flex flex-wrap items-center gap-1.5 text-xs">
-        <span className="font-medium">
-          {source.fieldPath ? (field?.label ?? source.fieldPath) : "Record"}
+    <span className="flex min-w-0 flex-wrap items-center gap-x-1">
+      {parts.length ? (
+        <span className="text-foreground">{parts.join(" · ")}</span>
+      ) : null}
+      {parts.length && related ? <span aria-hidden> · </span> : null}
+      {related}
+    </span>
+  );
+}
+
+/** One quote under its document: the field it supports, the variant seen, and when. */
+function Citation({ source, entity }: { source: Source; entity: Entity }) {
+  return (
+    <div className="grid gap-0.5 py-1">
+      <div className="flex flex-wrap items-baseline gap-x-1.5 text-muted-foreground">
+        <span className="font-medium text-foreground">
+          {fieldLabel(entity, source)}
         </span>
-        {source.fieldPath ? (
-          <Badge variant={source.supportsCurrentValue ? "positive" : "slate"}>
-            {source.supportsCurrentValue ? "Current value" : "Earlier value"}
-          </Badge>
+        {source.fieldPath && !source.supportsCurrentValue ? (
+          <span>earlier value</span>
         ) : null}
         {source.selectedVariant ? (
-          <Badge variant="outline">{source.selectedVariant}</Badge>
+          <span>· {source.selectedVariant}</span>
         ) : null}
         <span
-          className="text-muted-foreground"
           title={`Recorded ${formatTimestamp(source.createdAt)} by ${recorderLabel(source.recorder)}`}
         >
-          {source.observedAt ? "Seen " : null}
-          <DateDisplay timestamp={source.observedAt ?? source.createdAt} />
+          · {source.observedAt ? "Seen " : "Recorded "}
+          <DateDisplay
+            timestamp={source.observedAt ?? source.createdAt}
+            clock="day"
+          />
         </span>
       </div>
       {source.quote ? (
-        <blockquote className="border-l border-border pl-2 text-xs/5 text-muted-foreground">
+        <blockquote className="border-l border-border pl-2 text-muted-foreground">
           {source.quote}
         </blockquote>
       ) : null}
@@ -196,51 +248,82 @@ function EntitySourcesList({
         aria-label="Sources"
         empty={state.status === "success" ? "No sources." : undefined}
       >
-        {[...groups].map(([key, group]) => (
-          <RecordRow
-            key={key}
-            primary={
-              group.target.sourceEntity || group.target.url ? (
-                <SourceTargetLink source={group.target} />
-              ) : (
-                `by ${group.citations[0] ? recorderLabel(group.citations[0].recorder) : "unknown recorder"}`
-              )
-            }
-            secondary={
-              group.paths.length ? (
-                <span className="text-xs text-muted-foreground">
-                  Related evidence
-                </span>
-              ) : null
-            }
-            detail={
-              <>
-                {group.paths.length ? (
-                  <RecordPaths paths={group.paths} />
-                ) : null}
-                {group.citations.map((source) => (
-                  <Citation
-                    key={[
-                      source.createdAt.toISOString(),
-                      source.fieldPath,
-                      source.quote,
-                      source.selectedVariant,
-                      source.observedAt?.toISOString(),
-                    ].join("|")}
-                    source={source}
-                    entity={entity}
-                  />
-                ))}
-              </>
-            }
-          />
-        ))}
+        {[...groups].map(([key, group]) => {
+          const seen = latestSeen(group.citations);
+          const target = group.target.sourceEntity;
+          return (
+            <RecordRow
+              key={key}
+              primary={
+                group.target.sourceEntity || group.target.url ? (
+                  <>
+                    <SourceTargetLink source={group.target} />
+                    {target ? (
+                      <span className="shrink-0 font-mono text-2xs text-muted-foreground">
+                        {target.entityId}
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  `by ${group.citations[0] ? recorderLabel(group.citations[0].recorder) : "unknown recorder"}`
+                )
+              }
+              secondary={
+                <Supports
+                  entity={entity}
+                  citations={group.citations}
+                  related={
+                    group.paths.length ? (
+                      <span className="inline-flex min-w-0 items-center gap-1">
+                        Related
+                        <RecordPaths paths={group.paths} compact />
+                      </span>
+                    ) : null
+                  }
+                />
+              }
+              trailing={
+                seen ? (
+                  <>
+                    Seen <DateDisplay timestamp={seen} clock="day" />
+                  </>
+                ) : null
+              }
+              detail={
+                // Every citation keeps its variant, observation and recorder, quoted or not.
+                group.citations.length > 0 ? (
+                  <RecordDetail
+                    summary={countLabel(group.citations.length, "citation")}
+                    defaultOpen={groups.size === 1}
+                  >
+                    {group.citations.map((source) => (
+                      <Citation
+                        key={[
+                          source.createdAt.toISOString(),
+                          source.fieldPath,
+                          source.quote,
+                          source.selectedVariant,
+                          source.observedAt?.toISOString(),
+                        ].join("|")}
+                        source={source}
+                        entity={entity}
+                      />
+                    ))}
+                  </RecordDetail>
+                ) : null
+              }
+            />
+          );
+        })}
         {views
           .filter((view) => view.totalCount > view.items.length)
           .map((view) => (
             <RecordMore
               key={view.viewKey}
-              label={`${view.totalCount - view.items.length} more ${view.title.toLowerCase()}`}
+              label={countLabel(
+                view.totalCount - view.items.length,
+                `more ${view.title.toLowerCase()}`,
+              )}
               link={{
                 to: "/connections",
                 search: { source: entity, id: sourceId, view: view.viewKey },

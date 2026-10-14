@@ -21,6 +21,11 @@ type DateDisplayProps = {
   className?: string;
   /** Defaults to the compact, two-line form inside a desktop table cell. */
   stacked?: boolean;
+  /**
+   * A row in a list that prints its day elsewhere: `time` prints only the clock time, `day` the
+   * day and time; both keep the relative distance in the tooltip instead of inline.
+   */
+  clock?: "time" | "day";
 } & (
   | { timestamp: string | Date | number; start?: never; end?: never }
   | { start: string | null; end?: string | null; timestamp?: never }
@@ -86,11 +91,24 @@ export function DateDisplay(props: DateDisplayProps) {
     ? formatCompactRelative(date, now)
     : formatRelative(date, now);
   const year = formatInstant(date, "monthYear").slice(-4);
-  const secondary =
-    stacked && year !== today.slice(0, 4)
+  const clock = props.clock && !stacked ? props.clock : null;
+  const secondary = clock
+    ? null
+    : stacked && year !== today.slice(0, 4)
       ? `${yearMark(year)} · ${relative}`
       : relative;
-  const primary = formatInstant(date, stacked ? "monthDay" : "dateShortTime");
+  const primary = formatInstant(
+    date,
+    clock === "time"
+      ? "clock"
+      : clock === "day"
+        ? year === today.slice(0, 4)
+          ? "monthDayTime"
+          : "dateShortTime"
+        : stacked
+          ? "monthDay"
+          : "dateShortTime",
+  );
 
   return (
     <Tooltip open={open} onOpenChange={setOpen}>
@@ -101,6 +119,7 @@ export function DateDisplay(props: DateDisplayProps) {
         aria-describedby={open ? tooltipId : undefined}
         className={cn(
           "cursor-default text-left",
+          clock && "tabular-nums",
           stacked
             ? "block max-w-full min-w-0"
             : "inline-block max-w-full min-w-0 align-baseline whitespace-normal",
@@ -117,6 +136,11 @@ export function DateDisplay(props: DateDisplayProps) {
       </TooltipTrigger>
       <TooltipContent id={tooltipId} role="tooltip">
         <p>{formatInstant(date, "timestampExact")}</p>
+        {clock ? (
+          <p className="opacity-70" suppressHydrationWarning>
+            {formatRelative(date, now)}
+          </p>
+        ) : null}
       </TooltipContent>
     </Tooltip>
   );

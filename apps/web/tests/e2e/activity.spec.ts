@@ -232,7 +232,7 @@ test("Runs pages history, attempts, and events past one cursor page", async ({
 
   await gotoAuthenticatedPage(page, `/runs/jobs/${sample.newestJobId}`);
   const attempt = (number: number) =>
-    page.getByText(new RegExp(`^#${number} · Failed · `));
+    page.getByText(new RegExp(`^Attempt #${number} · Failed · `));
   await expect(attempt(22)).toBeVisible();
   await expect(attempt(1)).toHaveCount(0);
   await page.getByRole("button", { name: "Load more attempts" }).click();

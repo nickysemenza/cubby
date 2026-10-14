@@ -249,7 +249,7 @@ describe("EntityReportSlot records", () => {
             {
               ...row("retrieved", "Retrieved"),
               subtitle: "Failed\n503: upstream returned Service Unavailable",
-              statuses: [{ label: "Failed", tone: "destructive" }],
+              state: { kind: "failed", label: "Failed" },
             },
             {
               ...row("review", "Member review", [
@@ -286,7 +286,7 @@ describe("EntityReportSlot records", () => {
                   },
                 },
               ]),
-              statuses: [{ label: "Not reached", tone: "muted" }],
+              state: { kind: "not_reached", label: "Not reached" },
             },
           ],
         },

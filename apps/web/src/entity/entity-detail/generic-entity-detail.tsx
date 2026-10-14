@@ -573,7 +573,8 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   sections.push({
     id: "sources",
     title: "Sources",
-    count: sources.length,
+    // The section reports its own count: documents shown plus related ones beyond them,
+    // not raw citations (several cite one document).
     icon: QuotesIcon,
     placement: "primary",
     content: (

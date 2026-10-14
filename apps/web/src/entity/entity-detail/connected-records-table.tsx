@@ -137,7 +137,13 @@ export function RecordPaths({
   const [first, ...other] = paths;
   if (!first) return null;
   return (
-    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+    <div
+      className={cn(
+        "flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1",
+        // A compact trail sits in a row's evidence line, at its size.
+        compact ? "text-xs" : "text-sm",
+      )}
+    >
       {compact ? null : (
         <span className="text-xs text-muted-foreground">via</span>
       )}

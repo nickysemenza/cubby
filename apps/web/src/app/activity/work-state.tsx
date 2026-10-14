@@ -1,23 +1,52 @@
 import type { ActivityRun } from "@cubby/schemas/activity";
+import type { ReportRowState } from "@cubby/schemas/entity-report";
 
+import { RecordDot } from "~/ui/common/record-list";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
 
 const states = new Map(
   Object.entries({
-    ready: { label: "Completed", variant: "positive" },
-    completed: { label: "Completed", variant: "positive" },
-    skipped: { label: "Skipped", variant: "secondary" },
-    pending: { label: "Queued", variant: "secondary" },
-    leased: { label: "Processing", variant: "default" },
-    running: { label: "Processing", variant: "default" },
-    waiting_for_device: { label: "Waiting for Apple", variant: "warning" },
-    paused_auth: { label: "Waiting for sign-in", variant: "warning" },
-    paused_offline: { label: "Waiting for connection", variant: "warning" },
-    paused_approval: { label: "Waiting for approval", variant: "warning" },
-    needs_review: { label: "Needs review", variant: "warning" },
-    failed: { label: "Failed", variant: "destructive" },
-    dispatch_failed: { label: "Dispatch failed", variant: "destructive" },
-  } satisfies Record<string, { label: string; variant: BadgeVariant }>),
+    ready: { label: "Completed", variant: "positive", kind: "done" },
+    completed: { label: "Completed", variant: "positive", kind: "done" },
+    skipped: { label: "Skipped", variant: "secondary", kind: "skipped" },
+    pending: { label: "Queued", variant: "secondary", kind: "not_reached" },
+    leased: { label: "Processing", variant: "default", kind: "running" },
+    running: { label: "Processing", variant: "default", kind: "running" },
+    waiting_for_device: {
+      label: "Waiting for Apple",
+      variant: "warning",
+      kind: "warning",
+    },
+    paused_auth: {
+      label: "Waiting for sign-in",
+      variant: "warning",
+      kind: "warning",
+    },
+    paused_offline: {
+      label: "Waiting for connection",
+      variant: "warning",
+      kind: "warning",
+    },
+    paused_approval: {
+      label: "Waiting for approval",
+      variant: "warning",
+      kind: "warning",
+    },
+    needs_review: {
+      label: "Needs review",
+      variant: "warning",
+      kind: "warning",
+    },
+    failed: { label: "Failed", variant: "destructive", kind: "failed" },
+    dispatch_failed: {
+      label: "Dispatch failed",
+      variant: "destructive",
+      kind: "failed",
+    },
+  } satisfies Record<
+    string,
+    { label: string; variant: BadgeVariant; kind: ReportRowState }
+  >),
 );
 
 export const workStateLabel = (state: string) =>
@@ -28,6 +57,13 @@ export function WorkState({ state }: { state: string }) {
     <Badge variant={states.get(state)?.variant ?? "secondary"}>
       {workStateLabel(state)}
     </Badge>
+  );
+}
+
+/** A work state as a record row's mark; an unknown state keeps its label without a mark. */
+export function WorkStateDot({ state }: { state: string }) {
+  return (
+    <RecordDot state={states.get(state)?.kind} label={workStateLabel(state)} />
   );
 }
 

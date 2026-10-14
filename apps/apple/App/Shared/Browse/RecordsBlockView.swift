@@ -70,6 +70,9 @@ struct RecordRowView: View {
         }
         if let label = row.externalLinkLabel, let url = row.externalLinkURL {
             Link(label, destination: url).font(.fieldGuideLabel).frame(minHeight: 44)
+            if let hint = row.externalLinkHint {
+                Text(hint).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
         }
         if let model, !row.commands.isEmpty {
             ReportCommandBar(commands: row.commands, model: model)

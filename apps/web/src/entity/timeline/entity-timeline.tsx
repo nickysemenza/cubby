@@ -34,7 +34,12 @@ import { formatDateSpan } from "~/lib/date-span";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCount, formatCurrency } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
-import { RecordHeading, RecordList, RecordRow } from "~/ui/common/record-list";
+import {
+  RecordDot,
+  RecordHeading,
+  RecordList,
+  RecordRow,
+} from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -355,13 +360,10 @@ function EventLine({ event }: { event: EntityTimelineEvent }) {
   return (
     <RecordRow
       leading={
-        <span className="flex h-5 items-center">
-          <span
-            aria-hidden
-            className="size-2 rounded-full"
-            style={{ backgroundColor: kindColor(event.kind) }}
-          />
-        </span>
+        <RecordDot
+          color={kindColor(event.kind)}
+          label={kindLabel(event.kind)}
+        />
       }
       primary={
         <>

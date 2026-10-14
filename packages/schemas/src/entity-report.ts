@@ -118,6 +118,16 @@ export const entityReportManyInput = z.object({
 export type EntityReportManyInput = z.infer<typeof entityReportManyInput>;
 
 const reportTone = z.enum(["positive", "warning", "destructive", "muted"]);
+/** Where a stage or log row stands; each client draws its own mark for each. */
+const reportRowStates = [
+  "done",
+  "running",
+  "warning",
+  "failed",
+  "skipped",
+  "not_reached",
+] as const;
+export type ReportRowState = (typeof reportRowStates)[number];
 const reportFormat = z.enum(["money", "count", "text"]);
 
 /** A record a row or bar links to. */
@@ -492,6 +502,13 @@ const reportRecordRow = z.object({
   key: z.string().optional(),
   /** Why the row cannot be checked; absent or null when it can. */
   disabledReason: z.string().nullable().optional(),
+  /**
+   * Where the row stands (a pipeline stage, a run, a log event), worded for this row ("Ran",
+   * "Paused"). Clients draw `kind` as the row's mark; `statuses` are only further chips.
+   */
+  state: z
+    .object({ kind: z.enum(reportRowStates), label: z.string() })
+    .optional(),
   /** Status chips with a tone (a run's approvals, findings and operations). */
   statuses: z
     .array(z.object({ label: z.string(), tone: reportTone.optional() }))
@@ -503,7 +520,14 @@ const reportRecordRow = z.object({
   /** Raw material kept out of the way (an operation's arguments). */
   detail: z.object({ label: z.string(), text: z.string() }).optional(),
   /** An external diagnostic or reference page, opened by each client as a link. */
-  externalLink: z.object({ label: z.string(), url: z.httpUrl() }).optional(),
+  externalLink: z
+    .object({
+      label: z.string(),
+      url: z.httpUrl(),
+      /** Which account or mailbox the link opens, shown on hover. */
+      hint: z.string().optional(),
+    })
+    .optional(),
   /** Commands on this row: each runs an existing operation after its declared confirmation. */
   commands: z.array(reportCommand).optional(),
   /** A decision the person makes on this row; see `reportForm` for what it unlocks. */
@@ -519,12 +543,15 @@ export type ReportRecordRow = z.infer<typeof reportRecordRow>;
  */
 const reportRecords = z.object({
   /**
-   * `filmstrip` pages through photo captures. `ledger` lays read-mostly stage and log rows out as
-   * one aligned line each (state, title, text, time, commands) for a client wide enough to align
-   * them; a row's first status tone is its state and its first subtitle line its result.
+   * `filmstrip` pages through photo captures. `ledger` lays read-mostly log rows out as one
+   * aligned line each (state, title, text, time, commands) for a client wide enough to align them;
+   * a row's first subtitle line is its result. `timeline` is a ledger of ordered stages, drawn
+   * with a rail through their states.
    */
-  presentation: z.enum(["filmstrip", "ledger"]).optional(),
+  presentation: z.enum(["filmstrip", "ledger", "timeline"]).optional(),
   kind: z.literal("records"),
+  /** What the block stands for, for a client that picks it out of a report (`portions:<mealRecipeId>`). */
+  key: z.string().optional(),
   title: z.string().optional(),
   rows: z.array(reportRecordRow),
   empty: z.string(),

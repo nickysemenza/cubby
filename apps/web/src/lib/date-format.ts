@@ -25,6 +25,8 @@ const DATE_PRESETS = {
   dateTime: "M/d/yyyy, h:mm:ss a",
   /** 1:04:09 PM */
   time: "h:mm:ss a",
+  /** 1:04 PM */
+  clock: "h:mm a",
   /** 2026-01-05 13:04 */
   isoDateTime: "yyyy-MM-dd HH:mm",
   /** 2026-01-05 13:04:09 */
