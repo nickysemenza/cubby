@@ -23,7 +23,11 @@ const kindOptions = imageProcessingJobKind.options.map((value) => ({
   label: ACTIVITY_KIND_LABEL[value],
 }));
 
-const stateOptions = [
+const stateOptions: {
+  value: (typeof imageProcessingJobState.options)[number];
+  label: string;
+  color: string;
+}[] = [
   { value: "pending", label: "Queued", color: "var(--muted-foreground)" },
   {
     value: "waiting_for_device",
@@ -34,11 +38,7 @@ const stateOptions = [
   { value: "ready", label: "Completed", color: "var(--positive)" },
   { value: "skipped", label: "Skipped", color: "var(--muted-foreground)" },
   { value: "failed", label: "Failed", color: "var(--destructive)" },
-] as const satisfies readonly {
-  value: (typeof imageProcessingJobState.options)[number];
-  label: string;
-  color: string;
-}[];
+];
 
 /**
  * One durable unit of image work (subject lift, description, identification)
@@ -408,7 +408,6 @@ export default defineEntity({
         steps: [{ edge: "ImageProcessingJob.imageId", direction: "outgoing" }],
       },
       inverse: {
-        label: "Image jobs",
         steps: [{ edge: "ImageProcessingJob.imageId", direction: "incoming" }],
       },
     },
@@ -422,7 +421,6 @@ export default defineEntity({
         steps: [{ edge: "ImageProcessingJob.runId", direction: "outgoing" }],
       },
       inverse: {
-        label: "Image jobs",
         steps: [{ edge: "ImageProcessingJob.runId", direction: "incoming" }],
       },
     },

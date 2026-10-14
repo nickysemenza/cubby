@@ -9,6 +9,7 @@ import {
   run as runTable,
   plant,
   email as emailTable,
+  imageProcessingJob as imageJobTable,
 } from "~/server/db/schema";
 import { cookbookListWhere } from "~/server/repo/cookbook";
 import { getDb } from "~/server/repo/database-helpers";
@@ -86,6 +87,7 @@ const COUNT_WHERE = {
   planting: () => buildPlantingWhere(),
   gardenEntry: () => buildGardenEntryWhere(),
   email: () => notDeleted(emailTable),
+  imageJob: () => notDeleted(imageJobTable),
   run: () => and(notDeleted(runTable), ne(runTable.trigger, "ephemeral")),
   ledgerParty: () => buildLedgerPartyWhere({}),
   ledgerTransfer: (db) => buildLedgerTransferWhere(db, {}),

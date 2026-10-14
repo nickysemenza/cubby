@@ -534,6 +534,7 @@ export async function claimImageProcessingJob(
     const { previousAttemptId: _previousAttemptId, ...claimed } = candidate;
     return {
       ...claimed,
+      imageId: parseEntityId("image", claimed.imageId),
       derivativeKey,
       attemptId,
       leaseExpiresAt: leased.leaseExpiresAt,
@@ -1107,7 +1108,7 @@ export async function completeImageProcessingJob(
       .select({
         id: imageProcessingJob.id,
         runId: imageProcessingJob.runId,
-        imageId: imageProcessingJob.imageId,
+        imageId: sql<ImageId>`${imageProcessingJob.imageId}`,
         derivativeId: imageProcessingJob.derivativeId,
         kind: imageProcessingJob.kind,
         state: imageProcessingJob.state,

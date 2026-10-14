@@ -1,4 +1,8 @@
-import { parseShortcodeFor, type RunId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseShortcodeFor,
+  type RunId,
+} from "@cubby/schemas/identifiers";
 import {
   imageProcessingHello,
   pullCompanionImageProcessingInput,
@@ -274,7 +278,7 @@ async function completeNormalizedImageInput(
       adopted: await completeCloudImageDescription(db, {
         jobId: result.jobId,
         attemptId: result.attemptId,
-        imageId: context.imageId,
+        imageId: parseEntityId("image", context.imageId),
         runId: context.runId,
         normalizedInput: { bytes, key: snapshotKey },
       }),
