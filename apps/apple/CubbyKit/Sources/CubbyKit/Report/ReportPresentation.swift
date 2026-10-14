@@ -145,6 +145,8 @@ public struct ReportPresentation: Hashable, Sendable {
         public let detailText: String?
         public var externalLinkLabel: String? = nil
         public var externalLinkURL: URL? = nil
+        /// Which account or mailbox the link opens.
+        public var externalLinkHint: String? = nil
         /// Commands on this row; each runs an existing operation after its declared confirmation.
         public let commands: [ReportCommand]
         /// A decision the person makes on this row (see `Records.form`).
@@ -452,6 +454,7 @@ public struct ReportPresentation: Hashable, Sendable {
                             detailLabel: row.detail?.label, detailText: row.detail?.text,
                             externalLinkLabel: row.externalLink?.label,
                             externalLinkURL: row.externalLink.flatMap { URL(string: $0.url) },
+                            externalLinkHint: row.externalLink?.hint,
                             commands: row.commands ?? [], choice: row.choice.map(choice))
                     },
                     empty: records.empty,

@@ -53,6 +53,8 @@ test("Sources group internal citations and open their entity", async ({
   });
   await expect(link).toHaveCount(1);
   await expect(link).toHaveAttribute("href", `/vendors/${vendor.id}`);
+  // Two documents: each one's citations start folded under their count.
+  await section.getByText("2 citations").click();
   await expect(section.getByText("Synthetic tool identity.")).toBeVisible();
   await expect(section.getByText("Synthetic maker evidence.")).toBeVisible();
   await expect(
