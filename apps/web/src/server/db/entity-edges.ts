@@ -336,14 +336,22 @@ export const ENTITY_EDGES = {
       label: "attempts",
       description:
         "One claim of this job by AI Gateway or an Apple device, with its retained diagnostics and result.",
-      liveness: { kind: "must-target-live" },
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
+      },
     },
     "ImageProcessingEvent.jobId": {
       column: imageProcessingEvent.jobId,
       role: "history",
       label: "events",
       description: "A step this job's processing recorded.",
-      liveness: { kind: "must-target-live" },
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
+      },
     },
     "ImageProcessingSubmissionJob.jobId": {
       column: imageProcessingSubmissionJob.jobId,
@@ -351,7 +359,11 @@ export const ENTITY_EDGES = {
       label: "submissions",
       description:
         "A schedule or retry request that included this job, with its disposition.",
-      liveness: { kind: "must-target-live" },
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
+      },
     },
   }),
   email: edges({
