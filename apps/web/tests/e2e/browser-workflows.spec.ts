@@ -202,6 +202,11 @@ test("expense quick-add submits from the desktop dialog", async ({ page }) => {
   await dialog.getByRole("spinbutton", { name: "Cost" }).fill("12.34");
   await chooseOption(
     page,
+    dialog.getByRole("combobox", { name: "Line kind", exact: true }),
+    "Item or service",
+  );
+  await chooseOption(
+    page,
     dialog.getByRole("combobox", { name: /^Cost type/ }),
     "Materials",
   );

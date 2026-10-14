@@ -43,6 +43,7 @@ test("filters transactions by how well their purchase is itemized", async ({
     });
   const line = (purchaseId: string, cost: number, itemized: boolean) =>
     post(page, origin, "expense", {
+      lineKind: "principal",
       name: `${tag} line ${cost}`,
       cost,
       date: "2026-09-10",

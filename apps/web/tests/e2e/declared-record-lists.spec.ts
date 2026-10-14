@@ -28,6 +28,7 @@ test("combined records retain server sorting, pagination, and filters after relo
     name: `${prefix} Zulu`,
   });
   await createFixture(page, "expense", {
+    lineKind: "principal",
     name: `Quality evidence ${Date.now()}`,
     productId: product.id,
     cost: 2,
@@ -251,6 +252,7 @@ test("purchase and expense totals follow the full filtered set in tables and car
   ];
   const expense = (name: string, cost: number, purchaseId: string) =>
     createFixture(page, "expense", {
+      lineKind: "principal",
       name: `${tag} ${name}`,
       cost,
       purchaseId,
@@ -498,6 +500,7 @@ test("record dates retain their calendar label with present and future context",
   };
   await unclipped(futureTaskLabel);
   await createFixture(page, "expense", {
+    lineKind: "principal",
     name: `${prefix} expense`,
     date: later,
     cost: 2,

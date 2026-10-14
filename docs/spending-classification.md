@@ -85,4 +85,5 @@ in which case PostgreSQL aborts one and the person retries.
 
 Splitting an Expense preserves its category when a part omits the field, resets
 it when a part supplies null, and stores an explicit category when supplied.
+Web and native split editors let each part retain an explicit receipt role or ask for a Decision; an abstention can be resolved by selecting a role before retrying.
 Splits preserve allocation basis and cannot fabricate Product/receipt identity.
