@@ -1254,6 +1254,15 @@ filename extension. Base64, URL, and staged-upload inputs share this validation;
 unknown bytes and unreadable images fail before final storage. A filename never
 establishes the format, and a specific MIME label must still agree with the bytes.
 
+Linking an Email automatically attaches its retained files except printable
+shipping, postage, or return labels. An explicit label filename identifies that
+purpose; a generic `label` filename needs the Email subject to identify shipping,
+postage, or return labels. The Email body can still establish a shipping charge,
+and its original attachments stay retained and readable. Other files in the same
+Email, including files named as receipts or invoices, still attach normally. This rule applies to
+automatic promotion when linking or importing an Email; explicit file attachment
+remains available.
+
 The physical graph is composed at read time from `ENTITY_EDGES` and
 `ENTITY_EDGE_OWNERS` (`repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
 sourceId, targetKind, targetId)` with both ends live. It backs the Relations

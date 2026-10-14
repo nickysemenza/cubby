@@ -299,16 +299,36 @@ export async function readMail(
   });
 }
 
-/** Retained attachments become the Purchase's documents, once. */
+function isPrintableShippingLabel(
+  filename: string,
+  subject: RetainedMail["subject"],
+) {
+  const name = filename.replace(/[._-]+/g, " ");
+  // Accounting evidence in a label Email still belongs on the Purchase.
+  if (/\b(?:receipt|invoice)\b/i.test(name)) return false;
+  const labelPurpose = /\b(?:shipping|postage|return)\s*labels?\b/i;
+  return (
+    labelPurpose.test(name) ||
+    (/\blabels?\b/i.test(name) && labelPurpose.test(subject ?? ""))
+  );
+}
+
+/** Retained evidence files become Purchase documents; printable labels stay with the Email. */
 async function attachRetainedSource(
   db: Database,
-  input: { orderMailId: string; purchaseId: string; purchaseShortcode: string },
+  input: {
+    orderMailId: string;
+    purchaseId: string;
+    purchaseShortcode: string;
+    subject: RetainedMail["subject"];
+  },
 ) {
   const rows = await getDb(db)
     .select()
     .from(orderMailAttachment)
     .where(eq(orderMailAttachment.orderMailId, input.orderMailId));
   for (const attachment of rows) {
+    if (isPrintableShippingLabel(attachment.filename, input.subject)) continue;
     let imageId = attachment.imageId;
     if (!imageId && attachment.pendingObjectKey) {
       const bytes = await productionOrderMailAttachmentStorage.get(
@@ -473,6 +493,7 @@ export async function linkOrderMail(
     orderMailId: input.mail.id,
     purchaseId: chosen.id,
     purchaseShortcode: chosen.shortcode,
+    subject: input.mail.subject,
   });
   return chosen;
 }
