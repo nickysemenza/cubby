@@ -709,7 +709,7 @@ export const problemDetectors = {
     "fast",
     "coverage",
     vendorWithoutLogoSchema,
-    "vendorsWithPurchases",
+    "vendors",
   ),
   // Advisory, not backlog (see the note above): a purchase whose expenses disagree
   // with its stated total is often correct as-is, and the only mechanical "fix"

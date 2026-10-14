@@ -66,8 +66,8 @@ test("Work queue filters routing before paging and opens its source record", asy
     })
     .first();
   await expect(product).toHaveAttribute("href", `/products/${shared.id}`);
-  // One record can need both repair and research. Keep both work rows but
-  // copy the canonical code once.
+  // One record can need both repair and research. Copy its code once, along
+  // with the shared vendor's logo task even before it has a purchase.
   await expect(
     page.getByRole("table").getByRole("link", {
       name: `${prefix} shared product`,
@@ -77,8 +77,12 @@ test("Work queue filters routing before paging and opens its source record", asy
   await page.getByRole("checkbox", { name: "Select all", exact: true }).check();
   await page.getByRole("button", { name: "Copy codes", exact: true }).click();
   await expect
-    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toBe(shared.id);
+    .poll(async () =>
+      (await page.evaluate(() => navigator.clipboard.readText()))
+        .split("\n")
+        .sort(),
+    )
+    .toEqual([shared.id, mail.vendor.shortcode].sort());
   await page
     .getByRole("button", { name: "Clear selection", exact: true })
     .click();

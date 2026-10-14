@@ -14,11 +14,11 @@ import type {
   VendorAccountUpdateData,
 } from "@cubby/schemas/vendor-account";
 import { vendorAccountOut } from "@cubby/schemas/vendor-account";
-import { and, eq, inArray, max, sql } from "drizzle-orm";
+import { and, count, eq, inArray, max, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { ledgerParty, run, vendorAccount } from "~/server/db/schema";
+import { ledgerParty, purchase, run, vendorAccount } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   notDeleted,
@@ -139,8 +139,25 @@ const hydrateRead = async (
             rows.map((row) => row.id),
           ),
         ),
+        loadListGroup(projection, "derived", async () => {
+          if (rows.length === 0) return new Map();
+          const counts = await unwrapDb(db)
+            .select({ accountId: purchase.vendorAccountId, count: count() })
+            .from(purchase)
+            .where(
+              and(
+                inArray(
+                  purchase.vendorAccountId,
+                  rows.map((row) => row.id),
+                ),
+                notDeleted(purchase),
+              ),
+            )
+            .groupBy(purchase.vendorAccountId);
+          return new Map(counts.map((row) => [row.accountId, row.count]));
+        }),
       ]),
-    mapRow: (row, { loaded: [vendors, parties, activity] }) => {
+    mapRow: (row, { loaded: [vendors, parties, activity, purchaseCounts] }) => {
       const vendor = vendors?.get(row.vendorId);
       const party = parties?.get(row.ledgerPartyId);
       const result = {
@@ -151,6 +168,7 @@ const hydrateRead = async (
         Object.assign(result, {
           lastRunAt: activity.get(row.id)?.lastRunAt ?? null,
           lastSuccessAt: activity.get(row.id)?.lastSuccessAt ?? null,
+          purchaseCount: purchaseCounts?.get(row.id) ?? 0,
         });
       if (wantsListGroup(projection, "relations"))
         Object.assign(result, {

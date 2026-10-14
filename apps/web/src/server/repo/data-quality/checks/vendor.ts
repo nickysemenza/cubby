@@ -7,8 +7,8 @@ import { defineEntityChecks } from "../registry";
 
 type Vendor = typeof vendor;
 
-// A vendor is worth having identity evidence for only once it has actually
-// been transacted with (mirrors `vendorPurchaseCount`, repo/vendor.ts).
+// Order evidence and a website become expected once a vendor has purchases.
+// Every live vendor needs a logo independently of purchase history.
 const hasLivePurchase = (t: Vendor) => sql`EXISTS (
   SELECT 1 FROM "Purchase" dq_ven_p
   WHERE dq_ven_p."vendorId" = ${t.id} AND dq_ven_p."deletedAt" IS NULL
@@ -48,7 +48,6 @@ export const vendorChecks = defineEntityChecks({
       ],
     },
     vendor_logo: {
-      expected: hasLivePurchase,
       missing: (t) => sql`NOT ${hasDisplayableLogo(t)}`,
       // A new website is new evidence for a logo search.
       fingerprint: (t) => [sql`${t.website}`, hasDisplayableLogo(t)],

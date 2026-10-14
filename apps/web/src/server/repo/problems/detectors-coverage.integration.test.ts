@@ -85,7 +85,7 @@ describe("coverage totals", () => {
       }),
       TEST_ACTOR,
     );
-    // A vendor counts only once it has a live purchase.
+    // Logo coverage includes vendors with and without purchases.
     const transacted = await createRepoEntity(ctx, "vendor", {
       name: "Coverage transacted vendor",
     });
@@ -101,7 +101,7 @@ describe("coverage totals", () => {
     expect(delta("productsWithNoImages")).toBe(1);
     expect(delta("neverVerifiedInventory")).toBe(1);
     expect(delta("ingredientsWithoutProduct")).toBe(1);
-    expect(delta("vendorsWithPurchases")).toBe(1);
+    expect(delta("vendors")).toBe(2);
     // A parentless location is filed under the seeded "Home" root, so the new
     // shelf becomes the leaf and Home stops being one: the leaf count is flat.
     expect(delta("emptyLocations")).toBe(0);

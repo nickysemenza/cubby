@@ -25,6 +25,7 @@ import { expenseFiltersSchema } from "@cubby/schemas/project";
 import { purchaseFiltersSchema } from "@cubby/schemas/purchase";
 import { proposedImportFix } from "@cubby/schemas/purchase-import";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
+import { vendorFiltersSchema } from "@cubby/schemas/vendor";
 import {
   workQueueGapChecks,
   workQueueGapViews,
@@ -52,6 +53,7 @@ import {
   financialTransaction,
   product,
   purchase,
+  vendor,
   run as runTable,
   suggestion as suggestionTable,
 } from "~/server/db/schema";
@@ -72,6 +74,7 @@ import {
 } from "~/server/repo/settlement-grace";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { reviewableSuggestionSql } from "~/server/repo/suggestion-review";
+import { buildVendorWhereClause } from "~/server/repo/vendor";
 import { attentionStatePredicate } from "~/server/repo/work-attention";
 import { additionalWorkProblemSelections } from "~/server/repo/work-queue-problems";
 import {
@@ -158,6 +161,22 @@ async function workQueueProjection(
         ),
         details: research,
         key: "research:product",
+        shared: true,
+        carriesGaps: true,
+      }),
+    );
+  const vendorGaps = gapViewFilters(scope, "vendor");
+  if (vendorGaps && admits("vendor", true))
+    selections.push(
+      ...workQueueCandidate(scope, {
+        entity: "vendor",
+        table: sql`${vendor}`,
+        id: sql`"Vendor".shortcode`,
+        name: sql`"Vendor".name`,
+        owners: sql`ARRAY[]::uuid[]`,
+        where: buildVendorWhereClause(vendorFiltersSchema.parse(vendorGaps)),
+        details: research,
+        key: "research:vendor",
         shared: true,
         carriesGaps: true,
       }),

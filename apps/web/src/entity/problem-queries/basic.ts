@@ -34,12 +34,9 @@ export const basicProblemQueries = [
     executionLane: "fast",
     continuation: { kind: "entity-list" },
     freshness: { kind: "live" },
-    title: "Active vendors without logos",
-    description:
-      "Vendors with at least one live purchase and no displayable logo image.",
-    emptyMessage: "Every active vendor has a logo.",
-    // `vendor_logo`'s own `expected` is "has a live purchase"
-    // (checks/vendor.ts), the same population `purchaseCount: "1"` selected.
+    title: "Vendors without logos",
+    description: "Vendors with no displayable logo image.",
+    emptyMessage: "Every vendor has a logo or a recorded exception.",
     source: {
       kind: "entity",
       entity: "vendor",

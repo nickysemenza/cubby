@@ -1217,7 +1217,7 @@ const DECLARED_SECTIONS = [
     coverage: {
       keys: ["vendorsWithoutLogos"],
       meter: {
-        total: (t) => t.vendorsWithPurchases,
+        total: (t) => t.vendors,
         doneLabel: "with a mini logo",
       },
     },

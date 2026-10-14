@@ -113,7 +113,7 @@ describe("data quality: finance and project entities", () => {
     });
   });
 
-  it("vendor: order evidence, logo and website (only once transacted with)", async () => {
+  it("vendor: logo always expected; order evidence and website once transacted with", async () => {
     const untransacted = await createRepoEntity(ctx, "vendor", {
       name: "DQ vendor untransacted",
     });
@@ -145,10 +145,10 @@ describe("data quality: finance and project entities", () => {
       gap.entityId,
       complete.entityId,
     ]);
-    // Never transacted with: no evidence is expected at all.
+    // A vendor needs a logo before its first purchase, but not order evidence or a website.
     expect(hydrated.get(untransacted.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [expect.objectContaining({ check: "vendor_logo" })],
     });
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("vendor_order_evidence");

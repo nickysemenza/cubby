@@ -1030,6 +1030,20 @@ and emit no migration.
 
 ## Data quality
 
+Every Purchase expects a Vendor Account; a missing account is an identity gap
+on the Purchase and appears in its Research queue until assigned. Missing
+attribution stays nullable so incomplete records can be captured without
+guessing a member. Account purchase previews follow that explicit link and
+show the three newest live purchases and the full count, never all purchases
+from the shared Vendor. Vendor Accounts have no quality score until they have
+actionable checks of their own; absence of checks does not mean 100.
+
+Every live Vendor expects a displayable logo, including vendors with no
+purchases or accounts. Its missing-logo gap appears once in the Work queue as
+shared Research work. An evidence-bound `unavailable` exception still closes
+that gap. The logo coverage meter counts all live vendors. Order-evidence and
+website checks retain their purchase-based applicability.
+
 Run uses the shared quality score, filters, sorting, and explanation. Its
 progressive list declares quality and media enrichment groups, so base identity
 arrives first and web and native request scores through the shared loader. Its
@@ -1060,7 +1074,7 @@ that section owners exist after deriving relation sections. Placement changes pr
 applicability, and exceptions retain the shared record-level calculation.
 
 The Research queue ([terminology](guide/terminology.md#purchase-research)) is no table: it is the
-`research-queue` saved views on Product, Purchase and Expense, which filter
+`research-queue` saved views on Product, Purchase, Expense and Vendor, which filter
 `dataGaps` to the checks research can close and sort by `dataQuality`
 ascending. A `DataException` bound to the evidence fingerprint removes an item
 until its inputs change.

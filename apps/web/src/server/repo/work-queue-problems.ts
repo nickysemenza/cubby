@@ -17,7 +17,11 @@ import {
 } from "@cubby/schemas/project";
 import { recipeFiltersSchema } from "@cubby/schemas/recipe";
 import { vendorFiltersSchema } from "@cubby/schemas/vendor";
-import { type WorkQueueRow } from "@cubby/schemas/work-queue";
+import {
+  workQueueGapChecks,
+  workQueueGapViews,
+  type WorkQueueRow,
+} from "@cubby/schemas/work-queue";
 import { type ParsedShortcode } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { sql, type SQL } from "drizzle-orm";
@@ -295,6 +299,24 @@ export async function additionalWorkProblemSelections(
       nextAction: definition.description,
     } as const;
     if (source.kind === "entity") {
+      const gapView = workQueueGapViews.find(
+        (view) => view.entity === source.entity,
+      );
+      const coveredChecks = new Set<string>(
+        gapView ? workQueueGapChecks(gapView) : [],
+      );
+      // Canonical gap views already emit this work with structured checks.
+      if (
+        source.filters.length > 0 &&
+        source.filters.every(
+          (filter) =>
+            filter.id === "dataGaps" &&
+            (Array.isArray(filter.value) ? filter.value : [filter.value]).every(
+              (check) => coveredChecks.has(check),
+            ),
+        )
+      )
+        continue;
       if (
         ["purchase", "expense", "financialTransaction"].includes(
           source.entity,

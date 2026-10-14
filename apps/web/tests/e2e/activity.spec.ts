@@ -156,7 +156,11 @@ test("Image jobs open in the generic detail and their Run's section, while Activ
 
   // The requesting Run lists the job through the generic relation.
   await gotoAuthenticatedPage(page, `/runs/${sample.runId}`);
-  await expect(page.getByText(sample.jobId).first()).toBeVisible();
+  await expect(
+    page
+      .locator("#image-jobs")
+      .locator(`a[href="/image-jobs/${sample.jobId}"]`),
+  ).toBeVisible();
   await gotoAuthenticatedPage(page, "/activity");
   await expect(
     page.getByText("Recent changes across all entities."),

@@ -53,6 +53,7 @@ export const workQueueSourceSchema = z.enum([
  * `dataGaps` filter is the set of checks such a row can carry. */
 export const workQueueGapViews = [
   { entity: "product", source: "research", view: "research-queue" },
+  { entity: "vendor", source: "research", view: "research-queue" },
   { entity: "purchase", source: "research", view: "research-queue" },
   { entity: "expense", source: "research", view: "research-queue" },
   { entity: "email", source: "email", view: "pipeline-worklist" },
