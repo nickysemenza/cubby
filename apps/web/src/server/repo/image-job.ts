@@ -2,12 +2,12 @@ import {
   ACTIVITY_KIND_LABEL,
   imageProcessingJobKind,
 } from "@cubby/schemas/activity";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   type ImageJobFilters,
   type ImageJobOut,
   imageJobOut,
 } from "@cubby/schemas/image-job";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -22,10 +22,7 @@ import {
   type ListReadRow,
 } from "~/server/repo/list-projection";
 import { completeListReader } from "~/server/repo/list-read-adapters";
-import {
-  createEntityReader,
-  defineRepository,
-} from "~/server/repo/repository";
+import { createEntityReader, defineRepository } from "~/server/repo/repository";
 import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -74,24 +71,24 @@ const loadFacts = async (
     SELECT j.id,
       (SELECT coalesce(sum(u."chargedCost"), 0) FROM "AiUsage" u
         WHERE u."deletedAt" IS NULL AND (
-          (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
+          (u."jobKind" = ${"image_processing_attempt"} AND u."jobId" IN (
             SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id))
           OR (u."jobKind" = j.kind AND u."jobId" = j.id::text))) AS charged,
       (SELECT coalesce(sum(u."standardCost"), 0) FROM "AiUsage" u
         WHERE u."deletedAt" IS NULL AND (
-          (u."jobKind" = 'image_processing_attempt' AND u."jobId" IN (
+          (u."jobKind" = ${"image_processing_attempt"} AND u."jobId" IN (
             SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id))
           OR (u."jobKind" = j.kind AND u."jobId" = j.id::text))) AS standard,
       coalesce(
-        (SELECT a.executor->>'name' FROM "ImageProcessingAttempt" a
+        (SELECT a.executor->>${"name"} FROM "ImageProcessingAttempt" a
           WHERE a."jobId" = j.id AND a.executor IS NOT NULL
           ORDER BY a.number DESC LIMIT 1),
-        CASE WHEN (j.kind = 'describe_image' AND j."processorRevision" = ${IMAGE_DESCRIPTION_PROCESSOR_REVISION})
-          OR (j.kind = 'identify_image' AND j."processorRevision" = ${IMAGE_IDENTIFICATION_PROCESSOR_REVISION})
+        CASE WHEN (j.kind = ${imageProcessingJobKind.enum.describe_image} AND j."processorRevision" = ${IMAGE_DESCRIPTION_PROCESSOR_REVISION})
+          OR (j.kind = ${imageProcessingJobKind.enum.identify_image} AND j."processorRevision" = ${IMAGE_IDENTIFICATION_PROCESSOR_REVISION})
           THEN 'AI Gateway' END
       ) AS executor,
       EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a
-        WHERE a."jobId" = j.id AND a.executor->>'kind' = 'device') AS "deviceRan"
+        WHERE a."jobId" = j.id AND a.executor->>${"kind"} = ${"device"}) AS "deviceRan"
     FROM "ImageProcessingJob" j
     WHERE j.id IN (${sql.join(
       ids.map((id) => sql`${id}::uuid`),
@@ -213,9 +210,7 @@ const reader = createEntityReader<
     const [row] = await unwrapDb(db)
       .select()
       .from(imageProcessingJob)
-      .where(
-        and(eq(imageProcessingJob.id, id), notDeleted(imageProcessingJob)),
-      )
+      .where(and(eq(imageProcessingJob.id, id), notDeleted(imageProcessingJob)))
       .limit(1);
     return row;
   },

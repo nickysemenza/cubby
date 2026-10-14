@@ -1,4 +1,3 @@
-import { generateShortcode } from "@cubby/shared";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { testUserId } from "@cubby/schemas/testing";
@@ -6,6 +5,7 @@ import {
   workQueueHouseholdInput,
   workQueueOutSchema,
 } from "@cubby/schemas/work-queue";
+import { generateShortcode } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";

@@ -13,7 +13,6 @@ import {
 import { useEffect, useState } from "react";
 import { z } from "zod";
 
-import { workStateLabel } from "./image-processing-state";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
@@ -38,6 +37,8 @@ import {
 import { Image } from "~/ui/primitives/image";
 import { Textarea } from "~/ui/primitives/textarea";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
+
+import { workStateLabel } from "./image-processing-state";
 
 function ImageAnalysisHistory({
   id,

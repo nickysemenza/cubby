@@ -30,6 +30,20 @@ export {
   type ImageProcessingJobState,
 } from "./activity-fields";
 
+/** One attempt's state (`ImageProcessingAttempt_state_check`). */
+export const imageProcessingAttemptState = z.enum([
+  "leased",
+  "running",
+  "waiting",
+  "expired",
+  "ready",
+  "skipped",
+  "failed",
+]);
+export type ImageProcessingAttemptState = z.infer<
+  typeof imageProcessingAttemptState
+>;
+
 export const imageCutoutEligibility = z.enum([
   "eligible",
   "ineligible",

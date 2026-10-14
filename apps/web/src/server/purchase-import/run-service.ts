@@ -490,7 +490,7 @@ export async function startGuardedPhotoCoordinator(
           AND target."state" = ${runTargetState.enum.pending}
           AND NOT EXISTS (
             SELECT 1 FROM "ImageProcessingJob" job
-            WHERE job."imageId" = target."imageId"
+            WHERE job."imageId" = target."imageId" AND job."deletedAt" IS NULL
               AND job."kind" = ${imageProcessingJobKind.enum.describe_image}
               AND job."processorRevision" = ${IMAGE_DESCRIPTION_PROCESSOR_REVISION}
               AND job."sourceContentHash" = source."sha256"

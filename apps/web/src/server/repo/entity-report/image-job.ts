@@ -1,4 +1,8 @@
 import type { ReportBlock, ReportRowState } from "@cubby/schemas/entity-report";
+import {
+  imageProcessingAttemptState,
+  type ImageProcessingAttemptState,
+} from "@cubby/schemas/image-processing";
 import { asc, count, desc, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -15,9 +19,7 @@ const EVENT_LIMIT = 200;
 type Records = Extract<ReportBlock, { kind: "records" }>;
 type Row = Records["rows"][number];
 
-const ATTEMPT_STATE: Readonly<
-  Record<string, { kind: ReportRowState; label: string }>
-> = {
+const ATTEMPT_STATE = {
   ready: { kind: "done", label: "Completed" },
   skipped: { kind: "skipped", label: "Skipped" },
   failed: { kind: "failed", label: "Failed" },
@@ -25,6 +27,17 @@ const ATTEMPT_STATE: Readonly<
   waiting: { kind: "warning", label: "Waiting for Apple" },
   leased: { kind: "running", label: "Claimed" },
   running: { kind: "running", label: "Processing" },
+} as const satisfies Record<
+  ImageProcessingAttemptState,
+  { kind: ReportRowState; label: string }
+>;
+
+/** An unrecognised stored state keeps its own word without a mark. */
+const attemptState = (state: string) => {
+  const known = imageProcessingAttemptState.safeParse(state);
+  return known.success
+    ? ATTEMPT_STATE[known.data]
+    : { kind: "not_reached" as const, label: state };
 };
 
 const json = (value: unknown) => JSON.stringify(value, null, 2);
@@ -87,10 +100,7 @@ export async function imageJobAttemptsReport(
         return row({
           title: `Attempt #${attempt.number}`,
           at: (attempt.completedAt ?? attempt.startedAt).toISOString(),
-          state: ATTEMPT_STATE[attempt.state] ?? {
-            kind: "not_reached",
-            label: attempt.state,
-          },
+          state: attemptState(attempt.state),
           lines: [
             ...(executor ? [{ text: executor, tone: "muted" as const }] : []),
             ...(attempt.error

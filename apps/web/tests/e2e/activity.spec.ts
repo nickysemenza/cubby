@@ -110,7 +110,9 @@ test("Image jobs list by submission and show every attempt and event", async ({
 
   await gotoAuthenticatedPage(page, `/image-jobs/${sample.newestJobId}`);
   const attempts = page.locator("#attempts");
-  await expect(attempts.getByText("Attempt #22", { exact: true })).toBeVisible();
+  await expect(
+    attempts.getByText("Attempt #22", { exact: true }),
+  ).toBeVisible();
   await expect(attempts.getByText("Attempt #1", { exact: true })).toBeVisible();
   await expect(attempts.getByText(/^synthetic\.step\.\d{2}$/)).toHaveCount(22);
 });

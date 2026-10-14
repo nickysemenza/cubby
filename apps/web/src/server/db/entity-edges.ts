@@ -1555,8 +1555,7 @@ export const ENTITY_EDGES = {
       column: imageProcessingJob.runId,
       role: "history",
       label: "image processing jobs",
-      description:
-        "An Image job requested by this run.",
+      description: "An Image job requested by this run.",
       liveness: {
         kind: "allow-target-deleted",
         reason:

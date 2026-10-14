@@ -56,7 +56,6 @@ import {
   suggestion as suggestionTable,
 } from "~/server/db/schema";
 import { obsoleteExecutionFindingSql } from "~/server/purchase-import/run-retirement";
-import { attentionStatePredicate } from "~/server/repo/work-attention";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { gapCondition } from "~/server/repo/data-quality/sql";
 import { getDb, ilikeContains } from "~/server/repo/database-helpers";
@@ -73,6 +72,7 @@ import {
 } from "~/server/repo/settlement-grace";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { reviewableSuggestionSql } from "~/server/repo/suggestion-review";
+import { attentionStatePredicate } from "~/server/repo/work-attention";
 import { additionalWorkProblemSelections } from "~/server/repo/work-queue-problems";
 import {
   NO_FACT_COLUMNS,
