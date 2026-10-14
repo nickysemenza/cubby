@@ -22,7 +22,8 @@ export function installedApprovalVerifier(
     );
     if (result.error || result.status !== 0)
       throw new Error(
-        `Candidate does not satisfy the installed app privacy requirement: ${candidate}\n${result.error?.message ?? result.stderr.trim()} (exit ${result.status})`,
+        `Candidate does not satisfy the installed app privacy requirement: ${candidate}\n${result.error?.message ?? result.stderr.trim()} (exit ${result.status})\n` +
+          "To intentionally switch the installed signing identity (for example, TestFlight to development), run pnpm apple mac --replace-signing-identity. macOS privacy permissions may need approval again.",
       );
   };
 }

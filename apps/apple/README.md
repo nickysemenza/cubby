@@ -63,6 +63,10 @@ time, and then:
 - `pnpm apple cli companion [--once] [--verbose]` — run the app's image-processing companion
   worker headless (see below)
 - `pnpm apple mac` — build `Cubby-macOS` into `apps/apple/DerivedData` and `open` the `.app`
+- `pnpm apple mac --replace-signing-identity` — explicitly switch an installed
+  TestFlight app to the development build when the privacy requirement guard
+  refuses it. macOS privacy permissions may need approval again. Subsequent
+  development launches use plain `pnpm apple mac` and preserve that identity.
 - `pnpm apple ios [--device <name>]` — build `Cubby-iOS`, install and launch on the paired
   iPhone via `devicectl` (phone must be unlocked)
 - `pnpm apple sim [--sim <name>]` — same on the booted (or first iPhone) simulator
