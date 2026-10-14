@@ -5,6 +5,7 @@ import {
   workQueueHouseholdInput,
   workQueueOutSchema,
 } from "@cubby/schemas/work-queue";
+import { generateShortcode } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -461,6 +462,7 @@ describe("member actionable Work queue", () => {
       .values(
         [sourceImage, unknownImage].map(
           (image): typeof imageProcessingJob.$inferInsert => ({
+            shortcode: generateShortcode("imageJob"),
             imageId: parseEntityId("image", image.id),
             kind: "describe_image",
             state: "failed",
@@ -1057,6 +1059,7 @@ describe("member actionable Work queue", () => {
       .values(
         [privateImage, publicImage, unknownImage].map(
           (image): typeof imageProcessingJob.$inferInsert => ({
+            shortcode: generateShortcode("imageJob"),
             imageId: parseEntityId("image", image.id),
             kind: "describe_image",
             state: "failed",

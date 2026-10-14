@@ -135,6 +135,18 @@ export const renderSearchArtifacts = (
       const timelineFields = timeline
         ? 'timelineFrom:urlPlainDateParam,\ntimelineTo:urlPlainDateParam,\ntimelineOrder:z.enum(["asc","desc"]).optional().catch(undefined),\ntimelineMode:z.enum(["events","lifecycles"]).optional().catch(undefined),\n'
         : "";
+      // The nested/flat switch and the grouped toggle are URL state, so a
+      // reload or shared link keeps the presentation; absent is the default.
+      const nestToggle = entity.inspector.list.tree?.toggle === true;
+      const grouped = entity.fieldModel.sort?.grouping != null;
+      const presentationFields = [
+        ...(nestToggle
+          ? ['nest:z.enum(["on","off"]).optional().catch(undefined),']
+          : []),
+        ...(grouped
+          ? ['grouped:z.enum(["on"]).optional().catch(undefined),']
+          : []),
+      ].join("\n");
       const keys = [
         ...(primarySearch ? [primarySearch.key] : []),
         ...filterDescriptors.map(({ urlKey }) => urlKey),
@@ -143,6 +155,8 @@ export const renderSearchArtifacts = (
         ...(viewIds.length > 1 ? ["view"] : []),
         ...slotKeys,
         ...(timeline ? timelineKeys : []),
+        ...(nestToggle ? ["nest"] : []),
+        ...(grouped ? ["grouped"] : []),
       ];
       if (new Set(keys).size !== keys.length)
         throw new EntityDeclarationError(
@@ -150,7 +164,7 @@ export const renderSearchArtifacts = (
         );
       return (
         `${JSON.stringify(entity.key)}:{\n` +
-        `schema:z.object({\n${fields.join("\n")}\n...tableSearchFields,\n${dialog ? "create:createSearchField,\n" : ""}${viewField}${slotFields}${slotFields ? "\n" : ""}${timelineFields}}),\n` +
+        `schema:z.object({\n${fields.join("\n")}\n...tableSearchFields,\n${dialog ? "create:createSearchField,\n" : ""}${viewField}${slotFields}${slotFields ? "\n" : ""}${timelineFields}${presentationFields}${presentationFields ? "\n" : ""}}),\n` +
         `defaults:{${keys.map((key) => `${JSON.stringify(key)}:undefined`).join(",")}},\n},`
       );
     })

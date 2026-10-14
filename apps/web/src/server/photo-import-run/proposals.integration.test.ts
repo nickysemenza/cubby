@@ -524,6 +524,7 @@ describe("photo group proposals", () => {
     const [description] = await getDb(ctx.db)
       .insert(imageProcessingJob)
       .values({
+        shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", source.id),
         kind: "describe_image",
         state: "pending",
@@ -534,6 +535,7 @@ describe("photo group proposals", () => {
     const [appleDescription] = await getDb(ctx.db)
       .insert(imageProcessingJob)
       .values({
+        shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", source.id),
         kind: "describe_image",
         state: "waiting_for_device",
@@ -544,6 +546,7 @@ describe("photo group proposals", () => {
     await getDb(ctx.db)
       .insert(imageProcessingJob)
       .values({
+        shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", source.id),
         kind: "subject_lift",
         state: "waiting_for_device",
@@ -667,6 +670,7 @@ describe("photo group proposals", () => {
     const [job] = await getDb(ctx.db)
       .insert(imageProcessingJob)
       .values({
+        shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", source.id),
         kind: "describe_image",
         state: "ready",
@@ -679,6 +683,7 @@ describe("photo group proposals", () => {
     await getDb(ctx.db)
       .insert(imageProcessingJob)
       .values({
+        shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", source.id),
         kind: "describe_image",
         state: "waiting_for_device",

@@ -7,7 +7,6 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { writeOutcomeReceipts } from "~/server/purchase-import/run-outcome.fixtures";
-import { listActivity } from "~/server/repo/activity";
 import { getDb } from "~/server/repo/database-helpers";
 import { updateProduct, deleteProducts } from "~/server/repo/product/crud";
 import {
@@ -99,27 +98,6 @@ describe("records reports", () => {
     expect(block.actions).not.toContain("enrichProduct");
     const receipt = await getDb(ctx.db).query.runOperation.findFirst();
     await deleteProducts(ctx.db, [product.entityId], ctx.actor);
-    const history = await listActivity(ctx.db, party.id, {
-      recordType: "run",
-      executor: "all",
-      sort: "newest",
-      limit: 20,
-      subjectId: product.id,
-    });
-    expect(history.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: attempt.shortcode,
-          targetPreview: expect.arrayContaining([
-            expect.objectContaining({
-              id: product.id,
-              name: "Synthetic purchased variant",
-              state: "completed",
-            }),
-          ]),
-        }),
-      ]),
-    );
     expect(await getDb(ctx.db).query.runOperation.findFirst()).toEqual(receipt);
   });
 

@@ -262,6 +262,7 @@ export const nativeCoverage = {
       "product.cookbooks",
       "product.recipe-appearances",
       "image.associations",
+      "imageJob.attempts",
       "purchase.runs",
       "location.ai-description",
       // Finance slots: the same report view draws their `records` rows (checked rows, footer and
@@ -361,7 +362,6 @@ export const nativeCoverage = {
       "project.overview",
       "project.schedule",
       "planting.schedule",
-      "run.image-jobs",
       "task.agenda",
     ]),
     // Member-wide accuracy measurement is a desk workflow: sampling and blind

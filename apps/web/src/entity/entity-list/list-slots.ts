@@ -48,9 +48,6 @@ const productCategory = slotsFrom(() =>
 const project = slotsFrom(() =>
   import("~/app/projects/list-slots").then((m) => m.projectListSlots),
 );
-const run = slotsFrom(() =>
-  import("~/app/runs/list-slots").then((m) => m.runListSlots),
-);
 const task = slotsFrom(() =>
   import("~/app/tasks/list-slots").then((m) => m.taskListSlots),
 );
@@ -76,7 +73,6 @@ export const listSlotCoverage = {
     schedule: project("schedule"),
     analytics: project("analytics"),
   },
-  run: { "image-jobs": run("image-jobs") },
   task: { agenda: task("agenda"), board: task("board") },
 } satisfies {
   [E in Entity as ListSlotId<E> extends never ? never : E]: Record<

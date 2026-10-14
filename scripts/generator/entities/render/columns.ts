@@ -77,6 +77,8 @@ const enumColumnExpression = (
     "expense.trade": `text(${column},{enum:tradeValues})`,
     "image.renderStatus": `text(${column},{enum:imageRenderStatusValues})`,
     "image.status": `text(${column},{enum:imageStatusValues})`,
+    "imageJob.kind": `text(${column},{enum:["subject_lift", "describe_image", "identify_image"]})`,
+    "imageJob.state": `text(${column},{enum:["pending", "waiting_for_device", "leased", "ready", "skipped", "failed"]})`,
     "image.storageStatus": `text(${column},{enum:imageStorageStatusValues})`,
     "inventory.placement": `text(${column},{enum:inventoryPlacementValues})`,
     "meal.mealKind": `text(${column},{enum:mealKindValues})`,

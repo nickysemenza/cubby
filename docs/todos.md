@@ -431,7 +431,8 @@ unattended Mail import / interactive Burn-down boundary.
   updates; follow the MCP reader's cold-start regression in `agent-host.ts`.
 
 Run is the one unit of unattended work (Mail import, photo inventory, a member's
-import) and the attempt history the shared activity projection presents.
+import), listed through the generic Run list; image processing work is its own
+Image job entity.
 Burn-down writes are not Runs: they are audited member writes with Sources.
 
 - 🤔 🐛 **Preserve chronological timestamps for completed approval Runs.** A
@@ -451,27 +452,6 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   satisfying primary-document presence. Preserve the original capture and its
   history, record the missing evidence explicitly, and verify usable replacement
   evidence before treating document presence as source acceptance.
-
-- 🤔 🐛 **Repair Run-list attention projection validation.** A live Runs page can
-  reject its attention and list payload when a target's `entityKind` falls
-  outside the declared purchase/product/image/run enum. Reproduce using a
-  synthetic target, align the shared projection contract with supported target
-  kinds, and verify the list and attention summaries render. Individual Run
-  detail pages still load; preserve their retained history.
-
-- 🧱 🛠️ **Declare image jobs as an entity.** Runs list and inspect through the
-  generic Run table, but image-processing jobs still need the hand-written
-  Image jobs view (`apps/web/src/app/runs/image-job-history.tsx`), their own
-  inspector (`ActivityRunDetail`, `RunWorkFacts`) and the `/runs/jobs/$id`
-  page. Declaring them in the manifest (shortcode, state, kind, subject,
-  attempts, cost) lets the generic list, inspector and detail page replace all
-  three; plan the identifier and attempts storage first.
-
-- 🤔 🛠️ **Trim the activity projection to what clients still read.** The web
-  reads `activity.list`/`detail`/`events` only for image jobs now, and no
-  longer reads `activity.groups`/`groupChildren` at all. Check the native
-  Activity screen and the MCP `activity` tool before narrowing these
-  operations to image jobs or deleting the Run grouping reads.
 
 - ⏳ ✨ **Show the Research queue count where the household looks.** Surface the
   `research-queue` saved-view counts on Home or Activity, linking to the views,
@@ -613,6 +593,11 @@ Burn-down writes are not Runs: they are audited member writes with Sources.
   status, and an Open System Settings action. The import sheet inherits the saved
   alert preference and offers “Notify me for this import”; request notification
   permission when the preference is enabled, rather than at launch.
+- 🟢 ✨ **Nest manifest trees in native lists.** Web lists every `tree`
+  entity (Runs by `parentRunId`, Product and Spending categories) through the
+  server's `roots`/`children` nesting scope with a nested/flat toggle; native
+  lists stay flat. Request the same scope from the native generic list, expand
+  a row by its `childCount`, and honour the declared default and toggle.
 
 - 🤔 ✨ **One native picker with names and pictures, never codes.** Web
   now has one value picker (`apps/web/src/ui/combobox/picker.tsx`): a closed

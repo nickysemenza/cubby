@@ -686,8 +686,21 @@ unsupported with a reason. Executable queries, runtime option providers,
 heterogeneous trees (rows of another entity nested under a row), dialogs, and
 workflows remain handwritten. A self-referencing tree is declared:
 `presentation.list.tree.parentField` names a readable single reference to the
-entity itself, and the generic list nests rows under it, keeping a row whose
-parent is not loaded at the top level. A structured
+entity itself. Nesting is a server scope, never client stitching: every list
+read of a tree entity (`entity.listBase`, `entity_read.list`, HTTP) accepts
+`nesting` — `{scope:"flat"}` (the default for every caller), `{scope:"roots"}`,
+or `{scope:"children",parentId}` — applied after the same filters and sort. A
+root is a row whose parent is null or does not itself match the filters (judged
+over the whole filtered set, so a matching child of a filtered-out or deleted
+parent stays reachable); `roots`/`children` rows carry `childCount`, their
+directly nested children that match the filters, and `totalCount` counts the
+requested scope. The shared list scaffold (`server/repo/list.ts`) owns it, so a
+scaffold-built tree repository needs no code. The web table pages the roots and
+reads an expanded row's children through the same query, with their own paging;
+expansion resets when filters or sort change. `tree.toggle` adds a
+nested/flat switch beside Grouped, persisted as `nest=on|off` (absent is
+`tree.defaultNested`, default nested); the grouped switch is `grouped=on`.
+Cards and the timeline stay flat. A structured
 value that every client would otherwise re-word declares where the record
 carries its text instead of a renderer: `display.labelPath` for a list cell,
 `display.detailLabelPath` for a detail row (a server-composed sentence, lines
@@ -1020,9 +1033,9 @@ checks assess recorded actor attribution, a consistent timeline, and terminal
 target outcomes for completed Mail import and photo inventory runs (and
 historical validation and enrichment runs). A skipped or unavailable target
 needs a recorded reason. Running or paused work does not need finished targets. Execution status remains separate from
-quality of the recorded facts. The generic Runs list and native activity rows
-hydrate the same Run quality; image-processing jobs carry null quality, remain
-unassessed, and list in the Runs page's Image jobs view. Scored and unscored web renderer
+quality of the recorded facts. The generic Runs list on web and native
+hydrates the same Run quality. Image jobs are their own unscored entity
+(`imageJob`) and are not assessed. Scored and unscored web renderer
 coverage is type-checked against the generated list shape. Browser captures are required by the specific
 commit contract, so their absence is not a universal Run quality defect.
 Immutable scored entities without soft deletion use the same evaluator with

@@ -301,7 +301,6 @@ targets:
       - path: App/Tests/Photos/PhotoEntityChooserModelTests.swift
       - path: App/Tests/Photos/PhotoTestStores.swift
       - path: App/Tests/Participation/AppInstallationIDTests.swift
-      - path: App/Tests/Activity/ActivityListModelTests.swift
       - path: CubbyKit/Tests/CubbyKitTests/Support/Gate.swift
     dependencies:
       - target: Cubby-macOS

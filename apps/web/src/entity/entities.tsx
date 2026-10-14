@@ -23,6 +23,7 @@ import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
 import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
 import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
+import { ImageSquareIcon } from "@phosphor-icons/react/dist/csr/ImageSquare";
 import { KeyIcon } from "@phosphor-icons/react/dist/csr/Key";
 import { LeafIcon } from "@phosphor-icons/react/dist/csr/Leaf";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
@@ -191,6 +192,7 @@ const PHOSPHOR_ICONS = {
   Hammer: HammerIcon,
   Heart: HeartIcon,
   Image: ImageIcon,
+  ImageSquare: ImageSquareIcon,
   Key: KeyIcon,
   ListChecks: ListChecksIcon,
   MapPin: MapPinIcon,
@@ -408,6 +410,10 @@ const entityDefinitions = withEntityNames({
   },
   run: {
     ...generatedBrowserRoutes.run,
+    color: INK.slate,
+  },
+  imageJob: {
+    ...generatedBrowserRoutes.imageJob,
     color: INK.slate,
   },
   productCategory: {

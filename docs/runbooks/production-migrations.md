@@ -34,6 +34,47 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Image job entity cutover
+
+`0061_image_job_entity`, `0062_image_job_drop_public_id` and `0063_derived_ddl`
+are one authorized breaking cutover, applied in one invocation; `0061` is not a
+compatible expansion boundary. After commit, deployed code that inserts an
+`ImageProcessingJob` without a shortcode, or reads `publicId`, fails until the
+matching server and Worker deploy.
+
+Quiesce image work first and keep it quiesced until the matching code is
+verified:
+
+1. Set `MAINTENANCE_MODE` (web Worker answers 503; cron skips).
+2. `wrangler queues pause-delivery cubby-image-cloud` and
+   `wrangler queues pause-delivery cubby-background`; maintenance mode does not
+   gate queue consumers.
+3. Wait for leased jobs to settle or expire (`ImageProcessingJob.state =
+   'leased'`); the Apple companion cannot pull while the Worker answers 503.
+
+Capture before/after fingerprints: job count by `state` and `kind`, the
+retained job columns (UUID, image, run, state, attempt and lease fields,
+result), and row counts of `ImageProcessingAttempt`, `ImageProcessingEvent`,
+`ImageProcessingSubmissionJob`, `AiAnalysis` and `AiUsage`. Then apply:
+
+```sh
+pnpm --filter @cubby/web db:migrate --target=production --through=0063_derived_ddl
+```
+
+Read back: unchanged fingerprints; every job has a unique `IPR-` shortcode with
+one `Entity` row of kind `imageJob`; `publicId` is gone; the identity FK and
+the `Entity_identity_*` triggers exist on `ImageProcessingJob`; the journal ends
+at `0063_derived_ddl`. The migration takes `ACCESS EXCLUSIVE` on
+`ImageProcessingJob` for the whole backfill and on `Entity` only from its
+constraint widening to commit (blocking every entity insert for that window);
+`0063` recreates the identity triggers. On failure the whole batch rolls back:
+verify bookkeeping is unchanged before retrying. After a successful commit,
+keep maintenance on and roll forward if the deploy fails. Then merge, verify
+the deployed server, resume queue delivery, delete `MAINTENANCE_MODE`, and
+expect older native builds to receive 426 until they update to the bumped
+compatibility version. Old long `IPR-` ids and `/runs/jobs/…` links stop
+resolving by design.
+
 ## Label-review retirement
 
 Deploy the code that removes Product label-review fields and filters retired

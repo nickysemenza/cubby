@@ -194,11 +194,11 @@ test("image results compare descriptions and require explicit attachment confirm
   await description.scrollIntoViewIfNeeded();
   await page.screenshot({ path: "/tmp/cubby-image-results-mobile.png" });
   await page.setViewportSize({ width: 1280, height: 900 });
+  // The Image's generic "Image jobs" section opens the job's own record.
   await page
-    .getByRole("link", { name: "Image identification", exact: true })
+    .getByRole("link", { name: /^Image identification · / })
+    .first()
     .click();
-  await expect(page).toHaveURL(
-    /\/runs\?view=image-jobs&selected=IPR-[A-Z0-9]+$/,
-  );
-  await expect(page.getByRole("table", { name: "Image jobs" })).toBeVisible();
+  await expect(page).toHaveURL(/\/image-jobs\/IPR-[A-Z0-9]{5}$/);
+  await expect(page.locator("#attempts")).toBeVisible();
 });

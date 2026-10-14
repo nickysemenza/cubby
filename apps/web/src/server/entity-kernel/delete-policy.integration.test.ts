@@ -1225,6 +1225,7 @@ async function seedImageProcessingRows(db: Database, ids: StagingIds) {
     processorRevision: 1,
   }).catch(() => undefined);
   await insertAndReturn(db, imageProcessingJob, {
+    shortcode: generateShortcode("imageJob"),
     imageId: ids.imageId,
     kind: "describe_image",
     state: "pending",

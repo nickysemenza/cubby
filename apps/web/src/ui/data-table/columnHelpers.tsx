@@ -72,6 +72,7 @@ import {
   type EntitySearchEntity,
   type SearchProviderProps,
 } from "../combobox/with-search-hook";
+import { serverTreeChildCount } from "../hooks/useServerTreeChildren";
 import { ImageThumbnail } from "../table/ImageThumbnail";
 import type { CellClipboardSpec, CellJsonValue } from "./cell-clipboard";
 import {
@@ -309,6 +310,8 @@ export function createNameColumn<T extends BaseRow>(
       const wrapExpandable = (content: ReactNode) => {
         if (!options?.expandable) return content;
         const expanded = row.getIsExpanded();
+        // A server tree names how many nested rows match before they load.
+        const childCount = serverTreeChildCount(row.original);
         return (
           <Row
             align="center"
@@ -345,6 +348,14 @@ export function createNameColumn<T extends BaseRow>(
               <span aria-hidden className="size-6 shrink-0" />
             ) : null}
             <span className="min-w-0 flex-1 truncate">{content}</span>
+            {childCount > 0 ? (
+              <span
+                className="shrink-0 text-xs text-muted-foreground tabular-nums"
+                aria-label={`${childCount} nested`}
+              >
+                {childCount}
+              </span>
+            ) : null}
           </Row>
         );
       };

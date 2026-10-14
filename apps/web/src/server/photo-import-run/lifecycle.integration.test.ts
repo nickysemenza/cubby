@@ -179,6 +179,7 @@ describe("photo run lifecycle", () => {
         await getDb(ctx.db)
           .insert(imageProcessingJob)
           .values({
+            shortcode: generateShortcode("imageJob"),
             imageId: parseEntityId("image", entry.id),
             kind: "describe_image",
             state: describe,

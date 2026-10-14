@@ -537,6 +537,8 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
   "usda-food": "remote USDA records have no local relationships",
   device:
     "owner and hardware are rendered as detail fields; nothing yet declares a relation onto a device",
+  imageJob:
+    "an Image job's Image and requesting Run are detail fields; its attempts and events are the attempts slot",
 } as const satisfies Record<Exclude<Entity, RelatedViewSource>, string>;
 
 type RegisteredRelatedView = (typeof relatedViewRegistry)[number];

@@ -13,9 +13,7 @@ struct ImageEntityDetailView: View {
     @State private var error: String?
     @State private var diagnostics = ImageDiagnosticsCompareModel()
     @State private var processing = ImageProcessingHistoryModel()
-    @State private var jobs = ImageJobHistoryModel()
     @State private var showingAllAnalyses = false
-    @State private var showingAllJobs = false
 
     var body: some View {
         List {
@@ -24,8 +22,8 @@ struct ImageEntityDetailView: View {
                     detail: detail, appModel: appModel, onChanged: { Task { await load() } },
                     preferredAnalysis: processing.preferred,
                     history: processing.entries,
-                    totalAnalyses: processing.total, jobs: jobs.runs, totalJobs: jobs.total,
-                    showingAllAnalyses: $showingAllAnalyses, showingAllJobs: $showingAllJobs
+                    totalAnalyses: processing.total,
+                    showingAllAnalyses: $showingAllAnalyses
                 )
                 if developerOverlays {
                     Section("Developer overlays") {
@@ -110,17 +108,6 @@ struct ImageEntityDetailView: View {
                     }
             }
         }
-        .sheet(isPresented: $showingAllJobs) {
-            NavigationStack {
-                ImageJobHistoryView(id: id, model: jobs, client: appModel.client)
-                    .navigationTitle("Processing jobs")
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { showingAllJobs = false }
-                        }
-                    }
-            }
-        }
         .onDisappear { diagnostics.cancel() }
     }
 
@@ -129,10 +116,8 @@ struct ImageEntityDetailView: View {
         do {
             async let detail = appModel.client.imageDetail(id: id.rawValue)
             async let analyses = processing.load(id: id, client: appModel.client)
-            async let jobLoad = jobs.load(id: id, client: appModel.client)
             self.detail = try await detail
             await analyses
-            await jobLoad
         } catch {
             self.error = error.localizedDescription
             Diagnostics.report(error, context: "photos.imageDetail")
@@ -148,10 +133,7 @@ private struct PhotoTab: View {
     let preferredAnalysis: ImageDescriptionAnalysis?
     let history: [ImageAnalysisHistoryEntry]
     let totalAnalyses: Int
-    let jobs: [ActivityRun]
-    let totalJobs: Int
     @Binding var showingAllAnalyses: Bool
-    @Binding var showingAllJobs: Bool
 
     var body: some View {
         ContinuousDetailSection(title: "Preferred representation") {
@@ -208,17 +190,14 @@ private struct PhotoTab: View {
             }
         }.detailContentsAnchor("ai-history")
         ContinuousDetailSection(title: "Processing jobs") {
-            if jobs.isEmpty {
-                Text("No processing jobs").foregroundStyle(.secondary)
-                    .preference(key: DetailSectionEmpty.self, value: true)
-            }
-            ForEach(jobs.prefix(10), id: \.id) { job in
-                NavigationLink(value: Route.activityDetail(job.id)) {
-                    ImageJobRow(job: job)
-                }
-            }
-            if totalJobs > 10 {
-                Button("View all \(totalJobs)") { showingAllJobs = true }
+            // Image jobs are a generic entity; this opens their list filtered to this Image.
+            NavigationLink(
+                value: Route.entityList(
+                    .imageJob,
+                    filters: EntityFilterState(
+                        entity: .imageJob, urlFilters: ["imageId": detail.id.rawValue]))
+            ) {
+                Label("Image jobs", systemImage: "photo.badge.checkmark")
             }
         }.detailContentsAnchor("processing-jobs")
         ContinuousDetailSection(title: "Provenance") {
@@ -255,66 +234,6 @@ private struct PhotoTab: View {
                 .frame(maxHeight: 280)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-@Observable
-@MainActor
-private final class ImageJobHistoryModel {
-    private(set) var runs: [ActivityRun] = []
-    private(set) var total = 0
-    private(set) var nextCursor: String?
-    private(set) var loading = false
-
-    func load(id: ImageCode, client: CubbyClient, reset: Bool = true) async {
-        guard !loading else { return }
-        loading = true
-        defer { loading = false }
-        do {
-            let page = try await client.activityRuns(
-                filters: .init(subjectID: id.rawValue), cursor: reset ? nil : nextCursor,
-                limit: reset ? 10 : 20)
-            runs = reset ? page.items : runs + page.items
-            total = page.total
-            nextCursor = page.nextCursor
-        } catch {
-            Diagnostics.report(error, context: "photos.imageJobHistory")
-        }
-    }
-}
-
-private struct ImageJobRow: View {
-    let job: ActivityRun
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(job.kind.title)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(job.state.replacingOccurrences(of: "_", with: " ").capitalized)")
-                DateDisplay(date: job.createdAt)
-            }
-            .font(.caption).foregroundStyle(.secondary)
-        }
-    }
-}
-
-private struct ImageJobHistoryView: View {
-    let id: ImageCode
-    let model: ImageJobHistoryModel
-    let client: CubbyClient
-
-    var body: some View {
-        List {
-            ForEach(model.runs, id: \.id) { job in
-                NavigationLink(value: Route.activityDetail(job.id)) { ImageJobRow(job: job) }
-            }
-            if model.nextCursor != nil {
-                Button("Load more") {
-                    Task { await model.load(id: id, client: client, reset: false) }
-                }
-            }
-        }
-        .navigationDestination(for: Route.self) { RouteDestinationView(route: $0) }
     }
 }
 

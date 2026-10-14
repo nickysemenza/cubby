@@ -1,5 +1,6 @@
 import type {
   ColumnVisibilityState,
+  ExpandedState,
   OnChangeFn,
   RowData,
   RowSelectionState,
@@ -77,6 +78,11 @@ interface UseTableConfigOptions<TData extends RowData> {
   paginateExpandedRows?: boolean;
   /** Reset expanded state when data/filters change. TanStack default `true`. */
   autoResetExpanded?: boolean;
+  /** Whether a row offers expansion before its sub-rows are loaded. */
+  getRowCanExpand?: (row: CubbyRow<TData>) => boolean;
+  /** Controlled expansion, for trees that read children on expand. */
+  expanded?: ExpandedState;
+  onExpandedChange?: OnChangeFn<ExpandedState>;
 }
 
 export function useTableConfig<TData extends RowData>({
@@ -102,6 +108,9 @@ export function useTableConfig<TData extends RowData>({
   filterFromLeafRows,
   paginateExpandedRows,
   autoResetExpanded,
+  getRowCanExpand,
+  expanded,
+  onExpandedChange,
 }: UseTableConfigOptions<TData>): CubbyTable<TData> {
   const {
     sorting,
@@ -153,6 +162,9 @@ export function useTableConfig<TData extends RowData>({
     };
     if (rowSelection) {
       Object.assign(state, { rowSelection });
+    }
+    if (expanded) {
+      Object.assign(state, { expanded });
     }
 
     const options = {
@@ -213,6 +225,12 @@ export function useTableConfig<TData extends RowData>({
     if (autoResetExpanded !== undefined) {
       Object.assign(options, { autoResetExpanded });
     }
+    if (getRowCanExpand) {
+      Object.assign(options, { getRowCanExpand });
+    }
+    if (onExpandedChange) {
+      Object.assign(options, { onExpandedChange });
+    }
 
     return options;
   }, [
@@ -244,6 +262,9 @@ export function useTableConfig<TData extends RowData>({
     filterFromLeafRows,
     paginateExpandedRows,
     autoResetExpanded,
+    getRowCanExpand,
+    expanded,
+    onExpandedChange,
   ]);
 
   return useCubbyTable<

@@ -170,6 +170,7 @@
     "./product-category": "./src/product-category.ts",
     "./product-category-fields": "./src/product-category-fields.ts",
     "./device": "./src/device.ts",
+    "./image-job": "./src/image-job.ts",
     "./device-fields": "./src/device-fields.ts",
     "./image-sighting": "./src/image-sighting.ts",
     "./image-sighting-fields": "./src/image-sighting-fields.ts",

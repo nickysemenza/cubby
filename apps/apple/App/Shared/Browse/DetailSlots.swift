@@ -41,6 +41,7 @@ enum DetailSlotRegistry {
         .productCookbooks: { reportSlot(.product_cookbooks, $0) },
         .productRecipeAppearances: { reportSlot(.product_recipeAppearances, $0) },
         .imageAssociations: { reportSlot(.image_associations, $0) },
+        .imageJobAttempts: { reportSlot(.imageJob_attempts, $0) },
         .purchaseRuns: { reportSlot(.purchase_runs, $0) },
         .locationAiDescription: { reportSlot(.location_aiDescription, $0) },
         .purchaseReconciliation: { reportSlot(.purchase_reconciliation, $0) },

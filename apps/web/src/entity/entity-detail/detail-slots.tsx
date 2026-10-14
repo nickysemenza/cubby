@@ -78,6 +78,7 @@ const reportSlot = <E extends GenericDetailEntity>(report: ReportSlot) =>
  */
 export const detailSlots = {
   email: { review: reportSlot<"email">("email.review") },
+  imageJob: { attempts: reportSlot<"imageJob">("imageJob.attempts") },
   product: {
     ownership: slot(() =>
       import("~/app/products/product-runs").then((m) => ({

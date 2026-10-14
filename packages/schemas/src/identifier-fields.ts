@@ -90,6 +90,7 @@ export const gardenEntryId = ENTITY_ID_SCHEMA.gardenEntry;
 export const deviceId = ENTITY_ID_SCHEMA.device;
 export const plantId = ENTITY_ID_SCHEMA.plant;
 export const emailId = ENTITY_ID_SCHEMA.email;
+export const imageJobId = ENTITY_ID_SCHEMA.imageJob;
 
 export type RecipeId = EntityId<"recipe">;
 export type ImageId = EntityId<"image">;
@@ -117,6 +118,7 @@ export type GardenEntryId = EntityId<"gardenEntry">;
 export type DeviceId = EntityId<"device">;
 export type PlantId = EntityId<"plant">;
 export type EmailId = EntityId<"email">;
+export type ImageJobId = EntityId<"imageJob">;
 
 type AnyEntityId = {
   [E in ShortcodeEntity]: EntityId<E>;
@@ -170,6 +172,7 @@ const entityRefParser =
  */
 const PARSE_ENTITY_REF = {
   email: entityRefParser("email"),
+  imageJob: entityRefParser("imageJob"),
   spendingCategory: entityRefParser("spendingCategory"),
   cookbook: entityRefParser("cookbook"),
   expense: entityRefParser("expense"),
@@ -245,6 +248,7 @@ export {
   deviceShortcode,
   plantShortcode,
   emailShortcode,
+  imageJobShortcode,
 } from "@cubby/shared";
 export type {
   CookbookShortcode,
@@ -273,6 +277,7 @@ export type {
   DeviceShortcode,
   PlantShortcode,
   EmailShortcode,
+  ImageJobShortcode,
 } from "@cubby/shared";
 
 export type SpendingCategoryId = EntityId<"spendingCategory">;

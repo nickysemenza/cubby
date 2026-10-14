@@ -47,6 +47,7 @@ export async function seedPhotoReviewProcessingFailure(
   await getDb(db)
     .insert(schema.imageProcessingJob)
     .values({
+      shortcode: generateShortcode("imageJob"),
       imageId: parseEntityId("image", row.id),
       kind,
       state: "failed",
@@ -228,6 +229,7 @@ export async function seedActivityHistory(page: Page, name: string) {
   const [job] = await database
     .insert(schema.imageProcessingJob)
     .values({
+      shortcode: generateShortcode("imageJob"),
       imageId: parseEntityId("image", source.id),
       kind: "describe_image",
       sourceContentHash: "a".repeat(64),
@@ -242,6 +244,7 @@ export async function seedActivityHistory(page: Page, name: string) {
   const [standalone] = await database
     .insert(schema.imageProcessingJob)
     .values({
+      shortcode: generateShortcode("imageJob"),
       imageId: parseEntityId("image", source.id),
       kind: "subject_lift",
       sourceContentHash: "a".repeat(64),
@@ -283,15 +286,15 @@ export async function seedActivityHistory(page: Page, name: string) {
   return {
     imageId: source.shortcode,
     runId: parent.shortcode,
-    jobId: job.publicId,
-    standaloneJobId: standalone.publicId,
+    jobId: job.shortcode,
+    standaloneJobId: standalone.shortcode,
     filename: source.filename,
   };
 }
 
 /**
  * More image jobs, attempts, and events than one cursor page (20) holds, all
- * in one synthetic submission so `/runs?view=image-jobs&submissionId=` lists only them. Job
+ * in one synthetic submission so `/image-jobs?submissionId=` lists only them. Job
  * `NN` is `NN` minutes old: newest-first lists `01` first and leaves the
  * oldest on the second page. The newest job also carries `count` attempts
  * and `count` events for the detail's own cursors.
@@ -318,6 +321,7 @@ export async function seedPagedActivityHistory(name: string, count: number) {
     const [job] = await database
       .insert(schema.imageProcessingJob)
       .values({
+        shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", image.id),
         kind: "describe_image",
         sourceContentHash: "b".repeat(64),
@@ -362,7 +366,7 @@ export async function seedPagedActivityHistory(name: string, count: number) {
   );
   return {
     submissionId: submission.publicId,
-    newestJobId: newest.publicId,
+    newestJobId: newest.shortcode,
   };
 }
 

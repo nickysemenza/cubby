@@ -95,6 +95,7 @@ export const AppErrors = {
   RELATION_QUANTITY_UNSUPPORTED: "BAD_REQUEST",
   LIST_SORT_FIELD_UNSUPPORTED: "BAD_REQUEST",
   LIST_GROUP_BY_FIELD_UNSUPPORTED: "BAD_REQUEST",
+  LIST_NESTING_UNSUPPORTED: "BAD_REQUEST",
   // `ai.suggestFields` was asked for a target that isn't declared
   // `control.suggest` on the entity's manifest.
   SUGGEST_FIELD_UNKNOWN: "BAD_REQUEST",

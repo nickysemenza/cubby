@@ -57,6 +57,12 @@ type EntityProjectionMaps = Readonly<{
  * Keep the surface selection here so generated projections cannot quietly
  * drift into independently-maintained entity rosters.
  */
+/** A tree row's `childCount`, present in the `roots`/`children` scopes. */
+const treeRowExtension = (inspector: { list: { tree: unknown } }): string =>
+  inspector.list.tree === null
+    ? ""
+    : ".extend({childCount:listChildCountSchema})";
+
 export const entityProjectionMaps = (
   entities: readonly CompiledEntity[],
 ): EntityProjectionMaps => {
@@ -482,10 +488,11 @@ export const renderEntityArtifacts = (
           ],
     )
     .join("\n");
+  // Only a declared `list.tree` accepts a nesting scope.
   const listInputVariants = listEntitySpecs
     .map(
-      ({ key, filterSchema }) =>
-        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:z.string().min(1).optional()})`,
+      ({ key, filterSchema, inspector }) =>
+        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:z.string().min(1).optional()${inspector.list.tree === null ? "" : ",nesting:listNestingSchema.optional()"}})`,
     )
     .join(",\n  ");
   // Strict: an unknown filter name is a 400, not a silently wider list.
@@ -509,8 +516,8 @@ export const renderEntityArtifacts = (
   // surface in Swift as a positional `ItemsPayloadPayload`.
   const listItemSchemas = listEntitySpecs
     .map(
-      ({ key }) =>
-        `export const ${key}ListItem = withEntityListMedia(${key}ListOutputSchema);`,
+      ({ key, inspector }) =>
+        `export const ${key}ListItem = withEntityListMedia(${key}ListOutputSchema)${treeRowExtension(inspector)};`,
     )
     .join("\n");
   const listReadSchemas = listEntitySpecs
@@ -676,8 +683,8 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
     .join(",\n  ");
   const queryListResultVariants = schemaEntitySpecs
     .map(
-      ({ key, contract }) =>
-        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.list.export})),meta:paginatedMetaSchema})`,
+      ({ key, contract, inspector }) =>
+        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.list.export})${treeRowExtension(inspector)}),meta:paginatedMetaSchema})`,
     )
     .join(",\n  ");
   const mcpQueryGetResultVariants = schemaEntitySpecs
@@ -698,8 +705,8 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         entity.descriptor.mcp.includes("list"),
     )
     .map(
-      ({ key, contract }) =>
-        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.mcpList.export})),meta:paginatedMetaSchema})`,
+      ({ key, contract, inspector }) =>
+        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.mcpList.export})${treeRowExtension(inspector)}),meta:paginatedMetaSchema})`,
     )
     .join(",\n  ");
   // A declared field list is compiled into `.pick({...}).strict()` on the
@@ -1394,7 +1401,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
         'import { compileListReadSchema } from "../list-read-fields";\n' +
         'import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";\n' +
-        'import { MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
+        'import { listChildCountSchema, listNestingSchema, MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { FilterPatch } from "../filters";\n' +
         'import { z } from "zod";\n\n' +
         `export const listEntities = ${compactLiteral(listEntityKeys)} as const;\n` +
@@ -1417,7 +1424,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "type EntityListParsedFiltersByEntity = { [E in ListEntity]: z.output<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]> };\n" +
         "type EntityListSort = z.input<typeof entityListSortSchema>;\n" +
         "export type EntityListInputByEntity = {\n" +
-        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string };\n" +
+        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string; nesting?: z.input<typeof listNestingSchema> };\n" +
         "};\n" +
         "export type ParsedEntityListInputByEntity = {\n" +
         '  [E in ListEntity]: Omit<EntityListInputByEntity[E], "filters"> & { filters: EntityListParsedFiltersByEntity[E] };\n' +
@@ -1433,7 +1440,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "  const { entity: _entity, ...params } = input;\n" +
         "  return params;\n" +
         "}\n\n" +
-        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string };\n\n" +
+        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string; nesting?: z.input<typeof listNestingSchema> };\n\n" +
         "export type EntityListResultByEntity = {\n" +
         "  [E in ListEntity]: z.output<(typeof ENTITY_LIST_OUTPUT_SCHEMAS)[E]>;\n" +
         "};\n\n" +
@@ -1489,7 +1496,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         'import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";\n' +
         'import { withEntityDetailMedia, withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
         'import { entitySourceInputs } from "@cubby/schemas/entity-source";\n' +
-        'import { paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
+        'import { listChildCountSchema, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
         `${schemaImports}\n` +
         'import { z } from "zod";\n\n' +

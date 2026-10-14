@@ -9,6 +9,7 @@ import {
 } from "~/entity/entity-list";
 
 import { defaultSortDirectionFor, defaultSortFor } from "./entities";
+import { listNested } from "./entity-list/list-nesting";
 import { resolveListView } from "./entity-list/resolve-list-view";
 import { getEntityFilters } from "./filter-manifest";
 import {
@@ -20,6 +21,8 @@ import {
 } from "./filters";
 import type { ListEntity } from "./generated/entity-lists.gen";
 
+const ROOTS_SCOPE = { scope: "roots" } as const;
+
 type EntityListLoaderArgs = {
   context: { queryClient: QueryClient };
   deps: FilterPatch;
@@ -28,17 +31,21 @@ type EntityListLoaderArgs = {
 
 /** Bind the standard eager list loader while leaving route options literal. */
 export function entityListLoader<E extends ListEntity>(entity: E) {
-  return ({ context, deps, abortController }: EntityListLoaderArgs) =>
-    ensureEntityListSsr({
+  return ({ context, deps, abortController }: EntityListLoaderArgs) => {
+    const { view } = resolveListView(entity, deps);
+    return ensureEntityListSsr({
       queryClient: context.queryClient,
       entity,
       search: deps,
       // A slot view (Runs history) owns its reads and its URL keys — `sort`
       // there is `newest|oldest`, not a kernel sort field — so the kernel
       // list is not its first page to hydrate.
-      active: !isSlotListView(resolveListView(entity, deps).view),
+      active: !isSlotListView(view),
+      // The table pages a nested tree's roots; Cards and the timeline stay flat.
+      nested: view === "table" && listNested(entity, deps),
       signal: abortController.signal,
     });
+  };
 }
 
 /**
@@ -51,6 +58,7 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   search: FilterPatch;
   active?: boolean;
   defaultSort?: { orderBy: string; direction: "asc" | "desc" };
+  nested?: boolean;
   signal?: AbortSignal;
 }) {
   if (options.active === false) return;
@@ -60,7 +68,7 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
     compileEntityListInput(
       options.entity,
       searchWithInitialFilter(options.entity, options.search),
-      { defaultSort },
+      { defaultSort, nesting: options.nested ? ROOTS_SCOPE : undefined },
     ),
   );
   const cancelUnobserved = () => {

@@ -106,8 +106,6 @@ const NON_ENTITY_FK_TARGETS = {
   ImportSourceOrder:
     "an accepted original order owned by a retained import source",
   ImageDerivative: "a non-gallery representation owned by its original Image",
-  ImageProcessingJob:
-    "authoritative operational image work, exposed through Activity",
   ImageProcessingSubmission:
     "fixed membership of an explicit image-processing request",
   OrderMail: "normalized mailbox evidence, not a domain entity",
@@ -244,10 +242,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Sweep or suggestion Run that computed a Suggestion",
   },
-  "ImageProcessingJob.runId": {
-    classification: "metadata",
-    reason: "records the Run that scheduled a queued image-processing job",
-  },
   // ImageSighting is a child table of Image, not an entity, so no relation
   // path can start from it; the Image detail reads its sightings directly.
   "ImageSighting.imageId": {
@@ -380,9 +374,19 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "a non-gallery transparent representation is owned by its original",
   },
-  "ImageProcessingJob.imageId": {
+  // An Image job's attempts, events and submission memberships are its child
+  // tables, not entities; the job's attempts slot reads them directly.
+  "ImageProcessingAttempt.jobId": {
+    classification: "ownership",
+    reason: "one claim of an Image job, owned by that job",
+  },
+  "ImageProcessingEvent.jobId": {
+    classification: "ownership",
+    reason: "a processing step an Image job recorded, owned by that job",
+  },
+  "ImageProcessingSubmissionJob.jobId": {
     classification: "metadata",
-    reason: "durable processing state is operational metadata for the original",
+    reason: "records which submissions scheduled or retried an Image job",
   },
   "ImageDescriptionCorrection.imageId": {
     classification: "metadata",

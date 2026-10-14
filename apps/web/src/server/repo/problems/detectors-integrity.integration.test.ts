@@ -627,6 +627,7 @@ const SOURCE_FACTORIES = {
 
   "ImageProcessingJob.imageId": (db, targetId) =>
     insertAndReturn(db, imageProcessingJob, {
+      shortcode: generateShortcode("imageJob"),
       imageId: parseEntityId("image", targetId),
       kind: "subject_lift",
       state: "pending",
