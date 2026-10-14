@@ -188,10 +188,10 @@ The reviewed cutover has these inclusive journal boundaries:
 - Online expansion ends at `0064_shared_assessment_expansion`, which creates
   storage without copying reviews or changing legacy supersession triggers.
 - `0065_derived_ddl`, `0066_shared_assessment_reconciliation`,
-  `0067_derived_ddl` and `0068_derived_ddl` run only inside the enforced
+  `0067_derived_ddl`, `0068_derived_ddl` and `0069_derived_ddl` run only inside the enforced
   quiesced cutover barrier. Final reconciliation locks and transforms legacy
   reviews and retires their storage; final derived DDL establishes current
-  supersession and identity-evidence invalidation.
+  supersession, identity-evidence invalidation and retained order-event lifecycle.
 
 Check these exact tags against the final PR journal before execution. Never
 include `0065_derived_ddl` in an online expansion: it redirects field triggers
@@ -203,7 +203,10 @@ predecessor database and capture a private production baseline. Compare origin
 coverage and original keys for every retired store, including inactive image
 confirmations, all field statuses and receipts, pair/group suppression scopes,
 Email member labels and order-event decisions, frozen evaluation membership and
-grades. Missing historical provenance remains unknown. Compare authoritative
+grades. Preserve order-event link authority when its Email is absent; deleting
+an Email repoints that authority to the retained event, while deleting or
+superseding the event retires its current projection. Missing historical
+provenance remains unknown. Compare authoritative
 current projections independently of historical row counts.
 
 An initial online expansion/copy is not the final preservation boundary.
