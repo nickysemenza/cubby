@@ -48,6 +48,7 @@ import {
   isReferencePickerEntity,
   requireReferenceEntitySearch,
 } from "~/ui/combobox/reference-entity-search";
+import { PickerField } from "~/ui/form-utils/picker-field";
 
 const EntityEditFieldScopeContext = createContext<string | undefined>(
   undefined,
@@ -70,13 +71,9 @@ import type { SearchProviderProps } from "~/ui/combobox/with-search-hook";
 import {
   NullableNumericField,
   PlainDateField,
-  SelectField,
   SideBySideFields,
   UnifiedTextField,
 } from "~/ui/form-utils";
-import { EntityMultiValueField } from "~/ui/form-utils/entity-multi-value-field";
-import { EntityValueField } from "~/ui/form-utils/entity-value-field";
-import { VendorField } from "~/ui/form-utils/vendor-field";
 import { AliasesField } from "~/ui/forms/aliases-field";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { FormSection } from "~/ui/forms/form-section";
@@ -419,7 +416,8 @@ function renderPrimitiveField({
   }
   if (control.kind === "select") {
     return (
-      <SelectField
+      <PickerField
+        store="option"
         key={field.key}
         form={form}
         name={name}
@@ -639,7 +637,9 @@ function AmountField({ field, form }: SpecializedIntentRendererProps) {
  */
 function VendorNameField({ field, form }: SpecializedIntentRendererProps) {
   return (
-    <VendorField
+    <PickerField
+      store="name"
+      entity="vendor"
       form={form}
       name={field.key}
       label={field.label}
@@ -661,7 +661,8 @@ function EntityMultiSelectField({
   if (referenceEntity === undefined)
     throw new Error(`Field ${field.key} is a multi-select without a reference`);
   return (
-    <EntityMultiValueField
+    <PickerField
+      store="ids"
       form={form}
       name={field.key}
       // SAFETY: `referenceEntity` is a manifest-declared reference target,
@@ -816,7 +817,8 @@ function renderSingularReference({
   const scope = referenceScopeFor(reference, scopedValueRecord);
   return (
     <div key={field.key} className="space-y-1">
-      <EntityValueField
+      <PickerField
+        store="id"
         form={form}
         // SAFETY: `field.key` is one of this entity's own declared
         // model field keys; RHF's conditional path type cannot express

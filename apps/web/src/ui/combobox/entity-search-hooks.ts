@@ -255,7 +255,7 @@ const resolveSearchPath = (
  * it can only ever assign one constant. The blank-query roster is typically
  * sorted by the row's OWN name, not clustered by root, so without this a
  * root's rows interleave with other roots' and the group header (rendered
- * on every `group.id` transition, `EntityPicker`) would repeat. Leaves
+ * on every `group.id` transition, `Picker`) would repeat. Leaves
  * ungrouped items untouched and preserves each group's internal order.
  */
 export function stabilizeGroupOrder<TId extends string>(

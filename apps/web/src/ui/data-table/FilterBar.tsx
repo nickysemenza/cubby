@@ -9,9 +9,9 @@ import type { RowData } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
 
 import { cn } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Button } from "~/ui/primitives/button";
-import { FilterableCombobox } from "~/ui/primitives/combobox";
 import { Input } from "~/ui/primitives/input";
 import { Pill } from "~/ui/primitives/pill";
 import {
@@ -218,12 +218,12 @@ function FilterValueEditor({
     );
   }
   return (
-    <FilterableCombobox
-      items={options}
+    <Picker
+      options={options}
       value={filter?.values[0] ?? null}
       onValueChange={(value) => setValues(value === null ? [] : [value])}
       placeholder={`Filter ${field.label ?? field.key}`}
-      ariaLabel={`Filter ${field.label ?? field.key}`}
+      label={`Filter ${field.label ?? field.key}`}
       clearable
       className="w-full"
       onOpenChange={(open) => {

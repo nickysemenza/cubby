@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
  * Fixed-position style covering an anchor cell, Notion-style: slightly
  * outset from the anchor rect, at least as wide, clamped to the viewport.
  * Recomputes on resize and (capture-phase) scroll — same approach as
- * EntityPicker's dropdown positioning, minus the flip/height
+ * Picker's dropdown positioning, minus the flip/height
  * logic that is dropdown-specific.
  */
 function useAnchoredOverlayStyle(

@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 
 import { pageTitle } from "~/lib/page-title";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityPicker } from "~/ui/combobox/entity-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { Row, Stack } from "~/ui/layout";
 import { Page } from "~/ui/page/Page";
@@ -14,7 +14,6 @@ import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { FilterableCombobox } from "~/ui/primitives/combobox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -333,18 +332,18 @@ function DesignSmokeTest() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <Label>Filter options</Label>
-                    <FilterableCombobox
-                      items={SAMPLE_FILTERS}
+                    <Picker
+                      options={SAMPLE_FILTERS}
                       value={filter}
                       onValueChange={setFilter}
                       placeholder="Choose a state"
-                      ariaLabel="Filter options"
+                      label="Filter options"
                       clearable
                     />
                   </div>
                   <div>
                     <Label>Record picker</Label>
-                    <EntityPicker
+                    <Picker
                       entity="product"
                       label="Record picker"
                       items={SAMPLE_RECORDS}

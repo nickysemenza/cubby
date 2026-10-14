@@ -11,7 +11,7 @@ import { cn } from "~/lib/utils";
 import { Button } from "~/ui/primitives/button";
 
 import type { ComboboxItem, PickerEntity } from "../combobox/combobox-types";
-import { EntityPicker } from "../combobox/entity-picker";
+import { Picker } from "../combobox/picker";
 import type { SearchProviderProps } from "../combobox/with-search-hook";
 import type { CellClipboardSpec } from "./cell-clipboard";
 import { CellEditTrigger } from "./cell-edit-trigger";
@@ -63,7 +63,7 @@ export interface EditableEntityCellProps<TId extends string> {
  * Editable cell for a single related entity, backed by an async entity search.
  * Sibling of `EditableCell` (which only supports static option lists) — same
  * trigger / overlay / commit-on-pick / optimistic-display semantics, but the
- * editor is the shared Base UI `EntityPicker`, fed by a `With*Search` render-prop
+ * editor is the shared Base UI `Picker`, fed by a `With*Search` render-prop
  * provider.
  */
 export function EditableEntityCell<TId extends string>({
@@ -148,7 +148,7 @@ export function EditableEntityCell<TId extends string>({
  * Picking the SAME item, or clearing a non-clearable relation, closes without a
  * write; a save rejection toasts and keeps the editor open with the attempted
  * selection intact. The ✗ button stays as the explicit mouse cancel affordance
- * (Escape via the overlay also works). `EntityPicker` closes its
+ * (Escape via the overlay also works). `Picker` closes its
  * own dropdown on select, so the whole editor folds away in one gesture.
  */
 function EditableEntityEditor<TId extends string>({
@@ -173,7 +173,7 @@ function EditableEntityEditor<TId extends string>({
   onCommit: (value: ComboboxItem<TId> | null) => void;
 }) {
   const [selected, setSelected] = useState<ComboboxItem<TId> | null>(value);
-  // EntityPicker closes its dropdown synchronously on click (before
+  // Picker closes its dropdown synchronously on click (before
   // the awaited save resolves), so a fast second pick would otherwise fire a
   // concurrent onSave whose last-to-resolve wins regardless of click order. The
   // pointer-events gate on the wrapper below is the visual affordance;
@@ -220,7 +220,7 @@ function EditableEntityEditor<TId extends string>({
               onCreateNew,
               onOpenChange,
             }) => (
-              <EntityPicker
+              <Picker
                 entity={label}
                 label={label}
                 items={filterItems ? items.filter(filterItems) : items}

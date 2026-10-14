@@ -14,9 +14,9 @@ import {
   FormWrapper,
   NullableNumericField,
   PlainDateField,
-  SelectField,
   UnifiedTextField,
 } from "~/ui/form-utils";
+import { PickerField } from "~/ui/form-utils/picker-field";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
@@ -109,7 +109,8 @@ export function CreateProjectFromTasksDialog({
           staticBasis={{ notes: null }}
           fieldKeys={["kind"]}
         >
-          <SelectField
+          <PickerField
+            store="option"
             form={form}
             name="kind"
             label="Kind"

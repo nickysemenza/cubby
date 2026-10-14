@@ -15,7 +15,7 @@ import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { requiredLocationCode } from "~/ui/form-fields";
-import { EntityValueField } from "~/ui/form-utils/entity-value-field";
+import { PickerField } from "~/ui/form-utils/picker-field";
 import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
 
@@ -124,7 +124,8 @@ export function BulkReparentLocationsDialog({
         isPending={bulkUpdateParent.isPending}
       >
         <Stack gap="md">
-          <EntityValueField
+          <PickerField
+            store="id"
             form={form}
             name="targetParent"
             label="New Parent Location"

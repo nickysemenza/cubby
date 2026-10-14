@@ -25,6 +25,7 @@ import { EntityWorkbenchInspector } from "~/entity/entity-detail/entity-workbenc
 import { tryFormatAmount } from "~/features/inventory/format-amount";
 import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn, formatCurrency } from "~/lib/utils";
+import { Picker } from "~/ui/combobox/picker";
 import {
   GroupedFlow,
   type GroupedFlowGroup,
@@ -39,7 +40,6 @@ import {
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { FilterableCombobox } from "~/ui/primitives/combobox";
 import {
   Empty,
   EmptyDescription,
@@ -363,8 +363,8 @@ function GroupJumpBar({
         <span className="shrink-0 eyebrow">Jump to</span>
         {usesPicker ? (
           <div className="min-w-0 flex-1 sm:max-w-sm">
-            <FilterableCombobox
-              items={groups.map((group) => ({
+            <Picker
+              options={groups.map((group) => ({
                 value: group.key,
                 label: group.label,
                 hint: String(group.itemCount),
@@ -375,7 +375,7 @@ function GroupJumpBar({
               }}
               disabled={disabled}
               placeholder={`Choose a ${noun}`}
-              ariaLabel={`Jump to ${noun}`}
+              label={`Jump to ${noun}`}
               className="bg-card"
             />
           </div>

@@ -33,6 +33,7 @@ import {
 import { booleanCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { treePickerItems } from "~/ui/combobox/tree-items";
 import { useEntityListSource } from "~/ui/combobox/with-search-hook";
 import {
@@ -53,7 +54,6 @@ import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
 import { useNameEditable } from "~/ui/hooks/useNameEditable";
 import { useProductCategories } from "~/ui/hooks/useProductCategories";
 import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 import { NoneValue } from "~/ui/primitives/none-value";
 import {
   Tooltip,
@@ -67,7 +67,7 @@ import { defineListOverride, interleaveDeclared } from "./types";
 
 // Module-level fallbacks keep the runtime options reference stable while a
 // roster query is loading.
-const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
+const NO_FILTER_OPTIONS: PickerOption[] = [];
 /** Stable empty default so `nest` keeps its identity while kits load. */
 const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
 
@@ -101,7 +101,7 @@ function useProductFilterOptions() {
   const externalIdSourceOptionsQuery = useQuery(
     productOperations.externalIdSourceOptions.queryOptions(),
   );
-  const manufacturerOptions = useMemo<FilterableComboboxItem[]>(
+  const manufacturerOptions = useMemo<PickerOption[]>(
     () =>
       manufacturerOptionsQuery.data?.map(({ manufacturer, count }) => ({
         value: manufacturer,
@@ -110,7 +110,7 @@ function useProductFilterOptions() {
       })) ?? NO_FILTER_OPTIONS,
     [manufacturerOptionsQuery.data],
   );
-  const externalIdSourceOptions = useMemo<FilterableComboboxItem[]>(
+  const externalIdSourceOptions = useMemo<PickerOption[]>(
     () =>
       externalIdSourceOptionsQuery.data?.map(({ source, count }) => ({
         value: source,
@@ -134,7 +134,7 @@ function useProductFilterOptions() {
       limit: 100,
     }),
   );
-  const vendorOptions = useMemo<FilterableComboboxItem[]>(
+  const vendorOptions = useMemo<PickerOption[]>(
     () =>
       vendorOptionsQuery.data?.map(({ id, label, count }) => ({
         value: id,
@@ -143,7 +143,7 @@ function useProductFilterOptions() {
       })) ?? NO_FILTER_OPTIONS,
     [vendorOptionsQuery.data],
   );
-  const purchaseOptions = useMemo<FilterableComboboxItem[]>(
+  const purchaseOptions = useMemo<PickerOption[]>(
     () =>
       purchaseOptionsQuery.data?.map(({ id, label, count }) => ({
         value: id,

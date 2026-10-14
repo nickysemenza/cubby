@@ -22,6 +22,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { purchaseLabel } from "~/lib/purchase-label";
+import { Picker } from "~/ui/combobox/picker";
 import {
   createCurrencyColumn,
   createNameColumn,
@@ -38,7 +39,6 @@ import {
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
-import { FilterableCombobox } from "~/ui/primitives/combobox";
 import { Description } from "~/ui/primitives/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { Input } from "~/ui/primitives/input";
@@ -340,8 +340,10 @@ export function LinkExpensesDialog({
           placeholder="Search expense names…"
           className="flex-1"
         />
-        <FilterableCombobox
-          items={candidatesQuery.data?.scopes ?? NO_SCOPES}
+        <Picker
+          mode="choose"
+          label="Expense scope"
+          options={candidatesQuery.data?.scopes ?? NO_SCOPES}
           value={scope}
           onValueChange={(next) => {
             const chosen = candidatesQuery.data?.scopes.find(

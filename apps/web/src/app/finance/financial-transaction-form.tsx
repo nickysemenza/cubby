@@ -20,7 +20,7 @@ import {
 import { entities, entityDetailParams } from "~/entity/entities";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
-import { EntityValueField } from "~/ui/form-utils/entity-value-field";
+import { PickerField } from "~/ui/form-utils/picker-field";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
@@ -141,7 +141,8 @@ export function FinancialTransactionFormFields({
 
   return (
     <FormProvider {...form}>
-      <EntityValueField
+      <PickerField
+        store="id"
         form={form}
         name="accountId"
         entity="financialAccount"
@@ -177,7 +178,8 @@ export function FinancialTransactionFormFields({
             </Button>
           </Row>
         ) : null}
-        <EntityValueField
+        <PickerField
+          store="id"
           form={form}
           name="purchaseId"
           entity="purchase"
@@ -188,7 +190,8 @@ export function FinancialTransactionFormFields({
           clearable
         />
       </Stack>
-      <EntityValueField
+      <PickerField
+        store="id"
         form={form}
         name="spendingCategoryId"
         suggestField="spendingCategoryId"

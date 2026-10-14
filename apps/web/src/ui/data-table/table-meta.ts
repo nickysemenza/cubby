@@ -7,13 +7,13 @@ import { z } from "zod";
 
 import type { ColumnCellData } from "./cell-data";
 import type { CubbyDefaultTableLayout } from "./column-layout";
-import type { FilterableComboboxItem } from "./editable-cell";
+import type { PickerOption } from "./editable-cell";
 
 /** Configuration for an inline column-header filter. */
 export interface FilterConfig {
   placeholder: string;
   filterType?: "text" | "select" | "multiselect";
-  options?: FilterableComboboxItem[];
+  options?: PickerOption[];
   /** Client-side facet hints are opt-in because most Cubby tables are server-backed. */
   facetCount?: boolean;
   /** Deferred/server-backed option roster activation and search controls. */

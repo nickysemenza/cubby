@@ -20,13 +20,13 @@ import { Description } from "~/ui/primitives/description";
 
 import { UsdaFoodResultRow } from "../../features/usda/usda-food-result-row";
 import type { ComboboxItem } from "./combobox-types";
-import { EntityPicker } from "./entity-picker";
+import { Picker } from "./picker";
 
 interface UsdaFoodSearchFieldProps {
   /**
    * Seeds the search so candidates appear immediately (e.g. the ingredient or
    * product name). The user can still type to refine. We fall back to this until
-   * the user types, because `EntityPicker` resets its own input to "".
+   * the user types, because `Picker` resets its own input to "".
    * Also used as the ingredient name for the "Suggest with AI" action.
    */
   initialQuery?: string;
@@ -186,7 +186,7 @@ export function UsdaFoodSearchField({
       </Row>
       <Row align="center" gap="sm">
         <div className="flex-1">
-          <EntityPicker
+          <Picker
             label="USDA food"
             items={items}
             isLoading={parsedFdcId != null ? byIdLoading : isLoading}

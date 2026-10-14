@@ -10,8 +10,8 @@ import { useState } from "react";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityPicker } from "~/ui/combobox/entity-picker";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { WithVendorShortcodeSearch } from "~/ui/combobox/with-vendor-search";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
@@ -109,7 +109,7 @@ export function FinancialBookingReview({
       {!purchase ? (
         <WithVendorShortcodeSearch>
           {(search) => (
-            <EntityPicker
+            <Picker
               {...search}
               entity="vendor"
               label="Vendor"

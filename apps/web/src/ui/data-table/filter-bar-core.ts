@@ -1,10 +1,10 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 
 import { colorizeSelectOptions } from "~/lib/select-options";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 
-type FilterOption = FilterableComboboxItem;
+type FilterOption = PickerOption;
 
 export type FilterFieldConfig = {
   key: string;

@@ -12,7 +12,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entities } from "~/entity/entities";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityPicker } from "~/ui/combobox/entity-picker";
+import { Picker } from "~/ui/combobox/picker";
 import {
   isReferencePickerEntity,
   requireReferenceEntitySearch,
@@ -127,7 +127,7 @@ export function ChoiceControl({
       {option?.pick && picker ? (
         <picker.Search>
           {({ items, onSearchChange, onOpenChange, isLoading }) => (
-            <EntityPicker
+            <Picker
               entity={picker.entity}
               label={option.pick?.label ?? choice.label}
               items={items}

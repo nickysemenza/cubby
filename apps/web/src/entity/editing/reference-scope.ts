@@ -1,7 +1,6 @@
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { z } from "zod";
 
-import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import type { EntitySearchScope } from "~/ui/combobox/entity-search-hooks";
 
 import type { EntityEditValue, EntityEditValueBag } from "./value-schema";
@@ -9,15 +8,6 @@ import type { EntityEditValue, EntityEditValueBag } from "./value-schema";
 type ReferenceWithScope = NonNullable<
   EntityFieldModel["fields"][number]["reference"]
 >;
-
-/** Keep every selected id represented when a dependent scope changes. */
-export function preserveSelectedPickerItems<TId extends string>(
-  items: readonly ComboboxItem<TId>[],
-  selectedIds: readonly TId[],
-): ComboboxItem<TId>[] {
-  const byId = new Map(items.map((item) => [item.id, item]));
-  return selectedIds.map((id) => byId.get(id) ?? { id, name: id });
-}
 
 const scopeValueSchema = z.union([z.string(), z.array(z.string())]);
 

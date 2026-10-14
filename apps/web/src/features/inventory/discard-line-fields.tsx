@@ -1,15 +1,3 @@
-/**
- * DiscardLineFields — the trade/date/reason trio shared by `ProductDiscardDialog`
- * and `BulkDiscardInventoryDialog`.
- *
- * Both dialogs write a $0 expense line, and `expense.trade` is decision-model-enabled in
- * the manifest — but neither ever mounted a `FieldSuggestionProvider`, so
- * nothing ever asked. Owning the provider here (rather than in each dialog)
- * is what makes that gap impossible to reintroduce: `FieldSuggestionProvider`
- * calls `useFormContext()`, so it needs a `FormProvider` around it, and this
- * component supplies both in one place instead of trusting every future
- * discard-line caller to remember.
- */
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { Trade } from "@cubby/schemas/task-fields";
 import {
@@ -22,12 +10,21 @@ import {
 
 import { tradeOptions } from "~/app/projects/trade-options";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
+/**
+ * DiscardLineFields — the trade/date/reason trio shared by `ProductDiscardDialog`
+ * and `BulkDiscardInventoryDialog`.
+ *
+ * Both dialogs write a $0 expense line, and `expense.trade` is decision-model-enabled in
+ * the manifest — but neither ever mounted a `FieldSuggestionProvider`, so
+ * nothing ever asked. Owning the provider here (rather than in each dialog)
+ * is what makes that gap impossible to reintroduce: `FieldSuggestionProvider`
+ * calls `useFormContext()`, so it needs a `FormProvider` around it, and this
+ * component supplies both in one place instead of trusting every future
+ * discard-line caller to remember.
+ */
+import { PickerField } from "~/ui/form-utils/picker-field";
 
-import {
-  PlainDateField,
-  SelectField,
-  UnifiedTextField,
-} from "../../ui/form-utils";
+import { PlainDateField, UnifiedTextField } from "../../ui/form-utils";
 
 export interface DiscardLineFieldValues extends FieldValues {
   trade: Trade | null;
@@ -83,7 +80,8 @@ export function DiscardLineFields<TFieldValues extends DiscardLineFieldValues>({
           clearLabel="Date unknown"
           namedClear
         />
-        <SelectField
+        <PickerField
+          store="option"
           form={form}
           name={tradeName}
           label="Trade"

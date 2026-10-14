@@ -23,13 +23,14 @@ import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
 import { VendorMark } from "~/entity/components/vendor-cell";
-import { EntityIcon } from "~/entity/entities";
+import { EntityIcon, entityLabel } from "~/entity/entities";
 import { locationToSegments } from "~/features/locations/location-breadcrumb";
+import { LocationIcon } from "~/features/locations/location-icons";
 import { LocationPickerThumb } from "~/features/locations/location-picker-thumb";
 import { resolveLocationPrimaryVisual } from "~/features/locations/location-visual-resolver";
 import { matchKindLabel } from "~/features/search/search-utils";
 import { formatCount } from "~/lib/utils";
-import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import type { ComboboxItem, PickerThumb } from "~/ui/combobox/combobox-types";
 import { Image } from "~/ui/primitives/image";
 
 export type ProductPickerIntent = "reference" | "stock";
@@ -135,6 +136,7 @@ export function buildSearchHitComboboxItem<E extends SearchableEntity>(
     id: shortcode,
     shortcode,
     name: hit.title,
+    thumb: searchHitThumb(hit, entity),
     secondary: hit.subtitle ?? hit.typeHint ?? undefined,
     detail: hit.subtitle && hit.typeHint ? hit.typeHint : undefined,
     presentation:
@@ -142,6 +144,30 @@ export function buildSearchHitComboboxItem<E extends SearchableEntity>(
         ? { ...(facts && { facts }), ...(group && { group }) }
         : undefined,
     icon: fallback,
+  };
+}
+
+function searchHitThumb(hit: SearchHit, entity: SearchableEntity): PickerThumb {
+  if (entity === "vendor")
+    return {
+      imageUrl: null,
+      shape: "round",
+      fallback: (
+        <VendorMark
+          vendor={hit.title}
+          vendorId={parseShortcodeFor("vendor", hit.id)}
+          logo={hit.imageUrl ? { url: hit.imageUrl } : null}
+          className="size-full"
+        />
+      ),
+    };
+  return {
+    imageUrl: hit.imageUrl,
+    fallback: hit.emoji ? (
+      <RecordEmoji entity={entity} emoji={hit.emoji} />
+    ) : (
+      <EntityIcon entity={entity} size={14} colored />
+    ),
   };
 }
 
@@ -241,6 +267,10 @@ function productPickerBase(
         typeHint={null}
       />
     ),
+    thumb: {
+      imageUrl: coverImageUrl,
+      fallback: <EntityIcon entity="product" size={14} colored />,
+    },
   };
 }
 
@@ -328,7 +358,7 @@ function productPickerInventoryGroup(
  * does, instead of a flat alphabetical roster. A root location (empty
  * `ancestors`) groups under itself. Every group gets the same `order`
  * (0): the list is already server-sorted so siblings arrive contiguous,
- * and `EntityPicker`'s stable sort leaves same-order rows in that order.
+ * and `Picker`'s stable sort leaves same-order rows in that order.
  */
 export const buildLocationComboboxItem = (location: {
   id: LocationShortcode;
@@ -359,6 +389,17 @@ export const buildLocationComboboxItem = (location: {
         type={location.type}
       />
     ),
+    thumb: {
+      imageUrl: location.coverImage?.url ?? null,
+      fallback: (
+        <LocationIcon
+          type={location.type}
+          product={null}
+          size={14}
+          className="text-muted-foreground"
+        />
+      ),
+    },
     presentation: ancestors
       ? {
           group: { id: root.id, label: root.name, order: 0 },
@@ -397,18 +438,23 @@ export function buildRecordComboboxItem<E extends ShortcodeType>(
   const shortcode = parseShortcodeFor(entity, record.id);
   const title = record[entitySummary[entity].titleField];
   const aliases = pickerAliases.safeParse(record.aliases).data;
+  const icon = (
+    <RecordEmoji
+      entity={entity}
+      emoji={z.string().nullable().optional().parse(record.emoji)}
+      size={14}
+    />
+  );
   return {
     id: shortcode,
     shortcode,
-    name: pickerTitle.safeParse(title).data ?? shortcode,
+    // A record without its declared title is unnamed, never its code.
+    name:
+      pickerTitle.safeParse(title).data ??
+      `Untitled ${entityLabel(entity).toLowerCase()}`,
     ...(aliases && { aliases }),
-    icon: (
-      <RecordEmoji
-        entity={entity}
-        emoji={z.string().nullable().optional().parse(record.emoji)}
-        size={14}
-      />
-    ),
+    icon,
+    thumb: { imageUrl: null, fallback: icon },
   };
 }
 
@@ -463,4 +509,16 @@ const vendorComboboxItem = <Id extends string>(
   icon: (
     <VendorMark vendor={vendor.name} vendorId={vendor.id} logo={vendor.logo} />
   ),
+  thumb: {
+    imageUrl: null,
+    shape: "round",
+    fallback: (
+      <VendorMark
+        vendor={vendor.name}
+        vendorId={vendor.id}
+        logo={vendor.logo}
+        className="size-full"
+      />
+    ),
+  },
 });

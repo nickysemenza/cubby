@@ -33,7 +33,7 @@ import {
   requiredProductField,
 } from "~/ui/form-fields";
 import { NullableNumericField, UnifiedTextField } from "~/ui/form-utils";
-import { EntityItemField } from "~/ui/form-utils/entity-value-field";
+import { PickerField } from "~/ui/form-utils/picker-field";
 import { useImageState } from "~/ui/hooks/useImageState";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -297,7 +297,8 @@ export function QuickInventoryAdd({
           <div className="flex flex-col gap-2">
             <Row align="end" gap="sm">
               <div className="flex-1">
-                <EntityItemField
+                <PickerField
+                  store="item"
                   entity="product"
                   form={selectForm}
                   name="product"

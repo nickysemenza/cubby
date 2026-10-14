@@ -17,7 +17,7 @@ export interface TreePickerItemsOptions<T> {
  * Flattens a parent-linked tree into `ComboboxItem[]`, depth-first, with
  * `presentation.group` naming the root each node descends from and
  * `presentation.depth` its distance from that root — the shared shape
- * `EntityPicker`/`FilterableCombobox` render as a grouped, indented list
+ * `Picker` render as a grouped, indented list
  * (the "grouped-list + breadcrumb tree picker" decision, not
  * expand/collapse). Children keep the caller's own array order (assumed
  * already sensible, e.g. a `sortOrder` column) — only the roots are

@@ -8,8 +8,8 @@ import { z } from "zod";
 
 import { entityListFor } from "~/entity/entity-list";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityPicker } from "~/ui/combobox/entity-picker";
 import type { PickerSearchEntity } from "~/ui/combobox/entity-search-hooks";
+import { Picker } from "~/ui/combobox/picker";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -107,7 +107,7 @@ function ImagePicker({
     [query.data?.items],
   );
   return (
-    <EntityPicker
+    <Picker
       label={label}
       items={items}
       value={selected?.id === value ? selected : null}
@@ -153,7 +153,7 @@ function RunPicker({
     [query.data?.items],
   );
   return (
-    <EntityPicker
+    <Picker
       label={label}
       items={items}
       value={selected?.id === value ? selected : null}
@@ -187,7 +187,7 @@ function RecordPicker({
     onOpenChange: (open: boolean) => void;
     isLoading: boolean;
   }) => (
-    <EntityPicker
+    <Picker
       {...search}
       entity={entity}
       label={label}

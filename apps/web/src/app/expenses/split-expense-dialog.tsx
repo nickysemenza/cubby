@@ -32,8 +32,7 @@ import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { FieldSuggestionApply } from "~/features/ai/field-suggestion-apply";
 import { purchase } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
-import { EntityPicker } from "~/ui/combobox/entity-picker";
-import { StaticPicker } from "~/ui/combobox/static-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { useEntityListSource } from "~/ui/combobox/with-search-hook";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { Row, Stack } from "~/ui/layout";
@@ -80,7 +79,7 @@ function PartProjectPicker({
   return (
     <>
       {dialog}
-      <EntityPicker
+      <Picker
         entity="project"
         label="project"
         items={items}
@@ -151,8 +150,9 @@ function SplitPartCard({
         />
       </Row>
       <Row align="center" gap="sm" wrap>
-        <StaticPicker
-          items={fieldEnumOptions("expense", "costType")}
+        <Picker
+          mode="choose"
+          options={fieldEnumOptions("expense", "costType")}
           value={part.costType}
           onValueChange={(next) => {
             // Required enum — a cleared picker is a no-op.
@@ -165,8 +165,9 @@ function SplitPartCard({
           label={`Part ${index + 1} cost type`}
           compact
         />
-        <StaticPicker
-          items={tradeOptions}
+        <Picker
+          mode="choose"
+          options={tradeOptions}
           value={part.trade}
           onValueChange={(next) => {
             const parsed = tradeSchema.nullable().safeParse(next);
@@ -512,8 +513,9 @@ export function SplitExpenseDialog({
       </Row>
 
       {result?.needsAttributionPolicy ? (
-        <StaticPicker
-          items={ATTRIBUTION_OPTIONS.map((option) => ({ ...option }))}
+        <Picker
+          mode="choose"
+          options={ATTRIBUTION_OPTIONS.map((option) => ({ ...option }))}
           value={attributionPolicy ?? null}
           onValueChange={(next) => {
             const parsed = splitAttributionPolicy.safeParse(next);

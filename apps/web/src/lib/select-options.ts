@@ -1,9 +1,9 @@
 import { colorizeEnumOptions } from "@cubby/shared/enum-palette";
 
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 
 /** Shared defaults also cover web-only editor sentinels. */
-export function colorizeSelectOptions<T extends FilterableComboboxItem>(
+export function colorizeSelectOptions<T extends PickerOption>(
   options: readonly T[],
 ): Array<T & { color: string }> {
   return colorizeEnumOptions(options);
@@ -30,7 +30,7 @@ const DEFAULT_BOOLEAN_COLORS = {
 export function booleanCellOptions(
   labels: { true: string; false: string },
   colors: { true: string; false: string } = DEFAULT_BOOLEAN_COLORS,
-): FilterableComboboxItem[] {
+): PickerOption[] {
   return [
     { value: "true", label: labels.true, color: colors.true },
     { value: "false", label: labels.false, color: colors.false },

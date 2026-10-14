@@ -8,7 +8,7 @@ import { createElement } from "react";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { getEntityFilters, type FilterSpec } from "~/entity/filter-manifest";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 
 import { KIND_ICONS } from "./calendar-icons";
 
@@ -42,7 +42,7 @@ const KIND_LABELS = {
   planting: "Plantings",
 } satisfies Record<CalendarItemKind, string>;
 
-const itemKindOptions: FilterableComboboxItem[] = calendarItemKind.options.map(
+const itemKindOptions: PickerOption[] = calendarItemKind.options.map(
   (value) => ({
     value,
     label: KIND_LABELS[value] ?? value,

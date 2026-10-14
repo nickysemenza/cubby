@@ -1,8 +1,8 @@
 import { dataQualityStatus } from "@cubby/schemas/data-quality";
 
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { BadgeVariant } from "~/ui/primitives/badge";
 import { badgeVariantColor } from "~/ui/primitives/badge";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 
 type DataQualityStatus = (typeof dataQualityStatus.options)[number];
 
@@ -27,9 +27,10 @@ export const dataQualityStatusLabel = (status: DataQualityStatus): string =>
   DATA_QUALITY_LABELS[status];
 
 /** Shared internal status roster and tone. */
-export const dataQualityOptions: FilterableComboboxItem[] =
-  dataQualityStatus.options.map((value) => ({
+export const dataQualityOptions: PickerOption[] = dataQualityStatus.options.map(
+  (value) => ({
     value,
     label: DATA_QUALITY_LABELS[value],
     color: badgeVariantColor[DATA_QUALITY_TONE[value]],
-  }));
+  }),
+);

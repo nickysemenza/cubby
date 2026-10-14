@@ -26,7 +26,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { EntityPicker } from "~/ui/combobox/entity-picker";
+import { Picker } from "~/ui/combobox/picker";
 import {
   isReferencePickerEntity,
   requireReferenceEntitySearch,
@@ -546,7 +546,7 @@ function CommandRecordOperand({
   return (
     <Search>
       {({ items, onSearchChange, onOpenChange, isLoading }) => (
-        <EntityPicker
+        <Picker
           entity={entity}
           label={input.label}
           items={items}

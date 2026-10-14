@@ -6,9 +6,9 @@ import type {
 } from "@cubby/schemas/work-queue";
 
 import { colorizeSelectOptions } from "~/lib/select-options";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ChipCluster } from "~/ui/common/chip-cluster";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 import {
   Popover,
@@ -38,7 +38,7 @@ export function WaitingForPill({
   memberOptions,
 }: {
   waitingFor: WorkWaitingFor;
-  memberOptions: FilterableComboboxItem[];
+  memberOptions: PickerOption[];
 }) {
   switch (waitingFor.kind) {
     case "either":

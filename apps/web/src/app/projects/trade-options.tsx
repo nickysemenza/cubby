@@ -21,7 +21,7 @@ import { TruckIcon } from "@phosphor-icons/react/dist/csr/Truck";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 
 /**
  * Trade presentation — glyphs, chips, and select options.
@@ -84,13 +84,11 @@ export function TradeIcon({
  * by tasks and expenses. The glyph mirrors `TradeBadge` so the select and the
  * chip match.
  */
-export const tradeOptions: FilterableComboboxItem[] = tradeValues.map(
-  (value) => {
-    const Icon = TRADE_ICONS[value];
-    return {
-      value,
-      label: TRADE_LABELS[value],
-      icon: <Icon className="size-3.5" />,
-    };
-  },
-);
+export const tradeOptions: PickerOption[] = tradeValues.map((value) => {
+  const Icon = TRADE_ICONS[value];
+  return {
+    value,
+    label: TRADE_LABELS[value],
+    icon: <Icon className="size-3.5" />,
+  };
+});

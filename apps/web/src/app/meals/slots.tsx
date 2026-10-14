@@ -18,7 +18,7 @@ import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { meal as mealOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { StaticPicker } from "~/ui/combobox/static-picker";
+import { Picker } from "~/ui/combobox/picker";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Stack } from "~/ui/layout";
@@ -168,8 +168,9 @@ function MealPreparationOverlays({
         {preparation.isLoadingSourceChoices ? (
           <SimpleLoading text="Loading prepared recipes…" />
         ) : preparation.sourceChoices.length ? (
-          <StaticPicker
-            items={preparation.sourceChoices.map(({ value, label }) => ({
+          <Picker
+            mode="choose"
+            options={preparation.sourceChoices.map(({ value, label }) => ({
               value,
               label,
             }))}

@@ -17,12 +17,12 @@ import { PossibleVendor } from "~/app/finance/possible-vendor";
 import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { statusTone } from "~/lib/status-tone";
 import { formatCurrency } from "~/lib/utils";
+import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { usePageCount } from "~/ui/page/Page";
 import { badgeVariantColor } from "~/ui/primitives/badge";
-import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 import { DrilldownMetricStrip } from "~/ui/primitives/drilldown-metric-strip";
 import { Input } from "~/ui/primitives/input";
 import { NativeSelect } from "~/ui/primitives/native-select";
@@ -65,26 +65,22 @@ const MATCH_STATE_VALUES = [
 ] as const satisfies readonly StatementRowMatchState[];
 const matchStateSearchSchema = z.enum([...MATCH_STATE_VALUES, "all"] as const);
 
-const MATCH_STATE_OPTIONS: FilterableComboboxItem[] = MATCH_STATE_VALUES.map(
-  (value) => ({
-    value,
-    label: capitalize(value),
-    color: badgeVariantColor[statusTone("statementMatch", value)],
-  }),
-);
+const MATCH_STATE_OPTIONS: PickerOption[] = MATCH_STATE_VALUES.map((value) => ({
+  value,
+  label: capitalize(value),
+  color: badgeVariantColor[statusTone("statementMatch", value)],
+}));
 
 const DISPOSITION_VALUES = [
   "open",
   "ignored",
 ] as const satisfies readonly StatementRowDisposition[];
 
-const DISPOSITION_OPTIONS: FilterableComboboxItem[] = DISPOSITION_VALUES.map(
-  (value) => ({
-    value,
-    label: capitalize(value),
-    color: badgeVariantColor[statusTone("statementDisposition", value)],
-  }),
-);
+const DISPOSITION_OPTIONS: PickerOption[] = DISPOSITION_VALUES.map((value) => ({
+  value,
+  label: capitalize(value),
+  color: badgeVariantColor[statusTone("statementDisposition", value)],
+}));
 
 /** Route search → server filters. `"all"` never reaches the wire — it's the
  * client-only way to say "no matchState filter" (see the route file). */
