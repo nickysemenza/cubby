@@ -41,7 +41,7 @@ function AuthPage() {
   return (
     <AuthEntryFrame>
       {/* AuthView's card is a fixed max-w-sm without centering; share its
-          column so the alert and dev link align with the card's edges. */}
+          column so the alert aligns with the card's edges. */}
       <div className="mx-auto w-full max-w-sm">
         {googleError ? (
           <p
@@ -53,22 +53,27 @@ function AuthPage() {
           </p>
         ) : null}
         <AuthUIProvider>
-          <AuthView pathname={authView} />
+          <AuthView
+            pathname={authView}
+            cardFooter={
+              /* Statically false in every build, so the link never reaches a
+                 production bundle (enforced by scripts/check-client-bundle.ts).
+                 The route itself exists only in tooling/dev/worker.ts. */
+              import.meta.env.DEV && authView === "sign-in" ? (
+                <a
+                  href={`/__dev/login?${new URLSearchParams({ next: redirect ?? "/" })}`}
+                  className={cn(
+                    buttonVariants({ variant: "outline" }),
+                    // Match better-auth-ui's h-9 text-sm card buttons.
+                    "h-9 w-full text-sm",
+                  )}
+                >
+                  Continue as local dev user
+                </a>
+              ) : undefined
+            }
+          />
         </AuthUIProvider>
-        {/* Statically false in every build, so the link never reaches a
-          production bundle (enforced by scripts/check-client-bundle.ts). The
-          route itself exists only in tooling/dev/worker.ts. */}
-        {import.meta.env.DEV && authView === "sign-in" ? (
-          <a
-            href={`/__dev/login?${new URLSearchParams({ next: redirect ?? "/" })}`}
-            className={cn(
-              buttonVariants({ variant: "outline" }),
-              "mt-3 w-full",
-            )}
-          >
-            Continue as local dev user
-          </a>
-        ) : null}
       </div>
     </AuthEntryFrame>
   );
