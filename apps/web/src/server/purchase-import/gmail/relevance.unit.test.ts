@@ -2,6 +2,7 @@
  * outages and revoked authentication must remain recoverable failures. */
 import { describe, expect, it, vi } from "vitest";
 
+import { INLINE_EMAIL_PNG_BASE64 } from "./email-html.fixtures";
 import { normalizeMessage } from "./normalize";
 import { interpretMailRelevance, type MailRelevance } from "./relevance";
 import { GmailApiError, type GmailProvider } from "./types";
@@ -35,8 +36,7 @@ const gmail = (status: number): GmailProvider => ({
 
 describe("transient original attachment relevance", () => {
   it("counts a referenced inline image as available only when its exact MIME part reaches the interpreter", async () => {
-    const png =
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aNioAAAAASUVORK5CYII=";
+    const png = INLINE_EMAIL_PNG_BASE64;
     const make = (
       contentId: string,
       filename: string | null = "logo.png",

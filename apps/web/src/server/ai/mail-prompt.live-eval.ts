@@ -14,6 +14,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { localSecret } from "../../../tooling/local-secret";
+import { INLINE_EMAIL_PNG_BASE64 } from "../purchase-import/gmail/email-html.fixtures";
 
 // The compactor's developer timing warning includes source snippets.
 // Evaluation output keeps timings but never prints the original arguments.
@@ -356,6 +357,12 @@ async function evaluateRelevance() {
           body: "Order SYN-456 confirmed. Paid $42.00. Two cotton towels. You might also like these bath mats.",
           html: "",
         },
+        {
+          label: "unrelated",
+          body: "Community newsletter with gardening tips and upcoming neighborhood events.",
+          html: '<p>Community newsletter with gardening tips and upcoming neighborhood events.</p><img src="cid:synthetic-logo%40example.test">',
+          inlineImage: true,
+        },
       ];
   const usage = emptyEvalUsage();
   const ports = meteredStructuredPorts(usage, piCallTarget);
@@ -399,6 +406,26 @@ async function evaluateRelevance() {
         parts: [
           part(entry.body, "text/plain"),
           ...(entry.html ? [part(entry.html, "text/html")] : []),
+          ...("inlineImage" in entry && entry.inlineImage
+            ? [
+                {
+                  mimeType: "image/png",
+                  headers: [
+                    {
+                      name: "Content-ID",
+                      value: "<synthetic-logo@example.test>",
+                    },
+                  ],
+                  body: {
+                    data: Buffer.from(
+                      INLINE_EMAIL_PNG_BASE64,
+                      "base64",
+                    ).toString("base64url"),
+                    size: Buffer.from(INLINE_EMAIL_PNG_BASE64, "base64").length,
+                  },
+                },
+              ]
+            : []),
         ],
       },
     };

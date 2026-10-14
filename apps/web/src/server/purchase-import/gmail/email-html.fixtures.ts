@@ -1,3 +1,7 @@
+// Fully decoded opaque PNG: live image transport must not depend on a header-only fixture.
+export const INLINE_EMAIL_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAtUlEQVR42u3bsRHDMAzAQDvnSTJOhkrhoTxOVpF3cIovCPTiQTi23NdaaxvMSwtoCqAFNAXQApoCaAFNAbSApgBaQFMALaApgBbQHP8OeJ8f/Yft970evx2/AQXQApoCaAFNAbSApgBaQFMALaApgBbQFEALaAqgBTQF0AKaAmgBTQG0gKYAWkBTAC2gKYAW0BRAC2jGB9g7mBhOAbSApgBaQFMALaApgBbQFEALaAqgBTTjA9xg9gt51WLnMQAAAABJRU5ErkJggg==";
+
 import type { WCompactEmail } from "@cubby/recipebridge";
 
 import forwarded from "../../../../../../recipebridge/fixtures/email/forwarded.html?raw";
