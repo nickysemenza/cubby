@@ -49,11 +49,7 @@ struct RunPhotoReviewSections: View {
 
             if !proposed.isEmpty {
                 Section {
-                    reviewWorkspace(review)
-                } header: {
                     HStack {
-                        Text("Proposed items · \(proposed.count)")
-                        Spacer()
                         if !workspace.selectedGroupKeys.isEmpty {
                             Button("Approve selected · \(workspace.approvableSelectedKeys(session).count)") {
                                 workspace.freezeApproval(
@@ -73,8 +69,12 @@ struct RunPhotoReviewSections: View {
                                     approvalBlocker($0, images: review.images) != nil
                                 })
                     }
+                    .buttonStyle(.borderless)
                     .detailContentsHeader().detailContentsAnchor(
                         RunConsoleView.InitialSection.photoReview.rawValue)
+                    reviewWorkspace(review)
+                } header: {
+                    Text("Proposed items · \(proposed.count)")
                 } footer: {
                     Text("Products are created or linked only after approval.")
                 }

@@ -227,8 +227,9 @@ original digests, capture dates, import Sightings, sheet-close continuation, and
 explicit group approval without automatic financial or inventory writes. The
 Review item groups action targets the proposed-items section directly through
 the Run's shared contents navigation, ahead of the per-photo processing rows. The
-initial target is centered so its approval controls stay clear of the navigation
-bar when the import opens in a medium-height sheet. The
+initial target is a short approval-controls body row, separate from the tall
+evidence workspace and noninteractive count header. Centering that bounded row
+keeps its buttons clear of the navigation bar in a medium-height sheet. The
 review uses one confirmation presenter for individual, selected, all, and discard
 actions; approval keeps the reviewed document and group keys frozen until confirmation.
 The separate system-picker scripts retain the denied-library entry path. Fixture

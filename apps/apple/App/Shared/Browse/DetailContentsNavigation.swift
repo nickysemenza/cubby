@@ -171,8 +171,8 @@ struct DetailContentsNavigation: ViewModifier {
                 .task(id: initialSectionID) {
                     guard let initialSectionID else { return }
                     await Task.yield()
-                    // Initial destinations can open inside a medium sheet whose navigation bar
-                    // overlays List headers; keep their actions clear of that toolbar.
+                    // Initial action destinations use a bounded body row, clear of overlaid
+                    // navigation bars even when the enclosing sheet is medium-height.
                     proxy.scrollTo(DetailContentsAnchorID(id: initialSectionID), anchor: .center)
                     destination = DetailContentsJump(id: initialSectionID)
                 }
