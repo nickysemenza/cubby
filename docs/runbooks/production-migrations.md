@@ -180,3 +180,45 @@ through the same pass: the coordinator erases it only when exactly one settled
 Run of a retired purpose stores that exact name, and refuses otherwise without
 touching storage. Investigate a refusal; never rewrite the stored identity or
 stamp `retiredAt` by hand.
+
+## Shared Assessments and Feedback
+
+The owner applies the migrations shipped with ADR 0016 only after the final
+journal tags and the copy/retirement map have been checked against the reviewed
+PR. Record the exact expansion, final reconciliation and contraction tags
+privately; substitute those tags in the bounded commands above. Never apply a
+contract migration merely because it is the next journal entry.
+
+Before pushing or applying the cutover, prove preservation from a populated
+predecessor database and capture a private production baseline. Compare origin
+coverage and original keys for every retired store, including inactive image
+confirmations, all field statuses and receipts, pair/group suppression scopes,
+Email member labels and order-event decisions, frozen evaluation membership and
+grades. Missing historical provenance remains unknown. Compare authoritative
+current projections independently of historical row counts.
+
+An initial online expansion/copy is not the final preservation boundary.
+Before final reconciliation, establish an enforced maintenance barrier for
+relevant server, device and background writers. Disabling initiation alone does
+not stop existing requests or durable jobs: drain/cancel old in-flight work and
+transform persisted targets and Run payloads referencing retired contracts.
+The owner must be able to account for every admitted old writer before copying.
+
+Hold source-table locks through the final reconciliation transaction and verify
+updates made since an initial copy were retained. Keep the maintenance barrier
+in place across deploying the matching server, retiring old references/FKs and
+refreshing native/HTTP/MCP clients. The approved one-household wire break allows
+old clients to refuse and reconnect; it does not allow an acknowledged old write
+to disappear. Do not use observed idleness as proof of the barrier.
+
+Read back exact source-origin coverage, field status/receipt preservation,
+confirmed descriptions, operational Email authority, frozen weighted evaluation
+metadata and exact suppression keys before contraction. Check lifecycle edges
+and hard-delete constraints as well as table counts. Retire storage only after
+all current readers and writers have moved; immutable review history remains on
+durable subject identities. After contraction, verify the catalog and exercise
+field review, Email review, image confirmation and a pairwise Product review
+before reenabling automatic work. Inventory and ledger amounts must be unchanged.
+
+Preservation evidence is private operator material outside the repository; the
+public PR uses synthetic examples and reports checks and limits only.
