@@ -1,7 +1,7 @@
 import type { ReportRowState } from "@cubby/schemas/entity-report";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link, type LinkProps } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -351,15 +351,10 @@ export function RecordDetail({
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
-  // React writes `open` on every render it changes, so the disclosure owns its state and a
-  // default-open one still closes when the person toggles it.
-  const [open, setOpen] = useState(defaultOpen);
+  // Uncontrolled: the browser owns the open state, so a toggle made before hydration survives
+  // it. React writes `open` only when this prop changes, which it never does after mount.
   return (
-    <details
-      className="group text-xs/5"
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
+    <details className="group text-xs/5" open={defaultOpen || undefined}>
       <summary className="inline-flex cursor-pointer list-none items-center gap-0.5 text-muted-foreground hover:text-foreground max-md:min-h-11 max-md:min-w-11 [&::-webkit-details-marker]:hidden">
         <CaretRightIcon
           aria-hidden
