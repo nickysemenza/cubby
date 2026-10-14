@@ -2,13 +2,13 @@ import type { ScoredEntity } from "@cubby/schemas/data-quality";
 
 import { cookbookChecks } from "./checks/cookbook";
 import { deviceChecks } from "./checks/device";
-import { imageJobChecks } from "./checks/image-job";
 import { emailChecks } from "./checks/email";
 import { expenseChecks } from "./checks/expense";
 import { financialAccountChecks } from "./checks/financial-account";
 import { financialTransactionChecks } from "./checks/financial-transaction";
 import { gardenEntryChecks } from "./checks/garden-entry";
 import { imageChecks } from "./checks/image";
+import { imageJobChecks } from "./checks/image-job";
 import { ingredientChecks } from "./checks/ingredient";
 import { inventoryChecks } from "./checks/inventory";
 import { ledgerPartyChecks } from "./checks/ledger-party";

@@ -129,6 +129,12 @@ test("Image jobs open in the generic detail and their Run's section, while Activ
   const table = page.getByRole("table");
   await expect(table).toContainText(`Subject lift · ${sample.filename}`);
   await expect(table).toContainText(`Image description · ${sample.filename}`);
+  // The row borrows its Image's thumbnail and carries the job's own quality score.
+  const lift = table
+    .getByRole("row")
+    .filter({ hasText: `Subject lift · ${sample.filename}` });
+  await expect(lift.locator("img").first()).toBeVisible();
+  await expect(lift.getByText(/^\d{1,3}$/u).first()).toBeVisible();
 
   await gotoAuthenticatedPage(page, `/image-jobs/${sample.jobId}`);
   const attempts = page.locator("#attempts");

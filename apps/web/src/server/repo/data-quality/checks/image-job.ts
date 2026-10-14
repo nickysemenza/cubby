@@ -14,7 +14,8 @@ export const imageJobChecks = defineEntityChecks({
   table: imageProcessingJob,
   checks: {
     image_job_failed: {
-      missing: (t: ImageJob) => sql`${t.state} = ${imageProcessingJobState.enum.failed}`,
+      missing: (t: ImageJob) =>
+        sql`${t.state} = ${imageProcessingJobState.enum.failed}`,
     },
     image_job_unexplained_skip: {
       missing: (t: ImageJob) =>
