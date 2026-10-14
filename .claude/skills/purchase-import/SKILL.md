@@ -185,8 +185,9 @@ same outcome without prescribing an agent runtime.
    recorded fields contradicts the line: a missing identifier alone is no
    reason to fork it. Commit enforces this: `new` is refused beside a
    candidate flagged `exactIdentifierMatch`, and beside one flagged
-   `exactNameMatch` unless the resolution's `distinctFrom` names it with the
-   url and quoted text that show the difference (model, size, pack, kit
+   `exactNameMatch` or a strong brand/item review candidate unless the
+   resolution's `distinctFrom` names it with the url and quoted text that show
+   the difference (model, size, pack, kit
    contents). Browse the listings to find that difference; without one,
    resolve to the match. For a differently titled photo Product, compare its
    own photos, labels and Sources against the purchased variant before

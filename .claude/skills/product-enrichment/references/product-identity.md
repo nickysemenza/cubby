@@ -43,8 +43,8 @@ identifier is the proof.
 
 A style, family, or model number shared by several sizes or colors is not
 identity. It ranks candidates, and size, color, or model evidence must
-corroborate the exact variant; otherwise treat the pair as a descriptive-only
-match below. Never store a shared style number as `retailer_sku` or any other
+corroborate the exact variant; otherwise compare the descriptive
+evidence below. Never store a shared style number as `retailer_sku` or any other
 external id: it would claim one variant and collide with its siblings. Keep it
 in `model` or `notes`.
 
