@@ -8,7 +8,7 @@ import { ScopeChip } from "~/ui/data-table/ScopeChip";
 import { Row, Stack } from "~/ui/layout";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
-import { Demo, DemoGrid, DesignSection } from "../_components/design-section";
+import { Demo, DemoGrid } from "../_components/design-section";
 import {
   demoCategoryOptions,
   demoGaps,
@@ -63,23 +63,7 @@ export function ValuesSection() {
     { name: "Project", value: "Pantry refresh" },
   ]);
   return (
-    <DesignSection
-      id="values"
-      title="Dates, pills and filters"
-      components={[
-        "DateDisplay",
-        "EnumPill",
-        "GapChipCluster",
-        "FilterBar",
-        "ScopeChip",
-      ]}
-      source={[
-        "ui/common/date-display.tsx",
-        "ui/primitives/enum-pill.tsx",
-        "features/work-queue/work-queue-display.tsx",
-        "ui/data-table/FilterBar.tsx",
-      ]}
-    >
+    <Stack gap="md">
       <DemoGrid>
         <Demo
           name="<DateDisplay />"
@@ -172,6 +156,6 @@ export function ValuesSection() {
           </Row>
         </Demo>
       </DemoGrid>
-    </DesignSection>
+    </Stack>
   );
 }

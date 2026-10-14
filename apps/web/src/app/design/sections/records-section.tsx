@@ -15,8 +15,9 @@ import {
   RecordRow,
   RecordScore,
 } from "~/ui/common/record-list";
+import { Stack } from "~/ui/layout";
 
-import { Demo, DemoGrid, DesignSection } from "../_components/design-section";
+import { Demo, DemoGrid } from "../_components/design-section";
 import { EditableComponentDemo } from "../_components/EditableComponentDemo";
 import {
   demoFilmstripBlock,
@@ -129,31 +130,7 @@ function ActivityTimelineDemo() {
 
 export function RecordsSection() {
   return (
-    <DesignSection
-      id="records"
-      title="Records: ledger and timeline"
-      components={[
-        "RecordsBlockView",
-        "Ledger",
-        "LedgerRow",
-        "LedgerCell",
-        "RecordList",
-        "RecordRow",
-        "RecordGroup",
-        "RecordHeading",
-        "RecordMore",
-        "RecordFold",
-        "RecordDot",
-        "RecordScore",
-        "RecordHops",
-        "RecordDetail",
-      ]}
-      source={[
-        "entity/entity-detail/records-block.tsx",
-        "ui/common/ledger.tsx",
-        "ui/common/record-list.tsx",
-      ]}
-    >
+    <Stack gap="md">
       <div className="grid gap-4 xl:grid-cols-2">
         <EditableComponentDemo
           title='RecordsBlockView · kind: "records"'
@@ -239,6 +216,6 @@ export function RecordsSection() {
           <RecordList empty="No purchases recorded for this product." />
         </Demo>
       </DemoGrid>
-    </DesignSection>
+    </Stack>
   );
 }

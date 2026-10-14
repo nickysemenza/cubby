@@ -124,7 +124,7 @@ const DOMAIN_HEX = {
 } as const satisfies Record<DemoDomain, readonly [string, string]>;
 
 /** A labelled placeholder picture sized for the slot it fills. */
-export function placeholderImage(
+function placeholderImage(
   text: string,
   domain: DemoDomain,
   width = 160,
@@ -158,7 +158,7 @@ const DEMO_EMOJIS = [
 ] as const;
 
 /** The same record always gets the same emoji. */
-export const demoEmoji = (index: number): string =>
+const demoEmoji = (index: number): string =>
   DEMO_EMOJIS[index % DEMO_EMOJIS.length]!;
 
 export interface DemoProduct {

@@ -60,6 +60,7 @@ These are Cubby's own components, designed and built here rather than adopted fr
 - **`Picker`** (`ui/combobox/picker.tsx`) with `PickerField`, `PickerVisual` and `PickerOption` — every value choice: choose, search and segmented modes, single and multiple values, records with pictures and options with glyphs (`/design#picker`).
 - **Records ledger and timeline** — `RecordsBlockView` (`entity/entity-detail/records-block.tsx`), `Ledger`/`LedgerRow`/`LedgerCell` (`ui/common/ledger.tsx`), and `RecordList` with its `Record*` parts (`ui/common/record-list.tsx`) (`/design#records`).
 - **`RTable`** (`ui/data-table/Table.tsx`), reached through `ListWorkbench` (`/design#rtable`).
+- **`IndexedSections`** (`ui/data-table/indexed-sections.tsx`) — the continuous grouped page with its sticky contents index and Jump to menu; record details and `/design` both render through it (`/design#indexed-sections`).
 - **`LocationTree`**, `DateDisplay`, `EnumPill`, `GapChipCluster`, `FilterBar` and `ScopeChip` (`/design#location-tree`, `/design#values`).
 
 ### Shared headings and actions

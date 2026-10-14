@@ -29,6 +29,13 @@ test("design showcase renders every section and its live demos", async ({
     ).toBeVisible();
   }
 
+  // The record-detail contents index, shared through IndexedSections.
+  await page
+    .getByRole("navigation", { name: "Section index" })
+    .getByRole("link", { name: "RTable" })
+    .click();
+  await expect(page).toHaveURL(/#rtable$/);
+
   const picker = page.locator("#picker");
   await picker.getByRole("combobox", { name: "Product" }).first().click();
   await expect(

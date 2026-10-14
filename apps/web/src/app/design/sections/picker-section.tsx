@@ -11,7 +11,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { PickerField } from "~/ui/form-utils/picker-field";
 import { Stack } from "~/ui/layout";
 
-import { Demo, DemoGrid, DesignSection } from "../_components/design-section";
+import { Demo, DemoGrid } from "../_components/design-section";
 import {
   demoCategoryOptions,
   demoLocationOptions,
@@ -95,16 +95,7 @@ export function PickerSection() {
   const [location, setLocation] = useState<string | null>("kitchen-pantry-top");
 
   return (
-    <DesignSection
-      id="picker"
-      title="Picker"
-      components={["Picker", "PickerField", "PickerVisual", "PickerOption"]}
-      source={[
-        "ui/combobox/picker.tsx",
-        "ui/combobox/picker-visual.tsx",
-        "ui/form-utils/picker-field.tsx",
-      ]}
-    >
+    <Stack gap="md">
       <DemoGrid>
         <Demo
           name={'<Picker mode="choose" options />'}
@@ -229,6 +220,6 @@ export function PickerSection() {
           <PickerFieldDemo products={products} />
         </Demo>
       </DemoGrid>
-    </DesignSection>
+    </Stack>
   );
 }

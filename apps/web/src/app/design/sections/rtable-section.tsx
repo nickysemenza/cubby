@@ -29,8 +29,8 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/useGroupedList";
+import { Stack } from "~/ui/layout";
 
-import { DesignSection } from "../_components/design-section";
 import {
   type DemoProduct,
   demoCategoryOptions,
@@ -215,25 +215,7 @@ export function RTableSection() {
   ];
 
   return (
-    <DesignSection
-      id="rtable"
-      title="RTable"
-      components={[
-        "RTable",
-        "ListWorkbench",
-        "BulkActionBar",
-        "EditableCell",
-        "CellFrame",
-        "createNameColumn",
-        "createCurrencyColumn",
-        "createPlainDateColumn",
-      ]}
-      source={[
-        "ui/data-table/Table.tsx",
-        "ui/data-table/ListWorkbench.tsx",
-        "ui/data-table/columnHelpers.tsx",
-      ]}
-    >
+    <Stack gap="md">
       <p className="text-xs text-muted-foreground">
         Production lists reach RTable through <code>ListWorkbench</code> and the
         entity manifest; this one is built directly over synthetic rows. Click a
@@ -267,6 +249,6 @@ export function RTableSection() {
         }
         emptyState="No synthetic products."
       />
-    </DesignSection>
+    </Stack>
   );
 }

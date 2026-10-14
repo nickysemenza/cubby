@@ -5,8 +5,8 @@ import { z } from "zod";
 import { LocationTree } from "~/features/inventory/location-tree-view";
 import { formatRichText, parseRichTextSafe } from "~/features/recipes/richtext";
 import { ConversionCapabilities } from "~/features/units/ConversionCapabilities";
+import { Stack } from "~/ui/layout";
 
-import { DesignSection } from "../_components/design-section";
 import { EditableComponentDemo } from "../_components/EditableComponentDemo";
 import {
   richTextInputSchema,
@@ -23,12 +23,7 @@ function RichText({ data }: { data: z.infer<typeof richTextInputSchema> }) {
 
 export function LocationTreeSection() {
   return (
-    <DesignSection
-      id="location-tree"
-      title="LocationTree"
-      components={["LocationTree"]}
-      source={["features/inventory/location-tree-view.tsx"]}
-    >
+    <Stack gap="md">
       <EditableComponentDemo
         title="<LocationTree data />"
         description="Searchable household index: location hierarchy, inventory rollups and direct record navigation."
@@ -41,21 +36,13 @@ export function LocationTreeSection() {
           </div>
         )}
       </EditableComponentDemo>
-    </DesignSection>
+    </Stack>
   );
 }
 
 export function RecipeUnitsSection() {
   return (
-    <DesignSection
-      id="recipe-units"
-      title="Recipe text and unit conversion"
-      components={["formatRichText", "ConversionCapabilities"]}
-      source={[
-        "features/recipes/richtext.tsx",
-        "features/units/ConversionCapabilities.tsx",
-      ]}
-    >
+    <Stack gap="md">
       <div className="grid gap-4 xl:grid-cols-2">
         <EditableComponentDemo
           title="formatRichText(parseRichTextSafe(text, ingredients))"
@@ -74,6 +61,6 @@ export function RecipeUnitsSection() {
           {(data) => <ConversionCapabilities mappings={data} />}
         </EditableComponentDemo>
       </div>
-    </DesignSection>
+    </Stack>
   );
 }

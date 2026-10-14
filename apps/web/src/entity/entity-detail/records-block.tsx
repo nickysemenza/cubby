@@ -67,8 +67,9 @@ function RecordFilmstrip({
               <Image
                 src={row.imageUrl}
                 alt=""
-                displayWidth={64}
-                className="size-12 object-contain"
+                displayWidth={48}
+                // Inside the button's own height, never past its border.
+                className="-ml-1 size-6 shrink-0 rounded-sm object-cover"
               />
             ) : null}
             {row.title}

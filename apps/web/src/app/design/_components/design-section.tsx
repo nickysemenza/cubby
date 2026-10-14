@@ -1,47 +1,23 @@
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
-import { SectionHeading, Stack } from "~/ui/layout";
 
-/** One anchored showcase section: what it is, which components it shows, and where they live. */
-export function DesignSection({
-  id,
-  title,
+/** A section's heading line: the component names exactly as imported, then
+ * their source paths relative to `apps/web/src`. */
+export function ComponentsLine({
   components,
   source,
-  children,
 }: {
-  id: string;
-  title: string;
-  /** Component names exactly as imported. */
   components: readonly string[];
-  /** Source paths relative to `apps/web/src`. */
   source: readonly string[];
-  children: ReactNode;
 }) {
   return (
-    <section
-      id={id}
-      aria-labelledby={`${id}-title`}
-      className="scroll-mt-4"
-      data-design-section={id}
-    >
-      <Stack gap="md">
-        <SectionHeading
-          id={`${id}-title`}
-          title={title}
-          description={
-            <span className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-2xs">
-              <span className="text-foreground">{components.join(" · ")}</span>
-              {source.map((path) => (
-                <span key={path}>{path}</span>
-              ))}
-            </span>
-          }
-        />
-        {children}
-      </Stack>
-    </section>
+    <span className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-2xs">
+      <span className="text-foreground">{components.join(" · ")}</span>
+      {source.map((path) => (
+        <span key={path}>{path}</span>
+      ))}
+    </span>
   );
 }
 

@@ -37,8 +37,6 @@ import {
 } from "~/ui/primitives/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
-import { DesignSection } from "../_components/design-section";
-
 const DOMAIN_SWATCHES = [
   ["Cook", "var(--domain-cook)", "var(--domain-cook-surface)"],
   ["Pantry", "var(--domain-pantry)", "var(--domain-pantry-surface)"],
@@ -49,12 +47,7 @@ const DOMAIN_SWATCHES = [
 
 export function FoundationsSection() {
   return (
-    <DesignSection
-      id="foundations"
-      title="Foundations"
-      components={["Page", "Card", "Badge"]}
-      source={["styles.css", "ui/page/Page.tsx"]}
-    >
+    <Stack gap="md">
       <Card>
         <CardHeader>
           <CardTitle>Field Guide foundations</CardTitle>
@@ -74,7 +67,7 @@ export function FoundationsSection() {
           </div>
         </CardContent>
       </Card>
-    </DesignSection>
+    </Stack>
   );
 }
 
@@ -87,19 +80,7 @@ export function ControlsSection() {
   const invalidDescriptionId = useId();
   const invalidErrorId = useId();
   return (
-    <DesignSection
-      id="controls"
-      title="Controls"
-      components={[
-        "Button",
-        "Input",
-        "Checkbox",
-        "FormFieldGroup",
-        "DropdownMenu",
-        "Table",
-      ]}
-      source={["ui/primitives/", "ui/forms/form-field-group.tsx"]}
-    >
+    <Stack gap="md">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -255,19 +236,14 @@ export function ControlsSection() {
           </CardContent>
         </Card>
       </div>
-    </DesignSection>
+    </Stack>
   );
 }
 
 export function FeedbackSection() {
   const [dialogOpen, setDialogOpen] = useState(false);
   return (
-    <DesignSection
-      id="feedback"
-      title="Feedback, dialogs and tabs"
-      components={["Alert", "Skeleton", "Empty", "ResponsiveDialog", "Tabs"]}
-      source={["ui/primitives/"]}
-    >
+    <Stack gap="md">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -359,6 +335,6 @@ export function FeedbackSection() {
           </CardContent>
         </Card>
       </div>
-    </DesignSection>
+    </Stack>
   );
 }

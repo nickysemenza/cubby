@@ -1,6 +1,16 @@
+import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { CaretUpDownIcon } from "@phosphor-icons/react/dist/csr/CaretUpDown";
+import { ChatCircleTextIcon } from "@phosphor-icons/react/dist/csr/ChatCircleText";
 import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { CookingPotIcon } from "@phosphor-icons/react/dist/csr/CookingPot";
+import { ListBulletsIcon } from "@phosphor-icons/react/dist/csr/ListBullets";
+import { PaletteIcon } from "@phosphor-icons/react/dist/csr/Palette";
+import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/csr/SlidersHorizontal";
+import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
+import { TreeStructureIcon } from "@phosphor-icons/react/dist/csr/TreeStructure";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { ComponentsLine } from "~/app/design/_components/design-section";
 import {
   ControlsSection,
   FeedbackSection,
@@ -15,7 +25,10 @@ import { RecordsSection } from "~/app/design/sections/records-section";
 import { RTableSection } from "~/app/design/sections/rtable-section";
 import { ValuesSection } from "~/app/design/sections/values-section";
 import { pageTitle } from "~/lib/page-title";
-import { Stack } from "~/ui/layout";
+import {
+  IndexedSections,
+  type IndexedSectionGroup,
+} from "~/ui/data-table/indexed-sections";
 import { Page } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
 
@@ -30,18 +43,225 @@ const PROJECT_STATS = [
   { label: "Recorded spend", value: "$420.00" },
 ];
 
-/** In page order; the signature components follow the foundations. */
-const SECTIONS = [
-  ["foundations", "Foundations"],
-  ["picker", "Picker"],
-  ["records", "Records"],
-  ["rtable", "RTable"],
-  ["location-tree", "LocationTree"],
-  ["values", "Dates, pills, filters"],
-  ["recipe-units", "Recipe text, units"],
-  ["controls", "Controls"],
-  ["feedback", "Feedback"],
-] as const;
+/** The same contents index record details use; `#<section id>` and `#<group key>` link in. */
+const GROUPS: IndexedSectionGroup[] = [
+  {
+    id: "detail-group-signature",
+    title: "Signature components",
+    sections: [
+      {
+        id: "picker",
+        title: "Picker",
+        icon: CaretUpDownIcon,
+        overflowVisible: true,
+        description: (
+          <ComponentsLine
+            components={[
+              "Picker",
+              "PickerField",
+              "PickerVisual",
+              "PickerOption",
+            ]}
+            source={[
+              "ui/combobox/picker.tsx",
+              "ui/combobox/picker-visual.tsx",
+              "ui/form-utils/picker-field.tsx",
+            ]}
+          />
+        ),
+        content: <PickerSection />,
+      },
+      {
+        id: "records",
+        title: "Records: ledger and timeline",
+        icon: ListBulletsIcon,
+        description: (
+          <ComponentsLine
+            components={[
+              "RecordsBlockView",
+              "Ledger",
+              "LedgerRow",
+              "LedgerCell",
+              "RecordList",
+              "RecordRow",
+              "RecordGroup",
+              "RecordHeading",
+              "RecordMore",
+              "RecordFold",
+              "RecordDot",
+              "RecordScore",
+              "RecordHops",
+              "RecordDetail",
+            ]}
+            source={[
+              "entity/entity-detail/records-block.tsx",
+              "ui/common/ledger.tsx",
+              "ui/common/record-list.tsx",
+            ]}
+          />
+        ),
+        content: <RecordsSection />,
+      },
+      {
+        id: "rtable",
+        title: "RTable",
+        icon: TableIcon,
+        overflowVisible: true,
+        description: (
+          <ComponentsLine
+            components={[
+              "RTable",
+              "ListWorkbench",
+              "BulkActionBar",
+              "EditableCell",
+              "CellFrame",
+              "createNameColumn",
+              "createCurrencyColumn",
+              "createPlainDateColumn",
+            ]}
+            source={[
+              "ui/data-table/Table.tsx",
+              "ui/data-table/ListWorkbench.tsx",
+              "ui/data-table/columnHelpers.tsx",
+            ]}
+          />
+        ),
+        content: <RTableSection />,
+      },
+      {
+        id: "indexed-sections",
+        title: "IndexedSections",
+        icon: ListBulletsIcon,
+        description: (
+          <ComponentsLine
+            components={["IndexedSections", "SectionStack"]}
+            source={["ui/data-table/indexed-sections.tsx"]}
+          />
+        ),
+        content: (
+          <p className="text-xs text-muted-foreground">
+            This page: grouped, continuously mounted sections with the sticky
+            contents index from record details, the current entry tracked while
+            scrolling, and a “Jump to” menu below 800px.
+          </p>
+        ),
+      },
+    ],
+  },
+  {
+    id: "detail-group-household",
+    title: "Household components",
+    sections: [
+      {
+        id: "location-tree",
+        title: "LocationTree",
+        icon: TreeStructureIcon,
+        description: (
+          <ComponentsLine
+            components={["LocationTree"]}
+            source={["features/inventory/location-tree-view.tsx"]}
+          />
+        ),
+        content: <LocationTreeSection />,
+      },
+      {
+        id: "values",
+        title: "Dates, pills and filters",
+        icon: CalendarBlankIcon,
+        overflowVisible: true,
+        description: (
+          <ComponentsLine
+            components={[
+              "DateDisplay",
+              "EnumPill",
+              "GapChipCluster",
+              "FilterBar",
+              "ScopeChip",
+            ]}
+            source={[
+              "ui/common/date-display.tsx",
+              "ui/primitives/enum-pill.tsx",
+              "features/work-queue/work-queue-display.tsx",
+              "ui/data-table/FilterBar.tsx",
+            ]}
+          />
+        ),
+        content: <ValuesSection />,
+      },
+      {
+        id: "recipe-units",
+        title: "Recipe text and unit conversion",
+        icon: CookingPotIcon,
+        description: (
+          <ComponentsLine
+            components={["formatRichText", "ConversionCapabilities"]}
+            source={[
+              "features/recipes/richtext.tsx",
+              "features/units/ConversionCapabilities.tsx",
+            ]}
+          />
+        ),
+        content: <RecipeUnitsSection />,
+      },
+    ],
+  },
+  {
+    id: "detail-group-basics",
+    title: "Basics",
+    sections: [
+      {
+        id: "foundations",
+        title: "Foundations",
+        icon: PaletteIcon,
+        description: (
+          <ComponentsLine
+            components={["Page", "Card", "Badge"]}
+            source={["styles.css", "ui/page/Page.tsx"]}
+          />
+        ),
+        content: <FoundationsSection />,
+      },
+      {
+        id: "controls",
+        title: "Controls",
+        icon: SlidersHorizontalIcon,
+        overflowVisible: true,
+        description: (
+          <ComponentsLine
+            components={[
+              "Button",
+              "Input",
+              "Checkbox",
+              "FormFieldGroup",
+              "DropdownMenu",
+              "Table",
+            ]}
+            source={["ui/primitives/", "ui/forms/form-field-group.tsx"]}
+          />
+        ),
+        content: <ControlsSection />,
+      },
+      {
+        id: "feedback",
+        title: "Feedback, dialogs and tabs",
+        icon: ChatCircleTextIcon,
+        description: (
+          <ComponentsLine
+            components={[
+              "Alert",
+              "Skeleton",
+              "Empty",
+              "ResponsiveDialog",
+              "Tabs",
+            ]}
+            source={["ui/primitives/"]}
+          />
+        ),
+        content: <FeedbackSection />,
+      },
+    ],
+  },
+];
 
 function DesignSystem() {
   return (
@@ -62,31 +282,7 @@ function DesignSystem() {
         ),
       }}
     >
-      <Stack gap="lg">
-        <nav
-          aria-label="Design sections"
-          className="flex flex-wrap gap-x-3 gap-y-1 text-xs"
-        >
-          {SECTIONS.map(([id, label]) => (
-            <a
-              key={id}
-              href={`#${id}`}
-              className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              {label}
-            </a>
-          ))}
-        </nav>
-        <FoundationsSection />
-        <PickerSection />
-        <RecordsSection />
-        <RTableSection />
-        <LocationTreeSection />
-        <ValuesSection />
-        <RecipeUnitsSection />
-        <ControlsSection />
-        <FeedbackSection />
-      </Stack>
+      <IndexedSections groups={GROUPS} />
     </Page>
   );
 }
