@@ -15,6 +15,7 @@ import {
   PRODUCT_IDENTIFICATION_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
+  MAIL_ATTACHMENT_PURPOSE_FEATURE,
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
@@ -129,6 +130,13 @@ export const AI_SMOKE_CASES = {
     feature: MAILBOX_RELEVANCE_FEATURE,
     label: "Mailbox relevance",
     description: "Interpret purchase relevance from synthetic original mail",
+    group: "Purchase research",
+  },
+  mailAttachmentPurpose: {
+    feature: MAIL_ATTACHMENT_PURPOSE_FEATURE,
+    label: "Email attachment purpose",
+    description:
+      "Decide whether synthetic shipping paperwork belongs on a Purchase",
     group: "Purchase research",
   },
 

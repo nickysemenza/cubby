@@ -45,6 +45,7 @@ import { aiUsage, image, run as runTable } from "~/server/db/schema";
 import { loadPurchaseAuditBatch } from "~/server/purchase-import/audit-batch";
 import { normalizeMessage } from "~/server/purchase-import/gmail/normalize";
 import { interpretMailRelevance } from "~/server/purchase-import/gmail/relevance";
+import { shouldPromoteMailAttachment } from "~/server/purchase-import/mail-attachment-purpose";
 import { chooseLineStage } from "~/server/purchase-import/writer";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { getVerifiedImageRenditionKey } from "~/server/repo/image-identification";
@@ -406,6 +407,33 @@ async function runCase(
             validate: (plan) => assessRecipeFlowCandidate(recipe, plan),
           },
         ),
+      };
+    }
+    case "mailAttachmentPurpose": {
+      const { fixture } = aiSmokeInputs.mailAttachmentPurpose.parse(raw);
+      const bodyText =
+        fixture === "shipping_label"
+          ? "Print the attached carrier label and affix it to your parcel. Postage cost $8.50."
+          : fixture === "receipt"
+            ? "The attached receipt itemizes your $8.50 postage payment; your printable carrier label is available separately."
+            : "Documents are attached. Their purpose is not described.";
+      return {
+        result: {
+          promote: await shouldPromoteMailAttachment(
+            {
+              sender: "orders@shipping.example",
+              subject: "Shipping paperwork",
+              rawChecksum: "a".repeat(64),
+              content: { bodyText, bodyHtml: null, snippet: null },
+            },
+            {
+              filename: "document.pdf",
+              mimeType: "application/octet-stream",
+              checksum: "b".repeat(64),
+            },
+            { db, runId, operation: "smoke.mailAttachmentPurpose" },
+          ),
+        },
       };
     }
     case "mailboxTriage":

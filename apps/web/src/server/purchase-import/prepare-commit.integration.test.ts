@@ -13,8 +13,9 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import {
   auditLog,
   entityAttachment,
@@ -1351,7 +1352,7 @@ describe("caller-driven purchase import writes", () => {
           imageId: image.id,
         })),
       );
-    const { committed } = await memberImport(ctx.db, ctx.actor, {
+    const { commitInput } = await prepareMemberImport(ctx.db, ctx.actor, {
       key: "imported-original",
       orders: [
         {
@@ -1366,6 +1367,26 @@ describe("caller-driven purchase import writes", () => {
       ],
       defaultTrade: "other",
     });
+    const decisionPort: DecisionPort = vi.fn<DecisionPort>(async () => ({
+      answers: {
+        selection: {
+          type: "choice",
+          choice: "c0",
+          confidence: 0.98,
+          probabilities: { c0: 0.98, c1: 0.01, c2: 0.01 },
+        },
+      },
+    }));
+    const committed = await commitPurchaseImport(
+      ctx.db,
+      commitInput,
+      ctx.actor,
+      decisionPort,
+    );
+    expect(
+      await commitPurchaseImport(ctx.db, commitInput, ctx.actor, decisionPort),
+    ).toEqual(committed);
+    expect(decisionPort).toHaveBeenCalledOnce();
     expect(committed.items).toHaveLength(1);
     const attached = await getDb(ctx.db).select().from(entityAttachment);
     expect(attached.map(({ imageId }) => imageId)).toEqual([importedImage.id]);

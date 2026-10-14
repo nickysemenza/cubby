@@ -1254,6 +1254,17 @@ filename extension. Base64, URL, and staged-upload inputs share this validation;
 unknown bytes and unreadable images fail before final storage. A filename never
 establishes the format, and a specific MIME label must still agree with the bytes.
 
+Before linking or importing an Email, the `mail-attachment-purpose` Decision
+classifies each retained file using the Email context and attachment metadata.
+Only a high-confidence `purchase_document` result attaches automatically;
+`shipping_label`, `uncertain`, low confidence, or evidence exceeding the Decision
+context bound leaves the file with the original Email. Filenames and subjects
+are hints, not classification rules. The Email body can still establish a
+shipping charge, and original attachments stay retained and readable. Inference
+runs before the linking transaction; publication rechecks the Email checksum and
+attachment metadata/checksums. Model failures propagate without a heuristic
+fallback. Explicit file attachment remains available.
+
 The physical graph is composed at read time from `ENTITY_EDGES` and
 `ENTITY_EDGE_OWNERS` (`repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
 sourceId, targetKind, targetId)` with both ends live. It backs the Relations

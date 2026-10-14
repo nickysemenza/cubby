@@ -13,7 +13,8 @@ import {
  * disposal lost after the disposition commits is never retried, or a replay
  * fails once the original is gone, or confirming an already-disposed automated
  * negative loses the member resolution and leaves it awaiting review; a cancelled, retired or deleted Mail import
- * Run still reads, resolves, or spends on search.
+ * Run still reads, resolves, or spends on search; linking a shipping-label Email
+ * promotes printable labels to Purchase documents or discards its cost evidence.
  */
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -22,6 +23,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { account } from "~/server/db/auth.schema";
 import {
@@ -39,6 +41,7 @@ import {
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
+  entityAttachment,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
@@ -201,6 +204,175 @@ describe("public mail tool", () => {
       }),
     ).rejects.toThrow(/changed/);
     expect(await history()).toEqual(beforeReplay);
+  });
+
+  it("links shipping-label cost evidence without promoting printable labels, retaining receipts and originals", async () => {
+    const party = await member();
+    const source = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "synthetic-label-cost",
+      subject: "Your shipping label is ready",
+      checksum: "d".repeat(64),
+      content: {
+        bodyText: "Shipping label cost USD 8.50",
+        bodyHtml: null,
+        snippet: "Shipping label cost USD 8.50",
+      },
+    });
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic marketplace",
+    });
+    const target = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: seller.id,
+      orderId: "SYNTHETIC-SALE",
+    });
+    const receipt = await insertWithShortcode(ctx.db, "image", {
+      key: "synthetic/receipt.pdf",
+      filename: "receipt.pdf",
+      size: receiptBytes.length,
+      contentType: "application/pdf",
+      status: "UPLOADED",
+    });
+    const printable = await insertWithShortcode(ctx.db, "image", {
+      key: "synthetic/return-label.pdf",
+      filename: "return-label.pdf",
+      size: receiptBytes.length,
+      contentType: "application/pdf",
+      status: "UPLOADED",
+    });
+    const originals = await getDb(ctx.db)
+      .insert(orderMailAttachment)
+      .values([
+        {
+          orderMailId: source.id,
+          providerAttachmentId: "synthetic-label-pending",
+          filename: "scan-001.pdf",
+          mimeType: "application/octet-stream",
+          checksum: "a".repeat(64),
+          pendingObjectKey: "synthetic/label-pending",
+        },
+        {
+          orderMailId: source.id,
+          providerAttachmentId: "synthetic-label-image",
+          filename: "invoice.pdf",
+          mimeType: "application/pdf",
+          checksum: "b".repeat(64),
+          imageId: printable.id,
+        },
+        {
+          orderMailId: source.id,
+          providerAttachmentId: "synthetic-receipt",
+          filename: "shipping-label.pdf",
+          mimeType: "application/pdf",
+          checksum: "c".repeat(64),
+          imageId: receipt.id,
+        },
+      ])
+      .returning();
+    const fetch = vi
+      .spyOn(s3, "getS3Object")
+      .mockRejectedValue(
+        new Error("Printable label bytes must not be fetched"),
+      );
+    const input = mailResolveInput.parse({
+      mailboxId,
+      messageId: source.messageId,
+      checksum: source.rawChecksum,
+      disposition: {
+        kind: "linked",
+        event: "other",
+        purchaseIds: [target.shortcode],
+      },
+    });
+    // Model answers deliberately contradict filename cues: two labels and a receipt.
+    const decisionPort: DecisionPort = vi.fn<DecisionPort>(async (input) => {
+      const evidence = JSON.parse(input.state);
+      const choice =
+        evidence.attachment.checksum === "c".repeat(64) ? "c0" : "c1";
+      return {
+        answers: {
+          selection: {
+            type: "choice",
+            choice,
+            confidence: 0.98,
+            probabilities: {
+              c0: choice === "c0" ? 0.98 : 0.01,
+              c1: choice === "c1" ? 0.98 : 0.01,
+              c2: 0.01,
+            },
+          },
+        },
+      };
+    });
+    await expect(
+      resolveMail(ctx.db, input, ctx.actor, undefined, decisionPort),
+    ).resolves.toMatchObject({
+      status: "completed",
+      purchaseIds: [target.shortcode],
+    });
+    await resolveMail(ctx.db, input, ctx.actor, undefined, decisionPort);
+    expect(decisionPort).toHaveBeenCalledTimes(6);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(
+      await getDb(ctx.db)
+        .select({ imageId: entityAttachment.imageId })
+        .from(entityAttachment)
+        .where(
+          and(
+            eq(entityAttachment.entityKind, "purchase"),
+            eq(entityAttachment.entityId, target.id),
+          ),
+        ),
+    ).toEqual([{ imageId: receipt.id }]);
+    const retained = await getDb(ctx.db)
+      .select()
+      .from(orderMailAttachment)
+      .where(eq(orderMailAttachment.orderMailId, source.id));
+    expect(retained).toHaveLength(originals.length);
+    expect(retained).toEqual(expect.arrayContaining(originals));
+    const read = await readMail(
+      ctx.db,
+      { mailboxId, messageId: source.messageId },
+      ctx.actor,
+    );
+    expect(read.content.bodyText).toBe("Shipping label cost USD 8.50");
+    expect(read.purchaseIds).toEqual([target.shortcode]);
+    expect(read.attachments).toHaveLength(3);
+    let changed = false;
+    const changingPort: DecisionPort = vi.fn<DecisionPort>(async (input) => {
+      if (!changed) {
+        changed = true;
+        await getDb(ctx.db)
+          .update(orderMailAttachment)
+          .set({ filename: "changed-source.pdf" })
+          .where(
+            and(
+              eq(orderMailAttachment.orderMailId, source.id),
+              eq(
+                orderMailAttachment.providerAttachmentId,
+                "synthetic-label-pending",
+              ),
+            ),
+          );
+      }
+      return decisionPort(input);
+    });
+    await expect(
+      resolveMail(ctx.db, input, ctx.actor, undefined, changingPort),
+    ).rejects.toThrow("evidence changed");
+    expect(fetch).not.toHaveBeenCalled();
+    expect(
+      await getDb(ctx.db)
+        .select({ imageId: entityAttachment.imageId })
+        .from(entityAttachment)
+        .where(
+          and(
+            eq(entityAttachment.entityKind, "purchase"),
+            eq(entityAttachment.entityId, target.id),
+          ),
+        ),
+    ).toEqual([{ imageId: receipt.id }]);
   });
 
   it("atomically links a combined lifecycle Email to every Purchase and replays without duplicate evidence", async () => {

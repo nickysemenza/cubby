@@ -136,6 +136,13 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 
 ## AI
 
+- Semantic classification: new or revised judgments about what evidence means
+  use a declared Decision feature through `runDecisionChoice`, registered in
+  `decisionCatalogRows`. Supply source context, confidence and uncertainty;
+  filenames and keywords are model evidence. Keep regexes for structural
+  parsing, validation and candidate retrieval. An authoritative supplied value
+  or exact protocol match needs no model judgment.
+
 - Prompt requests: `AI_FEATURES` typed `feature.request` renderers; pure prompt
   definitions in `server/ai/prompts/`. `decisionCatalogRows` in the existing
   `decision-catalog.ts` owns decision discovery; `AI_FEATURES` owns chat requests. Purchase-import Markdown remains

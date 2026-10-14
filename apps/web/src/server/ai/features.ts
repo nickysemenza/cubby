@@ -65,6 +65,10 @@ import {
 } from "./prompts/ingredient-selection";
 import { mailRelevanceRequest, mailTriagePrompt } from "./prompts/mail";
 import {
+  mailAttachmentPurposeChoices,
+  mailAttachmentPurposePrompt,
+} from "./prompts/mail-attachment";
+import {
   purchaseExtractionPrompt,
   purchaseAuditPrompt,
   purchaseReceiptRequest,
@@ -252,6 +256,16 @@ export const MAILBOX_RELEVANCE_FEATURE = defineFeature({
   effort: "medium",
   maxTokens: 1500,
   schema: mailboxRelevanceDecision,
+});
+
+export const MAIL_ATTACHMENT_PURPOSE_FEATURE = defineFeature({
+  prompt: mailAttachmentPurposePrompt,
+  choices: mailAttachmentPurposeChoices,
+  feature: "mail-attachment-purpose",
+  promptVersion: "2026-10-14.1",
+  tier: "decision",
+  cache: true,
+  collectPayload: false,
 });
 
 export const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
@@ -517,6 +531,7 @@ export const ENTITY_EMBEDDING_FEATURE = defineFeature({
 export const AI_FEATURES = [
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
+  MAIL_ATTACHMENT_PURPOSE_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
   INGREDIENT_MERGE_FEATURE,
   FIELD_SUGGESTION_FEATURE,
