@@ -5,7 +5,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { sampleLocations } from "~/app/docs/_data/samples";
+import { sampleLocations } from "~/app/design/_data/samples";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { LocationTree } from "./location-tree-view";

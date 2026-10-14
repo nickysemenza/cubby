@@ -53,6 +53,15 @@ Web controls, chips and panels use their shared token radii. These web tokens ar
 
 ## Components
 
+### Custom-built signature components
+
+These are Cubby's own components, designed and built here rather than adopted from a component library; the headless pieces under them (Base UI popups and focus, TanStack Table state) carry no visual design. Each has a live, synthetic showcase on `/design`, which is also the home for any new component demo:
+
+- **`Picker`** (`ui/combobox/picker.tsx`) with `PickerField`, `PickerVisual` and `PickerOption` — every value choice: choose, search and segmented modes, single and multiple values, records with pictures and options with glyphs (`/design#picker`).
+- **Records ledger and timeline** — `RecordsBlockView` (`entity/entity-detail/records-block.tsx`), `Ledger`/`LedgerRow`/`LedgerCell` (`ui/common/ledger.tsx`), and `RecordList` with its `Record*` parts (`ui/common/record-list.tsx`) (`/design#records`).
+- **`RTable`** (`ui/data-table/Table.tsx`), reached through `ListWorkbench` (`/design#rtable`).
+- **`LocationTree`**, `DateDisplay`, `EnumPill`, `GapChipCluster`, `FilterBar` and `ScopeChip` (`/design#location-tree`, `/design#values`).
+
 ### Shared headings and actions
 
 `Page` is the sole list/detail shell; `src/ui/layouts/page-hero.tsx` owns contextual headers. Detail identity is an open header with a structural bottom divider, thumbnail, wayfinding, readable title, quiet metadata, and inline stats. Keep Edit and the main workflow action visible; remaining review and destructive actions use accessible overflow. `SectionHeading` owns the wrapping gray heading band for details, forms, and home. `FormSection` uses it with sentence-case headings and retains explicit local disclosure behavior.

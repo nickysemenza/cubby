@@ -15,11 +15,6 @@ const FeaturesSection = lazy(() =>
     default: m.FeaturesSection,
   })),
 );
-const ComponentDemosSection = lazy(() =>
-  import("./sections/component-demos-section").then((m) => ({
-    default: m.ComponentDemosSection,
-  })),
-);
 
 export interface DocSection {
   slug: string;
@@ -41,12 +36,6 @@ const referenceSections: DocSection[] = [
     title: "Features",
     group: "Reference",
     render: () => <FeaturesSection />,
-  },
-  {
-    slug: "components",
-    title: "Component demos",
-    group: "Reference",
-    render: () => <ComponentDemosSection />,
   },
 ];
 

@@ -1,13 +1,19 @@
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { CodeIcon } from "@phosphor-icons/react/dist/csr/Code";
-import { JsonEditor, type JsonData } from "json-edit-react";
-import { useCallback, useMemo, useState } from "react";
+import type { JsonData } from "json-edit-react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
 import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
+import { Spinner } from "~/ui/primitives/spinner";
+
+// Loads only when a demo's JSON panel first opens.
+const JsonEditor = lazy(() =>
+  import("json-edit-react").then((module) => ({ default: module.JsonEditor })),
+);
 
 interface EditableComponentDemoProps<T> {
   title: string;
@@ -71,13 +77,10 @@ export function EditableComponentDemo<T>({
   if (jsonSchema) jsonEditorSchemaProps.jsonSchema = jsonSchema;
 
   return (
-    <div className={cn("my-6", className)}>
+    <div className={cn("min-w-0", className)}>
       {/* Header */}
       <Row align="center" gap="sm" className="mb-2">
-        <span className="inline-flex items-center rounded bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
-          Interactive
-        </span>
-        {title && <span className="font-medium">{title}</span>}
+        <code className="font-mono text-2xs text-foreground">{title}</code>
         <Row gap="sm" className="ml-auto">
           {isEditing && (
             <Button
@@ -106,18 +109,20 @@ export function EditableComponentDemo<T>({
 
       {/* JSON Editor (collapsible) */}
       {isEditing && (
-        <div className="mb-4 overflow-hidden border border-[var(--border)]">
+        <div className="mb-3 overflow-hidden rounded-md border">
           <div className="border-b bg-muted/50 px-4 py-2 text-xs font-medium">
             Sample Data (editable)
           </div>
           <div className="max-h-80 overflow-auto p-2">
-            <JsonEditor
-              data={data}
-              setData={handleUpdate}
-              baseFontSize={12}
-              collapse={2}
-              {...jsonEditorSchemaProps}
-            />
+            <Suspense fallback={<Spinner />}>
+              <JsonEditor
+                data={data}
+                setData={handleUpdate}
+                baseFontSize={12}
+                collapse={2}
+                {...jsonEditorSchemaProps}
+              />
+            </Suspense>
           </div>
           {error && (
             <div className="border-t bg-destructive/10 px-4 py-2 text-xs text-destructive">
@@ -128,8 +133,8 @@ export function EditableComponentDemo<T>({
       )}
 
       {/* Demo content */}
-      <div className="overflow-hidden border border-[var(--border)] bg-card">
-        <div className="p-6">{children(data)}</div>
+      <div className="overflow-hidden rounded-md border bg-card">
+        <div className="p-3">{children(data)}</div>
       </div>
     </div>
   );
