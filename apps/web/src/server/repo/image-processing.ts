@@ -51,6 +51,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/repo/mail-attachment-uploads";
 import { refreshDirectImageOwnerSearchDocuments } from "~/server/repo/search-document";
+import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import {
   generateImageKey,
@@ -238,26 +239,36 @@ export async function createImageProcessingJob(
   )
     return null;
 
-  await getDb(db)
-    .insert(imageProcessingJob)
-    .values({
-      ...input,
-      derivativeId: input.derivativeId ?? null,
-      runId: input.runId ?? null,
-      state: "pending",
-    })
-    .onConflictDoNothing();
-
-  const row = await getDb(db).query.imageProcessingJob.findFirst({
-    where: and(
-      eq(imageProcessingJob.imageId, input.imageId),
-      eq(imageProcessingJob.kind, input.kind),
-      eq(imageProcessingJob.sourceContentHash, input.sourceContentHash),
-      eq(imageProcessingJob.processorRevision, input.processorRevision),
-    ),
-    columns: { id: true },
+  const job = await ensureImageProcessingJob(db, {
+    ...input,
+    derivativeId: input.derivativeId ?? null,
+    runId: input.runId ?? null,
   });
-  return row?.id ?? null;
+  return job.id;
+}
+
+/**
+ * The one job per (Image, kind, source, revision). A concurrent scheduler
+ * finds the winner's row; a shortcode collision retries with a new code
+ * instead of being mistaken for that duplicate.
+ */
+async function ensureImageProcessingJob(
+  db: Database | DrizzleTransaction,
+  values: JobIdentity & {
+    derivativeId: string | null;
+    runId: RunId | null;
+  },
+) {
+  const { row } = await findOrCreateWithShortcode(db, "imageJob", {
+    where: and(
+      eq(imageProcessingJob.imageId, values.imageId),
+      eq(imageProcessingJob.kind, values.kind),
+      eq(imageProcessingJob.sourceContentHash, values.sourceContentHash),
+      eq(imageProcessingJob.processorRevision, values.processorRevision),
+    ),
+    values: () => ({ ...values, state: "pending" as const }),
+  });
+  return row;
 }
 
 export async function createTransparentDerivativeAndJob(
@@ -309,31 +320,14 @@ export async function createTransparentDerivativeAndJob(
     });
     if (!derivative) throw new Error("Image derivative was not persisted");
 
-    await tx
-      .insert(imageProcessingJob)
-      .values({
-        imageId: input.imageId,
-        derivativeId: derivative.id,
-        kind: "subject_lift",
-        state: "pending",
-        sourceContentHash: input.sourceContentHash,
-        processorRevision: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-        runId: input.runId ?? null,
-      })
-      .onConflictDoNothing();
-    const job = await tx.query.imageProcessingJob.findFirst({
-      where: and(
-        eq(imageProcessingJob.imageId, input.imageId),
-        eq(imageProcessingJob.kind, "subject_lift"),
-        eq(imageProcessingJob.sourceContentHash, input.sourceContentHash),
-        eq(
-          imageProcessingJob.processorRevision,
-          IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-        ),
-      ),
-      columns: { id: true, state: true, lastError: true },
+    const job = await ensureImageProcessingJob(tx, {
+      imageId: input.imageId,
+      derivativeId: derivative.id,
+      kind: "subject_lift",
+      sourceContentHash: input.sourceContentHash,
+      processorRevision: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+      runId: input.runId ?? null,
     });
-    if (!job) throw new Error("Image processing job was not persisted");
     return { derivativeId: derivative.id, jobId: job.id };
   });
 }

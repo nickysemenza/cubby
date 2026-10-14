@@ -87,6 +87,9 @@ import type { AnyColumn } from "drizzle-orm";
 import {
   vendor,
   aiUsage,
+  imageProcessingAttempt,
+  imageProcessingEvent,
+  imageProcessingSubmissionJob,
   aiEvaluation,
   aiEvaluationRequest,
   auditLog,
@@ -326,6 +329,31 @@ function linkEdgesFor<E extends Entity>(entity: E): LinkEdgesOf<E> {
 }
 
 export const ENTITY_EDGES = {
+  imageJob: edges({
+    "ImageProcessingAttempt.jobId": {
+      column: imageProcessingAttempt.jobId,
+      role: "history",
+      label: "attempts",
+      description:
+        "One claim of this job by AI Gateway or an Apple device, with its retained diagnostics and result.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImageProcessingEvent.jobId": {
+      column: imageProcessingEvent.jobId,
+      role: "history",
+      label: "events",
+      description: "A step this job's processing recorded.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImageProcessingSubmissionJob.jobId": {
+      column: imageProcessingSubmissionJob.jobId,
+      role: "history",
+      label: "submissions",
+      description:
+        "A schedule or retry request that included this job, with its disposition.",
+      liveness: { kind: "must-target-live" },
+    },
+  }),
   email: edges({
     "EmailCandidateObservation.emailId": {
       column: emailCandidateObservation.emailId,
@@ -1528,7 +1556,7 @@ export const ENTITY_EDGES = {
       role: "history",
       label: "image processing jobs",
       description:
-        "A queued image-processing job requested by this run; the column is cleared when the run goes.",
+        "An Image job requested by this run.",
       liveness: {
         kind: "allow-target-deleted",
         reason:

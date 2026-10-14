@@ -466,8 +466,12 @@ _Avoid_: charged cost, household expense, uncached price
 The incremental amount attributable to AI work after plan coverage, response caching, or billing discounts; it may be estimated or provider-reported, with that distinction retained. A plan-covered call has zero incremental charge; the plan's subscription fee is separate.
 _Avoid_: standard cost, subscription fee, confirmed bill when only estimated
 
+**Image job**:
+One durable unit of image processing (subject lift, description, or identification) for one Image source and processor revision, identified by `IPR-`. AI Gateway or an Apple device claims it in attempts, each with its own diagnostics and events; a Run that requested it may already include its cost.
+_Avoid_: image processing run, activity row
+
 **Run**:
-A durable record of coordinated work, identified by `RUN-`, with a purpose, trigger, status, and optional targets or operations. It may group image jobs, but its recorded cost can already include their costs. The Runs list presents every purpose together; image jobs list in its Image jobs view. Retained target outcomes, including Email targets, remain visible after the mutable target roster is retired. A vendor mail search is a Run: what was asked and where its page-by-page walk stands belong to the Run itself.
+A durable record of coordinated work, identified by `RUN-`, with a purpose, trigger, status, and optional targets or operations. It may group image jobs, but its recorded cost can already include their costs. The Runs list presents every purpose together. Retained target outcomes, including Email targets, remain visible after the mutable target roster is retired. A vendor mail search is a Run: what was asked and where its page-by-page walk stands belong to the Run itself.
 _Avoid_: image processing job, individual attempt, search job
 
 **Image processing job**:

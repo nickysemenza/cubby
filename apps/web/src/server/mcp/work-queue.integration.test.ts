@@ -1,3 +1,4 @@
+import { generateShortcode } from "@cubby/shared";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { testUserId } from "@cubby/schemas/testing";
@@ -461,6 +462,7 @@ describe("member actionable Work queue", () => {
       .values(
         [sourceImage, unknownImage].map(
           (image): typeof imageProcessingJob.$inferInsert => ({
+            shortcode: generateShortcode("imageJob"),
             imageId: parseEntityId("image", image.id),
             kind: "describe_image",
             state: "failed",
@@ -1057,6 +1059,7 @@ describe("member actionable Work queue", () => {
       .values(
         [privateImage, publicImage, unknownImage].map(
           (image): typeof imageProcessingJob.$inferInsert => ({
+            shortcode: generateShortcode("imageJob"),
             imageId: parseEntityId("image", image.id),
             kind: "describe_image",
             state: "failed",

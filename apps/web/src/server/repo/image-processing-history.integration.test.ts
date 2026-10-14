@@ -1,3 +1,4 @@
+import { generateShortcode } from "@cubby/shared";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
@@ -575,6 +576,7 @@ describe("image execution history conservation", () => {
       .insert(imageProcessingJob)
       .values(
         Array.from({ length: 101 }, (_, index) => ({
+          shortcode: generateShortcode("imageJob"),
           imageId: sourceId,
           kind: "describe_image" as const,
           state: "pending" as const,
@@ -611,6 +613,7 @@ describe("image execution history conservation", () => {
       .insert(imageProcessingJob)
       .values(
         revisions.slice(0, 101).map((processorRevision) => ({
+          shortcode: generateShortcode("imageJob"),
           imageId: sourceId,
           kind: "describe_image" as const,
           state: "pending" as const,
@@ -632,6 +635,7 @@ describe("image execution history conservation", () => {
     const [history] = await getDb(ctx.db)
       .insert(imageProcessingJob)
       .values({
+        shortcode: generateShortcode("imageJob"),
         imageId: sourceId,
         kind: "describe_image",
         state: "ready",

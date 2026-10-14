@@ -13,11 +13,7 @@ import {
 import { useEffect, useState } from "react";
 import { z } from "zod";
 
-import {
-  WorkStateDot,
-  workIssueText,
-  workStateLabel,
-} from "~/app/activity/work-state";
+import { workStateLabel } from "./image-processing-state";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
@@ -25,12 +21,10 @@ import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import {
   image as imageOperations,
-  activity,
   imageProcessing,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatInstant } from "~/lib/date-format";
-import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
@@ -270,22 +264,16 @@ function IdentificationSummary({ image }: { image: ImageWithEntity }) {
 export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
   const id = imageShortcode.parse(image.id);
   const status = useImageProcessingStatus(id);
-  const recentRuns = useQuery({
-    ...activity.list.queryOptions({ subjectId: id, limit: 10 }),
-    refetchInterval: (query) =>
-      query.state.data?.items.some((run) => run.active) ? 15_000 : false,
-    refetchIntervalInBackground: false,
-  });
   const queryClient = useQueryClient();
   useEffect(() => {
-    if (!recentRuns.data) return;
+    if (!status.data) return;
     // Background completion happens outside this browser's mutation cache.
-    // Refresh detail records without invalidating activity and triggering this effect again.
+    // Refresh detail records (and the Image jobs section) without invalidating this status query.
     void invalidateOperationTags(
       queryClient,
       exactRippleTags([["entity", "detail"]]),
     );
-  }, [id, queryClient, recentRuns.data]);
+  }, [id, queryClient, status.data]);
   const [correction, setCorrection] = useState("");
   const save = useActionMutation({
     mutationFn: imageProcessing.correctDescription.mutationOptions,
@@ -323,69 +311,6 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
             <summary className="text-sm">Technical analysis history</summary>
             <ImageAnalysisHistory id={id} />
           </details>
-          <section className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <h4 className="text-sm font-medium">Recent jobs</h4>
-            </div>
-            <RecordList
-              empty="No processing jobs yet."
-              state={
-                recentRuns.isPending
-                  ? { status: "pending" }
-                  : recentRuns.error
-                    ? {
-                        status: "error",
-                        error: recentRuns.error,
-                        title: "recent image jobs",
-                        onRetry: () => void recentRuns.refetch(),
-                      }
-                    : undefined
-              }
-            >
-              {(recentRuns.data?.items ?? []).map((run) => (
-                <RecordRow
-                  key={run.id}
-                  leading={<WorkStateDot state={run.state} />}
-                  primary={
-                    <a
-                      className="hover:underline"
-                      href={
-                        run.recordType === "run"
-                          ? `/runs/${encodeURIComponent(run.id)}`
-                          : `/runs?view=image-jobs&selected=${encodeURIComponent(run.id)}`
-                      }
-                    >
-                      {run.workLabel}
-                    </a>
-                  }
-                  secondary={[
-                    workStateLabel(run.state),
-                    run.executors.length
-                      ? [
-                          ...new Set(
-                            run.executors.map((executor) =>
-                              executor.kind === "device" ? "Apple" : "Cloud",
-                            ),
-                          ),
-                        ].join(" · ")
-                      : "Executor not assigned",
-                  ].join(" · ")}
-                  trailing={
-                    <DateDisplay timestamp={run.createdAt} clock="day" />
-                  }
-                  detail={
-                    workIssueText(run) ? (
-                      <p className="text-xs text-muted-foreground">
-                        <ShortcodeProse>
-                          {workIssueText(run) ?? ""}
-                        </ShortcodeProse>
-                      </p>
-                    ) : undefined
-                  }
-                />
-              ))}
-            </RecordList>
-          </section>
         </>
       ) : status.error ? (
         <ErrorDisplay
@@ -443,7 +368,7 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
       result.submissionId ? (
         <a
           className="underline"
-          href={`/runs?view=image-jobs&submissionId=${encodeURIComponent(result.submissionId)}`}
+          href={`/image-jobs?submissionId=${encodeURIComponent(result.submissionId)}`}
         >
           Image processing queued — view submission
         </a>
@@ -529,7 +454,7 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
       ) : null}
       <a
         className={buttonVariants({ variant: "outline" })}
-        href={`/runs?view=image-jobs&subjectId=${encodeURIComponent(id)}`}
+        href={`/image-jobs?imageId=${encodeURIComponent(id)}`}
       >
         View processing jobs
       </a>

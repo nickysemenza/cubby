@@ -17,16 +17,13 @@ test("image jobs show completed status and an Apple skip reason", async ({
   await db
     .update(imageProcessingJob)
     .set({ state: "ready", lastError: null, completedAt: new Date() })
-    .where(eq(imageProcessingJob.publicId, sample.jobId));
+    .where(eq(imageProcessingJob.shortcode, sample.jobId));
   await db
     .update(imageProcessingJob)
     .set({ state: "skipped", lastError: "no_subject", completedAt: new Date() })
-    .where(eq(imageProcessingJob.publicId, sample.standaloneJobId));
-  await gotoAuthenticatedPage(
-    page,
-    `/runs?view=image-jobs&subjectId=${sample.imageId}`,
-  );
-  const table = page.getByRole("table", { name: "Image jobs" });
+    .where(eq(imageProcessingJob.shortcode, sample.standaloneJobId));
+  await gotoAuthenticatedPage(page, `/image-jobs?imageId=${sample.imageId}`);
+  const table = page.getByRole("table");
   const completed = table
     .getByRole("row")
     .filter({ hasText: "Image description" });

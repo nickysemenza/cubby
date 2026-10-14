@@ -26,7 +26,9 @@ import {
   financialTransactionAllocation,
   imageDerivative,
   imageDescriptionCorrection,
-  imageProcessingJob,
+  imageProcessingAttempt,
+  imageProcessingEvent,
+  imageProcessingSubmissionJob,
   imageSighting,
   mealFoodEntry,
   mealRecipe,
@@ -96,7 +98,10 @@ export const ENTITY_EDGE_OWNERS = {
   PhotoGroupProposal: { owner: photoGroupProposal.runId },
   ImageDerivative: { owner: imageDerivative.imageId },
   ImageDescriptionCorrection: { owner: imageDescriptionCorrection.imageId },
-  ImageProcessingJob: { owner: imageProcessingJob.imageId },
+  // An Image job's attempts, events and submission memberships belong to the job.
+  ImageProcessingAttempt: { owner: imageProcessingAttempt.jobId },
+  ImageProcessingEvent: { owner: imageProcessingEvent.jobId },
+  ImageProcessingSubmissionJob: { owner: imageProcessingSubmissionJob.jobId },
   ImageSighting: { owner: imageSighting.imageId },
   AiEvaluation: { excluded: "Durable inference and publication history." },
   AiEvaluationRequest: {
