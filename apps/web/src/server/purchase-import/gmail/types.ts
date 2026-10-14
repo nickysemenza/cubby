@@ -105,6 +105,7 @@ export interface GmailProvider {
 }
 
 export type GmailOrderMailAttachment = {
+  contentId?: string;
   sourceKey: string;
   mailboxId: string;
   messageId: string;

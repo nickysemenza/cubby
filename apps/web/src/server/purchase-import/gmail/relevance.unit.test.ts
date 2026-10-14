@@ -34,6 +34,117 @@ const gmail = (status: number): GmailProvider => ({
 });
 
 describe("transient original attachment relevance", () => {
+  it("counts a referenced inline image as available only when its exact MIME part reaches the interpreter", async () => {
+    const png =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aNioAAAAASUVORK5CYII=";
+    const make = (
+      contentId: string,
+      filename: string | null = "logo.png",
+      reference = "synthetic-logo%40example.test",
+    ) =>
+      normalizeMessage("synthetic-mailbox", {
+        id: "synthetic-inline-source",
+        payload: {
+          parts: [
+            {
+              mimeType: "text/html",
+              body: {
+                data: Buffer.from(
+                  `<p>Community newsletter with gardening tips and upcoming neighborhood events.</p><img src="cid:${reference}"><img src="cid:${reference}">`,
+                ).toString("base64url"),
+              },
+            },
+            {
+              mimeType: "image/png",
+              filename: filename ?? undefined,
+              headers: [{ name: "Content-ID", value: `<${contentId}>` }],
+              body: {
+                data: Buffer.from(png, "base64").toString("base64url"),
+                size: Buffer.from(png, "base64").length,
+              },
+            },
+          ],
+        },
+      });
+    const interpret = vi.fn<MailRelevance>(async () => ({
+      classification: "unrelated",
+    }));
+    await expect(
+      interpretMailRelevance(
+        gmail(500),
+        make("synthetic-logo@example.test"),
+        interpret,
+      ),
+    ).resolves.toEqual({ classification: "unrelated" });
+    expect(JSON.stringify(interpret.mock.calls[0]?.[0].messages)).toContain(
+      png,
+    );
+    await expect(
+      interpretMailRelevance(
+        gmail(500),
+        make("synthetic-logo@example.test", null),
+        interpret,
+      ),
+    ).resolves.toEqual({ classification: "unrelated" });
+    const longId = "synthetic-" + "x".repeat(520) + "@example.test";
+    await expect(
+      interpretMailRelevance(
+        gmail(500),
+        make(longId, "logo.png", longId),
+        interpret,
+      ),
+    ).resolves.toEqual({ classification: "uncertain" });
+    await expect(
+      interpretMailRelevance(
+        gmail(500),
+        make(
+          "synthetic-logo%ZZ@example.test",
+          "logo.png",
+          "synthetic-logo%ZZ@example.test",
+        ),
+        interpret,
+      ),
+    ).resolves.toEqual({ classification: "uncertain" });
+    await expect(
+      interpretMailRelevance(
+        gmail(500),
+        make("different-logo@example.test"),
+        interpret,
+      ),
+    ).resolves.toEqual({ classification: "uncertain" });
+    await expect(
+      interpretMailRelevance(
+        gmail(500),
+        make("synthetic-logo@example.test"),
+        interpret,
+        false,
+      ),
+    ).resolves.toEqual({ classification: "uncertain" });
+    const oversized = make("synthetic-logo@example.test");
+    oversized.attachments = oversized.attachments.map((part) => ({
+      ...part,
+      size: 256 * 1024,
+      dataBase64Url: Buffer.alloc(256 * 1024).toString("base64url"),
+    }));
+    await expect(
+      interpretMailRelevance(gmail(500), oversized, interpret),
+    ).resolves.toEqual({ classification: "uncertain" });
+    const unavailable = make("synthetic-logo@example.test");
+    unavailable.attachments = unavailable.attachments.map((part) => ({
+      ...part,
+      attachmentId: "synthetic-unavailable",
+      dataBase64Url: undefined,
+    }));
+    await expect(
+      interpretMailRelevance(gmail(404), unavailable, interpret),
+    ).resolves.toEqual({ classification: "uncertain" });
+    const missing = make("synthetic-logo@example.test");
+    missing.attachments = [];
+    await expect(
+      interpretMailRelevance(gmail(404), missing, interpret),
+    ).resolves.toEqual({ classification: "uncertain" });
+  });
+
   it("accepts an unrelated newsletter verdict despite decorative images", async () => {
     const normalized = {
       ...original,
