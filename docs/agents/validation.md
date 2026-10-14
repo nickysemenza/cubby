@@ -92,6 +92,9 @@ Choose local evidence by the changed behavior:
 `pnpm apple check host`, `app`, or `lint` selects one native check;
 `pnpm apple check` runs all three when full native diagnosis is needed. Each
 native pass is probed before FFI setup, and local misses run sequentially.
+For hand-written Swift edits, run `pnpm apple check lint` before opening a PR;
+the staged Oxfmt hook does not format Swift, and successful compilation does
+not verify Swift formatting or state rules.
 The server client-version gate test is relevant when changing compatibility
 behavior, not merely because generated Swift changed.
 

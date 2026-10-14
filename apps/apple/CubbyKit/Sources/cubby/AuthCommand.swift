@@ -76,7 +76,9 @@ extension Auth {
                     guard NSWorkspace.shared.open(link.url(appIdentity: appIdentity)) else {
                         throw CLIError.message("Could not open the Cubby app to approve sign-in.")
                     }
-                    print("Opened \(appIdentity.productName) — approve the sign-in there to finish logging in this CLI.")
+                    print(
+                        "Opened \(appIdentity.productName) — approve the sign-in there to finish logging in this CLI."
+                    )
                     let token = try await handoff.receive(for: context.baseURL)
                     try await context.credentials.set(.bearer(token))
                 } catch {

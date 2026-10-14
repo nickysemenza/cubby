@@ -53,7 +53,9 @@ public enum CubbyLink: Sendable, Hashable {
             return
         }
 
-        guard scheme == appIdentity.callbackScheme, let host = components.host?.lowercased() else { return nil }
+        guard scheme == appIdentity.callbackScheme, let host = components.host?.lowercased() else {
+            return nil
+        }
         let segments = components.path.split(separator: "/").map(String.init)
         let location = components.queryItems?.first { $0.name == "location" }?.value
         switch (host, segments.count) {
